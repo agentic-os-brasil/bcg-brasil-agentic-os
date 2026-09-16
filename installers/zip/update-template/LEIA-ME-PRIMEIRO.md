@@ -50,10 +50,11 @@ nova pasta `Maestro`. Não extraia o novo ZIP por cima da instalação atual.
    Se aparecer um pedido de confiança, confira o caminho exato e aceite somente
    a nova pasta extraída do ZIP cujo SHA-256 foi validado. Não aprove outra
    pasta por engano.
-6. Dentro da nova sessão, execute `/status` e `/hooks`. Só continue se o
-   diretório do projeto for a nova pasta `Maestro`, se não houver erro de
-   configuração e se os seis handlers do projeto aparecerem em `/hooks` com
-   origem em `.claude/settings.json`.
+6. Dentro da nova sessão, execute `/status` e `/hooks` quando esses comandos
+   estiverem disponíveis. Se a versão do Claude Code não os oferecer, siga a
+   rota de traço machine-readable descrita em `DIAGNOSTICO-HOOKS.md`; ausência
+   do comando não é ausência do hook. Só continue quando a raiz nova, os seis
+   handlers configurados e a execução dos eventos estiverem comprovados.
 7. Se os hooks não aparecerem ou não dispararem, pare e siga
    `DIAGNOSTICO-HOOKS.md`. Arquivos presentes e executáveis não bastam para
    considerar as automações ativas.
@@ -73,8 +74,8 @@ O Maestro deve confirmar, com evidência:
   lifecycle documentados e criar backfills ausentes;
 - runtime correto para a plataforma: PowerShell nativo no Windows; Bash e
   Python 3 no Mac;
-- `/status` sem erro de configuração e `/hooks` mostrando os seis handlers do
-  projeto;
+- configuração efetiva comprovada por `/status` e `/hooks` ou, quando esses
+  comandos não existirem, por settings mais traço machine-readable sanitizado;
 - hooks de início, prompt, proteção de escrita e anúncio carregados **e
   executados**, não apenas presentes no disco;
 - projeções de agentes presentes;
@@ -90,7 +91,7 @@ nova pasta para `Maestro-falhou-{{TO_VERSION}}` e devolva o nome `Maestro` para
 `Maestro-old-{{FROM_VERSION}}`. Guarde a pasta antiga por pelo menos sete dias,
 mesmo quando tudo passar.
 
-Se `/status` indicar que uma política corporativa bloqueou hooks de projeto, ou
+Se a UI ou o traço indicar que uma política corporativa bloqueou hooks de projeto, ou
 se o Windows informar que uma política bloqueou scripts PowerShell, não altere
 a política e não tente contornar o bloqueio. Faça o rollback acima e envie o
 diagnóstico ao time BCG Brasil AI.

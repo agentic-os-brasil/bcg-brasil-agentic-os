@@ -36,7 +36,9 @@ def evaluate(
 ) -> tuple[dict[str, bool], dict[str, str | None]]:
     """Return fail-closed checks and the observed Yoda tool-use id."""
     route_hook = False
-    session_start = False
+    session_start_hook_ids: set[str] = set()
+    stop_hook_indexes: list[int] = []
+    project_init = False
     agent_calls: list[tuple[int, str | None]] = []
     all_agent_calls: list[tuple[int, str | None, str | None]] = []
 
@@ -49,7 +51,9 @@ def evaluate(
                 and event.get("outcome") != "error"
                 and event.get("exit_code", 0) == 0
             ):
-                session_start = True
+                hook_id = str(event.get("hook_id") or "")
+                if hook_id:
+                    session_start_hook_ids.add(hook_id)
             if (
                 hook_event == "UserPromptSubmit"
                 and event.get("outcome") != "error"
@@ -58,6 +62,21 @@ def evaluate(
                 and "`yoda`" in hook_text
             ):
                 route_hook = True
+            if (
+                hook_event == "Stop"
+                and event.get("outcome") != "error"
+                and event.get("exit_code", 0) == 0
+            ):
+                stop_hook_indexes.append(index)
+        if event.get("type") == "system" and event.get("subtype") == "init":
+            cwd = Path(str(event.get("cwd") or ""))
+            agents = event.get("agents") or []
+            commands = event.get("slash_commands") or []
+            project_init = (
+                cwd.name == "Maestro"
+                and "yoda" in agents
+                and "maestro-setup-update" in commands
+            )
         if event.get("type") == "assistant":
             for block in _blocks(event):
                 agent_input = block.get("input") or {}
@@ -112,24 +131,29 @@ def evaluate(
                     pretool_hook = True
 
     hub_return = False
+    hub_return_index = -1
     if result_index >= 0:
-        for event in events[result_index + 1 :]:
+        for index, event in enumerate(events[result_index + 1 :], start=result_index + 1):
             if (
                 event.get("type") == "assistant"
                 and not event.get("parent_tool_use_id")
                 and _has_exact_line(_blocks(event), "QUALIFICACAO_MAESTRO_OK")
             ):
                 hub_return = True
+                hub_return_index = index
 
     checks = {
         "claude_exit_zero": claude_rc == 0,
-        "session_start_hook_succeeded": session_start,
+        "both_session_start_hooks_succeeded": len(session_start_hook_ids) >= 2,
+        "project_init_loaded_yoda_and_update_contract": project_init,
         "user_prompt_route_hook_returned_yoda": route_hook,
         "exactly_one_agent_tool_call_total": len(all_agent_calls) == 1,
         "exactly_one_agent_tool_yoda_observed": len(agent_calls) == 1,
         "yoda_pretool_hook_correlated": pretool_hook,
         "yoda_return_correlated_to_tool_use": agent_return,
         "hub_return_after_yoda_result": hub_return,
+        "stop_hook_succeeded_after_hub": hub_return_index >= 0
+        and any(index > hub_return_index for index in stop_hook_indexes),
     }
     return checks, {"yoda": call_id}
 

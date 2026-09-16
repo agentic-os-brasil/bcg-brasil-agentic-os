@@ -164,6 +164,7 @@ if [ -f "$README" ]; then
   grep -q 'claude --debug hooks' "$README" \
     && grep -q '/status' "$README" \
     && grep -q '/hooks' "$README" \
+    && grep -q 'machine-readable' "$README" \
     && pass "instructions require hook discovery preflight from the Maestro root" \
     || fail "instructions omit the hook discovery preflight"
   grep -q 'UPDATE-RUNBOOK.md' "$README" \
@@ -205,6 +206,7 @@ if [ -f "$POST" ]; then
     && pass "post-update goal requires real Yoda and the closed durable receipt schema" \
     || fail "post-update goal omits Yoda, persistence or the closed receipt schema"
   grep -q '/status' "$POST" && grep -q '/hooks' "$POST" \
+    && grep -q 'machine-readable' "$POST" \
     && grep -qi 'configurado.*carregado.*executado' "$POST" \
     && pass "post-update prompt separates configured, loaded and executed hooks" \
     || fail "post-update prompt does not prove hooks were loaded and executed"
@@ -248,6 +250,7 @@ if [ -f "$HOOK_DIAG" ]; then
 fi
 if [ -f "$QUALIFICATION_TEST" ]; then
   grep -q '/status' "$QUALIFICATION_TEST" && grep -q '/hooks' "$QUALIFICATION_TEST" \
+    && grep -q 'machine-readable' "$QUALIFICATION_TEST" \
     && grep -q 'DIAGNOSTICO-HOOKS.md' "$QUALIFICATION_TEST" \
     && pass "cross-platform qualification gates on effective hook loading" \
     || fail "cross-platform qualification does not gate on effective hook loading"

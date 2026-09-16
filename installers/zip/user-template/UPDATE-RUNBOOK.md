@@ -82,7 +82,11 @@ Depois de iniciado, o Maestro deve:
    do primeiro check pendente da tentativa atual, sem reiniciar seus checks
    verdes;
 3. verificar versão, baseline SHA-256, preservação de `data/`, runtime, hooks
-   carregados e executados, e projeções de agentes;
+   carregados e executados, e projeções de agentes. `/status` e `/hooks` são a
+   rota preferida quando existirem; em versões que não os exponham, aceitar
+   somente um traço `stream-json` com `init` na raiz nova e respostas bem
+   sucedidas dos hooks SessionStart, UserPromptSubmit, PreToolUse/Agent e Stop,
+   combinado com a leitura dos seis handlers em `.claude/settings.json`;
 4. corrigir ou diagnosticar achados reversíveis dentro do escopo autorizado;
 5. despachar o subagent `yoda` com o pacote final de evidência para pressionar
    a conclusão;

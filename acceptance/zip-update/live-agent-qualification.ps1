@@ -81,16 +81,30 @@ try {
         try { $events += ($line | ConvertFrom-Json) } catch {}
     }
 
-    $sessionStart = $false
+    $sessionStartHookIds = @()
     $routeHook = $false
+    $stopHookIndexes = @()
+    $projectInit = $false
     $agentCalls = @()
     $allAgentCalls = @()
     for ($index = 0; $index -lt $events.Count; $index++) {
         $event = $events[$index]
         if ((Property $event 'type') -eq 'system' -and (Property $event 'subtype') -eq 'hook_response') {
             $hookText = ([string](Property $event 'output')) + "`n" + ([string](Property $event 'stdout'))
-            if ((Property $event 'hook_event') -eq 'SessionStart' -and (Property $event 'outcome') -ne 'error' -and [int](Property $event 'exit_code') -eq 0) { $sessionStart = $true }
+            if ((Property $event 'hook_event') -eq 'SessionStart' -and (Property $event 'outcome') -ne 'error' -and [int](Property $event 'exit_code') -eq 0) {
+                $hookId = [string](Property $event 'hook_id')
+                if ($hookId -and $sessionStartHookIds -notcontains $hookId) { $sessionStartHookIds += $hookId }
+            }
             if ((Property $event 'hook_event') -eq 'UserPromptSubmit' -and (Property $event 'outcome') -ne 'error' -and [int](Property $event 'exit_code') -eq 0 -and $hookText.Contains('<!-- maestro:agent-route -->') -and $hookText.Contains('`yoda`')) { $routeHook = $true }
+            if ((Property $event 'hook_event') -eq 'Stop' -and (Property $event 'outcome') -ne 'error' -and [int](Property $event 'exit_code') -eq 0) { $stopHookIndexes += $index }
+        }
+        if ((Property $event 'type') -eq 'system' -and (Property $event 'subtype') -eq 'init') {
+            $cwd = [string](Property $event 'cwd')
+            $agents = @(Property $event 'agents')
+            $commands = @(Property $event 'slash_commands')
+            $normalizedCwd = $cwd.Replace('\', '/')
+            $leaf = [System.IO.Path]::GetFileName($normalizedCwd.TrimEnd('/'))
+            $projectInit = ($leaf -eq 'Maestro' -and $agents -contains 'yoda' -and $commands -contains 'maestro-setup-update')
         }
         if ((Property $event 'type') -eq 'assistant') {
             foreach ($block in Blocks $event) {
@@ -145,22 +159,25 @@ try {
     }
 
     $hubReturn = $false
+    $hubReturnIndex = -1
     if ($resultIndex -ge 0) {
         for ($index = $resultIndex + 1; $index -lt $events.Count; $index++) {
             $event = $events[$index]
-            if ((Property $event 'type') -eq 'assistant' -and -not (Property $event 'parent_tool_use_id') -and (Has-ExactLine (Blocks $event) 'QUALIFICACAO_MAESTRO_OK')) { $hubReturn = $true }
+            if ((Property $event 'type') -eq 'assistant' -and -not (Property $event 'parent_tool_use_id') -and (Has-ExactLine (Blocks $event) 'QUALIFICACAO_MAESTRO_OK')) { $hubReturn = $true; $hubReturnIndex = $index }
         }
     }
 
     $checks = [ordered]@{
         claude_exit_zero = ($claudeRc -eq 0)
-        session_start_hook_succeeded = $sessionStart
+        both_session_start_hooks_succeeded = ($sessionStartHookIds.Count -ge 2)
+        project_init_loaded_yoda_and_update_contract = $projectInit
         user_prompt_route_hook_returned_yoda = $routeHook
         exactly_one_agent_tool_call_total = ($allAgentCalls.Count -eq 1)
         exactly_one_agent_tool_yoda_observed = ($agentCalls.Count -eq 1)
         yoda_pretool_hook_correlated = $pretoolHook
         yoda_return_correlated_to_tool_use = $agentReturn
         hub_return_after_yoda_result = $hubReturn
+        stop_hook_succeeded_after_hub = ($hubReturnIndex -ge 0 -and @($stopHookIndexes | Where-Object { $_ -gt $hubReturnIndex }).Count -gt 0)
     }
     $allPassed = -not (@($checks.Values | Where-Object { -not $_ }).Count)
     $receiptObject = [ordered]@{

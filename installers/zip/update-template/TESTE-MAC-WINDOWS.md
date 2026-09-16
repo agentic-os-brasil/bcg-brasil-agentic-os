@@ -25,18 +25,21 @@ claude doctor
 claude --debug hooks
 ```
 
-Dentro da sessão, execute `/status` e `/hooks`. Registre:
+Dentro da sessão, execute `/status` e `/hooks` quando disponíveis. Se não
+existirem nesta versão, use o traço machine-readable descrito em
+`DIAGNOSTICO-HOOKS.md`. Registre:
 
 - diretório raiz reconhecido;
 - confiança aceita somente para a raiz exata extraída do ZIP validado;
 - versão do Claude Code;
-- fontes de configuração mostradas por `/status`;
+- fontes de configuração mostradas por `/status` ou pelo `init` do traço;
 - ausência de erro de schema;
-- seis handlers com origem de projeto em `.claude/settings.json`;
+- seis handlers em `.claude/settings.json` e execução correlacionada no traço;
 - qualquer política gerenciada, como `allowManagedHooksOnly` ou
   `disableAllHooks`, que impeça hooks do projeto.
 
-Se `/hooks` não listar os handlers, pare e siga `DIAGNOSTICO-HOOKS.md`. Não
+Se nem `/hooks` nem o traço comprovarem os handlers, pare e siga
+`DIAGNOSTICO-HOOKS.md`. Não
 continue o teste de qualificação como se a automação estivesse ativa.
 
 Não anexe nem compartilhe o log bruto de `claude --debug hooks`: ele pode conter
@@ -76,7 +79,7 @@ forma atendida `acceptance/zip-update/live-agent-qualification.ps1` em PowerShel
 e 7; ele não usa Git Bash nem Python. A evidência mínima é:
 
 - SessionStart executado na abertura;
-- os seis handlers visíveis em `/hooks` como configuração do projeto;
+- os seis handlers comprovados pela UI ou por settings mais traço;
 - UserPromptSubmit entregando a rota de Yoda;
 - ferramenta Agent chamada com `subagent_type: yoda`;
 - PreToolUse devolvendo o pedido de anúncio ao hub;
@@ -97,5 +100,5 @@ O bug fix pode ser distribuído apenas quando cada ZIP específico de plataforma
 - atualização {{FROM_VERSION}} → {{TO_VERSION}} preservando cada arquivo
   preexistente de `data/` em ambas, à exceção dos metadados de lifecycle
   explicitamente documentados;
-- `/status` e `/hooks` comprovando que a configuração do projeto foi carregada
-  em cada plataforma.
+- `/status` e `/hooks` ou o traço machine-readable comprovando que a
+  configuração do projeto foi carregada em cada plataforma.

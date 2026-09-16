@@ -22,12 +22,18 @@ plano, explicação ou progresso parcial não encerram o trabalho:
     ausente ou digest divergente torna o receipt stale: preserve-o com sufixo
     `-stale-<attempt_id>.json`, gere outro attempt_id e nunca herde o PASS;
 3. confirme que a sessão atual foi iniciada a partir da raiz da nova pasta
-   Maestro. Peça ao usuário para executar `/status` e `/hooks` nesta sessão e
-   registrar a saída sem expor conteúdo pessoal. Não infira ativação apenas
-   porque `.claude/settings.json` e os scripts existem. `/status` deve estar sem
-   erro de configuração, e `/hooks` deve mostrar os seis handlers do projeto
-   com origem em `.claude/settings.json`. Se isso não puder ser observado,
-   marque hooks carregados como UNAVAILABLE e a atualização como incompleta;
+   Maestro. Se esta versão do Claude Code oferecer `/status` e `/hooks`, peça ao
+   usuário para executá-los e registre a saída sem expor conteúdo pessoal. Se
+   esses comandos não existirem, não trate a ausência do comando como falha do
+   hook: use o traço machine-readable de uma sessão controlada iniciada nessa
+   raiz (`--setting-sources project --output-format stream-json --verbose
+   --include-hook-events`) e registre somente metadados sanitizados. O traço
+   substituto precisa provar o evento `init` na raiz nova, os dois handlers de
+   SessionStart, UserPromptSubmit, o PreToolUse correlacionado ao Yoda e Stop,
+   todos sem erro. Em ambas as rotas, confira separadamente os seis handlers
+   configurados em `.claude/settings.json`. Arquivos presentes, sozinhos, não
+   provam carregamento ou execução. Se nem a UI nem o traço puderem ser
+   observados, marque hooks carregados como UNAVAILABLE;
 4. execute maestro-doctor. No Windows, reporte PowerShell e confirme que os
    hooks não chamam Bash nem Python. No Mac, reporte Bash e Python 3;
 5. confira em .claude/settings.json o wiring de SessionStart,
@@ -47,7 +53,8 @@ plano, explicação ou progresso parcial não encerram o trabalho:
 
 No final, reporte cada item como PASS, FAIL ou UNAVAILABLE. Diferencie arquivo
 configurado, hook carregado pelo Claude, hook executado e Agent realmente
-chamado. Se os seis handlers não aparecerem em `/hooks`, se o runtime exigido
-pela plataforma faltar, ou se Yoda não for chamado, não diga que a
+chamado. Se os seis handlers não forem comprovados pela UI ou pela combinação
+de settings e traço machine-readable, se o runtime exigido pela plataforma
+faltar, ou se Yoda não for chamado, não diga que a
 atualização está concluída. Interrupção, erro de API, limite de uso ou
 compactação exigem retomada a partir do receipt, não reinício nem falso PASS.

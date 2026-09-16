@@ -9,7 +9,9 @@ nova instalação e preserve `Maestro-old-{{FROM_VERSION}}` para rollback.
 São três verificações diferentes:
 
 1. **Configurado:** scripts e `.claude/settings.json` existem.
-2. **Carregado:** `/hooks` mostra os seis handlers com origem no projeto.
+2. **Carregado:** `/hooks` mostra os seis handlers com origem no projeto ou,
+   quando o comando não existe, o evento `init` do traço identifica a raiz nova
+   e os handlers do projeto deixam eventos correlacionáveis.
 3. **Executado:** o log de debug e os efeitos esperados mostram que o evento
    disparou.
 
@@ -43,12 +45,22 @@ os hooks do projeto não serem carregados.
 
 ## 3. Conferir a configuração efetiva
 
-Dentro da sessão, execute:
+Dentro da sessão, execute, se estes comandos existirem nesta versão:
 
 ```text
 /status
 /hooks
 ```
+
+Se `/status` ou `/hooks` não aparecerem na lista de comandos, não os invente e
+não classifique isso sozinho como falha. Gere uma sessão controlada com saída
+`stream-json`, `--setting-sources project`, `--verbose` e
+`--include-hook-events`, sempre a partir da raiz nova. Preserve o traço bruto
+somente localmente e extraia apenas: `cwd` do evento `init`, nomes dos eventos,
+matcher, exit code, origem de projeto e correlação do PreToolUse com a chamada
+real de Yoda. SessionStart deve ter duas respostas bem sucedidas;
+UserPromptSubmit, PreToolUse/Agent e Stop devem aparecer sem erro. Os seis
+handlers continuam sendo contados em `.claude/settings.json`.
 
 Registre sistema operacional, versão do Claude Code, diretório do projeto e,
 sem incluir conteúdo pessoal, as fontes de configuração exibidas. Procure:
@@ -109,16 +121,18 @@ Se a política normal do PowerShell impedir a execução, não use Bypass. Regis
 `UNAVAILABLE` e encaminhe a evidência sanitizada ao time responsável.
 
 - Se a chamada direta falhar, registre o erro como problema de runtime/script.
-- Se funcionar, mas `/hooks` estiver vazio, o problema é descoberta ou política
-  do Claude Code.
-- Se `/hooks` listar o handler, mas o evento não executar, use o log produzido
+- Se funcionar, mas `/hooks` ou o traço não mostrarem carregamento, o problema é
+  descoberta ou política do Claude Code.
+- Se `/hooks` listar o handler, ou o `init` estiver correto, mas o evento não
+  executar, use o log produzido
   por `claude --debug hooks` para registrar matcher, exit code e stderr.
 
 ## 5. Critério de saída
 
-O update só recebe `PASS` quando os seis handlers aparecem em `/hooks`, os
-eventos de início e prompt deixam evidência de execução, a proteção de escrita
-está ativa e a chamada real ao Agent `yoda` retorna à sessão principal.
+O update só recebe `PASS` quando os seis handlers são comprovados pela UI ou
+pela combinação de settings e traço machine-readable, os eventos de início,
+prompt, PreToolUse/Agent e Stop deixam evidência de execução, a proteção de
+escrita está ativa e a chamada real ao Agent `yoda` retorna à sessão principal.
 
 Caso contrário, mantenha `Maestro-old-{{FROM_VERSION}}`, classifique cada etapa
 como `FAIL` ou `UNAVAILABLE` e não distribua esta instalação.

@@ -52,9 +52,12 @@ in PowerShell 7 when available:
   -Receipt .\windows-agent.json
 ```
 
-A PASS requires observed SessionStart and UserPromptSubmit hooks, exactly one
-real `Agent` call to Yoda, its Agent PreToolUse hook, its correlated controlled
-return token and the hub's return after Yoda. The qualification test
+A PASS requires the project `init` event with Yoda and the update contract,
+both SessionStart handlers, UserPromptSubmit, exactly one real `Agent` call to
+Yoda, its correlated Agent PreToolUse hook, its controlled return token, the
+hub's return after Yoda and a successful Stop hook. This machine-readable
+route is also the supported fallback when a Claude Code version does not expose
+the interactive `/status` or `/hooks` commands. The qualification test
 deliberately uses the narrow `dontAsk` permission mode plus an `Agent`-only
 allowlist; it does not enable Claude Auto mode or grant file, shell or network
 tools. Preserve the raw trace privately; it is diagnostic
