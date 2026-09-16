@@ -48,7 +48,7 @@ set +e
     --include-hook-events \
     --forward-subagent-text \
     --no-session-persistence \
-    --max-budget-usd 0.30 \
+    --max-budget-usd 0.50 \
     --permission-mode dontAsk \
     --allowedTools=Agent \
     -- "$PROMPT"

@@ -29,7 +29,7 @@ checks.
 ## Live Claude Agent receipt
 
 This command contacts the configured Claude service and can consume up to
-US$0.30. Run it attended and only after approving that the fixed synthetic
+US$0.50. Run it attended and only after approving that the fixed synthetic
 prompt plus distributable workspace instructions may be sent:
 
 ```bash
