@@ -1,0 +1,60 @@
+/goal Quero verificar a atualização do Maestro para a versão {{TO_VERSION}}. Leia `UPDATE-RUNBOOK.md` e a skill `maestro-setup-update` por completo, retome o receipt se existir e execute agora até o campo raiz terminar em `status: pass`, `status: fail` ou `status: unavailable`. Plano, explicação ou progresso parcial não encerram o trabalho. Yoda deve ser chamado de verdade pela ferramenta Agent.
+
+Faça uma verificação local completa, sem alterar meu conteúdo. Crie ou retome
+`data/canary/update-{{TO_VERSION}}.json` e continue até um estado terminal;
+plano, explicação ou progresso parcial não encerram o trabalho:
+
+1. confirme que VERSION é exatamente {{TO_VERSION}};
+2. confirme que data/, ../Maestro-old-{{FROM_VERSION}}/data/ e o arquivo
+   `../Maestro-old-{{FROM_VERSION}}/.maestro-update-baseline-{{FROM_VERSION}}.json`
+   existem. Recalcule caminho relativo, tamanho e SHA-256 de cada arquivo do
+   baseline contra a nova data/. Só marque PASS se todos os arquivos
+   preexistentes continuarem presentes e idênticos. Arquivos novos de backfill
+   são permitidos. Ignore diferenças apenas nestes metadados de lifecycle:
+   `.scaffold.log`, `.maestro-version`, `.upgrade-pending` e
+   `memory/.dream-requested`. No Windows use PowerShell/Get-FileHash; no Mac use
+   SHA-256 nativo. Baseline ou pasta antiga ausente é UNAVAILABLE, e contagem
+   igual de arquivos não basta;
+2a. antes de reutilizar qualquer PASS do receipt, valide suas bindings:
+    attempt_id, versões, plataforma, SHA-256 do ZIP exato contra o sidecar,
+    SHA-256 agregado de todos os arquivos do core fora de data/, SHA-256 do
+    manifesto de baseline e SHA-256 do caminho canônico da instalação. Campo
+    ausente ou digest divergente torna o receipt stale: preserve-o com sufixo
+    `-stale-<attempt_id>.json`, gere outro attempt_id e nunca herde o PASS;
+3. confirme que a sessão atual foi iniciada a partir da raiz da nova pasta
+   Maestro. Se esta versão do Claude Code oferecer `/status` e `/hooks`, peça ao
+   usuário para executá-los e registre a saída sem expor conteúdo pessoal. Se
+   esses comandos não existirem, não trate a ausência do comando como falha do
+   hook: use o traço machine-readable de uma sessão controlada iniciada nessa
+   raiz (`--setting-sources project --output-format stream-json --verbose
+   --include-hook-events`) e registre somente metadados sanitizados. O traço
+   substituto precisa provar o evento `init` na raiz nova, os dois handlers de
+   SessionStart, UserPromptSubmit, o PreToolUse correlacionado ao Yoda e Stop,
+   todos sem erro. Em ambas as rotas, confira separadamente os seis handlers
+   configurados em `.claude/settings.json`. Arquivos presentes, sozinhos, não
+   provam carregamento ou execução. Se nem a UI nem o traço puderem ser
+   observados, marque hooks carregados como UNAVAILABLE;
+4. execute maestro-doctor. No Windows, reporte PowerShell e confirme que os
+   hooks não chamam Bash nem Python. No Mac, reporte Bash e Python 3;
+5. confira em .claude/settings.json o wiring de SessionStart,
+   UserPromptSubmit, PreToolUse para escrita, PreToolUse para Agent/Task e Stop;
+6. confirme separadamente evidência de que SessionStart e UserPromptSubmit
+   realmente executaram nesta sessão. Diferencie `configurado`, `carregado` e
+   `executado`. Em caso de dúvida, use `DIAGNOSTICO-HOOKS.md` e o log iniciado
+   com `claude --debug hooks`;
+7. confirme que as projeções .claude/agents e a política de ativação existem;
+8. use a ferramenta Agent com subagent_type `yoda` para pressionar o
+   pacote final de evidência. Aguarde o retorno real. Não simule o agente nem
+   substitua a chamada por leitura do arquivo do agente;
+9. confirme o anúncio e o retorno real. Grave cada
+    `checks[*].state` e `agents.<id>.state` como `PASS`, `FAIL` ou
+    `UNAVAILABLE`. O campo raiz `status` aceita apenas `in_progress`, `pass`,
+    `fail` ou `unavailable`, sempre em minúsculas.
+
+No final, reporte cada item como PASS, FAIL ou UNAVAILABLE. Diferencie arquivo
+configurado, hook carregado pelo Claude, hook executado e Agent realmente
+chamado. Se os seis handlers não forem comprovados pela UI ou pela combinação
+de settings e traço machine-readable, se o runtime exigido pela plataforma
+faltar, ou se Yoda não for chamado, não diga que a
+atualização está concluída. Interrupção, erro de API, limite de uso ou
+compactação exigem retomada a partir do receipt, não reinício nem falso PASS.

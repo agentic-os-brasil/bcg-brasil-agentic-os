@@ -728,6 +728,10 @@
     {
       "source": "bundles/base/skills/workspace-agent-setup/agents/openai.yaml",
       "path": "skills/workspace-agent-setup/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/tools/agent-route.py",
+      "path": "tools/agent-route.py"
     }
   ]
 }

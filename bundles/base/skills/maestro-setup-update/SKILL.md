@@ -44,22 +44,75 @@ Se o pedido for rollback, tratar como caso de "reparo com ZIP anterior" (ver se�
 
 Contexto: o time BCG Brasil AI envia um email com o link do ZIP novo. O usuário baixa e segue o ritual do `README-INSTALL.md` na raiz da pasta Maestro, que é a fonte única desse processo. Esta skill entra depois disso, para verificar.
 
+Antes da verificação longa, leia `UPDATE-RUNBOOK.md`. O contrato exige um
+receipt versionado sob `data/canary/`, retomada idempotente e um despacho real
+do agente disponível no Maestro: Yoda para o veredito final. Não simule o
+retorno e não encerre em plano ou progresso parcial.
+`data/canary/` é um namespace histórico preservado por compatibilidade com o
+layout já instalado; o receipt registra uma qualificação de release válida
+para o ZIP exato, não um canário preliminar.
+
 **Nunca repita os passos do ritual nesta skill.** Qualquer resumo diverge do original e vira instrução destrutiva. Em particular, nunca oriente a extrair o ZIP por cima da pasta atual: isso deixa arquivos de versões diferentes misturados. O `README-INSTALL.md` manda renomear a pasta antiga e **copiar** a `data/` para a instalação nova — é ele que o usuário deve seguir.
 
 1. **Perguntar a versão esperada.** Uma frase apenas: "qual versão o email do time BCG Brasil AI pediu para instalar?"
 
 2. **Ler `VERSION` local.** Comparar com a versão informada.
-   - **Match:** "instalado v<X.Y.Z>, igual à versão do email. Atualização concluída. Sua workspace `data/` foi preservada."
+   - **Match:** "instalado v<X.Y.Z>, igual à versão do email. O núcleo novo está ativo. Agora vou verificar a preservação da workspace pelo manifesto criado antes da troca." A igualdade de `VERSION` nunca prova preservação de `data/`; concluir somente depois de validar o baseline descrito no kit.
    - **Mismatch (local abaixo do esperado):** "a versão instalada é v<X.Y.Z>, abaixo da que o email pediu. Feche o Claude Code inteiro e siga o passo a passo do `README-INSTALL.md` que está na raiz da pasta Maestro — ele preserva sua `data/`. Quando reabrir, é só dizer 'confere versão' que eu verifico." Não listar os passos aqui.
    - **Mismatch (local acima do esperado):** raro, mas possível. Informar: "a versão instalada é mais nova que a informada. Confirme com o time BCG Brasil AI qual é a versão correta antes de qualquer ação."
 
-3. **Sanidade pós-atualização.** Se surgir dúvida (arquivo faltando, hook não roda), delegar para `maestro-doctor` e seguir a prescrição dele.
+3. **Abrir ou retomar o receipt.** Derivar a versão de destino do arquivo
+   `VERSION` e usar `data/canary/update-<versão>.json`. Se não existir, criar
+   um JSON com `schema_version: 1`, `contract_id:
+   maestro-update-long-run-v1`, um `attempt_id` UUID opaco, versões de
+   origem/destino, plataforma, `target_release_sha256` do ZIP exato validado
+   contra seu sidecar, `target_core_sha256` agregado de todos os arquivos fora
+   de `data/`, `baseline_manifest_sha256`, `installation_root_sha256` do
+   caminho canônico, `status: in_progress`, timestamps, checks nomeados e a
+   lista `required_agents: [yoda]`. Checks e agentes ainda não
+   executados não carregam `state`; ausência de estado significa pendente. O
+   receipt é somente metadado:
+   nunca incluir prompts, conteúdo de arquivos, material de cliente ou dados
+   pessoais. Se existir, validar schema e todas essas bindings antes de
+   reutilizar qualquer `PASS`. Campo ausente, ZIP/core/baseline/raiz divergente
+   ou tentativa de outra plataforma torna o receipt anterior stale: preservá-lo
+   como `update-<versão>-stale-<attempt_id>.json`, gerar novo `attempt_id` e
+   começar outra tentativa. Só retomar do primeiro item não terminal quando
+   todas as bindings coincidirem.
 
-4. **Fechar o ciclo (obrigatório).** Ao concluir a verificação (match ou orientação de reinstalação aceita), reconciliar os marcadores em `data/`:
+4. **Provar o update.** Registrar separadamente como `PASS`, `FAIL` ou
+   `UNAVAILABLE`: versão; baseline SHA-256 de cada arquivo preexistente;
+   preservação de `data/`; runtime da plataforma; `/status`; seis handlers em
+   `/hooks`; execução observada de SessionStart e UserPromptSubmit; projeções
+   de agentes. Configurado, carregado e executado são estados diferentes.
+
+5. **Sanidade pós-atualização.** Rodar `maestro-doctor`. Se surgir dúvida
+   (arquivo faltando, hook não roda), seguir a prescrição dele antes de
+   continuar.
+
+6. **Yoda obrigatório.** Depois de fechar os checks,
+   usar a ferramenta Agent com `subagent_type: yoda`. Enviar pedido literal,
+   resumo de evidência, consequência de erro, reversibilidade e gaps. Aguardar
+   o retorno real e registrar o veredito. Se Agent estiver indisponível,
+   registrar `UNAVAILABLE`; não imitar Yoda.
+
+7. **Terminalidade.** Continuar enquanto houver ação segura e autorizada.
+   Finalizar o receipt apenas quando todo check e o agente estiverem em
+   `PASS`, `FAIL` ou `UNAVAILABLE`. `status: pass` exige todos em `PASS`;
+   qualquer `FAIL` produz `status: fail`; sem falha mas com prova impossível,
+   `status: unavailable`. Um bloqueio corporativo é terminal honesto, não
+   convite para contornar política. O schema é fechado: `status` aceita apenas
+   `in_progress`, `pass`, `fail` ou `unavailable` em minúsculas; cada
+   `checks[*].state` e `agents.<id>.state` aceita apenas `PASS`, `FAIL` ou
+   `UNAVAILABLE` em maiúsculas.
+
+8. **Fechar o ciclo (obrigatório).** Somente quando o receipt terminar em
+   `pass`, reconciliar os marcadores em `data/`:
    - Ler `${CLAUDE_PROJECT_DIR}/VERSION` (versão em execução) e `${CLAUDE_PROJECT_DIR}/data/.maestro-version` (versão instalada anteriormente).
    - Se diferentes e a verificação confirmou o novo ZIP no lugar, atualizar `data/.maestro-version` para o novo valor via Write ou Edit.
    - Se existir `data/.upgrade-pending`, apagar o arquivo. Ele foi escrito pelo hook `first-run-scaffold.sh` e serviu de gatilho; sem essa limpeza o SessionStart repete o alerta.
-   - Se a migração falhou (não conseguiu extrair, VERSION continua diferente), preservar o marcador e informar honestamente que o upgrade não fechou.
+   - Se a migração falhou ou ficou `unavailable`, preservar o marcador e
+     informar honestamente que o upgrade não fechou.
 
 ## Migração incremental de schema
 
@@ -101,7 +154,9 @@ Não há rollback automático. Se o usuário pediu para voltar a uma versão ant
 - Não sugere abrir terminal, rodar script ou editar JSON.
 - Não invoca `bcgos` nem qualquer binário de instalador (esse caminho foi encerrado).
 - Não promete rollback automático.
-- Não toca em `data/`. Essa pasta pertence ao usuário.
+- Não altera conteúdo autoral em `data/`. Depois de uma atualização validada,
+  pode reconciliar somente os marcadores de lifecycle explicitados neste
+  contrato (`.maestro-version` e `.upgrade-pending`).
 - Não repete o trabalho de `maestro-onboarding` (identidade) nem de `maestro-doctor` (diagnóstico). Delega.
 
 ## Encerramento

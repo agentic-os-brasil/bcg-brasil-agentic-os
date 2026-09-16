@@ -6,6 +6,17 @@ Codes contain exactly four uppercase letters. They are globally unique, permanen
 
 Never include secrets, credentials, personal data, client-identifying context or case content.
 
+## PSHK - Use native PowerShell hooks for the Windows release
+
+- Date: 2026-09-14
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The 0.1.12 compatibility patch fixed Windows path and Python-name defects but still invoked every product hook through Git Bash. Git for Windows is optional in the native Claude Code installation and is not present on every corporate device, so describing that patch as Windows support would leave scaffold, memory, case isolation and agent routing inactive on a supported Windows host.
+- Decision: The Windows Maestro artifact uses PowerShell-native hook implementations and an explicit PowerShell hook configuration compatible with Windows PowerShell 5.1 and PowerShell 7. The macOS artifact keeps the Bash implementations. Git Bash remains an optional user capability, never a Maestro runtime prerequisite. The user-facing update kit selects the platform payload before activation and preserves the existing `data/` workspace contract.
+- Consequences: Each configured Windows hook needs behaviorally equivalent PowerShell coverage, including stdin JSON, bounded stdout, exit-code semantics, UTF-8, drive-letter paths, spaces and reparse-point safety. Release evidence remains platform-specific: local PowerShell contract tests do not replace a native Windows Claude session, and publication stays blocked until the exact Windows artifact passes update preservation, lifecycle-hook and real Agent-call canaries. Platform selection must not ask the owner to edit JSON, run shell commands or merge old managed-core files into the new release.
+- Refs: specs/001-cli-distribution.md; specs/003-pilot-success.md; specs/004-runtime-portability.md; installers/zip/; Claude Code hooks reference
+- Supersedes: none
+
 ## WYRB - Rename internal reviewer role from Walter to Yoda (Mestre Yoda persona)
 
 - Date: 2026-08-15

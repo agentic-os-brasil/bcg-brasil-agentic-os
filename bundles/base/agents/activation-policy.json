@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "policy_id": "agent-activation-v1-data-backport",
+  "updated": "2026-09-13",
+  "note": "Politica de spokes para a linha 0.1.x. Preserva data/ como contrato de estado. Gatilhos periodicos ficam fora ate existir um consumidor ponta a ponta; esta release roteia somente a partir da mensagem do dono ou de uma decisao explicita do hub.",
+  "layers": {
+    "hub": "A propria sessao. Nao se despacha.",
+    "instance": "Conta e caso sao escopo assumido pela sessao, nao subagentes.",
+    "spoke": "Subagente nativo em .claude/agents/, despachado com pacote fechado."
+  },
+  "dispatch_rules": {
+    "max_depth": 2,
+    "max_active_branches": 1,
+    "parallel_when": "escopos independentes que nao conflitam podem ser despachados juntos",
+    "packet_is_closed": "o spoke nao busca contexto; tudo de que precisa vai no prompt",
+    "verdict_is_input": "o retorno do spoke e insumo; o hub continua responsavel pela resposta",
+    "budget_not_gate": "profundidade e numero de branches sao orcamentos observaveis, nao condicoes de validade"
+  },
+  "announce": {
+    "required": true,
+    "rule": "Todo despacho de spoke e anunciado no chat para o dono saber qual agente foi ativado.",
+    "format": "{emoji} **{display} ativado** — {motivo em meia linha, na lingua do dono}.",
+    "on_return": "Quando o veredito mudar a entrega, diga em uma linha o que mudou.",
+    "never": "Nao anuncie agente que nao foi despachado nem a camada de instancia."
+  },
+  "agents": [
+    {
+      "id": "yoda",
+      "layer": "spoke",
+      "status": "active",
+      "emoji": "🧙",
+      "spec": "bundles/base/agents/yoda/AGENT.md",
+      "projection": ".claude/agents/yoda.md",
+      "subagent_type": "yoda",
+      "dispatchable": true,
+      "when": "Antes de output de alta alavancagem sair: recomendacao material, trade-off consequente, artefato para cliente ou stakeholder externo, escolha dificil de reverter.",
+      "never": "Trabalho operacional, reversivel ou de baixa alavancagem.",
+      "packet": [
+        "pedido literal do dono",
+        "rascunho completo",
+        "audiencia",
+        "consequencia se estiver errado",
+        "reversibilidade",
+        "referencias de evidencia"
+      ],
+      "gate": "client-delivery-gate",
+      "triggers": [
+        "chama o yoda",
+        "revisa antes de mandar",
+        "revisar antes de enviar",
+        "yoda check",
+        "isso vai para o cliente",
+        "vai para o comite",
+        "recomendacao material",
+        "decisao dificil de reverter",
+        "trade-off consequente"
+      ]
+    },
+    {
+      "id": "darwin",
+      "layer": "spoke",
+      "status": "active",
+      "emoji": "🧬",
+      "spec": "bundles/base/agents/darwin/AGENT.md",
+      "projection": ".claude/agents/darwin.md",
+      "subagent_type": "darwin",
+      "dispatchable": true,
+      "when": "Saude do Maestro: deriva entre especificacao e execucao, confiabilidade, cobertura de agente e skill, custo, atrito e contexto injetado.",
+      "never": "Trabalho de caso, material de cliente ou conversa direta com o dono.",
+      "packet": [
+        "escopo da avaliacao",
+        "o que mudou",
+        "diagnosticos e marcadores relevantes sob data/"
+      ],
+      "triggers": [
+        "chama o darwin",
+        "saude do sistema",
+        "saude do maestro",
+        "o que esta inerte",
+        "deriva entre especificacao e execucao",
+        "cobertura de skill",
+        "cobertura de agente",
+        "auditoria do proprio sistema"
+      ]
+    },
+    {
+      "id": "gamma-guardian",
+      "layer": "spoke",
+      "status": "active",
+      "emoji": "🧪",
+      "spec": "bundles/base/agents/gamma-guardian/AGENT.md",
+      "projection": ".claude/agents/gamma-guardian.md",
+      "subagent_type": "gamma-guardian",
+      "dispatchable": true,
+      "when": "Qualidade longitudinal de codigo de uma workspace autorizada contra um head de fonte.",
+      "never": "Sem workspace e head declarados, herdando contexto de caso ou avaliando material de cliente.",
+      "packet": [
+        "workspace autorizada por caminho absoluto",
+        "head de fonte",
+        "o que mudou"
+      ],
+      "triggers": [
+        "chama o gamma guardian",
+        "qualidade do codigo",
+        "avaliacao longitudinal de codigo",
+        "cobertura de teste do sistema",
+        "divida tecnica do maestro",
+        "semaforo de qualidade"
+      ]
+    },
+    {
+      "id": "pa-expert",
+      "layer": "spoke",
+      "status": "dormant",
+      "emoji": "🧠",
+      "spec": "bundles/base/agents/pa-expert/AGENT.md",
+      "projection": ".claude/agents/pa-expert.md",
+      "subagent_type": "pa-expert",
+      "dispatchable": false,
+      "dormant_reason": "O registro de experts esta vazio; sem canone aplicavel nao ha despacho seguro.",
+      "when": "Somente depois de existir um expert versionado no registro.",
+      "never": "Enquanto dormente, com contexto de cliente ou caso, ou para pesquisa aberta.",
+      "packet": ["pergunta de pratica higienizada"],
+      "triggers": []
+    }
+  ]
+}

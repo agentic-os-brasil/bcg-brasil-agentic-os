@@ -2,8 +2,16 @@
 
 ## Requisitos
 
-- **Claude Code desktop** instalado (Mac ou Windows).
-- Nada mais.
+- **Claude Code desktop** instalado.
+- **Mac:** Bash do sistema e um interpretador Python 3 disponível.
+- **Windows:** Windows PowerShell 5.1 (já incluído no Windows) ou PowerShell 7.
+  Use o ZIP cujo nome termina em `windows-powershell`.
+
+No Windows, os hooks de memória, proteção de escrita e chamada de agentes são
+PowerShell nativo. Git Bash e Python não são requisitos desses hooks. No Mac,
+os hooks continuam em Bash e usam Python 3. Se o diagnóstico inicial apontar
+uma peça ausente, não é necessário abrir terminal nem instalar algo por conta
+própria: envie a saída de `/maestro-doctor` ao time BCG Brasil AI.
 
 ## Instalação (primeira vez)
 
@@ -17,7 +25,9 @@ Pronto. Rode `/maestro-onboarding` para a apresentação guiada.
 
 ## Atualização (novas versões)
 
-Quando o time BCG Brasil AI mandar um email com nova versão. O ritual é "renomear, extrair novo, mover `data/`". Uma única operação destrutiva visível, sem risco de arquivos velhos sobrando entre versões.
+Quando o time BCG Brasil AI mandar um email com nova versão. O ritual é
+"renomear, extrair novo, copiar `data/`". Uma única operação destrutiva visível,
+sem risco de arquivos velhos sobrando entre versões.
 
 **Antes de começar:** conferir se a pasta `data/` existe dentro da pasta `Maestro/` atual. Se não existir, parar e rodar `/maestro-doctor` antes de atualizar.
 
@@ -29,7 +39,14 @@ Quando o time BCG Brasil AI mandar um email com nova versão. O ritual é "renom
    - **Windows (Explorer):** abrir `Maestro-old/`, copiar `data/` (`Ctrl+C`), colar dentro da nova `Maestro/` (`Ctrl+V`).
 5. Conferir que a nova `Maestro/` contém: `VERSION`, `CLAUDE.md`, `.claude/`, `bundles/` e `data/`. Se `data/` não estiver lá, refazer o passo 4 antes de continuar.
 6. Reabrir a nova pasta `Maestro/` no Claude Code e rodar `/maestro-doctor` para confirmar.
-7. Só depois de confirmar que `data/` está dentro da nova `Maestro/` **e** que `/maestro-doctor` reporta tudo verde, apagar `Maestro-old/`. Manter por pelo menos 7 dias (ou até a próxima atualização) como rede de segurança.
+7. Seguir `UPDATE-RUNBOOK.md` para a verificação longa. Ele orienta modelo,
+   effort, Auto mode quando disponível, continuidade com `/goal`, checkpoints
+   e uma chamada real ao subagent Yoda.
+8. Depois de confirmar que `data/` está dentro da nova `Maestro/`, que
+   `/maestro-doctor` reporta tudo verde e que o campo raiz do receipt terminou
+   exatamente em `status: pass`,
+   manter `Maestro-old/` por pelo menos 7 dias (ou até a próxima atualização)
+   como rede de segurança. Só então apagar.
 
 Esse fluxo elimina o risco de arquivos velhos de versões anteriores sobrarem misturados com a versão nova. Como o passo 4 é uma cópia, um erro no meio do caminho não destrói nada: `Maestro-old/data/` continua intacto até o passo 7.
 
@@ -40,6 +57,7 @@ Maestro/
 ├── VERSION                ← versão instalada
 ├── WELCOME.md             ← primeira leitura
 ├── README-INSTALL.md      ← este arquivo
+├── UPDATE-RUNBOOK.md     ← contrato de verificação longa do update
 ├── CLAUDE.md              ← bootstrap do Claude Code
 ├── .claude/               ← configuração (hooks, skills, settings)
 ├── bundles/               ← skills e agentes (núcleo)
@@ -54,6 +72,22 @@ Maestro/
 
 **"O Claude Code não reconheceu os hooks."**
 Feche e reabra o Claude Code com a pasta. Se persistir, rode `/maestro-doctor`.
+
+**"Sem Git Bash no Windows."**
+Nenhuma ação é necessária. Esta versão usa PowerShell nativo no Windows.
+
+**"A política da empresa bloqueou um script PowerShell."**
+Não altere a política nem tente contornar o bloqueio. Guarde `Maestro-old/` e
+envie a saída de `/maestro-doctor` ao time BCG Brasil AI; o release só pode ser
+liberado nessa máquina pela rota aprovada pela empresa.
+
+**"Sem Python 3."**
+No Windows, nenhuma ação é necessária para os hooks desta versão. No Mac, a
+memória em Markdown e a conversa continuam, mas o roteamento automático fica
+indisponível e escritas que não podem ser verificadas são recusadas.
+
+Nos dois casos, envie a saída de `/maestro-doctor` ao time BCG Brasil AI. Não
+é necessário abrir terminal nem instalar algo por conta própria.
 
 **"Sumiu minha memória depois do update."**
 Provavelmente a pasta `data/` foi movida por engano. Ela deve estar dentro de `Maestro/`. Se não estiver, verifique se você extraiu para o lugar certo.
