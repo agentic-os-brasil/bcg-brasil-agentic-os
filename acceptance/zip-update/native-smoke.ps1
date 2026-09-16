@@ -41,11 +41,16 @@ try {
         'preferred_effort: xhigh',
         '  - darwin',
         '  - yoda',
-        '/goal '
+        '/goal',
+        'receipt_bindings:',
+        '  - target_release_sha256',
+        '  - target_core_sha256',
+        '  - baseline_manifest_sha256',
+        '  - installation_root_sha256'
     )) {
         if (-not $runbook.Contains($required)) { throw "Long-running update contract is missing: $required" }
     }
-    Write-Host 'PASS  long-running update contract names Opus/xhigh, goal continuity, Darwin and Yoda'
+    Write-Host 'PASS  long-running update contract binds Opus/xhigh, goal continuity, install identity, Darwin and Yoda'
 
     $smokeOutput = @(& (Join-Path $repo 'acceptance/zip-update/powershell-hook-smoke.ps1') `
         -MaestroRoot $maestro `
