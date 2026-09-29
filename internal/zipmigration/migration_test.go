@@ -134,7 +134,7 @@ func TestLegacyResolverValidatesBeforeReturningActualContentPath(t *testing.T) {
 	}
 }
 func TestUnicodeAndCaseMappedCollisionsArePortable(t *testing.T) {
-	for _, pair := range [][2]string{{"profile/Name.json", "owner/name.json"}, {"profile/São.json", "owner/são.json"}, {"profile/straße.json", "owner/STRASSE.json"}} {
+	for _, pair := range [][2]string{{"craft/index.md", "owner/atlas/craft/index.md"}, {"learnings/index.md", "owner/atlas/learnings/index.md"}, {"profile/Name.json", "owner/name.json"}, {"profile/São.json", "owner/são.json"}, {"profile/straße.json", "owner/STRASSE.json"}} {
 		root := t.TempDir()
 		put(t, root, "data/"+pair[0], "one")
 		put(t, root, "data/"+pair[1], "two")

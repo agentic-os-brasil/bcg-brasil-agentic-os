@@ -219,8 +219,8 @@ class PackagedUpgradeV020(unittest.TestCase):
 
                 # Authored material is synthetic; preserve every old scaffold file as well.
                 fixtures = {
-                    "craft/index.md": "# Authored craft index\n- methods/fixture.md — synthetic retained index\n",
-                    "learnings/index.md": "# Authored learning index\n- fixture.md — synthetic retained index\n",
+                    "owner/atlas/craft/index.md": "# Authored craft index\n- methods/fixture.md — synthetic retained index\n",
+                    "owner/atlas/learnings/index.md": "# Authored learning index\n- fixture.md — synthetic retained index\n",
                     "owner/fixture-author-note.md": "Synthetic owner note; no real person or client.\n",
                     "cases/fixture-case/brain/canon/facts.md": "Synthetic case canon for upgrade acceptance.\n",
                     "cases/.active": b"\xef\xbb\xbffixture-case\r\n",
@@ -286,9 +286,9 @@ class PackagedUpgradeV020(unittest.TestCase):
                 ):
                     self.assertTrue((new / "brain" / relative).is_file(), f"missing migrated fixture: {relative}")
                 self.assertTrue((new / "brain/customizações/empty").is_dir())
-                for old_index, new_index in (("craft/index.md", "craft/craft.md"), ("learnings/index.md", "learnings/learnings.md")):
+                for old_index, new_index in (("owner/atlas/craft/index.md", "craft/craft.md"), ("owner/atlas/learnings/index.md", "learnings/learnings.md")):
                     self.assertEqual((new / "brain" / new_index).read_bytes(), (old / "data" / old_index).read_bytes(), "author index must remain readable at canonical path")
-                    self.assertFalse((new / "brain" / old_index).exists(), "scaffold must not create a competing legacy index")
+                    self.assertFalse((new / "brain" / Path(new_index).parent / "index.md").exists(), "scaffold must not create a competing legacy index")
                 for namespace, file in (
                     ("agents", "custom/agent.md"),
                     ("workspaces", "project-a/context.md"),
@@ -310,7 +310,7 @@ class PackagedUpgradeV020(unittest.TestCase):
                 post_edit = scaffold(new)
                 self.assertEqual(post_edit.returncode, 0, post_edit.stderr)
                 self.assertNotIn("maestro:migration-blocked", post_edit.stdout)
-                for old_index, new_index in (("craft/index.md", "craft/craft.md"), ("learnings/index.md", "learnings/learnings.md")):
+                for old_index, new_index in (("owner/atlas/craft/index.md", "craft/craft.md"), ("owner/atlas/learnings/index.md", "learnings/learnings.md")):
                     self.assertEqual((new / "brain" / new_index).read_bytes(), (old / "data" / old_index).read_bytes(), "repeated startup overwrote authored index")
                 _, evolved = migration(new, "--status")
                 self.assertEqual(evolved["state"], "committed", evolved)
