@@ -554,15 +554,8 @@ function Invoke-MaestroAgentAnnouncement {
 function Invoke-MaestroSessionStopDream {
     $project = Get-MaestroProjectDir
     if (-not $project) { return }
-    $memory = Join-Path $project 'brain/memory'
-    if (-not (Test-Path -LiteralPath $memory -PathType Container)) { return }
-    $marker = Join-Path $memory '.dream-requested'
-    $today = [DateTime]::Now.ToString('yyyy-MM-dd')
-    if (Test-Path -LiteralPath (Join-Path $memory "recent/$today.md") -PathType Leaf) {
-        Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
-        return
-    }
-    Write-MaestroUtf8 $marker ([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ') + "`n")
+    . (Join-Path $PSScriptRoot 'maestro-runtime.ps1')
+    Invoke-MaestroRuntime -Root $project -RuntimeArgs @('daily-stop','--root',$project)
 }
 
 . (Join-Path $PSScriptRoot 'Maestro.Lifecycle.ps1')

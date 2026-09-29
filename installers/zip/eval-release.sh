@@ -689,8 +689,25 @@ if CLAUDE_PROJECT_DIR="$DREAM_MAESTRO" bash "$DREAM_MAESTRO/.claude/hooks/sessio
 else
   fail "session-stop-dream.sh non-zero exit"
 fi
+if [ -e "$DREAM_MAESTRO/brain/memory/.dream-requested" ]; then
+  fail "no-op Stop must not create a dream request"
+else
+  pass "no-op Stop does not create a dream request"
+fi
+mkdir -p "$DREAM_MAESTRO/brain/.maestro/daily-pending"
+python3 - "$DREAM_MAESTRO" <<'PY'
+import datetime, json, pathlib, sys
+root = pathlib.Path(sys.argv[1]).resolve()
+now = datetime.datetime.now().astimezone()
+checkpoint = dict(schema_version=1, id='eval-checkpoint', session_id='eval-session',
+                  workspace=str(root), scope='owner', captured_at=now.isoformat(timespec='seconds'),
+                  local_date=now.date().isoformat(), summary='Synthetic packaged continuity check',
+                  decisions=[], next_actions=[], provenance='agent-authored')
+(root / 'brain/.maestro/daily-pending/eval-checkpoint.json').write_text(json.dumps(checkpoint), encoding='utf-8')
+PY
+CLAUDE_PROJECT_DIR="$DREAM_MAESTRO" bash "$DREAM_MAESTRO/.claude/hooks/session-stop-dream.sh" >/dev/null 2>&1
 if [ -f "$DREAM_MAESTRO/brain/memory/.dream-requested" ] && [ -s "$DREAM_MAESTRO/brain/memory/.dream-requested" ]; then
-  pass ".dream-requested marker written with timestamp"
+  pass ".dream-requested fingerprint written after a persisted checkpoint"
 else
   fail ".dream-requested marker missing or empty after session-stop-dream.sh"
 fi
@@ -719,7 +736,7 @@ mkdir -p "$INJECT2_MAESTRO/brain/memory/recent" "$INJECT2_MAESTRO/brain/memory/l
 printf '{"schema_version":1,"display_name":"Test User","role":"test","context":"","initialized":true}\n' \
   > "$INJECT2_MAESTRO/brain/owner/identity.json"
 printf '# Test memory entry\nThis is a recent memory.\n' \
-  > "$INJECT2_MAESTRO/brain/memory/recent/2024-01-01.md"
+  > "$INJECT2_MAESTRO/brain/memory/recent/$(date +%Y-%m-%d).md"
 printf '# professional-role\n\n## Current\n\nSenior AI Scientist.\n' \
   > "$INJECT2_MAESTRO/brain/owner/self/professional-role.md"
 INJECT2_OUT=$(CLAUDE_PROJECT_DIR="$INJECT2_MAESTRO" bash "$INJECT2_MAESTRO/.claude/hooks/session-start-memory-inject.sh" 2>/dev/null)
@@ -728,7 +745,7 @@ if echo "$INJECT2_OUT" | grep -q "maestro:session-context:start"; then
 else
   fail "session-start-memory-inject.sh does NOT emit session-context markers"
 fi
-if echo "$INJECT2_OUT" | grep -q "Último log diário consolidado"; then
+if echo "$INJECT2_OUT" | grep -q "This is a recent memory"; then
   pass "session-start-memory-inject.sh injects L1 daily log layer"
 else
   fail "session-start-memory-inject.sh does NOT inject L1 daily log layer"

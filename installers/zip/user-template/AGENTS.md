@@ -1,5 +1,15 @@
 # Maestro — native Codex workspace
 
+Before a material final response or interruption, follow the daily continuity
+checkpoint recipe in `bundles/base/skills/maestro-operator/SKILL.md`: select
+bounded agent-authored summary/decisions/next actions, bind the actual session,
+workspace, scope and local date, queue it in the owning scope and invoke the
+verified `daily-stop` helper. Confirm persistence from its content-free receipt
+and the checkpoint ID; keep failed inputs for retry. Client work stays in the
+confirmed case. This automatic logging never substitutes for user-confirmed eod.
+
+
+
 Before normal work, follow .codex/README.md: attended setup binds the packaged
 helper to the explicitly confirmed canonical installation root. Never search
 ancestors or nearby .codex directories to choose a hook executable. The portable

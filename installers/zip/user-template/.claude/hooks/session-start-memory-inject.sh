@@ -3,10 +3,9 @@
 # profile context and emits structured context for the session.
 #
 # Injection order and depth (mirrors Kowalski OS rollup model):
-#   - L3  long-term memory   → full content (compact, high-signal, always injected)
-#   - L2  weekly resume      → latest file (most recent weekly synthesis)
-#   - L1  daily log          → latest consolidated daily log
-#   - profile identity + preferences
+#   - lifetime, L3 thematic projection, then L2 weekly synthesis
+#   - shared daily + L1 packet for owner/current case, D0/D-1/D-2
+#   - profile, SELF and other routing sections within the whole-packet cap
 #
 # Fail-open: any missing layer is skipped with a one-line diagnostic.
 # Never blocks Claude from starting a session.
@@ -17,6 +16,10 @@ set +e
 . "$(dirname "${BASH_SOURCE[0]}")/lib/python.sh" 2>/dev/null || true
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
+. "$(dirname "${BASH_SOURCE[0]}")/lib/maestro-runtime.sh"
+MIGRATION_RESULT=$(maestro_runtime "$PROJECT_DIR" migration --project "$PROJECT_DIR") || exit 0
+case "$MIGRATION_RESULT" in *'"state":"committed"'*|*'"state":"not_needed"'*) ;; *) printf 'Maestro: migration pending; daily recovery unavailable.\n'; exit 0 ;; esac
+DAILY_RECOVERY=$(maestro_runtime "$PROJECT_DIR" daily-stop --root "$PROJECT_DIR" 2>/dev/null) || DAILY_RECOVERY='{"state":"unavailable"}'
 
 BRAIN_DIR="$PROJECT_DIR/brain"
 MEMORY_DIR="$BRAIN_DIR/memory"
@@ -118,10 +121,20 @@ PY
 # The maestro:session-context markers are recognized by the Maestro runtime.
 # Content between them is appended to the session context budget.
 
+emit_memory_blocks() {
+  [ -n "$MEM_EMITTER" ] || return 0
+  PYTHONIOENCODING=utf-8 maestro_py "$MEM_EMITTER" \
+    --brain "$BRAIN_DIR" --envelope "$ENVELOPE_FILE" --cap-total "$CAP_total" \
+    --budgets "self=$CAP_self,lifetime=$CAP_lifetime,l3=$CAP_l3,learnings=$CAP_learnings,craft=$CAP_craft,l2=$CAP_l2,l1=$CAP_l1" \
+    "$@" 2>/dev/null
+}
+
+
 emit_session_packet() {
 printf '<!-- maestro:session-context:start -->\n'
 printf '# Maestro — Contexto da sessão\n'
 printf '_Injetado automaticamente pelo hook de início de sessão._\n'
+case "$DAILY_RECOVERY" in *'"state":"pending"'*|*'"state":"migration_blocked"'*|*'"state":"unavailable"'*) printf 'daily_recovery %s\n' "$DAILY_RECOVERY" ;; esac
 
 # No interpreter means structured JSON parsing and prompt-time routing are
 # unavailable. Markdown memory still injects, while the case guard refuses file
@@ -146,6 +159,9 @@ printf '\n## Método operacional\n'
 printf '<!-- maestro:pointer: maestro-operator · reason: deterministic_operational_method -->\n'
 printf 'Skill: %s/bundles/base/skills/maestro-operator/SKILL.md\n' "${PROJECT_DIR}"
 printf 'Instrução: carregar este skill antes de escolher, interpretar ou recuperar qualquer operação de controle do Maestro.\n'
+
+emit_memory_blocks --blocks lifetime,l3,l2
+maestro_runtime "$PROJECT_DIR" daily-context --root "$PROJECT_DIR" || printf 'Daily continuity unavailable; inspect scope daily sources.\n'
 
 # Tech-core pointer (§3.1 diagnostic) — engineering skills bundle. Emitted only
 # when the directory exists; fail-open otherwise. Loaded on demand.
@@ -401,11 +417,7 @@ if [ -f "$DREAM_MARKER" ]; then
   printf '<!-- maestro:dream-trigger: marker=%s -->\n' "$DREAM_MARKER"
   printf 'O marcador `.dream-requested` foi detectado (escrito pelo hook da sessão anterior).\n'
   printf '\n**Ação obrigatória:** leia `bundles/base/skills/dream-memory/SKILL.md` e execute o ciclo diário como primeira ação desta sessão, antes de responder ao usuário ou executar qualquer tarefa.\n'
-  # The marker is consumed by dream-memory itself, which deletes it both at the
-  # start of the cycle and again on completion. Deleting it here instead meant a
-  # skipped cycle destroyed the request: the consolidation was never retried and
-  # nothing recorded that it had been dropped. A repeated prompt is recoverable;
-  # silently losing a day of memory is not.
+  # Acknowledge only successful synthesis of the matching request fingerprint.
 fi
 
 # EOD auto-trigger — check for .eod-requested marker written by
@@ -452,37 +464,7 @@ PY
   printf '\n**Ação sugerida:** ofereça fechar o(s) dia(s) na primeira resposta desta sessão — sem travar o pedido do dono. Só leia `bundles/base/skills/eod/SKILL.md` (e rode a reconstrução que ela descreve) depois que ele confirmar; se o bloco "Day brief pré-computado" abaixo já cobre os mesmos dias, não releia as páginas diárias só para redescobrir o que já está ali. Fechar sempre exige confirmação dele; nunca grave sem isso. Se ele adiar, deixe o marcador como está e não insista de novo nesta mesma sessão.\n'
 fi
 
-# Day brief pré-computado — calculado uma vez no Stop anterior
-# (session-stop-eod-check.sh), não a cada sessão. Cobre o que start-day e eod
-# mais releem sem necessidade: as duas diárias anteriores e os objetivos
-# ativos. Emitido sempre que o arquivo existir, não só quando há fechamento
-# pendente — start-day usa isto em re-entrada mesmo sem marcador nenhum.
-if [ -f "$DAY_BRIEF" ] && maestro_python >/dev/null 2>&1; then
-  PYTHONIOENCODING=utf-8 maestro_py - "$DAY_BRIEF" <<'PY' 2>/dev/null
-import json, sys
-try:
-    d = json.load(open(sys.argv[1], encoding="utf-8"))
-except Exception:
-    sys.exit(0)
-pages = d.get("last_daily_pages") or []
-objectives = d.get("objectives_active") or []
-if not (pages or objectives):
-    sys.exit(0)
-print("\n## Day brief pré-computado (Stop da sessão anterior)")
-print(f"<!-- maestro:day-brief: generated_at={d.get('generated_at', '')} -->")
-print("Use isto em vez de reler as mesmas páginas diárias em `start-day` ou `eod`; "
-      "releia o arquivo inteiro só se precisar de algo que não está aqui "
-      "(ex.: uma linha específica de plano de projeto).\n")
-for p in pages:
-    print(f"- **{p['date']}** (`{p['path']}`)")
-    if p.get("briefing_last"):
-        print(f"  - último briefing: {p['briefing_last'][:200]}")
-    if p.get("fechamento_last"):
-        print(f"  - último fechamento: {p['fechamento_last'][:200]}")
-if objectives:
-    print(f"- Objetivos ativos: {', '.join(objectives)}")
-PY
-fi
+# Cached daily-body injection retired: daily-context reads live pages.
 
 # ---------------------------------------------------------------------------
 # Rotinas do dia e da semana — checagem direta, sem marcador.
@@ -693,7 +675,7 @@ fi
 emit_profile_json "Identidade do usuário" "$PROFILE_DIR/identity.json"
 emit_profile_json "Preferências e estilo" "$PROFILE_DIR/style.json"
 
-# Blocos de memoria — SELF, lifetime, projecao L3, aprendizados e craft.
+# Remaining owner facets; broad memory was emitted before daily/L1 above.
 #
 # Os quatro emissores em shell viravam ~350 processos externos (um `sed` por
 # arquivo em emit_titles, `basename`+`grep`+`awk` por arquivo em emit_all_files)
@@ -701,15 +683,8 @@ emit_profile_json "Preferências e estilo" "$PROFILE_DIR/style.json"
 # O emissor tambem corrige o `find | sort | tail -1` que devolvia
 # `weekly_index.md` no lugar da semana, mede o EMITIDO em vez da origem, e corta
 # em bytes em vez de caracteres.
-emit_memory_blocks() {
-  [ -n "$MEM_EMITTER" ] || return 0
-  PYTHONIOENCODING=utf-8 maestro_py "$MEM_EMITTER" \
-    --brain "$BRAIN_DIR" --envelope "$ENVELOPE_FILE" --cap-total "$CAP_total" \
-    --budgets "self=$CAP_self,lifetime=$CAP_lifetime,l3=$CAP_l3,learnings=$CAP_learnings,craft=$CAP_craft,l2=$CAP_l2,l1=$CAP_l1" \
-    "$@" 2>/dev/null
-}
 
-emit_memory_blocks --blocks self,lifetime,l3,learnings,craft
+emit_memory_blocks --blocks self,learnings,craft
 
 # Ponteiro para o indice navegavel — nao injeta o indice, so diz onde ele esta.
 # Ponteiro para o indice navegavel — nao injeta o indice, so diz onde ele esta.
@@ -747,9 +722,8 @@ PY
   fi
 fi
 
-# L2 (sintese da semana) e L1 (ultimo log diario consolidado). O mesmo emissor,
-# segunda chamada: `--finalize` fecha o envelope com o que os dois lotes mediram.
-emit_memory_blocks --blocks l2,l1 \
+# Finalize measured emitter blocks without repeating any memory layer.
+emit_memory_blocks --blocks "" \
   --finalize --out "$BRAIN_DIR/.maestro/context-envelope.json"
 
 printf '\n<!-- maestro:session-context:end -->\n'

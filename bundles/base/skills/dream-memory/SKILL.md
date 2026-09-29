@@ -7,6 +7,12 @@ description: Run or inspect professional memory consolidation through the BCG Br
 
 Operate directly on the workspace memory tree under `brain/memory/` (memória recente, memória semanal, memória de médio prazo e memória permanente). All reads and writes go through the Read, Write and Edit tools, following the invariants below.
 
+Paths beginning `brain/memory/` below are owner defaults. For an active-case
+request, resolve the confirmed case first and use only that case's `memory/`
+tree, schema, budgets and policies. Never borrow owner configuration or silently
+copy policies into a case. If required case configuration is missing, dreaming
+is unavailable and its request remains pending.
+
 ## Interaction profile
 
 Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) skill before responding. Ajustar o tom e o nível de detalhe ao perfil do usuário antes de apresentar qualquer resultado visível. A operação de memória, a política e o comportamento de segurança nunca variam por perfil; apenas a explicação e o detalhe opcional variam.
@@ -18,7 +24,7 @@ Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) s
 
 ## Choose the cycle
 
-- Use **daily light** for session or day closure. It may capture sanitized signals and update memória recente only. The day's entry is `data/memory/recent/<YYYY-MM-DD>.md`, one file per date being closed.
+- Use **daily light** for session or day closure. It may capture sanitized signals and update memória recente only. The day's entry is `brain/memory/recent/<YYYY-MM-DD>.md`, one file per date being closed.
 - Use **weekly deep** for week closure or an overdue weekly cycle. It may update memória semanal and memória de médio prazo and promote eligible lifetime memory.
 - Use **status** when the user asks what is remembered, why a promotion occurred or whether a cycle was missed.
 
@@ -26,10 +32,10 @@ Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) s
 
 When invoked automatically at session start (the `⚠️ Dreaming pendente` block was present in session context), run the **daily light** cycle without prompting the user. After the cycle completes successfully:
 
-1. Delete `brain/memory/.dream-requested` (the marker written by `session-stop-dream.sh`).
+1. Acknowledge only the exact request fingerprint read before synthesis, using the matching-ack procedure below.
 2. Report the result in one paragraph — do not wait for the user to ask.
 
-If the cycle fails or the memory tree is missing, report the failure and delete the marker anyway so it does not repeat on every session start.
+If the cycle fails, is unavailable, empty or interrupted, retain the request and report the limitation. A later SessionStart retries it. Never delete a marker to suppress a failed cycle.
 
 ## Workflow
 
@@ -41,12 +47,12 @@ If the cycle fails or the memory tree is missing, report the failure and delete 
 5. For weekly lifetime promotion, require a named eligibility policy in `brain/memory/policies/lifetime.json`. If it is missing, stop: lifetime activation must fail closed.
 6. Return the cycle, period, origem e momento de registro de cada memória, activated layers, lifetime eligibility reason and any skipped or missing layers.
 7. If the required policy or budget files are missing, report the capability as unavailable rather than emulating dreaming with ad-hoc edits.
-8. **Marker cleanup (auto-trigger only):** if `brain/memory/.dream-requested` exists at invocation time, delete it after the cycle — success or failure — so the trigger fires only once per session stop.
+8. **Matching acknowledgement:** after successful persisted synthesis, acknowledge the request fingerprint captured before the cycle. Changed requests stay pending. Never remove request files directly.
 
 ## Invariants
 
 - O ciclo diário não pode escrever na memória semanal, memória de médio prazo ou memória permanente.
-- A presença de `data/memory/recent/<YYYY-MM-DD>.md` é o sinal público de que aquele dia já foi consolidado. O `session-stop-dream.sh` lê exatamente esse caminho para decidir se ainda pede um ciclo; gravar o dia sob outro nome desarma o pedido de dreaming sem erro visível.
+- A date file is not a freshness watermark. Later checkpoints on that date create a new request fingerprint and remain pending until matching successful synthesis.
 - O ciclo semanal prepara todos os outputs e os torna disponíveis de uma vez, de forma consistente.
 - Uma síntese vazia, inválida ou interrompida não altera nada visível.
 - O sistema usa apenas o estado mais recente totalmente válido; nenhum estado parcial de memória semanal, de médio prazo ou permanente é injetado.
@@ -69,3 +75,34 @@ página, nunca depois.
 
 Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
 trabalho fica gravado e invisível.
+
+## ZIP scope and matching acknowledgement
+
+Resolve the same owner or confirmed active-case scope as maestro-operator.
+Requests and generated recent pages stay under that scope's `memory/`; never
+copy case content into owner memory. Read the selected
+`<scope>/memory/.dream-requested` fingerprint before selecting daily sources.
+The daily journal is selected agent-authored context, not a capture-v2 source or
+semantic sanitization attestation. It cannot bypass a required engine producer,
+policy or eligibility check; when unavailable retain the request.
+
+After successful synthesis has persisted the selected work, use the verified
+helper with `daily-dream-ack --root ROOT` and stdin JSON
+`{"scope":"owner","digest":"<64-character fingerprint read before synthesis>"}`.
+For a case use `account/<account>/case/<case>`. Bash: pipe the JSON to
+`maestro_runtime "$PWD" daily-dream-ack --root "$PWD"` after sourcing
+`.claude/hooks/lib/maestro-runtime.sh`. PowerShell: pass the JSON via
+`Invoke-MaestroRuntime -Root $PWD.Path -RuntimeArgs @('daily-dream-ack','--root',$PWD.Path) -Payload $ackJson`
+after sourcing `.claude/hooks/lib/maestro-runtime.ps1`.
+
+The shared writer lock compares and acknowledges atomically; if a newer
+checkpoint arrived meanwhile, the command fails and the new request survives.
+The fingerprint represents cumulative durable work, so replaying an older
+checkpoint cannot roll it back. Legacy 0.1.x timestamp requests remain pending:
+run `daily-stop` to normalize them under the same lock, preserving the original
+timestamp in the scope's `memory/.dream-legacy-request`, then read the normalized
+fingerprint before synthesis. Missing migration readiness blocks normalization,
+logging and acknowledgement; valid history remains available through `daily-context`.
+An acknowledgement is an agent assertion of success, not independent proof of
+synthesis. No-op Stop does not request another cycle. Do not use ordinary daily
+logging as authorization to perform user-confirmed day closure.

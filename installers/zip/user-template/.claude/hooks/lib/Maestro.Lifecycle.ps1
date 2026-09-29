@@ -71,14 +71,23 @@ function Invoke-MaestroSessionStartMemoryInject {
     $lines.Add('# Maestro - Contexto da sessao')
     $lines.Add('Metodo operacional: load bundles/base/skills/maestro-operator/SKILL.md before control-plane work.')
     $lines.Add('Memory: brain/memory/. Skills: bundles/base/skills/ and bundles/tech-core/skills/. Read specific sources on demand.')
-    $identity = Read-MaestroBounded (Join-Path $brain 'owner/identity.json') 2048
-    if ($identity) { $lines.Add($identity) }
-    foreach ($tier in @('lifetime','medium-term','weekly','recent')) {
+    . (Join-Path $PSScriptRoot 'maestro-runtime.ps1')
+    try {
+        $recovery = (Invoke-MaestroRuntime -Root $project -RuntimeArgs @('daily-stop','--root',$project)) -join "`n"
+        $receipt = $recovery | ConvertFrom-Json
+        if ($receipt.failed -gt 0 -or $receipt.busy -gt 0) { $lines.Add('daily_recovery ' + $recovery) }
+    } catch { $lines.Add('daily_recovery unavailable; checkpoints retained.') }
+    # Reserve <= 2000 bytes for broad layers before the <= 5000-byte daily/L1
+    # packet. Large identity/brief sections follow and may be trimmed at 8192.
+    foreach ($tier in @('lifetime','medium-term','weekly')) {
         $dir = Join-Path $brain ('memory/' + $tier)
         Assert-MaestroNoAlias $dir
         $files = @(Get-ChildItem -LiteralPath $dir -Filter '*.md' -ErrorAction SilentlyContinue | Sort-Object Name | Select-Object -Last 1)
-        if ($files.Count) { $lines.Add('Memory ' + $tier + ': ' + (Read-MaestroBounded $files[0].FullName 1024)) }
+        if ($files.Count) { $lines.Add('Memory ' + $tier + ': ' + (Read-MaestroBounded $files[0].FullName 512)) }
     }
+    try { $lines.Add((Invoke-MaestroRuntime -Root $project -RuntimeArgs @('daily-context','--root',$project)) -join "`n") } catch { $lines.Add('Daily continuity unavailable; inspect scope daily sources.') }
+    $identity = Read-MaestroBounded (Join-Path $brain 'owner/identity.json') 2048
+    if ($identity) { $lines.Add($identity) }
     try {
         $active = Get-MaestroActiveCase $project
         if ($active) {
@@ -118,8 +127,7 @@ function Invoke-MaestroSessionStartMemoryInject {
     }
     $lines.Add('<!-- maestro:session-context:end -->')
     $text = $lines -join "`n"
-    if ($script:Utf8NoBom.GetByteCount($text) -gt 8192) { $text = '<!-- maestro:session-context:start -->Context omitted: total budget exceeded. Load maestro-operator and brain sources on demand.<!-- maestro:session-context:end -->' }
-    [Console]::Out.WriteLine($text)
+    Invoke-MaestroRuntime -Root $project -RuntimeArgs @('context-cap','--root',$project,'--max','8192') -Payload $text
 }
 
 function Invoke-MaestroSessionStopAgentCheck {

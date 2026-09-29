@@ -1215,3 +1215,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Pilot users no longer hit a hard stop when `uv` is missing; the on-demand Python path (PYUV) becomes usable end-to-end for a non-technical user. Maestro now downloads and executes one script from a third-party site (astral.sh) as part of normal operation, which is a new trust dependency beyond PyPI package installs already covered by PYUV; if astral.sh is unreachable (offline, corporate proxy/firewall) the capability must degrade to `unavailable` with the existing manual-install fallback, never fail silently. Must be revisited if specs/010/031's fully signed managed runtime pack ships and removes the need for a local `uv` install entirely.
 - Refs: PYUV; SETU; CNAB; specs/010-local-ingestion-runtime.md; specs/031-markitdown-ingestion-adapter.md
 - Supersedes: none
+
+## DLOG - Preserve daily continuity independently of dreaming
+
+- Date: 2026-09-29
+- Status: accepted
+- Owner: Daniel Scardini, through delegated Walter review
+- Context: Portable Stop hooks did not persist daily work, and Bash, PowerShell and Codex exposed different and stale daily history at SessionStart.
+- Decision: Use one managed runtime core to persist bounded, scoped, agent-authored checkpoints idempotently and inject fresh daily and recent L1 context for exactly D0, D-1 and D-2 calendar days. Daily capture is independent of dreaming, retains source data and failed pending work, and never copies raw transcripts or silently moves case content into owner memory. Native adapters translate events only.
+- Consequences: Agents must prepare useful checkpoints before final responses and at interruption boundaries; a hook cannot invent useful content from telemetry. Missing capture and incomplete native qualification remain explicit. Dreaming retains separate provenance and retry semantics. Windows release qualification remains required.
+- Refs: MEMO; specs/006-memory-persistence.md; specs/002-data-boundaries.md; specs/004-runtime-portability.md; docs/superpowers/plans/2026-09-29-daily-continuity.md
+- Supersedes: none

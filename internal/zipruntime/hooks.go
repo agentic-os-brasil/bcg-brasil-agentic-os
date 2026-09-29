@@ -18,6 +18,17 @@ import (
 // Run dispatches bounded native hook input. JSON denial uses exit zero, never
 // continue:false, which is not a supported PreToolUse enforcement response.
 func Run(args []string, in io.Reader, out io.Writer) error {
+	if len(args) == 3 && args[1] == "--root" {
+		if args[0] == "daily-stop" {
+			return dailyStop(args[2], out)
+		}
+		if args[0] == "daily-context" {
+			return dailyContext(args[2], out)
+		}
+		if args[0] == "daily-dream-ack" {
+			return dailyDreamAck(args[2], in, out)
+		}
+	}
 	if len(args) == 3 && args[0] == "bind-codex" && args[1] == "--root" {
 		if err := BindCodex(args[2]); err != nil {
 			return err
@@ -76,11 +87,30 @@ func Run(args []string, in io.Reader, out io.Writer) error {
 				return json.NewEncoder(out).Encode(map[string]any{"continue": false, "stopReason": "Maestro migration is " + migration.State + ". Retained data remains available in the prior installation. Resolve migration before new writes."})
 			}
 		}
-		return json.NewEncoder(out).Encode(map[string]any{"hookSpecificOutput": map[string]string{"hookEventName": event, "additionalContext": "You are Maestro for this professional workspace. Read AGENTS.md and load the maestro-operator skill. Use brain/accounts/.active to resolve case scope. Continue from explicit checkpoints; do not infer missing state. caseOS requires the caseos-connect skill and a current consented, allowlisted connection. Hooks are configured; this adapter invocation does not prove native qualification."}})
+		context := "You are Maestro for this professional workspace. Read AGENTS.md and load the maestro-operator skill. Use brain/accounts/.active to resolve case scope. Continue from explicit checkpoints; do not infer missing state. caseOS requires the caseos-connect skill and a current consented, allowlisted connection. Hooks are configured; this adapter invocation does not prove native qualification."
+		if event == "SessionStart" {
+			diagnostic, _ := dailyRecovery(root)
+			if diagnostic != "" {
+				context += "\n" + diagnostic
+			}
+			var packet bytes.Buffer
+			if dailyContext(root, &packet) == nil {
+				context += "\n" + packet.String()
+			} else {
+				context += "\nDaily continuity unavailable."
+			}
+		}
+		return json.NewEncoder(out).Encode(map[string]any{"hookSpecificOutput": map[string]string{"hookEventName": event, "additionalContext": context}})
 	case "PostToolUse", "Stop":
 		semantic := lifecycle.PostActionObserve
+		diagnostic := ""
 		if event == "Stop" {
 			semantic = lifecycle.StopFinalize
+			var blocked bool
+			diagnostic, blocked = dailyRecovery(root)
+			if blocked {
+				return json.NewEncoder(out).Encode(map[string]string{"systemMessage": diagnostic})
+			}
 		}
 		receipt, err := codexadapter.Receipt(semantic, input)
 		if err != nil {
@@ -97,6 +127,9 @@ func Run(args []string, in io.Reader, out io.Writer) error {
 		}
 		if _, err = lifecycle.Record(dataRoot, lifecycle.IdempotencyKey(root), receipt); err != nil {
 			return errors.New("lifecycle receipt unavailable")
+		}
+		if diagnostic != "" {
+			return json.NewEncoder(out).Encode(map[string]string{"systemMessage": diagnostic})
 		}
 		return json.NewEncoder(out).Encode(map[string]any{})
 	default:

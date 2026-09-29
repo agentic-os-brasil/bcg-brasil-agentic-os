@@ -298,7 +298,14 @@ Assert-True (($nonAgent.ExitCode -eq 0) -and (-not $nonAgent.Stdout)) 'announcem
 
 $dream = Invoke-Hook 'session-stop-dream.ps1' $project
 Assert-True ($dream.ExitCode -eq 0) 'Stop hook exits zero'
-Assert-True (Test-Path -LiteralPath (Join-Path $project 'brain/memory/.dream-requested')) 'Stop hook writes the dream marker'
+Assert-True (-not (Test-Path -LiteralPath (Join-Path $project 'brain/memory/.dream-requested'))) 'No-op Stop does not request dreaming'
+$checkpointQueue = Join-Path $project 'brain/.maestro/daily-pending'
+New-Item -ItemType Directory -Path $checkpointQueue -Force | Out-Null
+$captureTime = [DateTimeOffset]::Now
+$checkpoint = @{schema_version=1;id='smoke-checkpoint';session_id='smoke-session';workspace=[IO.Path]::GetFullPath($project);scope='owner';captured_at=$captureTime.ToString('yyyy-MM-ddTHH:mm:sszzz');local_date=$captureTime.ToString('yyyy-MM-dd');summary='Synthetic PowerShell checkpoint';decisions=@();next_actions=@();provenance='agent-authored'}
+[IO.File]::WriteAllText((Join-Path $checkpointQueue 'smoke-checkpoint.json'),($checkpoint | ConvertTo-Json -Compress),(New-Object Text.UTF8Encoding($false)))
+$dreamSaved = Invoke-Hook 'session-stop-dream.ps1' $project
+Assert-HookResult (Test-Path -LiteralPath (Join-Path $project 'brain/memory/.dream-requested')) 'Persisted checkpoint creates dream fingerprint' $dreamSaved
 
 $malformed = Invoke-Hook 'block-cross-case-writes.ps1' $project '{"tool_name":"Write","tool_input":'
 Assert-True ($malformed.ExitCode -eq 2) 'malformed write payload fails closed'
@@ -325,7 +332,14 @@ $closed = Invoke-Hook 'session-stop-eod-check.ps1' $project
 Assert-HookResult (-not (Test-Path -LiteralPath (Join-Path $project 'brain/owner/.eod-requested'))) 'closed daily page clears only EOD marker' $closed
 Set-Content -LiteralPath (Join-Path $project "brain/memory/recent/$today.md") -Value 'consolidated' -Encoding UTF8
 $dreamAgain = Invoke-Hook 'session-stop-dream.ps1' $project
-Assert-True (-not (Test-Path -LiteralPath (Join-Path $project 'brain/memory/.dream-requested'))) 'consolidated day does not rearm dreaming'
+Assert-True (Test-Path -LiteralPath (Join-Path $project 'brain/memory/.dream-requested')) 'Date file alone never clears a pending dream request'
+. (Join-Path $script:ContentRoot '.claude/hooks/lib/maestro-runtime.ps1')
+$dreamDigest = (Get-Content -LiteralPath (Join-Path $project 'brain/memory/.dream-requested') -Raw).Trim()
+$ackPayload = @{scope='owner';digest=$dreamDigest} | ConvertTo-Json -Compress
+$ack = Invoke-MaestroRuntime -Root $project -RuntimeArgs @('daily-dream-ack','--root',$project) -Payload $ackPayload
+Assert-True ((($ack -join "`n") | ConvertFrom-Json).state -eq 'acknowledged') 'Matching successful synthesis acknowledgement accepted'
+$dreamNoop = Invoke-Hook 'session-stop-dream.ps1' $project
+Assert-True (-not (Test-Path -LiteralPath (Join-Path $project 'brain/memory/.dream-requested'))) 'Acknowledged work remains clear after no-op Stop'
 
 # Reconstructed 0.1.11/0.1.12 fixtures use the real shared binary and preserve originals.
 foreach ($baseline in @('0.1.11','0.1.12')) {

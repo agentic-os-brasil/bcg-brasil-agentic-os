@@ -5,6 +5,56 @@ description: Método operacional do Maestro, carregado no início de cada sessã
 
 # Maestro Operator
 
+## Daily continuity checkpoint (before the final response)
+
+For material work or an interruption, write one selected agent-authored checkpoint
+before the final response. Do not parse transcripts or copy tool logs. Retain only
+the bounded summary, explicit decisions and next actions needed to resume.
+Automatic logging does not close the human day: `eod` still requires confirmation.
+
+Resolve the canonical absolute installation root (Bash: `pwd -P`; PowerShell:
+`(Get-Item -LiteralPath .).FullName`) and the actual current session ID. If the
+host does not expose one, choose a stable session-local UUID once and reuse it;
+this is authored binding, not native session attestation. Read
+`brain/accounts/.active`. Client work uses the confirmed active
+`brain/accounts/<account>/cases/<case>/` scope, with
+`scope: "account/<account>/case/<case>"`; owner-only work uses `brain/` and
+`scope: "owner"`. Never move a case checkpoint to owner when the case changes.
+
+Use Write to stage `<scope>/.maestro/daily-pending/<id>.tmp`, then publish by
+same-directory rename without overwrite: Bash `mv -n -- <id>.tmp <id>.json`,
+or PowerShell `Move-Item -LiteralPath <id>.tmp -Destination <id>.json` without
+`-Force`. Verify the final file and absence of the temporary file. Existing IDs
+must retain the exact previous payload; never overwrite a queued checkpoint.
+Generate a new stable UUID per material checkpoint; retry the same ID and exact
+payload. IDs/session IDs accept 1–64 ASCII letters, digits, underscore or hyphen
+and must start alphanumeric. Use this exact schema, replacing all examples:
+
+```json
+{"schema_version":1,"id":"checkpoint-uuid","session_id":"session-uuid","workspace":"/absolute/Maestro","scope":"owner","captured_at":"2026-09-29T14:30:00-03:00","local_date":"2026-09-29","summary":"Selected work completed; evidence and limitations.","decisions":["Explicit decision"],"next_actions":["Next safe action"],"provenance":"agent-authored"}
+```
+
+Use the capture's local date and explicit RFC3339 offset, even if Stop runs after
+midnight. Maximum input: 16384 UTF-8 bytes; summary and each list entry: 4096
+bytes; at most 16 decisions and 16 next actions. No credentials, raw client
+documents or claims of verified semantic sanitization. Scope/digest checks prove
+binding and replay identity only. Keep client evidence in its case.
+
+Persist immediately through the verified helper (Stop and SessionStart retry
+pending work as fallback):
+
+- Bash: `. .claude/hooks/lib/maestro-runtime.sh; maestro_runtime "$PWD" daily-stop --root "$PWD"`
+- PowerShell: `. .claude/hooks/lib/maestro-runtime.ps1; Invoke-MaestroRuntime -Root $PWD.Path -RuntimeArgs @('daily-stop','--root',$PWD.Path)`
+
+Inspect the content-free JSON receipt: `saved` or `replayed` confirms persisted
+checkpoints, `failed`/`busy` retains pending work, and `missing_checkpoint`
+means there was no capture. A batch processes at most 32 inputs: inspect the
+specific queue file and `<scope>/daily/<local_date>.md` for your ID before claiming your checkpoint
+persisted. Never fabricate a saved receipt. On failure keep the queue and report
+the limitation; a leftover `<scope>/.maestro/daily.lock` needs diagnosis and explicit
+recovery after confirming no writer is active. Do not remove locks heuristically.
+
+
 Este é o método do hub. O `SessionStart` injeta só o ponteiro para cá; o corpo é
 carregado sob demanda, antes de escolher qualquer rota.
 
