@@ -1,0 +1,260 @@
+Maestro release eval
+  ZIP:      <artifact-directory>/Maestro-v0.2.0-macos.zip
+  scratch:  <temporary-directory>
+
+Phase 1 — Integrity
+  PASS  sha256 matches sidecar (65cc6f7e2868159d43feba9d7c6afca46b7223aaabf1fc9021814845c85ba9f0)
+  PASS  ZIP extracted cleanly
+  PASS  top-level Maestro/ present after extract
+  PASS  no .DS_Store artifacts in ZIP
+  PASS  no __pycache__ artifacts in ZIP
+  PASS  no *.pyc artifacts in ZIP
+
+Phase 2 — Structure (user-facing files)
+  PASS  file present: VERSION
+  PASS  file present: CLAUDE.md
+  PASS  file present: WELCOME.md
+  PASS  file present: README-INSTALL.md
+  PASS  file present: .claude/settings.json
+  PASS  file present: .claude/hooks/first-run-scaffold.sh
+  PASS  file present: bundles/base/skills/INDEX.md
+  PASS  file present: bundles/base/skills/catalog.json
+  PASS  file present: bundles/base/skills/agent-skill-policy.json
+  PASS  file present: bundles/base/distribution.json
+  PASS  dir present + non-empty: bundles/base/agents
+  PASS  VERSION file is semver (0.2.0)
+  PASS  first-run-scaffold.sh is executable
+  PASS  data/ correctly absent from ZIP
+  PASS  brain/ correctly absent from ZIP
+  PASS  all 3 slash-command skill path(s) resolve in the ZIP
+
+Phase 3 — No dev tree leakage
+  PASS  no /cmd in user ZIP
+  PASS  no /dev in user ZIP
+  PASS  no /internal in user ZIP
+  PASS  no /.github in user ZIP
+  PASS  no /go.mod in user ZIP
+  PASS  no /go.sum in user ZIP
+  PASS  no .go source files in ZIP
+
+Phase 4 — First-run scaffold, happy path
+  PASS  hook exit 0 on first run
+  PASS  brain/accounts created
+  PASS  brain/craft created
+  PASS  brain/daily created
+  PASS  brain/development created
+  PASS  brain/learnings created
+  PASS  brain/memory created
+  PASS  brain/owner created
+  PASS  brain/people created
+  PASS  brain/tasks created
+  PASS  brain/.initialized marker exists + non-empty
+  PASS  brain/.scaffold.log has DONE line
+  PASS  brain/README.md describes all nine top-level trees
+  PASS  brain/README.md describes no tree the scaffold does not create
+  PASS  no FIRST-RUN-FAILED.txt on happy path
+  PASS  hook silent on stderr (0 lines)
+
+Phase 5 — First-run scaffold, idempotency
+  PASS  hook exit 0 on second run
+  PASS  second run is a no-op (53 lines before/after)
+
+Phase 6 — First-run scaffold, failure modes
+  PASS  hook fail-open (exit 0) with unwritable brain/ (Scenario B)
+  PASS  FIRST-RUN-FAILED.txt breadcrumb visible + points at /maestro-doctor (Scenario B)
+  PASS  hook fail-open (exit 0) with read-only project dir (Scenario A)
+  PASS  FIRST-RUN-FAILED breadcrumb fallback landed in $TMPDIR (Scenario A, Yoda Wave 2 fix)
+  PASS  hook stderr surfaces fallback path to operator (Scenario A)
+
+Phase 7 — Skills catalog integrity
+  PASS  catalog.json is valid JSON
+  PASS  agent-skill-policy.json is valid JSON
+  PASS  every catalog skill has a SKILL.md on disk (50 skills)
+  PASS  every agent-skill-policy skill_id resolves to a real skill dir
+  PASS  INDEX.md has 49 skill row(s)
+
+Phase 8 — Distribution manifest coverage
+  PASS  distribution.json is valid JSON
+  PASS  every distribution.json path exists in ZIP
+
+Phase 9 — Yoda fix regression checks
+  PASS  README-INSTALL.md ships as a non-empty user guide
+  PASS  CLAUDE.md references FIRST-RUN-FAILED.txt + /maestro-doctor (Yoda Fix 1)
+
+Phase 10 — Settings + hook wiring
+  PASS  settings.json is valid JSON
+  PASS  settings.json wires first-run-scaffold.sh to SessionStart
+  PASS  PreToolUse matcher is anchored and names every file-writing tool
+
+Phase 11 — Case workspace smoke test
+  PASS  accounts tree writable + accepts a case path with its brief
+  PASS  memory dir writable + accepts note file
+
+Phase 12 — Memory scaffold + dreaming hook wiring
+  PASS  brain/memory/recent created by scaffold
+  PASS  brain/memory/weekly created by scaffold
+  PASS  brain/memory/medium-term created by scaffold
+  PASS  brain/memory/lifetime created by scaffold
+  PASS  brain/memory/policies created by scaffold
+  PASS  brain/memory/policies/lifetime.json created by scaffold
+  PASS  lifetime.json is valid JSON
+  PASS  lifetime.json names the spec-006 eligibility policy
+  PASS  brain/owner/identity.json placeholder created by scaffold
+  PASS  brain/owner/self/ directory created by scaffold
+  PASS  all 10 SELF facet placeholder files created by scaffold
+  PASS  SELF facet placeholder contains ## Current section (spec 013)
+  PASS  .claude/hooks/session-start-memory-inject.sh present + non-empty
+  PASS  .claude/hooks/session-stop-dream.sh present + non-empty
+  PASS  settings.json wires session-start-memory-inject.sh to SessionStart
+  PASS  settings.json wires session-stop-dream.sh to Stop
+  PASS  session-stop-dream.sh exits 0
+  PASS  .dream-requested marker written with timestamp
+  PASS  session-start-memory-inject.sh exits 0 when brain/ absent (fail-open)
+  PASS  session-start-memory-inject.sh emits session-context markers
+  PASS  session-start-memory-inject.sh injects L1 daily log layer
+  PASS  session-start-memory-inject.sh injects identity profile
+  PASS  session-start-memory-inject.sh injects owner SELF facets section
+  PASS  session-start-memory-inject.sh includes facet content from brain/owner/self/
+  PASS  session-start-memory-inject.sh emits dream-trigger block when .dream-requested present
+  PASS  dream-trigger block contains mandatory action instruction
+  PASS  dream-trigger block correctly suppressed when .dream-requested absent
+  PASS  dream-memory skill documents auto-trigger marker cleanup
+  PASS  maestro-doctor references correct bundle names (no data-practice/engineering-core)
+  PASS  maestro-doctor explicitly checks for bundles/tech-core
+  PASS  maestro-doctor checks for brain/owner/ in workspace health
+  PASS  maestro-operator/SKILL.md exists
+  PASS  maestro-operator registered in catalog.json
+  PASS  session-start-memory-inject.sh emits maestro-operator pointer
+  PASS  tech-core pointer emits the real INDEX.md path
+  PASS  tech-core pointer emits the real catalog.json path
+  PASS  first-run-scaffold.sh creates owner/registry.json
+  PASS  first-run-scaffold.sh creates owner/operating/
+  PASS  first-run-scaffold.sh creates owner/observations/
+  PASS  first-run-scaffold.sh creates owner/interview/
+
+Phase 13 — Top-level brain trees
+  PASS  brain/accounts created by scaffold
+  PASS  brain/daily created by scaffold
+  PASS  brain/craft/methods created by scaffold
+  PASS  brain/craft/style created by scaffold
+  PASS  brain/learnings created by scaffold
+  PASS  brain/people created by scaffold
+  PASS  brain/development/cdc created by scaffold
+  PASS  brain/development/project-feedback created by scaffold
+  PASS  brain/development/upward-feedback created by scaffold
+  PASS  brain/development/retros created by scaffold
+  PASS  brain/craft/craft.md created by scaffold
+  PASS  brain/learnings/learnings.md created by scaffold
+  PASS  brain/development/objectives.md created by scaffold
+  PASS  objectives.md carries exactly one '## Aposentados'
+  PASS  objectives.md carries exactly one '#### Evidência — objetivo 1'
+  PASS  brain/daily/ correctly left empty for start-day
+
+Phase 14 — Cross-case guard on the native host
+  PASS  cross-case write blocked (POSIX paths)
+  PASS  same-case write allowed (POSIX paths)
+  SKIP  native Windows drive-letter/junction parity requires dedicated PowerShell CI
+  PASS  cross-case write blocked (.. traversal out of the active case)
+  PASS  cross-case write blocked (multi-level .. traversal)
+  PASS  cross-case write blocked (double separator)
+  PASS  cross-case write blocked (/./ segment)
+  PASS  cross-case write blocked through an in-case filesystem alias
+  PASS  cross-case write blocked through an alias outside the cases tree
+  PASS  cross-case write blocked (MultiEdit)
+  PASS  cross-case write blocked (NotebookEdit via notebook_path)
+  PASS  cross-case write blocked (NotebookEdit with a decoy file_path on the active case)
+  PASS  TodoWrite naming the cases tree is allowed
+  PASS  malformed write payload is refused by the managed runtime
+  PASS  same-case write fails closed while runtime integrity is unavailable
+  PASS  same-case write recovers after restoring runtime integrity
+  PASS  write into a case refused while .active is missing
+  PASS  write outside the cases tree still allowed while .active is missing
+  PASS  write into a case refused while .active is empty
+  PASS  policy block reason reaches stderr, where the runtime reads it on exit 2
+
+Phase 15 — User-visible hook messages carry no internal syntax
+  PASS  block-cross-case-writes.sh present in ZIP
+  PASS  cross-case write is blocked, with a reason on stderr
+  PASS  block message contains no internal $skill syntax
+
+Phase 16 — Prompt-time context pointers resolve
+  PASS  context-inject-userprompt.sh present in ZIP
+  PASS  context-inject emits a first-fire bundle
+  PASS  every context-inject pointer resolves on a fresh install
+
+Phase 17 — Suggested skill ids resolve
+  PASS  all 16 suggested /skill-id reference(s) resolve to a shipped skill
+
+Phase 18 — Update ritual has one source of truth
+  PASS  no shipped skill instructs extract-over
+  PASS  maestro-setup-update points at README-INSTALL.md
+  PASS  maestro-doctor points at README-INSTALL.md
+
+Phase 19 — Hook interpreter resolution
+  PASS  hooks/lib/python.sh present in ZIP
+  PASS  resolver finds 'python' when 'python3' is absent
+  PASS  resolver falls back to the 'py -3' launcher
+  PASS  resolver rejects a 'python' that is not Python 3
+  PASS  no hook invokes python3 directly; all resolve through the library
+  PASS  a recorded interpreter resolves and runs, including a path with a space
+  PASS  a stale interpreter record is rejected rather than trusted
+  PASS  SessionStart names a missing interpreter instead of degrading in silence
+  PASS  SessionStart stays quiet when an interpreter is available
+
+Phase 20 — Active-case context reaches the session
+  PASS  scaffold builds brain/accounts/
+  PASS  exactly one active-case header across every SessionStart hook
+  PASS  the header names the case as <account>/<case>
+  PASS  the case brief reaches the session from the case root
+  PASS  a bare case id in .active emits nothing instead of guessing an account
+
+Phase 21 — Scheduled routines are wired to run unattended
+  PASS  start-day declares an autonomous mode
+  PASS  start-day names the canonical unattended marker
+  PASS  start-day reports to the chat of its own execution
+  PASS  eod declares an autonomous mode
+  PASS  eod names the canonical unattended marker
+  PASS  eod reports to the chat of its own execution
+  PASS  retro declares an autonomous mode
+  PASS  retro names the canonical unattended marker
+  PASS  retro reports to the chat of its own execution
+  PASS  every MAESTRO_RUN declaration in the bundle is the canonical marker (4 file(s))
+
+Phase 22 — Agent dispatch is wired to the policy that authorizes it
+  PASS  activation policy and agent router both ship
+  PASS  every spoke in the policy has a .claude/agents projection
+  PASS  the policy carries the announcement contract
+  PASS  router stays silent on ordinary work
+  PASS  router resolves an explicit agent request
+  PASS  router honours the dormant declaration and stays silent on pa-expert
+  PASS  announce hook returns hookSpecificOutput.additionalContext (reaches the hub)
+  PASS  announce hook ignores a non-agent tool and exits 0
+  PASS  announce hook fails open without an interpreter (never blocks a dispatch)
+  PASS  context-inject reaches the agent router and emits its line
+  PASS  context-inject stays quiet on ordinary work
+  PASS  operator spoke section names every policy spoke and defers to the policy as source
+
+Phase 23 — The routers read what the compiler writes
+  PASS  the compiler writes route-index.json
+  PASS  the inverted index has terms (102) once the corpus is not one page
+  PASS  the brain router resolves a page from that index
+  PASS  the router carries pointers, never page body
+  PASS  the brain router stays silent on a greeting
+  PASS  the skill router answers a three-character literal request
+  PASS  the skill router stays silent on a greeting
+
+Phase 24 — Every path the product cites exists on a fresh install
+  PASS  no dead paths cited anywhere in the shipped product
+
+Phase 25 — Long-running update contract is executable and bounded
+  PASS  v2 update contract binds hosts, migration and persistent qualification
+  PASS  update consumer references authoritative contract and actual Yoda review
+  PASS  update consumer references authoritative contract and actual Yoda review
+
+──────────────────────────────────────────────
+Summary:  198 pass  0 fail  1 skip
+
+All local evaluator checks green. Native qualification and distribution remain separate.
+
+scratch kept: <temporary-directory>
+EVALUATOR_EXIT_CODE=0

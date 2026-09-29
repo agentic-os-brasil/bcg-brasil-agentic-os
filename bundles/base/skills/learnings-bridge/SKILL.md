@@ -9,13 +9,13 @@ Carry one candidate at a time off a daily page into the segment that should
 hold it. This is a curation conversation that produces pages, not a batch pass
 over a folder.
 
-All reads and writes use direct file operations on the owner atlas paths (`data/owner/atlas/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
+All reads and writes use direct file operations on the owner atlas paths (`brain/owner/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
 
 ## This is not memory consolidation
 
 The two look adjacent and are different work. Keep them apart.
 
-- **`dream-memory`** runs the canonical memory engine: automatic, bottom-up
+- **[`dream-memory`](../dream-memory/SKILL.md)** runs the canonical memory engine: automatic, bottom-up
   consolidation of already-sanitized signals into the managed layers under a
   named eligibility policy. It is the only path into memory.
 - **This skill** is deliberate curation of atlas pages. The owner wrote the
@@ -25,11 +25,11 @@ The two look adjacent and are different work. Keep them apart.
 Nothing here reads a capture, runs a cycle, or changes a memory layer, budget,
 policy or eligibility rule. A promoted learning is not memory input, and a
 memory cycle never promotes a page. If the owner is asking to consolidate
-memory, hand them `dream-memory` instead of approximating it.
+memory, hand them [`dream-memory`](../dream-memory/SKILL.md) instead of approximating it.
 
 ## Interaction profile
 
-Resolve `interaction-profile` before presenting candidates. The routing rule,
+Resolve [`interaction-profile`](../interaction-profile/SKILL.md) before presenting candidates. The routing rule,
 the operations used, the bounds and the confirmation gate never vary by
 profile; only the explanation and optional detail do.
 
@@ -47,7 +47,7 @@ is no whole-root read and no folder listing, so name the days.
 - the daily pages for the window — default the last seven days, or since the
   previous pass if the owner names it — read for their
   `## Candidatos a aprendizado` section;
-- `owner/learnings/index.md` and `owner/craft/index.md`, so a candidate that
+- `brain/learnings/learnings.md` and `brain/craft/craft.md`, so a candidate that
   restates a page already written is recognized before it is duplicated.
 
 `collect` is bounded, so a long window is collected in more than one call. A
@@ -60,12 +60,12 @@ as weak evidence, not proof that the claim is new.
 
 Route each candidate to exactly one destination, and state which.
 
-- **`owner/learnings/<claim-slug>.md`** — a durable claim about how a kind of
+- **`brain/learnings/<claim-slug>.md`** — a durable claim about how a kind of
   work goes. Test: it could be shown to be **wrong** by the next engagement. A
   learning is the only one of the three that can be false.
-- **`owner/craft/methods/<method-slug>.md`** — a reusable technique. Test:
+- **`brain/craft/methods/<method-slug>.md`** — a reusable technique. Test:
   another practitioner could follow it and get a comparable result.
-- **`owner/craft/style/<situation-slug>.md`** — a calibration of how this owner
+- **`brain/craft/style/<situation-slug>.md`** — a calibration of how this owner
   prefers to work. Test: it is true of this owner, not of the craft. If the
   candidate cannot say why it is *not* generalizable, it is a method.
 
@@ -126,7 +126,7 @@ estáveis — `append-entry` nunca cria um heading, então fundamentação e rev
 não podem ser acrescentadas depois a uma página que não declarou onde elas
 entram.
 
-**Afirmação — `owner/learnings/<claim-slug>.md`**:
+**Afirmação — `brain/learnings/<claim-slug>.md`**:
 
 ```markdown
 # Aprendizado — <a afirmação em poucas palavras>
@@ -159,7 +159,7 @@ entram.
 - YYYY-MM-DD — refinada | estreitada | superada — <o que mudou e por quê> — <link para a afirmação que substitui esta, se houver>
 
 ## Relacionado
-- [Índice de learnings](index.md)
+- [Índice de learnings](learnings.md)
 - <link para a página de método, estilo ou objetivo que esta afirmação afeta>
 ```
 
@@ -167,8 +167,8 @@ Uma página superada mantém o texto, a fundamentação original e a história; 
 `Status` no snapshot muda, por edição do owner. `Nível`, `Em`, `Última
 confirmação` e a linha no índice também são edição do owner.
 
-**Método e estilo** usam as mesmas templates declaradas em `craft-update` —
-`owner/craft/methods/<method-slug>.md` e `owner/craft/style/<situation-slug>.md`.
+**Método e estilo** usam as mesmas templates declaradas em [`craft-update`](../craft-update/SKILL.md) —
+`brain/craft/methods/<method-slug>.md` e `brain/craft/style/<situation-slug>.md`.
 Elas não são reproduzidas aqui; leia a seção `## Formato da página` daquela
 skill antes de escrever uma dessas páginas.
 
@@ -200,3 +200,13 @@ diária de origem. É a única escrita que esta skill faz numa página diária:
 - If an operation is unavailable, say so and keep going. The routing, the
   reasoning and a draft the owner can keep are all still worth having — only
   the recording is lost, and it must never be reported as done.
+
+## Contrato de página do brain
+
+Toda página escrita em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.

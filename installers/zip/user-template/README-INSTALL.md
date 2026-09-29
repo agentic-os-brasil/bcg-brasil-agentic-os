@@ -1,79 +1,85 @@
-# Instalação e atualização do Maestro
+# Instalação e atualização do Maestro 0.2.0
 
-## Requisitos
+Este pacote instala receitas, agentes projetados, hooks e ferramentas gerenciadas.
+Não contém a memória, os casos ou as personalizações do Maestro de outra pessoa.
+A pasta pessoal existente deve ser preservada e reconciliada, nunca substituída.
 
-- **Claude Code desktop** instalado (Mac ou Windows).
-- Nada mais.
+## Escolha do pacote e do host
 
-## Instalação (primeira vez)
+- Mac: pacote macos, Bash do sistema e runtime nativo incluído para Intel/Apple Silicon.
+- Windows: pacote windows-powershell, PowerShell 5.1 ou 7, binário incluído para x64/ARM64. Git Bash não é necessário.
+- Host: Claude Code ou Codex. Cada um possui configuração e mecanismo próprio de agentes.
+- Python é opcional para indexação e algumas ferramentas de conhecimento. Migração e proteção de escrita usam o runtime nativo incluído nos dois sistemas. Sem Python, recursos opcionais devem declarar indisponibilidade.
 
-1. Descompacte o ZIP no local que preferir. Sugestão: `Documents/Maestro/` (Mac) ou `Documentos\Maestro\` (Windows).
-2. Abra o Claude Code.
-3. `File > Open folder…` e escolha a pasta `Maestro/` que você acabou de extrair.
-4. Aceite quando o Claude Code perguntar se pode carregar os hooks (é normal e obrigatório).
-5. Ao iniciar a sessão, o Maestro cria automaticamente a pasta `data/` (sua workspace).
+O runtime é um candidato não assinado enquanto a distribuição corporativa não o qualificar.
+Se o sistema bloquear o executável ou script, não contorne a política. Use o canal oficial.
 
-Pronto. Rode `/maestro-onboarding` para a apresentação guiada.
+## Primeira instalação
 
-## Atualização (novas versões)
+1. Extraia o ZIP em uma pasta nova, por exemplo Documents/Maestro ou Documentos\Maestro.
+2. Abra essa pasta no host escolhido. Revise e aceite somente a confiança/permissões normais exigidas pelo host.
+3. Claude Code: os hooks gerenciados criam a workspace brain/; use maestro-onboarding.
+4. Codex: leia AGENTS.md e adapters/codex/README.md quando disponível no repositório. O setup precisa vincular os hooks à raiz absoluta confirmada desta instalação. As definições portáteis recusam escrita quando carregadas e confiadas; antes da revisão de hooks pelo host, elas podem ser ignoradas e não são proteção ativa. Siga o bootstrap descrito em AGENTS.md. Depois do binding, revise os cinco comandos na tela nativa /hooks e confie nas definições exatas pelo fluxo normal. Reabra e peça a qualificação dos hooks e uma chamada real a Yoda. Confiança na pasta não substitui confiança nas definições.
+5. Peça maestro-doctor. Configuração presente não prova execução: siga as verificações do host.
 
-Quando o time BCG Brasil AI mandar um email com nova versão. O ritual é "renomear, extrair novo, mover `data/`". Uma única operação destrutiva visível, sem risco de arquivos velhos sobrando entre versões.
+## Atualização de 0.1.11 ou 0.1.12
 
-**Antes de começar:** conferir se a pasta `data/` existe dentro da pasta `Maestro/` atual. Se não existir, parar e rodar `/maestro-doctor` antes de atualizar.
+1. Na instalação antiga, peça ao Maestro que siga PROMPT-1-PREPARAR.txt do kit. Ele deve inventariar a árvore data/ inteira, inclusive ocultos, e as personalizações fora dela. O baseline não altera esses arquivos.
+2. Feche todas as sessões que possam escrever nessa pasta. Preserve a instalação inteira com nome único de backup, sem sobrescrever um backup anterior.
+3. Extraia o pacote novo em outra pasta. Nunca extraia por cima da instalação antiga.
+4. Copie (não mova) data/ da pasta anterior para a nova. Preserve permissões e conteúdo. No Finder use copiar/colar ou Option ao arrastar; no Explorer use Ctrl+C/Ctrl+V.
+5. Personalizações em CLAUDE.md, AGENTS.md, .claude/, .codex/ e skills próprias ficam preservadas no backup e entram numa reconciliação explícita. Não copie configurações antigas por cima dos hooks novos.
+6. Abra a nova raiz no host escolhido e siga PROMPT-2-VERIFICAR.txt, UPDATE-CONTRACT.json e UPDATE-RUNBOOK.md. No Codex faça o binding específico da nova raiz.
+7. O motor copia os caminhos mapeados para brain/, valida hashes e grava plano/recibo imutáveis em brain/.maestro/migration/. A origem data/ permanece byte a byte preservada.
+8. A verificação só termina em PASS depois dos checks obrigatórios e do retorno real de Yoda. FAIL/UNAVAILABLE são resultados honestos que exigem próximo passo, não sucesso.
 
-1. Fechar o Claude Code por completo.
-2. No mesmo diretório onde está a pasta `Maestro/`, renomear ela para `Maestro-old/`.
-3. Baixar o ZIP novo e extrair no mesmo diretório. Isso cria uma pasta `Maestro/` fresca ao lado de `Maestro-old/`.
-4. **Copiar** (não mover) a pasta `data/` de dentro de `Maestro-old/` para dentro da nova `Maestro/`. Copiar é reversível; mover não é. Se algo der errado no meio do caminho, `Maestro-old/data/` continua intacto.
-   - **Mac (Finder):** abrir `Maestro-old/`, segurar `Option (⌥)` e arrastar `data/` para dentro da nova `Maestro/` (arrastar sem Option move; com Option copia).
-   - **Windows (Explorer):** abrir `Maestro-old/`, copiar `data/` (`Ctrl+C`), colar dentro da nova `Maestro/` (`Ctrl+V`).
-5. Conferir que a nova `Maestro/` contém: `VERSION`, `CLAUDE.md`, `.claude/`, `bundles/` e `data/`. Se `data/` não estiver lá, refazer o passo 4 antes de continuar.
-6. Reabrir a nova pasta `Maestro/` no Claude Code e rodar `/maestro-doctor` para confirmar.
-7. Só depois de confirmar que `data/` está dentro da nova `Maestro/` **e** que `/maestro-doctor` reporta tudo verde, apagar `Maestro-old/`. Manter por pelo menos 7 dias (ou até a próxima atualização) como rede de segurança.
+Se existirem data/ e brain/ sem um recibo de migração válido, pare e peça diagnóstico.
+Não mescle automaticamente duas árvores autorais. Se a origem já for uma instalação
+0.2.0 com brain/, o contrato de origem deste kit não a cobre: faça diagnóstico de
+reparo em vez de forçar uma migração antiga.
 
-Esse fluxo elimina o risco de arquivos velhos de versões anteriores sobrarem misturados com a versão nova. Como o passo 4 é uma cópia, um erro no meio do caminho não destrói nada: `Maestro-old/data/` continua intacto até o passo 7.
+**Não apague data/ após a migração.** Agentes, workspaces e recibos históricos podem
+continuar sendo consumidos pelos caminhos legados retidos no plano. O resolver
+gerenciado valida cada namespace antes da leitura. Também não há exclusão automática
+da instalação anterior: ela é o caminho de recuperação e deve seguir a política de
+retenção autorizada pelo dono.
 
-## Estrutura de pastas
+Edições legítimas posteriores em brain/ não refazem a migração nem reescrevem o
+recibo histórico. Uma nova qualificação usa verificações frescas; o PASS antigo não
+serve como prova do estado atual. Links inseguros e adulteração continuam bloqueantes.
 
-```
-Maestro/
-├── VERSION                ← versão instalada
-├── WELCOME.md             ← primeira leitura
-├── README-INSTALL.md      ← este arquivo
-├── CLAUDE.md              ← bootstrap do Claude Code
-├── .claude/               ← configuração (hooks, skills, settings)
-├── bundles/               ← skills e agentes (núcleo)
-└── data/                  ← SUA workspace — nunca sobrescrita
-    ├── agents/            ← estado de cada agente
-    ├── memory/            ← memória de longo prazo
-    ├── profile/           ← identidade e preferências
-    └── workspaces/        ← projetos ativos
-```
+## Recuperação e rollback
 
-## Solução de problemas
+Revogar uma tentativa preserva ambas as árvores e informa restored_runtime: false.
+Isso não reinstala a versão antiga. Para recuperar o runtime anterior, reabra a
+instalação antiga intacta. Não copie brain/ de volta para um runtime que espera data/.
+Conteúdo autoral criado depois do update deve ser reconciliado separadamente, nunca
+apagado para fazer um teste passar.
 
-**"O Claude Code não reconheceu os hooks."**
-Feche e reabra o Claude Code com a pasta. Se persistir, rode `/maestro-doctor`.
+## caseOS MCP
 
-**"Sumiu minha memória depois do update."**
-Provavelmente a pasta `data/` foi movida por engano. Ela deve estar dentro de `Maestro/`. Se não estiver, verifique se você extraiu para o lugar certo.
+Peça caseos-connect para instalação e uso ativo do conhecimento compartilhado.
+É necessário consentimento, workspace/caso explícitos, URL oficial completa e acesso
+corporativo. Não adivinhe o caminho do endpoint nem copie tokens. O host faz o login
+normal. Indisponibilidade de caseOS não impede o trabalho local. Consultas usam
+ferramentas descobertas na sessão atual; exportação exige aprovação específica.
 
-**"Não sei qual versão tenho."**
-Abra o arquivo `VERSION` na raiz da pasta.
+## Estrutura
 
-**"Não recebi o email da nova versão."**
-Peça no canal BCG Brasil AI ou escreva para o time.
+- VERSION, README-INSTALL.md, UPDATE-CONTRACT.json e UPDATE-RUNBOOK.md: versão e contrato.
+- CLAUDE.md + .claude/: projeção Claude.
+- AGENTS.md + .codex/ + .agents/skills/: projeção Codex.
+- bundles/: skills e agentes canônicos. runtime/: executáveis verificados por manifesto.
+- brain/: conteúdo pessoal e de casos. brain/.maestro/: índices e evidências locais.
+- data/: quando presente após upgrade, origem preservada e namespaces legados ainda consumidos.
 
-**"Meu Claude Code não abre a pasta."**
-Confirme que está usando o Claude Code desktop (não o navegador). Reinstale se necessário: https://claude.ai/download
+## Problemas frequentes
 
-## Desinstalação
+- Hooks não executam: reabra a raiz correta e peça maestro-doctor. Não conclua por presença dos arquivos.
+- Script/executável bloqueado: guarde o backup e encaminhe o diagnóstico ao time BCG Brasil AI. Não mude políticas de segurança.
+- Python ausente: mantenha uso local; maestro-environment-setup orienta instalação opcional gerenciada com consentimento.
+- Memória parece ausente: confirme raiz e cópia da origem; não crie uma workspace substituta por cima.
+- Pasta movida no Codex: faça novo binding para a raiz confirmada, sem executar launcher de um caso aninhado.
 
-Para remover: fechar o Claude Code, apagar a pasta `Maestro/`. Se quiser preservar sua memória, copiar `data/` antes.
-
-- **Windows:** esvaziar a Lixeira depois. Antes de esvaziar, "apagado" é reversível; depois, não.
-- **Mac:** esvaziar a Lixeira depois. Mesma lógica.
-
-## Suporte
-
-Escreva para o time BCG Brasil AI no canal habitual. Inclua a saída de `/maestro-doctor` se possível.
+Para remover a instalação, feche os hosts e preserve antes uma cópia íntegra de
+brain/, data/ e personalizações. Não esvazie a Lixeira automaticamente.

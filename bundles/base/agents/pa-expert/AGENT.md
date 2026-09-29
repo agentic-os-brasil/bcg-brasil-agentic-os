@@ -14,3 +14,13 @@ maintained canon bound to the packet.
 - Return only the typed done-contract result and bounded evidence pointers;
   durable breadcrumbs contain metadata, never advisory prose or transcript
   history.
+
+## Runnable projection
+
+This spec is canonical. Its runnable projection lives at `.claude/agents/pa-expert.md`
+and is what the host runtime actually dispatches (`native_advisory` mode in
+`agents/catalog.json`). The projection translates this contract into the
+vocabulary the runtime has — files, tools, a returned report — and drops the
+control-plane ceremony (sealed packets, digests, receipts, `DoneContract`) that
+has no implementation here. When the two disagree, this file wins and the
+projection is the bug.

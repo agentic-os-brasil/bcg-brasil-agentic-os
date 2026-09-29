@@ -1,0 +1,20 @@
+Prepare esta instalação do Maestro para a atualização para {{TO_VERSION}}.
+Leia VERSION e confirme que a origem é 0.1.11 ou 0.1.12. Não migre ainda.
+
+Faça apenas diagnóstico local e escreva na raiz
+.maestro-update-baseline-<versão-original>.json com inventário de caminhos
+relativos, tamanhos e SHA-256 de TODOS os arquivos em data/, inclusive ocultos.
+Não leia nem registre corpos de documentos no relatório. Identifique links,
+permissões insuficientes e colisões de nomes; não siga links silenciosamente.
+
+Inventarie também as personalizações fora de data/ (agentes, instruções, hooks,
+integrações e arquivos próprios), sem expor credenciais. Explique o que precisa
+ser reconciliado depois e preserve a pasta inteira como origem do rollback.
+Se brain/ também existir, registre a árvore dupla e não adivinhe qual é atual.
+
+Confirme sistema operacional, disponibilidade do PowerShell no Windows e
+host escolhido (Claude Code ou Codex). Não instale Python/Bash/Go nem mude
+permissões. Não execute doctor de outra versão sobre os dados desta instalação.
+A única escrita permitida nesta etapa é o manifesto de baseline e seu
+inventário de personalizações. Não mova, renomeie ou apague esta pasta enquanto
+a sessão estiver aberta. Explique quando é seguro fechar e seguir o LEIA-ME.

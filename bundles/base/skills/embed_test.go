@@ -16,8 +16,8 @@ func TestGuidedOwnerSkillsCarryExactResumableReviewCommands(t *testing.T) {
 			id: "maestro-onboarding",
 			required: []string{
 				"Maestro Onboarding",
-				"data/profile/onboarding.json",
-				"data/profile/identity.json",
+				"brain/owner/onboarding.json",
+				"brain/owner/identity.json",
 				"interaction-profile",
 			},
 		},
@@ -25,7 +25,7 @@ func TestGuidedOwnerSkillsCarryExactResumableReviewCommands(t *testing.T) {
 			id: "agent-identity-setup",
 			required: []string{
 				"interaction-profile",
-				"data/profile/agents.json",
+				"brain/owner/agents.json",
 				"owner_id",
 			},
 		},

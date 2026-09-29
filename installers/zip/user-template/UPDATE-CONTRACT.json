@@ -1,0 +1,53 @@
+{
+  "schema_version": 2,
+  "contract_id": "maestro-update-long-run-v2",
+  "target_version": "0.2.0",
+  "source_versions": [
+    "0.1.11",
+    "0.1.12"
+  ],
+  "hosts": [
+    "claude-code",
+    "codex"
+  ],
+  "receipt": "brain/.maestro/updates/update-0.2.0.json",
+  "receipt_bindings": [
+    "attempt_id",
+    "from_version",
+    "to_version",
+    "platform",
+    "runtime_host",
+    "target_release_sha256",
+    "target_core_sha256",
+    "baseline_manifest_sha256",
+    "installation_root_sha256",
+    "migration_receipt_sha256"
+  ],
+  "required_checks": [
+    "source_baseline_preserved",
+    "migration_committed",
+    "legacy_namespaces_readable",
+    "customizations_reconciled",
+    "native_runtime_integrity",
+    "hooks_configured",
+    "hooks_observed",
+    "native_agent_return",
+    "yoda_review"
+  ],
+  "optional_checks": [
+    "caseos_connected",
+    "python_optional_tools",
+    "host_goal_available"
+  ],
+  "required_subagents": [
+    "yoda"
+  ],
+  "resume": "first_non_pass_check_after_binding_validation",
+  "terminal_statuses": [
+    "pass",
+    "fail",
+    "unavailable"
+  ],
+  "caseos_required_for_local_update": false,
+  "may_bypass_host_limits": false
+}

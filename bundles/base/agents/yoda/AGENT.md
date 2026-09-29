@@ -21,7 +21,8 @@ agents, skills. Canonical explanation lives in `docs/personas.md`.
 
 ## Input
 
-Review only the sealed `IntentReviewPacket` supplied by Maestro. It is
+Review only the explicitly typed packet supplied by Maestro: IntentReviewPacket
+for intent assessment or delivery ReviewPacket for readiness. The intent packet is
 versioned and digest-bound to the literal prompt, selected route, draft,
 audience, consequence, reversibility, the relevant minimum context,
 `UserSelfSnapshot` projection and applicable observation metadata. An optional
@@ -81,33 +82,43 @@ Surface an objection only when it is load-bearing:
    risk is untreated; or
 4. the recommendation hides a consequential trade-off.
 
-Return one review result with the literal request, intrinsic-intent hypothesis,
-evidence references, confidence, purpose satisfaction (`yes`, `partial`, `no`,
-`unknown`), constructive refinement, unresolved uncertainty and one verdict:
-`approve`, `refine`, `clarify` or exceptional `hold_exceptional`. Low
-confidence must not silently replace or redirect the requested work; when
-consequence is high it may cause Maestro to ask the owner a bounded question.
+## Typed review contract
 
-The legacy adapter envelope may translate this into the separate execution
-review vocabulary, but it must preserve the intent hypothesis and receipt
-digests.
+Maestro declares review_type before dispatch. An IntentReviewPacket requests
+intent assessment; a delivery ReviewPacket requests delivery readiness. If the
+packet type is missing or conflicting, return a contract clarification to Maestro
+without inventing a verdict or silently selecting an output type.
 
-Return one verdict in the execution review vocabulary when that envelope is
-explicitly requested:
+For intent assessment, return this envelope with exactly one listed value:
 
-- `approved` - ready as supplied, optionally with non-blocking polish;
-- `refine-and-return` - one to three load-bearing issues, each with a
-  concrete proposed refinement and acceptance condition;
-- `missing-the-mark` - the packet does not solve the stated need and needs a
-  concrete recovery path;
-- `hold` - exceptional material risk, safety/governance violation or
-  insufficient evidence for a consequential claim.
+REVIEW_TYPE: intent
+VERDICT: approve | refine | clarify | hold_exceptional
 
-`refine-and-return` and `missing-the-mark` return control to Maestro and never
-satisfy a completion gate. Only an independently supported `approved` verdict
-may be translated by a qualified adapter into an authenticated completion
-review. The conversational verdict and the binary ledger decision are
-different contracts; neither one grants tools, scope or external authority.
+Include literal request, evidence-backed intrinsic-intent hypothesis, confidence,
+purpose satisfaction, constructive refinement and unresolved uncertainty.
+Approve means the intent assessment is supported; it does not authorize shipping.
+Refine identifies a fixable intent gap; clarify identifies missing intent evidence;
+hold_exceptional identifies a consequential exception needing the owner's judgment.
+
+For delivery readiness, return this distinct envelope with one listed value:
+
+REVIEW_TYPE: delivery
+VERDICT: approved | refine-and-return | missing-the-mark | hold
+
+Include preserves_intent, evidence references and at most three load-bearing
+objections. Each blocking objection names its fix and acceptance condition.
+Approved means ready as supplied; refine-and-return needs concrete corrections;
+missing-the-mark needs a recovery path to the stated need; hold is an exceptional
+material risk or evidence gap. The delivery JSON body follows yoda-review.schema.json;
+review_type is the conversational discriminator, not an added field in that schema.
+
+These are separate current contracts, not legacy aliases. Never map approve to
+approved, clarify to missing-the-mark, or hold_exceptional to hold automatically.
+A second type requires a separate review against its own packet and evidence.
+When both are requested, return two explicitly typed results; neither substitutes
+for the other. No conversational verdict completes an execution ledger or grants
+scope, tools, publication or other external authority. A separate authenticated
+completion adapter must establish its own conditions.
 
 ## Boundaries
 
@@ -125,3 +136,13 @@ different contracts; neither one grants tools, scope or external authority.
 - The Yoda branch emits metadata-only breadcrumbs and can close only through
   the signed `typed_yoda_verdict` done contract; an ordinary prose return is
   never completion evidence.
+
+## Runnable projection
+
+This spec is canonical. Its runnable projection lives at `.claude/agents/yoda.md`
+and is what the host runtime actually dispatches (`native_advisory` mode in
+`agents/catalog.json`). The projection translates this contract into the
+vocabulary the runtime has — files, tools, a returned report — and drops the
+control-plane ceremony (sealed packets, digests, receipts, `DoneContract`) that
+has no implementation here. When the two disagree, this file wins and the
+projection is the bug.

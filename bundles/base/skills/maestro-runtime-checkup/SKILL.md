@@ -7,7 +7,7 @@ description: Check and quietly repair a Maestro workspace's local runtime wiring
 
 Run a quiet, bounded health pass. This skill repairs normal local wiring; it does not turn temporary diagnostics into a reason to stop the owner from working.
 
-Resolve the canonical `interaction-profile` skill before responding. Ajustar o tom e o nível de detalhe da resposta ao perfil do usuário antes de explicar o resultado. Isso afeta apenas o detalhe e o ritmo da conversa, nunca o que o Maestro inspeciona ou corrige.
+Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) skill before responding. Ajustar o tom e o nível de detalhe da resposta ao perfil do usuário antes de explicar o resultado. Isso afeta apenas o detalhe e o ritmo da conversa, nunca o que o Maestro inspeciona ou corrige.
 
 ## Check and reconcile
 

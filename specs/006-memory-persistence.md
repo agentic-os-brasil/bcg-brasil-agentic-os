@@ -215,6 +215,46 @@ rollup carries two weekly L3 generations under
 - Claude and Codex conformance fixtures for context injection and failure reporting.
 - concurrent-cycle exclusion and fail-closed leftover-lock behavior.
 
+## ZIP daily continuity (DLOG)
+
+The portable ZIP runtime maintains a human-readable daily journal separate from
+generated L1 and the attested capture-v2 engine. Before a material response or an
+interruption checkpoint, Maestro prepares bounded agent-authored JSON containing
+schema version, stable ID, session/workspace binding, explicit owner or active-case
+scope, local calendar date with timezone offset, summary, decisions and next
+actions. This is selected local context, not a transcript, semantic sanitization
+attestation or evidence of dreaming.
+
+Pending checkpoints live in the scope's `.maestro/daily-pending/`.
+`maestro-runtime daily-stop --root ROOT` processes at most 32 checkpoints per call,
+validates bindings and paths, appends idempotently to `daily/YYYY-MM-DD.md`,
+preserves existing bytes and removes pending work only after confirmed persistence.
+Invalid/conflicting/interrupted work stays pending with content-free diagnostics.
+Case changes never redirect a checkpoint to owner or another case. Writers reject
+aliases and serialize without making hooks wait for a long-running worker.
+
+`maestro-runtime daily-context --root ROOT` reads current owner and confirmed
+active-case files at SessionStart for exactly local-calendar D0, D-1 and D-2.
+Timezone and source pointers are explicit. Missing dates do not backfill older
+days; future and generated index pages are excluded. The whole packet including
+headers has a byte budget and explicit omission diagnostics. Source text is
+evidence, not instructions. Recent L1 is a separate section with the same window,
+not a replacement for daily or permission to mix case content into owner memory.
+
+Claude Bash, Claude PowerShell and Codex call the same core. SessionStart recovers
+pending checkpoints only after the migration gate; failures do not prevent reading
+valid daily history. No Python, Git Bash, network or scheduler is required.
+Dream requests track newly saved daily work and survive failed synthesis; a date
+file or marker alone never proves all later work was consolidated. Automatic
+logging is not user-confirmed `eod` closure. Missing capture is reported, never
+fabricated. Adapter tests do not qualify native Windows sessions.
+
+`daily-dream-ack --root ROOT` is a compare-and-acknowledge operation, not a second
+capture writer. The agent supplies the scope and request digest read before
+synthesis. Under the same scope lock, only a matching successful request may be
+acknowledged; newer work remains pending. The receipt explicitly means
+agent-asserted success, not runtime attestation that synthesis occurred.
+
 ## Deferred decisions
 
 - synthesis provider and whether local-only operation is required;

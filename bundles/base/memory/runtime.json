@@ -1,11 +1,40 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "_comment": "Tetos do envelope de contexto. Ate a v1 nenhum destes era lido por linha nenhuma de codigo: eram declaracao sem enforcement. session-start-memory-inject.sh agora le este arquivo, corta cada bloco no seu teto (em limite de linha, com nota visivel do que foi cortado) e grava o medido em brain/.maestro/context-envelope.json — que e o context_envelope que o sensor do Darwin pede e nunca recebia.",
+  "_calibracao": "Os tetos session_context_*_max_bytes estao em bytes UTF-8, logo acima do valor real medido. Recalibrados em 2026-09-05 depois que emit_all_files passou a emitir corpo em vez de arquivo: SELF caiu de 13.361 para 6.233 e lifetime de 3.199 para 1.282 sem perder uma linha de conteudo. Os tetos antigos (14.000 e 3.500) tinham virado folga grande demais para prender qualquer coisa. Baixar mais e decisao do dono, e o envelope em brain/.maestro/context-envelope.json e o que embasa.",
   "l1_max_runes": 12000,
   "l1_max_entries": 64,
   "l1_max_input_bytes": 1048576,
   "l1_max_input_entries": 256,
-  "session_context_lifetime_max_runes": 1024,
-  "session_context_l3_max_runes": 768,
-  "session_context_l2_max_runes": 768,
-  "session_context_l1_max_runes": 1024
+  "session_context_self_max_bytes": 7000,
+  "session_context_lifetime_max_bytes": 1600,
+  "session_context_l3_max_bytes": 900,
+  "session_context_l2_max_bytes": 2600,
+  "session_context_l1_max_bytes": 3600,
+  "session_context_learnings_max_bytes": 2000,
+  "session_context_craft_max_bytes": 1200,
+  "session_context_total_max_bytes": 18000,
+  "_measured_2026_09_05": {
+    "self": 6233,
+    "lifetime": 1282,
+    "l3": 809,
+    "l2": 2344,
+    "l1": 3373,
+    "learnings": 1202,
+    "craft": 346,
+    "total": 15589,
+    "_antes_do_corte_de_embalagem": {
+      "self": 13361,
+      "lifetime": 3199,
+      "total": 24634
+    },
+    "_nota": "55% do bloco SELF era embalagem, nao conteudo: indice gerado da propria pasta (1.925), README (798), frontmatter (3.010) e procedencia mais cabecalho duplicado (1.443). O conteudo real das dez facetas sao ~6.100 bytes e e sempre-ligado de proposito — estilo, barra de qualidade e fronteira de confidencialidade disparam em toda resposta e nunca sao nomeados no pedido, entao roteamento nao os alcancaria."
+  },
+  "_superseded_runes": {
+    "_nota": "Tetos da v1, em 'runes'. Nunca foram lidos: o valor de lifetime (1024) esta 3x abaixo do real (3197), o que so ficou visivel quando o enforcement passou a existir. Guardados porque registram a intencao original de projeto — nao os apague sem decidir se a intencao era essa mesmo.",
+    "session_context_lifetime_max_runes": 1024,
+    "session_context_l3_max_runes": 768,
+    "session_context_l2_max_runes": 768,
+    "session_context_l1_max_runes": 1024
+  }
 }

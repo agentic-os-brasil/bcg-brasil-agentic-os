@@ -6,6 +6,39 @@ Codes contain exactly four uppercase letters. They are globally unique, permanen
 
 Never include secrets, credentials, personal data, client-identifying context or case content.
 
+## VNTV - Consolidate ZIP migration and native hosts through one verified runtime
+
+- Date: 2026-09-29
+- Status: accepted
+- Owner: Daniel Scardini, with Walter as delegated decision proxy
+- Context: The 0.1.11 field layout, 0.1.12 compatibility candidate and Marcelo structural stack need one preserving update, native Windows without Git Bash, native Codex and consented caseOS access.
+- Decision: Consolidate the stack into 0.2.0, retaining source data and personal customizations. Use a single Go migration/guard core with verified Bash and PowerShell wrappers, architecture-specific bundled executables, immutable migration plans/receipts and explicit retained-namespace readers. Legitimate post-commit edits keep the runtime usable but require fresh update qualification; unsafe topology blocks without erasing historical authority. Bind Codex hooks to a confirmed installation root, never a discovered nested launcher. Enroll caseOS per workspace/case/tool parameter with native authentication and no automatic export.
+- Consequences: Native Windows, native host calls, exact-artifact update checks and organization-controlled distribution remain separate gates. Recipes persist checkpoints and require real Yoda returns but cannot override provider limits. No source PR is closed before consolidation merge and concept coverage. Rollback revokes an attempt and preserves both trees; it does not claim runtime restoration.
+- Refs: docs/plans/2026-09-29-v020-consolidation.md; acceptance/migration/CONTRACT.md; installers/zip/user-template/UPDATE-CONTRACT.json; internal/zipmigration; internal/zipruntime
+- Supersedes: none
+
+## PSHK - Use native PowerShell hooks for the Windows release
+
+- Date: 2026-09-14
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The 0.1.12 compatibility patch fixed Windows path and Python-name defects but still invoked every product hook through Git Bash. Git for Windows is optional in the native Claude Code installation and is not present on every corporate device, so describing that patch as Windows support would leave scaffold, memory, case isolation and agent routing inactive on a supported Windows host.
+- Decision: The Windows Maestro artifact uses PowerShell-native hook implementations and an explicit PowerShell hook configuration compatible with Windows PowerShell 5.1 and PowerShell 7. The macOS artifact keeps the Bash implementations. Git Bash remains an optional user capability, never a Maestro runtime prerequisite. The user-facing update kit selects the platform payload before activation and preserves the existing `data/` workspace contract.
+- Consequences: Each configured Windows hook needs behaviorally equivalent PowerShell coverage, including stdin JSON, bounded stdout, exit-code semantics, UTF-8, drive-letter paths, spaces and reparse-point safety. Release evidence remains platform-specific: local PowerShell contract tests do not replace a native Windows Claude session, and publication stays blocked until the exact Windows artifact passes update preservation, lifecycle-hook and real Agent-call canaries. Platform selection must not ask the owner to edit JSON, run shell commands or merge old managed-core files into the new release.
+- Refs: specs/001-cli-distribution.md; specs/003-pilot-success.md; specs/004-runtime-portability.md; installers/zip/; Claude Code hooks reference
+- Supersedes: none
+
+## UNAT - Allow unattended scheduled sessions for the three daily/weekly routines, owner-configured at onboarding
+
+- Date: 2026-09-10
+- Status: accepted
+- Owner: Marcelo Petrof
+- Context: `start-day`, `eod` and `retro` are written as attended conversations — `eod` opens by asking the owner what actually happened — so nothing could schedule them without running a dialogue with no owner present. specs/006-memory-persistence.md lists "unattended model permission" among its **deferred decisions**, and its objective explicitly forbids "allowing an unattended model pass to overwrite authoritative sources"; specs/009-scheduler-catch-up.md defines the scheduler layer but leaves the idempotent operation and its domain truth to the owning subsystem. So the mechanism was specified and the permission was not. Separately, an observed run of scheduled routine sessions opened the session and wrote the page but reported only a fraction of what the skill was supposed to produce, leaving the owner unable to see what the routine had concluded — a failure that is silent from the owner's side and indistinguishable from the routine working.
+- Decision: Maestro may run unattended, scheduled sessions for exactly three routines — `start-day`, `eod` and `retro` — and for no other skill without its own decision. Five conditions bound this. (1) **Owner-configured only:** whether the routines run at all, and at what times, is chosen by the owner during onboarding; nothing is scheduled by default, and a declined offer is sticky rather than re-asked. (2) **Marker-gated entry:** a skill enters autonomous mode only when the invoking prompt carries the line `MAESTRO_RUN: scheduled-unattended` verbatim, never on a prose description or an inferred condition, so a reworded prompt fails loudly at the gate instead of silently stalling on a question nobody can answer. (3) **Marked output:** the page a scheduled run writes is marked as unconfirmed in its own text, and every uncertain reading is marked `evidência direta` or `inferido, não confirmado`, so an autonomously written entry is never indistinguishable from one the owner stood behind. (4) **Consent-requiring acts are deferred, not performed:** filing a durable decision, adding evidence to a development objective and promoting a learning never run unattended; each leaves a pointer in a place that already exists on the page, for the next attended pass. (5) **Full report to the execution's own chat:** the run reports everything an attended run of the same skill would have said out loud, at the same level of detail — not a completion line. This narrows specs/006's deferred "unattended model permission" to these three routines under these five conditions, and does not widen it to any other skill.
+- Consequences: The owner gets a briefing waiting in the morning, a day closed at night and a weekly retro without having to open the conversation. Concurrency safety carries over unchanged from the attended path and matters more here: a `proposed` write result means the owner edited the page under the read, and unattended there is nobody to show the proposal to, so the write ends there rather than retrying over an edit the owner could never see undone. The three routines now carry two behaviours to keep in sync, mitigated by mapping each autonomous step onto its attended counterpart rather than writing a second procedure. Anything that creates a scheduled task must write the canonical marker; eval Phase 21 asserts the marker, the autonomous mode and the reporting requirement across all three skills, and fails on a one-character drift. Reconstruction quality in `eod` is the open risk — no amount of prose settles it, and it needs a real unattended run to calibrate. This does not authorize scheduling any other skill, nor unattended writes to the memory layers, which remain governed by specs/006's dreaming contract.
+- Refs: bundles/base/skills/start-day/SKILL.md; bundles/base/skills/eod/SKILL.md; bundles/base/skills/retro/SKILL.md; installers/zip/eval-release.sh (Phase 21); specs/006-memory-persistence.md; specs/009-scheduler-catch-up.md; PR: feat/routines-autonomous-mode
+- Supersedes: none
+
 ## WYRB - Rename internal reviewer role from Walter to Yoda (Mestre Yoda persona)
 
 - Date: 2026-08-15
@@ -1181,4 +1214,15 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Decision: When `uv` is absent and a pilot user's explicit request needs a Python-dependent capability under PYUV's on-demand path, Maestro may download and run the official `uv` installer from astral.sh (`install.sh` on macOS/Linux, `install.ps1` on Windows) directly, after asking the user a one-line confirmation before the download runs. The installer must be invoked exactly as published by astral.sh (no mirrored, modified or re-hosted copy), must never request or require administrator/elevated privileges, and must install to the standard per-user location rather than a system-wide path. This is a narrow widening of PYUV: it authorizes fetching and executing exactly one additional external artifact (the `uv` installer itself) under the same user-confirmed, task-bound conditions, and does not authorize installing any other external tool without its own decision.
 - Consequences: Pilot users no longer hit a hard stop when `uv` is missing; the on-demand Python path (PYUV) becomes usable end-to-end for a non-technical user. Maestro now downloads and executes one script from a third-party site (astral.sh) as part of normal operation, which is a new trust dependency beyond PyPI package installs already covered by PYUV; if astral.sh is unreachable (offline, corporate proxy/firewall) the capability must degrade to `unavailable` with the existing manual-install fallback, never fail silently. Must be revisited if specs/010/031's fully signed managed runtime pack ships and removes the need for a local `uv` install entirely.
 - Refs: PYUV; SETU; CNAB; specs/010-local-ingestion-runtime.md; specs/031-markitdown-ingestion-adapter.md
+- Supersedes: none
+
+## DLOG - Preserve daily continuity independently of dreaming
+
+- Date: 2026-09-29
+- Status: accepted
+- Owner: Daniel Scardini, through delegated Walter review
+- Context: Portable Stop hooks did not persist daily work, and Bash, PowerShell and Codex exposed different and stale daily history at SessionStart.
+- Decision: Use one managed runtime core to persist bounded, scoped, agent-authored checkpoints idempotently and inject fresh daily and recent L1 context for exactly D0, D-1 and D-2 calendar days. Daily capture is independent of dreaming, retains source data and failed pending work, and never copies raw transcripts or silently moves case content into owner memory. Native adapters translate events only.
+- Consequences: Agents must prepare useful checkpoints before final responses and at interruption boundaries; a hook cannot invent useful content from telemetry. Missing capture and incomplete native qualification remain explicit. Dreaming retains separate provenance and retry semantics. Windows release qualification remains required.
+- Refs: MEMO; specs/006-memory-persistence.md; specs/002-data-boundaries.md; specs/004-runtime-portability.md; docs/superpowers/plans/2026-09-29-daily-continuity.md
 - Supersedes: none

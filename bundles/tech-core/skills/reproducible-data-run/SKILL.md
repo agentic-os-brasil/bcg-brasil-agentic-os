@@ -11,7 +11,7 @@ it does not execute code, retain source data or authorize production changes.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` first. Standard users receive a
+Resolve the canonical [`interaction-profile`](../../base/skills/interaction-profile/SKILL.md) first. Standard users receive a
 plain-language explanation of what another reviewer needs to repeat the result.
 Advanced and power users may receive version, environment and artifact details.
 The profile never changes data retention, access controls or release approval.

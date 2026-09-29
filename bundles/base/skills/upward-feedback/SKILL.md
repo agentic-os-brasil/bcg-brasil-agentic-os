@@ -7,7 +7,7 @@ description: Help the owner prepare considered feedback to give upward to a seni
 
 Help the owner work out what to say, and how to say it, before they say it.
 
-All reads and writes use direct file operations on the owner atlas paths (`data/owner/atlas/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
+All reads and writes use direct file operations on the owner atlas paths (`brain/owner/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
 
 ## The boundary that defines this skill
 
@@ -34,7 +34,7 @@ specific person. Naming is not the risk; accumulating is. So:
   new one. The owner starts from what they think now.
 - **the file is named for the occasion, not the person.** No segment proposal
   declares a page kind for this, so write where the owner names it, defaulting
-  to `owner/development/upward-feedback/<YYYY-MM-DD>-<occasion-slug>.md`. A
+  to `brain/development/upward-feedback/<YYYY-MM-DD>-<occasion-slug>.md`. A
   per-person filename would turn pages that are individually fine into the
   dossier this boundary exists to prevent.
 - **the page says what it is.** State on it, in the owner's words, that it is
@@ -42,7 +42,7 @@ specific person. Naming is not the risk; accumulating is. So:
 
 ## Interaction profile
 
-Resolve `interaction-profile` before presenting a draft. The boundary above,
+Resolve [`interaction-profile`](../interaction-profile/SKILL.md) before presenting a draft. The boundary above,
 the operations used, the bounds and the confirmation behaviour never vary by
 profile; only the explanation and optional detail do.
 
@@ -103,7 +103,7 @@ Forma recomendada, não porta de entrada. A página é nomeada pela ocasião, nu
 pela pessoa, e diz na primeira linha o que ela é. Todo ponto traz o momento que
 o owner confirmou; um ponto sem âncora confirmada não entra na página.
 
-**Preparação — `owner/development/upward-feedback/<YYYY-MM-DD>-<occasion-slug>.md`**:
+**Preparação — `brain/development/upward-feedback/<YYYY-MM-DD>-<occasion-slug>.md`**:
 
 ```markdown
 # Preparação de feedback — <ocasião> — YYYY-MM-DD
@@ -169,3 +169,13 @@ ainda falta o owner decidir`.
 - If an operation is unavailable, say so and keep going. The thinking, the
   framing and a draft the owner can take to the conversation are the point —
   only the recording is lost, and it must never be reported as done.
+
+## Contrato de página do brain
+
+Toda página escrita em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.

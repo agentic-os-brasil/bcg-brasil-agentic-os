@@ -11,7 +11,7 @@ approve a deployment or create a production change.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before presenting the plan.
+Resolve the canonical [`interaction-profile`](../../base/skills/interaction-profile/SKILL.md) before presenting the plan.
 For a standard user, use plain language and one recommended next step. For
 advanced and power users, make assumptions, interfaces and alternatives
 explicit. The profile changes communication only: it never changes permissions,

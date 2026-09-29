@@ -1,0 +1,601 @@
+{
+  "schema_version": 1,
+  "old_zip_sha256": "937f22cc917540f771ddd6081d81eef1574f55229d71e7a544416c0a0fa657bf",
+  "new_zip_sha256": "65cc6f7e2868159d43feba9d7c6afca46b7223aaabf1fc9021814845c85ba9f0",
+  "scope": "all runtime artifacts/manifest, .codex tree, .claude hooks and settings, VERSION, AGENTS.md, canonical agent definitions, loaded Yoda/operator/interaction-profile skill contracts",
+  "compared": 74,
+  "files": [
+    {
+      "path": "Maestro/.agents/skills/interaction-profile/SKILL.md",
+      "old_sha256": "c5fc695715d7511e9c82966d6c7ae3138eab569257d1d2704f74999540feb68c",
+      "new_sha256": "c5fc695715d7511e9c82966d6c7ae3138eab569257d1d2704f74999540feb68c",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.agents/skills/interaction-profile/agents/openai.yaml",
+      "old_sha256": "7b0ab7cb8740f048597e6cd0cc657ae2e5e736a80681253c0d5231156d9c5305",
+      "new_sha256": "7b0ab7cb8740f048597e6cd0cc657ae2e5e736a80681253c0d5231156d9c5305",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.agents/skills/maestro-operator/SKILL.md",
+      "old_sha256": "9a014273510c87d1e7fd5e3debe14691c3d063c4a07e236cfceef6b5f41e8752",
+      "new_sha256": "9a014273510c87d1e7fd5e3debe14691c3d063c4a07e236cfceef6b5f41e8752",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.agents/skills/maestro-operator/agents/openai.yaml",
+      "old_sha256": "a724707624f306be8a0ab2dac0afcd06018e78f46167c4f1fb00d2de2bf643df",
+      "new_sha256": "a724707624f306be8a0ab2dac0afcd06018e78f46167c4f1fb00d2de2bf643df",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.agents/skills/yoda/SKILL.md",
+      "old_sha256": "7ae1a9933a9f97f847e474033feeac93fa7be1e1ee42bdc05898e39aa06989ed",
+      "new_sha256": "7ae1a9933a9f97f847e474033feeac93fa7be1e1ee42bdc05898e39aa06989ed",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.agents/skills/yoda/agents/openai.yaml",
+      "old_sha256": "804f89e49556a823cb61ec2ee3843ef82c00d1b388836d45a29e2b555dfb5477",
+      "new_sha256": "804f89e49556a823cb61ec2ee3843ef82c00d1b388836d45a29e2b555dfb5477",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/announce-agent-dispatch.ps1",
+      "old_sha256": "7716b5130a595243b9f14f5a39f48baa84fca65e5ce11db634e8f70fb8819eba",
+      "new_sha256": "7716b5130a595243b9f14f5a39f48baa84fca65e5ce11db634e8f70fb8819eba",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/announce-agent-dispatch.sh",
+      "old_sha256": "41f888ed439a7d17e89dd468129682fb2c44515cf9a85a9507917d9bcad01523",
+      "new_sha256": "41f888ed439a7d17e89dd468129682fb2c44515cf9a85a9507917d9bcad01523",
+      "old_mode": 493,
+      "new_mode": 493,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/block-cross-case-writes.ps1",
+      "old_sha256": "f79f9c465bd65941b67342d223c9b03b7483975309c909a34f4d71a7a948c047",
+      "new_sha256": "f79f9c465bd65941b67342d223c9b03b7483975309c909a34f4d71a7a948c047",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/block-cross-case-writes.sh",
+      "old_sha256": "3e18053c14fe47d278741e2c858f511a6b462348fa17ba1a4fbc727776868a46",
+      "new_sha256": "3e18053c14fe47d278741e2c858f511a6b462348fa17ba1a4fbc727776868a46",
+      "old_mode": 493,
+      "new_mode": 493,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/context-inject-userprompt.ps1",
+      "old_sha256": "c06d3142dbfc42d79e4f0fbdd3eaf0e4fd048b2a741bcd46812045a98e921fc5",
+      "new_sha256": "c06d3142dbfc42d79e4f0fbdd3eaf0e4fd048b2a741bcd46812045a98e921fc5",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/context-inject-userprompt.sh",
+      "old_sha256": "ad09cc5d1db2b945f197d3567e0fee01e64344fd01b3ef24dad627545c1b8872",
+      "new_sha256": "ad09cc5d1db2b945f197d3567e0fee01e64344fd01b3ef24dad627545c1b8872",
+      "old_mode": 493,
+      "new_mode": 493,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/first-run-scaffold.ps1",
+      "old_sha256": "52ce539a290da34620f8c585668845645baf90aaf95b798fcb90c8768147e432",
+      "new_sha256": "52ce539a290da34620f8c585668845645baf90aaf95b798fcb90c8768147e432",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/first-run-scaffold.sh",
+      "old_sha256": "6fe17b3c0776400a0613ecadd33de74decea04300b6c1d2dd8053c04fed05f24",
+      "new_sha256": "6fe17b3c0776400a0613ecadd33de74decea04300b6c1d2dd8053c04fed05f24",
+      "old_mode": 493,
+      "new_mode": 493,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/lib/Maestro.Hooks.ps1",
+      "old_sha256": "c6a2a6721da1ba78af75d11c516a5a0b3fa629fcbaf3f54f8af2cdb2ff2615f1",
+      "new_sha256": "58df729e27cfd47eeed37cd11a3b44d6970281d999795b803baf847b55ae566b",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": false
+    },
+    {
+      "path": "Maestro/.claude/hooks/lib/Maestro.Lifecycle.ps1",
+      "old_sha256": "890da3b2128b5e7decf2b9c0ee2cc78b541e1c987f00c8080423ab76e2d42819",
+      "new_sha256": "890da3b2128b5e7decf2b9c0ee2cc78b541e1c987f00c8080423ab76e2d42819",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/lib/maestro-runtime.ps1",
+      "old_sha256": "f23cb5c82fbb31a8cd989a90b5fab93738be8a934df15e3f77fe1fe12ecd8fa7",
+      "new_sha256": "2de8e3c8dddda6ff7f8e7cc7d0ee7ff0fe753a1c8fed17d25e1190c747bba8bf",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": false
+    },
+    {
+      "path": "Maestro/.claude/hooks/lib/maestro-runtime.sh",
+      "old_sha256": "bfaed481e616a4f984831e65f9e31bdbd9138518da1bca3f5df4cf6073614992",
+      "new_sha256": "bfaed481e616a4f984831e65f9e31bdbd9138518da1bca3f5df4cf6073614992",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/lib/python.sh",
+      "old_sha256": "dc823b4ab025050028ec119c0f7efc89e18551ff09189c1f20dbbf9b324dbd5b",
+      "new_sha256": "dc823b4ab025050028ec119c0f7efc89e18551ff09189c1f20dbbf9b324dbd5b",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/session-start-memory-inject.ps1",
+      "old_sha256": "93587959d899e8c61624a2fce4aa5f0dbb680741ec0d5d0ff8a7bc74052e96d3",
+      "new_sha256": "93587959d899e8c61624a2fce4aa5f0dbb680741ec0d5d0ff8a7bc74052e96d3",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/session-start-memory-inject.sh",
+      "old_sha256": "4dba1ddcc7ba35cf660fe3aeda3242d5dea3ea480d8c1ec84ca3344865aba2e9",
+      "new_sha256": "4dba1ddcc7ba35cf660fe3aeda3242d5dea3ea480d8c1ec84ca3344865aba2e9",
+      "old_mode": 493,
+      "new_mode": 493,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/session-stop-agent-check.ps1",
+      "old_sha256": "3af84452609b89a0dfea2d49273b4b5a9b4eb4b56b1e1a6447fc9ce47d879dea",
+      "new_sha256": "3af84452609b89a0dfea2d49273b4b5a9b4eb4b56b1e1a6447fc9ce47d879dea",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/session-stop-agent-check.sh",
+      "old_sha256": "b23258cf62ae62d28730e3787a13277526676e3a0c8cbdb49f80c042a409fb6b",
+      "new_sha256": "b23258cf62ae62d28730e3787a13277526676e3a0c8cbdb49f80c042a409fb6b",
+      "old_mode": 493,
+      "new_mode": 493,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/session-stop-brain-index.ps1",
+      "old_sha256": "051c9619cb6439e66a09539c7b59002b9d1d51eb75eb6e8cabf3c4d616ce92e0",
+      "new_sha256": "051c9619cb6439e66a09539c7b59002b9d1d51eb75eb6e8cabf3c4d616ce92e0",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/session-stop-brain-index.sh",
+      "old_sha256": "6cf09b0117d859ec5647d2e1f4f2ceee01c915be3f98116e4b9d9234778110d7",
+      "new_sha256": "6cf09b0117d859ec5647d2e1f4f2ceee01c915be3f98116e4b9d9234778110d7",
+      "old_mode": 493,
+      "new_mode": 493,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/session-stop-dream.ps1",
+      "old_sha256": "d34ad78f18a280ed28ab4553fa6a83641245a3e9517f3a17f627226f936aebd4",
+      "new_sha256": "d34ad78f18a280ed28ab4553fa6a83641245a3e9517f3a17f627226f936aebd4",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/session-stop-dream.sh",
+      "old_sha256": "188dfa3392725db80a9dfc7ed69109f91894fded4f22c0785f97db2f33c32556",
+      "new_sha256": "188dfa3392725db80a9dfc7ed69109f91894fded4f22c0785f97db2f33c32556",
+      "old_mode": 493,
+      "new_mode": 493,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/session-stop-eod-check.ps1",
+      "old_sha256": "0674bf77bb7b2d4fcaf1bbc2f098619af70a15d31a60088408f159865e218311",
+      "new_sha256": "0674bf77bb7b2d4fcaf1bbc2f098619af70a15d31a60088408f159865e218311",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/hooks/session-stop-eod-check.sh",
+      "old_sha256": "bcab6032d63508176e8d50cc6760f14fb902c4d9ce1304f7975b78fa079f5b62",
+      "new_sha256": "bcab6032d63508176e8d50cc6760f14fb902c4d9ce1304f7975b78fa079f5b62",
+      "old_mode": 493,
+      "new_mode": 493,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.claude/settings.json",
+      "old_sha256": "a56c0dbd0ac4a542cf38a7aa809c536408a85251317062fb0b3443890e20ad33",
+      "new_sha256": "a56c0dbd0ac4a542cf38a7aa809c536408a85251317062fb0b3443890e20ad33",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.codex/README.md",
+      "old_sha256": "cc2a2afc463c3e8cbaee7d1184c119375983cb6607f920998e8555e44171a0ae",
+      "new_sha256": "cc2a2afc463c3e8cbaee7d1184c119375983cb6607f920998e8555e44171a0ae",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.codex/agents/case-agent.toml",
+      "old_sha256": "9d9dd7907c74952e2be119f2045d6859701fb5c0c465c4b1427a9911b34db5ff",
+      "new_sha256": "9d9dd7907c74952e2be119f2045d6859701fb5c0c465c4b1427a9911b34db5ff",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.codex/agents/client-account-agent.toml",
+      "old_sha256": "bbfba14e14583820742fdd9460eb3812f1353b7da537c7dd428a57d4810c5e61",
+      "new_sha256": "bbfba14e14583820742fdd9460eb3812f1353b7da537c7dd428a57d4810c5e61",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.codex/agents/darwin.toml",
+      "old_sha256": "e982eda84e63a27e0c5a1d42fe46c4481ad101ed5ec7b76f93e1e3979f117821",
+      "new_sha256": "e982eda84e63a27e0c5a1d42fe46c4481ad101ed5ec7b76f93e1e3979f117821",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.codex/agents/gamma-guardian.toml",
+      "old_sha256": "bfa67c182514bdfb56ccba1f42053988d82eaefb8c20c2f521f500df88d75af9",
+      "new_sha256": "bfa67c182514bdfb56ccba1f42053988d82eaefb8c20c2f521f500df88d75af9",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.codex/agents/pa-expert.toml",
+      "old_sha256": "ace4d4a7264c0b82462a60ea75660749dfd9298b58b616d96b4d0952c09cda20",
+      "new_sha256": "ace4d4a7264c0b82462a60ea75660749dfd9298b58b616d96b4d0952c09cda20",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.codex/agents/yoda.toml",
+      "old_sha256": "1288532c00cd0759f99b33ceaaf859382ec688106ae05f04df1919b0a6dc230a",
+      "new_sha256": "1288532c00cd0759f99b33ceaaf859382ec688106ae05f04df1919b0a6dc230a",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.codex/config.toml",
+      "old_sha256": "a0694f9c7279ea7623799d6b52fe715649d5379e3cd67ecba31cc159e0e3fb7c",
+      "new_sha256": "a0694f9c7279ea7623799d6b52fe715649d5379e3cd67ecba31cc159e0e3fb7c",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.codex/hooks.json",
+      "old_sha256": "55fc2730374f76120cc31e655ed1dd00503bcdde3d6a0bf36bfa6e78f8e5c09e",
+      "new_sha256": "55fc2730374f76120cc31e655ed1dd00503bcdde3d6a0bf36bfa6e78f8e5c09e",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.codex/hooks/run.ps1",
+      "old_sha256": "fdc3b5bd10c7911e897ba74db8746f790bc9c87aa0c66829d18fcca8a793a86e",
+      "new_sha256": "fdc3b5bd10c7911e897ba74db8746f790bc9c87aa0c66829d18fcca8a793a86e",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/.codex/hooks/run.sh",
+      "old_sha256": "901dfe4f9e308d79dc7926ef7ed73f875f95732e2ea0ce51a6d1d5b55bc48c33",
+      "new_sha256": "901dfe4f9e308d79dc7926ef7ed73f875f95732e2ea0ce51a6d1d5b55bc48c33",
+      "old_mode": 493,
+      "new_mode": 493,
+      "equal": true
+    },
+    {
+      "path": "Maestro/AGENTS.md",
+      "old_sha256": "297fd7f011b360ef7dab9b8ff6254435331da4758764d185bb13ea1d40a04982",
+      "new_sha256": "297fd7f011b360ef7dab9b8ff6254435331da4758764d185bb13ea1d40a04982",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/VERSION",
+      "old_sha256": "1f930dd1f133c1f97a94fe3acb8db34372cf4c01ffdb2b3ff4ca72f9494121e9",
+      "new_sha256": "1f930dd1f133c1f97a94fe3acb8db34372cf4c01ffdb2b3ff4ca72f9494121e9",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/agents/activation-policy.json",
+      "old_sha256": "5f7fecb91c4ce9db731634fdbe4f6ae8058626b039449d989dc318c0cbc4e9a6",
+      "new_sha256": "5f7fecb91c4ce9db731634fdbe4f6ae8058626b039449d989dc318c0cbc4e9a6",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/agents/case-agent/AGENT.md",
+      "old_sha256": "bdb835e803ec0aed064308b371a383f03201d414b7ac27e138009a51e7e958c8",
+      "new_sha256": "bdb835e803ec0aed064308b371a383f03201d414b7ac27e138009a51e7e958c8",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/agents/catalog.json",
+      "old_sha256": "a04585a92a3e4b55f99142f724c05b56ed766f2557e857983ee08b161a1fcb15",
+      "new_sha256": "a04585a92a3e4b55f99142f724c05b56ed766f2557e857983ee08b161a1fcb15",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/agents/client-account-agent/AGENT.md",
+      "old_sha256": "f0080b0e216a9e39e2d5ad81dcd47f37d12bf61c8f59784c7572b6dad5f8a835",
+      "new_sha256": "f0080b0e216a9e39e2d5ad81dcd47f37d12bf61c8f59784c7572b6dad5f8a835",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/agents/darwin/AGENT.md",
+      "old_sha256": "d252dbdee8060f98c79fda70ffc8bc31980f9fd4b77c2cd426bd041f2c6c798e",
+      "new_sha256": "d252dbdee8060f98c79fda70ffc8bc31980f9fd4b77c2cd426bd041f2c6c798e",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/agents/gamma-guardian/AGENT.md",
+      "old_sha256": "50d499d91232de5fbd4508e613960538787be1fbdba8635a6a5dc560df13b836",
+      "new_sha256": "50d499d91232de5fbd4508e613960538787be1fbdba8635a6a5dc560df13b836",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/agents/maestro/AGENT.md",
+      "old_sha256": "a2158140eada8622380841163c9cf391cf7fb0c8702a957d5b0c2fe0b053286d",
+      "new_sha256": "a2158140eada8622380841163c9cf391cf7fb0c8702a957d5b0c2fe0b053286d",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/agents/pa-expert-registry.json",
+      "old_sha256": "9863cee7d758e2aec916b9ddfcb1dd2c496abc69d12816fdc23d3f7132d45cc6",
+      "new_sha256": "9863cee7d758e2aec916b9ddfcb1dd2c496abc69d12816fdc23d3f7132d45cc6",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/agents/pa-expert/AGENT.md",
+      "old_sha256": "052b291fc60dee3c0c2849cca7b06a37e09f89640260b6c8e71195155ef66ec1",
+      "new_sha256": "052b291fc60dee3c0c2849cca7b06a37e09f89640260b6c8e71195155ef66ec1",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/agents/templates/account_agent/AGENT.md",
+      "old_sha256": "48fc2f49032baa8301822472d2daeb74f5d2192696c0586dc3b202fcd06e9ff2",
+      "new_sha256": "48fc2f49032baa8301822472d2daeb74f5d2192696c0586dc3b202fcd06e9ff2",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/agents/templates/case_agent/AGENT.md",
+      "old_sha256": "3d44c9ac8d539451bbfda662f89c58ef4ddd81d875fd9f46189e0e4adb26dda5",
+      "new_sha256": "3d44c9ac8d539451bbfda662f89c58ef4ddd81d875fd9f46189e0e4adb26dda5",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/agents/templates/client_account_agent/AGENT.md",
+      "old_sha256": "7265852c238751db33b289b5b3e6a012314d46d4c9ba0d14e9bde29140f15d27",
+      "new_sha256": "7265852c238751db33b289b5b3e6a012314d46d4c9ba0d14e9bde29140f15d27",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/agents/templates/pa_expert/AGENT.md",
+      "old_sha256": "72c45bd8394d5a03607d47170240345f8692c186762fb3114d90e41b8306601f",
+      "new_sha256": "72c45bd8394d5a03607d47170240345f8692c186762fb3114d90e41b8306601f",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/agents/templates/practice_agent/AGENT.md",
+      "old_sha256": "aade7a2c063506bc3cd6ce6aa649956d9c147ea2b37c61f8620fb3852918232b",
+      "new_sha256": "aade7a2c063506bc3cd6ce6aa649956d9c147ea2b37c61f8620fb3852918232b",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/agents/templates/quality_guardian/AGENT.md",
+      "old_sha256": "86352b664b55b6ce3aa204e0f2f9cec71fd308b48e6d77a0ab435e15a01b311a",
+      "new_sha256": "86352b664b55b6ce3aa204e0f2f9cec71fd308b48e6d77a0ab435e15a01b311a",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/agents/templates/subject_specialist/AGENT.md",
+      "old_sha256": "7de76d41a4c3a3fa9d8295b83f296ec94ffc7a0904d697acbe0b646d14132e3c",
+      "new_sha256": "7de76d41a4c3a3fa9d8295b83f296ec94ffc7a0904d697acbe0b646d14132e3c",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/agents/templates/workspace_agent/AGENT.md",
+      "old_sha256": "004cf66ba2abff042559fb27fe26b6402e0f27cd33045395172ee9aaf201bd39",
+      "new_sha256": "004cf66ba2abff042559fb27fe26b6402e0f27cd33045395172ee9aaf201bd39",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/agents/yoda/AGENT.md",
+      "old_sha256": "37f779fe874fbba8d46c9a80a6b0892e9135524a91b00b950a9b049993a10fcf",
+      "new_sha256": "37f779fe874fbba8d46c9a80a6b0892e9135524a91b00b950a9b049993a10fcf",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/runtime/capabilities.json",
+      "old_sha256": "13a188c5664fc6f1b912f94d6b5285c7e4a95526fd05ed6db686745ce7ee98af",
+      "new_sha256": "13a188c5664fc6f1b912f94d6b5285c7e4a95526fd05ed6db686745ce7ee98af",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/runtime/hook-policy.json",
+      "old_sha256": "6684653a4a59e626d704267152accf1abf3750a09d321e6b4142b8983d24195d",
+      "new_sha256": "6684653a4a59e626d704267152accf1abf3750a09d321e6b4142b8983d24195d",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/runtime/maintenance.json",
+      "old_sha256": "0b527dd0d36f6ff2f235e4ad790154b11f10f3cbc4d7eafb3e8d0c36a505fa25",
+      "new_sha256": "0b527dd0d36f6ff2f235e4ad790154b11f10f3cbc4d7eafb3e8d0c36a505fa25",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/runtime/orientation.md.tmpl",
+      "old_sha256": "edd5130ad81816b2a549a134959749588323f3a5223a7b4ff0b4985ff5c9cc62",
+      "new_sha256": "edd5130ad81816b2a549a134959749588323f3a5223a7b4ff0b4985ff5c9cc62",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/skills/interaction-profile/SKILL.md",
+      "old_sha256": "c5fc695715d7511e9c82966d6c7ae3138eab569257d1d2704f74999540feb68c",
+      "new_sha256": "c5fc695715d7511e9c82966d6c7ae3138eab569257d1d2704f74999540feb68c",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/skills/interaction-profile/agents/openai.yaml",
+      "old_sha256": "7b0ab7cb8740f048597e6cd0cc657ae2e5e736a80681253c0d5231156d9c5305",
+      "new_sha256": "7b0ab7cb8740f048597e6cd0cc657ae2e5e736a80681253c0d5231156d9c5305",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/skills/maestro-operator/SKILL.md",
+      "old_sha256": "9a014273510c87d1e7fd5e3debe14691c3d063c4a07e236cfceef6b5f41e8752",
+      "new_sha256": "9a014273510c87d1e7fd5e3debe14691c3d063c4a07e236cfceef6b5f41e8752",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/skills/maestro-operator/agents/openai.yaml",
+      "old_sha256": "a724707624f306be8a0ab2dac0afcd06018e78f46167c4f1fb00d2de2bf643df",
+      "new_sha256": "a724707624f306be8a0ab2dac0afcd06018e78f46167c4f1fb00d2de2bf643df",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/skills/yoda/SKILL.md",
+      "old_sha256": "7ae1a9933a9f97f847e474033feeac93fa7be1e1ee42bdc05898e39aa06989ed",
+      "new_sha256": "7ae1a9933a9f97f847e474033feeac93fa7be1e1ee42bdc05898e39aa06989ed",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/bundles/base/skills/yoda/agents/openai.yaml",
+      "old_sha256": "804f89e49556a823cb61ec2ee3843ef82c00d1b388836d45a29e2b555dfb5477",
+      "new_sha256": "804f89e49556a823cb61ec2ee3843ef82c00d1b388836d45a29e2b555dfb5477",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    },
+    {
+      "path": "Maestro/runtime/darwin-amd64/maestro-runtime",
+      "old_sha256": "f05ca22efc05d67e8c4144cc840e24d954a53a26eae2ceb9071e6114154f8d52",
+      "new_sha256": "f05ca22efc05d67e8c4144cc840e24d954a53a26eae2ceb9071e6114154f8d52",
+      "old_mode": 493,
+      "new_mode": 493,
+      "equal": true
+    },
+    {
+      "path": "Maestro/runtime/darwin-arm64/maestro-runtime",
+      "old_sha256": "4cb4d5625c0c653cdcb4da22465b7513133e74a8441bce2b70491fd81bfeaa14",
+      "new_sha256": "4cb4d5625c0c653cdcb4da22465b7513133e74a8441bce2b70491fd81bfeaa14",
+      "old_mode": 493,
+      "new_mode": 493,
+      "equal": true
+    },
+    {
+      "path": "Maestro/runtime/manifest.json",
+      "old_sha256": "efd9c68f2c476438f3fcf5a978de8c736ac417851825115dbf3430e59d15f920",
+      "new_sha256": "efd9c68f2c476438f3fcf5a978de8c736ac417851825115dbf3430e59d15f920",
+      "old_mode": 420,
+      "new_mode": 420,
+      "equal": true
+    }
+  ]
+}

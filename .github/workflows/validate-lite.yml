@@ -61,6 +61,25 @@ jobs:
             *'"permissionDecision":"deny"'*) ;;
             *) echo "Claude hook did not deny destructive Git command"; exit 1 ;;
           esac
+      # Every config file the bundle ships must have something that reads it.
+      # This wave found the same defect by hand half a dozen times — a policy
+      # nothing consulted, eight agent templates nobody loaded, a budget file
+      # declared and never enforced — and each one was invisible because a file
+      # that exists looks healthy. The tool reports zero on a clean tree, so
+      # any new orphan is a regression introduced by the PR under review.
+      #
+      # Known debt is listed inside the tool and does not fail the build: each
+      # entry is a decision waiting on the owner, not a mistake to block on.
+      - name: Every shipped config file has a reader
+        shell: bash
+        run: |
+          orphans=$(python3 bundles/base/tools/readers-check.py --count)
+          if [ "$orphans" != "0" ]; then
+            echo "::error::${orphans} shipped config file(s) have no reader"
+            python3 bundles/base/tools/readers-check.py
+            exit 1
+          fi
+          echo "readers-check: no orphaned config files"
       - name: Record validation completion
         if: always()
         shell: bash

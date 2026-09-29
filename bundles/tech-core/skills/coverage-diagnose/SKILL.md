@@ -11,7 +11,7 @@ approve a release.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before presenting the map. The
+Resolve the canonical [`interaction-profile`](../../base/skills/interaction-profile/SKILL.md) before presenting the map. The
 profile changes explanation depth only; it never changes evidence, permissions
 or data scope.
 

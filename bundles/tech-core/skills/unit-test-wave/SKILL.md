@@ -11,7 +11,7 @@ merge a branch or lower a quality bar.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before presenting the wave plan.
+Resolve the canonical [`interaction-profile`](../../base/skills/interaction-profile/SKILL.md) before presenting the wave plan.
 Use plain language for standard users and expose commands and diagnostics only
 when requested; the quality bar and data boundaries remain unchanged.
 

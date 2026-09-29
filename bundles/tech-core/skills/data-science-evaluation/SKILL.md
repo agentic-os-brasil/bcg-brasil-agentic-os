@@ -11,7 +11,7 @@ not train, deploy, access restricted data or approve a model.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before explaining the evaluation.
+Resolve the canonical [`interaction-profile`](../../base/skills/interaction-profile/SKILL.md) before explaining the evaluation.
 Standard users receive the decision, comparison and recommendation in plain
 language; advanced and power users can inspect splits, metrics and uncertainty.
 The profile never changes governance, access or promotion criteria.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "caseOS — preparar enriquecimento"
+  short_description: "Audita um recorte existente e propõe melhorias locais com evidência"
+  default_prompt: "Use $caseos-prepare-enrichment para revisar este recorte autorizado, sem alterar o caseOS."

@@ -11,7 +11,7 @@ production data or self-approve a release.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before explaining validation. Use
+Resolve the canonical [`interaction-profile`](../../base/skills/interaction-profile/SKILL.md) before explaining validation. Use
 one recommended route for standard users and expose additional diagnostics only
 for advanced or power users. The profile does not relax a test, data or approval
 standard.

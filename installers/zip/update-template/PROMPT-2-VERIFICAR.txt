@@ -1,0 +1,28 @@
+Execute a verificação completa do update Maestro {{TO_VERSION}}, não apenas
+um plano. Leia UPDATE-RUNBOOK.md e UPDATE-CONTRACT.json integralmente. Use a
+continuidade/goal nativa se disponível; caso contrário continue com checkpoints.
+Nunca invente um comando nem tente contornar limites ou políticas do host.
+
+Crie ou retome brain/.maestro/updates/update-{{TO_VERSION}}.json. Valide todas
+as bindings antes de reutilizar PASS, inclusive versão original, host,
+plataforma, ZIP, núcleo, raiz, baseline e receipt da migração. Preserve receipts
+stale. Retome no primeiro check pendente e continue enquanto houver trabalho
+seguro e acionável.
+
+Compare caminhos/tamanhos/SHA-256 da data/ copiada com a origem intacta;
+confirme migração committed, leitura real dos namespaces legados e
+reconciliação das personalizações. Confira os hooks efetivos do host, rode
+testes e diferencie configuração, adapter_command e invocação nativa.
+
+Chame Yoda de verdade pelo mecanismo nativo de subagents e aguarde seu
+retorno. Não simule a revisão. Corrija os achados dentro do escopo e repita
+os testes afetados. Uma resposta de progresso não encerra a execução.
+
+Checks opcionais (caseOS, Python extra ou goal indisponível) não autorizam
+PASS falso nem bloqueiam o trabalho local quando não são pré-requisitos.
+caseOS exige URL oficial, consentimento, autenticação e prova de conexão;
+nunca exporte conteúdo pessoal ou de outro case.
+
+Finalize apenas com status pass, fail ou unavailable e um receipt íntegro.
+Se houver interrupção/compactação, persista o checkpoint e retome a tentativa
+válida. Não apague o backup nem altere a instalação anterior.

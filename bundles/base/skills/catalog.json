@@ -30,6 +30,13 @@
       "relative_path": "skills/bcg-deck/SKILL.md"
     },
     {
+      "id": "brain-index",
+      "display_name": "Índice do brain",
+      "trigger": "Recompila a camada de navegação do brain e reporta links quebrados, páginas órfãs e frontmatter incompleto",
+      "default_prompt": "Use $brain-index para recompilar o índice do meu brain e me dizer, em linguagem simples, o que está quebrado ou fora do contrato de página.",
+      "relative_path": "skills/brain-index/SKILL.md"
+    },
+    {
       "id": "case-agent-setup",
       "display_name": "Case Agent",
       "trigger": "Entrevista e pesquisa um case de projeto com segurança",
@@ -49,6 +56,48 @@
       "trigger": "Registra uma decisão estrutural no log de decisões do case ativo",
       "default_prompt": "Use $case-decision-log-entry para registrar esta decisão no log do case ativo.",
       "relative_path": "skills/case-decision-log-entry/SKILL.md"
+    },
+    {
+      "id": "case-sharepoint-ingest",
+      "display_name": "SharePoint do Case",
+      "trigger": "Lê a pasta SharePoint do case ativo e propõe candidatos a canon por módulo",
+      "default_prompt": "Use $case-sharepoint-ingest para ler a pasta SharePoint do case ativo e propor cada documento recente como candidato a canon, ligado ao módulo certo.",
+      "relative_path": "skills/case-sharepoint-ingest/SKILL.md"
+    },
+    {
+      "id": "case-sharepoint-map",
+      "display_name": "Mapa do SharePoint do Case",
+      "trigger": "Mapeia onde cada tipo de informação mora no SharePoint do case ativo",
+      "default_prompt": "Use $case-sharepoint-map para mapear a estrutura do SharePoint do case ativo e gravar um guia de navegação em sources/.",
+      "relative_path": "skills/case-sharepoint-map/SKILL.md"
+    },
+    {
+      "id": "caseos-connect",
+      "display_name": "caseOS MCP",
+      "trigger": "Conecta conhecimento compartilhado com escopo e consentimento",
+      "default_prompt": "Use $caseos-connect para configurar ou consultar o caseOS deste caso.",
+      "relative_path": "skills/caseos-connect/SKILL.md"
+    },
+    {
+      "id": "caseos-prepare-enrichment",
+      "display_name": "caseOS — preparar enriquecimento",
+      "trigger": "Audita um recorte existente e propõe melhorias locais com evidência",
+      "default_prompt": "Use $caseos-prepare-enrichment para revisar este recorte autorizado, sem alterar o caseOS.",
+      "relative_path": "skills/caseos-prepare-enrichment/SKILL.md"
+    },
+    {
+      "id": "caseos-prepare-ingest",
+      "display_name": "caseOS — preparar ingestão",
+      "trigger": "Prepara material autorizado para revisão local, sem publicar",
+      "default_prompt": "Use $caseos-prepare-ingest para preparar uma proposta local a partir deste material autorizado.",
+      "relative_path": "skills/caseos-prepare-ingest/SKILL.md"
+    },
+    {
+      "id": "caseos-tutorial",
+      "display_name": "caseOS — aprender e consultar",
+      "trigger": "Explica o grafo e orienta consultas ao conhecimento do caso",
+      "default_prompt": "Use $caseos-tutorial para explicar caseOS e orientar uma consulta do caso.",
+      "relative_path": "skills/caseos-tutorial/SKILL.md"
     },
     {
       "id": "client-delivery-gate",
@@ -91,6 +140,13 @@
       "trigger": "Fecha o dia e deixa um ponto de partida para amanhã",
       "default_prompt": "Use $eod para fechar o dia na minha página diária e antecipar a primeira prioridade de amanhã.",
       "relative_path": "skills/eod/SKILL.md"
+    },
+    {
+      "id": "excel-financial-model",
+      "display_name": "Modelo financeiro em Excel",
+      "trigger": "Constrói ou reestrutura um modelo em Excel que precisa amarrar e ir a comitê, com origem única por número e aba Overview obrigatória",
+      "default_prompt": "Use $excel-financial-model para montar ou reorganizar este modelo: cada número com uma origem rastreável, cada visão derivada amarrando com a base na própria planilha, e a aba Overview dizendo onde digitar e onde não tocar.",
+      "relative_path": "skills/excel-financial-model/SKILL.md"
     },
     {
       "id": "execution-continuity",
@@ -147,6 +203,13 @@
       "trigger": "Encontra a causa raiz de um resultado errado ou inesperado",
       "default_prompt": "Use $investigate para descobrir por que este resultado está errado, com a evidência que sustenta a causa.",
       "relative_path": "skills/investigate/SKILL.md"
+    },
+    {
+      "id": "learn-from-logs",
+      "display_name": "Aprender com os Logs",
+      "trigger": "Lê conversas anteriores com o Claude para propor rascunhos ou atualizações ao perfil do dono, sempre com confirmação individual",
+      "default_prompt": "Use $learn-from-logs para ler minhas conversas novas com o Claude (chat ou Claude Code) e propor atualizações ao meu perfil, uma de cada vez.",
+      "relative_path": "skills/learn-from-logs/SKILL.md"
     },
     {
       "id": "learnings-bridge",
@@ -219,6 +282,13 @@
       "relative_path": "skills/meeting-to-work-items/SKILL.md"
     },
     {
+      "id": "owner-background",
+      "display_name": "Background do dono",
+      "trigger": "Registra formação, trajetória antes do BCG e aspirações de carreira e de vida",
+      "default_prompt": "Use $owner-background para registrar minha formação, minha trajetória antes do BCG e minhas aspirações.",
+      "relative_path": "skills/owner-background/SKILL.md"
+    },
+    {
       "id": "qa-gate",
       "display_name": "Gate de QA",
       "trigger": "Classifica a qualidade de uma mudança com evidência proporcional",
@@ -250,7 +320,7 @@
       "id": "sharepoint-ingest",
       "display_name": "Ingestão do SharePoint",
       "trigger": "Ingerir pastas SharePoint autorizadas e generalizar conceitos do trajeto",
-      "default_prompt": "Use $sharepoint-ingest para ler as pastas autorizadas do SharePoint na sessão, materializar rationales delimitados por documento em data/memory/sharepoint-rationales/ e construir um índice de conceitos generalizados em brain/knowledge/sharepoint-rationales/ para o trajeto da pasta.",
+      "default_prompt": "Use $sharepoint-ingest para ler as pastas autorizadas do SharePoint na sessão e materializar rationales delimitados por documento, com um índice de conceitos ao lado deles: dentro de sources/sharepoint-rationales/ do caso ativo, ou em brain/memory/sharepoint-rationales/ quando a pasta é do próprio dono.",
       "relative_path": "skills/sharepoint-ingest/SKILL.md"
     },
     {
@@ -287,6 +357,13 @@
       "trigger": "Redireciona o nome aposentado workspace-agent-setup",
       "default_prompt": "Use $case-agent-setup; este alias legado apenas redireciona chamadas existentes durante a migração.",
       "relative_path": "skills/workspace-agent-setup/SKILL.md"
+    },
+    {
+      "id": "writing-tighten",
+      "display_name": "Apertar a escrita",
+      "trigger": "Corta o excesso de um texto já escrito, na voz registrada do dono, sem mudar o que ele afirma",
+      "default_prompt": "Use $writing-tighten para apertar este texto: corte preâmbulo, nominalização e hedge empilhado, mantenha cada afirmação, número e atribuição, e me mostre o que cortou e o que decidiu não cortar.",
+      "relative_path": "skills/writing-tighten/SKILL.md"
     },
     {
       "id": "yoda",

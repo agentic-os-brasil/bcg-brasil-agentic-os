@@ -1,0 +1,4 @@
+interface:
+  display_name: "caseOS — aprender e consultar"
+  short_description: "Explica o grafo e orienta consultas ao conhecimento do caso"
+  default_prompt: "Use $caseos-tutorial para explicar caseOS e orientar uma consulta do caso."

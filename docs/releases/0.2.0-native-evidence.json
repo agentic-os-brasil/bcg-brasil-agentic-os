@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "qualification_mode": "authorized_byte_identical_macos_chain_reuse_not_fresh_native_run",
+  "previous_zip_sha256": "937f22cc917540f771ddd6081d81eef1574f55229d71e7a544416c0a0fa657bf",
+  "final_zip_sha256": "65cc6f7e2868159d43feba9d7c6afca46b7223aaabf1fc9021814845c85ba9f0",
+  "original_native_receipt_sha256": "1b8f8aac40329f1e97394af1b2ba512c09f82422928deaba4227f770d6fb6749",
+  "original_reuse_receipt_sha256": "8100ef26ca2332a14aece6c2da8b040023bab7296220295a34c05391466b91e4",
+  "host": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "codex_cli_version": "0.147.0"
+  },
+  "comparison": {
+    "selected_path_union": true,
+    "bytes_sha256": true,
+    "permission_bits": true,
+    "files_total": 74,
+    "identical": 72,
+    "changed": [
+      {
+        "path": "Maestro/.claude/hooks/lib/Maestro.Hooks.ps1",
+        "old_sha256": "c6a2a6721da1ba78af75d11c516a5a0b3fa629fcbaf3f54f8af2cdb2ff2615f1",
+        "new_sha256": "58df729e27cfd47eeed37cd11a3b44d6970281d999795b803baf847b55ae566b",
+        "old_mode": 420,
+        "new_mode": 420,
+        "equal": false
+      },
+      {
+        "path": "Maestro/.claude/hooks/lib/maestro-runtime.ps1",
+        "old_sha256": "f23cb5c82fbb31a8cd989a90b5fab93738be8a934df15e3f77fe1fe12ecd8fa7",
+        "new_sha256": "2de8e3c8dddda6ff7f8e7cc7d0ee7ff0fe753a1c8fed17d25e1190c747bba8bf",
+        "old_mode": 420,
+        "new_mode": 420,
+        "equal": false
+      }
+    ],
+    "scope": "all runtime artifacts/manifest, .codex tree, .claude hooks and settings, VERSION, AGENTS.md, canonical agent definitions, loaded Yoda/operator/interaction-profile skill contracts"
+  },
+  "inference": "The two changed .ps1 files are Windows-only dependencies, not invoked by the macOS /bin/bash hook command chain. Native macOS artifacts, Bash launchers, hooks/config, projected and canonical agent definitions and loaded review contracts are byte- and mode-identical; no affected macOS native proof requires repetition under the explicit Walter reuse authorization.",
+  "reused_claims": {
+    "session_start": "native observed through exclusive dual-tree migration side effect and zero-model blocked turn",
+    "post_tool_use": "six metadata-only native event receipts",
+    "stop": "one metadata-only native event receipt",
+    "yoda": "native spawn and delivery response observed; approved applies to bounded report honesty only"
+  },
+  "not_qualified": {
+    "file_guard": "unavailable: apply_patch tool absent in normal native comparison",
+    "windows_native_runtime": "not tested or transferred",
+    "production_readiness": "not established",
+    "authenticated_completion": "not established"
+  },
+  "cleanup": {
+    "prior_fixture_hooks": "all five disabled via normal /hooks UI after test",
+    "new_trust_changes": false,
+    "new_fixture_created": false
+  }
+}

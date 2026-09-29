@@ -28,10 +28,20 @@
 
 set -eu
 
+# Resolved from this file's own directory, not from CLAUDE_PROJECT_DIR: the hook
+# must find its library whatever the working directory is.
+#
+# `|| true` is load-bearing: `set -eu` is already active here and the ERR trap
+# that guarantees the minimal-pointer fallback is not installed until further
+# down. Without it, an unreadable library would kill the hook before its own
+# fail-open contract could apply.
+# shellcheck source=lib/python.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/python.sh" 2>/dev/null || true
+
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
-DATA_DIR="$PROJECT_DIR/data"
-PROFILE_DIR="$DATA_DIR/profile"
-MEMORY_DIR="$DATA_DIR/memory"
+BRAIN_DIR="$PROJECT_DIR/brain"
+OWNER_DIR="$BRAIN_DIR/owner"
+MEMORY_DIR="$BRAIN_DIR/memory"
 
 FIRST_BUDGET=1600
 NEXT_BUDGET=160
@@ -65,17 +75,104 @@ emit_minimal() {
   # Absolute fallback — used on any read error. Points at the memory root,
   # which the scaffold always creates. Naming a specific index file here would
   # assert a path that may not exist.
-  printf '<!-- maestro:context-inject:minimal -->\nMemory: %s/data/memory/ (load on demand).\n' "$PROJECT_DIR"
+  printf '<!-- maestro:context-inject:minimal -->\nMemory: %s/brain/memory/ (load on demand).\n' "$PROJECT_DIR"
 }
 
 # Trap any unexpected error -> emit minimal, exit 0.
 trap 'emit_minimal; exit 0' ERR
 
+# ---------------------------------------------------------------------------
+# Agent routing — runs on EVERY prompt, deliberately above the marker branch.
+#
+# The marker below silences this hook after the first fire of a session, which
+# is right for context pointers and wrong for this: a request that needs a
+# spoke can arrive at any turn. So the routing sits before that gate.
+#
+# It is conservative by construction. The router stays silent on the
+# overwhelming majority of messages, because dispatching a spoke costs a whole
+# model call. When it does match, it carries the closed packet the agent
+# requires — a truncated packet is worse than none, since the spoke then
+# answers about something else, which is why this budget is larger than the
+# pointer budgets above.
+#
+# Every step is `|| true` or guarded: `set -eu` and the ERR trap are both live
+# here, and a router that cannot run must cost the owner nothing.
+# ---------------------------------------------------------------------------
+AGENT_ROUTER="$PROJECT_DIR/bundles/base/tools/agent-route.py"
+SKILL_ROUTER="$PROJECT_DIR/bundles/base/tools/skill-route.py"
+BRAIN_ROUTER="$PROJECT_DIR/bundles/base/tools/brain-route.py"
+ROUTE_INDEX="$BRAIN_DIR/.maestro/route-index.json"
+# O orcamento do agente e o maior dos tres porque cada acerto carrega o
+# pacote fechado que o spoke exige, e pacote truncado e pior que nenhum: o
+# agente recebe metade do que precisa e devolve veredito sobre outra coisa.
+AGENT_BUDGET=1600
+SKILL_BUDGET=700
+BRAIN_BUDGET=1200
+
+if [ -f "$AGENT_ROUTER" ] && maestro_python >/dev/null 2>&1; then
+  AGENT_HOOK_INPUT=$(cat 2>/dev/null || true)
+  if [ -n "${AGENT_HOOK_INPUT:-}" ]; then
+    # O script vai numa variavel entre aspas simples e entra por `-c "$VAR"`.
+    # Nao e estilo. `maestro_py -` le o SCRIPT do stdin, entao um heredoc aqui
+    # disputa o stdin com o payload e ganha: o json.load fica sem nada para ler
+    # e a extracao devolve vazio em toda mensagem — o roteador nunca era
+    # chamado, sem erro nenhum. E o mesmo formato que o announce-agent-dispatch
+    # usa, pelo mesmo motivo.
+    AGENT_EXTRACT_PY='import sys, json
+try:
+    print(json.load(sys.stdin).get("prompt", "") or "")
+except Exception:
+    print("")'
+    AGENT_PROMPT=$(printf '%s' "$AGENT_HOOK_INPUT" \
+      | PYTHONIOENCODING=utf-8 maestro_py -c "$AGENT_EXTRACT_PY" 2>/dev/null || true)
+    if [ -n "${AGENT_PROMPT:-}" ]; then
+      AGENTS_OUT=$( (cd "$PROJECT_DIR" && printf '%s' "$AGENT_PROMPT" \
+        | PYTHONIOENCODING=utf-8 maestro_py "$AGENT_ROUTER" --max 2 2>/dev/null) \
+        | truncate_stdout "$AGENT_BUDGET" || true)
+      if [ -n "${AGENTS_OUT:-}" ]; then
+        printf '%s\n' "$AGENTS_OUT"
+      fi
+    fi
+
+    # ---------------------------------------------------------------------
+    # Roteamento de skills e de paginas do brain, na mesma passada e com o
+    # mesmo prompt ja extraido. Dois pisos diferentes, porque a economia dos
+    # dois roteadores e diferente:
+    #
+    #   - Skill: sem piso proprio. "eod" tem tres caracteres e e o pedido mais
+    #     literal que existe para aquela skill.
+    #   - Pagina do brain: a partir de 25 caracteres. Abaixo disso o termo nao
+    #     distingue nada e o casamento e ruido — devolver a pagina errada custa
+    #     mais que nao devolver nenhuma.
+    # ---------------------------------------------------------------------
+    if [ -n "${AGENT_PROMPT:-}" ]; then
+      if [ -f "$SKILL_ROUTER" ]; then
+        SKILLS_OUT=$( (cd "$PROJECT_DIR" && printf '%s' "$AGENT_PROMPT" \
+          | PYTHONIOENCODING=utf-8 maestro_py "$SKILL_ROUTER" --max 4 2>/dev/null) \
+          | truncate_stdout "$SKILL_BUDGET" || true)
+        if [ -n "${SKILLS_OUT:-}" ]; then
+          printf '%s\n' "$SKILLS_OUT"
+        fi
+      fi
+
+      PROMPT_LEN=${#AGENT_PROMPT}
+      if [ "$PROMPT_LEN" -ge 25 ] && [ -f "$BRAIN_ROUTER" ] && [ -f "$ROUTE_INDEX" ]; then
+        PAGES_OUT=$( (cd "$PROJECT_DIR" && printf '%s' "$AGENT_PROMPT" \
+          | PYTHONIOENCODING=utf-8 maestro_py "$BRAIN_ROUTER" --max 5 2>/dev/null) \
+          | truncate_stdout "$BRAIN_BUDGET" || true)
+        if [ -n "${PAGES_OUT:-}" ]; then
+          printf '%s\n' "$PAGES_OUT"
+        fi
+      fi
+    fi
+  fi
+fi
+
 if [ -f "$MARKER" ]; then
   # -------- subsequent fires: stub only --------
   {
     printf '<!-- maestro:context-inject:stub -->\n'
-    printf 'Memory: %s/data/memory/ · Load specific tiers on demand.\n' "$PROJECT_DIR"
+    printf 'Memory: %s/brain/memory/ · Load specific tiers on demand.\n' "$PROJECT_DIR"
   } | truncate_stdout "$NEXT_BUDGET"
   exit 0
 fi
@@ -88,9 +185,9 @@ fi
   printf '# Context pointers\n'
 
   # Profile identity headline (name / role / track) — best-effort.
-  IDENTITY_FILE="$PROFILE_DIR/identity.json"
-  if [ -f "$IDENTITY_FILE" ] && command -v python3 >/dev/null 2>&1; then
-    HEADLINE=$(python3 - "$IDENTITY_FILE" <<'PY' 2>/dev/null || true
+  IDENTITY_FILE="$OWNER_DIR/identity.json"
+  if [ -f "$IDENTITY_FILE" ] && maestro_python >/dev/null 2>&1; then
+    HEADLINE=$(maestro_py - "$IDENTITY_FILE" <<'PY' 2>/dev/null || true
 import json, sys
 try:
     with open(sys.argv[1]) as f:
@@ -115,7 +212,7 @@ PY
   # actually exists: neither MEMORY.md nor decisions/decision-log.md is created
   # by the scaffold, and naming a file that is not there invites a failed read
   # on the first turn of every session.
-  printf 'Memory: %s/data/memory/\n' "$PROJECT_DIR"
+  printf 'Memory: %s/brain/memory/\n' "$PROJECT_DIR"
   if [ -f "$MEMORY_DIR/MEMORY.md" ]; then
     printf 'Memory index: %s/MEMORY.md\n' "$MEMORY_DIR"
   fi

@@ -1,0 +1,71 @@
+{
+  "description": "Maestro portable template: attended binding to the confirmed installation root is required before tools can run.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "exit 0",
+            "commandWindows": "powershell.exe -NoProfile -Command \"exit 0\"",
+            "timeout": 10,
+            "statusMessage": "Maestro managed root binding"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(apply_patch|Edit|Write|MultiEdit|NotebookEdit|Agent|spawn_agent)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Maestro requires attended binding to the confirmed installation root.' >&2; exit 2",
+            "commandWindows": "powershell.exe -NoProfile -Command \"[Console]::Error.WriteLine('Maestro requires attended binding to the confirmed installation root.'); exit 2\"",
+            "timeout": 10,
+            "statusMessage": "Maestro managed root binding"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "exit 0",
+            "commandWindows": "powershell.exe -NoProfile -Command \"exit 0\"",
+            "timeout": 10,
+            "statusMessage": "Maestro managed root binding"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "exit 0",
+            "commandWindows": "powershell.exe -NoProfile -Command \"exit 0\"",
+            "timeout": 10,
+            "statusMessage": "Maestro managed root binding"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "exit 0",
+            "commandWindows": "powershell.exe -NoProfile -Command \"exit 0\"",
+            "timeout": 10,
+            "statusMessage": "Maestro managed root binding"
+          }
+        ]
+      }
+    ]
+  }
+}

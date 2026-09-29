@@ -1,57 +1,119 @@
 {
   "schema_version": 1,
   "bundle_id": "maestro-base",
-  "bundle_version": "0.1.11",
+  "bundle_version": "0.2.0",
   "format": "okf-1",
   "provenance": {
     "publisher": "BCG Brasil Agentic OS",
     "canonical_source": "bundles/base/",
     "distribution_map": "bundles/base/distribution.json",
     "status": "experimental",
-    "status_note": "OKF-1 shape is not yet fixed. Downstream consumers should treat this manifest as forward-compatible-only: read known fields, ignore unknown ones. Breaking changes will bump schema_version and land with a migration note in the release provider."
+    "status_note": "OKF-1 shape is not yet fixed. Downstream consumers should treat this manifest as forward-compatible-only: read known fields, ignore unknown ones. Breaking changes will bump schema_version and land with a migration note in the release provider.",
+    "migration_note": "0.2.0 renomeia a workspace de `data/` para `brain/` e achata o nível `brain/` interno de cada caso. A migração é automática, roda no primeiro SessionStart via bundles/base/tools/migrate-data-to-brain.py, copia sem mover e preserva `data/` intacta. Ver README-INSTALL.md."
   },
   "runtime_requirements": {
     "host": [
       "claude-code",
       "codex-cli"
     ],
+    "hook_runtime": {
+      "macos": "bash plus a resolvable Python 3 interpreter",
+      "windows": "native Windows PowerShell 5.1 or PowerShell 7; Git Bash and Python are not required for hooks"
+    },
     "hooks": [
       {
         "event": "session_start",
         "installer_path": ".claude/hooks/first-run-scaffold.sh",
+        "windows_installer_path": ".claude/hooks/first-run-scaffold.ps1",
         "criticality": "required"
       },
       {
         "event": "session_start",
         "installer_path": ".claude/hooks/session-start-memory-inject.sh",
+        "windows_installer_path": ".claude/hooks/session-start-memory-inject.ps1",
         "criticality": "required"
       },
       {
         "event": "user_prompt_submit",
         "installer_path": ".claude/hooks/context-inject-userprompt.sh",
+        "windows_installer_path": ".claude/hooks/context-inject-userprompt.ps1",
         "criticality": "recommended"
       },
       {
         "event": "pre_tool_use",
         "installer_path": ".claude/hooks/block-cross-case-writes.sh",
-        "matcher": "Edit|Write",
+        "windows_installer_path": ".claude/hooks/block-cross-case-writes.ps1",
+        "matcher": "^(Edit|MultiEdit|Write|NotebookEdit)$",
+        "criticality": "required"
+      },
+      {
+        "event": "pre_tool_use",
+        "installer_path": ".claude/hooks/announce-agent-dispatch.sh",
+        "windows_installer_path": ".claude/hooks/announce-agent-dispatch.ps1",
+        "matcher": "^(Agent|Task)$",
         "criticality": "recommended"
       },
       {
-        "event": "session_end",
+        "event": "stop",
         "installer_path": ".claude/hooks/session-stop-dream.sh",
+        "windows_installer_path": ".claude/hooks/session-stop-dream.ps1",
+        "criticality": "recommended"
+      },
+      {
+        "event": "stop",
+        "installer_path": ".claude/hooks/session-stop-agent-check.sh",
+        "criticality": "recommended"
+      },
+      {
+        "event": "stop",
+        "installer_path": ".claude/hooks/session-stop-brain-index.sh",
+        "criticality": "recommended"
+      },
+      {
+        "event": "stop",
+        "installer_path": ".claude/hooks/session-stop-eod-check.sh",
         "criticality": "recommended"
       }
     ],
     "workspace_state": {
-      "root": "data/",
+      "root": "brain/",
       "owned_by": "user",
       "never_overwritten_by_upgrade": true,
       "version_markers": [
-        "data/.maestro-version",
-        "data/memory/.schema-version"
+        "brain/.maestro-version",
+        "brain/memory/.schema-version"
       ]
-    }
+    },
+    "tools": [
+      {
+        "path": "bundles/base/tools/brain-index.py",
+        "role": "compilador de índice, backlinks, visão de tarefas e índice de roteamento"
+      },
+      {
+        "path": "bundles/base/tools/brain-route.py",
+        "role": "roteia a mensagem do dono para páginas do brain, lendo só o índice"
+      },
+      {
+        "path": "bundles/base/tools/skill-route.py",
+        "role": "roteia a mensagem do dono para as skills que a resolvem"
+      },
+      {
+        "path": "bundles/base/tools/agent-route.py",
+        "role": "decide qual spoke despachar, a partir de activation-policy.json"
+      },
+      {
+        "path": "bundles/base/tools/session-memory-emit.py",
+        "role": "monta os blocos de memória do SessionStart num spawn só, dentro do orçamento"
+      },
+      {
+        "path": "bundles/base/tools/paths-check.py",
+        "role": "verifica que todo caminho citado pelo produto existe"
+      },
+      {
+        "path": "bundles/base/tools/migrate-data-to-brain.py",
+        "role": "migra uma workspace data/ da versão anterior para brain/"
+      }
+    ]
   },
   "contracts": {
     "memory_policy": "bundles/base/memory/policy.json",
@@ -97,11 +159,11 @@
       "bundles/base/skills/maestro-onboarding/SKILL.md"
     ],
     "profile_outputs": {
-      "purpose": "Maps the four user-facing profile files produced by the maestro-onboarding skill to their declarative JSON Schemas. Consumers validating data/profile/ contents (installer, harness validators, downstream OKF bundlers) should look them up here rather than walking the tree. Schemas mirror the manifest's provenance.status=experimental stance; shape may evolve.",
-      "data/profile/identity.json": "schemas/identity.schema.json",
-      "data/profile/style.json": "schemas/style.schema.json",
-      "data/profile/onboarding.json": "schemas/onboarding.schema.json",
-      "data/profile/markitdown.json": "schemas/markitdown.schema.json"
+      "purpose": "Maps the four user-facing profile files produced by the maestro-onboarding skill to their declarative JSON Schemas. Consumers validating brain/owner/ contents (installer, harness validators, downstream OKF bundlers) should look them up here rather than walking the tree. Schemas mirror the manifest's provenance.status=experimental stance; shape may evolve.",
+      "brain/owner/identity.json": "schemas/identity.schema.json",
+      "brain/owner/style.json": "schemas/style.schema.json",
+      "brain/owner/onboarding.json": "schemas/onboarding.schema.json",
+      "brain/owner/markitdown.json": "schemas/markitdown.schema.json"
     }
   },
   "portability_notes": {
@@ -112,9 +174,10 @@
       "downstream OKF bundlers"
     ],
     "invariants": [
-      "bundle never writes outside data/ inside the user's workspace",
-      "version_markers live inside data/ so upgrades are detectable but reversible",
+      "bundle never writes outside brain/ inside the user's workspace, with one declared exception: FIRST-RUN-FAILED.txt at the project root, written only when the scaffold itself could not create brain/ — the one case where the breadcrumb cannot live inside the tree it failed to make",
+      "version_markers live inside brain/ so upgrades are detectable but reversible",
       "hooks are fail-open and idempotent"
     ]
-  }
+  },
+  "agent_activation_policy": "bundles/base/agents/activation-policy.json"
 }

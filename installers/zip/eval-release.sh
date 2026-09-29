@@ -45,6 +45,17 @@ if [ ! -f "$ZIP_PATH" ]; then
   exit 2
 fi
 
+# The evaluator must accept the same interpreter names as the shipped hooks.
+# Otherwise a supported Windows machine with only the python.org `py -3`
+# launcher cannot run the very gate intended to qualify it.
+# shellcheck source=user-template/.claude/hooks/lib/python.sh
+. "$TEMPLATE_DIR/.claude/hooks/lib/python.sh"
+if ! maestro_python >/dev/null 2>&1; then
+  echo "no Python 3 interpreter found (tried python3, python and py -3)" >&2
+  exit 2
+fi
+eval_py() { maestro_py "$@"; }
+
 RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; DIM=$'\033[2m'; RESET=$'\033[0m'
 
 PASS_COUNT=0
@@ -70,6 +81,15 @@ cleanup() {
   fi
 }
 trap cleanup EXIT
+
+# Partial fixtures still need the exact manifest, VERSION and binaries from the
+# artifact: a missing helper blocks every call and can make negative tests lie.
+seed_managed_fixture() {
+  local destination="$1"
+  mkdir -p "$destination"
+  cp -R "$MAESTRO_DIR/runtime" "$MAESTRO_DIR/.claude" "$MAESTRO_DIR/bundles" "$destination/"
+  cp "$MAESTRO_DIR/VERSION" "$destination/"
+}
 
 printf '%sMaestro release eval%s\n' "$YELLOW" "$RESET"
 printf '  ZIP:      %s\n' "$ZIP_PATH"
@@ -159,11 +179,13 @@ else
   fail "first-run-scaffold.sh is NOT executable"
 fi
 
-if [ -d "$MAESTRO_DIR/data" ]; then
-  fail "data/ pre-shipped in ZIP (must be created by hook, not shipped)"
-else
-  pass "data/ correctly absent from ZIP"
-fi
+for personal_tree in data brain; do
+  if [ -e "$MAESTRO_DIR/$personal_tree" ]; then
+    fail "$personal_tree/ pre-shipped in ZIP (must never contain personal state)"
+  else
+    pass "$personal_tree/ correctly absent from ZIP"
+  fi
+done
 
 # Slash commands must reference paths that exist in the shipped layout.
 # A command body is read verbatim by the runtime, so a path that resolves to
@@ -235,30 +257,47 @@ else
   fail "hook non-zero exit on first run"
 fi
 
-for sub in agents memory profile workspaces; do
-  if [ -d "$MAESTRO_DIR/data/$sub" ]; then
-    pass "data/$sub created"
+for sub in accounts craft daily development learnings memory owner people tasks; do
+  if [ -d "$MAESTRO_DIR/brain/$sub" ]; then
+    pass "brain/$sub created"
   else
-    fail "data/$sub NOT created"
+    fail "brain/$sub NOT created"
   fi
 done
 
-if [ -f "$MAESTRO_DIR/data/.initialized" ] && [ -s "$MAESTRO_DIR/data/.initialized" ]; then
-  pass "data/.initialized marker exists + non-empty"
+if [ -f "$MAESTRO_DIR/brain/.initialized" ] && [ -s "$MAESTRO_DIR/brain/.initialized" ]; then
+  pass "brain/.initialized marker exists + non-empty"
 else
-  fail "data/.initialized marker missing or empty"
+  fail "brain/.initialized marker missing or empty"
 fi
 
-if [ -f "$MAESTRO_DIR/data/.scaffold.log" ] && grep -q "DONE  marker written" "$MAESTRO_DIR/data/.scaffold.log"; then
-  pass "data/.scaffold.log has DONE line"
+if [ -f "$MAESTRO_DIR/brain/.scaffold.log" ] && grep -q "DONE  marker written" "$MAESTRO_DIR/brain/.scaffold.log"; then
+  pass "brain/.scaffold.log has DONE line"
 else
-  fail "data/.scaffold.log missing DONE line"
+  fail "brain/.scaffold.log missing DONE line"
 fi
 
-if [ -f "$MAESTRO_DIR/data/README.md" ] && grep -q "workspaces" "$MAESTRO_DIR/data/README.md"; then
-  pass "data/README.md present + mentions workspaces"
+# The README written into brain/ is the owner's map of their own workspace, and
+# the only description of it they can read without asking. Pinning this check to
+# one keyword let it keep passing while the tree underneath was replaced, so it
+# now asserts that every trunk the scaffold builds is actually described.
+if [ -f "$MAESTRO_DIR/brain/README.md" ]; then
+  README_MISSING=""
+  for trunk in accounts craft daily development learnings memory owner people tasks; do
+    grep -q "\`$trunk/\`" "$MAESTRO_DIR/brain/README.md" || README_MISSING="$README_MISSING $trunk"
+  done
+  if [ -z "$README_MISSING" ]; then
+    pass "brain/README.md describes all nine top-level trees"
+  else
+    fail "brain/README.md does not describe:$README_MISSING"
+  fi
+  if grep -qE '`(workspaces|profile|cases)/`' "$MAESTRO_DIR/brain/README.md"; then
+    fail "brain/README.md still describes a pre-accounts tree the scaffold no longer creates"
+  else
+    pass "brain/README.md describes no tree the scaffold does not create"
+  fi
 else
-  fail "data/README.md missing or malformed"
+  fail "brain/README.md missing"
 fi
 
 if [ -f "$MAESTRO_DIR/FIRST-RUN-FAILED.txt" ]; then
@@ -279,13 +318,13 @@ fi
 phase "Phase 5 — First-run scaffold, idempotency"
 # --------------------------------------------------------------------------
 
-LOG_BEFORE=$(wc -l < "$MAESTRO_DIR/data/.scaffold.log" | tr -d ' ')
+LOG_BEFORE=$(wc -l < "$MAESTRO_DIR/brain/.scaffold.log" | tr -d ' ')
 if CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$HOOK" >/dev/null 2>&1; then
   pass "hook exit 0 on second run"
 else
   fail "hook non-zero on second run"
 fi
-LOG_AFTER=$(wc -l < "$MAESTRO_DIR/data/.scaffold.log" | tr -d ' ')
+LOG_AFTER=$(wc -l < "$MAESTRO_DIR/brain/.scaffold.log" | tr -d ' ')
 if [ "$LOG_BEFORE" = "$LOG_AFTER" ]; then
   pass "second run is a no-op ($LOG_BEFORE lines before/after)"
 else
@@ -296,17 +335,17 @@ fi
 phase "Phase 6 — First-run scaffold, failure modes"
 # --------------------------------------------------------------------------
 
-# Scenario B: data/ pre-exists and is unwritable. Parent writable → breadcrumb should surface.
+# Scenario B: brain/ pre-exists and is unwritable. Parent writable → breadcrumb should surface.
 FAIL_SCRATCH=$(mktemp -d -t maestro-eval-failB-XXXXXX)
 unzip -q "$ZIP_PATH" -d "$FAIL_SCRATCH"
 FAIL_MAESTRO="$FAIL_SCRATCH/Maestro"
-mkdir "$FAIL_MAESTRO/data"
-chmod 555 "$FAIL_MAESTRO/data"
+mkdir "$FAIL_MAESTRO/brain"
+chmod 555 "$FAIL_MAESTRO/brain"
 
 if CLAUDE_PROJECT_DIR="$FAIL_MAESTRO" bash "$FAIL_MAESTRO/.claude/hooks/first-run-scaffold.sh" >/dev/null 2>&1; then
-  pass "hook fail-open (exit 0) with unwritable data/ (Scenario B)"
+  pass "hook fail-open (exit 0) with unwritable brain/ (Scenario B)"
 else
-  fail "hook non-zero when data/ unwritable"
+  fail "hook non-zero when brain/ unwritable"
 fi
 
 if [ -f "$FAIL_MAESTRO/FIRST-RUN-FAILED.txt" ] && grep -q "maestro-doctor" "$FAIL_MAESTRO/FIRST-RUN-FAILED.txt"; then
@@ -359,18 +398,18 @@ CATALOG="$MAESTRO_DIR/bundles/base/skills/catalog.json"
 INDEX_MD="$MAESTRO_DIR/bundles/base/skills/INDEX.md"
 POLICY="$MAESTRO_DIR/bundles/base/skills/agent-skill-policy.json"
 
-if python3 -c "import json,sys; json.load(open('$CATALOG'))" 2>/dev/null; then
+if eval_py -c "import json,sys; json.load(open('$CATALOG'))" 2>/dev/null; then
   pass "catalog.json is valid JSON"
 else
   fail "catalog.json invalid JSON"
 fi
-if python3 -c "import json,sys; json.load(open('$POLICY'))" 2>/dev/null; then
+if eval_py -c "import json,sys; json.load(open('$POLICY'))" 2>/dev/null; then
   pass "agent-skill-policy.json is valid JSON"
 else
   fail "agent-skill-policy.json invalid JSON"
 fi
 
-CATALOG_IDS=$(python3 -c "
+CATALOG_IDS=$(eval_py -c "
 import json
 c=json.load(open('$CATALOG'))
 ids=[]
@@ -402,7 +441,7 @@ else
   fail "$MISSING_SKILLS catalog skill(s) missing SKILL.md"
 fi
 
-POLICY_SKILLS=$(python3 -c "
+POLICY_SKILLS=$(eval_py -c "
 import json
 p=json.load(open('$POLICY'))
 out=[]
@@ -437,10 +476,10 @@ phase "Phase 8 — Distribution manifest coverage"
 # --------------------------------------------------------------------------
 
 DIST_JSON="$MAESTRO_DIR/bundles/base/distribution.json"
-if python3 -c "import json; json.load(open('$DIST_JSON'))" 2>/dev/null; then
+if eval_py -c "import json; json.load(open('$DIST_JSON'))" 2>/dev/null; then
   pass "distribution.json is valid JSON"
 
-  DIST_PATHS=$(python3 -c "
+  DIST_PATHS=$(eval_py -c "
 import json
 d=json.load(open('$DIST_JSON'))
 paths=[]
@@ -482,17 +521,13 @@ fi
 phase "Phase 9 — Yoda fix regression checks"
 # --------------------------------------------------------------------------
 
+# Human prose is reviewed with the update contract, not pinned to obsolete
+# menu wording or a deletion workflow the product no longer permits.
 README="$MAESTRO_DIR/README-INSTALL.md"
-if grep -q "Copiar" "$README" && grep -q "Ctrl+C" "$README" && grep -q "Option" "$README"; then
-  pass "README-INSTALL step 4 uses Copiar + Ctrl+C + Option (Yoda Fix 2)"
+if [ -s "$README" ]; then
+  pass "README-INSTALL.md ships as a non-empty user guide"
 else
-  fail "README-INSTALL step 4 missing Copiar/Ctrl+C/Option — Yoda Fix 2 regressed"
-fi
-
-if grep -qE "confirmar.*data.*maestro-doctor|maestro-doctor.*data" "$README"; then
-  pass "README-INSTALL step 7 gates deletion on data/ present + doctor green"
-else
-  fail "README-INSTALL step 7 missing dual-gate on deletion"
+  fail "README-INSTALL.md missing or empty"
 fi
 
 CLAUDE_MD="$MAESTRO_DIR/CLAUDE.md"
@@ -507,7 +542,7 @@ phase "Phase 10 — Settings + hook wiring"
 # --------------------------------------------------------------------------
 
 SETTINGS="$MAESTRO_DIR/.claude/settings.json"
-if python3 -c "import json; json.load(open('$SETTINGS'))" 2>/dev/null; then
+if eval_py -c "import json; json.load(open('$SETTINGS'))" 2>/dev/null; then
   pass "settings.json is valid JSON"
 else
   fail "settings.json invalid JSON"
@@ -518,23 +553,34 @@ else
   fail "settings.json does NOT wire scaffold to SessionStart"
 fi
 
-# --------------------------------------------------------------------------
-phase "Phase 11 — Workspace creation smoke test"
-# --------------------------------------------------------------------------
-
-# Simulate user starting a project. The hook created workspaces/; verify a project
-# subdir can be created and marker files land where expected.
-if mkdir -p "$MAESTRO_DIR/data/workspaces/demo-project" \
-   && echo "demo" > "$MAESTRO_DIR/data/workspaces/demo-project/README.md" \
-   && [ -f "$MAESTRO_DIR/data/workspaces/demo-project/README.md" ]; then
-  pass "workspace dir writable + accepts project subdir"
+# The PreToolUse matcher is a regex. Unanchored, "Write" also matches
+# TodoWrite, which then reaches the isolation guard with no file target; and a
+# matcher naming only Edit and Write never delivers MultiEdit or NotebookEdit
+# to the guard at all. Both shapes were live bypasses.
+if grep -q '"\^(Edit|MultiEdit|Write|NotebookEdit)\$"' "$SETTINGS"; then
+  pass "PreToolUse matcher is anchored and names every file-writing tool"
 else
-  fail "workspace dir not writable"
+  fail "PreToolUse matcher is not the anchored four-tool form (TodoWrite leaks in, MultiEdit/NotebookEdit never arrive)"
 fi
 
-if mkdir -p "$MAESTRO_DIR/data/memory/notes" \
-   && echo "test" > "$MAESTRO_DIR/data/memory/notes/first.md" \
-   && [ -f "$MAESTRO_DIR/data/memory/notes/first.md" ]; then
+# --------------------------------------------------------------------------
+phase "Phase 11 — Case workspace smoke test"
+# --------------------------------------------------------------------------
+
+# Simulate the owner starting real work. Case material lands under
+# accounts/<account>/cases/<case>/, so that is the path whose writability
+# matters; workspaces/ was the pre-accounts shape and is no longer scaffolded.
+if mkdir -p "$MAESTRO_DIR/brain/accounts/demo-account/cases/demo-case/canon" \
+   && echo "demo" > "$MAESTRO_DIR/brain/accounts/demo-account/cases/demo-case/demo-case.md" \
+   && [ -f "$MAESTRO_DIR/brain/accounts/demo-account/cases/demo-case/demo-case.md" ]; then
+  pass "accounts tree writable + accepts a case path with its brief"
+else
+  fail "accounts tree not writable"
+fi
+
+if mkdir -p "$MAESTRO_DIR/brain/memory/notes" \
+   && echo "test" > "$MAESTRO_DIR/brain/memory/notes/first.md" \
+   && [ -f "$MAESTRO_DIR/brain/memory/notes/first.md" ]; then
   pass "memory dir writable + accepts note file"
 else
   fail "memory dir not writable"
@@ -546,23 +592,23 @@ phase "Phase 12 — Memory scaffold + dreaming hook wiring"
 
 # 12a: Memory sub-tiers exist after first-run scaffold (Phase 4 already ran the hook)
 for tier in recent weekly medium-term lifetime policies; do
-  if [ -d "$MAESTRO_DIR/data/memory/$tier" ]; then
-    pass "data/memory/$tier created by scaffold"
+  if [ -d "$MAESTRO_DIR/brain/memory/$tier" ]; then
+    pass "brain/memory/$tier created by scaffold"
   else
-    fail "data/memory/$tier NOT created by scaffold"
+    fail "brain/memory/$tier NOT created by scaffold"
   fi
 done
 
 # 12a2: Lifetime eligibility policy exists after first-run scaffold.
 # dream-memory/SKILL.md step 5 refuses lifetime promotion without a named
-# eligibility policy at data/memory/policies/lifetime.json ("lifetime
+# eligibility policy at brain/memory/policies/lifetime.json ("lifetime
 # activation must fail closed"). Spec 006 states the base distribution ships
 # that named policy, so an install without it can never activate the permanent
 # memory tier.
-LIFETIME_POLICY="$MAESTRO_DIR/data/memory/policies/lifetime.json"
+LIFETIME_POLICY="$MAESTRO_DIR/brain/memory/policies/lifetime.json"
 if [ -f "$LIFETIME_POLICY" ]; then
-  pass "data/memory/policies/lifetime.json created by scaffold"
-  if python3 -c "import json;json.load(open(r'$(cygpath -w "$LIFETIME_POLICY" 2>/dev/null || echo "$LIFETIME_POLICY")'))" 2>/dev/null; then
+  pass "brain/memory/policies/lifetime.json created by scaffold"
+  if eval_py -c "import json;json.load(open(r'$(cygpath -w "$LIFETIME_POLICY" 2>/dev/null || echo "$LIFETIME_POLICY")'))" 2>/dev/null; then
     pass "lifetime.json is valid JSON"
   else
     fail "lifetime.json invalid JSON"
@@ -573,38 +619,38 @@ if [ -f "$LIFETIME_POLICY" ]; then
     fail "lifetime.json does NOT name the spec-006 eligibility policy"
   fi
 else
-  fail "data/memory/policies/lifetime.json NOT created by scaffold (lifetime tier fails closed forever)"
+  fail "brain/memory/policies/lifetime.json NOT created by scaffold (lifetime tier fails closed forever)"
 fi
 
 # 12b: Profile placeholder files exist
 for pfile in identity.json; do
-  if [ -f "$MAESTRO_DIR/data/profile/$pfile" ]; then
-    pass "data/profile/$pfile placeholder created by scaffold"
+  if [ -f "$MAESTRO_DIR/brain/owner/$pfile" ]; then
+    pass "brain/owner/$pfile placeholder created by scaffold"
   else
-    fail "data/profile/$pfile NOT created by scaffold"
+    fail "brain/owner/$pfile NOT created by scaffold"
   fi
 done
 
 # 12b2: Owner self directory and 10 SELF facet placeholder files (spec 013)
-if [ -d "$MAESTRO_DIR/data/owner/self" ]; then
-  pass "data/owner/self/ directory created by scaffold"
+if [ -d "$MAESTRO_DIR/brain/owner/self" ]; then
+  pass "brain/owner/self/ directory created by scaffold"
 else
-  fail "data/owner/self/ directory NOT created by scaffold"
+  fail "brain/owner/self/ directory NOT created by scaffold"
 fi
 SELF_FACET_COUNT=0
 for facet in owner-identity personal-context professional-role communication-style \
              voice preferences motivations quality-bar decision-rules working-boundaries; do
-  if [ -f "$MAESTRO_DIR/data/owner/self/$facet.md" ]; then
+  if [ -f "$MAESTRO_DIR/brain/owner/self/$facet.md" ]; then
     SELF_FACET_COUNT=$((SELF_FACET_COUNT + 1))
   else
-    fail "data/owner/self/$facet.md NOT created by scaffold"
+    fail "brain/owner/self/$facet.md NOT created by scaffold"
   fi
 done
 if [ "$SELF_FACET_COUNT" -eq 10 ]; then
   pass "all 10 SELF facet placeholder files created by scaffold"
 fi
 # Verify placeholder content has ## Current section (spec 013 format)
-if grep -q "## Current" "$MAESTRO_DIR/data/owner/self/owner-identity.md" 2>/dev/null; then
+if grep -q "## Current" "$MAESTRO_DIR/brain/owner/self/owner-identity.md" 2>/dev/null; then
   pass "SELF facet placeholder contains ## Current section (spec 013)"
 else
   fail "SELF facet placeholder missing ## Current section"
@@ -637,29 +683,46 @@ fi
 DREAM_SCRATCH=$(mktemp -d -t maestro-eval-dream-XXXXXX)
 unzip -q "$ZIP_PATH" -d "$DREAM_SCRATCH"
 DREAM_MAESTRO="$DREAM_SCRATCH/Maestro"
-mkdir -p "$DREAM_MAESTRO/data/memory"
+mkdir -p "$DREAM_MAESTRO/brain/memory"
 if CLAUDE_PROJECT_DIR="$DREAM_MAESTRO" bash "$DREAM_MAESTRO/.claude/hooks/session-stop-dream.sh" >/dev/null 2>&1; then
   pass "session-stop-dream.sh exits 0"
 else
   fail "session-stop-dream.sh non-zero exit"
 fi
-if [ -f "$DREAM_MAESTRO/data/memory/.dream-requested" ] && [ -s "$DREAM_MAESTRO/data/memory/.dream-requested" ]; then
-  pass ".dream-requested marker written with timestamp"
+if [ -e "$DREAM_MAESTRO/brain/memory/.dream-requested" ]; then
+  fail "no-op Stop must not create a dream request"
+else
+  pass "no-op Stop does not create a dream request"
+fi
+mkdir -p "$DREAM_MAESTRO/brain/.maestro/daily-pending"
+python3 - "$DREAM_MAESTRO" <<'PY'
+import datetime, json, pathlib, sys
+root = pathlib.Path(sys.argv[1]).resolve()
+now = datetime.datetime.now().astimezone()
+checkpoint = dict(schema_version=1, id='eval-checkpoint', session_id='eval-session',
+                  workspace=str(root), scope='owner', captured_at=now.isoformat(timespec='seconds'),
+                  local_date=now.date().isoformat(), summary='Synthetic packaged continuity check',
+                  decisions=[], next_actions=[], provenance='agent-authored')
+(root / 'brain/.maestro/daily-pending/eval-checkpoint.json').write_text(json.dumps(checkpoint), encoding='utf-8')
+PY
+CLAUDE_PROJECT_DIR="$DREAM_MAESTRO" bash "$DREAM_MAESTRO/.claude/hooks/session-stop-dream.sh" >/dev/null 2>&1
+if [ -f "$DREAM_MAESTRO/brain/memory/.dream-requested" ] && [ -s "$DREAM_MAESTRO/brain/memory/.dream-requested" ]; then
+  pass ".dream-requested fingerprint written after a persisted checkpoint"
 else
   fail ".dream-requested marker missing or empty after session-stop-dream.sh"
 fi
 chmod -R u+w "$DREAM_SCRATCH"
 rm -rf "$DREAM_SCRATCH"
 
-# 12g: session-start-memory-inject.sh is fail-open when data/ absent
+# 12g: session-start-memory-inject.sh is fail-open when brain/ absent
 INJECT_SCRATCH=$(mktemp -d -t maestro-eval-inject-XXXXXX)
 unzip -q "$ZIP_PATH" -d "$INJECT_SCRATCH"
 INJECT_MAESTRO="$INJECT_SCRATCH/Maestro"
-# Do NOT create data/ — simulate first session where scaffold hasn't run yet
+# Do NOT create brain/ — simulate first session where scaffold hasn't run yet
 if CLAUDE_PROJECT_DIR="$INJECT_MAESTRO" bash "$INJECT_MAESTRO/.claude/hooks/session-start-memory-inject.sh" >/dev/null 2>&1; then
-  pass "session-start-memory-inject.sh exits 0 when data/ absent (fail-open)"
+  pass "session-start-memory-inject.sh exits 0 when brain/ absent (fail-open)"
 else
-  fail "session-start-memory-inject.sh blocks when data/ absent"
+  fail "session-start-memory-inject.sh blocks when brain/ absent"
 fi
 chmod -R u+w "$INJECT_SCRATCH"
 rm -rf "$INJECT_SCRATCH"
@@ -668,21 +731,21 @@ rm -rf "$INJECT_SCRATCH"
 INJECT2_SCRATCH=$(mktemp -d -t maestro-eval-inject2-XXXXXX)
 unzip -q "$ZIP_PATH" -d "$INJECT2_SCRATCH"
 INJECT2_MAESTRO="$INJECT2_SCRATCH/Maestro"
-mkdir -p "$INJECT2_MAESTRO/data/memory/recent" "$INJECT2_MAESTRO/data/memory/lifetime" \
-         "$INJECT2_MAESTRO/data/profile" "$INJECT2_MAESTRO/data/owner/self"
+mkdir -p "$INJECT2_MAESTRO/brain/memory/recent" "$INJECT2_MAESTRO/brain/memory/lifetime" \
+         "$INJECT2_MAESTRO/brain/owner" "$INJECT2_MAESTRO/brain/owner/self"
 printf '{"schema_version":1,"display_name":"Test User","role":"test","context":"","initialized":true}\n' \
-  > "$INJECT2_MAESTRO/data/profile/identity.json"
+  > "$INJECT2_MAESTRO/brain/owner/identity.json"
 printf '# Test memory entry\nThis is a recent memory.\n' \
-  > "$INJECT2_MAESTRO/data/memory/recent/2024-01-01.md"
+  > "$INJECT2_MAESTRO/brain/memory/recent/$(date +%Y-%m-%d).md"
 printf '# professional-role\n\n## Current\n\nSenior AI Scientist.\n' \
-  > "$INJECT2_MAESTRO/data/owner/self/professional-role.md"
+  > "$INJECT2_MAESTRO/brain/owner/self/professional-role.md"
 INJECT2_OUT=$(CLAUDE_PROJECT_DIR="$INJECT2_MAESTRO" bash "$INJECT2_MAESTRO/.claude/hooks/session-start-memory-inject.sh" 2>/dev/null)
 if echo "$INJECT2_OUT" | grep -q "maestro:session-context:start"; then
   pass "session-start-memory-inject.sh emits session-context markers"
 else
   fail "session-start-memory-inject.sh does NOT emit session-context markers"
 fi
-if echo "$INJECT2_OUT" | grep -q "Último log diário consolidado"; then
+if echo "$INJECT2_OUT" | grep -q "This is a recent memory"; then
   pass "session-start-memory-inject.sh injects L1 daily log layer"
 else
   fail "session-start-memory-inject.sh does NOT inject L1 daily log layer"
@@ -698,9 +761,9 @@ else
   fail "session-start-memory-inject.sh does NOT inject owner SELF facets"
 fi
 if echo "$INJECT2_OUT" | grep -q "professional-role"; then
-  pass "session-start-memory-inject.sh includes facet content from data/owner/self/"
+  pass "session-start-memory-inject.sh includes facet content from brain/owner/self/"
 else
-  fail "session-start-memory-inject.sh does NOT include facet content from data/owner/self/"
+  fail "session-start-memory-inject.sh does NOT include facet content from brain/owner/self/"
 fi
 chmod -R u+w "$INJECT2_SCRATCH"
 rm -rf "$INJECT2_SCRATCH"
@@ -708,15 +771,13 @@ rm -rf "$INJECT2_SCRATCH"
 # 12h2: dream auto-trigger — session-start-memory-inject.sh emits mandatory dreaming block when
 # .dream-requested marker is present; block is suppressed when marker is absent.
 INJECT3_SCRATCH=$(mktemp -d -t maestro-inject3-XXXXXX)
+unzip -q "$ZIP_PATH" -d "$INJECT3_SCRATCH"
 INJECT3_MAESTRO="$INJECT3_SCRATCH/Maestro"
-mkdir -p "$INJECT3_MAESTRO/data/memory" "$INJECT3_MAESTRO/data/profile" "$INJECT3_MAESTRO/data/owner/self"
+mkdir -p "$INJECT3_MAESTRO/brain/memory" "$INJECT3_MAESTRO/brain/owner/self"
 INJECT3_HOOK="$INJECT3_MAESTRO/.claude/hooks/session-start-memory-inject.sh"
-mkdir -p "$(dirname "$INJECT3_HOOK")"
-cp "$MAESTRO_DIR/.claude/hooks/session-start-memory-inject.sh" "$INJECT3_HOOK"
-chmod +x "$INJECT3_HOOK"
 
 # Sub-check A: marker present → dream-trigger block emitted
-printf '%s\n' "2099-01-01T00:00:00Z" > "$INJECT3_MAESTRO/data/memory/.dream-requested"
+printf '%s\n' "2099-01-01T00:00:00Z" > "$INJECT3_MAESTRO/brain/memory/.dream-requested"
 INJECT3_OUT_WITH=$(CLAUDE_PROJECT_DIR="$INJECT3_MAESTRO" bash "$INJECT3_HOOK" 2>/dev/null)
 if echo "$INJECT3_OUT_WITH" | grep -q "maestro:dream-trigger\|dream-requested"; then
   pass "session-start-memory-inject.sh emits dream-trigger block when .dream-requested present"
@@ -730,7 +791,7 @@ else
 fi
 
 # Sub-check B: marker absent → dream-trigger block NOT emitted
-rm -f "$INJECT3_MAESTRO/data/memory/.dream-requested"
+rm -f "$INJECT3_MAESTRO/brain/memory/.dream-requested"
 INJECT3_OUT_WITHOUT=$(CLAUDE_PROJECT_DIR="$INJECT3_MAESTRO" bash "$INJECT3_HOOK" 2>/dev/null)
 if echo "$INJECT3_OUT_WITHOUT" | grep -q "maestro:dream-trigger"; then
   fail "session-start-memory-inject.sh emits dream-trigger block even without .dream-requested"
@@ -761,10 +822,10 @@ if [ -f "$DOCTOR_SKILL" ]; then
   else
     fail "maestro-doctor does NOT check for bundles/tech-core"
   fi
-  if grep -q "data/owner" "$DOCTOR_SKILL"; then
-    pass "maestro-doctor checks for data/owner/ in workspace health"
+  if grep -q "brain/owner" "$DOCTOR_SKILL"; then
+    pass "maestro-doctor checks for brain/owner/ in workspace health"
   else
-    fail "maestro-doctor does NOT check for data/owner/ in workspace health"
+    fail "maestro-doctor does NOT check for brain/owner/ in workspace health"
   fi
 else
   fail "maestro-doctor/SKILL.md not found — cannot check bundle names"
@@ -841,39 +902,41 @@ else
 fi
 
 # --------------------------------------------------------------------------
-phase "Phase 13 — Owner atlas tree"
+phase "Phase 13 — Top-level brain trees"
 # --------------------------------------------------------------------------
 
 # start-day, eod, craft-update, feedback-capture, learnings-bridge and
-# upward-feedback all operate on data/owner/atlas/. Their reads carry
+# upward-feedback all operate on brain/owner/. Their reads carry
 # continuity between sessions, so a missing tree silently degrades the daily
 # ritual rather than failing loudly. Phase 4 already ran the scaffold.
 for atlas_dir in \
-  owner/atlas \
-  owner/atlas/daily \
-  owner/atlas/craft/methods \
-  owner/atlas/craft/style \
-  owner/atlas/learnings \
-  owner/atlas/development/cdc \
-  owner/atlas/development/project-feedback \
-  owner/atlas/development/upward-feedback
+  accounts \
+  daily \
+  craft/methods \
+  craft/style \
+  learnings \
+  people \
+  development/cdc \
+  development/project-feedback \
+  development/upward-feedback \
+  development/retros
 do
-  if [ -d "$MAESTRO_DIR/data/$atlas_dir" ]; then
-    pass "data/$atlas_dir created by scaffold"
+  if [ -d "$MAESTRO_DIR/brain/$atlas_dir" ]; then
+    pass "brain/$atlas_dir created by scaffold"
   else
-    fail "data/$atlas_dir NOT created by scaffold"
+    fail "brain/$atlas_dir NOT created by scaffold"
   fi
 done
 
 for atlas_file in \
-  owner/atlas/craft/index.md \
-  owner/atlas/learnings/index.md \
-  owner/atlas/development/objectives.md
+  craft/craft.md \
+  learnings/learnings.md \
+  development/objectives.md
 do
-  if [ -f "$MAESTRO_DIR/data/$atlas_file" ]; then
-    pass "data/$atlas_file created by scaffold"
+  if [ -f "$MAESTRO_DIR/brain/$atlas_file" ]; then
+    pass "brain/$atlas_file created by scaffold"
   else
-    fail "data/$atlas_file NOT created by scaffold"
+    fail "brain/$atlas_file NOT created by scaffold"
   fi
 done
 
@@ -881,7 +944,7 @@ done
 # `append-entry` never creates a heading and refuses one that appears more than
 # once on a page, so a missing or duplicated heading means the write is
 # declined rather than misfiled — silently, on every fresh install.
-OBJ="$MAESTRO_DIR/data/owner/atlas/development/objectives.md"
+OBJ="$MAESTRO_DIR/brain/development/objectives.md"
 if [ -f "$OBJ" ]; then
   for heading in "## Aposentados" "#### Evidência — objetivo 1"; do
     # grep -c prints its count and still exits 1 on no match, so the count is
@@ -897,44 +960,30 @@ if [ -f "$OBJ" ]; then
     fi
   done
 else
-  fail "data/owner/atlas/development/objectives.md NOT created by scaffold"
+  fail "brain/development/objectives.md NOT created by scaffold"
 fi
 
 # The daily page is authored by start-day, never pre-seeded: a placeholder
 # there would be read back as a real entry.
-if [ -n "$(ls -A "$MAESTRO_DIR/data/owner/atlas/daily" 2>/dev/null)" ]; then
-  fail "owner/atlas/daily/ is pre-seeded (must be authored by start-day)"
+if [ -n "$(ls -A "$MAESTRO_DIR/brain/daily" 2>/dev/null)" ]; then
+  fail "brain/daily/ is pre-seeded (must be authored by start-day)"
 else
-  pass "owner/atlas/daily/ correctly left empty for start-day"
+  pass "brain/daily/ correctly left empty for start-day"
 fi
 
 # --------------------------------------------------------------------------
-phase "Phase 14 — Cross-case guard is platform-independent"
+phase "Phase 14 — Cross-case guard on the native host"
 # --------------------------------------------------------------------------
 
-# The guard that stops one client's material being written into another
-# client's case folder must behave identically whichever path shape the runtime
-# hands it. On Windows the runtime supplies drive-letter paths; treating those
-# as relative silently disables the guard while macOS still passes.
-#
-# End-to-end verdict assertions require the hook to read data/cases/.active at
-# the same path shape it was handed. On a real Windows host,
-# "C:/foo/data/cases/.active" is a readable file and the hook's block verdict
-# is observable. On a POSIX eval host the synthetic drive-letter tree has no
-# filesystem counterpart, so the hook fails-open (by design) and the verdict
-# cannot be exercised without pretending the check ran when it did not.
-#
-# The property the Windows fix actually enforces is that PROJECT_DIR and the
-# target path, whichever shape the runtime hands them in, both flow through
-# the same canonicalization before the prefix comparison — so a drive-letter
-# target is recognized as being inside the cases dir instead of being
-# classified as a relative path outside it. That property is testable on any
-# platform, and it is what broke on Windows before the fix.
+# Exercise the shipped managed runtime against the native host filesystem.
+# Windows drive letters and junctions require dedicated PowerShell CI, not
+# a copied shell canonicalizer on a Mac.
 XC_HOOK="$MAESTRO_DIR/.claude/hooks/block-cross-case-writes.sh"
 if [ -f "$XC_HOOK" ]; then
   XC_ROOT=$(mktemp -d -t maestro-eval-xcase-XXXXXX)
-  mkdir -p "$XC_ROOT/data/cases/case-alpha" "$XC_ROOT/data/cases/case-beta"
-  printf 'case-alpha\n' > "$XC_ROOT/data/cases/.active"
+  seed_managed_fixture "$XC_ROOT"
+  mkdir -p "$XC_ROOT/brain/accounts/alfa/cases/tmo" "$XC_ROOT/brain/accounts/beta/cases/tmo"
+  printf 'alfa/tmo\n' > "$XC_ROOT/brain/accounts/.active"
 
   # verdict PROJECT_DIR TARGET -> "block" | "allow"
   # Backslashes must be escaped or the payload is not valid JSON and the hook
@@ -944,123 +993,133 @@ if [ -f "$XC_HOOK" ]; then
     local esc=${2//\\/\\\\}
     printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$esc" \
       | CLAUDE_PROJECT_DIR="$1" bash "$XC_HOOK" >/dev/null 2>&1
-    [ "$?" -eq 2 ] && printf 'block' || printf 'allow'
+    case "$?" in 0) printf 'allow' ;; 2) printf 'block' ;; *) printf 'error' ;; esac
   }
 
-  # Kept in sync with normalize_path() in
-  # installers/zip/user-template/.claude/hooks/block-cross-case-writes.sh.
-  # Any change to the hook's canonicalization rule must be mirrored here so
-  # this eval reflects the same classification the hook performs on Windows.
-  xc_normalize() {
-    local p="$1" drive
-    p="${p//\\//}"
-    case "$p" in
-      /[A-Za-z]/*)
-        drive=$(printf '%s' "${p#/}" | cut -c1 | tr '[:upper:]' '[:lower:]')
-        p="$drive:${p#/?}"
-        ;;
-      [A-Za-z]:/*)
-        drive=$(printf '%s' "$p" | cut -c1 | tr '[:upper:]' '[:lower:]')
-        p="$drive${p#?}"
-        ;;
-    esac
-    printf '%s' "$p"
+  # verdict for a named tool and payload key, so the tools that reach the hook
+  # through the settings matcher are all exercised, not just Write.
+  xc_verdict_tool() {
+    local proj="$1" tool="$2" key="$3" esc=${4//\\/\\\\}
+    printf '{"tool_name":"%s","tool_input":{"%s":"%s"}}' "$tool" "$key" "$esc" \
+      | CLAUDE_PROJECT_DIR="$proj" bash "$XC_HOOK" >/dev/null 2>&1
+    case "$?" in 0) printf 'allow' ;; 2) printf 'block' ;; *) printf 'error' ;; esac
   }
 
-  xc_classifies_inside_cases() {
-    local proj="$1" target="$2"
-    local cases_abs target_abs
-    cases_abs=$(xc_normalize "$proj/data/cases")
-    target_abs=$(xc_normalize "$target")
-    case "$target_abs" in
-      "$cases_abs"/*) return 0 ;;
-      *)              return 1 ;;
-    esac
+  # verdict with a raw payload, for shapes that are not one tool plus one path.
+  xc_verdict_raw() {
+    printf '%s' "$2" | CLAUDE_PROJECT_DIR="$1" bash "$XC_HOOK" >/dev/null 2>&1
+    case "$?" in 0) printf 'allow' ;; 2) printf 'block' ;; *) printf 'error' ;; esac
   }
 
-  xc_extracted_case_id() {
-    local proj="$1" target="$2"
-    local cases_abs target_abs rel
-    cases_abs=$(xc_normalize "$proj/data/cases")
-    target_abs=$(xc_normalize "$target")
-    rel="${target_abs#"$cases_abs/"}"
-    printf '%s' "${rel%%/*}"
-  }
-
-  # Guard against this check silently degrading into a JSON-parse test: the
-  # hook must still block when handed a well-formed POSIX payload.
-  if [ "$(xc_verdict "$XC_ROOT" "$XC_ROOT/data/cases/case-beta/probe.md")" = "block" ]; then
-    pass "cross-case harness drives the hook's path logic, not a parse failure"
-  else
-    fail "cross-case harness is not exercising the hook (payload rejected before path logic)"
-  fi
-
+  # A negative verdict alone is insufficient: unavailable runtime also blocks.
+  # The positive same-case assertion below proves this fixture reaches policy.
   # POSIX shape — the shape macOS always produced, and the only one previously covered.
   XC_R="$XC_ROOT"
-  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-beta/x.md")" = "block" ] \
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts/beta/cases/tmo/x.md")" = "block" ] \
     && pass "cross-case write blocked (POSIX paths)" \
     || fail "cross-case write NOT blocked (POSIX paths)"
-  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-alpha/x.md")" = "allow" ] \
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts/alfa/cases/tmo/x.md")" = "allow" ] \
     && pass "same-case write allowed (POSIX paths)" \
     || fail "same-case write wrongly blocked (POSIX paths)"
 
-  # Windows shapes. These are asserted at the canonicalization layer because
-  # on a POSIX eval host the synthetic drive-letter tree has no filesystem
-  # counterpart, so the hook cannot read .active and the verdict is
-  # unobservable. What is observable on every host is whether both PROJECT_DIR
-  # and the target canonicalize to a form where the target is a prefix-match
-  # inside the cases dir and the case-id is extracted correctly. If that
-  # classification fails, the guard is inactive on Windows in exactly the way
-  # the pre-fix code was broken. On a real Windows runtime, the block verdict
-  # is additionally asserted end-to-end at the bottom of this phase.
-  if command -v cygpath >/dev/null 2>&1; then
-    XC_W=$(cygpath -m "$XC_ROOT")            # C:/Users/...
+  # Foreign Windows spellings cannot exercise native filesystem aliases on POSIX.
+  # Native PowerShell CI owns that proof, not a duplicated canonicalizer.
+  skip "native Windows drive-letter/junction parity requires dedicated PowerShell CI"
+
+  # Path traversal and separator bypasses are exercised by the actual managed
+  # runtime resolving paths on this host filesystem.
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts/alfa/cases/tmo/../../../beta/cases/tmo/leak.md")" = "block" ] \
+    && pass "cross-case write blocked (.. traversal out of the active case)" \
+    || fail "cross-case write NOT blocked (.. traversal out of the active case)"
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts/alfa/cases/tmo/sub/../../../../beta/cases/tmo/leak.md")" = "block" ] \
+    && pass "cross-case write blocked (multi-level .. traversal)" \
+    || fail "cross-case write NOT blocked (multi-level .. traversal)"
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts//beta/cases/tmo/x.md")" = "block" ] \
+    && pass "cross-case write blocked (double separator)" \
+    || fail "cross-case write NOT blocked (double separator)"
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts/./beta/cases/tmo/x.md")" = "block" ] \
+    && pass "cross-case write blocked (/./ segment)" \
+    || fail "cross-case write NOT blocked (/./ segment)"
+
+  # Filesystem aliases are not lexical traversal. A path can name the active
+  # case and still resolve into another case through a symlink (or a Windows
+  # junction). Conversely, an alias outside brain/accounts can land inside it
+  # without the payload containing the word "cases" at all.
+  if ln -s "$XC_R/brain/accounts/beta/cases/tmo" "$XC_R/brain/accounts/alfa/cases/tmo/link-to-beta" 2>/dev/null \
+    && ln -s "$XC_R/brain/accounts/beta/cases/tmo" "$XC_R/brain/beta-alias" 2>/dev/null; then
+    [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts/alfa/cases/tmo/link-to-beta/leak.md")" = "block" ] \
+      && pass "cross-case write blocked through an in-case filesystem alias" \
+      || fail "cross-case write ALLOWED through an in-case filesystem alias"
+    [ "$(xc_verdict "$XC_R" "$XC_R/brain/beta-alias/leak.md")" = "block" ] \
+      && pass "cross-case write blocked through an alias outside the cases tree" \
+      || fail "cross-case write ALLOWED through an alias outside the cases tree"
   else
-    XC_W="C:${XC_ROOT}"                      # synthetic drive-letter equivalent
-  fi
-  if xc_classifies_inside_cases "$XC_W" "$XC_W/data/cases/case-beta/x.md" \
-     && [ "$(xc_extracted_case_id "$XC_W" "$XC_W/data/cases/case-beta/x.md")" = "case-beta" ]; then
-    pass "cross-case target classified inside cases dir (drive-letter paths)"
-  else
-    fail "cross-case target NOT classified inside cases dir (drive-letter paths) — guard inactive on Windows"
+    skip "host cannot create filesystem aliases for the cross-case guard test"
   fi
 
-  # Backslash separators, the literal shape the Windows runtime sends.
-  XC_B=$(printf '%s' "$XC_W" | tr '/' '\\')
-  if xc_classifies_inside_cases "$XC_B" "$XC_B\\data\\cases\\case-beta\\x.md" \
-     && [ "$(xc_extracted_case_id "$XC_B" "$XC_B\\data\\cases\\case-beta\\x.md")" = "case-beta" ]; then
-    pass "cross-case target classified inside cases dir (backslash paths)"
-  else
-    fail "cross-case target NOT classified inside cases dir (backslash paths) — guard inactive on Windows"
-  fi
+  # Every tool the settings matcher admits must be guarded, not just Write.
+  # MultiEdit and NotebookEdit previously reached the hook and were waved
+  # through by a case statement that named only Edit and Write.
+  [ "$(xc_verdict_tool "$XC_R" MultiEdit file_path "$XC_R/brain/accounts/beta/cases/tmo/x.md")" = "block" ] \
+    && pass "cross-case write blocked (MultiEdit)" \
+    || fail "cross-case write NOT blocked (MultiEdit)"
+  [ "$(xc_verdict_tool "$XC_R" NotebookEdit notebook_path "$XC_R/brain/accounts/beta/cases/tmo/n.ipynb")" = "block" ] \
+    && pass "cross-case write blocked (NotebookEdit via notebook_path)" \
+    || fail "cross-case write NOT blocked (NotebookEdit via notebook_path)"
+  [ "$(xc_verdict_raw "$XC_R" "$(printf '{"tool_name":"NotebookEdit","tool_input":{"file_path":"%s","notebook_path":"%s"}}' "$XC_R/brain/accounts/alfa/cases/tmo/ok.md" "$XC_R/brain/accounts/beta/cases/tmo/n.ipynb")")" = "block" ] \
+    && pass "cross-case write blocked (NotebookEdit with a decoy file_path on the active case)" \
+    || fail "cross-case write NOT blocked (NotebookEdit decoy file_path)"
 
-  # Mixed shapes: the runtime may describe the same location two ways — a
-  # POSIX-style MSYS project dir with a drive-letter target. Both must
-  # canonicalize to a form where the target is inside the cases dir.
-  # Derived by re-spelling the drive-letter form as its MSYS equivalent
-  # ("C:/x" -> "/c/x"), which is the same location written two ways. Asking
-  # cygpath -u instead would return a mount alias (/tmp for C:/Users/../Temp),
-  # a different location that no string normalizer can or should reconcile.
-  # Lowercase via tr (portable) — BSD sed on macOS does not honor GNU \L.
-  _xc_drive=$(printf '%s' "$XC_W" | cut -c1 | tr '[:upper:]' '[:lower:]')
-  XC_U="/${_xc_drive}${XC_W#?:}"
-  if xc_classifies_inside_cases "$XC_U" "$XC_W/data/cases/case-beta/x.md" \
-     && [ "$(xc_extracted_case_id "$XC_U" "$XC_W/data/cases/case-beta/x.md")" = "case-beta" ]; then
-    pass "cross-case target classified inside cases dir (mixed MSYS dir + drive-letter target)"
-  else
-    fail "cross-case target NOT classified inside cases dir (mixed MSYS dir + drive-letter target)"
-  fi
+  # A tool that writes no file has no target to verify and must never be
+  # refused. The settings matcher is an unanchored regex in installs predating
+  # this change, so TodoWrite does arrive here, and in a Portuguese-language
+  # workspace its list mentions the cases tree routinely.
+  [ "$(xc_verdict_raw "$XC_R" '{"tool_name":"TodoWrite","tool_input":{"todos":[{"content":"revisar brain/accounts/beta/cases/tmo"}]}}')" = "allow" ] \
+    && pass "TodoWrite naming the cases tree is allowed" \
+    || fail "TodoWrite naming the cases tree was refused"
 
-  # If a real Windows runtime is available (cygpath present and the drive
-  # letter maps to a readable filesystem location), promote the drive-letter
-  # shape to an end-to-end verdict assertion. This runs on Windows CI and
-  # skips silently on POSIX eval hosts, so both platforms exercise the guard
-  # at the strongest available fidelity without producing false failures.
-  if command -v cygpath >/dev/null 2>&1 && [ -f "$XC_W/data/cases/.active" ]; then
-    [ "$(xc_verdict "$XC_W" "$XC_W/data/cases/case-beta/x.md")" = "block" ] \
-      && pass "cross-case write blocked end-to-end (drive-letter paths, native Windows)" \
-      || fail "cross-case write NOT blocked end-to-end (drive-letter paths, native Windows)"
-  fi
+  # Malformed JSON reaches the actual managed parser, never a fake interpreter.
+  [ "$(xc_verdict_raw "$XC_R" '{"tool_name":"Write","tool_input":')" = "block" ] \
+    && pass "malformed write payload is refused by the managed runtime" \
+    || fail "malformed write payload was allowed"
+
+  # Missing integrity metadata is an unavailable-runtime failure, not isolation proof.
+  mv "$XC_R/runtime/manifest.json" "$XC_R/runtime/manifest.json.evalbak"
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts/alfa/cases/tmo/x.md")" = "block" ] \
+    && pass "same-case write fails closed while runtime integrity is unavailable" \
+    || fail "write allowed without verified runtime integrity"
+  mv "$XC_R/runtime/manifest.json.evalbak" "$XC_R/runtime/manifest.json"
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts/alfa/cases/tmo/x.md")" = "allow" ] \
+    && pass "same-case write recovers after restoring runtime integrity" \
+    || fail "verified same-case write remains blocked after restoring integrity"
+
+  # An unreadable active marker means the target cannot be shown to be the
+  # right case. Previously both shapes exited 0 and allowed the write.
+  mv "$XC_ROOT/brain/accounts/.active" "$XC_ROOT/brain/accounts/.active.evalbak"
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts/beta/cases/tmo/x.md")" = "block" ] \
+    && pass "write into a case refused while .active is missing" \
+    || fail "write into a case ALLOWED while .active is missing"
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/memory/x.md")" = "allow" ] \
+    && pass "write outside the cases tree still allowed while .active is missing" \
+    || fail "write outside the cases tree refused while .active is missing"
+  printf '   \n' > "$XC_ROOT/brain/accounts/.active"
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts/beta/cases/tmo/x.md")" = "block" ] \
+    && pass "write into a case refused while .active is empty" \
+    || fail "write into a case ALLOWED while .active is empty"
+  mv "$XC_ROOT/brain/accounts/.active.evalbak" "$XC_ROOT/brain/accounts/.active"
+
+  # The runtime reads stdout only on exit 0, so a reason printed there on the
+  # block path never reaches the model. It must be on stderr.
+  XC_MSG=$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$XC_R/brain/accounts/beta/cases/tmo/x.md" \
+    | CLAUDE_PROJECT_DIR="$XC_R" bash "$XC_HOOK" 2>&1 >/dev/null)
+  case "$XC_MSG" in
+    *"verified runtime unavailable"*) fail "guard fixture did not reach policy: $XC_MSG" ;;
+    *"Cross-case write blocked:"*) pass "policy block reason reaches stderr, where the runtime reads it on exit 2" ;;
+    *) fail "block reason is not on stderr (got: ${XC_MSG:-<empty>})" ;;
+  esac
+
+  rm -rf "$XC_ROOT"
+
 else
   fail "block-cross-case-writes.sh missing from ZIP"
 fi
@@ -1080,15 +1139,22 @@ if [ -f "$CROSS_CASE_HOOK" ]; then
 
   # Drive the hook into its block branch and inspect the emitted reason string.
   XC_ROOT=$(mktemp -d -t maestro-eval-crosscase-XXXXXX)
-  mkdir -p "$XC_ROOT/data/cases/case-alpha" "$XC_ROOT/data/cases/case-beta" "$XC_ROOT/.claude/hooks"
-  cp "$CROSS_CASE_HOOK" "$XC_ROOT/.claude/hooks/"
-  printf 'case-alpha\n' > "$XC_ROOT/data/cases/.active"
-  XC_OUT=$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' \
-             "$XC_ROOT/data/cases/case-beta/notes.md" \
-           | CLAUDE_PROJECT_DIR="$XC_ROOT" bash "$XC_ROOT/.claude/hooks/block-cross-case-writes.sh" 2>/dev/null)
+  mkdir -p "$XC_ROOT/brain/accounts/alfa/cases/tmo" "$XC_ROOT/brain/accounts/beta/cases/tmo" "$XC_ROOT/.claude/hooks"
+  seed_managed_fixture "$XC_ROOT"
+  printf 'alfa/tmo\n' > "$XC_ROOT/brain/accounts/.active"
+  # The reason travels on stderr, not stdout: the runtime reads a decision
+  # object on stdout only when the hook exits 0, so a reason printed there on
+  # the exit-2 path is discarded before anyone sees it.
+  XC_ERR="$XC_ROOT/block.err"
+  printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' \
+    "$XC_ROOT/brain/accounts/beta/cases/tmo/notes.md" \
+    | CLAUDE_PROJECT_DIR="$XC_ROOT" bash "$XC_ROOT/.claude/hooks/block-cross-case-writes.sh" \
+      >/dev/null 2>"$XC_ERR"
+  XC_RC=$?
+  XC_OUT=$(cat "$XC_ERR" 2>/dev/null)
 
-  if printf '%s' "$XC_OUT" | grep -q '"decision":"block"'; then
-    pass "cross-case write is blocked"
+  if [ "$XC_RC" -eq 2 ] && [ -n "$XC_OUT" ]; then
+    pass "cross-case write is blocked, with a reason on stderr"
 
     if printf '%s' "$XC_OUT" | grep -q '\$'; then
       fail "block message leaks internal \$skill syntax to the user: $XC_OUT"
@@ -1096,7 +1162,7 @@ if [ -f "$CROSS_CASE_HOOK" ]; then
       pass "block message contains no internal \$skill syntax"
     fi
   else
-    fail "cross-case write was NOT blocked (hook emitted: $XC_OUT)"
+    fail "cross-case write was NOT blocked (rc=$XC_RC, stderr: ${XC_OUT:-<empty>})"
   fi
 else
   fail "block-cross-case-writes.sh missing from ZIP"
@@ -1147,7 +1213,7 @@ phase "Phase 17 — Suggested skill ids resolve"
 SKILLS_ROOT="$MAESTRO_DIR/bundles/base/skills"
 if [ -d "$SKILLS_ROOT" ]; then
   # Slash-prefixed ids that are runtime commands rather than skills.
-  SLASH_ALLOWLIST=" clear help "
+  SLASH_ALLOWLIST=" clear help hooks status goal "
   SLASH_BAD=0
   SLASH_CHECKED=0
   for skillmd in "$SKILLS_ROOT"/*/SKILL.md; do
@@ -1175,12 +1241,12 @@ phase "Phase 18 — Update ritual has one source of truth"
 # --------------------------------------------------------------------------
 
 # README-INSTALL.md is the declared single source of the install/update ritual,
-# and it mandates rename + copy data/ across. WELCOME.md tells the owner not to
+# and it mandates rename + copy brain/ across. WELCOME.md tells the owner not to
 # extract over the folder. A shipped skill that tells them to "extraia por cima"
 # contradicts both, from inside the same folder.
 #
 # Matches the instruction, not the word: a line that forbids extract-over, or
-# that restores a personal backup over data/, is fine.
+# that restores a personal backup over brain/, is fine.
 RITUAL_BAD=0
 for skillmd in "$MAESTRO_DIR/bundles/base/skills"/*/SKILL.md; do
   [ -f "$skillmd" ] || continue
@@ -1209,6 +1275,604 @@ fi
 # --------------------------------------------------------------------------
 # Summary
 # --------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+phase "Phase 19 — Hook interpreter resolution"
+# --------------------------------------------------------------------------
+
+# The hooks parse JSON with Python. Testing `command -v python3` and nothing
+# else made a Windows box that has Python indistinguishable from one that does
+# not: the python.org installer ships python.exe and the py launcher and
+# creates no python3, so every hook needing an interpreter exited 0 in silence.
+PY_LIB="$MAESTRO_DIR/.claude/hooks/lib/python.sh"
+if [ -f "$PY_LIB" ]; then
+  pass "hooks/lib/python.sh present in ZIP"
+
+  py_stub_dir() {
+    local name="$1" body="$2" d
+    d=$(mktemp -d -t maestro-eval-py-XXXXXX)
+    printf '%s\n' "$body" > "$d/$name"
+    chmod +x "$d/$name"
+    printf '%s' "$d"
+  }
+  PY_RUNNER_TMP=""
+  PY_REAL=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)
+  if [ -z "$PY_REAL" ] && command -v py >/dev/null 2>&1 \
+    && py -3 -c 'import sys; raise SystemExit(0 if sys.version_info[0] == 3 else 1)' >/dev/null 2>&1; then
+    PY_RUNNER_TMP=$(mktemp -d -t maestro-eval-pyrunner-XXXXXX)
+    PY_LAUNCHER=$(command -v py)
+    printf '#!/bin/sh\nexec "%s" -3 "$@"\n' "$PY_LAUNCHER" > "$PY_RUNNER_TMP/python-real"
+    chmod +x "$PY_RUNNER_TMP/python-real"
+    PY_REAL="$PY_RUNNER_TMP/python-real"
+  fi
+  PY_EMPTY_PATH=$(mktemp -d -t maestro-eval-empty-path-XXXXXX)
+  ln -s "$(command -v dirname)" "$PY_EMPTY_PATH/dirname"
+  for native_command in tr uname shasum cut mktemp rm cat head sed date find sort tail wc; do
+    command_path=$(command -v "$native_command")
+    [ -z "$command_path" ] || ln -s "$command_path" "$PY_EMPTY_PATH/$native_command"
+  done
+
+  if [ -n "$PY_REAL" ]; then
+    PY_ONLY_PYTHON=$(py_stub_dir python "#!/bin/sh
+exec \"$PY_REAL\" \"\$@\"")
+    RESOLVED=$(env PATH="$PY_ONLY_PYTHON:$PY_EMPTY_PATH" /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+    [ "$RESOLVED" = "python" ] \
+      && pass "resolver finds 'python' when 'python3' is absent" \
+      || fail "resolver did not find 'python' when 'python3' is absent (got: ${RESOLVED:-<none>})"
+
+    PY_ONLY_LAUNCHER=$(py_stub_dir py "#!/bin/sh
+shift
+exec \"$PY_REAL\" \"\$@\"")
+    RESOLVED=$(env PATH="$PY_ONLY_LAUNCHER:$PY_EMPTY_PATH" /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+    [ "$RESOLVED" = "py -3" ] \
+      && pass "resolver falls back to the 'py -3' launcher" \
+      || fail "resolver did not fall back to 'py -3' (got: ${RESOLVED:-<none>})"
+
+    rm -rf "$PY_ONLY_PYTHON" "$PY_ONLY_LAUNCHER"
+  else
+    skip "no interpreter on this host to build resolver stubs from"
+  fi
+
+  # A `python` that is Python 2 must be rejected rather than selected: the hook
+  # scripts are Python 3, and the resulting error is swallowed by 2>/dev/null —
+  # the silent failure this resolver exists to end.
+  PY_TWO=$(py_stub_dir python '#!/bin/sh
+exit 1')
+  RESOLVED=$(env PATH="$PY_TWO:$PY_EMPTY_PATH" /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+  [ -z "$RESOLVED" ] \
+    && pass "resolver rejects a 'python' that is not Python 3" \
+    || fail "resolver selected a non-Python-3 interpreter (got: $RESOLVED)"
+  rm -rf "$PY_TWO"
+
+  # Regression guard: a hook that calls the interpreter by name again
+  # reintroduces the bug for every owner whose Python is not called python3.
+  HARDCODED=$(grep -rlE '(\||^|[[:space:]])python3[[:space:]]+(-c|-)' \
+                "$MAESTRO_DIR/.claude/hooks" 2>/dev/null \
+              | grep -v '/lib/python.sh$' || true)
+  if [ -z "$HARDCODED" ]; then
+    pass "no hook invokes python3 directly; all resolve through the library"
+  else
+    fail "hook(s) still invoke python3 directly: $(printf '%s' "$HARDCODED" | tr '\n' ' ')"
+  fi
+
+  # A provisioned interpreter is recorded by path, and on Windows that path
+  # routinely contains a space ("C:\Users\Firstname Lastname\..."). It must
+  # both resolve and RUN, which is why the library invokes through a function
+  # instead of interpolating the interpreter at each call site.
+  if [ -n "$PY_REAL" ]; then
+    PY_REC_ROOT=$(mktemp -d -t maestro-eval-pyrec-XXXXXX)
+    seed_managed_fixture "$PY_REC_ROOT"
+    mkdir -p "$PY_REC_ROOT/with space" "$PY_REC_ROOT/brain"
+    printf '#!/bin/sh\nexec "%s" "$@"\n' "$PY_REAL" > "$PY_REC_ROOT/with space/maestro-python"
+    chmod +x "$PY_REC_ROOT/with space/maestro-python"
+    printf '%s\n' "$PY_REC_ROOT/with space/maestro-python" > "$PY_REC_ROOT/brain/.maestro-python"
+
+    RAN=$(env PATH="$PY_EMPTY_PATH" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" \
+            /bin/bash -c ". '$PY_LIB'; maestro_py -c 'print(\"ran\")'" 2>/dev/null)
+    [ "$RAN" = "ran" ] \
+      && pass "a recorded interpreter resolves and runs, including a path with a space" \
+      || fail "recorded interpreter did not run (got: ${RAN:-<none>})"
+
+    # A record outlives the interpreter it names — uninstalled, moved, or
+    # carried in a workspace copied to another machine. It must be skipped, not
+    # trusted, or provisioning leaves behind a permanent false positive.
+    printf '%s\n' "$PY_REC_ROOT/gone/maestro-python" > "$PY_REC_ROOT/brain/.maestro-python"
+    RESOLVED=$(env PATH="$PY_EMPTY_PATH" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" \
+                 /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+    [ -z "$RESOLVED" ] \
+      && pass "a stale interpreter record is rejected rather than trusted" \
+      || fail "stale interpreter record was accepted (got: $RESOLVED)"
+
+    # Absence must be visible. Every hook that needs the interpreter exits 0
+    # without it, so silence here is the whole defect.
+    MEM_HOOK="$MAESTRO_DIR/.claude/hooks/session-start-memory-inject.sh"
+    if [ -f "$MEM_HOOK" ]; then
+      mkdir -p "$PY_REC_ROOT/brain/memory/recent"
+      rm -f "$PY_REC_ROOT/brain/.maestro-python"
+      NUDGE=$(env PATH="$PY_EMPTY_PATH" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" /bin/bash "$MEM_HOOK" 2>/dev/null)
+      case "$NUDGE" in
+        *maestro:python-missing*) pass "SessionStart names a missing interpreter instead of degrading in silence" ;;
+        *) fail "SessionStart emitted no signal for a missing interpreter" ;;
+      esac
+      QUIET=$(CLAUDE_PROJECT_DIR="$PY_REC_ROOT" bash "$MEM_HOOK" 2>/dev/null)
+      case "$QUIET" in
+        *maestro:python-missing*) fail "SessionStart warns about a missing interpreter while one is available" ;;
+        *) pass "SessionStart stays quiet when an interpreter is available" ;;
+      esac
+    fi
+
+    rm -rf "$PY_REC_ROOT"
+  fi
+  rm -rf "$PY_EMPTY_PATH"
+  [ -z "$PY_RUNNER_TMP" ] || rm -rf "$PY_RUNNER_TMP"
+else
+  fail "hooks/lib/python.sh missing from ZIP"
+fi
+
+# --------------------------------------------------------------------------
+phase "Phase 20 — Active-case context reaches the session"
+# --------------------------------------------------------------------------
+# The whole point of an active case is that the next session opens knowing it.
+# That makes this the least visible thing in the product when it breaks: the
+# emitter reads one path, the scaffold builds another, and the owner simply
+# gets a session with no case context and no error anywhere. Moving cases under
+# accounts/ did exactly that, and nothing caught it, because every other check
+# verified a tree existed rather than that anything read it.
+#
+# The emitter lives in session-start-memory-inject.sh and nowhere else. It was
+# briefly in both hooks, which put the brief, the decisions and the task list
+# twice into the same context — and worse, the two copies looked for the brief
+# in different places, because one still followed a layout with `projects/`.
+# This phase asserts one header, not at least one.
+CASE_ROOT=$(mktemp -d -t maestro-eval-case-XXXXXX)
+seed_managed_fixture "$CASE_ROOT"
+
+# Scaffold first, so the fixture is the layout the product actually creates.
+CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/first-run-scaffold.sh" >/dev/null 2>&1 || true
+
+if [ -d "$CASE_ROOT/brain/accounts" ]; then
+  pass "scaffold builds brain/accounts/"
+
+  # The canonical case layout: brief at the case root, five subdirectories,
+  # and no wrapper folder around the brief.
+  CASE_DIR="$CASE_ROOT/brain/accounts/alfa/cases/tmo"
+  mkdir -p "$CASE_DIR/decisions" "$CASE_DIR/tasks" "$CASE_DIR/canon" \
+           "$CASE_DIR/deliverables" "$CASE_DIR/sources"
+  printf '# Brief - TMO\n\nLinha do brief que precisa aparecer.\n' > "$CASE_DIR/tmo.md"
+  printf '# Decision Log\n\n## D-001 Escolha inicial\n' > "$CASE_DIR/decisions/decision-log.md"
+  printf '# Tarefa\n' > "$CASE_DIR/tasks/primeira.md"
+  printf 'alfa/tmo\n' > "$CASE_ROOT/brain/accounts/.active"
+
+  SCAFFOLD_OUT=$(CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/first-run-scaffold.sh" 2>/dev/null)
+  MEMORY_OUT=$(CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/session-start-memory-inject.sh" 2>/dev/null)
+  EMITTED="$SCAFFOLD_OUT
+$MEMORY_OUT"
+
+  HEADERS=$(printf '%s' "$EMITTED" | grep -c "Caso ativo" || true)
+  case "$HEADERS" in
+    1) pass "exactly one active-case header across every SessionStart hook" ;;
+    0) fail "no active-case header — the case context never reaches the session" ;;
+    *) fail "$HEADERS active-case headers — the case context is duplicated in the context window" ;;
+  esac
+  case "$EMITTED" in
+    *"Caso ativo: alfa/tmo"*) pass "the header names the case as <account>/<case>" ;;
+    *) fail "the active-case header does not name the account/case pair" ;;
+  esac
+  case "$EMITTED" in
+    *"Linha do brief que precisa aparecer"*) pass "the case brief reaches the session from the case root" ;;
+    *) fail "the case brief never reached the session (wrong brief location?)" ;;
+  esac
+
+  # A marker in the pre-accounts format cannot name an account. Guessing would
+  # surface one client's brief while the owner works on another.
+  printf 'tmo\n' > "$CASE_ROOT/brain/accounts/.active"
+  STALE=$(CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/session-start-memory-inject.sh" 2>/dev/null)
+  case "$STALE" in
+    *"Caso ativo"*) fail "a bare case id in .active still produced case context (which client did it pick?)" ;;
+    *) pass "a bare case id in .active emits nothing instead of guessing an account" ;;
+  esac
+else
+  fail "scaffold did not build brain/accounts/ — cannot check active-case context"
+fi
+rm -rf "$CASE_ROOT"
+
+# --------------------------------------------------------------------------
+phase "Phase 21 — Scheduled routines are wired to run unattended"
+# --------------------------------------------------------------------------
+
+# The onboarding offers to schedule these three, and the scheduled prompt runs
+# the skill itself. Two ways that breaks silently, both checked here: a skill
+# with no unattended mode asks its first question and waits for an owner who is
+# not there, and a marker that drifted by one word does the same thing while
+# looking configured. The owner sees a routine that produces nothing.
+ROUTINE_MARKER="MAESTRO_RUN: scheduled-unattended"
+for routine in start-day eod retro; do
+  RSKILL="$MAESTRO_DIR/bundles/base/skills/$routine/SKILL.md"
+  if [ ! -f "$RSKILL" ]; then
+    fail "$routine/SKILL.md not in ZIP"
+    continue
+  fi
+  if grep -q "^## Autonomous mode (scheduled run)$" "$RSKILL"; then
+    pass "$routine declares an autonomous mode"
+  else
+    fail "$routine has no autonomous mode — scheduling it would run a dialogue with nobody there"
+  fi
+  if grep -qF "$ROUTINE_MARKER" "$RSKILL"; then
+    pass "$routine names the canonical unattended marker"
+  else
+    fail "$routine does not name the marker '$ROUTINE_MARKER' — its entry condition cannot be triggered"
+  fi
+  # An unattended run has nobody to hear a summary, so the report to its own
+  # chat is the owner's only account of what the routine concluded.
+  if grep -q "chat of this execution" "$RSKILL"; then
+    pass "$routine reports to the chat of its own execution"
+  else
+    fail "$routine does not require reporting to its own chat — a run the owner cannot see"
+  fi
+done
+
+# Anything that creates the scheduled task must write the same marker the
+# skills read. Checked across the whole bundle so the onboarding prompt cannot
+# ship a reworded one.
+MARKER_USERS=$(grep -rlF "$ROUTINE_MARKER" "$MAESTRO_DIR/bundles" 2>/dev/null | wc -l | tr -d ' ')
+# Compare the declarations themselves, not the files that contain them: every
+# file has lines that are not the marker, so a file-level -v test always fires.
+DRIFTED=$(grep -rhoE "MAESTRO_RUN:[[:space:]]*[A-Za-z0-9_-]+" "$MAESTRO_DIR/bundles" 2>/dev/null \
+          | sort -u | grep -vxF "$ROUTINE_MARKER" || true)
+if [ -z "$DRIFTED" ]; then
+  pass "every MAESTRO_RUN declaration in the bundle is the canonical marker ($MARKER_USERS file(s))"
+else
+  fail "a MAESTRO_RUN declaration drifted from the canonical spelling: $(printf '%s' "$DRIFTED" | tr '\n' ' ')"
+fi
+# --------------------------------------------------------------------------
+phase "Phase 22 — Agent dispatch is wired to the policy that authorizes it"
+# --------------------------------------------------------------------------
+
+# The policy declares which agents exist and when each is called; the router
+# and the periodic check are what read it. They can drift apart silently, and
+# both failure modes are invisible: a policy entry for an agent nothing can
+# dispatch, or a dispatch path for an agent the policy never authorized. This
+# phase asserts they still agree, and that the announcement actually reaches
+# the hub instead of being printed into the void — the defect the announce
+# hook was rewritten to fix, which had a green test the whole time because the
+# test captured the hook's stdout and proved the text EXISTED, never that it
+# ARRIVED.
+AGENT_POLICY="$MAESTRO_DIR/bundles/base/agents/activation-policy.json"
+AGENT_ROUTER="$MAESTRO_DIR/bundles/base/tools/agent-route.py"
+ANNOUNCE_HOOK="$MAESTRO_DIR/.claude/hooks/announce-agent-dispatch.sh"
+
+if [ -f "$AGENT_POLICY" ] && [ -f "$AGENT_ROUTER" ]; then
+  pass "activation policy and agent router both ship"
+
+  # Every spoke the policy declares must have a projection under .claude/agents/,
+  # or the dispatch names a subagent type the runtime cannot resolve.
+  MISSING_PROJ=""
+  for spoke in yoda darwin gamma-guardian pa-expert; do
+    [ -f "$MAESTRO_DIR/.claude/agents/$spoke.md" ] || MISSING_PROJ="$MISSING_PROJ $spoke"
+  done
+  if [ -z "$MISSING_PROJ" ]; then
+    pass "every spoke in the policy has a .claude/agents projection"
+  else
+    fail "spoke(s) declared but not projected:$MISSING_PROJ"
+  fi
+
+  # The announcement text is the policy's, not the hook's. A hook carrying its
+  # own copy is a second source that drifts the first time the format changes.
+  if grep -q "announce" "$AGENT_POLICY"; then
+    pass "the policy carries the announcement contract"
+  else
+    fail "the policy has no announce block — the hook would have to invent the format"
+  fi
+else
+  fail "activation policy or agent router missing from ZIP"
+fi
+
+# The router must be conservative. A router that fires on ordinary work costs a
+# model call per message and trains the owner to ignore the line.
+if [ -f "$AGENT_ROUTER" ] && [ -n "${PY_REAL:-}" ]; then
+  ROUTE_QUIET=$(cd "$MAESTRO_DIR" && printf 'pode me ajudar a montar o slide de decisao do projeto' \
+                  | "$PY_REAL" "$AGENT_ROUTER" --max 2 2>/dev/null)
+  [ -z "$ROUTE_QUIET" ] \
+    && pass "router stays silent on ordinary work" \
+    || fail "router fired on an ordinary request (would cost a model call per message)"
+
+  ROUTE_HIT=$(cd "$MAESTRO_DIR" && printf 'chama o yoda para revisar essa recomendacao' \
+                | "$PY_REAL" "$AGENT_ROUTER" --max 2 2>/dev/null)
+  case "$ROUTE_HIT" in
+    *yoda*) pass "router resolves an explicit agent request" ;;
+    *) fail "router did not resolve an explicit request for yoda" ;;
+  esac
+
+  # pa-expert is declared dormant. Naming it must NOT route it, or the owner
+  # gets a dispatch that can only answer "no applicable canon".
+  ROUTE_DORMANT=$(cd "$MAESTRO_DIR" && printf 'chama o pa-expert para trazer a visao de pratica' \
+                    | "$PY_REAL" "$AGENT_ROUTER" --max 2 2>/dev/null)
+  case "$ROUTE_DORMANT" in
+    *pa-expert*) fail "router routed pa-expert, which the policy declares dormant" ;;
+    *) pass "router honours the dormant declaration and stays silent on pa-expert" ;;
+  esac
+else
+  skip "no interpreter on this host to exercise the agent router"
+fi
+
+# The announce hook's only useful output is a JSON object with
+# hookSpecificOutput.additionalContext. Plain stdout in PreToolUse goes to the
+# transcript and never reaches the model.
+if [ -f "$ANNOUNCE_HOOK" ] && [ -n "${PY_REAL:-}" ]; then
+  ANN=$(printf '{"tool_name":"Agent","tool_input":{"subagent_type":"yoda","prompt":"x"}}' \
+        | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$ANNOUNCE_HOOK" 2>/dev/null)
+  ANN_OK=$(printf '%s' "$ANN" | "$PY_REAL" -c 'import sys,json
+try:
+    d=json.load(sys.stdin)
+except Exception:
+    print("nojson"); raise SystemExit
+h=d.get("hookSpecificOutput") or {}
+print("ok" if h.get("additionalContext") else "nocontext")' 2>/dev/null)
+  case "$ANN_OK" in
+    ok) pass "announce hook returns hookSpecificOutput.additionalContext (reaches the hub)" ;;
+    nojson) fail "announce hook emitted non-JSON — plain stdout never reaches the model in PreToolUse" ;;
+    *) fail "announce hook returned JSON without additionalContext (speaks into the void)" ;;
+  esac
+
+  # A non-agent tool must be ignored, and absence of an interpreter must never
+  # block a dispatch: this hook is a net, not a gate.
+  printf '{"tool_name":"Write","tool_input":{"file_path":"x"}}' \
+    | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$ANNOUNCE_HOOK" >/dev/null 2>&1
+  [ $? -eq 0 ] \
+    && pass "announce hook ignores a non-agent tool and exits 0" \
+    || fail "announce hook did not exit 0 for a non-agent tool"
+
+  env PATH="/usr/bin:/bin" CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$ANNOUNCE_HOOK" \
+    < /dev/null >/dev/null 2>&1
+  [ $? -eq 0 ] \
+    && pass "announce hook fails open without an interpreter (never blocks a dispatch)" \
+    || fail "announce hook returned nonzero without an interpreter — this would block every agent call"
+else
+  skip "announce hook or interpreter unavailable"
+fi
+
+# The router only matters if the hook that calls it actually reaches it. That
+# link had no check and was broken on arrival: the extraction piped the payload
+# into `maestro_py -`, which reads the SCRIPT from stdin, so a heredoc there
+# won the stdin and json.load got nothing. Empty prompt, no routing, no error,
+# on every message. Assert the whole path, not the router alone.
+CI_HOOK="$MAESTRO_DIR/.claude/hooks/context-inject-userprompt.sh"
+if [ -f "$CI_HOOK" ] && [ -f "$AGENT_ROUTER" ] && [ -n "${PY_REAL:-}" ]; then
+  CI_HOME=$(mktemp -d -t maestro-eval-cihome-XXXXXX)
+  CI_OUT=$(printf '{"prompt":"chama o yoda para revisar essa recomendacao"}' \
+           | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" HOME="$CI_HOME" bash "$CI_HOOK" 2>/dev/null)
+  case "$CI_OUT" in
+    *yoda*) pass "context-inject reaches the agent router and emits its line" ;;
+    *) fail "context-inject produced no agent line for an explicit request — the router is wired but unreachable" ;;
+  esac
+
+  # An ordinary request must not pay for this. A router that fires on everything
+  # costs a model call per message and trains the owner to ignore the line.
+  CI_QUIET=$(printf '{"prompt":"me ajuda a montar o slide de decisao"}' \
+             | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" HOME="$CI_HOME" bash "$CI_HOOK" 2>/dev/null)
+  case "$CI_QUIET" in
+    *yoda*|*darwin*|*gamma-guardian*) fail "context-inject emitted an agent line for ordinary work" ;;
+    *) pass "context-inject stays quiet on ordinary work" ;;
+  esac
+  rm -rf "$CI_HOME"
+fi
+
+# The operator's spoke section is prose derived from the policy. Prose and its
+# source drift, and the drift is silent: the method a session reads would name
+# an agent the policy never authorized, or miss one it did.
+OPERATOR="$MAESTRO_DIR/bundles/base/skills/maestro-operator/SKILL.md"
+if [ -f "$OPERATOR" ] && [ -f "$AGENT_POLICY" ] && [ -n "${PY_REAL:-}" ]; then
+  OP_AGREE=$(PYTHONIOENCODING=utf-8 "$PY_REAL" - "$OPERATOR" "$AGENT_POLICY" <<'PY' 2>/dev/null
+import io, json, re, sys
+op = io.open(sys.argv[1], encoding="utf-8").read()
+pol = json.load(io.open(sys.argv[2], encoding="utf-8"))
+ids = sorted(a["id"] for a in pol["agents"] if a.get("layer") == "spoke")
+parts = op.split("### 3. Spokes")
+if len(parts) < 2:
+    print("nosection"); raise SystemExit
+sec = parts[1].split("\n## ")[0]
+named = sorted(set(i for i in ids if i in sec))
+missing = [i for i in ids if i not in named]
+if missing:
+    print("missing:" + ",".join(missing)); raise SystemExit
+if not re.search(r"activation-policy\.json", op):
+    print("nosource"); raise SystemExit
+print("ok")
+PY
+)
+  case "$OP_AGREE" in
+    ok) pass "operator spoke section names every policy spoke and defers to the policy as source" ;;
+    nosection) fail "operator has no spoke section — the method a session reads would not know the layer" ;;
+    nosource) fail "operator does not name activation-policy.json as the source (two sources, one will drift)" ;;
+    missing:*) fail "operator omits policy spoke(s): ${OP_AGREE#missing:}" ;;
+    *) fail "could not compare operator against policy (got: ${OP_AGREE:-<empty>})" ;;
+  esac
+fi
+
+# --------------------------------------------------------------------------
+phase "Phase 23 — The routers read what the compiler writes"
+# --------------------------------------------------------------------------
+
+# The brain router reads `route-index.json` and opens no page. That makes the
+# index shape a contract between two files that never import each other, and a
+# silent one: rename a key in the compiler and the router matches nothing, on
+# every message, with no error.
+#
+# The fixture needs SIX pages, not one, and the reason is a real property of
+# the compiler rather than padding: a term present in nearly every page is
+# template structure, not a concept, so it is filtered out. With a single page
+# every term is present in 100% of pages, the inverted index comes back empty,
+# and a check built on one page fails while the router is perfectly healthy.
+# That is exactly how the first version of this phase failed.
+RT_ROUTER="$MAESTRO_DIR/bundles/base/tools/brain-route.py"
+RT_SKILL="$MAESTRO_DIR/bundles/base/tools/skill-route.py"
+RT_INDEXER="$MAESTRO_DIR/bundles/base/tools/brain-index.py"
+
+if [ -f "$RT_ROUTER" ] && [ -f "$RT_INDEXER" ] && [ -n "${PY_REAL:-}" ]; then
+  RT_ROOT=$(mktemp -d -t maestro-eval-route-XXXXXX)
+  mkdir -p "$RT_ROOT/bundles/base/tools" "$RT_ROOT/brain/learnings" \
+           "$RT_ROOT/brain/craft/methods" "$RT_ROOT/brain/craft/style" \
+           "$RT_ROOT/brain/people" "$RT_ROOT/brain/development"
+  cp "$RT_INDEXER" "$RT_ROUTER" "$RT_ROOT/bundles/base/tools/"
+  cp "$MAESTRO_DIR/bundles/base/brain-contract.md" "$RT_ROOT/bundles/base/" 2>/dev/null
+
+  rt_page() {
+    printf -- '---\nid: %s\ntitle: "%s"\nsummary: "%s"\ntype: %s\nscope: owner\nstatus: active\nsensitivity: owner-private\nupdated: 2026-09-01\n---\n\n# %s\n\n%s\n' \
+      "${1%.md}" "$3" "$4" "$2" "$3" "$4" > "$RT_ROOT/brain/$1"
+  }
+  rt_page "learnings/kickoff-sem-agenda.md" learning "Kickoff sem agenda escrita" \
+    "Kickoff sem agenda escrita gasta a primeira semana alinhando escopo do projeto"
+  rt_page "learnings/planilha-fonte-cliente.md" learning "Reconhecer planilha do cliente" \
+    "Mapear tabs e tabela workhorse antes de modelar qualquer coisa na planilha"
+  rt_page "craft/methods/pipeline-automacao.md" craft-method "Pipeline de automacao" \
+    "Cinco estagios para decidir se vale automatizar um passo manual de um caso"
+  rt_page "craft/style/tom-slack.md" craft-style "Tom no Slack" \
+    "Gancho envolvente e corpo profissional nas mensagens de anuncio interno"
+  rt_page "people/colega-analista.md" person "Colega analista" \
+    "Perfil de trabalho conjunto em modelagem quantitativa e revisao de numeros"
+  rt_page "development/objectives.md" development "Objetivos atuais" \
+    "Pontos de desenvolvimento em lideranca de time e comunicacao executiva"
+
+  ( cd "$RT_ROOT" && PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/brain-index.py >/dev/null 2>&1 )
+
+  if [ -f "$RT_ROOT/brain/.maestro/route-index.json" ]; then
+    pass "the compiler writes route-index.json"
+
+    RT_TERMS=$(cd "$RT_ROOT" && PYTHONIOENCODING=utf-8 "$PY_REAL" -c 'import json,io;print(len(json.load(io.open("brain/.maestro/route-index.json",encoding="utf-8"))["owner"]["terms"]))' 2>/dev/null)
+    [ "${RT_TERMS:-0}" -gt 0 ] 2>/dev/null \
+      && pass "the inverted index has terms ($RT_TERMS) once the corpus is not one page" \
+      || fail "the inverted index came back empty on a six-page corpus"
+
+    RT_HIT=$(cd "$RT_ROOT" && printf 'kickoff sem agenda escrita no projeto' \
+             | PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/brain-route.py --max 5 2>/dev/null)
+    case "$RT_HIT" in
+      *kickoff-sem-agenda*) pass "the brain router resolves a page from that index" ;;
+      *) fail "the router read the compiler's index and matched nothing — the index shape and the router disagree" ;;
+    esac
+
+    # The router must not open the page. It carries title, summary and path;
+    # the body is the owner's most sensitive material.
+    case "$RT_HIT" in
+      *"# Kickoff"*) fail "the router emitted page body — it carries only title, summary and path" ;;
+      *) pass "the router carries pointers, never page body" ;;
+    esac
+
+    RT_QUIET=$(cd "$RT_ROOT" && printf 'oi' \
+               | PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/brain-route.py --max 5 2>/dev/null)
+    [ -z "$RT_QUIET" ] \
+      && pass "the brain router stays silent on a greeting" \
+      || fail "the brain router fired on a two-letter greeting"
+  else
+    fail "the compiler produced no route-index.json — the router has nothing to read"
+  fi
+  rm -rf "$RT_ROOT"
+else
+  skip "router, compiler or interpreter unavailable"
+fi
+
+# The skill router replaces injecting every skill at every session start, so it
+# has to answer a literal request. "eod" is three characters and is the most
+# literal request that exists for that skill.
+if [ -f "$RT_SKILL" ] && [ -n "${PY_REAL:-}" ]; then
+  SK_HIT=$(cd "$MAESTRO_DIR" && printf 'eod' \
+           | PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/skill-route.py --max 4 2>/dev/null)
+  case "$SK_HIT" in
+    *eod*) pass "the skill router answers a three-character literal request" ;;
+    *) fail "the skill router did not resolve 'eod' — a literal skill name must route" ;;
+  esac
+
+  SK_QUIET=$(cd "$MAESTRO_DIR" && printf 'oi' \
+             | PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/skill-route.py --max 4 2>/dev/null)
+  [ -z "$SK_QUIET" ] \
+    && pass "the skill router stays silent on a greeting" \
+    || fail "the skill router fired on a greeting"
+fi
+# --------------------------------------------------------------------------
+phase "Phase 24 — Every path the product cites exists on a fresh install"
+# --------------------------------------------------------------------------
+
+# This is the dead-path class, and it has produced a defect in every structural
+# change this product has made: the 2026-09-01 account migration moved the disk
+# and not the scaffold; the flip to brain/ raised four trees to the top and left
+# nine skills pointing at where they had been. Both times the code was correct
+# and the instructions were not, which is the failure a model cannot route
+# around — it follows the text.
+#
+# The fixture is shaped like an owner's install rather than the repo: hooks at
+# `.claude/`, the nine scaffolded trunks present, and the on-demand trees
+# (`.maestro/`, `runtime/`) absent, because absent is their normal state before
+# first use.
+PATHS_TOOL_EVAL="$MAESTRO_DIR/bundles/base/tools/paths-check.py"
+if [ -f "$PATHS_TOOL_EVAL" ] && [ -n "${PY_REAL:-}" ]; then
+  PC_ROOT=$(mktemp -d -t maestro-eval-paths-XXXXXX)
+  cp -R "$MAESTRO_DIR/bundles" "$PC_ROOT/" 2>/dev/null
+  cp -R "$MAESTRO_DIR/.claude" "$PC_ROOT/" 2>/dev/null
+  cp -R "$MAESTRO_DIR/schemas" "$PC_ROOT/" 2>/dev/null
+  cp "$MAESTRO_DIR/CLAUDE.md" "$PC_ROOT/" 2>/dev/null
+  for sub in accounts craft/methods craft/style daily development/cdc \
+             development/project-feedback development/upward-feedback \
+             development/retros learnings memory/recent memory/weekly \
+             memory/medium-term memory/lifetime memory/policies owner/self \
+             owner/operating owner/observations owner/interview/drafts people tasks; do
+    mkdir -p "$PC_ROOT/brain/$sub"
+  done
+
+  PC_OUT=$(cd "$PC_ROOT" && PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/paths-check.py 2>/dev/null)
+  PC_COUNT=$(cd "$PC_ROOT" && PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/paths-check.py --count 2>/dev/null)
+  if [ "${PC_COUNT:-1}" = "0" ]; then
+    pass "no dead paths cited anywhere in the shipped product"
+  else
+    fail "$PC_COUNT dead path(s) cited by the shipped product: $(printf '%s' "$PC_OUT" | tr '\n' ' ' | cut -c1-320)"
+  fi
+  rm -rf "$PC_ROOT"
+else
+  skip "paths-check.py or interpreter unavailable"
+fi
+
+
+
+
+
+
+
+
+
+
+
+
+
+# --------------------------------------------------------------------------
+phase "Phase 25 — Long-running update contract is executable and bounded"
+# --------------------------------------------------------------------------
+
+UPDATE_RUNBOOK="$MAESTRO_DIR/UPDATE-RUNBOOK.md"
+UPDATE_CONTRACT="$MAESTRO_DIR/UPDATE-CONTRACT.json"
+UPDATE_SKILL="$MAESTRO_DIR/bundles/base/skills/maestro-setup-update/SKILL.md"
+if [ -n "${PY_REAL:-}" ] && [ -f "$UPDATE_CONTRACT" ]; then
+  if "$PY_REAL" - "$UPDATE_CONTRACT" <<'PY'
+import json,sys
+c=json.load(open(sys.argv[1],encoding="utf-8"))
+assert c["schema_version"]==2
+assert set(c["hosts"])=={"claude-code","codex"}
+assert c["source_versions"]==["0.1.11","0.1.12"]
+assert c["required_subagents"]==["yoda"]
+assert set(["runtime_host","migration_receipt_sha256","target_release_sha256","target_core_sha256","baseline_manifest_sha256","installation_root_sha256"]).issubset(c["receipt_bindings"])
+assert c["resume"]=="first_non_pass_check_after_binding_validation"
+assert c["may_bypass_host_limits"] is False
+assert c["caseos_required_for_local_update"] is False
+assert c["receipt"]=="brain/.maestro/updates/update-0.2.0.json"
+PY
+  then pass "v2 update contract binds hosts, migration and persistent qualification"
+  else fail "invalid v2 update contract"; fi
+else
+  fail "UPDATE-CONTRACT.json or evaluator interpreter unavailable"
+fi
+for doc in "$UPDATE_RUNBOOK" "$UPDATE_SKILL"; do
+  if grep -q 'UPDATE-CONTRACT.json' "$doc" && grep -q 'Yoda' "$doc"; then
+    pass "update consumer references authoritative contract and actual Yoda review"
+  else fail "update consumer missing contract or Yoda: $doc"; fi
+done
+
+
 
 echo ""
 printf '%s──────────────────────────────────────────────%s\n' "$YELLOW" "$RESET"
@@ -1227,5 +1891,5 @@ if [ "$FAIL_COUNT" -gt 0 ]; then
 fi
 
 echo ""
-echo "All checks green. ZIP is shippable."
+echo "All local evaluator checks green. Native qualification and distribution remain separate."
 exit 0

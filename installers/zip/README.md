@@ -10,6 +10,10 @@ Factory que produz `Maestro-v<version>.zip` — o entregável para os 40 beta us
 installers/zip/
 ├── README.md                    ← este arquivo
 ├── build-release.sh             ← script principal (roda no macOS do maintainer)
+├── build-update-package.sh      ← empacota release + receita de update
+├── eval-release.sh              ← gate determinístico do ZIP de release
+├── eval-update-package.sh       ← gate do kit e ensaio de preservação de data/
+├── update-template/             ← instruções e prompts entregues no kit
 └── user-template/               ← estrutura da pasta que o usuário recebe
     ├── WELCOME.md
     ├── README-INSTALL.md
@@ -24,18 +28,46 @@ O `build-release.sh` copia `user-template/` + `bundles/` + `CLAUDE.md` para uma 
 ## Como buildar
 
 ```bash
-installers/zip/build-release.sh 0.1.0
+installers/zip/build-release.sh 0.1.0 macos
+installers/zip/build-release.sh 0.1.0 windows-powershell
 ```
 
 Saída em `dist/`:
-- `Maestro-v0.1.0.zip`
-- `Maestro-v0.1.0.sha256`
+- `Maestro-v0.1.0-macos.zip` e seu `.sha256`
+- `Maestro-v0.1.0-windows-powershell.zip` e seu `.sha256`
+
+## Como buildar um kit de atualização
+
+O kit envolve o ZIP já construído e validado. Para atualizar a versão em campo
+0.1.11 para 0.1.12:
+
+```bash
+bash installers/zip/build-update-package.sh 0.1.11 0.1.12
+bash installers/zip/eval-update-package.sh \
+  --zip dist/Maestro-Update-v0.1.12.zip \
+  --from-version 0.1.11 --to-version 0.1.12
+```
+
+O resultado `Maestro-Update-v0.1.12.zip` contém os releases de Mac e Windows,
+checksums, instruções
+de rollback e dois prompts: um para o Maestro antigo preparar o update e outro
+para o novo Maestro verificar hooks e fazer o teste real de qualificação com Yoda. O wrapper e
+o release continuam sem `data/`.
+
+Antes da distribuição, rode o ZIP macOS com
+`acceptance/zip-update/native-smoke.sh` e o ZIP Windows com
+`acceptance/zip-update/native-smoke.ps1` em PowerShell nativo, depois o teste de qualificação
+opt-in de Agent. Cada recibo deve apontar para o SHA-256 do artefato exato. O workflow manual
+`ZIP update native qualification` verifica a portabilidade da factory, mas não
+substitui a qualificação do mesmo artefato final nas duas máquinas.
 
 ## Fluxo de release
 
 1. `git tag v0.1.0 && git push --tags` (após code freeze).
 2. Rode `build-release.sh 0.1.0`.
-3. Envie `dist/Maestro-v0.1.0.zip` por email para o batch beta apontando para o `README-INSTALL.md` incluído no ZIP, que é a fonte única do ritual de instalação e atualização.
+3. Para uma instalação nova, envie o ZIP específico da plataforma. Para atualizar
+   uma versão em campo, envie o `Maestro-Update-v*.zip`, que conduz o mesmo
+   ritual definido por `README-INSTALL.md`.
 
 Sem manifest, sem hosting público, sem checagem automática. O email é o único canal de notificação e o único canal de entrega.
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "caseOS MCP"
+  short_description: "Conecta conhecimento compartilhado com escopo e consentimento"
+  default_prompt: "Use $caseos-connect para configurar ou consultar o caseOS deste caso."

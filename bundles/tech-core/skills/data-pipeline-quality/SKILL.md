@@ -11,7 +11,7 @@ access, execute a pipeline or promote an output.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` first. For standard users, explain
+Resolve the canonical [`interaction-profile`](../../base/skills/interaction-profile/SKILL.md) first. For standard users, explain
 the quality risks and the recommended checklist in plain language. Advanced and
 power users may receive schemas, thresholds and observability options. The
 profile never changes data classification, retention, access approval or

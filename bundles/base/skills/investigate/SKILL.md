@@ -16,18 +16,18 @@ fixing.
 
 The two look similar and are opposites in practice.
 
-| | `wayfinder` | `investigate` |
+| | [`wayfinder`](../wayfinder/SKILL.md) | `investigate` |
 | --- | --- | --- |
 | Input | an open question with no structure | a symptom: something already went wrong |
 | Output | a tree of branches to explore | one diagnosed cause, with evidence |
 | When | before analysis | after a failure |
 
-The test: if nothing has happened yet, it is `wayfinder`. If something happened
+The test: if nothing has happened yet, it is [`wayfinder`](../wayfinder/SKILL.md). If something happened
 and it was wrong, it is this.
 
 ## Interaction profile
 
-Resolve `interaction-profile` before presenting the diagnosis. The method, the
+Resolve [`interaction-profile`](../interaction-profile/SKILL.md) before presenting the diagnosis. The method, the
 stop rule and the refusals never vary by profile.
 
 - `standard`: the cause, the evidence for it, the blast radius, the remediation.

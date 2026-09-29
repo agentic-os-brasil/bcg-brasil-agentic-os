@@ -6,12 +6,12 @@ description: Produce a reviewable closure packet from supplied meeting notes by 
 # Meeting Close
 
 Use when a Case Agent needs a reliable end-of-meeting checkpoint. This is a
-bounded composition of `meeting-to-work-items`; it stops before external
+bounded composition of [`meeting-to-work-items`](../meeting-to-work-items/SKILL.md); it stops before external
 systems, messages or durable memory.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before presenting the packet. It
+Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) before presenting the packet. It
 changes explanation depth only; it never enables persistence, integrations or
 delegation.
 
@@ -27,7 +27,7 @@ when the supplied notes are sufficient, with gaps made explicit.
 
 ## Method
 
-1. Run the pure `meeting-to-work-items` transformation on the supplied notes.
+1. Run the pure [`meeting-to-work-items`](../meeting-to-work-items/SKILL.md) transformation on the supplied notes.
 2. Separate resolved decisions, owned tasks, unassigned follow-ups and
    participants.
 3. Build a closure summary: what changed, what remains open, dependencies and
@@ -52,3 +52,13 @@ available. `persistence_status` is always `not_attempted` for this skill.
   context; a PA Expert consultation requires an explicit bounded packet.
 - If an integration is unavailable, preserve the reviewable packet and report
   the capability as `unavailable` rather than emulating it.
+
+## Contrato de página do brain
+
+Toda página escrita em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.
