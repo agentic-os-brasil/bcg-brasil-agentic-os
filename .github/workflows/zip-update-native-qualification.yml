@@ -16,9 +16,9 @@ on:
         required: true
         default: 0.1.11
       to_version:
-        description: Candidate version
-        required: true
-        default: 0.1.12
+        description: Candidate version (blank uses this checkout's VERSION; explicit value must match)
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -38,27 +38,35 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
       - name: Resolve release version on macOS
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          if [[ -z "$TO_VERSION" ]]; then
-            echo "TO_VERSION=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_ENV"
+          checkout_version=$(tr -d '\r\n' < VERSION)
+          if [[ -n "$TO_VERSION" && "$TO_VERSION" != "$checkout_version" ]]; then
+            echo 'Candidate version must match VERSION in the checked-out commit.' >&2
+            exit 1
           fi
+          echo "TO_VERSION=$checkout_version" >> "$GITHUB_ENV"
       - name: Resolve release version on Windows
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:TO_VERSION)) {
-            "TO_VERSION=$((Get-Content -Raw VERSION).Trim())" |
-              Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $checkoutVersion = (Get-Content -Raw VERSION).Trim()
+          if ($env:TO_VERSION -and $env:TO_VERSION -ne $checkoutVersion) {
+            throw 'Candidate version must match VERSION in the checked-out commit.'
           }
-      - name: Reject false-positive live Agent traces
+          "TO_VERSION=$checkoutVersion" |
+            Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Reject false-positive Agent traces and Mac qualification receipts
         if: runner.os == 'macOS'
         shell: bash
         run: |
           . installers/zip/user-template/.claude/hooks/lib/python.sh
-          maestro_py -m unittest acceptance/zip-update/test_eval_live_agent_trace.py
+          maestro_py -m unittest acceptance/zip-update/test_eval_live_agent_trace.py acceptance/zip-update/test_classify_macos_eval.py
       - name: Build exact macOS release ZIP
         if: runner.os == 'macOS'
         shell: bash
@@ -80,6 +88,14 @@ jobs:
           bash acceptance/zip-update/native-smoke.sh \
             --zip "dist/Maestro-v${TO_VERSION}-macos.zip" \
             --output "${RUNNER_TEMP}/${RUNNER_OS}-offline.json"
+      - name: Require an actual non-elevated Windows process
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          go run ./cmd/maestro-runtime preflight
+          if ($LASTEXITCODE -ne 0) {
+            throw "Windows qualification requires an approved non-elevated runner. No installation was qualified. Retry without Run as administrator; do not disable the token-elevation guard or change machine permissions."
+          }
       - name: Evaluate native Windows PowerShell 5.1 hooks
         if: runner.os == 'Windows'
         shell: powershell

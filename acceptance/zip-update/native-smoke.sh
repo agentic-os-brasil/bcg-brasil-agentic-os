@@ -38,15 +38,7 @@ PYTHON_LABEL=$(maestro_python) || {
 
 UNAME_S=$(uname -s)
 case "$UNAME_S" in
-  Darwin) PLATFORM="macos"; NATIVE_ASSERTION="filesystem alias" ;;
-  MINGW*|MSYS*|CYGWIN*)
-    PLATFORM="windows-git-bash"
-    NATIVE_ASSERTION="drive-letter paths, native Windows"
-    command -v cygpath >/dev/null 2>&1 || {
-      echo "Windows qualification must use acceptance/zip-update/native-smoke.ps1 in native PowerShell." >&2
-      exit 1
-    }
-    ;;
+  Darwin) PLATFORM="macos" ;;
   *)
     echo "this script qualifies macOS; Windows uses native-smoke.ps1. Got $UNAME_S" >&2
     exit 1
@@ -62,18 +54,12 @@ bash "$REPO_ROOT/installers/zip/eval-release.sh" --zip "$ZIP_PATH" | tee "$LOG"
 EVAL_RC=${PIPESTATUS[0]}
 set -e
 
-SUMMARY=$(grep '^Summary:' "$LOG" | tail -1 | sed $'s/\033\\[[0-9;]*m//g' || true)
-PASS_COUNT=$(printf '%s' "$SUMMARY" | sed -n 's/.*Summary:[^0-9]*\([0-9][0-9]*\) pass.*/\1/p')
-FAIL_COUNT=$(printf '%s' "$SUMMARY" | sed -n 's/.*pass[^0-9]*\([0-9][0-9]*\) fail.*/\1/p')
-SKIP_COUNT=$(printf '%s' "$SUMMARY" | sed -n 's/.*fail[^0-9]*\([0-9][0-9]*\) skip.*/\1/p')
-
-[ "$EVAL_RC" -eq 0 ] || { echo "release eval failed" >&2; exit 1; }
-[ "${FAIL_COUNT:-1}" = 0 ] || { echo "release eval contains failures" >&2; exit 1; }
-[ "${SKIP_COUNT:-1}" = 0 ] || { echo "release eval contains skipped checks" >&2; exit 1; }
-grep -F "$NATIVE_ASSERTION" "$LOG" >/dev/null || {
-  echo "platform-native path assertion was not exercised" >&2
-  exit 1
-}
+# This classifier permits only the exact foreign-platform deferred check.
+# It verifies complete logs, counts and native Mac alias PASS records before
+# issuing a macos-only result; Windows and global release gates stay closed.
+CLASSIFICATION="$SCRATCH/macos-classification.json"
+maestro_py "$REPO_ROOT/acceptance/zip-update/classify_macos_eval.py" \
+  --log "$LOG" --eval-exit-code "$EVAL_RC" > "$CLASSIFICATION"
 
 ZIP_SHA=$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')
 VERSION=$(unzip -p "$ZIP_PATH" Maestro/VERSION | tr -d '\r\n')
@@ -83,12 +69,14 @@ SOURCE_COMMIT=$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || printf 'unavai
 
 maestro_py - "$OUTPUT" "$PLATFORM" "$UNAME_S" "$(uname -m)" \
   "$ZIP_SHA" "$VERSION" "$SOURCE_COMMIT" "$BASH_VERSION_TEXT" \
-  "$PYTHON_LABEL" "$CLAUDE_VERSION" "$PASS_COUNT" "$FAIL_COUNT" "$SKIP_COUNT" <<'PY'
+  "$PYTHON_LABEL" "$CLAUDE_VERSION" "$CLASSIFICATION" <<'PY'
 import json, sys
 (
     output, platform, os_name, architecture, zip_sha, version, commit,
-    bash_version, python_resolver, claude_version, passed, failed, skipped,
+    bash_version, python_resolver, claude_version, classification_path,
 ) = sys.argv[1:]
+with open(classification_path, encoding="utf-8") as stream:
+    classification = json.load(stream)
 receipt = {
     "schema_version": 1,
     "evidence_kind": "maestro_zip_native_offline",
@@ -103,15 +91,10 @@ receipt = {
         "python_resolver": python_resolver,
         "claude_code": claude_version,
     },
-    "checks": {
-        "passed": int(passed),
-        "failed": int(failed),
-        "skipped": int(skipped),
-        "platform_native_path_exercised": True,
-    },
-    "verdict": "PASS",
+    **classification,
     "limits": [
         "offline receipt; does not prove a model-backed Agent invocation",
+        "Windows qualification is deferred; the global release gate remains closed",
         "does not publish or sign the release",
     ],
 }
@@ -120,4 +103,4 @@ with open(output, "x", encoding="utf-8", newline="\n") as f:
     f.write("\n")
 PY
 
-echo "Native offline receipt: $OUTPUT"
+echo "macOS-only offline receipt (release not qualified): $OUTPUT"

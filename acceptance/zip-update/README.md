@@ -24,8 +24,31 @@ when available:
 ```
 
 Git Bash and Python are not part of the Windows hook runtime. Each receipt must
-report the SHA-256 of its exact platform ZIP, zero failures and no skipped
-checks.
+report the SHA-256 of its exact platform ZIP and zero failures.
+
+The macOS wrapper is macOS-only: its verdict is `PASS_MACOS_ONLY`, with
+`qualification_scope: macos-only` and `release_qualified: false`. It accepts
+exactly one deferred check, `windows-native-path-parity`, and only when the
+log's SKIP reason is exactly
+`native Windows drive-letter/junction parity requires dedicated PowerShell CI`.
+The receipt retains `skipped: 1` and records that check in `deferred_checks`;
+it does not convert the missing Windows evidence into a PASS.
+
+The classifier rejects nonzero evaluator exit status, any failure, unknown or
+additional skips, missing native Mac alias PASS assertions, malformed or
+inconsistent counts, and incomplete logs. Both Mac alias checks and the
+same-case positive control are mandatory. Native Windows must still produce
+its own successful PowerShell evidence; its HOLD is not relaxed by this change.
+
+Run the replay/mutation regression tests without repeating the product eval:
+
+```bash
+python3 acceptance/zip-update/test_classify_macos_eval.py -v
+```
+
+The committed fixture is a path-sanitized copy of a real 0.2.0 Mac evaluation.
+Wrapper tests replay that transcript at the evaluator subprocess boundary in a
+temporary repository; their receipts are test fixtures, not release evidence.
 
 ## Live Claude Agent receipt
 
