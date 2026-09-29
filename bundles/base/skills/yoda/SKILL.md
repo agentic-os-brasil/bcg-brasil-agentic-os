@@ -14,7 +14,7 @@ description: Run an internal pressure-test of a high-materiality proposal, decis
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` skill before composing the review packet or reporting the verdict. It only calibrates explanation depth for the requesting agent; it never changes the review contract, verdict vocabulary or Yoda's read-only stance.
+Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) skill before composing the review packet or reporting the verdict. It only calibrates explanation depth for the requesting agent; it never changes the review contract, verdict vocabulary or Yoda's read-only stance.
 
 Yoda is Maestro's Senior Advisor and Refiner. This skill is the entry point
 producing agents use to invoke him. The full mandate, judgment model and
@@ -39,28 +39,71 @@ as a rubber-stamp before every response. Overuse degrades the signal.
 
 ## Invocation contract
 
-- Maestro composes a sealed `IntentReviewPacket` — literal prompt, selected
+> **This skill is not the reviewer — it is how the packet is built.** There is a
+> skill named `yoda` and a native subagent named `yoda`, and until 2026-09-06
+> nothing said which one "invoke Yoda" meant. Measured live, the message router
+> answered the *skill* for every phrasing, so the review that
+> [`maestro-operator`](../maestro-operator/SKILL.md) declares mandatory never reached the agent that performs
+> it. The two are now explicitly split:
+>
+> - **This file** — when review is warranted, and what the sealed packet must
+>   contain. Read it to compose.
+> - **The subagent** (`.claude/agents/yoda.md`, spec
+>   `bundles/base/agents/yoda/AGENT.md`) — the reviewer itself. Dispatch it with
+>   the Agent tool, `subagent_type: "yoda"`, passing the packet in the prompt.
+>
+> Composing the packet and never dispatching is not a review. The declared rule
+> for when to dispatch lives in
+> `bundles/base/agents/activation-policy.json`.
+
+- Maestro declares intent or delivery review and composes the matching packet.
+  An `IntentReviewPacket` carries the literal prompt, selected
   route, draft, audience, consequence, reversibility, minimum context,
   `UserSelfSnapshot` projection, applicable observation metadata.
+- Maestro then dispatches the `yoda` subagent with that packet. The Agent call
+  **is** the invocation; there is no other path.
 - Yoda reads only the packet. He has no tools, no retrieval, no delegation.
   Missing evidence is a review finding, never an invitation to browse.
 - Yoda never speaks to the owner directly. His verdict returns to the
   producing agent, which decides how to act on it.
 
-## Verdicts
+## Typed review contract
 
-Yoda returns exactly one verdict from the canonical set:
+Maestro declares review_type before dispatch. An IntentReviewPacket requests
+intent assessment; a delivery ReviewPacket requests delivery readiness. If the
+packet type is missing or conflicting, return a contract clarification to Maestro
+without inventing a verdict or silently selecting an output type.
 
-- `approve` — proposal is defensible and ready; ship it.
-- `refine` — proposal has a fixable gap; return with the specific correction.
-- `clarify` — the intent behind the request is under-specified; ask the owner
-  a narrow clarifying question before proceeding.
-- `hold_exceptional` — proposal is out of scope, misaligned with owner canon,
-  or carries risk that requires the owner's explicit decision.
+For intent assessment, return this envelope with exactly one listed value:
 
-Legacy execution vocabulary (`approved`, `refine-and-return`,
-`missing-the-mark`, `hold`) is still recognized during migration; do not mix
-sets in the same packet.
+REVIEW_TYPE: intent
+VERDICT: approve | refine | clarify | hold_exceptional
+
+Include literal request, evidence-backed intrinsic-intent hypothesis, confidence,
+purpose satisfaction, constructive refinement and unresolved uncertainty.
+Approve means the intent assessment is supported; it does not authorize shipping.
+Refine identifies a fixable intent gap; clarify identifies missing intent evidence;
+hold_exceptional identifies a consequential exception needing the owner's judgment.
+
+For delivery readiness, return this distinct envelope with one listed value:
+
+REVIEW_TYPE: delivery
+VERDICT: approved | refine-and-return | missing-the-mark | hold
+
+Include preserves_intent, evidence references and at most three load-bearing
+objections. Each blocking objection names its fix and acceptance condition.
+Approved means ready as supplied; refine-and-return needs concrete corrections;
+missing-the-mark needs a recovery path to the stated need; hold is an exceptional
+material risk or evidence gap. The delivery JSON body follows yoda-review.schema.json;
+review_type is the conversational discriminator, not an added field in that schema.
+
+These are separate current contracts, not legacy aliases. Never map approve to
+approved, clarify to missing-the-mark, or hold_exceptional to hold automatically.
+A second type requires a separate review against its own packet and evidence.
+When both are requested, return two explicitly typed results; neither substitutes
+for the other. No conversational verdict completes an execution ledger or grants
+scope, tools, publication or other external authority. A separate authenticated
+completion adapter must establish its own conditions.
 
 ## Invariants
 

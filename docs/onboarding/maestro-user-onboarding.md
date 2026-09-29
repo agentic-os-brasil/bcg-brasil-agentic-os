@@ -300,9 +300,10 @@ esse passe e o Maestro não pergunta novamente na mesma sessão ou em leituras
 do mesmo escopo. Um coletor Claude qualificado lê apenas o escopo aprovado e
 envia o lote assinado para ingestão.
 
-O Maestro grava apenas racionais derivados em
-`brain/knowledge/sharepoint-rationales/`, ordenados pelos materiais mais
-recentes, com o link SharePoint, item, digest e data de modificação em cada
+O Maestro grava apenas racionais derivados, junto do trabalho que eles
+descrevem: em `sources/sharepoint-rationales/` do caso ativo quando há um, ou
+em `brain/memory/sharepoint-rationales/` quando a pasta é do próprio dono.
+Ordenados pelos materiais mais recentes, com o link SharePoint, item, digest e data de modificação em cada
 registro. O corpo bruto do documento não é copiado e o SharePoint continua
 sendo a fonte de verdade. Sem enrollment, qualificação nativa ou runtime local
 disponível, a ingestão falha fechada e nada é criado. Codex não coleta

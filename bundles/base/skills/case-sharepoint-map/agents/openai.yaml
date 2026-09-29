@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mapa do SharePoint do Case"
+  short_description: "Mapeia onde cada tipo de informação mora no SharePoint do case ativo"
+  default_prompt: "Use $case-sharepoint-map para mapear a estrutura do SharePoint do case ativo e gravar um guia de navegação em sources/."

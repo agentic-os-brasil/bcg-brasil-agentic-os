@@ -11,7 +11,7 @@ visible, bounded debt record; it does not silently make a failing suite green.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before presenting the capture
+Resolve the canonical [`interaction-profile`](../../base/skills/interaction-profile/SKILL.md) before presenting the capture
 packet. The profile changes language and detail only; it never changes the
 required evidence or authority boundary.
 

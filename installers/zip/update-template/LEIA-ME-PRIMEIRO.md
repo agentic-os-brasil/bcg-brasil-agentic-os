@@ -1,103 +1,62 @@
-# Atualização do Maestro {{FROM_VERSION}} para {{TO_VERSION}}
+# Atualização do Maestro para {{TO_VERSION}}
 
-## O que existe dentro deste kit
+## Isto não substitui seu Maestro pessoal
 
-Este é um único kit de distribuição para Mac e Windows. Ele **não contém
-apenas receitas**: inclui o núcleo completo e gerenciado do Maestro
-{{TO_VERSION}} em dois ZIPs, um para cada runtime:
+Este kit atualiza apenas a parte gerenciada: receitas, skills, agentes, hooks
+e ferramentas de suporte. A memória, os perfis, os casos e suas personalizações
+não vêm no ZIP. Eles continuam sendo seus e precisam ser preservados.
 
-- `Maestro-v{{TO_VERSION}}-macos.zip` — núcleo completo para Mac;
-- `Maestro-v{{TO_VERSION}}-windows-powershell.zip` — núcleo completo para
-  Windows com PowerShell nativo.
+O kit pode conter os payloads Mac e Windows ou apenas o da sua plataforma.
+O Windows usa PowerShell nativo; Git Bash, Python e Go não são pré-requisitos
+dos hooks. No Mac, o helper de migração também já vem incluído.
 
-As receitas, prompts, checksums, diagnóstico e testes de qualificação deste kit conduzem a
-troca segura do núcleo. Seu conteúdo pessoal não vem no pacote: ele continua
-em `data/` na instalação atual e deve ser copiado conforme o passo a passo.
+Na 0.2.0 a área canônica passa a ser `brain/`, com clientes em
+`brain/accounts/`. A migração copia e verifica dados; não apaga a `data/`
+antiga. Agentes e workspaces legados permanecem acessíveis por mapa validado.
 
-Este kit não se instala sozinho e o Claude Code não procura este kit nem
-atualizações do Maestro na pasta Downloads. O novo núcleo só passa a ser visto
-quando o ZIP correto é extraído e o Claude Code é iniciado a partir da raiz da
-nova pasta `Maestro`. Não extraia o novo ZIP por cima da instalação atual.
+## Antes da troca
 
-## Antes de mexer nas pastas
+1. Abra a instalação atual e cole `PROMPT-1-PREPARAR.txt`.
+2. Aguarde o inventário por SHA-256 da origem, incluindo arquivos ocultos e
+   personalizações fora de data/. Origens suportadas: 0.1.11 e 0.1.12.
+3. Feche sessões e terminais que escrevem nessa instalação.
+4. Preserve a pasta inteira como `Maestro-old-<versão-original>`. Não extraia
+   nada por cima dela. Um backup apenas de data/ não cobre hooks/agentes próprios.
 
-1. Abra seu Maestro atual normalmente.
-2. Cole todo o conteúdo de `PROMPT-1-PREPARAR.txt` no chat.
-3. Só continue quando o Maestro disser que a instalação atual é a versão
-   {{FROM_VERSION}}, que `data/` foi encontrada e que o manifesto de baseline
-   `.maestro-update-baseline-{{FROM_VERSION}}.json` foi validado.
-4. Feche o Claude Code e qualquer terminal aberto dentro da pasta `Maestro`.
+## Aplicar e verificar
 
-## Fazer a atualização
+1. Confira o SHA-256 do ZIP recebido com o checksum entregue pelo time.
+2. Extraia o payload da sua plataforma em uma pasta nova ao lado da antiga.
+3. Copie, não mova, a `data/` original para a nova raiz. Não crie outra brain/
+   manualmente antes da migração. Se já existem data/ e brain/ na origem,
+   preserve ambas e peça diagnóstico: não escolha uma nem mescle por conta própria.
+4. Não copie o núcleo antigo sobre o novo. O Maestro reconciliará suas
+   personalizações a partir do inventário e da pasta antiga, de forma explícita.
+5. Abra a raiz nova no Claude Code ou Codex. Revise os pedidos reais de
+   confiança e permissão. Uma pasta adicional no chat não prova que seus hooks
+   foram carregados.
+6. Leia `UPDATE-RUNBOOK.md`, escolha modelo forte/esforço alto e cole
+   `PROMPT-2-VERIFICAR.txt`. O Maestro deve retomar até verificar todos os
+   checks obrigatórios, incluindo migração e chamada real ao Yoda.
 
-1. Renomeie a pasta atual `Maestro` para `Maestro-old-{{FROM_VERSION}}`.
-2. Escolha e extraia o ZIP da sua plataforma ao lado dela:
-   - Windows: `Maestro-v{{TO_VERSION}}-windows-powershell.zip`
-   - Mac: `Maestro-v{{TO_VERSION}}-macos.zip`
-   O ZIP criará uma nova pasta chamada `Maestro`.
-3. Copie somente a pasta `data/` de `Maestro-old-{{FROM_VERSION}}` para dentro
-   da nova pasta `Maestro`.
-4. Não copie `.claude/`, `bundles/`, `CLAUDE.md` ou outros arquivos antigos.
-   Eles são o núcleo que está sendo atualizado.
-5. Inicie o Claude Code **a partir da raiz da nova pasta `Maestro`**. Abrir a
-   pasta como diretório adicional não prova que as configurações do projeto
-   foram carregadas:
-   - Mac: no Terminal, execute `cd "/caminho/para/Maestro"` e depois
-     `claude --debug hooks`;
-   - Windows: no PowerShell, execute
-     `Set-Location "C:\caminho\para\Maestro"` e depois
-     `claude --debug hooks`.
-   Se aparecer um pedido de confiança, confira o caminho exato e aceite somente
-   a nova pasta extraída do ZIP cujo SHA-256 foi validado. Não aprove outra
-   pasta por engano.
-6. Dentro da nova sessão, execute `/status` e `/hooks` quando esses comandos
-   estiverem disponíveis. Se a versão do Claude Code não os oferecer, siga a
-   rota de traço machine-readable descrita em `DIAGNOSTICO-HOOKS.md`; ausência
-   do comando não é ausência do hook. Só continue quando a raiz nova, os seis
-   handlers configurados e a execução dos eventos estiverem comprovados.
-7. Se os hooks não aparecerem ou não dispararem, pare e siga
-   `DIAGNOSTICO-HOOKS.md`. Arquivos presentes e executáveis não bastam para
-   considerar as automações ativas.
-8. Leia `UPDATE-RUNBOOK.md` na nova pasta e configure modelo, effort e
-   **Auto mode** quando disponível. Depois cole todo o conteúdo de
-   `PROMPT-2-VERIFICAR.txt` no chat. Ele já começa com o `/goal` completo, que
-   inicia a verificação; não execute `/maestro-setup-update` em seguida, salvo
-   quando `/goal` estiver indisponível.
+Claude/Codex não encontram automaticamente este kit em Downloads. Precisam
+receber o caminho ou abrir a nova raiz. Depois disso, CLAUDE.md/AGENTS.md e o
+contrato orientam a atualização; ainda é preciso confiar nos hooks conforme
+o host. Este pacote não ativa download automático nem muda políticas BCG.
 
-## Quando considerar concluído
+## Conclusão
 
-O Maestro deve confirmar, com evidência:
+Exija receipt terminal `brain/.maestro/updates/update-{{TO_VERSION}}.json`
+com `status: pass` e evidências do host e da plataforma usados. A verificação
+vale para o ZIP exato; não é um teste preliminar. Arquivos presentes, contagens
+iguais e scripts chamados manualmente não provam que hooks/subagents funcionam
+na sessão real.
 
-- versão {{TO_VERSION}};
-- todos os arquivos preexistentes de `data/` preservados conforme o manifesto
-  criado antes da troca. A primeira abertura pode mudar somente os metadados de
-  lifecycle documentados e criar backfills ausentes;
-- runtime correto para a plataforma: PowerShell nativo no Windows; Bash e
-  Python 3 no Mac;
-- configuração efetiva comprovada por `/status` e `/hooks` ou, quando esses
-  comandos não existirem, por settings mais traço machine-readable sanitizado;
-- hooks de início, prompt, proteção de escrita e anúncio carregados **e
-  executados**, não apenas presentes no disco;
-- projeções de agentes presentes;
-- chamada real ao subagent `yoda`, com retorno observado;
-- receipt `data/canary/update-{{TO_VERSION}}.json` em estado terminal `pass`.
+caseOS e ferramentas Python opcionais têm diagnóstico próprio. Credenciais,
+permissão de case e endpoint oficial podem depender do time BCG; sua ausência
+não deve impedir trabalho local nem ser registrada como conexão bem-sucedida.
 
-O nome histórico `data/canary/` é mantido apenas para compatibilidade com a
-estrutura já instalada. O receipt é evidência de qualificação do release
-exato, não um teste preliminar.
-
-Se qualquer item falhar, não apague a pasta antiga. Feche o Claude, renomeie a
-nova pasta para `Maestro-falhou-{{TO_VERSION}}` e devolva o nome `Maestro` para
-`Maestro-old-{{FROM_VERSION}}`. Guarde a pasta antiga por pelo menos sete dias,
-mesmo quando tudo passar.
-
-Se a UI ou o traço indicar que uma política corporativa bloqueou hooks de projeto, ou
-se o Windows informar que uma política bloqueou scripts PowerShell, não altere
-a política e não tente contornar o bloqueio. Faça o rollback acima e envie o
-diagnóstico ao time BCG Brasil AI.
-
-## Perfil suportado
-
-- macOS: Claude Code, Bash e Python 3.
-- Windows: Claude Code com Windows PowerShell 5.1 ou PowerShell 7. Os hooks não
-  dependem de Git Bash nem Python.
+Se houver falha, preserve ambas as pastas e reabra a instalação antiga.
+Mantenha o backup por pelo menos sete dias depois da qualificação. Nenhum
+bloqueio de PowerShell, hooks, Gatekeeper ou política corporativa deve ser
+contornado.

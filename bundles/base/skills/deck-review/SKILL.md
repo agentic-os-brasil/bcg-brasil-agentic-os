@@ -11,7 +11,7 @@ spreadsheet capability.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before presenting findings. It
+Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) before presenting findings. It
 changes explanation depth only; severity, evidence and release gates do not
 change.
 

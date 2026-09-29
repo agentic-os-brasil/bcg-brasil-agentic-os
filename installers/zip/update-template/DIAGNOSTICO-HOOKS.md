@@ -9,7 +9,7 @@ nova instalação e preserve `Maestro-old-{{FROM_VERSION}}` para rollback.
 São três verificações diferentes:
 
 1. **Configurado:** scripts e `.claude/settings.json` existem.
-2. **Carregado:** `/hooks` mostra os seis handlers com origem no projeto ou,
+2. **Carregado:** `/hooks` mostra os nove handlers com origem no projeto ou,
    quando o comando não existe, o evento `init` do traço identifica a raiz nova
    e os handlers do projeto deixam eventos correlacionáveis.
 3. **Executado:** o log de debug e os efeitos esperados mostram que o evento
@@ -59,7 +59,7 @@ não classifique isso sozinho como falha. Gere uma sessão controlada com saída
 somente localmente e extraia apenas: `cwd` do evento `init`, nomes dos eventos,
 matcher, exit code, origem de projeto e correlação do PreToolUse com a chamada
 real de Yoda. SessionStart deve ter duas respostas bem sucedidas;
-UserPromptSubmit, PreToolUse/Agent e Stop devem aparecer sem erro. Os seis
+UserPromptSubmit, PreToolUse/Agent e Stop devem aparecer sem erro. Os nove
 handlers continuam sendo contados em `.claude/settings.json`.
 
 Registre sistema operacional, versão do Claude Code, diretório do projeto e,
@@ -82,7 +82,7 @@ de cliente.
 ## 4. Distinguir runtime de despacho
 
 Execute um hook diretamente somente numa extração limpa e descartável do ZIP da
-plataforma. Não copie a instalação real: ela contém `data/` pessoal e de casos.
+plataforma. Não copie a instalação real: ela contém `data/` legado e `brain/` pessoal e de casos.
 
 Mac:
 
@@ -129,10 +129,41 @@ Se a política normal do PowerShell impedir a execução, não use Bypass. Regis
 
 ## 5. Critério de saída
 
-O update só recebe `PASS` quando os seis handlers são comprovados pela UI ou
+O update só recebe `PASS` quando os nove handlers são comprovados pela UI ou
 pela combinação de settings e traço machine-readable, os eventos de início,
 prompt, PreToolUse/Agent e Stop deixam evidência de execução, a proteção de
 escrita está ativa e a chamada real ao Agent `yoda` retorna à sessão principal.
 
 Caso contrário, mantenha `Maestro-old-{{FROM_VERSION}}`, classifique cada etapa
 como `FAIL` ou `UNAVAILABLE` e não distribua esta instalação.
+
+## Contrato v2 e host escolhido
+
+O arquivo `UPDATE-CONTRACT.json` deste kit é a autoridade para versões, checks
+obrigatórios, opcionais, revisão de Yoda e bindings do recibo. A cópia externa
+deve ser idêntica à que acompanha o payload escolhido. Este kit foi preparado
+para `{{PLATFORM}}`; use somente o ZIP correspondente à plataforma real.
+
+O recibo durável fica em `brain/.maestro/updates/update-{{TO_VERSION}}.json`.
+A migração precisa estar committed e o inventário original de `data/` deve
+permanecer verificável; agentes e workspaces retidos são lidos pelo adaptador
+legado validado. Um marcador `.initialized` não substitui o recibo de migração.
+
+No Claude são nove handlers: dois SessionStart, um UserPromptSubmit, dois
+PreToolUse e quatro Stop. No Codex, verifique os eventos SessionStart,
+UserPromptSubmit, PreToolUse, PostToolUse e Stop de `.codex/hooks.json`. A
+projeção portátil requer binding atendido à raiz confirmada da instalação antes
+do uso; presença da configuração não prova binding nem execução nativa. Use a
+receita do runbook para o host escolhido e registre configured, observed e
+native-qualified separadamente. Não aplique comandos exclusivos do Claude ao
+Codex. Uma chamada real de subagente e seu retorno exigem evidência do host.
+
+caseOS, ferramentas Python opcionais e suporte a goal são checks opcionais.
+Ausência deve aparecer como unavailable com motivo; não autoriza instalar
+dependências, autenticar, exportar dados ou contornar limites do host. O handler
+Stop de índice pode executar corretamente enquanto a indexação Python continua
+unavailable. Migração e hooks críticos do Windows usam o runtime Go empacotado
+e PowerShell nativo, sem Git Bash ou Python.
+
+Este kit é um candidato de engenharia. Checksum e validação offline não provam
+qualificação nativa, assinatura, autorização de distribuição ou release.

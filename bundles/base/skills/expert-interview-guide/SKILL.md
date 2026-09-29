@@ -11,7 +11,7 @@ not a contact action or a research result.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before presenting the guide. It
+Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) before presenting the guide. It
 changes explanation depth only; it never changes the approved scope or what
 may be disclosed externally.
 

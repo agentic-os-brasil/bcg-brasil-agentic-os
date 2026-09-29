@@ -35,22 +35,23 @@ try {
     $runbookPath = Join-Path $maestro 'UPDATE-RUNBOOK.md'
     if (-not (Test-Path -LiteralPath $runbookPath -PathType Leaf)) { throw 'Release ZIP has no UPDATE-RUNBOOK.md' }
     $runbook = Get-Content -LiteralPath $runbookPath -Raw -Encoding UTF8
-    foreach ($required in @(
-        'contract_id: maestro-update-long-run-v1',
-        'model_family: opus',
-        'preferred_effort: xhigh',
-        '  - yoda',
-        '/goal',
-        'receipt_bindings:',
-        '  - target_release_sha256',
-        '  - target_core_sha256',
-        '  - baseline_manifest_sha256',
-        '  - installation_root_sha256'
-    )) {
-        if (-not $runbook.Contains($required)) { throw "Long-running update contract is missing: $required" }
+    $contract = Get-Content -LiteralPath (Join-Path $maestro 'UPDATE-CONTRACT.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    $target = (Get-Content -LiteralPath (Join-Path $maestro 'VERSION') -Raw).Trim()
+    if ($contract.schema_version -ne 2 -or $contract.contract_id -ne 'maestro-update-long-run-v2' -or $contract.target_version -ne $target) { throw 'Update contract identity mismatch' }
+    if ($contract.receipt -ne "brain/.maestro/updates/update-$target.json") { throw 'Update receipt namespace mismatch' }
+    foreach ($binding in @('attempt_id','from_version','to_version','platform','runtime_host','target_release_sha256','target_core_sha256','baseline_manifest_sha256','installation_root_sha256','migration_receipt_sha256')) {
+        if ($contract.receipt_bindings -notcontains $binding) { throw "Missing update binding: $binding" }
     }
-    if ($runbook.Contains('  - darwin')) { throw 'Long-running update contract must require Yoda only' }
-    Write-Host 'PASS  long-running update contract binds Opus/xhigh, goal continuity, install identity and Yoda'
+    foreach ($check in @('source_baseline_preserved','migration_committed','legacy_namespaces_readable','customizations_reconciled','native_runtime_integrity','hooks_configured','hooks_observed','native_agent_return','yoda_review')) {
+        if ($contract.required_checks -notcontains $check) { throw "Missing update check: $check" }
+    }
+    foreach ($check in @('caseos_connected','python_optional_tools','host_goal_available')) {
+        if ($contract.optional_checks -notcontains $check) { throw "Missing optional update capability: $check" }
+    }
+    if ($contract.may_bypass_host_limits -ne $false -or $contract.caseos_required_for_local_update -ne $false) { throw 'Update contract must preserve host limits and optional dependencies' }
+    if (@($contract.required_subagents).Count -ne 1 -or $contract.required_subagents[0] -ne 'yoda') { throw 'Update contract must require Yoda review' }
+    if (-not $runbook.Contains('UPDATE-CONTRACT.json')) { throw 'Runbook does not reference its authoritative contract' }
+    Write-Host 'PASS  authoritative v2 update contract binds migration, identity, evidence and Yoda; optional capabilities remain optional'
 
     $smokeOutput = @(& (Join-Path $repo 'acceptance/zip-update/powershell-hook-smoke.ps1') `
         -MaestroRoot $maestro `

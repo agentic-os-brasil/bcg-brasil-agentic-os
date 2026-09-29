@@ -8,11 +8,11 @@ description: Open or resume the working day at whatever hour the owner appears, 
 Compose one briefing scoped to the hours that actually remain, and record it on
 today's page.
 
-All reads and writes use direct file operations on the owner atlas paths (`data/owner/atlas/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
+All reads and writes use direct file operations on the owner atlas paths (`brain/owner/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
 
 ## Interaction profile
 
-Resolve `interaction-profile` before presenting. The reads, the write, the
+Resolve [`interaction-profile`](../interaction-profile/SKILL.md) before presenting. The reads, the write, the
 bounds and the omissions never vary by profile; only the explanation does.
 
 - `standard`: the shape of the day, the top three, one first move.
@@ -24,10 +24,18 @@ bounds and the omissions never vary by profile; only the explanation does.
 
 Obtained with `collect`, always with a declared purpose and named pages.
 
-- today's page in `owner/daily/`, if it exists — this decides first contact
+- today's page in `brain/daily/`, if it exists — this decides first contact
   versus re-entry;
 - the two most recent prior daily pages;
-- current objectives from `owner/development/objectives.md`;
+- current objectives from `brain/development/objectives.md`;
+- **the task view in `brain/tasks/tasks.md`** — sempre, sem exceção. É a única
+  fonte que atravessa todos os casos, e vem classificada em dois eixos:
+  **status** (a ser realizada, em andamento, concluída) e **prioridade** (P0
+  urgente, P1 alta, P2 baixa). Duas marcas de atributo aparecem na linha: ⛔
+  depende de terceiro, 📦 residual de caso encerrado. Nenhum plano de dia se
+  monta sem ela — sem ela o ranking usa só o que a página de ontem lembrou de
+  mencionar. É derivada e recompilada a cada fim de sessão pelo compilador do
+  índice, então está sempre em dia com os casos;
 - open workplan lines from the project pages the recent dailies reference.
 
 ## Optional inputs
@@ -57,6 +65,22 @@ of context it can use, and works without any of it.
    protected block still ahead that the atlas declares.
 5. Rank what is achievable in the time that is left. Ranking happens here, from
    what was already read.
+
+   O ranking parte de `brain/tasks/tasks.md` e usa os dois eixos como filtro,
+   não como ordem cega:
+   - **em andamento** vem antes de qualquer coisa nova, em qualquer prioridade
+     — fechar frente aberta custa menos que abrir outra;
+   - **P0 sem ⛔** entra em seguida: é onde o esforço próprio move o ponteiro
+     hoje;
+   - **P0 com ⛔** não vira bloco de trabalho, vira **uma pergunta a fazer**.
+     Sugerir "trabalhar nisso" quando depende de terceiro é planejar um dia que
+     não pode acontecer;
+   - **P1** preenche o resto das horas; **P2** só se sobrar espaço;
+   - **📦 residual** só aparece se o dia estiver vazio ou se o dono pedir — é
+     dívida de fechamento, não trabalho vivo;
+   - tarefa em **P1 sem marcador explícito** não deve ser tratada como decisão
+     de prioridade do dono: se o dia estiver disputado, vale perguntar em vez
+     de supor.
 6. Compose one briefing:
    - **first contact** — the shape of the day with past and upcoming marked,
      the top three for the remaining hours with a one-line reason each,
@@ -79,14 +103,26 @@ of context it can use, and works without any of it.
 
 ## Formato da página
 
-Forma recomendada, não porta de entrada: a página do owner aceita Markdown
-livre. O que a template garante é recuperabilidade e headings estáveis, já que
-`append-entry` nunca cria um heading.
+O corpo aceita Markdown livre. Páginas novas criadas pelo Maestro exigem os oito
+campos de frontmatter. Os headings organizam entradas; append-entry não cria
+headings. Preserve páginas autorais existentes: não substitua corpo, id ou
+metadados para ajustá-las ao exemplo. Se faltar frontmatter ou heading de destino,
+proponha complementação mínima para revisão, sem reescrita automática.
 
-**Página do dia — `owner/daily/<YYYY-MM-DD>.md`**, criada apenas quando o dia
+**Página do dia — `brain/daily/<YYYY-MM-DD>.md`**, criada apenas quando o dia
 ainda não tem página:
 
 ```markdown
+---
+id: daily/YYYY-MM-DD
+title: "Daily — YYYY-MM-DD"
+summary: "Prioridades, notas e decisões do dia."
+type: daily
+scope: owner
+status: active
+sensitivity: owner-private
+updated: YYYY-MM-DD
+---
 # Daily — YYYY-MM-DD
 
 > Registro humano do dia. Entradas brutas não são insumo de memória.
@@ -134,6 +170,103 @@ entrada: título de reunião, contagem de participantes e nome de quem espera
 resposta ficam fora da página. Uma entrada que não foi gravada nunca é
 reportada como gravada.
 
+## Autonomous mode (scheduled run)
+
+Entered only when the invoking prompt states explicitly that this is an
+unattended, scheduled run (`scheduled-tasks`) with no owner present to answer
+or confirm. Never inferred — not from a quiet chat, not from an unanswered
+question, not from the hour. If the prompt does not say so, the run is
+attended and the workflow above applies as written. This mode relaxes no
+invariant except the two named at the end of this section.
+
+**The declaration is a fixed marker, not a paraphrase.** The invoking prompt
+must contain this line verbatim:
+
+```
+MAESTRO_RUN: scheduled-unattended
+```
+
+Whoever creates the scheduled task writes that line; this skill enters
+autonomous mode on it and on nothing else. A prose description of being
+scheduled is not enough, because the failure is silent in the worst
+direction: reworded, the skill reads the run as attended, asks its first
+question, and waits for an owner who is not there — a routine that appears
+configured and quietly produces nothing. A marker either matches or it does
+not, and it can be asserted by a check.
+
+A scheduled opening runs before the owner arrives, which is the whole point:
+the briefing is waiting when they get there. It also means every judgment in
+it was made without them.
+
+1. **Steps 1 through 6 run unchanged, without dialogue.** Resolve the time,
+   `collect`, take whatever optional context the session offers, compute the
+   remaining hours, rank, and compose the briefing exactly as attended. The
+   ranking is the value of this run; it is not deferred for lack of an
+   audience.
+2. **Where the attended workflow would ask, state the reading instead** and
+   mark which kind it is: `evidência direta` when a page the owner wrote
+   supports it, `inferido, não confirmado` when it does not. Never invent a
+   priority to fill a thin day. A day with little evidence produces a short
+   briefing, and says that it is short because the evidence was thin.
+3. **Near-zero remaining hours does not offer to close the day.** There is
+   nobody to accept the offer. Say so in the entry and give the briefing for
+   the hours that remain; closing the day stays an attended act.
+4. **The entry is written, and marked as unconfirmed.** Step 7 runs as usual —
+   `create-page` if today has no page, then `append-entry` — with one added
+   line at the top of the entry: `**Registro:** briefing automático, não
+   confirmado pelo dono`. The rest of the entry's shape is identical to an
+   attended briefing, so the page stays readable as one record.
+5. **A `proposed` result is final in this mode.** Attended, a proposal is
+   shown to the owner and they decide. Here there is nobody to show it to, so
+   the page moved under the read and the entry is not written: leave the
+   owner's version alone, do not retry, and name it in the report. Silently
+   retrying over an edit the owner made is the one failure this mode could
+   cause that they would not be able to see.
+6. **Step 8 is folded into the report below**, not dropped: every optional
+   input that was unavailable, and the true write outcome, are still stated —
+   to the chat rather than to a listener.
+7. **Report the briefing in full to the chat of this execution.** Not a
+   confirmation line — the whole briefing: the ranked priorities with their
+   reasons, the first move, every optional input that was unavailable, and
+   whether the entry was written, proposed or skipped. The owner reads this
+   chat later and it has to carry what an attended briefing would have said
+   out loud. A page written and never announced is indistinguishable, from
+   where the owner sits, from a run that never happened.
+
+   **Why this is a hard requirement and not a preference.** Scheduled runs
+   were observed opening a session, doing the work, and reporting a fraction
+   of what the skill was supposed to produce — the chat existed, the page was
+   written, and the owner still could not see what the routine had actually
+   concluded. The failure is silent from the owner's side and looks identical
+   to the routine working. So the bar is not "announce that the run
+   happened": it is that this chat carries **everything an attended run of
+   this skill would have said out loud**, at the same level of detail. If a
+   line would have been spoken to the owner, it is written here.
+
+An owner returning to an autonomously written briefing in an ordinary session
+can correct it, act on it, or ignore it exactly as with any other entry. This
+mode defers the acts that need them; it forecloses none.
+
+
+The permission for this mode and its five bounding conditions are recorded as
+decision UNAT in the project decision log. This section implements that
+decision; it does not extend it.
+
+### Invariants (autonomous mode)
+
+- Autonomous mode is entered only on an explicit, self-declared unattended
+  run. Never inferred from context.
+- An autonomously written briefing is always marked as such in its own text,
+  never indistinguishable from an attended one.
+- Every invariant of the attended skill still holds, with two named
+  exceptions: the confirmation gate is replaced by the unconfirmed marker in
+  point 4, and a `proposed` result ends the write instead of starting a
+  conversation.
+- Nothing sourced from optional context is written, here as anywhere. An
+  unattended run has less oversight, not more latitude.
+- The interaction profile calibrates how much is explained, never how much of
+  this run is reported. A concise profile shortens the prose, not the record:
+  the report still carries every item, every marker and everything deferred.
 ## Invariants
 
 - Append-only per day. The first run creates one page; each subsequent run
@@ -148,7 +281,23 @@ reportada como gravada.
 - An engagement may be named. Findings, figures and deliverable material stay
   in the workspace that owns them.
 - A result of `proposed` rather than `written` means the page moved under the
-  read. Show the owner the proposal; do not retry over their edit.
+  read. Show the owner the proposal; do not retry over their edit. In a
+  scheduled run there is nobody to show it to — see "Autonomous mode" above.
 - If an operation is unavailable, say so and give the briefing anyway. The plan
   is still worth having — only the recording is lost, and it must never be
   reported as done.
+
+## Contrato de página do brain
+
+Toda página nova criada pelo Maestro em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.
+
+Ao retomar página autoral existente, preservar texto, identidade e metadados.
+Lacunas geram proposta de complementação mínima, nunca substituição automática.
+No exemplo, substituir YYYY-MM-DD pela data local do conteúdo em todos os campos.
+A passagem do tempo não altera o id de uma página existente.

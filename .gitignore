@@ -43,3 +43,4 @@ Thumbs.db
 *.tmp
 *.bak
 *.swp
+__pycache__/

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Apertar a escrita"
+  short_description: "Corta o excesso de um texto já escrito, na voz registrada do dono, sem mudar o que ele afirma"
+  default_prompt: "Use $writing-tighten para apertar este texto: corte preâmbulo, nominalização e hedge empilhado, mantenha cada afirmação, número e atribuição, e me mostre o que cortou e o que decidiu não cortar."

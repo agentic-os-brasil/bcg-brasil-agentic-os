@@ -44,9 +44,48 @@ mkdir -p "$MAESTRO_DIR"
 echo "==> Staging core files"
 cp -R "$TEMPLATE_DIR/." "$MAESTRO_DIR/"
 cp -R "$BUNDLES_DIR" "$MAESTRO_DIR/bundles"
+# Native Codex discovery uses real copies, not symlinks requiring Windows privileges.
+mkdir -p "$MAESTRO_DIR/.agents/skills"
+cp -R "$BUNDLES_DIR/base/skills/." "$MAESTRO_DIR/.agents/skills/"
 if [ -d "$REPO_ROOT/schemas" ]; then
   cp -R "$REPO_ROOT/schemas" "$MAESTRO_DIR/schemas"
 fi
+
+# The factory needs Go; recipients do not. One shared, dependency-free engine
+# backs migration and native host adapters on both supported architectures.
+command -v go >/dev/null 2>&1 || { echo 'FATAL: Go is required by the release factory' >&2; exit 1; }
+if [ "$PLATFORM" = "windows-powershell" ]; then
+  TARGET_OS=windows
+  EXE_SUFFIX=.exe
+else
+  TARGET_OS=darwin
+  EXE_SUFFIX=
+fi
+hash_file() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    echo 'FATAL: SHA-256 utility required by the factory' >&2
+    return 1
+  fi
+}
+mkdir -p "$MAESTRO_DIR/runtime"
+RUNTIME_MANIFEST="$MAESTRO_DIR/runtime/manifest.json"
+printf '{"schema_version":1,"version":"%s","release_status":"unsigned-candidate","artifacts":[' "$VERSION" > "$RUNTIME_MANIFEST"
+SEPARATOR=
+for arch in amd64 arm64; do
+  relative="runtime/$TARGET_OS-$arch/maestro-runtime$EXE_SUFFIX"
+  mkdir -p "$(dirname "$MAESTRO_DIR/$relative")"
+  (cd "$REPO_ROOT" && CGO_ENABLED=0 GOOS="$TARGET_OS" GOARCH="$arch" \
+    go build -trimpath -ldflags='-s -w' -o "$MAESTRO_DIR/$relative" ./cmd/maestro-runtime)
+  digest=$(hash_file "$MAESTRO_DIR/$relative")
+  printf '%s{"os":"%s","arch":"%s","path":"%s","sha256":"%s"}' \
+    "$SEPARATOR" "$TARGET_OS" "$arch" "$relative" "$digest" >> "$RUNTIME_MANIFEST"
+  SEPARATOR=,
+done
+printf ']}\n' >> "$RUNTIME_MANIFEST"
 
 # Each distributable has one authoritative settings.json.  The alternative is
 # a factory input only, never something an owner must choose or rename.
@@ -60,10 +99,15 @@ rm -f "$MAESTRO_DIR/.claude/settings.windows-powershell.json"
 # and paths survive on both 5.1 and PowerShell 7.  Source files remain normal
 # UTF-8; this conversion affects only the release artifact.
 if [ "$PLATFORM" = "windows-powershell" ]; then
-  find "$MAESTRO_DIR/.claude/hooks" -type f -name '*.ps1' -print0 | while IFS= read -r -d '' ps_file; do
+  find "$MAESTRO_DIR" -type f -name '*.ps1' -print0 | while IFS= read -r -d '' ps_file; do
     bom_tmp="${ps_file}.bom"
     printf '\357\273\277' > "$bom_tmp"
-    sed 's/\r$//; s/$/\r/' "$ps_file" >> "$bom_tmp"
+    # Source may already have a BOM for direct Windows 5.1 tests.
+    if [ "$(LC_ALL=C head -c 3 "$ps_file")" = "$(printf '\357\273\277')" ]; then
+      tail -c +4 "$ps_file" | sed 's/\r$//; s/$/\r/' >> "$bom_tmp"
+    else
+      sed 's/\r$//; s/$/\r/' "$ps_file" >> "$bom_tmp"
+    fi
     mv "$bom_tmp" "$ps_file"
   done
 fi
@@ -80,21 +124,13 @@ find "$MAESTRO_DIR" -name '.DS_Store' -delete 2>/dev/null || true
 find "$MAESTRO_DIR" -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
 find "$MAESTRO_DIR" -name '*.pyc' -delete 2>/dev/null || true
 
-# data/ contract — release ZIPs must NEVER ship any data/. The workspace is
-# always created on first run by .claude/hooks/first-run-scaffold.sh, and
-# README-INSTALL.md promises "sua data/ nunca é tocada pelo ZIP". If a data/
-# directory ever leaks into the template or gets copied in during staging
-# (dev workspace pollution, backup restore, careless test scaffold), strip
-# it here so the release stays clean. Defensive: exit non-zero if strip
-# fails to keep leakage visible.
-if [ -e "$MAESTRO_DIR/data" ]; then
-  echo "==> Stripping data/ from staged release (must never ship)"
-  rm -rf "$MAESTRO_DIR/data"
-  if [ -e "$MAESTRO_DIR/data" ]; then
-    echo "FATAL: could not strip $MAESTRO_DIR/data — aborting release" >&2
+# Personal state must never enter a release. Fail visibly; do not hide a leak.
+for private_root in data brain; do
+  if [ -e "$MAESTRO_DIR/$private_root" ]; then
+    echo "FATAL: private $private_root/ found in staged release — aborting" >&2
     exit 1
   fi
-fi
+done
 
 # Belt-and-suspenders: ensure every hook is executable before zipping.
 # macOS `zip` preserves Unix mode bits, but a source file that lost its +x
@@ -103,12 +139,15 @@ echo "==> Ensuring hooks are executable"
 if [ -d "$MAESTRO_DIR/.claude/hooks" ]; then
   chmod +x "$MAESTRO_DIR/.claude/hooks"/*.sh 2>/dev/null || true
 fi
+if [ -d "$MAESTRO_DIR/.codex/hooks" ]; then
+  chmod +x "$MAESTRO_DIR/.codex/hooks"/*.sh 2>/dev/null || true
+fi
 
 STRIP_MANIFEST="$STAGE_DIR/go-strip-manifest.txt"
-find "$MAESTRO_DIR/bundles" -type f \( -name '*.go' -o -name 'go.mod' -o -name 'go.sum' \) -print > "$STRIP_MANIFEST" 2>/dev/null || true
+find "$MAESTRO_DIR" -type f \( -name '*.go' -o -name 'go.mod' -o -name 'go.sum' \) -print > "$STRIP_MANIFEST" 2>/dev/null || true
 STRIP_COUNT=$(wc -l < "$STRIP_MANIFEST" | tr -d ' ')
-echo "==> Stripping $STRIP_COUNT Go source file(s) from bundles (manifest: $STRIP_MANIFEST)"
-find "$MAESTRO_DIR/bundles" -type f \( -name '*.go' -o -name 'go.mod' -o -name 'go.sum' \) -delete 2>/dev/null || true
+echo "==> Stripping $STRIP_COUNT Go source file(s) from managed projections (manifest: $STRIP_MANIFEST)"
+find "$MAESTRO_DIR" -type f \( -name '*.go' -o -name 'go.mod' -o -name 'go.sum' \) -delete 2>/dev/null || true
 
 mkdir -p "$DIST_DIR"
 if [ "$PLATFORM" = "windows-powershell" ]; then
@@ -154,4 +193,4 @@ echo "  ZIP:      $ZIP_PATH"
 echo "  SHA256:   $SHA256"
 echo ""
 echo "Próximo passo:"
-echo "  Envie $ZIP_NAME por email para o batch beta."
+echo "  Candidato de engenharia nao assinado. Qualifique o ZIP exato antes de distribuir."

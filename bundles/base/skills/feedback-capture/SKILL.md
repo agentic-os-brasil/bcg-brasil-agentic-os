@@ -9,11 +9,11 @@ Record what was said to the owner, then apply the effect it actually has on
 their objectives. Getting the capture right matters less than getting the
 effect right: the two feedback events are not the same kind of event.
 
-All reads and writes use direct file operations on the owner atlas paths (`data/owner/atlas/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
+All reads and writes use direct file operations on the owner atlas paths (`brain/owner/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
 
 ## Interaction profile
 
-Resolve `interaction-profile` before presenting the capture. The reads, the
+Resolve [`interaction-profile`](../interaction-profile/SKILL.md) before presenting the capture. The reads, the
 writes, the bounds and the confirmation behaviour never vary by profile; only
 the explanation and optional detail do.
 
@@ -31,7 +31,7 @@ writing anything, and ask when the answer is not explicit.
 
 | | Project feedback | Career-committee review |
 | --- | --- | --- |
-| Page | `owner/development/project-feedback/<YYYY-MM-DD>-<project-slug>.md` | `owner/development/cdc/<YYYY-MM-DD>-cdc.md` |
+| Page | `brain/development/project-feedback/<YYYY-MM-DD>-<project-slug>.md` | `brain/development/cdc/<YYYY-MM-DD>-cdc.md` |
 | Cadence | Once per project round | Roughly every six months |
 | What it is | One case team's view of one period | The career-level synthesis |
 | Effect | **Folds into** the live objectives | **Resets** them |
@@ -65,7 +65,7 @@ whose conduct the page describes.
 
 - The feedback text, supplied by the owner in session, close to its source.
 - Obtained with `collect`, purpose declared and pages named:
-  `owner/development/objectives.md`; the prior captures the owner points at;
+  `brain/development/objectives.md`; the prior captures the owner points at;
   and the retrospectives since the last review. There is no whole-root read and
   no folder listing, so name the pages. An absent page is reported as an
   omission — a first capture has no predecessor, and that is not an error.
@@ -122,7 +122,7 @@ livre no segmento. O que a template garante é recuperabilidade e headings
 estáveis. As duas páginas registram o que foi dito ao owner e o efeito sobre os
 objetivos; nenhuma delas avalia quem deu o feedback.
 
-**Project feedback — `owner/development/project-feedback/<YYYY-MM-DD>-<project-slug>.md`**:
+**Project feedback — `brain/development/project-feedback/<YYYY-MM-DD>-<project-slug>.md`**:
 
 ```markdown
 # Project feedback — <project-slug> — YYYY-MM-DD
@@ -155,7 +155,7 @@ objetivos; nenhuma delas avalia quem deu o feedback.
 - [Objetivos](../objectives.md)
 ```
 
-**Career-committee review — `owner/development/cdc/<YYYY-MM-DD>-cdc.md`**:
+**Career-committee review — `brain/development/cdc/<YYYY-MM-DD>-cdc.md`**:
 
 ```markdown
 # CDC — YYYY-MM-DD
@@ -221,3 +221,13 @@ evidência dele e aponta para a página de CDC que a causou.
   feedback, the fold-or-reset judgement and a draft the owner can keep all
   still stand — only the recording is lost, and it must never be reported as
   done.
+
+## Contrato de página do brain
+
+Toda página escrita em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.

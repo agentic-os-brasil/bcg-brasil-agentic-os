@@ -1,4 +1,4 @@
-Set-StrictMode -Version 2.0
+﻿Set-StrictMode -Version 2.0
 
 $script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [Console]::OutputEncoding = $script:Utf8NoBom
@@ -38,6 +38,7 @@ function Get-MaestroProjectDir {
 }
 
 function Write-MaestroUtf8([string]$Path, [string]$Content) {
+    Assert-MaestroNoAlias $Path
     $parent = Split-Path -Parent $Path
     if ($parent -and -not (Test-Path -LiteralPath $parent -PathType Container)) {
         New-Item -ItemType Directory -Path $parent -Force | Out-Null
@@ -52,6 +53,7 @@ function Write-MaestroIfMissing([string]$Path, [string]$Content) {
 }
 
 function Append-MaestroUtf8([string]$Path, [string]$Content) {
+    Assert-MaestroNoAlias $Path
     $parent = Split-Path -Parent $Path
     if ($parent -and -not (Test-Path -LiteralPath $parent -PathType Container)) {
         New-Item -ItemType Directory -Path $parent -Force | Out-Null
@@ -65,6 +67,7 @@ function Read-MaestroTrimmed([string]$Path) {
 }
 
 function Ensure-MaestroDirectory([string]$Path) {
+    Assert-MaestroNoAlias $Path
     if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
         New-Item -ItemType Directory -Path $Path -Force | Out-Null
     }
@@ -136,67 +139,21 @@ function Ensure-MaestroMemoryBackfill([string]$DataDir, [string]$Origin) {
 }
 
 function Write-MaestroSkillsRollup([string]$ProjectDir) {
-    $bundles = @(
-        @('bundles/base/skills', 'Maestro skills disponíveis', 'Índice compacto. A skill completa é carregada sob demanda quando o pedido do dono a aciona.'),
-        @('bundles/tech-core/skills', 'Skills técnicas (tech-core)', 'Skills de engenharia — testes, revisão, pipelines de dados, entrega por spec. Carregadas sob demanda.')
-    )
-    foreach ($bundle in $bundles) {
-        $dir = Join-Path $ProjectDir $bundle[0]
-        if (-not (Test-Path -LiteralPath $dir -PathType Container)) { continue }
-        $rows = @()
-        foreach ($file in @(Get-ChildItem -LiteralPath $dir -Filter SKILL.md -Recurse -ErrorAction SilentlyContinue)) {
-            try {
-                $text = [System.IO.File]::ReadAllText($file.FullName, $script:Utf8NoBom)
-                $name = [regex]::Match($text, '(?m)^name:\s*["'']?([^\r\n"'']+)').Groups[1].Value.Trim()
-                $description = [regex]::Match($text, '(?m)^description:\s*["'']?([^\r\n"'']+)').Groups[1].Value.Trim()
-                if ($name -and $description) {
-                    $first = [regex]::Split($description, '\.\s+')[0]
-                    if ($first.Length -gt 140) { $first = $first.Substring(0, 137) + '...' }
-                    $rows += "- **$name** — $first"
-                }
-            } catch {}
-        }
-        if ($rows.Count -gt 0) {
-            [Console]::Out.WriteLine("## $($bundle[1])`n")
-            [Console]::Out.WriteLine("$($bundle[2])`n")
-            foreach ($row in @($rows | Sort-Object)) { [Console]::Out.WriteLine($row) }
-            [Console]::Out.WriteLine('')
+    $rows = New-Object 'System.Collections.Generic.List[string]'
+    $rows.Add('Skills: load the full SKILL.md on demand. Available bundle indices:')
+    foreach ($relative in @('bundles/base/skills','bundles/tech-core/skills')) {
+        $dir = Join-Path $ProjectDir $relative
+        if (-not (Test-Path -LiteralPath $dir)) { continue }
+        $rows.Add($relative)
+        foreach ($file in @(Get-ChildItem -LiteralPath $dir -Filter SKILL.md -Recurse | Sort-Object FullName)) {
+            $text = Read-MaestroBounded $file.FullName 16384
+            $name = [regex]::Match($text, '(?m)^name:\s*([^\r\n]+)').Groups[1].Value.Trim()
+            if ($name) { $rows.Add('- ' + $name) }
         }
     }
-}
-
-function Write-MaestroActiveCaseContext([string]$ProjectDir, [string]$DataDir) {
-    $cases = Join-Path $DataDir 'cases'
-    $caseId = Read-MaestroTrimmed (Join-Path $cases '.active')
-    if (-not $caseId) { return }
-    $caseDir = Join-Path $cases $caseId
-    if (-not (Test-Path -LiteralPath $caseDir -PathType Container)) { return }
-    [Console]::Out.WriteLine("## Caso ativo: $caseId`n")
-    $projects = Join-Path $caseDir 'brain/projects'
-    $brief = @(Get-ChildItem -LiteralPath $projects -Filter '*.md' -ErrorAction SilentlyContinue | Sort-Object Name | Select-Object -First 1)
-    if ($brief.Count -gt 0) {
-        [Console]::Out.WriteLine("### Brief`n")
-        [Console]::Out.WriteLine(((@(Get-Content -LiteralPath $brief[0].FullName -Encoding UTF8 | Select-Object -First 25)) -join "`n"))
-        [Console]::Out.WriteLine('')
-    }
-    $decisions = Join-Path $caseDir 'brain/decisions/decision-log.md'
-    if (Test-Path -LiteralPath $decisions -PathType Leaf) {
-        $heads = @(Get-Content -LiteralPath $decisions -Encoding UTF8 | Where-Object { $_ -match '^## D-[0-9]+' } | Select-Object -Last 5)
-        if ($heads.Count -gt 0) {
-            [Console]::Out.WriteLine("### Últimas decisões`n")
-            foreach ($head in $heads) { [Console]::Out.WriteLine('- ' + $head.Substring(3)) }
-            [Console]::Out.WriteLine('')
-        }
-    }
-    $tasks = Join-Path $caseDir 'brain/tasks'
-    $taskFiles = @(Get-ChildItem -LiteralPath $tasks -Filter '*.md' -ErrorAction SilentlyContinue)
-    if ($taskFiles.Count -gt 0) {
-        [Console]::Out.WriteLine("### Tarefas abertas ($($taskFiles.Count))`n")
-        foreach ($task in @($taskFiles | Sort-Object Name | Select-Object -First 10)) {
-            [Console]::Out.WriteLine('- ' + $task.BaseName)
-        }
-        [Console]::Out.WriteLine('')
-    }
+    $packet = $rows -join "`n"
+    if ($script:Utf8NoBom.GetByteCount($packet) -gt 4096) { $packet = 'Skills list omitted: load bundles/base/skills and bundles/tech-core/skills indices on demand.' }
+    [Console]::Out.WriteLine($packet)
 }
 
 function Invoke-MaestroFirstRunScaffold {
@@ -205,18 +162,19 @@ function Invoke-MaestroFirstRunScaffold {
         [Console]::Error.WriteLine('maestro first-run-scaffold: CLAUDE_PROJECT_DIR unset and no VERSION found nearby — skipping scaffold (fail-open).')
         return
     }
-    $data = Join-Path $project 'data'
+    if (-not (Test-MaestroMigrationReady $project)) { return }
+    $data = Join-Path $project 'brain'
     $marker = Join-Path $data '.initialized'
     $log = Join-Path $data '.scaffold.log'
     $timestamp = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
     function Log([string]$Line) { try { Append-MaestroUtf8 $log "$timestamp  $Line`n" } catch {} }
 
     if ((Test-Path -LiteralPath $data -PathType Container) -and -not (Test-Path -LiteralPath $marker -PathType Leaf)) {
-        $agents = Join-Path $data 'agents'
+        $agents = Join-Path $data 'memory'
         if ((Test-Path -LiteralPath $agents -PathType Container) -and @(Get-ChildItem -LiteralPath $agents -Force -ErrorAction SilentlyContinue).Count -gt 0) {
             $timestampFile = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ')
             Write-MaestroUtf8 (Join-Path $data ".recovered-$timestampFile") "$timestamp`n"
-            Log 'RECOVERY  data/agents has content, marker missing — breadcrumb written'
+            Log 'RECOVERY  brain/memory has content, marker missing — breadcrumb written'
         }
     }
 
@@ -240,16 +198,15 @@ function Invoke-MaestroFirstRunScaffold {
             Write-MaestroUtf8 (Join-Path $data '.upgrade-pending') (($upgrade | ConvertTo-Json -Depth 4) + "`n")
         }
         Write-MaestroSkillsRollup $project
-        Write-MaestroActiveCaseContext $project $data
-        return
+            return
     }
 
     foreach ($relative in @(
-        'agents','canary','cases','memory','owner','profile','workspaces',
+        'accounts','craft','daily','development','learnings','memory','owner','people','tasks','.maestro',
         'owner/self','owner/operating','owner/observations','owner/interview/drafts',
-        'owner/atlas/daily','owner/atlas/craft/methods','owner/atlas/craft/style',
-        'owner/atlas/learnings','owner/atlas/development/cdc',
-        'owner/atlas/development/project-feedback','owner/atlas/development/upward-feedback'
+        'daily','craft/methods','craft/style',
+        'learnings','development/cdc',
+        'development/project-feedback','development/upward-feedback'
     )) { Ensure-MaestroDirectory (Join-Path $data $relative) }
     Ensure-MaestroMemoryBackfill $data 'first-run-scaffold.ps1'
 
@@ -306,7 +263,7 @@ _Não inicializado. Atualizado automaticamente pelo Maestro ao final de cada ses
 _Nenhum registrado._
 '@
     Write-MaestroIfMissing (Join-Path $data 'owner/observations/observations.jsonl') ''
-    Write-MaestroIfMissing (Join-Path $data 'owner/atlas/craft/index.md') @'
+    Write-MaestroIfMissing (Join-Path $data 'craft/index.md') @'
 # Craft
 
 Métodos e calibrações de estilo que se mantêm verdadeiros entre projetos.
@@ -316,14 +273,14 @@ Métodos e calibrações de estilo que se mantêm verdadeiros entre projetos.
 
 _Ainda vazio. As páginas são criadas por `/craft-update` e `/learnings-bridge`._
 '@
-    Write-MaestroIfMissing (Join-Path $data 'owner/atlas/learnings/index.md') @'
+    Write-MaestroIfMissing (Join-Path $data 'learnings/index.md') @'
 # Learnings
 
 Aprendizados profissionais duráveis, corrigíveis e ligados às suas fontes quando aplicável.
 
 _Ainda vazio. As páginas são criadas por `/learnings-bridge`._
 '@
-    Write-MaestroIfMissing (Join-Path $data 'owner/atlas/development/objectives.md') @'
+    Write-MaestroIfMissing (Join-Path $data 'development/objectives.md') @'
 # Objetivos de desenvolvimento
 
 O que você está tentando desenvolver neste período, e o que conta como progresso.
@@ -354,19 +311,17 @@ _Não preenchido. Diga "quero definir meus objetivos" para preencher._
 }
 '@
     Write-MaestroIfMissing (Join-Path $data 'README.md') @'
-# data/ — sua workspace do Maestro
+# brain/ — sua workspace do Maestro
 
-Tudo dentro de `data/` é seu. Atualizações do Maestro nunca sobrescrevem este diretório.
+Tudo dentro de `brain/` é seu. Atualizações do Maestro nunca sobrescrevem este diretório.
 
-- `agents/` — estado de cada agente
-- `cases/` — casos ativos e seus brains
+- `accounts/` — contas e casos isolados
 - `memory/` — memória de longo prazo
-- `profile/` — identidade e preferências
-- `workspaces/` — projetos ativos
+- `owner/` — identidade e preferências
 
-Se quiser fazer backup, basta copiar `data/` inteiro.
+Se quiser fazer backup, basta copiar `brain/` inteiro.
 '@
-    Write-MaestroIfMissing (Join-Path $data 'profile/identity.json') @'
+    Write-MaestroIfMissing (Join-Path $data 'owner/identity.json') @'
 {
   "schema_version": 1,
   "display_name": "",
@@ -380,7 +335,6 @@ Se quiser fazer backup, basta copiar `data/` inteiro.
     if ($version) { Write-MaestroUtf8 (Join-Path $data '.maestro-version') "$version`n" }
     Log 'DONE  marker written'
     Write-MaestroSkillsRollup $project
-    Write-MaestroActiveCaseContext $project $data
 }
 
 function Write-MaestroLatestFile([string]$Label, [string]$Directory) {
@@ -417,52 +371,6 @@ function Write-MaestroProfile([string]$Label, [string]$Path) {
     } catch {}
 }
 
-function Invoke-MaestroSessionStartMemoryInject {
-    $project = Get-MaestroProjectDir
-    if (-not $project) { return }
-    $data = Join-Path $project 'data'
-    if (-not (Test-Path -LiteralPath $data -PathType Container)) { return }
-    $memory = Join-Path $data 'memory'
-    $profile = Join-Path $data 'profile'
-    [Console]::Out.WriteLine('<!-- maestro:session-context:start -->')
-    [Console]::Out.WriteLine('# Maestro — Contexto da sessão')
-    [Console]::Out.WriteLine('_Injetado automaticamente pelo hook de início de sessão._')
-    [Console]::Out.WriteLine("`n## Método operacional")
-    [Console]::Out.WriteLine('<!-- maestro:pointer: maestro-operator · reason: deterministic_operational_method -->')
-    [Console]::Out.WriteLine("Skill: $project/bundles/base/skills/maestro-operator/SKILL.md")
-    [Console]::Out.WriteLine('Instrução: carregar este skill antes de escolher, interpretar ou recuperar qualquer operação de controle do Maestro.')
-    $tech = Join-Path $project 'bundles/tech-core/skills'
-    if (Test-Path -LiteralPath $tech -PathType Container) {
-        [Console]::Out.WriteLine("`n## Skills técnicas (tech-core)")
-        [Console]::Out.WriteLine('<!-- maestro:pointer: tech-core · reason: engineering_skills_bundle -->')
-        [Console]::Out.WriteLine("Bundle path: $project/bundles/tech-core")
-        if (Test-Path -LiteralPath (Join-Path $tech 'INDEX.md')) { [Console]::Out.WriteLine("Índice: $tech/INDEX.md") }
-        if (Test-Path -LiteralPath (Join-Path $tech 'catalog.json')) { [Console]::Out.WriteLine("Catálogo: $tech/catalog.json") }
-    }
-    $dream = Join-Path $memory '.dream-requested'
-    if (Test-Path -LiteralPath $dream -PathType Leaf) {
-        [Console]::Out.WriteLine("`n## ⚠️ Dreaming pendente — executar antes de qualquer outra tarefa")
-        [Console]::Out.WriteLine("<!-- maestro:dream-trigger: marker=$dream -->")
-        [Console]::Out.WriteLine('**Ação obrigatória:** leia `bundles/base/skills/dream-memory/SKILL.md` e execute o ciclo diário como primeira ação desta sessão.')
-    }
-    $upgrade = Join-Path $data '.upgrade-pending'
-    if (Test-Path -LiteralPath $upgrade -PathType Leaf) {
-        [Console]::Out.WriteLine("`n## ⚠️ Upgrade Maestro pendente — verificar antes de qualquer outra tarefa")
-        [Console]::Out.WriteLine("<!-- maestro:upgrade-trigger: marker=$upgrade -->")
-        [Console]::Out.WriteLine('```json')
-        [Console]::Out.Write([System.IO.File]::ReadAllText($upgrade, $script:Utf8NoBom))
-        [Console]::Out.WriteLine('```')
-        [Console]::Out.WriteLine('**Ação obrigatória:** invoque `/maestro-setup-update` antes de seguir.')
-    }
-    Write-MaestroProfile 'Identidade do usuário' (Join-Path $profile 'identity.json')
-    Write-MaestroProfile 'Preferências e estilo' (Join-Path $profile 'style.json')
-    Write-MaestroAllFiles 'SELF do usuário' (Join-Path $data 'owner/self')
-    Write-MaestroAllFiles 'Memória de longo prazo (L3)' (Join-Path $memory 'lifetime')
-    Write-MaestroLatestFile 'Resumo semanal (L2)' (Join-Path $memory 'weekly')
-    Write-MaestroLatestFile 'Último log diário consolidado (L1)' (Join-Path $memory 'recent')
-    [Console]::Out.WriteLine("`n<!-- maestro:session-context:end -->")
-}
-
 function Get-MaestroAgentRoute([string]$Project, [string]$Prompt) {
     $policyPath = Join-Path $Project 'bundles/base/agents/activation-policy.json'
     if (-not (Test-Path -LiteralPath $policyPath -PathType Leaf)) { return '' }
@@ -493,7 +401,8 @@ function Get-MaestroAgentRoute([string]$Project, [string]$Prompt) {
     foreach ($hit in $hits) {
         $agent = $hit.Agent
         [void]$lines.Add("- **$($agent.emoji) ``$($agent.id)``** — $($agent.when)")
-        if ($agent.gate) { [void]$lines.Add("  - Portão: passar por ``$($agent.gate)`` antes.") }
+        $gate = Get-MaestroProperty $agent 'gate'
+        if ($gate) { [void]$lines.Add("  - Portão: passar por ``$gate`` antes.") }
         if (@($agent.packet).Count -gt 0) { [void]$lines.Add('  - Pacote fechado (vai inteiro no prompt): ' + (@($agent.packet) -join '; ') + '.') }
         [void]$lines.Add("  - Despachar com a ferramenta Agent, ``subagent_type: `"$($agent.subagent_type)`"``.")
         if ($policy.announce.required) {
@@ -516,7 +425,7 @@ function Invoke-MaestroContextInject {
         $route = Get-MaestroAgentRoute $project $prompt
         if ($route) { [Console]::Out.Write((Limit-MaestroText $route 1600)) }
     }
-    $data = Join-Path $project 'data'
+    $data = Join-Path $project 'brain'
     $state = $env:MAESTRO_STATE_DIR
     if (-not $state) {
         if ($env:USERPROFILE) { $state = Join-Path $env:USERPROFILE '.claude/state' }
@@ -528,7 +437,7 @@ function Invoke-MaestroContextInject {
     $safeSession = [regex]::Replace($sessionId, '[^A-Za-z0-9._-]', '_')
     $marker = Join-Path $state "context-inject-$safeSession.marker"
     if (Test-Path -LiteralPath $marker -PathType Leaf) {
-        $stub = "<!-- maestro:context-inject:stub -->`nMemory: $project/data/memory/ · Load specific tiers on demand.`n"
+        $stub = "<!-- maestro:context-inject:stub -->`nMemory: $project/brain/memory/ · Load specific tiers on demand.`n"
         [Console]::Out.Write((Limit-MaestroText $stub 160))
         return
     }
@@ -536,7 +445,7 @@ function Invoke-MaestroContextInject {
     $lines = New-Object System.Collections.Generic.List[string]
     [void]$lines.Add('<!-- maestro:context-inject:first -->')
     [void]$lines.Add('# Context pointers')
-    $identityPath = Join-Path $data 'profile/identity.json'
+    $identityPath = Join-Path $data 'owner/identity.json'
     if (Test-Path -LiteralPath $identityPath -PathType Leaf) {
         try {
             $identity = Get-Content -LiteralPath $identityPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -605,46 +514,13 @@ function Stop-MaestroCrossCase([string]$Reason) {
 
 function Invoke-MaestroCrossCaseGuard {
     $project = Get-MaestroProjectDir
+    if (-not $project) { Stop-MaestroCrossCase 'Project root unavailable.' }
     $raw = Read-MaestroStdin
-    if (-not $raw) { return }
-    try { $payload = $raw | ConvertFrom-Json } catch {
-        if ($raw -match 'file_path|notebook_path') { Stop-MaestroCrossCase 'The guard could not parse this file-writing call, so client isolation cannot be verified.' }
-        return
-    }
-    $tool = [string](Get-MaestroProperty $payload 'tool_name')
-    if (@('Edit','MultiEdit','Write','NotebookEdit') -notcontains $tool) { return }
-    $inputObject = Get-MaestroProperty $payload 'tool_input'
-    $key = 'file_path'
-    if ($tool -eq 'NotebookEdit') { $key = 'notebook_path' }
-    $target = [string](Get-MaestroProperty $inputObject $key)
-    if (-not $target) { Stop-MaestroCrossCase 'A file-writing call arrived without a readable target path.' }
-    if (-not $project) { Stop-MaestroCrossCase 'The project root is unavailable, so client isolation cannot be verified.' }
-    if (-not [System.IO.Path]::IsPathRooted($target)) { $target = Join-Path $project $target }
-    $cases = Join-Path $project 'data/cases'
-    try {
-        $lexicalTarget = [System.IO.Path]::GetFullPath($target)
-        $lexicalCases = [System.IO.Path]::GetFullPath($cases)
-        $resolvedTarget = Resolve-MaestroPathAliases $lexicalTarget
-        $resolvedCases = Resolve-MaestroPathAliases $lexicalCases
-    } catch {
-        Stop-MaestroCrossCase 'The guard could not resolve filesystem aliases for this target, so client isolation cannot be verified.'
-    }
-    $lexicalInside = Test-MaestroPathInside $lexicalTarget $lexicalCases
-    $resolvedInside = Test-MaestroPathInside $resolvedTarget $resolvedCases
-    if ($lexicalInside -and -not $resolvedInside) { Stop-MaestroCrossCase 'The requested path is written inside data/cases but resolves outside that tree through a filesystem alias.' }
-    if (-not $resolvedInside) { return }
-    $relative = $resolvedTarget.Substring($resolvedCases.TrimEnd([char[]]@('\','/')).Length).TrimStart([char[]]@('\','/'))
-    $targetCase = @($relative -split '[\\/]+')[0]
-    if (-not $targetCase) { return }
-    if ($targetCase.StartsWith('.')) { return }
-    $activeFile = Join-Path $cases '.active'
-    $active = (Read-MaestroTrimmed $activeFile).ToLowerInvariant()
-    $targetCase = $targetCase.ToLowerInvariant()
-    if (-not $active) { Stop-MaestroCrossCase "No active case is recorded, and this write targets case '$targetCase'." }
-    if ($targetCase -eq $active) { return }
-    $pending = (Read-MaestroTrimmed (Join-Path $cases '.pending')).ToLowerInvariant()
-    if ($pending -and $targetCase -eq $pending) { return }
-    Stop-MaestroCrossCase "Active case: $active. This write targets case: $targetCase. Ask the owner to confirm a case switch first."
+    . (Join-Path $PSScriptRoot 'maestro-runtime.ps1')
+    $output = Invoke-MaestroRuntime -Root $project -RuntimeArgs @('codex-hook','PreToolUse','--root',$project) -Payload $raw
+    $decision = ($output -join "`n") | ConvertFrom-Json
+    $specific = Get-MaestroProperty $decision 'hookSpecificOutput'
+    if ($specific -and (Get-MaestroProperty $specific 'permissionDecision') -eq 'deny') { Stop-MaestroCrossCase 'The shared native runtime denied this write; verify active account/case and filesystem aliases.' }
 }
 
 function Invoke-MaestroAgentAnnouncement {
@@ -660,7 +536,7 @@ function Invoke-MaestroAgentAnnouncement {
     $policyPath = Join-Path $project 'bundles/base/agents/activation-policy.json'
     try { $policy = Get-Content -LiteralPath $policyPath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return }
     if (-not $policy.announce.required) { return }
-    $agent = @($policy.agents | Where-Object { $_.subagent_type -eq $agentType -or $_.id -eq $agentType } | Select-Object -First 1)
+    $agent = @($policy.agents | Where-Object { (Get-MaestroProperty $_ 'subagent_type') -eq $agentType -or $_.id -eq $agentType } | Select-Object -First 1)
     $rule = [string]$policy.announce.rule
     if ($agent.Count -eq 0) {
         $context = "[maestro] Você despachou o subagente ``$agentType``, que não está na política de agentes. $rule Diga na resposta qual subagente foi ativado e por quê."
@@ -678,7 +554,7 @@ function Invoke-MaestroAgentAnnouncement {
 function Invoke-MaestroSessionStopDream {
     $project = Get-MaestroProjectDir
     if (-not $project) { return }
-    $memory = Join-Path $project 'data/memory'
+    $memory = Join-Path $project 'brain/memory'
     if (-not (Test-Path -LiteralPath $memory -PathType Container)) { return }
     $marker = Join-Path $memory '.dream-requested'
     $today = [DateTime]::Now.ToString('yyyy-MM-dd')
@@ -688,3 +564,5 @@ function Invoke-MaestroSessionStopDream {
     }
     Write-MaestroUtf8 $marker ([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ') + "`n")
 }
+
+. (Join-Path $PSScriptRoot 'Maestro.Lifecycle.ps1')

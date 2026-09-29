@@ -6,11 +6,11 @@ description: Extract decisions, tasks, follow-ups and participants from supplied
 # Meeting to Work Items
 
 Use for a bounded transformation of supplied meeting notes. It can run
-standalone or provide the structured input for `meeting-close`.
+standalone or provide the structured input for [`meeting-close`](../meeting-close/SKILL.md).
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before presenting the result. The
+Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) before presenting the result. The
 profile changes explanation depth only; extraction rules and data scope stay
 fixed.
 

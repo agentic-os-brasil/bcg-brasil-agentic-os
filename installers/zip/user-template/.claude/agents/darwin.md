@@ -19,11 +19,13 @@ projeção executável dela.
 O sistema, não o trabalho. Pode ler e rodar:
 
 - `bundles/**`, `.claude/**`, `CLAUDE.md`, `VERSION`, `schemas/**`
-- `data/memory/.schema-version`, `data/memory/policies/**`
-- os marcadores `data/memory/.dream-requested` e `data/.upgrade-pending`
-- diagnósticos gerados pelo `/maestro-doctor`, quando existirem
+- `brain/.maestro/**` (diagnostics, backlinks, route-index, log)
+- `brain/memory/.schema-version`, `brain/memory/policies/**`
+- os marcadores: `brain/memory/.dream-requested`, `brain/owner/.eod-requested`,
+  `brain/.upgrade-pending`, `brain/.maestro/.health-requested`
+- `python3 bundles/base/tools/brain-index.py --check` (não publica)
 
-**Nunca** leia conteúdo de caso (`data/cases/**`), material de
+**Nunca** leia conteúdo de caso (`brain/accounts/*/cases/**`), material de
 cliente, ou as facetas SELF do dono. Contagem e metadado sobre eles: sim.
 Corpo: não. Sem perfilamento pessoal, sem análise de vida pessoal.
 
@@ -50,8 +52,15 @@ Você é o observador responsável pelo decaimento do envelope de contexto. Meç
 que os hooks de SessionStart de fato emitem — bytes totais e contribuição por
 bloco — e compare com os tetos declarados em `bundles/base/memory/runtime.json`.
 
-Como medir. A linha 0.1.x não persiste um envelope pré-calculado. Meça a saída
-real dos dois hooks e compare com os tetos em `bundles/base/memory/runtime.json`:
+Como medir. O envelope da última sessão já vem medido — leia primeiro:
+
+```bash
+cat brain/.maestro/context-envelope.json
+```
+
+Traz bytes e teto por bloco, a razão entre os dois, quais estouraram e a ordem de
+injeção. Cobre só o hook de memória; o rollup de skills sai do scaffold e não
+está somado ali. Para o número da sessão inteira, rode os dois hooks:
 
 ```bash
 export CLAUDE_PROJECT_DIR="<raiz do projeto>"
@@ -107,7 +116,7 @@ verificar. Nunca reporte como reparado o que não foi validado.
 ## Limites
 
 - Sem delegação, sem canal direto com o dono, sem trabalho de fundo solto.
-- Escrita apenas em estado gerido do sistema. Nunca em `data/cases/**` —
+- Escrita apenas em estado gerido do sistema. Nunca em `brain/accounts/**` —
   o hook `block-cross-case-writes.sh` barra Edit/Write ali de todo modo, e
   tentar é sinal de escopo errado, não de permissão faltando.
 - Nunca edite memória lifetime, faceta SELF, ou qualquer página do dono.

@@ -1,95 +1,96 @@
-# Codex product adapter
+# Native Codex ZIP adapter
 
-This is the thin product adapter boundary for Codex. Policies, memory and
-capability states remain canonical in `bundles/base/runtime/capabilities.json`.
+The v0.2.0 ZIP template provides AGENTS.md, .codex/config.toml, .codex/hooks.json,
+six project agent TOMLs and native .agents/skills projections of canonical
+bundles/base/skills. Project configuration and hooks require the owner's Codex project
+trust. Installation never grants trust or overrides sandbox/approval policy.
+The factory's shared Go libraries remain canonical; the ZIP helper is
+maestro-runtime, not the retired bcgos command surface.
 
-Current state: `bcgos doctor` discovers a local Codex executable, while every
-product lifecycle event remains explicitly unavailable. Workspace-local
-configuration installs the five bounded command hooks supported by the current
-Codex runtime; this does not prove that Codex trusted or invoked them. Native
-observation is still pending, and Codex must not inherit Claude-specific
-development hooks as a product capability.
+## Runtime behavior
 
-Evidence snapshot: `as_of: 2026-08-06` · source baseline:
-`43e86494b2e32ca8eccece843514b75d2c98ffa7` (`origin/main` at review start;
-candidate refresh at `012c08f`) · runtime evidence: no
-reproducible in-repo runtime-version artifact or fresh native-session
-observation is attached. This adapter is configured and has local contract
-coverage, but is not `native-qualified`, `release-ready` or `pilot-ready`.
+Attended setup invokes the explicitly verified helper's bind-codex --root against
+the owner-confirmed canonical installation. Before binding, the portable template
+denies file-edit and agent tools while shell setup uses normal host approvals.
+The binder verifies manifest/version/helper SHA256 and pins absolute shell-quoted
+and PowerShell-encoded commands, preserving user hooks. Modified managed entries
+and aliased roots/configs are refused. No ancestor search selects executable code.
+The bound platform launcher resolves the installation from its own path, validates the
+runtime manifest and helper SHA256, and invokes the packaged native executable.
+Windows uses PowerShell 5.1/7; macOS uses Bash 3.2 and the shared native locator.
+Neither Codex hook path requires Python or Git Bash. Manifest hashes detect
+accidental corruption, not malicious replacement of the package; organization
+signing/distribution remains a separate release gate.
 
-The managed Maestro, Case, Client Account, PA Expert, Yoda and Darwin definitions live in
-`bundles/base/agents/`. `internal/agentorchestration` now provides the shared
-fail-closed controller, and the Codex envelope maps
-`collaboration_branch_start`, `collaboration_child_start` (legacy denial only), `tool_call_guard`,
-`collaboration_child_stop` and `collaboration_branch_stop` to its semantic
-events. The shared conformance fixture proves equivalent decisions with
-Claude, including forged identities, scopes and unregistered targets. Events
-require capability-bound agent identities and exact tool/resource grants. A
-shared durable Maestro state store prevents a second adapter instance from
-opening a parallel branch and is shared with Claude. Native qualification still
-requires fresh session evidence.
+Project trust is a separate owner action; reload the project after binding.
+Relocation requires attended rebinding/reconciliation. A record bound elsewhere
+is never silently retargeted. Local tests execute the real packaged macOS wrapper
+from nested cwd containing a hostile nested .codex directory, plus PowerShell
+quoted-path fixtures. These are local adapter tests, not native Codex qualification.
 
-Yoda review wiring is shared with Claude through `internal/agentdispatch`:
-the Codex adapter only forwards a sealed Yoda packet and typed verdict to
-that core. Yoda is Maestro's internal Senior Advisor & Refiner: calm,
-precise and constructive, with at most three load-bearing objections. A
-blocking refinement must include a concrete fix and acceptance condition;
-cosmetic preferences cannot block. Yoda has no tools, delegation or direct
-user channel. The execution-ledger bridge uses installation-scoped
-`maestro/yoda-review` custody, distinct from release signing; missing,
-stale, replayed or cross-scope custody fails closed. Adapter-command receipts
-remain diagnostic until native evidence exists.
+| Hook | ZIP implementation | Evidence limitation |
+| --- | --- | --- |
+| SessionStart | Transactional copy-only migration; stop on blocked/partial/rolled-back status; bounded operating pointers | Does not prove native hook invocation or synthesize personal context |
+| UserPromptSubmit | Bounded canonical skill and scope pointers | No prompt capture or inferred consent |
+| PreToolUse | 64 KiB input bound, protected-root removal guard, alias-aware case checks for Write/Edit/NotebookEdit/apply_patch including Move targets | Shell and specialized tool paths are not a complete enforcement boundary |
+| PostToolUse | Shared metadata-only adapter_command receipt | Does not qualify native invocation |
+| Stop | Shared metadata-only adapter_command receipt | Does not synthesize checkpoints, dream memory, or enforce the full account route |
 
-The packet also carries a digest-bound IntentReviewPacket: literal prompt,
-Maestro route, bounded draft, Owner Context snapshot version/digest and
-relevant metadata-only observation references. Yoda returns a typed purpose
-hypothesis with evidence and confidence; low confidence at high consequence
-returns `clarify`. Neither adapter may persist a hypothesis or write Owner
-Context; both call the same core.
+File paths resolve existing ancestors, including symlink aliases. Malformed
+write payloads fail closed using hookSpecificOutput.permissionDecision=deny.
+The hook understands Agent and spawn_agent aliases but does not infer delegated
+authority from their name. Native sandbox controls and bounded role instructions
+still apply. PreToolUse does not use continue:false, which is unsupported there.
 
-Maestro resolves two independent decisions: `account_consultation_required`
-for client/stakeholder strategic lens, and `yoda_required` for high-leverage
-output. Account-assisted work proves Account framing → Case → Account
-validation; direct Case work proves an execution-only/no-client-lens reason and
-does not call Account. Both routes return to Maestro, and only a required
-Yoda approval—or an explicit low-leverage `yoda_skipped` receipt—can reach
-the final response.
+Codex project agent files name case-agent, client-account-agent, yoda, darwin,
+gamma-guardian and pa-expert; each loads its canonical bundles/base/agents role. One concurrent specialist is
+configured. The main session is Maestro. The existing internal/agentorchestration,
+agentdispatch and Yoda custody contracts are libraries; these definitions do not
+prove their full native mediation or tool-denial behavior. In particular,
+specialist depth/no-child policy remains an instruction rather than an attested
+native security boundary.
 
-```mermaid
-flowchart LR
-    Catalog["Implemented<br/>managed agent catalog"] --> Adapter["Implemented<br/>shared enforcement"]
-    Adapter --> Fixtures["Implemented<br/>cross-runtime fixtures"]
-    Fixtures --> Wiring["Configured<br/>Codex-native command-hook wiring"]
-    Wiring --> Active["Pending<br/>native qualification and activation"]
-    Catalog -.->|current capability| Unavailable["Unavailable<br/>fails closed"]
-```
+## caseOS
 
-The lifecycle adapter maps Codex-native command hooks to `session_start`,
-`pre_action_guard`, `post_action_observe`, `stop_finalize` and `context_inject`.
-Conformance fixtures must remain green before changing a capability state. At
-Session Start it also resolves the user-local interaction profile and injects
-only its bounded ID and managed policy pointer; the profile must not be derived
-from or persisted into memory.
+Use the caseos-connect skill. No endpoint path, token, private case or personal
+allowlist is shipped. Setup needs an externally supplied official HTTPS endpoint
+on the exact approved production host, valid TLS/MCP handshake, case-lead access,
+ZPA, native Okta OAuth and explicit workspace/case consent. Unknown endpoint paths
+and stale development URLs remain unavailable.
 
-Spec 035 and `docs/lifecycle-readiness.md` record the current evidence matrix:
-Codex configuration is not native invocation evidence. Each of the five
-bindings remains unavailable until a real native-session observation exists.
+The helper caseos-check probes a supplied endpoint without credentials, rejects
+redirects and persists nothing. RouteCaseOS is the reusable read-only connector
+boundary: consent, workspace/case enrollment, live health/discovery, reviewed
+read-only tool and live schema validation. The native host supplies the connector;
 
-Darwin 🧬 is the governance surgeon, not a separate housekeeping agent. The
-runtime-neutral `internal/darwin` contract accepts the same bounded packet in
-interactive and `headless_housekeeping` modes, applies only the signed
-`health/maestro-system` grants and persists metadata-only receipts. Codex
-native invocation of that seam remains unavailable until a qualifying native
-session observes it.
-Darwin maintenance signals use `darwin_maintenance_wake` and map to the same
-`darwin` identity over `health/maestro-system`. The signal is signal-only: the
-qualified local worker owns command validation, occurrence fencing and receipt
-publication. Native scheduler installation remains disabled pending evidence.
+Enrollment binds each allowed tool to its exact case parameter in CaseParameters.
+The request cannot select or redirect that parameter. Live discovery must still
+declare that enrolled parameter as a required string property; missing or changed
+bindings fail closed before the call. No production handshake is inferred.
 
-Codex may present and persist the local guided SharePoint project-source choice
-through `bcgos prior-work source`, because that operation records only reviewed
-pointers under the workspace-bound local contract. It must not resolve those
-URLs, enumerate SharePoint, mint an enrollment, use a browser/plugin/token
-fallback or call the collector. Collection remains
-`unavailable/corporate_policy`; Codex may query only an already verified local
-metadata/pointer index produced by the qualified Claude path.
+the ZIP does not implement a second OAuth client or forcibly proxy all MCP calls.
+The skill actively routes eligible work through discovered native tools. Export
+requires separate approval and is not enabled by the read adapter. Offline work
+continues locally with no automatic upload replay.
+
+Codex must not collect SharePoint data or use browser/plugin/token fallbacks to
+circumvent the existing corporate-policy boundary. It may query the verified
+local metadata/pointer index produced by the approved Claude path.
+
+## Qualification
+
+Local fixture tests cover case isolation, patch targets, symlink aliases,
+malformed/oversized payloads, migration, lifecycle metadata, missing consent,
+wrong workspace/case, export denial, untrusted endpoints, redirects and schema
+drift. Fake connector tests are local contract evidence. Installed configuration,
+adapter observation and fresh attended native qualification are separate states.
+Native Windows/macOS sessions, OAuth and production caseOS health must be tested
+on the actual supported host. None is inferred from this documentation.
+
+Official mechanics checked for this implementation:
+- https://learn.chatgpt.com/docs/hooks (JSON commandWindows; project trust;
+  apply_patch/Edit/Write matchers; Agent alias; specialized-path limitations)
+- https://learn.chatgpt.com/docs/agent-configuration/subagents (standalone project
+  TOML agents with name, description and developer_instructions)
+- https://learn.chatgpt.com/docs/extend/mcp?surface=cli (native configuration/OAuth)
+- https://code.claude.com/docs/en/mcp (native local/project MCP scopes)

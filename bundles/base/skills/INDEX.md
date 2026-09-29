@@ -8,15 +8,20 @@
 | Identidade dos Agentes | Nomeia e personaliza os agentes governados | `skills/agent-identity-setup/SKILL.md` |
 | Kickoff de Case | Monta um plano dos primeiros dias a partir do escopo aprovado do case | `skills/bcg-case-kickoff/SKILL.md` |
 | Deck e Storyline | Constrói uma storyline profissional orientada à decisão e o plano do deck | `skills/bcg-deck/SKILL.md` |
+| Índice do brain | Recompila a camada de navegação do brain e reporta links quebrados, páginas órfãs e frontmatter incompleto | `skills/brain-index/SKILL.md` |
 | Case Agent | Entrevista e pesquisa um case de projeto com segurança | `skills/case-agent-setup/SKILL.md` |
 | Canon do Case | Compila insights revisados no canon persistente do case ativo | `skills/case-canon-ingest/SKILL.md` |
 | Registro de Decisão do Case | Registra uma decisão estrutural no log de decisões do case ativo | `skills/case-decision-log-entry/SKILL.md` |
+| SharePoint do Case | Lê a pasta SharePoint do case ativo e propõe candidatos a canon por módulo | `skills/case-sharepoint-ingest/SKILL.md` |
+| Mapa do SharePoint do Case | Mapeia onde cada tipo de informação mora no SharePoint do case ativo | `skills/case-sharepoint-map/SKILL.md` |
+| caseOS MCP | Conecta conhecimento compartilhado com escopo e consentimento | `skills/caseos-connect/SKILL.md` |
 | Gate de Entrega ao Cliente | Checagem de qualidade em três lentes antes de qualquer entrega ao cliente | `skills/client-delivery-gate/SKILL.md` |
 | Registro de Método | Documenta um método próprio ou uma preferência de trabalho | `skills/craft-update/SKILL.md` |
 | Ensaio de Deck | Ensaia o deck contra as perguntas que a sala vai fazer | `skills/deck-drill/SKILL.md` |
 | Review de Deck | Revisa o texto dos slides em busca de riscos de storyline e de evidência | `skills/deck-review/SKILL.md` |
 | Consolidação de Memória | Consolida a memória profissional diária e semanal | `skills/dream-memory/SKILL.md` |
 | Fechar o Dia | Fecha o dia e deixa um ponto de partida para amanhã | `skills/eod/SKILL.md` |
+| Modelo financeiro em Excel | Constrói ou reestrutura um modelo em Excel que precisa amarrar e ir a comitê, com origem única por número e aba Overview obrigatória | `skills/excel-financial-model/SKILL.md` |
 | Execution Continuity | Registrar tarefas e entregas, preparar versão, criar checkpoints e retomar trabalho entre sessões | `skills/execution-continuity/SKILL.md` |
 | Guia de Entrevista com Expert | Estrutura um guia de entrevista a partir das perguntas aprovadas do case | `skills/expert-interview-guide/SKILL.md` |
 | Registro de Feedback | Registra o feedback recebido e aplica aos objetivos de desenvolvimento | `skills/feedback-capture/SKILL.md` |
@@ -25,6 +30,7 @@
 | Ingestão de Conteúdo | Extrai documentos profissionais localmente e com segurança | `skills/ingest-content/SKILL.md` |
 | Perfil de Interação | Aplica a preferência de comunicação e de detalhe do owner no Maestro | `skills/interaction-profile/SKILL.md` |
 | Investigar | Encontra a causa raiz de um resultado errado ou inesperado | `skills/investigate/SKILL.md` |
+| Aprender com os Logs | Lê conversas anteriores com o Claude para propor rascunhos ou atualizações ao perfil do dono, sempre com confirmação individual | `skills/learn-from-logs/SKILL.md` |
 | Ponte de Aprendizados | Promove aprendizados do dia a dia para conhecimento durável do owner | `skills/learnings-bridge/SKILL.md` |
 | Diagnóstico do Maestro | Faz um diagnóstico da instalação do Maestro em linguagem simples | `skills/maestro-doctor/SKILL.md` |
 | Preparar Ambiente Maestro | Prepara workspace, runtime e manutenção local | `skills/maestro-environment-setup/SKILL.md` |
@@ -35,6 +41,7 @@
 | Instalação e Atualização do Maestro | Conduz instalação, atualização e recuperação de forma conversacional | `skills/maestro-setup-update/SKILL.md` |
 | Fechamento de Reunião | Transforma notas de reunião em um pacote de fechamento revisável | `skills/meeting-close/SKILL.md` |
 | Reunião em Itens de Trabalho | Extrai decisões, tarefas e follow-ups das notas de reunião | `skills/meeting-to-work-items/SKILL.md` |
+| Background do dono | Registra formação, trajetória antes do BCG e aspirações de carreira e de vida | `skills/owner-background/SKILL.md` |
 | Gate de QA | Classifica a qualidade de uma mudança com evidência proporcional | `skills/qa-gate/SKILL.md` |
 | Análise Qualitativa | Sintetiza evidência qualitativa delimitada em temas e implicações | `skills/qualitative-analysis/SKILL.md` |
 | Análise Quantitativa | Analisa evidência quantitativa delimitada com premissas e checagens explícitas | `skills/quantitative-analysis/SKILL.md` |
@@ -45,4 +52,5 @@
 | Upward Feedback | Prepara um feedback consistente para dar a um colega sênior | `skills/upward-feedback/SKILL.md` |
 | Wayfinder | Estrutura um problema aberto até o primeiro movimento | `skills/wayfinder/SKILL.md` |
 | Alias Legado do Case Agent | Redireciona o nome aposentado workspace-agent-setup | `skills/workspace-agent-setup/SKILL.md` |
+| Apertar a escrita | Corta o excesso de um texto já escrito, na voz registrada do dono, sem mudar o que ele afirma | `skills/writing-tighten/SKILL.md` |
 | Yoda — pressure-test | Roda revisão sênior interna de proposta ou decisão de alta materialidade antes do owner | `skills/yoda/SKILL.md` |

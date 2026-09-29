@@ -9,13 +9,13 @@ Write one craft page properly, or revise one that already exists. The owner has
 already decided there is something to record; the work here is getting it into
 a shape that is still usable a year from now.
 
-All reads and writes use direct file operations on the owner atlas paths (`data/owner/atlas/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
+All reads and writes use direct file operations on the owner atlas paths (`brain/owner/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
 
-## How this differs from `learnings-bridge`
+## How this differs from [`learnings-bridge`](../learnings-bridge/SKILL.md)
 
-Both fill `owner/craft/`, from opposite directions.
+Both fill `brain/craft/`, from opposite directions.
 
-- **`learnings-bridge` is bottom-up and periodic.** It works from what the
+- **[`learnings-bridge`](../learnings-bridge/SKILL.md) is bottom-up and periodic.** It works from what the
   dailies already collected, sweeps a window of candidates the owner wrote
   earlier, and decides where each one belongs.
 - **This skill is top-down and immediate.** The owner names the technique or
@@ -26,7 +26,7 @@ did I note down this week", that is the other skill.
 
 ## Interaction profile
 
-Resolve `interaction-profile` before presenting a draft. The method-versus-style
+Resolve [`interaction-profile`](../interaction-profile/SKILL.md) before presenting a draft. The method-versus-style
 test, the operations used, the bounds and the confirmation gate never vary by
 profile; only the explanation and optional detail do.
 
@@ -45,7 +45,7 @@ profile; only the explanation and optional detail do.
   the owner has not described, and it does not generalize an engagement into a
   method on their behalf.
 - Obtained with `collect`, purpose declared and pages named:
-  `owner/craft/index.md`, and for a revision the target page itself. Keep the
+  `brain/craft/index.md`, and for a revision the target page itself. Keep the
   revision of anything read; a later write uses it to notice that the owner
   edited the page in the meantime.
 
@@ -53,9 +53,9 @@ profile; only the explanation and optional detail do.
 
 Answer this before drafting, and say the answer out loud.
 
-- **Method** — `owner/craft/methods/<method-slug>.md`. Another practitioner
+- **Method** — `brain/craft/methods/<method-slug>.md`. Another practitioner
   could follow it and get a comparable result. The subject is the technique.
-- **Style** — `owner/craft/style/<situation-slug>.md`. A calibration true of
+- **Style** — `brain/craft/style/<situation-slug>.md`. A calibration true of
   this owner, not of the craft. The subject is the owner.
 
 The style shape asks the author to state why the page is *not* generalizable. A
@@ -112,7 +112,7 @@ template garante é recuperabilidade, a fronteira visível entre método e estil
 e headings estáveis — `append-entry` nunca cria um heading, então uma seção que
 a página não declara é uma seção onde nada pode ser anexado depois.
 
-**Método — `owner/craft/methods/<method-slug>.md`**:
+**Método — `brain/craft/methods/<method-slug>.md`**:
 
 ```markdown
 # Método — <nome>
@@ -154,7 +154,7 @@ a página não declara é uma seção onde nada pode ser anexado depois.
 - [Índice de craft](../index.md)
 ```
 
-**Estilo — `owner/craft/style/<situation-slug>.md`**:
+**Estilo — `brain/craft/style/<situation-slug>.md`**:
 
 ```markdown
 # Estilo — <tipo de artefato ou situação recorrente>
@@ -214,3 +214,13 @@ também é edição do owner. `## Evidência de uso` é o único destino de
 - If an operation is unavailable, say so and keep going. The conversation still
   reaches a page worth having, and the owner can keep the draft — only the
   recording is lost, and it must never be reported as done.
+
+## Contrato de página do brain
+
+Toda página escrita em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.

@@ -30,6 +30,26 @@
 
 ---
 
+## v0.2.0 consolidation — engineering candidate
+
+The ZIP release line is being consolidated from the field 0.1.11 baseline and the
+0.1.12 fixes with Marcelo’s structural work. This is a recipes/runtime update,
+not a replacement for an owner’s personal Maestro. See the
+[consolidation plan](docs/plans/2026-09-29-v020-consolidation.md),
+[installation guide](installers/zip/user-template/README-INSTALL.md) and
+[update contract](installers/zip/user-template/UPDATE-CONTRACT.json).
+
+- One copy-only Go migration engine; original data/ and retained legacy namespaces remain intact.
+- Native PowerShell 5.1/7 hooks on Windows, system Bash on Mac, bundled architecture-specific helper. Python is optional for additional knowledge tools, not migration or case-write enforcement.
+- Claude and native Codex projections, with trusted-root hook binding and native skill discovery.
+- Optional caseOS MCP onboarding and active, consented, case-scoped retrieval. No credentials or personal case configuration ship.
+- Separate Mac/Windows update kits, resumable checks and a real Yoda review; no artificial claim that a Markdown recipe overrides host limits.
+
+Artifacts remain unsigned engineering candidates. Local tests, hosted Windows CI,
+native Claude/Codex sessions, authenticated caseOS and authorized distribution
+are separate evidence. The historical maturity snapshot below is dated August 6,
+not an assertion of current release qualification.
+
 ## The promise
 
 Work should not reset because a conversation ended, a handoff happened, or an
@@ -154,8 +174,8 @@ for a genuinely absent, disabled or failed capability.
 > end-user release or a user pilot is available. Pilot distribution, native
 > schedulers and hosted bridge operation remain release operations with their
 > own evidence. The repository `VERSION` tracks the bundle release line (current:
-> `0.1.5`); release artifacts receive an explicit semantic version and are
-> distributed as signed ZIPs through the release pipeline.
+> `0.2.0` candidate); release artifacts receive an explicit semantic version.
+> Signed distribution requires separate organization-controlled release evidence.
 
 ### Continuous use after installation
 
@@ -374,7 +394,7 @@ Lifecycle adapter evidence is intentionally separated into configuration,
 direct-contract tests, adapter-command receipts and native-session proof. See
 [the lifecycle evidence matrix](specs/035-lifecycle-evidence-matrix.md).
 
-Maestro is operated entirely through Claude Code — no external CLI is required.
+Maestro is operated through Claude Code or Codex. The bundled runtime is a managed helper, not a separate user-facing CLI.
 The canonical entry points are skills invoked as slash-commands:
 
 ```text

@@ -1,0 +1,4 @@
+interface:
+  display_name: "SharePoint do Case"
+  short_description: "Lê a pasta SharePoint do case ativo e propõe candidatos a canon por módulo"
+  default_prompt: "Use $case-sharepoint-ingest para ler a pasta SharePoint do case ativo e propor cada documento recente como candidato a canon, ligado ao módulo certo."

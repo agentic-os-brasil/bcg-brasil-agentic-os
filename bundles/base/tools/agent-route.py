@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """Roteador de ativacao de agentes.
 
-Complementa o roteamento de skills da linha 0.1.x. Responde a pergunta que nao
+Terceiro irmao de brain-route.py e skill-route.py. Os dois primeiros respondem
+"que pagina importa" e "que skill resolve". Este responde a pergunta que nao
 tinha mecanismo nenhum: **que agente o hub deve despachar, e com que pacote**.
 
 Por que existe. Ate 2026-09-06 os quatro spokes eram despachaveis e nenhum
 caminho automatico levava a eles. Medido ao vivo: "yoda check nesse deck"
 devolvia a *skill* `yoda`; "como anda a saude do sistema" devolvia
-`maestro-doctor`, nunca `darwin`. O unico mecanismo por mensagem
+`maestro-doctor` e `brain-index`, nunca `darwin`. O unico mecanismo por mensagem
 que existia era cego para a camada de spoke, e a regra de quando chamar cada um
 vivia em prosa numa skill que depende de alguem lembrar de abrir. Isso e
-o que deixa a declaracao inerte sem um leitor no caminho da mensagem.
+exatamente o padrao que `brain/learnings/especificacao-nunca-lida-e-padrao.md`
+nomeia.
 
 Fonte unica: bundles/base/agents/activation-policy.json. Nao ha corpus paralelo
 para manter em sincronia — os gatilhos, o pacote exigido e o status de cada
@@ -34,9 +36,9 @@ sistema"), e o caminho de tras continua inteiro: o pedido ainda roteia por skill
 e a tabela de spokes do maestro-operator continua nomeando darwin. Este roteador
 e acelerador, nao a unica porta.
 
-Uso:  echo '<texto>' | <python-3> bundles/base/tools/agent-route.py [--max N]
-      <python-3> bundles/base/tools/agent-route.py --max 2 "texto"
-      <python-3> bundles/base/tools/agent-route.py --list
+Uso:  echo '<texto>' | python3 bundles/base/tools/agent-route.py [--max N]
+      python3 bundles/base/tools/agent-route.py --max 2 "texto"
+      python3 bundles/base/tools/agent-route.py --list    # o que a politica declara
 """
 import io
 import os

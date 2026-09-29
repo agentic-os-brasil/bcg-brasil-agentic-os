@@ -1,0 +1,7 @@
+# Project hooks/config load only after the owner trusts this project in Codex.
+# Never set project trust, approval overrides or OAuth credentials here.
+[features]
+hooks = true
+
+[agents]
+max_concurrent_threads_per_session = 1

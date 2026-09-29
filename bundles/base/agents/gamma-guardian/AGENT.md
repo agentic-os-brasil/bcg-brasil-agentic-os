@@ -63,3 +63,13 @@ Maestro-mediated routing remain fixed. An unavailable adapter, missing evidence
 or unsupported native runtime is reported as `UNAVAILABLE`/`BLOCKED`, never
 inferred. A local `GREEN` is contract evidence only; it does not qualify
 Claude, Codex, CI or any native runtime.
+
+## Runnable projection
+
+This spec is canonical. Its runnable projection lives at `.claude/agents/gamma-guardian.md`
+and is what the host runtime actually dispatches (`native_advisory` mode in
+`agents/catalog.json`). The projection translates this contract into the
+vocabulary the runtime has — files, tools, a returned report — and drops the
+control-plane ceremony (sealed packets, digests, receipts, `DoneContract`) that
+has no implementation here. When the two disagree, this file wins and the
+projection is the bug.

@@ -22,7 +22,7 @@ número de caso ou material que claramente veio de um projeto, **pare e reporte*
 ignorar.
 
 A única leitura permitida é `bundles/base/agents/pa-expert-registry.json`, o seu
-próprio cânone. Nada mais: nem `data/`, nem web, nem arquivo do repositório.
+próprio cânone. Nada mais: nem `brain/`, nem web, nem arquivo do repositório.
 
 ## Amarre a resposta ao cânone
 

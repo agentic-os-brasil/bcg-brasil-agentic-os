@@ -1,84 +1,59 @@
 #!/usr/bin/env bash
-# Build a self-contained, user-facing update kit around an already validated
-# Maestro release ZIP. The kit never contains owner data and never edits an
-# installed Maestro in place.
-#
-# Usage:
-#   installers/zip/build-update-package.sh <from-version> <to-version>
-
+# Factory-only wrapper of existing verified candidate payloads; no installation.
+# Usage: build-update-package.sh <from-version> <to-version> [both|macos|windows-powershell]
 set -euo pipefail
-
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DIST_DIR="$REPO_ROOT/dist"
 TEMPLATE_DIR="$REPO_ROOT/installers/zip/update-template"
-
-if [ $# -ne 2 ]; then
-  echo "usage: build-update-package.sh <from-version> <to-version>" >&2
+if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
+  echo 'usage: build-update-package.sh <from-version> <to-version> [both|macos|windows-powershell]' >&2
   exit 2
 fi
-
 FROM_VERSION="$1"
 TO_VERSION="$2"
+PLATFORM="both"
+[ "$#" -lt 3 ] || PLATFORM="$3"
 for version in "$FROM_VERSION" "$TO_VERSION"; do
-  if ! printf '%s' "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-    echo "version must match X.Y.Z: got '$version'" >&2
-    exit 2
-  fi
+  printf '%s' "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo 'Invalid version' >&2; exit 2; }
 done
-if [ "$FROM_VERSION" = "$TO_VERSION" ]; then
-  echo "from-version and to-version must differ" >&2
-  exit 2
-fi
-
-MAC_ZIP="$DIST_DIR/Maestro-v${TO_VERSION}-macos.zip"
-MAC_SHA="$DIST_DIR/Maestro-v${TO_VERSION}-macos.sha256"
-WIN_ZIP="$DIST_DIR/Maestro-v${TO_VERSION}-windows-powershell.zip"
-WIN_SHA="$DIST_DIR/Maestro-v${TO_VERSION}-windows-powershell.sha256"
-for pair in "$MAC_ZIP:$MAC_SHA" "$WIN_ZIP:$WIN_SHA"; do
-  release_zip=${pair%%:*}
-  release_sha=${pair#*:}
-  if [ ! -f "$release_zip" ] || [ ! -f "$release_sha" ]; then
-    echo "missing platform release ZIP or sidecar for $TO_VERSION" >&2
-    echo "run both: build-release.sh $TO_VERSION macos; build-release.sh $TO_VERSION windows-powershell" >&2
-    exit 1
-  fi
-  expected_sha=$(awk '{print $1}' "$release_sha")
-  actual_sha=$(shasum -a 256 "$release_zip" | awk '{print $1}')
-  if [ "$expected_sha" != "$actual_sha" ]; then
-    echo "release checksum mismatch for $(basename "$release_zip"); refusing to wrap it" >&2
-    exit 1
-  fi
+[ "$FROM_VERSION" != "$TO_VERSION" ] || { echo 'Versions must differ' >&2; exit 2; }
+case "$PLATFORM" in
+  both) PLATFORMS='macos windows-powershell'; SUFFIX='' ;;
+  macos|windows-powershell) PLATFORMS="$PLATFORM"; SUFFIX="-$PLATFORM" ;;
+  *) echo 'Invalid platform' >&2; exit 2 ;;
+esac
+command -v python3 >/dev/null || { echo 'Factory requires Python 3 for ZIP validation; recipients do not.' >&2; exit 1; }
+VALIDATOR="$REPO_ROOT/acceptance/zip-update/update_package_contract.py"
+# Validate every requested input before creating or replacing an output kit.
+for platform in $PLATFORMS; do
+  python3 "$VALIDATOR" payload --zip "$DIST_DIR/Maestro-v$TO_VERSION-$platform.zip" \
+    --from-version "$FROM_VERSION" --to-version "$TO_VERSION" --platform "$platform"
 done
-
 STAGE=$(mktemp -d -t maestro-update-build-XXXXXX)
 trap 'rm -rf "$STAGE"' EXIT
-
-ROOT_NAME="Maestro-Update-v${TO_VERSION}"
-ROOT="$STAGE/$ROOT_NAME"
-mkdir -p "$ROOT"
-
-render() {
-  sed \
-    -e "s/{{FROM_VERSION}}/$FROM_VERSION/g" \
-    -e "s/{{TO_VERSION}}/$TO_VERSION/g" \
-    "$1" > "$2"
-}
-
-for name in LEIA-ME-PRIMEIRO.md PROMPT-1-PREPARAR.txt \
-  PROMPT-2-VERIFICAR.txt TESTE-MAC-WINDOWS.md DIAGNOSTICO-HOOKS.md; do
-  render "$TEMPLATE_DIR/$name" "$ROOT/$name"
+ROOT_NAME="Maestro-Update-v$TO_VERSION$SUFFIX"
+KIT_ROOT="$STAGE/$ROOT_NAME"
+mkdir -p "$KIT_ROOT"
+printf '{"schema_version":1,"from_version":"%s","target_version":"%s","platform":"%s","qualification":"unqualified-candidate"}\n' "$FROM_VERSION" "$TO_VERSION" "$PLATFORM" > "$KIT_ROOT/UPDATE-KIT.json"
+for name in LEIA-ME-PRIMEIRO.md PROMPT-1-PREPARAR.txt PROMPT-2-VERIFICAR.txt TESTE-MAC-WINDOWS.md DIAGNOSTICO-HOOKS.md; do
+  sed -e "s/{{FROM_VERSION}}/$FROM_VERSION/g" -e "s/{{TO_VERSION}}/$TO_VERSION/g" \
+    -e "s/{{PLATFORM}}/$PLATFORM/g" "$TEMPLATE_DIR/$name" > "$KIT_ROOT/$name"
 done
-
-cp "$MAC_ZIP" "$MAC_SHA" "$WIN_ZIP" "$WIN_SHA" "$ROOT/"
-
-UPDATE_ZIP="$DIST_DIR/${ROOT_NAME}.zip"
-UPDATE_SHA="$DIST_DIR/${ROOT_NAME}.sha256"
-rm -f "$UPDATE_ZIP" "$UPDATE_SHA"
-(cd "$STAGE" && zip -qr "$UPDATE_ZIP" "$ROOT_NAME")
-
-UPDATE_DIGEST=$(shasum -a 256 "$UPDATE_ZIP" | awk '{print $1}')
-printf '%s  %s\n' "$UPDATE_DIGEST" "${ROOT_NAME}.zip" > "$UPDATE_SHA"
-
-echo "Update kit pronto:"
-echo "  ZIP:    $UPDATE_ZIP"
-echo "  SHA256: $UPDATE_DIGEST"
+for platform in $PLATFORMS; do
+  payload="$DIST_DIR/Maestro-v$TO_VERSION-$platform.zip"
+  cp "$payload" "$DIST_DIR/Maestro-v$TO_VERSION-$platform.sha256" "$KIT_ROOT/"
+  unzip -p "$payload" Maestro/UPDATE-CONTRACT.json > "$STAGE/contract-$platform.json"
+  if [ -f "$KIT_ROOT/UPDATE-CONTRACT.json" ]; then
+    cmp "$KIT_ROOT/UPDATE-CONTRACT.json" "$STAGE/contract-$platform.json" || { echo 'Platform contracts differ' >&2; exit 1; }
+  else
+    cp "$STAGE/contract-$platform.json" "$KIT_ROOT/UPDATE-CONTRACT.json"
+  fi
+done
+# Build and validate in staging. Existing candidate output survives failed validation.
+(cd "$STAGE" && zip -qr "$ROOT_NAME.zip" "$ROOT_NAME")
+DIGEST=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$STAGE/$ROOT_NAME.zip")
+printf '%s  %s.zip\n' "$DIGEST" "$ROOT_NAME" > "$STAGE/$ROOT_NAME.sha256"
+python3 "$VALIDATOR" kit --zip "$STAGE/$ROOT_NAME.zip" --from-version "$FROM_VERSION" --to-version "$TO_VERSION" --platform "$PLATFORM"
+mv "$STAGE/$ROOT_NAME.zip" "$DIST_DIR/$ROOT_NAME.zip"
+mv "$STAGE/$ROOT_NAME.sha256" "$DIST_DIR/$ROOT_NAME.sha256"
+printf 'Draft update candidate: %s\nSHA256: %s\nNative qualification and distribution remain separate.\n' "$DIST_DIR/$ROOT_NAME.zip" "$DIGEST"

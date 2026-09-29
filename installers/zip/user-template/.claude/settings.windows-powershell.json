@@ -63,6 +63,33 @@
             "command": "& \"$env:CLAUDE_PROJECT_DIR\\.claude\\hooks\\session-stop-dream.ps1\""
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "& \"$env:CLAUDE_PROJECT_DIR\\.claude\\hooks\\session-stop-agent-check.ps1\""
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "& \"$env:CLAUDE_PROJECT_DIR\\.claude\\hooks\\session-stop-brain-index.ps1\""
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "& \"$env:CLAUDE_PROJECT_DIR\\.claude\\hooks\\session-stop-eod-check.ps1\""
+          }
+        ]
       }
     ]
   }

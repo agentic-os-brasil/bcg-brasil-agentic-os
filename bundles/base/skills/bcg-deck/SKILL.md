@@ -12,7 +12,7 @@ presentation capability.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before presenting the plan. It
+Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) before presenting the plan. It
 changes explanation depth only; it never changes evidence, source or the
 planning output.
 

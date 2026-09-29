@@ -5,7 +5,7 @@ description: Mandatory pre-delivery quality gate for any output going to a clien
 
 # Skill: client-delivery-gate
 
-Resolve the canonical `interaction-profile` before starting. It controls how findings are
+Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) before starting. It controls how findings are
 presented (compact vs. verbose), but never changes the three-lens structure, verdict
 categories, or the 🔴 SEGURAR hard-stop invariant.
 
@@ -112,6 +112,34 @@ Return:
 - Per-lens findings (only non-trivial items)
 - Ordered action list (blockers first, then cautions)
 - Estimated effort to resolve (rough: <30min / ~1h / >1h per item)
+
+### Step 5 — Chain Yoda when the output is high-leverage
+
+This gate is mandatory, and so is Yoda — but until 2026-09-06 this file did not
+mention him anywhere. [`maestro-operator`](../maestro-operator/SKILL.md) declared both as required for
+high-leverage output and nothing connected the two, so the second gate depended
+on the hub remembering. It is exactly the failure class named in
+`brain/learnings/especificacao-nunca-lida-e-padrao.md`. The chain is now part of
+the sequence.
+
+After rendering the verdict, dispatch the **native [`yoda`](../yoda/SKILL.md) subagent** (Agent
+tool, `subagent_type: "yoda"`) when any of these holds — the same conditions
+declared in `bundles/base/agents/activation-policy.json`:
+
+- material recommendation, or a trade-off with real opportunity cost;
+- the artifact leaves for a client, sponsor, partner or regulator;
+- the decision is hard to reverse, or changes a standing rule or shared config.
+
+Send the closed packet in the prompt — Yoda fetches nothing: the owner's literal
+request, the full draft, the named audience, the consequence if wrong, the
+reversibility, and the evidence pointers. Add this gate's verdict and open
+findings so he reviews the artifact as it stands, not as it was.
+
+Ordinary operational, reversible, low-leverage output does **not** go to Yoda.
+Skipping is a typed decision with evidence, not an omission — say so in one line.
+
+A 🔴 SEGURAR here is resolved *before* Yoda: do not spend a senior review on an
+artifact this gate already blocked.
 
 ---
 

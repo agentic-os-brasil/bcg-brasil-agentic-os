@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Maestro first-run scaffold — creates data/ workspace on first session.
+# Maestro first-run scaffold — creates brain/ workspace on first session.
 # Idempotent. Fail-open. Never blocks Claude Code.
 
 set +e
@@ -25,10 +25,47 @@ if [ -z "$PROJECT_DIR" ]; then
     exit 0
   fi
 fi
-DATA_DIR="$PROJECT_DIR/data"
-MARKER="$DATA_DIR/.initialized"
-LOG="$DATA_DIR/.scaffold.log"
+
+# Resolvido a partir da pasta deste arquivo, nao do CLAUDE_PROJECT_DIR.
+#
+# Ate aqui o source vivia DENTRO do bloco de migracao, que so roda quando ha
+# um `data/` para migrar — ou seja, nunca numa instalacao nova. Toda funcao
+# deste hook que precisa de `maestro_py` saia em silencio na primeira sessao
+# de um dono novo, que e exatamente a sessao em que ela mais importa.
+# shellcheck source=lib/python.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/python.sh" 2>/dev/null || true
+BRAIN_DIR="$PROJECT_DIR/brain"
+MARKER="$BRAIN_DIR/.initialized"
+LOG="$BRAIN_DIR/.scaffold.log"
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+# Validate legacy migration before logs, backfills, recovery or initialized fast
+# paths. A stale .initialized or .migrated-to-brain never authorizes scaffolding.
+if [ -d "$PROJECT_DIR/data" ] || [ -f "$BRAIN_DIR/.maestro/migration/state.json" ]; then
+  . "$(dirname "$0")/lib/maestro-runtime.sh" 2>/dev/null
+  MIG_OUT="$(maestro_runtime "$PROJECT_DIR" migration --project "$PROJECT_DIR" 2>/dev/null)"
+  MIG_STATUS=$?
+  MIG_READY=false
+  if [ "$MIG_STATUS" -eq 0 ]; then
+    case "$MIG_OUT" in
+      *'"state":"committed"'*|*'"state":"not_needed"'*) MIG_READY=true ;;
+    esac
+  fi
+  if [ "$MIG_READY" != true ]; then
+    printf '<!-- maestro:migration-blocked -->\n'
+    printf 'A atualização da sua pasta ainda não foi validada. Os arquivos originais em data/ continuam preservados; a inicialização está pendente.\n'
+    printf 'Peça ao Maestro para verificar a migração com /maestro-doctor. O diagnóstico identifica bloqueio, cópia parcial ou componente indisponível.\n'
+    [ -n "$MIG_OUT" ] && printf 'Estado verificável da migração: %s\n' "$MIG_OUT"
+    exit 0
+  fi
+  # This is a live-validated map, not an instruction to guess a new namespace.
+  case "$MIG_OUT" in
+    *'"agents":"data/agents"'*|*'"workspaces":"data/workspaces"'*|*'"canary":"data/canary"'*)
+      printf 'Conteúdo legado preservado e disponível por adaptador: valide cada raiz com maestro-runtime migration --resolve-legacy antes de ler agentes, workspaces ou canary em data/. Não descarte data/.\n'
+      printf 'Mapa validado: %s\n' "$MIG_OUT"
+      ;;
+  esac
+fi
 
 log_line() {
   ( printf '%s  %s\n' "$TS" "$1" >> "$LOG" ) 2>/dev/null
@@ -135,66 +172,83 @@ emit_skills_rollup() {
 }
 
 # ---------------------------------------------------------------------------
-# Active case context — emitted every session when a case is active.
-# Reads data/cases/.active for the case ID, then emits a compact summary:
-# project brief (first 25 lines), last 5 decision headings, open task count.
-# Fail-open: any error silently returns without output.
+# O contexto do caso ativo NAO e emitido aqui.
+#
+# Ele vive em session-start-memory-inject.sh, que este commit traz e que roda
+# no mesmo SessionStart. Com os dois emitindo, o brief, as decisoes e a lista
+# de tarefas do caso entravam duas vezes no mesmo contexto — e os dois
+# procuravam o brief em lugares diferentes, porque este seguia um layout com
+# `projects/` que o canonico nao tem. Uma fonte, um leitor.
 # ---------------------------------------------------------------------------
-emit_active_case_context() {
-  local cases_dir="$DATA_DIR/cases"
-  local active_file="$cases_dir/.active"
+# MarkItDown — deteccao deterministica.
+#
+# O passo 3 do CLAUDE.md mandava eu rodar `markitdown --version` e gravar
+# brain/owner/markitdown.json. O arquivo nunca existiu: o check nunca rodou em
+# sessao nenhuma. Instrucao que depende de alguem lembrar falha exatamente
+# quando o trabalho aperta — o mesmo raciocinio que tirou "ao criar pasta,
+# atualize o indice" das maos e passou para o compilador.
+#
+# Cadencia: checa quando nao ha registro, e recheca depois de 30 dias quando o
+# ultimo resultado foi negativo (pode ter sido instalado desde entao). Resultado
+# positivo nao e rechecado.
+# ---------------------------------------------------------------------------
+detect_markitdown() {
+  local out="$BRAIN_DIR/owner/markitdown.json"
+  [ -d "$BRAIN_DIR/owner" ] || return 0
+  maestro_python >/dev/null 2>&1 || return 0
 
-  [ -f "$active_file" ] || return 0
+  local due
+  due=$(PYTHONIOENCODING=utf-8 maestro_py - "$out" <<'PY' 2>/dev/null
+import json, sys, datetime
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        d = json.load(f)
+except Exception:
+    print("yes"); sys.exit(0)           # sem registro: checa
+if d.get("available"):
+    print("no"); sys.exit(0)            # ja achou: nao recheca
+try:
+    last = datetime.datetime.fromisoformat(d["checked_at"].replace("Z", "+00:00"))
+    age = (datetime.datetime.now(datetime.timezone.utc) - last).days
+except Exception:
+    print("yes"); sys.exit(0)
+print("yes" if age >= 30 else "no")
+PY
+)
+  [ "$due" = "yes" ] || return 0
 
-  local case_id
-  case_id=$(tr -d '[:space:]' < "$active_file" 2>/dev/null)
-  [ -z "$case_id" ] && return 0
-
-  local case_dir="$cases_dir/$case_id"
-  [ -d "$case_dir" ] || return 0
-
-  printf '## Caso ativo: %s\n\n' "$case_id"
-
-  # Project brief — first .md in brain/projects/, first 25 lines
-  local brief_file=""
-  for f in "$case_dir/brain/projects/"*.md; do
-    [ -f "$f" ] && brief_file="$f" && break
-  done
-  if [ -n "$brief_file" ]; then
-    printf '### Brief\n\n'
-    head -25 "$brief_file" 2>/dev/null
-    printf '\n'
+  local ver="" avail="false"
+  if command -v markitdown >/dev/null 2>&1; then
+    ver=$(markitdown --version 2>/dev/null | head -1 | tr -d '"\')
+    [ -n "$ver" ] && avail="true"
   fi
-
-  # Last 5 decision headings
-  local decision_log="$case_dir/brain/decisions/decision-log.md"
-  if [ -f "$decision_log" ]; then
-    printf '### Últimas decisões\n\n'
-    grep -E "^## D-[0-9]+" "$decision_log" 2>/dev/null | tail -5 | sed 's/^## /- /'
-    printf '\n'
-  fi
-
-  # Open tasks count + names (max 10)
-  if [ -d "$case_dir/brain/tasks" ]; then
-    local task_count
-    task_count=$(find "$case_dir/brain/tasks" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
-    if [ "${task_count:-0}" -gt 0 ] 2>/dev/null; then
-      printf '### Tarefas abertas (%s)\n\n' "$task_count"
-      find "$case_dir/brain/tasks" -name "*.md" 2>/dev/null | head -10 | while read -r tf; do
-        printf '- %s\n' "$(basename "$tf" .md)"
-      done
-      printf '\n'
-    fi
+  local ts
+  ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  if [ "$avail" = "true" ]; then
+    printf '{\n  "available": true,\n  "version": "%s",\n  "checked_at": "%s"\n}\n' \
+      "$ver" "$ts" > "$out" 2>/dev/null
+    log_line "MARKITDOWN disponivel ($ver)"
+    # Uma linha, so quando muda de estado: ingestao de documento passou a existir.
+    printf '\n## Ingestão de documentos habilitada\n'
+    printf 'MarkItDown detectado (%s). PDF, Office e páginas salvas podem ser ingeridos com `ingest-content`.\n' "$ver"
+  else
+    printf '{\n  "available": false,\n  "checked_at": "%s"\n}\n' "$ts" > "$out" 2>/dev/null
+    log_line "MARKITDOWN ausente (recheca em 30 dias)"
+    # Silencio de proposito: ausencia nao e problema do dono nem pedido de setup.
   fi
 }
 
-# Recovery detection: data/ exists with real content but marker is missing.
-# Means either: (a) user restored data/ from a backup, or (b) marker was clobbered
+# ---------------------------------------------------------------------------
+# O contexto do caso ativo NAO e emitido aqui — ver session-start-memory-inject.sh.
+# ---------------------------------------------------------------------------
+
+# Recovery detection: brain/ exists with real content but marker is missing.
+# Means either: (a) user restored brain/ from a backup, or (b) marker was clobbered
 # during an update. Drop a breadcrumb rather than silently re-scaffolding.
-if [ -d "$DATA_DIR" ] && [ ! -f "$MARKER" ]; then
-  if [ -d "$DATA_DIR/agents" ] && [ -n "$(ls -A "$DATA_DIR/agents" 2>/dev/null)" ]; then
-    printf '%s\n' "$TS" > "$DATA_DIR/.recovered-$TS" 2>/dev/null
-    log_line "RECOVERY  data/agents has content, marker missing — breadcrumb written"
+if [ -d "$BRAIN_DIR" ] && [ ! -f "$MARKER" ]; then
+  if [ -d "$BRAIN_DIR/memory" ] && [ -n "$(ls -A "$BRAIN_DIR/memory" 2>/dev/null)" ]; then
+    printf '%s\n' "$TS" > "$BRAIN_DIR/.recovered-${TS//:/-}" 2>/dev/null
+    log_line "RECOVERY  brain/memory has content, marker missing — breadcrumb written"
   fi
 fi
 
@@ -206,41 +260,41 @@ fi
 # Without this, dream-memory silently refuses to write against pre-existing
 # workspaces because .schema-version is missing.
 # ---------------------------------------------------------------------------
-# Ensure data/memory/ itself exists before backfilling tiers. Covers workspaces
-# where data/.initialized was written outside the scaffold (backup restore,
-# manual copy, dev pre-population) and data/memory/ never got created.
-if [ -d "$DATA_DIR" ] && [ ! -d "$DATA_DIR/memory" ]; then
-  mkdir -p "$DATA_DIR/memory" 2>/dev/null && \
-    log_line "BACKFILL  data/memory/ (root mkdir — missing from pre-existing workspace)"
+# Ensure brain/memory/ itself exists before backfilling tiers. Covers workspaces
+# where brain/.initialized was written outside the scaffold (backup restore,
+# manual copy, dev pre-population) and brain/memory/ never got created.
+if [ -d "$BRAIN_DIR" ] && [ ! -d "$BRAIN_DIR/memory" ]; then
+  mkdir -p "$BRAIN_DIR/memory" 2>/dev/null && \
+    log_line "BACKFILL  brain/memory/ (root mkdir — missing from pre-existing workspace)"
 fi
 
-if [ -d "$DATA_DIR/memory" ]; then
+if [ -d "$BRAIN_DIR/memory" ]; then
   # Memory tier sub-dirs — required by dream-memory + session-start-memory-inject.
-  # Idempotent. Runs even when data/.initialized already exists (workspaces
+  # Idempotent. Runs even when brain/.initialized already exists (workspaces
   # restored from backup, copied manually, or pre-populated in dev), where the
   # first-run branch never executed. Without this, emit_latest_file/emit_all_files
   # find nothing and dream-memory refuses to write because the tier target is
   # missing.
   for tier in recent weekly medium-term lifetime policies; do
-    if [ ! -d "$DATA_DIR/memory/$tier" ]; then
-      mkdir -p "$DATA_DIR/memory/$tier" 2>/dev/null && \
-        log_line "BACKFILL  data/memory/$tier (tier mkdir)"
+    if [ ! -d "$BRAIN_DIR/memory/$tier" ]; then
+      mkdir -p "$BRAIN_DIR/memory/$tier" 2>/dev/null && \
+        log_line "BACKFILL  brain/memory/$tier (tier mkdir)"
     fi
   done
 
-  MEMORY_GITIGNORE="$DATA_DIR/memory/.gitignore"
+  MEMORY_GITIGNORE="$BRAIN_DIR/memory/.gitignore"
   if [ ! -f "$MEMORY_GITIGNORE" ]; then
     printf '.dream-requested\n' > "$MEMORY_GITIGNORE" 2>/dev/null && \
-      log_line "BACKFILL  data/memory/.gitignore (ignores .dream-requested)"
+      log_line "BACKFILL  brain/memory/.gitignore (ignores .dream-requested)"
   fi
 
-  LIFETIME_POLICY="$DATA_DIR/memory/policies/lifetime.json"
+  LIFETIME_POLICY="$BRAIN_DIR/memory/policies/lifetime.json"
   if [ ! -f "$LIFETIME_POLICY" ]; then
     write_lifetime_policy "$LIFETIME_POLICY" "first-run-scaffold.sh (backfill)" && \
-      log_line "BACKFILL  data/memory/policies/lifetime.json (deterministic-l3-continuity-v1)"
+      log_line "BACKFILL  brain/memory/policies/lifetime.json (deterministic-l3-continuity-v1)"
   fi
 
-  MEMORY_SCHEMA_MARKER="$DATA_DIR/memory/.schema-version"
+  MEMORY_SCHEMA_MARKER="$BRAIN_DIR/memory/.schema-version"
   if [ ! -f "$MEMORY_SCHEMA_MARKER" ]; then
     cat > "$MEMORY_SCHEMA_MARKER" 2>/dev/null <<'EOF'
 {
@@ -250,7 +304,7 @@ if [ -d "$DATA_DIR/memory" ]; then
   "initialized_by": "first-run-scaffold.sh (backfill)"
 }
 EOF
-    log_line "BACKFILL  data/memory/.schema-version (v1)"
+    log_line "BACKFILL  brain/memory/.schema-version (v1)"
   fi
 fi
 
@@ -258,19 +312,19 @@ if [ -f "$MARKER" ]; then
   # ---------------------------------------------------------------------------
   # GAP-C — Incremental upgrade detection.
   # Compare the running bundle VERSION against the marker previously written
-  # into data/.maestro-version. If they differ, emit an upgrade breadcrumb so
-  # `maestro-setup-update` can pick it up. Never mutate data/; only surface
+  # into brain/.maestro-version. If they differ, emit an upgrade breadcrumb so
+  # `maestro-setup-update` can pick it up. Never mutate brain/; only surface
   # signal. Fail-open on missing files.
   # ---------------------------------------------------------------------------
   RUNNING_VERSION="$(cat "$PROJECT_DIR/VERSION" 2>/dev/null | tr -d '[:space:]')"
-  INSTALLED_MARKER="$DATA_DIR/.maestro-version"
+  INSTALLED_MARKER="$BRAIN_DIR/.maestro-version"
   INSTALLED_VERSION="$(cat "$INSTALLED_MARKER" 2>/dev/null | tr -d '[:space:]')"
 
   if [ -n "$RUNNING_VERSION" ] && [ -z "$INSTALLED_VERSION" ]; then
     printf '%s\n' "$RUNNING_VERSION" > "$INSTALLED_MARKER" 2>/dev/null
-    log_line "WRITE OK  data/.maestro-version=$RUNNING_VERSION (backfilled)"
+    log_line "WRITE OK  brain/.maestro-version=$RUNNING_VERSION (backfilled)"
   elif [ -n "$RUNNING_VERSION" ] && [ -n "$INSTALLED_VERSION" ] && [ "$RUNNING_VERSION" != "$INSTALLED_VERSION" ]; then
-    UPGRADE_MARKER="$DATA_DIR/.upgrade-pending"
+    UPGRADE_MARKER="$BRAIN_DIR/.upgrade-pending"
     cat > "$UPGRADE_MARKER" 2>/dev/null <<EOF
 {
   "from_version": "$INSTALLED_VERSION",
@@ -283,48 +337,56 @@ EOF
   fi
 
   emit_skills_rollup 2>/dev/null
-  emit_active_case_context 2>/dev/null
+  detect_markitdown 2>/dev/null
   exit 0
 fi
 
+
+
 log_line "SCAFFOLD  project_dir=$PROJECT_DIR"
 
-for sub in agents canary cases memory owner profile workspaces; do
-  if mkdir -p "$DATA_DIR/$sub" 2>/dev/null; then
-    log_line "MKDIR OK  data/$sub"
+# `tasks` is the ninth trunk, not an eighth-plus-one. It holds a view of the
+# case and owner checkboxes that the brain index compiles; the compiler and
+# the SessionStart block that reads brain/tasks/tasks.md arrive with the
+# indexing change, so the directory is empty until then. Created here anyway:
+# the tree shape belongs to the scaffold, and adding it later would mean a
+# second pass over this file for a directory name.
+for sub in accounts craft daily development learnings memory owner people tasks; do
+  if mkdir -p "$BRAIN_DIR/$sub" 2>/dev/null; then
+    log_line "MKDIR OK  brain/$sub"
   else
-    log_line "MKDIR FAIL  data/$sub  (permissions or path issue)"
+    log_line "MKDIR FAIL  brain/$sub  (permissions or path issue)"
   fi
 done
 
 # Memory layer sub-tiers — required by dream-memory skill (L1/L2/L3 + policies)
 for tier in recent weekly medium-term lifetime policies; do
-  if mkdir -p "$DATA_DIR/memory/$tier" 2>/dev/null; then
-    log_line "MKDIR OK  data/memory/$tier"
+  if mkdir -p "$BRAIN_DIR/memory/$tier" 2>/dev/null; then
+    log_line "MKDIR OK  brain/memory/$tier"
   else
-    log_line "MKDIR FAIL  data/memory/$tier  (permissions or path issue)"
+    log_line "MKDIR FAIL  brain/memory/$tier  (permissions or path issue)"
   fi
 done
 
 # Ensure the dreaming marker never gets committed if the user's workspace is a git repo.
-MEMORY_GITIGNORE="$DATA_DIR/memory/.gitignore"
+MEMORY_GITIGNORE="$BRAIN_DIR/memory/.gitignore"
 if [ ! -f "$MEMORY_GITIGNORE" ]; then
   printf '.dream-requested\n' > "$MEMORY_GITIGNORE" 2>/dev/null && \
-    log_line "WRITE OK  data/memory/.gitignore  (ignores .dream-requested)"
+    log_line "WRITE OK  brain/memory/.gitignore  (ignores .dream-requested)"
 fi
 
 # Lifetime eligibility policy — see write_lifetime_policy() above.
-LIFETIME_POLICY="$DATA_DIR/memory/policies/lifetime.json"
+LIFETIME_POLICY="$BRAIN_DIR/memory/policies/lifetime.json"
 if [ ! -f "$LIFETIME_POLICY" ]; then
   write_lifetime_policy "$LIFETIME_POLICY" "first-run-scaffold.sh" && \
-    log_line "WRITE OK  data/memory/policies/lifetime.json (deterministic-l3-continuity-v1)"
+    log_line "WRITE OK  brain/memory/policies/lifetime.json (deterministic-l3-continuity-v1)"
 fi
 
 # Memory schema version marker — GAP-D. Consumed by dream-memory to detect
 # migrations. The current schema is v1 (L1/L2/L3 + lifetime + policies as
 # described in bundles/base/memory/policy.json). When the schema evolves,
 # dream-memory refuses to write until a migration bumps this marker.
-MEMORY_SCHEMA_MARKER="$DATA_DIR/memory/.schema-version"
+MEMORY_SCHEMA_MARKER="$BRAIN_DIR/memory/.schema-version"
 if [ ! -f "$MEMORY_SCHEMA_MARKER" ]; then
   cat > "$MEMORY_SCHEMA_MARKER" 2>/dev/null <<'EOF'
 {
@@ -334,30 +396,30 @@ if [ ! -f "$MEMORY_SCHEMA_MARKER" ]; then
   "initialized_by": "first-run-scaffold.sh"
 }
 EOF
-  log_line "WRITE OK  data/memory/.schema-version (v1)"
+  log_line "WRITE OK  brain/memory/.schema-version (v1)"
 fi
 
 # Owner self facets — ten individually-addressable markdown files (spec 013)
 # Creates placeholder files only; content is filled in by /maestro-onboarding.
-if mkdir -p "$DATA_DIR/owner/self" 2>/dev/null; then
-  log_line "MKDIR OK  data/owner/self"
+if mkdir -p "$BRAIN_DIR/owner/self" 2>/dev/null; then
+  log_line "MKDIR OK  brain/owner/self"
   for facet in owner-identity personal-context professional-role communication-style \
                voice preferences motivations quality-bar decision-rules working-boundaries; do
-    FACET_FILE="$DATA_DIR/owner/self/$facet.md"
+    FACET_FILE="$BRAIN_DIR/owner/self/$facet.md"
     if [ ! -f "$FACET_FILE" ]; then
       printf '# %s\n\n## Current\n\n_Não preenchido. Use /maestro-onboarding para configurar._\n' \
         "$facet" > "$FACET_FILE" 2>/dev/null && \
-        log_line "WRITE OK  data/owner/self/$facet.md (placeholder)"
+        log_line "WRITE OK  brain/owner/self/$facet.md (placeholder)"
     fi
   done
 else
-  log_line "MKDIR FAIL  data/owner/self  (permissions or path issue)"
+  log_line "MKDIR FAIL  brain/owner/self  (permissions or path issue)"
 fi
 
 # Owner context tree — extended structure per spec 013
 # registry.json — policy/pointer index for all owner sub-trees
-if [ ! -f "$DATA_DIR/owner/registry.json" ]; then
-  cat > "$DATA_DIR/owner/registry.json" 2>/dev/null <<'EOF'
+if [ ! -f "$BRAIN_DIR/owner/registry.json" ]; then
+  cat > "$BRAIN_DIR/owner/registry.json" 2>/dev/null <<'EOF'
 {
   "schema_version": 1,
   "trees": {
@@ -375,12 +437,12 @@ if [ ! -f "$DATA_DIR/owner/registry.json" ]; then
   }
 }
 EOF
-  log_line "WRITE OK  data/owner/registry.json (placeholder)"
+  log_line "WRITE OK  brain/owner/registry.json (placeholder)"
 fi
 
 # owner/self/README.md — canonical index of the 10 SELF facets
-if [ ! -f "$DATA_DIR/owner/self/README.md" ]; then
-  cat > "$DATA_DIR/owner/self/README.md" 2>/dev/null <<'EOF'
+if [ ! -f "$BRAIN_DIR/owner/self/README.md" ]; then
+  cat > "$BRAIN_DIR/owner/self/README.md" 2>/dev/null <<'EOF'
 # SELF — Owner Context Facets
 
 Dez arquivos individualmente endereçáveis. Preenchidos por /maestro-onboarding.
@@ -398,14 +460,14 @@ Dez arquivos individualmente endereçáveis. Preenchidos por /maestro-onboarding
 | Regras de decisão | decision-rules.md |
 | Limites de trabalho | working-boundaries.md |
 EOF
-  log_line "WRITE OK  data/owner/self/README.md"
+  log_line "WRITE OK  brain/owner/self/README.md"
 fi
 
 # owner/operating/work-state.md — work continuity placeholder
-if mkdir -p "$DATA_DIR/owner/operating" 2>/dev/null; then
-  log_line "MKDIR OK  data/owner/operating"
-  if [ ! -f "$DATA_DIR/owner/operating/work-state.md" ]; then
-    cat > "$DATA_DIR/owner/operating/work-state.md" 2>/dev/null <<'EOF'
+if mkdir -p "$BRAIN_DIR/owner/operating" 2>/dev/null; then
+  log_line "MKDIR OK  brain/owner/operating"
+  if [ ! -f "$BRAIN_DIR/owner/operating/work-state.md" ]; then
+    cat > "$BRAIN_DIR/owner/operating/work-state.md" 2>/dev/null <<'EOF'
 # Work State
 
 _Não inicializado. Atualizado automaticamente pelo Maestro ao final de cada sessão de trabalho._
@@ -418,46 +480,50 @@ _Não inicializado. Atualizado automaticamente pelo Maestro ao final de cada ses
 ## Open threads
 _Nenhum registrado._
 EOF
-    log_line "WRITE OK  data/owner/operating/work-state.md (placeholder)"
+    log_line "WRITE OK  brain/owner/operating/work-state.md (placeholder)"
   fi
 else
-  log_line "MKDIR FAIL  data/owner/operating"
+  log_line "MKDIR FAIL  brain/owner/operating"
 fi
 
 # owner/observations/ — append-only observations log
-if mkdir -p "$DATA_DIR/owner/observations" 2>/dev/null; then
-  log_line "MKDIR OK  data/owner/observations"
-  if [ ! -f "$DATA_DIR/owner/observations/observations.jsonl" ]; then
-    printf '' > "$DATA_DIR/owner/observations/observations.jsonl" 2>/dev/null && \
-      log_line "WRITE OK  data/owner/observations/observations.jsonl (empty)"
+if mkdir -p "$BRAIN_DIR/owner/observations" 2>/dev/null; then
+  log_line "MKDIR OK  brain/owner/observations"
+  if [ ! -f "$BRAIN_DIR/owner/observations/observations.jsonl" ]; then
+    printf '' > "$BRAIN_DIR/owner/observations/observations.jsonl" 2>/dev/null && \
+      log_line "WRITE OK  brain/owner/observations/observations.jsonl (empty)"
   fi
 else
-  log_line "MKDIR FAIL  data/owner/observations"
+  log_line "MKDIR FAIL  brain/owner/observations"
 fi
 
-# owner/atlas/ — the owner's professional atlas (spec 007 navigation layer).
-# start-day, eod, craft-update, feedback-capture, learnings-bridge and
-# upward-feedback all read and write under data/owner/atlas/. Their reads are
-# what rank the day and carry continuity between sessions; with no tree and no
-# objectives file those reads return nothing and the daily ritual degrades to a
-# briefing composed from the session alone.
+# The owner's own trees (spec 007 navigation layer). start-day, eod,
+# craft-update, feedback-capture, learnings-bridge and upward-feedback all read
+# and write here. Their reads are what rank the day and carry continuity
+# between sessions; with no tree and no objectives file those reads return
+# nothing and the daily ritual degrades to a briefing composed from the session
+# alone.
+#
+# These sit at the top of brain/ rather than under owner/atlas/. Each has one
+# clear owner and is addressed by its own name — brain/daily, brain/craft —
+# everywhere else in the product, so nesting them under a navigation folder
+# added a level nothing referenced.
 #
 # Only the directories and the two index pages are created. Daily pages, method
 # and style pages, learnings and feedback captures are authored by the skills
 # themselves — placeholders there would be mistaken for real content.
-if mkdir -p "$DATA_DIR/owner/atlas" 2>/dev/null; then
-  log_line "MKDIR OK  data/owner/atlas"
-  for atlas_sub in daily craft/methods craft/style learnings \
-                   development/cdc development/project-feedback development/upward-feedback; do
-    if mkdir -p "$DATA_DIR/owner/atlas/$atlas_sub" 2>/dev/null; then
-      log_line "MKDIR OK  data/owner/atlas/$atlas_sub"
+if mkdir -p "$BRAIN_DIR/craft" 2>/dev/null; then
+  log_line "MKDIR OK  brain/craft"
+  for owner_sub in daily craft/methods craft/style learnings people                    development/cdc development/project-feedback development/upward-feedback                    development/retros; do
+    if mkdir -p "$BRAIN_DIR/$owner_sub" 2>/dev/null; then
+      log_line "MKDIR OK  brain/$owner_sub"
     else
-      log_line "MKDIR FAIL  data/owner/atlas/$atlas_sub  (permissions or path issue)"
+      log_line "MKDIR FAIL  brain/$owner_sub  (permissions or path issue)"
     fi
   done
 
-  if [ ! -f "$DATA_DIR/owner/atlas/craft/index.md" ]; then
-    cat > "$DATA_DIR/owner/atlas/craft/index.md" 2>/dev/null <<'EOF'
+  if [ ! -f "$BRAIN_DIR/craft/craft.md" ]; then
+    cat > "$BRAIN_DIR/craft/craft.md" 2>/dev/null <<'EOF'
 # Craft
 
 Métodos e calibrações de estilo que se mantêm verdadeiros entre projetos.
@@ -467,11 +533,11 @@ Métodos e calibrações de estilo que se mantêm verdadeiros entre projetos.
 
 _Ainda vazio. As páginas são criadas por `/craft-update` e `/learnings-bridge`._
 EOF
-    log_line "WRITE OK  data/owner/atlas/craft/index.md"
+    log_line "WRITE OK  brain/craft/craft.md"
   fi
 
-  if [ ! -f "$DATA_DIR/owner/atlas/learnings/index.md" ]; then
-    cat > "$DATA_DIR/owner/atlas/learnings/index.md" 2>/dev/null <<'EOF'
+  if [ ! -f "$BRAIN_DIR/learnings/learnings.md" ]; then
+    cat > "$BRAIN_DIR/learnings/learnings.md" 2>/dev/null <<'EOF'
 # Learnings
 
 Aprendizados profissionais duráveis, corrigíveis e ligados às suas fontes
@@ -479,19 +545,19 @@ quando aplicável.
 
 _Ainda vazio. As páginas são criadas por `/learnings-bridge`._
 EOF
-    log_line "WRITE OK  data/owner/atlas/learnings/index.md"
+    log_line "WRITE OK  brain/learnings/learnings.md"
   fi
 
   # objectives.md is read by start-day, eod and feedback-capture to tie the day
   # to what the owner is actually working toward. It is authored by the owner,
   # so it ships as an empty structure rather than invented content.
-  if [ ! -f "$DATA_DIR/owner/atlas/development/objectives.md" ]; then
+  if [ ! -f "$BRAIN_DIR/development/objectives.md" ]; then
     # The heading set is load-bearing, not decoration. feedback-capture files
     # evidence and retirements with `append-entry`, which never creates a
     # heading and refuses one that appears more than once on a page. So the
     # page must ship with a uniquely-numbered evidence heading per objective
     # and a single retirement heading, or those writes are declined outright.
-    cat > "$DATA_DIR/owner/atlas/development/objectives.md" 2>/dev/null <<'EOF'
+    cat > "$BRAIN_DIR/development/objectives.md" 2>/dev/null <<'EOF'
 # Objetivos de desenvolvimento
 
 O que você está tentando desenvolver neste período, e o que conta como
@@ -516,34 +582,34 @@ _Não preenchido. Diga "quero definir meus objetivos" para preencher._
 
 <!-- append-only: uma linha datada por objetivo aposentado, nomeando a review que o aposentou -->
 EOF
-    log_line "WRITE OK  data/owner/atlas/development/objectives.md (placeholder)"
+    log_line "WRITE OK  brain/development/objectives.md (placeholder)"
   fi
 else
-  log_line "MKDIR FAIL  data/owner/atlas  (permissions or path issue)"
+  log_line "MKDIR FAIL  brain/owner  (permissions or path issue)"
 fi
 
 # owner/interview/ — interview confirmations + drafts
-if mkdir -p "$DATA_DIR/owner/interview/drafts" 2>/dev/null; then
-  log_line "MKDIR OK  data/owner/interview/drafts"
-  if [ ! -f "$DATA_DIR/owner/interview/confirmations.json" ]; then
-    cat > "$DATA_DIR/owner/interview/confirmations.json" 2>/dev/null <<'EOF'
+if mkdir -p "$BRAIN_DIR/owner/interview/drafts" 2>/dev/null; then
+  log_line "MKDIR OK  brain/owner/interview/drafts"
+  if [ ! -f "$BRAIN_DIR/owner/interview/confirmations.json" ]; then
+    cat > "$BRAIN_DIR/owner/interview/confirmations.json" 2>/dev/null <<'EOF'
 {
   "schema_version": 1,
   "completed_tracks": [],
   "last_updated": null
 }
 EOF
-    log_line "WRITE OK  data/owner/interview/confirmations.json (placeholder)"
+    log_line "WRITE OK  brain/owner/interview/confirmations.json (placeholder)"
   fi
 else
-  log_line "MKDIR FAIL  data/owner/interview/drafts"
+  log_line "MKDIR FAIL  brain/owner/interview/drafts"
 fi
 
-if [ ! -d "$DATA_DIR/agents" ]; then
-  log_line "ABORT  data/agents was not created — hook exiting fail-open"
+if [ ! -d "$BRAIN_DIR/memory" ]; then
+  log_line "ABORT  brain/memory was not created — hook exiting fail-open"
   BREADCRUMB_BODY="Maestro first-run scaffold failed at $TS.
 
-O hook tentou criar $DATA_DIR/agents mas não conseguiu (permissões, path bloqueado
+O hook tentou criar $BRAIN_DIR/memory mas não conseguiu (permissões, path bloqueado
 por OneDrive/MDM, ou disco cheio). O Maestro está rodando sem workspace persistente.
 
 Próximo passo: peça \"/maestro-doctor\" na próxima mensagem para diagnóstico."
@@ -561,25 +627,38 @@ Próximo passo: peça \"/maestro-doctor\" na próxima mensagem para diagnóstico
   exit 0
 fi
 
-cat > "$DATA_DIR/README.md" 2>/dev/null <<'EOF'
-# data/ — sua workspace do Maestro
+cat > "$BRAIN_DIR/README.md" 2>/dev/null <<'EOF'
+# brain/ — sua workspace do Maestro
 
-Tudo dentro de `data/` é seu. Atualizações do Maestro nunca sobrescrevem este diretório.
+Tudo dentro de `brain/` é seu. Atualizações do Maestro nunca sobrescrevem este diretório.
 
-- `agents/`   — estado de cada agente (memória de trabalho, decisões, contexto)
-- `cases/`    — casos de cliente ativos; cada caso tem brain/ (projects/, decisions/, tasks/, deliverables/, sources/, canon/)
-- `memory/`   — memória de longo prazo do Maestro sobre você
-- `profile/`  — identidade e preferências
-- `workspaces/` — projetos ativos
+- `memory/`      — memória consolidada, escrita pelo motor de dreaming (recente, semanal, médio prazo, permanente)
+- `owner/`       — quem você é: identidade, estilo, facetas SELF, estado de trabalho, observações
+- `daily/`       — a página de cada dia de trabalho
+- `learnings/`   — aprendizados profissionais duráveis
+- `craft/`       — métodos e calibrações de estilo que se mantêm entre projetos
+- `people/`      — perfis de colegas com quem você trabalhou
+- `development/` — objetivos, retrospectivas, feedback recebido e a dar
+- `accounts/`    — clientes, cada um com `cases/<projeto>/`: o brief em `<projeto>.md` na raiz do caso, e decisions/,
+  tasks/, deliverables/, sources/, canon/ em subpastas
+- `tasks/`       — visão de tarefas derivada dos casos
 
-O caso ativo é indicado por `cases/.active` (contém o case-id). O Maestro injeta contexto do caso ativo a cada sessão.
+Há ainda um `.maestro/`, que é área de máquina: índices, backlinks, diagnóstico e
+log, todos regeneráveis a partir das suas páginas. Não precisa de backup e não deve
+ser editado à mão.
 
-Se quiser fazer backup, basta copiar `data/` inteiro. Nenhum arquivo aqui depende de código externo.
+O índice de tudo é `brain_index.md`, na raiz — sempre regenerado, nunca editado à
+mão. Cada conta e cada caso têm o seu, na própria pasta.
+
+O caso ativo é indicado por `accounts/.active`, que contém `<cliente>/<projeto>`.
+O Maestro injeta o contexto do caso ativo a cada sessão.
+
+Se quiser fazer backup, basta copiar `brain/` inteiro. Nenhum arquivo aqui depende de código externo.
 EOF
 
 # Profile placeholders — created only once; user fills them in via /maestro-onboarding
-if [ ! -f "$DATA_DIR/profile/identity.json" ]; then
-  cat > "$DATA_DIR/profile/identity.json" 2>/dev/null <<'EOF'
+if [ ! -f "$BRAIN_DIR/owner/identity.json" ]; then
+  cat > "$BRAIN_DIR/owner/identity.json" 2>/dev/null <<'EOF'
 {
   "schema_version": 1,
   "display_name": "",
@@ -588,7 +667,7 @@ if [ ! -f "$DATA_DIR/profile/identity.json" ]; then
   "initialized": false
 }
 EOF
-  log_line "WRITE OK  data/profile/identity.json (placeholder)"
+  log_line "WRITE OK  brain/owner/identity.json (placeholder)"
 fi
 
 printf '%s\n' "$TS" > "$MARKER" 2>/dev/null
@@ -597,11 +676,11 @@ log_line "DONE  marker written"
 # GAP-C — record installed bundle version so future runs can detect upgrades.
 FIRST_RUN_VERSION="$(cat "$PROJECT_DIR/VERSION" 2>/dev/null | tr -d '[:space:]')"
 if [ -n "$FIRST_RUN_VERSION" ]; then
-  printf '%s\n' "$FIRST_RUN_VERSION" > "$DATA_DIR/.maestro-version" 2>/dev/null
-  log_line "WRITE OK  data/.maestro-version=$FIRST_RUN_VERSION"
+  printf '%s\n' "$FIRST_RUN_VERSION" > "$BRAIN_DIR/.maestro-version" 2>/dev/null
+  log_line "WRITE OK  brain/.maestro-version=$FIRST_RUN_VERSION"
 fi
 
 emit_skills_rollup
-emit_active_case_context 2>/dev/null
+detect_markitdown 2>/dev/null
 
 exit 0

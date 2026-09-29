@@ -1,0 +1,4 @@
+interface:
+  display_name: "Background do dono"
+  short_description: "Registra formação, trajetória antes do BCG e aspirações de carreira e de vida"
+  default_prompt: "Use $owner-background para registrar minha formação, minha trajetória antes do BCG e minhas aspirações."

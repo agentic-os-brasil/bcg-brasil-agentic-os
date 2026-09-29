@@ -1,0 +1,4 @@
+interface:
+  display_name: "Aprender com os Logs"
+  short_description: "Lê conversas anteriores com o Claude para propor rascunhos ou atualizações ao perfil do dono, sempre com confirmação individual"
+  default_prompt: "Use $learn-from-logs para ler minhas conversas novas com o Claude (chat ou Claude Code) e propor atualizações ao meu perfil, uma de cada vez."
