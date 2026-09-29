@@ -69,6 +69,13 @@ fazer, não pela palavra que usou.
 
 ### Conhecimento compartilhado do caso (caseOS)
 
+| O pedido soa como | Rota |
+|---|---|
+| entender caseOS ou como buscar decisões do time | [`caseos-tutorial`](../caseos-tutorial/SKILL.md) |
+| conectar ou consultar o caso autorizado | [`caseos-connect`](../caseos-connect/SKILL.md) |
+| preparar um documento ou notas para caseOS | [`caseos-prepare-ingest`](../caseos-prepare-ingest/SKILL.md) — proposta local |
+| auditar ou melhorar um recorte existente do grafo | [`caseos-prepare-enrichment`](../caseos-prepare-enrichment/SKILL.md) — proposta local |
+
 Em trabalho de caso que dependa de contexto ou material do time, verifique se há
 uma conexão caseOS já consentida para a raiz e o caso ativos. Se houver, use
 [`caseos-connect`](../caseos-connect/SKILL.md), valide saúde e schema atuais e
@@ -80,6 +87,8 @@ A recusa ou indisponibilidade mantém o trabalho local, sem insistência a cada
 pedido. URL, autenticação, case_id e allowlist nunca são inferidos de outro caso.
 Nenhuma memória pessoal ou log é enviado automaticamente. Publicação/exportação
 exige plano e consentimento específicos.
+As skills de preparação não executam publicação, nem após aprovação do rascunho.
+Não trate ferramentas ou cartões de aprovação de outro host como disponíveis aqui.
 
 ### Trazer material para dentro
 

@@ -26,6 +26,10 @@ return evidence, limitations and the next action. Do not treat a prompt, hook or
 agent definition as permission to bypass host approvals or sandbox policy.
 
 For team knowledge, caseOS access or MCP setup, load caseos-connect first.
+For offline learning, use caseos-tutorial and CASEOS-GUIDE.md; no connection is needed.
+Use caseos-prepare-ingest for new authorized source material and
+caseos-prepare-enrichment for an existing graph slice. Both return local proposals,
+never remote writes or approval-card submissions, even when asked to publish.
 Routing requires explicit consent, exact workspace/case enrollment, successful
 current native MCP health/discovery and a reviewed read-only tool schema.
 Never upload owner memory, personal data, credentials or raw logs. Export is

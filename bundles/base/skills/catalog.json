@@ -79,6 +79,27 @@
       "relative_path": "skills/caseos-connect/SKILL.md"
     },
     {
+      "id": "caseos-prepare-enrichment",
+      "display_name": "caseOS — preparar enriquecimento",
+      "trigger": "Audita um recorte existente e propõe melhorias locais com evidência",
+      "default_prompt": "Use $caseos-prepare-enrichment para revisar este recorte autorizado, sem alterar o caseOS.",
+      "relative_path": "skills/caseos-prepare-enrichment/SKILL.md"
+    },
+    {
+      "id": "caseos-prepare-ingest",
+      "display_name": "caseOS — preparar ingestão",
+      "trigger": "Prepara material autorizado para revisão local, sem publicar",
+      "default_prompt": "Use $caseos-prepare-ingest para preparar uma proposta local a partir deste material autorizado.",
+      "relative_path": "skills/caseos-prepare-ingest/SKILL.md"
+    },
+    {
+      "id": "caseos-tutorial",
+      "display_name": "caseOS — aprender e consultar",
+      "trigger": "Explica o grafo e orienta consultas ao conhecimento do caso",
+      "default_prompt": "Use $caseos-tutorial para explicar caseOS e orientar uma consulta do caso.",
+      "relative_path": "skills/caseos-tutorial/SKILL.md"
+    },
+    {
       "id": "client-delivery-gate",
       "display_name": "Gate de Entrega ao Cliente",
       "trigger": "Checagem de qualidade em três lentes antes de qualquer entrega ao cliente",

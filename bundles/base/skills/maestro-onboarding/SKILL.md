@@ -1231,6 +1231,12 @@ owner's stated need. Examples: [`/case-agent-setup`](../case-agent-setup/SKILL.m
 [`/ingest-content`](../ingest-content/SKILL.md) or [`/meeting-to-work-items`](../meeting-to-work-items/SKILL.md). Suggesting a skill is not
 executing it. Explain its purpose and wait for the owner to choose it.
 
+Se o dono trabalha com conhecimento compartilhado do time, inclua entre as
+sugestões [caseos-tutorial](../caseos-tutorial/SKILL.md): explica como usar caseOS
+e o que deve continuar privado, sem exigir login. Se ele escolher conectar,
+siga [caseos-connect](../caseos-connect/SKILL.md). Não acrescente uma entrevista
+obrigatória, não instale/configure por inferência e respeite recusa já registrada.
+
 **A única exceção** é a cadeia da pergunta 9 — [`account-case-setup`](../account-case-setup/SKILL.md),
 [`case-agent-setup`](../case-agent-setup/SKILL.md) e os dois `agent.json` default. Aquilo se executa, sem
 perguntar de novo. A regra existe para o dono não sair com skills rodando que

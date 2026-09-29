@@ -11,6 +11,34 @@ ZIP = Path(os.environ.get("MAESTRO_ZIP", str(ROOT / "dist/Maestro-v0.2.0-macos.z
 
 
 class RuntimePackage(unittest.TestCase):
+    def test_caseos_enrichment_preparation_is_discoverable_from_catalog(self):
+        with zipfile.ZipFile(ZIP) as z:
+            for surface in ("bundles/base/skills", ".agents/skills"):
+                catalog = json.loads(z.read(f"Maestro/{surface}/catalog.json"))
+                entries = {entry["id"]: entry for entry in catalog["skills"]}
+                self.assertIn("caseos-prepare-enrichment", entries)
+                pointer = entries["caseos-prepare-enrichment"]["relative_path"].removeprefix("skills/")
+                self.assertIn(f"Maestro/{surface}/{pointer}", z.namelist())
+
+    def test_caseos_ingest_preparation_is_discoverable_from_catalog(self):
+        with zipfile.ZipFile(ZIP) as z:
+            for surface in ("bundles/base/skills", ".agents/skills"):
+                catalog = json.loads(z.read(f"Maestro/{surface}/catalog.json"))
+                entries = {entry["id"]: entry for entry in catalog["skills"]}
+                self.assertIn("caseos-prepare-ingest", entries)
+                pointer = entries["caseos-prepare-ingest"]["relative_path"].removeprefix("skills/")
+                self.assertIn(f"Maestro/{surface}/{pointer}", z.namelist())
+
+    def test_caseos_guide_and_tutorial_resolve_in_both_skill_surfaces(self):
+        # Catch a release that advertises caseOS but omits its offline learning material.
+        with zipfile.ZipFile(ZIP) as z:
+            self.assertIn("Maestro/CASEOS-GUIDE.md", z.namelist())
+            for surface in ("bundles/base/skills", ".agents/skills"):
+                self.assertIn(f"Maestro/{surface}/caseos-tutorial/SKILL.md", z.namelist())
+                self.assertIn(f"Maestro/{surface}/caseos-tutorial/references/guide.md", z.namelist())
+                self.assertEqual(z.read("Maestro/CASEOS-GUIDE.md"),
+                                 z.read(f"Maestro/{surface}/caseos-tutorial/references/guide.md"))
+
     def test_no_personal_state_is_distributed(self):
         with zipfile.ZipFile(ZIP) as z:
             forbidden = [name for name in z.namelist()

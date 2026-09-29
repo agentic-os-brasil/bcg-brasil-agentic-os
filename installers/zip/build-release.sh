@@ -47,6 +47,7 @@ cp -R "$BUNDLES_DIR" "$MAESTRO_DIR/bundles"
 # Native Codex discovery uses real copies, not symlinks requiring Windows privileges.
 mkdir -p "$MAESTRO_DIR/.agents/skills"
 cp -R "$BUNDLES_DIR/base/skills/." "$MAESTRO_DIR/.agents/skills/"
+cp "$BUNDLES_DIR/base/skills/caseos-tutorial/references/guide.md" "$MAESTRO_DIR/CASEOS-GUIDE.md"
 if [ -d "$REPO_ROOT/schemas" ]; then
   cp -R "$REPO_ROOT/schemas" "$MAESTRO_DIR/schemas"
 fi

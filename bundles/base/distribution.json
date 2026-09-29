@@ -482,6 +482,34 @@
       "path": "skills/caseos-connect/SKILL.md"
     },
     {
+      "source": "bundles/base/skills/caseos-prepare-enrichment/SKILL.md",
+      "path": "skills/caseos-prepare-enrichment/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/caseos-prepare-enrichment/agents/openai.yaml",
+      "path": "skills/caseos-prepare-enrichment/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/caseos-prepare-ingest/SKILL.md",
+      "path": "skills/caseos-prepare-ingest/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/caseos-prepare-ingest/agents/openai.yaml",
+      "path": "skills/caseos-prepare-ingest/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/caseos-tutorial/SKILL.md",
+      "path": "skills/caseos-tutorial/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/caseos-tutorial/agents/openai.yaml",
+      "path": "skills/caseos-tutorial/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/caseos-tutorial/references/guide.md",
+      "path": "skills/caseos-tutorial/references/guide.md"
+    },
+    {
       "source": "bundles/base/skills/catalog.json",
       "path": "skills/catalog.json"
     },

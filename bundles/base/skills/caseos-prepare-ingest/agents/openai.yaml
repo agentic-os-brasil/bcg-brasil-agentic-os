@@ -1,0 +1,4 @@
+interface:
+  display_name: "caseOS — preparar ingestão"
+  short_description: "Prepara material autorizado para revisão local, sem publicar"
+  default_prompt: "Use $caseos-prepare-ingest para preparar uma proposta local a partir deste material autorizado."

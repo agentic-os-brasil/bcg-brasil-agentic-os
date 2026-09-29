@@ -15,6 +15,9 @@
 | SharePoint do Case | Lê a pasta SharePoint do case ativo e propõe candidatos a canon por módulo | `skills/case-sharepoint-ingest/SKILL.md` |
 | Mapa do SharePoint do Case | Mapeia onde cada tipo de informação mora no SharePoint do case ativo | `skills/case-sharepoint-map/SKILL.md` |
 | caseOS MCP | Conecta conhecimento compartilhado com escopo e consentimento | `skills/caseos-connect/SKILL.md` |
+| caseOS — preparar enriquecimento | Audita um recorte existente e propõe melhorias locais com evidência | `skills/caseos-prepare-enrichment/SKILL.md` |
+| caseOS — preparar ingestão | Prepara material autorizado para revisão local, sem publicar | `skills/caseos-prepare-ingest/SKILL.md` |
+| caseOS — aprender e consultar | Explica o grafo e orienta consultas ao conhecimento do caso | `skills/caseos-tutorial/SKILL.md` |
 | Gate de Entrega ao Cliente | Checagem de qualidade em três lentes antes de qualquer entrega ao cliente | `skills/client-delivery-gate/SKILL.md` |
 | Registro de Método | Documenta um método próprio ou uma preferência de trabalho | `skills/craft-update/SKILL.md` |
 | Ensaio de Deck | Ensaia o deck contra as perguntas que a sala vai fazer | `skills/deck-drill/SKILL.md` |

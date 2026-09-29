@@ -7,6 +7,10 @@
       "skill_ids": [
         "bcg-case-kickoff",
         "bcg-deck",
+        "caseos-connect",
+        "caseos-prepare-enrichment",
+        "caseos-prepare-ingest",
+        "caseos-tutorial",
         "deck-review",
         "execution-continuity",
         "expert-interview-guide",
