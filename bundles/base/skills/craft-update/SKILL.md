@@ -45,7 +45,7 @@ profile; only the explanation and optional detail do.
   the owner has not described, and it does not generalize an engagement into a
   method on their behalf.
 - Obtained with `collect`, purpose declared and pages named:
-  `brain/craft/index.md`, and for a revision the target page itself. Keep the
+  `brain/craft/craft.md`, and for a revision the target page itself. Keep the
   revision of anything read; a later write uses it to notice that the owner
   edited the page in the meantime.
 
@@ -151,7 +151,7 @@ a página não declara é uma seção onde nada pode ser anexado depois.
 - **O que teria de mudar antes de compartilhar:**
 
 ## Relacionado
-- [Índice de craft](../index.md)
+- [Índice de craft](../craft.md)
 ```
 
 **Estilo — `brain/craft/style/<situation-slug>.md`**:
@@ -183,7 +183,7 @@ a página não declara é uma seção onde nada pode ser anexado depois.
 - <uma linha. Se não for possível completar, a página provavelmente pertence a methods/.>
 
 ## Relacionado
-- [Índice de craft](../index.md)
+- [Índice de craft](../craft.md)
 ```
 
 `Maturidade`, `Último uso` e `Última confirmação` mudam por edição do owner:

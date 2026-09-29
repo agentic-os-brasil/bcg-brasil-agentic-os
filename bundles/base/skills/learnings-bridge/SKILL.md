@@ -47,7 +47,7 @@ is no whole-root read and no folder listing, so name the days.
 - the daily pages for the window — default the last seven days, or since the
   previous pass if the owner names it — read for their
   `## Candidatos a aprendizado` section;
-- `brain/learnings/index.md` and `brain/craft/index.md`, so a candidate that
+- `brain/learnings/learnings.md` and `brain/craft/craft.md`, so a candidate that
   restates a page already written is recognized before it is duplicated.
 
 `collect` is bounded, so a long window is collected in more than one call. A
@@ -159,7 +159,7 @@ entram.
 - YYYY-MM-DD — refinada | estreitada | superada — <o que mudou e por quê> — <link para a afirmação que substitui esta, se houver>
 
 ## Relacionado
-- [Índice de learnings](index.md)
+- [Índice de learnings](learnings.md)
 - <link para a página de método, estilo ou objetivo que esta afirmação afeta>
 ```
 

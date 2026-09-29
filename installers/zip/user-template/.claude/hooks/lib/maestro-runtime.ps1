@@ -17,14 +17,17 @@ function Invoke-MaestroRuntime {
   switch ($arch.ToUpperInvariant()) { 'ARM64' { $arch = 'arm64' }; 'AMD64' { $arch = 'amd64' }; 'X64' { $arch = 'amd64' }; default { throw 'Unsupported architecture' } }
   $rel = "runtime/$osName-$arch/maestro-runtime$extension"
   $binary = Join-Path $Root $rel
-  foreach ($candidate in @((Join-Path $Root 'runtime'), (Join-Path $Root "runtime/$osName-$arch"), (Join-Path $Root 'runtime/manifest.json'), $binary)) {
+  $versionPath = Join-Path $Root 'VERSION'
+  foreach ($candidate in @((Join-Path $Root 'runtime'), (Join-Path $Root "runtime/$osName-$arch"), (Join-Path $Root 'runtime/manifest.json'), $binary, $versionPath)) {
     $entry = Get-Item -LiteralPath $candidate -Force
     if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Aliased runtime artifact' }
   }
+  if (-not (Test-Path -LiteralPath $versionPath -PathType Leaf)) { throw 'Invalid version file' }
+  $version = (Get-Content -LiteralPath $versionPath -Raw -Encoding UTF8) -replace '[\r\n]', ''
   $manifest = Get-Content -LiteralPath (Join-Path $Root 'runtime/manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-  if ($manifest.schema_version -ne 1) { throw 'Invalid manifest' }
-  $entries = @($manifest.artifacts | Where-Object { $_.path -ceq $rel -and $_.os -ceq $osName -and $_.arch -ceq $arch })
-  if ($entries.Count -ne 1 -or $entries[0].sha256 -notmatch '^[a-f0-9]{64}$') { throw 'Invalid artifact' }
+  if ($manifest.schema_version -ne 1 -or $manifest.version -isnot [string] -or -not $version -or $manifest.version -cne $version) { throw 'Invalid manifest' }
+  $entries = @($manifest.artifacts | Where-Object { $_.os -ceq $osName -and $_.arch -ceq $arch })
+  if ($entries.Count -ne 1 -or $entries[0].path -cne $rel -or $entries[0].sha256 -notmatch '^[a-f0-9]{64}$') { throw 'Invalid artifact' }
   $item = Get-Item -LiteralPath $binary
   if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Aliased executable' }
   $hash = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant()

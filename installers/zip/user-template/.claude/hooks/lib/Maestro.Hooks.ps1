@@ -263,7 +263,7 @@ _Não inicializado. Atualizado automaticamente pelo Maestro ao final de cada ses
 _Nenhum registrado._
 '@
     Write-MaestroIfMissing (Join-Path $data 'owner/observations/observations.jsonl') ''
-    Write-MaestroIfMissing (Join-Path $data 'craft/index.md') @'
+    Write-MaestroIfMissing (Join-Path $data 'craft/craft.md') @'
 # Craft
 
 Métodos e calibrações de estilo que se mantêm verdadeiros entre projetos.
@@ -273,7 +273,7 @@ Métodos e calibrações de estilo que se mantêm verdadeiros entre projetos.
 
 _Ainda vazio. As páginas são criadas por `/craft-update` e `/learnings-bridge`._
 '@
-    Write-MaestroIfMissing (Join-Path $data 'learnings/index.md') @'
+    Write-MaestroIfMissing (Join-Path $data 'learnings/learnings.md') @'
 # Learnings
 
 Aprendizados profissionais duráveis, corrigíveis e ligados às suas fontes quando aplicável.

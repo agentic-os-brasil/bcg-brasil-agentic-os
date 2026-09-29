@@ -148,15 +148,73 @@ if (Test-Path -LiteralPath (Join-Path $root 'runtime/manifest.json')) {
     @{schema_version=1;version='0.2.0';artifacts=@(@{os=$goos;arch=$goarch;path=$rel;sha256=(Get-FileHash -LiteralPath $bin -Algorithm SHA256).Hash.ToLowerInvariant()})} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $project 'runtime/manifest.json') -Encoding UTF8
 }
 
+# The real helper would let a fresh workspace initialize. Invalid binding metadata
+# must stop the wrapper before that mutation, even with a valid helper checksum.
+foreach ($invalidBinding in @('version-mismatch','version-missing','version-directory','version-alias','manifest-version-missing','manifest-version-number','duplicate-target','duplicate-target-other-path')) {
+    $invalidRoot = Join-Path $scratchParent $invalidBinding
+    New-Item -ItemType Directory -Path (Join-Path $invalidRoot 'data/owner') -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $invalidRoot 'data/owner/sentinel.md') -Value 'preserved legacy owner data' -Encoding UTF8
+    Copy-Item -LiteralPath (Join-Path $project 'runtime') -Destination $invalidRoot -Recurse
+    Copy-Item -LiteralPath $bundlesRoot -Destination $invalidRoot -Recurse
+    $versionPath = Join-Path $invalidRoot 'VERSION'
+    Set-Content -LiteralPath $versionPath -Value '0.2.0' -Encoding UTF8
+    $manifestPath = Join-Path $invalidRoot 'runtime/manifest.json'
+    $invalidManifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    switch ($invalidBinding) {
+        'version-mismatch' { $invalidManifest.version = '0.1.12' }
+        'version-missing' { Remove-Item -LiteralPath $versionPath }
+        'version-directory' {
+            Remove-Item -LiteralPath $versionPath
+            New-Item -ItemType Directory -Path $versionPath | Out-Null
+        }
+        'version-alias' {
+            Move-Item -LiteralPath $versionPath -Destination (Join-Path $invalidRoot 'actual-version')
+            if ($env:OS -eq 'Windows_NT') {
+                # Junctions exercise reparse rejection without requiring symlink privileges.
+                New-Item -ItemType Junction -Path $versionPath -Target $script:EmptyPath | Out-Null
+            } else {
+                New-Item -ItemType SymbolicLink -Path $versionPath -Target (Join-Path $invalidRoot 'actual-version') | Out-Null
+            }
+        }
+        'manifest-version-missing' { $invalidManifest.PSObject.Properties.Remove('version') }
+        'manifest-version-number' { $invalidManifest.version = 2 }
+        default {
+            $duplicates = @($invalidManifest.artifacts | ForEach-Object {
+                $duplicate = $_ | ConvertTo-Json | ConvertFrom-Json
+                if ($invalidBinding -eq 'duplicate-target-other-path') { $duplicate.path = 'runtime/other/maestro-runtime' }
+                $duplicate
+            })
+            $invalidManifest.artifacts = @($invalidManifest.artifacts) + $duplicates
+        }
+    }
+    $invalidManifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+    $rejected = Invoke-Hook 'first-run-scaffold.ps1' $invalidRoot
+    Assert-HookResult (($rejected.Stdout -match 'migration-blocked') -and -not (Test-Path -LiteralPath (Join-Path $invalidRoot 'brain/.initialized'))) "$invalidBinding rejects runtime binding before initialization" $rejected
+}
+
 $scaffold = Invoke-Hook 'first-run-scaffold.ps1' $project
 Assert-True ($scaffold.ExitCode -eq 0) 'scaffold exits zero'
 Assert-True (Test-Path -LiteralPath (Join-Path $project 'brain/.initialized')) 'scaffold creates brain/.initialized'
 Assert-True (Test-Path -LiteralPath (Join-Path $project 'brain/owner/registry.json')) 'scaffold creates owner registry'
 Assert-True (Test-Path -LiteralPath (Join-Path $project 'brain/memory/.schema-version')) 'scaffold creates memory schema marker'
+foreach ($canonicalIndex in @('brain/craft/craft.md','brain/learnings/learnings.md')) {
+    Assert-True (Test-Path -LiteralPath (Join-Path $project $canonicalIndex) -PathType Leaf) "scaffold creates canonical $canonicalIndex"
+}
+foreach ($oldIndex in @('brain/craft/index.md','brain/learnings/index.md')) {
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $project $oldIndex))) "fresh scaffold does not create obsolete $oldIndex"
+}
 $sentinel = Join-Path $project 'brain/owner/observations/owner-sentinel.txt'
 Set-Content -LiteralPath $sentinel -Value 'preserve-me' -Encoding UTF8
+$canonicalHashes = @{}
+foreach ($canonicalIndex in @('brain/craft/craft.md','brain/learnings/learnings.md')) {
+    Set-Content -LiteralPath (Join-Path $project $canonicalIndex) -Value 'owner-authored canonical index' -Encoding UTF8
+    $canonicalHashes[$canonicalIndex] = (Get-FileHash -LiteralPath (Join-Path $project $canonicalIndex)).Hash
+}
 $scaffoldAgain = Invoke-Hook 'first-run-scaffold.ps1' $project
 Assert-True (($scaffoldAgain.ExitCode -eq 0) -and ((Get-Content -LiteralPath $sentinel -Raw).Trim() -eq 'preserve-me')) 'scaffold is idempotent and preserves owner data'
+foreach ($canonicalIndex in $canonicalHashes.Keys) {
+    Assert-True ((Get-FileHash -LiteralPath (Join-Path $project $canonicalIndex)).Hash -eq $canonicalHashes[$canonicalIndex]) "repeated scaffold preserves $canonicalIndex byte for byte"
+}
 
 $session = Invoke-Hook 'session-start-memory-inject.ps1' $project
 Assert-True ($session.ExitCode -eq 0) 'SessionStart hook exits zero'
@@ -299,6 +357,7 @@ foreach ($baseline in @('0.1.11','0.1.12')) {
 $blocked = Join-Path $scratchParent 'blocked-upgrade'
 New-Item -ItemType Directory -Path (Join-Path $blocked 'data/owner'),(Join-Path $blocked 'brain/owner') -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $project 'runtime') -Destination $blocked -Recurse
+Set-Content -LiteralPath (Join-Path $blocked 'VERSION') -Value '0.2.0' -Encoding UTF8
 Set-Content -LiteralPath (Join-Path $blocked 'data/owner/a.md') -Value 'old' -Encoding UTF8
 Set-Content -LiteralPath (Join-Path $blocked 'brain/owner/a.md') -Value 'new' -Encoding UTF8
 $blockedRun = Invoke-Hook 'first-run-scaffold.ps1' $blocked
