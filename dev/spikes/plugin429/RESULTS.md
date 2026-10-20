@@ -1,8 +1,11 @@
 # Resultados — spike #429
 
 Data: 2026-10-20. Baseline: `origin/main` em `f92e44520915b562697a2fc00c1fa07efedb07d2`.
-Estado: implementação local descartável; F0 aberto. Nenhum resultado local
-substitui uma sessão real do Code tab ou a execução do Windows em #431.
+Estado: ferramenta de desenvolvimento sob `dev/`, com incorporação em `main`
+autorizada pelo PR #441; F0 aberto. Incorporar o código de desenvolvimento
+não qualifica o runtime nem inclui o spike nos pacotes de produto. Nenhum
+resultado local substitui uma sessão real do Code tab ou a execução do
+Windows em #431.
 
 ## Perguntas do handoff
 
@@ -58,3 +61,22 @@ Nenhum Code tab, hook despachado pelo host ou modelo foi executado neste ciclo.
 A inspeção de `claude --help` em 2.1.233 não anunciou `--init-only`.
 O ensaio opcional de inicialização sem modelo não foi executado: falta um
 modo explicitamente suportado no CLI instalado para essa observação.
+
+## Ajustes de review — PR #441
+
+A incorporação autorizada mantém esta ferramenta sob `dev/`, excluída do
+produto. A qualificação F0 continua aberta. Os testes usam diretório absoluto
+do próprio host; os cenários de symlink ficam em subteste isolado e podem
+ser pulados em Windows quando o runner não permite criá-los. Os testes sem
+symlink continuam executando.
+
+Validação focal após os ajustes:
+
+- `go test ./dev/spikes/plugin429 -v`: PASS no macOS arm64; quatro testes e
+  o subteste de symlinks executados, sem skips.
+- `go vet ./dev/spikes/plugin429`: PASS.
+- `GOOS=windows GOARCH=amd64 go test -c ./dev/spikes/plugin429`: PASS de
+  compilação cruzada. O executável de teste não foi executado em Windows.
+
+O helper e o builder não foram alterados nesta revisão; a evidência anterior
+de build/manifest permanece vinculada ao mesmo artefato. Sem full suite local.

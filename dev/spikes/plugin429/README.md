@@ -1,6 +1,8 @@
 # Spike #429 — marketplace local
 
-Spike descartável, fora da distribuição e sem merge em `main`. Constrói um
+Ferramenta de desenvolvimento retida sob `dev/`, com incorporação autorizada
+em `main` pelo PR #441. Continua fora dos pacotes de produto e o gate F0
+permanece aberto até a qualificação de runtime. Constrói um
 marketplace `maestro-spike` com uma skill, SessionStart, uma sonda de bloqueio
 de escrita e uma sonda dos nomes `Agent`/`Task`. O helper `maestro-runtime`
 existente executa somente `preflight`, sem migração ou escrita de memória.
