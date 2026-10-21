@@ -160,3 +160,37 @@ O resultado comprova despacho duplo de SessionStart por seletores de shell
 nesse CLI/macOS. Não comprova `.exe` Windows, PowerShell 5.1, chamadas de tools,
 Code tab, controles corporativos ou comportamento de pastas sincronizadas.
 Comparação Windows real: `NOT_RUN`; F0 e #431 permanecem abertos.
+
+## Execução hospedada Windows — correção de transporte confirmada
+
+O primeiro dispatch de #444 foi recusado pelo validador do GitHub por usar
+`matrix.shell` em `steps.shell`. A correção moveu a expressão para o contexto
+suportado `jobs.synthetic-windows.defaults.run.shell`.
+
+Depois do dispatch válido, o teste de bytes exatos revelou um BOM acrescentado
+somente por `powershell.exe`. O .NET Framework criava um StreamWriter com
+Console.InputEncoding e AutoFlush durante Process.Start, emitindo preâmbulo
+antes das escritas em BaseStream. A wrapper passou a herdar os handles brutos;
+o runner seleciona UTF-8 sem BOM apenas durante Start e restaura o encoding
+em finally. Nenhuma asserção foi relaxada e nenhum BOM é removido do input.
+
+Na execução hospedada `39538062298`, sobre `5db5db8`, os dois jobs passaram os
+testes focais, incluindo Bash/PowerShell 5.1/7 com bytes exatos e exit codes
+0/2, build nativo, guard permitido/negado e log de delegação. Ambos chegaram
+à recusa esperada de SessionStart pelo processo elevado do runner. O log
+`Developer/CodexWorkspace/2026-10-20/maestro-epic-428/windows/hosted-second-run-probe.log`
+preserva a execução. O workflow dessa execução terminou reprovado; não houve
+recibo final nem sucesso ordinário de SessionStart.
+
+O patch posterior classifica exclusivamente exit 2 de SessionStart com stderr
+exato da recusa por elevação e stdout vazio. Após os contratos anteriores
+passarem, grava recibo completo com `session_start_direct=BLOCKED_ELEVATED`
+e `f0=OPEN`; o runner manual retorna 64. O workflow aceita 64 somente com
+recibo JSON válido, commit atual, guard/delegação PASS e estados explícitos de
+bloqueio/não execução. Publica resumo e notice `BLOCKED_ELEVATED / NOT_QUALIFIED`.
+Todo outro erro continua fatal e o caso comum ainda exige o prefixo de sucesso.
+
+Essa classificação ainda precisa de novo dispatch no Windows. Job verde com
+o recibo bloqueado comprovará contratos sintéticos e bloqueio registrado;
+não comprovará usuário comum, Code tab, host corporativo, política de execução,
+pasta sincronizada nem despacho duplo pelo Claude no Windows. F0 permanece aberto.
