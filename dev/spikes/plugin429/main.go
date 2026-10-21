@@ -2,6 +2,7 @@
 package main
 
 import (
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,10 +10,17 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
 const markerName = "maestro-spike-denied.txt"
+
+//go:embed compare-shells.sh
+var compareBash []byte
+
+//go:embed compare-shells.ps1
+var comparePowerShell []byte
 
 type event struct {
 	HookEventName string `json:"hook_event_name"`
@@ -44,7 +52,7 @@ func execute(args []string, in io.Reader, out io.Writer) error {
 		if !filepath.IsAbs(root) {
 			return errors.New("CLAUDE_PLUGIN_ROOT must be absolute")
 		}
-		cmd := exec.Command(filepath.Join(root, "scripts", "maestro-runtime"), "preflight")
+		cmd := exec.Command(filepath.Join(root, "scripts", executableName("maestro-runtime", runtime.GOOS)), "preflight")
 		result, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("runtime preflight: %w: %s", err, result)
@@ -117,6 +125,41 @@ func execute(args []string, in io.Reader, out io.Writer) error {
 	return nil
 }
 
+func executableName(name, goos string) string {
+	if goos == "windows" {
+		return name + ".exe"
+	}
+	return name
+}
+
+func pluginHooks(goos string) map[string]any {
+	hook := func(mode string) []any {
+		if goos == "windows" {
+			return []any{map[string]any{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/maestro-spike-hook.exe", "args": []string{mode}}}
+		}
+		return []any{map[string]string{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/maestro-spike-hook\" " + mode}}
+	}
+	return map[string]any{"hooks": map[string]any{
+		"SessionStart": []any{map[string]any{"hooks": hook("session-start")}},
+		"PreToolUse":   []any{map[string]any{"matcher": "^(Edit|MultiEdit|Write|NotebookEdit)$", "hooks": hook("guard")}, map[string]any{"matcher": "^(Agent|Task)$", "hooks": hook("delegation")}},
+	}}
+}
+
+func shellComparisonHooks() map[string]any {
+	config := pluginHooks("windows")
+	for _, groups := range config["hooks"].(map[string]any) {
+		for _, raw := range groups.([]any) {
+			group := raw.(map[string]any)
+			mode := group["hooks"].([]any)[0].(map[string]any)["args"].([]string)[0]
+			group["hooks"] = []any{
+				map[string]any{"type": "command", "shell": "bash", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/compare-shells.sh\" " + mode},
+				map[string]any{"type": "command", "shell": "powershell", "command": "& \"${CLAUDE_PLUGIN_ROOT}/scripts/compare-shells.ps1\" " + mode},
+			}
+		}
+	}
+	return config
+}
+
 func build(destination string, out io.Writer) error {
 	destination, err := filepath.Abs(destination)
 	if err != nil {
@@ -133,14 +176,17 @@ func build(destination string, out io.Writer) error {
 	}
 	manifest := map[string]any{"name": "maestro-spike", "version": "0.0.1", "description": "Spike descartável da distribuição Maestro; fora de produção"}
 	marketplace := map[string]any{"name": "maestro-spike", "owner": map[string]string{"name": "Maestro"}, "plugins": []any{map[string]string{"name": "maestro-spike", "source": "./versions/0.0.1/maestro-spike", "description": "Spike descartável"}}}
-	hook := func(mode string) []any {
-		return []any{map[string]string{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/maestro-spike-hook\" " + mode}}
+	hooks := pluginHooks(runtime.GOOS)
+	manifests := map[string]any{filepath.Join(destination, ".claude-plugin", "marketplace.json"): marketplace, filepath.Join(plugin, ".claude-plugin", "plugin.json"): manifest, filepath.Join(plugin, "hooks", "hooks.json"): hooks}
+	if runtime.GOOS == "windows" {
+		manifests[filepath.Join(plugin, "hooks", "compare-shells.json")] = shellComparisonHooks()
+		for name, body := range map[string][]byte{"compare-shells.sh": compareBash, "compare-shells.ps1": comparePowerShell} {
+			if err := os.WriteFile(filepath.Join(plugin, "scripts", name), body, 0755); err != nil {
+				return err
+			}
+		}
 	}
-	hooks := map[string]any{"hooks": map[string]any{
-		"SessionStart": []any{map[string]any{"hooks": hook("session-start")}},
-		"PreToolUse":   []any{map[string]any{"matcher": "^(Edit|MultiEdit|Write|NotebookEdit)$", "hooks": hook("guard")}, map[string]any{"matcher": "^(Agent|Task)$", "hooks": hook("delegation")}},
-	}}
-	for path, value := range map[string]any{filepath.Join(destination, ".claude-plugin", "marketplace.json"): marketplace, filepath.Join(plugin, ".claude-plugin", "plugin.json"): manifest, filepath.Join(plugin, "hooks", "hooks.json"): hooks} {
+	for path, value := range manifests {
 		body, err := json.MarshalIndent(value, "", "  ")
 		if err != nil {
 			return err
@@ -154,7 +200,7 @@ func build(destination string, out io.Writer) error {
 		return err
 	}
 	for target, source := range map[string]string{"maestro-runtime": "./cmd/maestro-runtime", "maestro-spike-hook": "./dev/spikes/plugin429"} {
-		cmd := exec.Command("go", "build", "-o", filepath.Join(plugin, "scripts", target), source)
+		cmd := exec.Command("go", "build", "-o", filepath.Join(plugin, "scripts", executableName(target, runtime.GOOS)), source)
 		cmd.Stdout, cmd.Stderr = out, out
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("build %s (partial output retained): %w", target, err)
