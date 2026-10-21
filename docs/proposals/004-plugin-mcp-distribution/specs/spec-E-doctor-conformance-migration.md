@@ -48,8 +48,8 @@ Python, shell ou MCP. Fixtures 0.1.11 e candidata 0.1.12 cobrem:
    abertura do ZIP anterior. Restauração funcional exigida em #434 precisa de
    prova adicional ao atual recibo de revogação; não declarar já implementada.
 
-O layout físico final, marker e adaptação do controle/legacy map precisam
-fechar juntos em #433/#434. Uma fase intermediária com brain no produto não
+O contrato do layout físico final, marker e controle/legacy map fecha em #432
+antes do freeze F1; #433/#434 o implementam e validam. Uma fase intermediária com brain no produto não
 é pré-requisito para o colega de campo. Qualificação nova nunca reutiliza
 receipt histórico como PASS fresco após alterações autorais.
 

@@ -25,8 +25,9 @@ e brain de casos, ajusta marcadores e retém agents/workspaces/canary na origem.
 Portanto, mover todos os bytes 1:1 para `home/data` não descreve a baseline.
 
 O desenho preserva os contratos lógicos de estado consumidos pelo runtime.
-O layout físico do home permanece TBD: #433/#434 precisam fechar os paths
-do estado, controle e namespaces retidos antes de implementar. O inventário
+O layout físico do home permanece TBD: #432 precisa fechar documentalmente os
+paths do estado, controle e namespaces retidos antes do freeze F1. #433/#434
+implementam e validam esse contrato depois do merge da proposta. O inventário
 origem→destino/retido e transformações versionadas é a autoridade de equivalência;
 payloads autorais preservam bytes, e transformações exigem validação própria.
 Retidos continuam legíveis por um resolvedor validado; renomear a origem não
