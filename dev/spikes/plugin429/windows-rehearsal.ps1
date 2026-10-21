@@ -63,7 +63,12 @@ try {
         $start.FileName = $hook; $start.Arguments = $Mode
         $start.UseShellExecute = $false; $start.CreateNoWindow = $true
         $start.RedirectStandardInput = $true; $start.RedirectStandardOutput = $true; $start.RedirectStandardError = $true
-        $process = [Diagnostics.Process]::Start($start)
+        # Framework creates an auto-flushing stdin writer during Start, before raw writes.
+        $savedInputEncoding = [Console]::InputEncoding
+        try {
+            [Console]::InputEncoding = New-Object Text.UTF8Encoding($false)
+            $process = [Diagnostics.Process]::Start($start)
+        } finally { [Console]::InputEncoding = $savedInputEncoding }
         try {
             # .NET Framework in PowerShell 5.1 has no StandardInputEncoding property.
             $inputBytes = [Text.Encoding]::UTF8.GetBytes($InputJson)
