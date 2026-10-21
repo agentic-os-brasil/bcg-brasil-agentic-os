@@ -127,3 +127,36 @@ A chamada de modelo terminou sem autenticação, custo zero, sem tools nem MCP.
 O artefato registrado de outro ensaio foi preservado. Essa observação prova
 despacho exec-form somente no macOS, nunca no Windows. Evidência:
 `Developer/CodexWorkspace/2026-10-20/maestro-epic-428/windows/mac-exec-form-observation.json`.
+
+## Comparação literal Bash/PowerShell — preparação e probe macOS
+
+O build Windows agora também produz `hooks/compare-shells.json` e twins
+`.sh`/`.ps1`, mantendo `hooks/hooks.json` com execução nativa direta. O
+manifesto alternativo repete cada evento/matcher em dois handlers com
+`shell: bash` e `shell: powershell`, sem `args`. As wrappers passam stdin
+bruto ao mesmo `.exe`, preservam stdout/exit code e identificam shell/modo
+no stderr com `MAESTRO_SPIKE_HANDLER`. A ativação assistida e restauração
+por hash alteram somente o artefato novo de comparação, conforme o guia.
+
+Teste antes da implementação: `TestShellComparison*` falhou por ausência do
+manifesto e das twins. Depois, os contratos focais passaram no macOS arm64:
+manifesto com dois handlers por modo; Bash e PowerShell 7 preservaram bytes
+Unicode, stdout, stderr nativo e exit codes 0/2 nos três modos, em caminho
+com espaços. `powershell.exe` foi pulado por indisponibilidade nesse host.
+O parser PowerShell 7 aceitou ambas as fontes `.ps1`. Não houve fast harness
+nem full suite neste delta. A cobertura anterior de symlinks foi preservada.
+
+Um probe adicional no CLI instalado 2.1.233 usou uma fixture macOS nova via
+`--plugin-dir`, com helper macOS nativo copiado para o nome `.exe` somente
+nessa fixture. O host despachou dois SessionStart e retornou dois
+`hook_response` com exit 0: IDs `bash/session-start` e
+`powershell/session-start` no stderr e preflight stdout preservado. A
+inferência terminou por falta de autenticação, com `total_cost_usd=0` e
+`duration_api_ms=0`, sem tools/MCP/persistência de sessão. Nenhum artefato
+registrado foi alterado. Evidência:
+`Developer/CodexWorkspace/2026-10-20/maestro-epic-428/windows/mac-shell-comparison-observation.json`.
+
+O resultado comprova despacho duplo de SessionStart por seletores de shell
+nesse CLI/macOS. Não comprova `.exe` Windows, PowerShell 5.1, chamadas de tools,
+Code tab, controles corporativos ou comportamento de pastas sincronizadas.
+Comparação Windows real: `NOT_RUN`; F0 e #431 permanecem abertos.

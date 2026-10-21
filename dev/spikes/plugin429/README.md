@@ -28,6 +28,9 @@ repo. O builder escolhe o formato nativo do host: executáveis `.exe` e hooks
 em execução direta no Windows; executáveis sem extensão e o launcher existente
 no Unix. Para compilar e ensaiar no Windows PowerShell 5.1/7, use
 [WINDOWS.md](WINDOWS.md). A qualificação do host em #431 continua pendente.
+O build nativo Windows inclui uma variante separada de comparação literal
+Bash/PowerShell e suas wrappers; sua ativação/restauração no artefato de ensaio
+está no mesmo guia. O manifesto padrão permanece com execução nativa direta.
 
 ## Ensaio assistido no Code tab
 

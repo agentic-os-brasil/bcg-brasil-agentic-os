@@ -76,6 +76,82 @@ controles de execução somente em caminho real aprovado; uma pasta local sob
 Developer não comprova essas propriedades. Preserve arquivos do owner e de
 clientes; remova o plugin pelo fluxo normal ao concluir o ensaio.
 
+## Comparação literal Bash/PowerShell — somente no artefato de ensaio
+
+O builder nativo Windows também grava `hooks/compare-shells.json` e as twins
+`scripts/compare-shells.sh` / `scripts/compare-shells.ps1`. O manifesto padrão
+`hooks/hooks.json` continua com execução nativa direta. O arquivo alternativo
+declara cada modo duas vezes, com `shell: bash` e `shell: powershell`, sem
+`args`, para comparar os shells de fato. O campo `shell` seleciona o shell do
+handler; ele não seleciona o sistema operacional. A [referência oficial dos
+campos de hooks](https://code.claude.com/docs/en/hooks#command-hook-fields),
+verificada em 2026-10-21, especifica esses dois valores e informa que `args`
+faria o host ignorar `shell`.
+
+Construa outro destino novo com o runner; este pacote será exclusivo da
+comparação assistida. Git Bash já disponível é requisito dessa comparação,
+não do manifesto nativo padrão. Registre a falta de um shell ou bloqueio de
+policy como resultado; preserve as proteções e instalações do host.
+
+```powershell
+& ./dev/spikes/plugin429/windows-rehearsal.ps1 -Destination "$env:USERPROFILE/Developer/CodexWorkspace/Windows Plugin Comparison"
+```
+
+Ative a variante somente na cópia recém-gerada, com as sessões do ensaio
+fechadas. O exemplo abaixo usa um caminho fixo sob Developer: ajuste o nome
+apenas para o destino novo que acabou de construir. Preserve o terminal para
+conferir o hash na restauração.
+
+```powershell
+$plugin = Join-Path $env:USERPROFILE 'Developer/CodexWorkspace/Windows Plugin Comparison/versions/0.0.1/maestro-spike'
+$active = Join-Path $plugin 'hooks/hooks.json'
+$backup = Join-Path $plugin 'hooks/native-exec.saved.json'
+if (Test-Path -LiteralPath $backup) { throw 'Backup já existe; preserve e inspecione esse ensaio antes de repetir.' }
+$nativeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $active).Hash
+Copy-Item -LiteralPath $active -Destination $backup
+Copy-Item -LiteralPath (Join-Path $plugin 'hooks/compare-shells.json') -Destination $active -Force
+```
+
+Registre esse marketplace novo no perfil isolado aprovado, conforme o pacote
+assistido acima. Confira a raiz que o host realmente selecionou; se selecionar
+uma cópia em cache antiga, o resultado fica inconclusivo até o fluxo suportado
+carregar o artefato correto. Abra uma sessão nova e examine `/hooks` e os
+diagnósticos do host. Para cada evento observado, registre as duas ocorrências
+e seus exit codes. As wrappers emitem IDs fixos no stderr, separados do stdout
+do helper:
+
+| Modo | Handler Bash | Handler PowerShell |
+|---|---|---|
+| SessionStart | `MAESTRO_SPIKE_HANDLER=bash/session-start` | `MAESTRO_SPIKE_HANDLER=powershell/session-start` |
+| Escrita | `MAESTRO_SPIKE_HANDLER=bash/guard` | `MAESTRO_SPIKE_HANDLER=powershell/guard` |
+| Delegação | `MAESTRO_SPIKE_HANDLER=bash/delegation` | `MAESTRO_SPIKE_HANDLER=powershell/delegation` |
+
+Espere ambos os handlers de SessionStart ao iniciar; repita a tentativa de
+Write no marker, o Write de controle e a delegação inofensiva. O helper deve
+manter os mesmos exit codes e conteúdo; os IDs identificam a wrapper que
+iniciou, enquanto exit code e saída do helper comprovam a conclusão. Um ID
+sozinho não comprova stdin correto, negação ou sucesso do helper. Não presuma
+ordem de execução: os handlers podem rodar em paralelo, e os dois handlers de
+delegação podem registrar a mesma tool. Capture ambos com diagnósticos nativos
+limitados ao workspace sintético; não colete prompts nem conteúdo de clientes.
+
+Depois do ensaio, feche suas sessões e restaure **o arquivo do artefato de
+comparação**, conferindo o hash. Preserve o backup e as evidências:
+
+```powershell
+Copy-Item -LiteralPath $backup -Destination $active -Force
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $active).Hash -cne $nativeHash) { throw 'Hash divergente; preserve os arquivos e inspecione antes de reabrir.' }
+```
+
+O teste local das wrappers usa um helper de teste que ecoa bytes e termina
+com 0 ou 2, em caminhos com espaços e Unicode. Isso verifica o transporte e
+os IDs. Um probe adicional no CLI 2.1.233/macOS despachou ambos os handlers
+de SessionStart com `shell` explícito, IDs distintos, stdout do helper
+preservado e exit 0; depois falhou por falta de autenticação, com custo zero.
+Esse probe usou uma fixture separada com helper macOS nativo copiado para o
+nome `.exe`, sem modificar artefatos registrados. A comparação dupla real no
+Windows, PowerShell 5.1 e Code tab continua `NOT_RUN` até a observação assistida.
+
 ## Contrato de launch e limites
 
 O pacote Windows é gerado no Windows e recebe um manifesto nativo separado.

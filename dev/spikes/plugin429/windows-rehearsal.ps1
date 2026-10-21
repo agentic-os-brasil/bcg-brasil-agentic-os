@@ -47,6 +47,17 @@ try {
             }
         }
     }
+    $comparison = Get-Content -Raw -LiteralPath (Join-Path $env:CLAUDE_PLUGIN_ROOT 'hooks/compare-shells.json') | ConvertFrom-Json
+    foreach ($group in @($comparison.hooks.SessionStart) + @($comparison.hooks.PreToolUse)) {
+        if (@($group.hooks).Count -ne 2 -or $group.hooks[0].shell -cne 'bash' -or $group.hooks[1].shell -cne 'powershell') {
+            throw 'Expected separate Bash/PowerShell comparison handlers.'
+        }
+    }
+    foreach ($name in @('compare-shells.sh', 'compare-shells.ps1')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $env:CLAUDE_PLUGIN_ROOT "scripts/$name") -PathType Leaf)) {
+            throw 'Missing shell comparison wrapper.'
+        }
+    }
     function Invoke-Probe([string]$Mode, [string]$InputJson, [int]$Expected) {
         $start = New-Object Diagnostics.ProcessStartInfo
         $start.FileName = $hook; $start.Arguments = $Mode
@@ -87,7 +98,7 @@ try {
         helper_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $hook).Hash
         runtime_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $env:CLAUDE_PLUGIN_ROOT 'scripts/maestro-runtime.exe')).Hash
         guard = 'PASS'; delegation_metadata = 'PASS'; session_start_direct = 'PASS'
-        code_tab = 'NOT_RUN'; corporate_windows = 'NOT_RUN'; synced_folder = 'NOT_RUN'; source_reload = 'NOT_RUN'; f0 = 'OPEN'
+        shell_comparison = 'NOT_RUN'; code_tab = 'NOT_RUN'; corporate_windows = 'NOT_RUN'; synced_folder = 'NOT_RUN'; source_reload = 'NOT_RUN'; f0 = 'OPEN'
     }
     $packetPath = Join-Path $destinationPath 'windows-rehearsal.json'
     [IO.File]::WriteAllText($packetPath, ($packet | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding($false)))

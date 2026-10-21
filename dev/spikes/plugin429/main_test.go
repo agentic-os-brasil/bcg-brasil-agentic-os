@@ -3,12 +3,30 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 )
+
+func TestMain(m *testing.M) {
+	if os.Getenv("MAESTRO_SPIKE_WRAPPER_HELPER") == "1" {
+		if len(os.Args) != 2 || os.Args[1] != os.Getenv("MAESTRO_SPIKE_WRAPPER_MODE") {
+			os.Exit(3)
+		}
+		io.Copy(os.Stdout, os.Stdin)
+		fmt.Fprintln(os.Stderr, "NATIVE_STDERR")
+		if os.Getenv("MAESTRO_SPIKE_WRAPPER_DENY") == "1" {
+			os.Exit(2)
+		}
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
 
 func TestGuardMarkerAndInputFailures(t *testing.T) {
 	dir := t.TempDir()
@@ -139,6 +157,110 @@ func TestPlatformHookLaunch(t *testing.T) {
 			}
 			if got := executableName("maestro-runtime", goos); got != want {
 				t.Fatalf("runtime name=%s want=%s", got, want)
+			}
+		})
+	}
+}
+
+func TestShellComparisonManifest(t *testing.T) {
+	config := shellComparisonHooks()
+	hooks := config["hooks"].(map[string]any)
+	for event, groups := range hooks {
+		for _, raw := range groups.([]any) {
+			group := raw.(map[string]any)
+			mode := "session-start"
+			if event == "PreToolUse" {
+				switch group["matcher"] {
+				case "^(Edit|MultiEdit|Write|NotebookEdit)$":
+					mode = "guard"
+				case "^(Agent|Task)$":
+					mode = "delegation"
+				default:
+					t.Fatalf("unexpected comparison matcher: %v", group["matcher"])
+				}
+			}
+			handlers := group["hooks"].([]any)
+			if len(handlers) != 2 {
+				t.Fatalf("%s: expected both shells", mode)
+			}
+			for i, shell := range []string{"bash", "powershell"} {
+				handler := handlers[i].(map[string]any)
+				if handler["shell"] != shell || handler["args"] != nil || handler["type"] != "command" {
+					t.Fatalf("shell form required: %v", handler)
+				}
+				command := handler["command"].(string)
+				if !strings.Contains(command, "${CLAUDE_PLUGIN_ROOT}/scripts/compare-shells.") || !strings.HasSuffix(command, " "+mode) {
+					t.Fatalf("bad shell command: %s", command)
+				}
+			}
+		}
+	}
+	if len(hooks) != 2 || len(hooks["SessionStart"].([]any)) != 1 || len(hooks["PreToolUse"].([]any)) != 2 {
+		t.Fatalf("missing comparison events/groups: %v", hooks)
+	}
+}
+
+func TestShellComparisonWrappers(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "path with spaces ç")
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(self)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "maestro-spike-hook.exe"), body, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string][]byte{"compare-shells.sh": compareBash, "compare-shells.ps1": comparePowerShell} {
+		if err := os.WriteFile(filepath.Join(dir, name), body, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, shell := range []string{"bash", "powershell.exe", "pwsh"} {
+		t.Run(shell, func(t *testing.T) {
+			launcher, err := exec.LookPath(shell)
+			if err != nil {
+				t.Skipf("comparison shell unavailable: %s", shell)
+			}
+			id, script := "bash", "compare-shells.sh"
+			if shell != "bash" {
+				id, script = "powershell", "compare-shells.ps1"
+			}
+			for _, mode := range []string{"session-start", "guard", "delegation"} {
+				for _, deny := range []string{"0", "1"} {
+					args := []string{filepath.Join(dir, script), mode}
+					if shell != "bash" {
+						args = append([]string{"-NoProfile", "-File"}, args...)
+					}
+					cmd := exec.Command(launcher, args...)
+					cmd.Env = append(os.Environ(), "MAESTRO_SPIKE_WRAPPER_HELPER=1", "MAESTRO_SPIKE_WRAPPER_MODE="+mode, "MAESTRO_SPIKE_WRAPPER_DENY="+deny)
+					input := `{"cwd":"path with spaces ç","tool_name":"Write"}`
+					cmd.Stdin = strings.NewReader(input)
+					var stdout, stderr bytes.Buffer
+					cmd.Stdout, cmd.Stderr = &stdout, &stderr
+					err := cmd.Run()
+					if cmd.ProcessState == nil {
+						t.Fatalf("start %s wrapper: %v", shell, err)
+					}
+					want := 0
+					if deny == "1" {
+						want = 2
+					}
+					if code := cmd.ProcessState.ExitCode(); code != want {
+						t.Fatalf("%s deny=%s: code=%d err=%v stderr=%s", mode, deny, code, err, &stderr)
+					}
+					if stdout.String() != input {
+						t.Fatalf("%s changed stdin/stdout: %q", shell, stdout.String())
+					}
+					if stderr.String() != "MAESTRO_SPIKE_HANDLER="+id+"/"+mode+"\nNATIVE_STDERR\n" && stderr.String() != "MAESTRO_SPIKE_HANDLER="+id+"/"+mode+"\r\nNATIVE_STDERR\n" {
+						t.Fatalf("%s lost handler/native diagnostic: %q", shell, stderr.String())
+					}
+				}
 			}
 		})
 	}
