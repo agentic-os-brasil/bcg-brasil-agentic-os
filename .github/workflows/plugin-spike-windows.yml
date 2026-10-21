@@ -10,6 +10,9 @@ jobs:
   synthetic-windows:
     runs-on: windows-latest
     timeout-minutes: 15
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
     strategy:
       fail-fast: false
       matrix:
@@ -21,7 +24,6 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: Direct synthetic probes; no Claude or corporate-host qualification
-        shell: ${{ matrix.shell }}
         run: |
           & ./dev/spikes/plugin429/windows-rehearsal.ps1 -Destination "$env:USERPROFILE/Developer/CodexWorkspace/Windows Plugin Spike ${{ matrix.shell }}"
       - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4
