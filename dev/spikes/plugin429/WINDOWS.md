@@ -35,17 +35,33 @@ Resultados esperados do ensaio direto:
 
 Um terminal elevado ou runner hospedado pode falhar no preflight existente.
 Preserve o diagnóstico nativo e a revisão; repita em host aprovado sem
-elevação. Bloqueios de execution policy, AppLocker/WDAC, antivírus, SmartScreen
+elevação. Somente exit 2 de SessionStart com a mensagem exata de recusa por
+elevação gera recibo `session_start_direct=BLOCKED_ELEVATED` e termina o runner
+com código **64**, após os contratos de guard/delegação terem passado. Qualquer
+outro erro continua fatal. Em processo comum, SessionStart ainda exige exit 0
+e seu prefixo de sucesso. Bloqueios de execution policy, AppLocker/WDAC, antivírus, SmartScreen
 ou acesso devem ser registrados. Preserve as proteções existentes.
 O script não instala software, autentica, chama modelos, altera perfis de
 plugins, migra dados nem escreve no state-home do produto.
 
 O workflow manual `Plugin spike Windows rehearsal` executa o mesmo pacote em
 Windows hospedado nas duas edições do PowerShell. Usa nenhum segredo e envia
-somente o recibo JSON sintético. Falha de preflight mantém o job reprovado;
-ausência de recibo não é sucesso. Ele não instala Claude nem observa um
+somente o recibo JSON sintético. O workflow aceita o código 64 exclusivamente
+após validar JSON, commit atual e os estados de sucesso dos contratos e de
+bloqueio por elevação. Publica `BLOCKED_ELEVATED / NOT_QUALIFIED` no resumo e
+uma notice; ausência de recibo, campos incorretos e outros exits reprovam o job.
+Assim, job verde com esse recibo significa contratos sintéticos aprovados e
+SessionStart bloqueado; não significa execução com usuário comum aprovada.
+O preflight permanece ativo. O workflow não instala Claude nem observa um
 dispositivo corporativo. Definição do workflow, execução hospedada e aceite
 do host são evidências independentes.
+
+Na execução hospedada `39538062298`, ambas as edições passaram nos testes de
+bytes exatos das wrappers em Bash, PowerShell 5.1 e 7, build nativo, guard e
+logging de delegação. SessionStart foi bloqueado pelo processo elevado do
+runner. Isso confirma a correção do BOM no PS5 em CI e preserva a necessidade
+de ensaio corporativo sem elevação; não qualifica Code tab nem despacho dos
+hooks por Claude no Windows.
 
 ## Pacote assistido no Code tab
 

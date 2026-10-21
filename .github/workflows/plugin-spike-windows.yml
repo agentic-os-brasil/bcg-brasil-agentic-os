@@ -10,6 +10,9 @@ jobs:
   synthetic-windows:
     runs-on: windows-latest
     timeout-minutes: 15
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
     strategy:
       fail-fast: false
       matrix:
@@ -21,9 +24,24 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: Direct synthetic probes; no Claude or corporate-host qualification
-        shell: ${{ matrix.shell }}
         run: |
-          & ./dev/spikes/plugin429/windows-rehearsal.ps1 -Destination "$env:USERPROFILE/Developer/CodexWorkspace/Windows Plugin Spike ${{ matrix.shell }}"
+          $destination = "$env:USERPROFILE/Developer/CodexWorkspace/Windows Plugin Spike ${{ matrix.shell }}"
+          & ./dev/spikes/plugin429/windows-rehearsal.ps1 -Destination $destination
+          $probeExit = $LASTEXITCODE
+          if ($probeExit -eq 0) { exit 0 }
+          if ($probeExit -ne 64) { exit $probeExit }
+          $receiptPath = Join-Path $destination 'windows-rehearsal.json'
+          if (-not (Test-Path -LiteralPath $receiptPath -PathType Leaf)) { throw 'Exit 64 requires a rehearsal receipt.' }
+          $receipt = Get-Content -Raw -LiteralPath $receiptPath | ConvertFrom-Json -ErrorAction Stop
+          if ($receipt.evidence -cne 'direct-synthetic-only' -or $receipt.issue -ne 431 -or
+              $receipt.guard -cne 'PASS' -or $receipt.delegation_metadata -cne 'PASS' -or
+              $receipt.session_start_direct -cne 'BLOCKED_ELEVATED' -or $receipt.f0 -cne 'OPEN' -or
+              $receipt.code_tab -cne 'NOT_RUN' -or $receipt.corporate_windows -cne 'NOT_RUN' -or
+              $receipt.source_commit -cne $env:GITHUB_SHA) { throw 'Invalid elevated-block rehearsal receipt.' }
+          '### BLOCKED_ELEVATED / NOT_QUALIFIED' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          'Synthetic guard/delegation passed. SessionStart requires a non-elevated process. F0 OPEN; corporate Windows and Code tab NOT_RUN.' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          Write-Output '::notice title=Windows rehearsal BLOCKED_ELEVATED::Synthetic contracts passed; SessionStart BLOCKED_ELEVATED. NOT_QUALIFIED; F0 OPEN.'
+          exit 0
       - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4
         with:
           name: windows-spike-synthetic-${{ matrix.shell }}

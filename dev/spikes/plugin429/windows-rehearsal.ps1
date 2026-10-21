@@ -63,7 +63,12 @@ try {
         $start.FileName = $hook; $start.Arguments = $Mode
         $start.UseShellExecute = $false; $start.CreateNoWindow = $true
         $start.RedirectStandardInput = $true; $start.RedirectStandardOutput = $true; $start.RedirectStandardError = $true
-        $process = [Diagnostics.Process]::Start($start)
+        # Framework creates an auto-flushing stdin writer during Start, before raw writes.
+        $savedInputEncoding = [Console]::InputEncoding
+        try {
+            [Console]::InputEncoding = New-Object Text.UTF8Encoding($false)
+            $process = [Diagnostics.Process]::Start($start)
+        } finally { [Console]::InputEncoding = $savedInputEncoding }
         try {
             # .NET Framework in PowerShell 5.1 has no StandardInputEncoding property.
             $inputBytes = [Text.Encoding]::UTF8.GetBytes($InputJson)
@@ -72,7 +77,13 @@ try {
             $stdout = $process.StandardOutput.ReadToEnd()
             $stderr = $process.StandardError.ReadToEnd()
             $process.WaitForExit()
-            if ($process.ExitCode -ne $Expected) { throw "Probe $Mode expected $Expected, got $($process.ExitCode): $stderr" }
+            if ($process.ExitCode -ne $Expected) {
+                $failure = New-Object Exception "Probe $Mode expected $Expected, got $($process.ExitCode): $stderr"
+                $failure.Data['native_exit_code'] = $process.ExitCode
+                $failure.Data['native_stderr'] = $stderr
+                $failure.Data['native_stdout'] = $stdout
+                throw $failure
+            }
             return $stdout
         } finally { $process.Dispose() }
     }
@@ -90,18 +101,28 @@ try {
     }
     $log = Get-Content -LiteralPath (Join-Path $env:CLAUDE_PLUGIN_DATA 'delegation.jsonl')
     if (@($log).Count -ne 2 -or $log[0] -cne '{"tool_name":"Agent"}' -or $log[1] -cne '{"tool_name":"Task"}') { throw 'Unexpected delegation log.' }
-    $session = Invoke-Probe 'session-start' '{}' 0
-    if ($session -notmatch '^MAESTRO_SPIKE revision=0\.0\.1;') { throw 'Missing SessionStart probe output.' }
+    $sessionState = 'PASS'
+    try { $session = Invoke-Probe 'session-start' '{}' 0 } catch {
+        $knownElevation = 'maestro-spike: runtime preflight: exit status 2: Maestro must be installed and initialized from a non-elevated Windows user process; close this window and retry without Run as administrator'
+        if ($_.Exception.Data['native_exit_code'] -ne 2 -or $_.Exception.Data['native_stdout'] -cne '' -or
+            ([string]$_.Exception.Data['native_stderr']).TrimEnd([char[]]"`r`n") -cne $knownElevation) { throw }
+        $sessionState = 'BLOCKED_ELEVATED'
+    }
+    if ($sessionState -ceq 'PASS' -and $session -notmatch '^MAESTRO_SPIKE revision=0\.0\.1;') { throw 'Missing SessionStart probe output.' }
     $packet = [ordered]@{
         evidence = 'direct-synthetic-only'; issue = 431; source_commit = (git rev-parse HEAD)
         powershell = $PSVersionTable.PSVersion.ToString(); go = (go version)
         helper_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $hook).Hash
         runtime_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $env:CLAUDE_PLUGIN_ROOT 'scripts/maestro-runtime.exe')).Hash
-        guard = 'PASS'; delegation_metadata = 'PASS'; session_start_direct = 'PASS'
+        guard = 'PASS'; delegation_metadata = 'PASS'; session_start_direct = $sessionState
         shell_comparison = 'NOT_RUN'; code_tab = 'NOT_RUN'; corporate_windows = 'NOT_RUN'; synced_folder = 'NOT_RUN'; source_reload = 'NOT_RUN'; f0 = 'OPEN'
     }
     $packetPath = Join-Path $destinationPath 'windows-rehearsal.json'
     [IO.File]::WriteAllText($packetPath, ($packet | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding($false)))
+    if ($sessionState -ceq 'BLOCKED_ELEVATED') {
+        [Console]::Error.WriteLine("BLOCKED_ELEVATED / NOT_QUALIFIED; F0 OPEN. Evidence: $packetPath")
+        exit 64
+    }
     Write-Output "Direct synthetic checks passed. F0 OPEN. Evidence: $packetPath"
 } finally {
     foreach ($key in $saved.Keys) { [Environment]::SetEnvironmentVariable($key, $saved[$key], 'Process') }
