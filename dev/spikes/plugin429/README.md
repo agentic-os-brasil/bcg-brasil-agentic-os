@@ -24,8 +24,10 @@ go run ./dev/spikes/plugin429 build "$HOME/Developer/CodexWorkspace/Marketplace 
 
 Os dois executáveis nativos ficam em `versions/0.0.1/maestro-spike/scripts/`.
 O pacote não usa Python, MCP, dados de cliente, memória nem configuração do
-repo. O build e os testes deste spike são para macOS; a embalagem `.exe`, os
-handlers PowerShell e a execução em Windows pertencem à issue #431.
+repo. O builder escolhe o formato nativo do host: executáveis `.exe` e hooks
+em execução direta no Windows; executáveis sem extensão e o launcher existente
+no Unix. Para compilar e ensaiar no Windows PowerShell 5.1/7, use
+[WINDOWS.md](WINDOWS.md). A qualificação do host em #431 continua pendente.
 
 ## Ensaio assistido no Code tab
 

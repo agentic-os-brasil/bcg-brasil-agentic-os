@@ -96,3 +96,50 @@ func TestBuildRefusesExistingDestination(t *testing.T) {
 		t.Fatalf("existing file changed: %s %v", body, err)
 	}
 }
+
+func TestPlatformHookLaunch(t *testing.T) {
+	for _, goos := range []string{"windows", "darwin", "linux"} {
+		t.Run(goos, func(t *testing.T) {
+			body, err := json.Marshal(pluginHooks(goos))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var config struct {
+				Hooks map[string][]struct {
+					Hooks []struct {
+						Command string   `json:"command"`
+						Args    []string `json:"args"`
+					} `json:"hooks"`
+				} `json:"hooks"`
+			}
+			if err := json.Unmarshal(body, &config); err != nil {
+				t.Fatal(err)
+			}
+			modes := map[string]int{}
+			for _, groups := range config.Hooks {
+				for _, group := range groups {
+					for _, hook := range group.Hooks {
+						if goos == "windows" {
+							if hook.Command != "${CLAUDE_PLUGIN_ROOT}/scripts/maestro-spike-hook.exe" || len(hook.Args) != 1 {
+								t.Fatalf("Windows requires native exec form: %+v", hook)
+							}
+							modes[hook.Args[0]]++
+						} else if hook.Args != nil || !strings.HasPrefix(hook.Command, `"${CLAUDE_PLUGIN_ROOT}/scripts/maestro-spike-hook" `) {
+							t.Fatalf("changed Unix launch contract: %+v", hook)
+						}
+					}
+				}
+			}
+			if goos == "windows" && (len(modes) != 3 || modes["session-start"] != 1 || modes["guard"] != 1 || modes["delegation"] != 1) {
+				t.Fatalf("missing hook modes: %v", modes)
+			}
+			want := "maestro-runtime"
+			if goos == "windows" {
+				want += ".exe"
+			}
+			if got := executableName("maestro-runtime", goos); got != want {
+				t.Fatalf("runtime name=%s want=%s", got, want)
+			}
+		})
+	}
+}

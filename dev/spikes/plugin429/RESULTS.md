@@ -80,3 +80,50 @@ Validação focal após os ajustes:
 
 O helper e o builder não foram alterados nesta revisão; a evidência anterior
 de build/manifest permanece vinculada ao mesmo artefato. Sem full suite local.
+
+## Observação CLI posterior — 2026-10-20, sem modelo
+
+Um ensaio posterior com CLI 2.1.233/macOS arm64, perfil isolado e ferramentas
+desabilitadas observou `hook_started`/`hook_response` de SessionStart com exit
+0 e preflight `non_elevated`/`unattested`. `init.plugins` selecionou a pasta
+publicada da origem, apesar da cópia física registrada no cache. Uma segunda
+inicialização releu um marker temporário acrescentado ao hook da origem, sem
+`plugin update`; o arquivo foi restaurado byte a byte e o hash do cache
+permaneceu igual. Isso comprova somente despacho de SessionStart e releitura
+do arquivo de hook nesse CLI. Não comprova revisão da skill, troca de ponteiro
+de marketplace, inferência, ferramentas, delegação nem Code tab.
+
+A autenticação estava ausente e a execução de modelo terminou com
+`authentication_failed`, custo zero. As perguntas assistidas acima continuam
+`NOT_RUN`. Evidência externa local preservada em
+`Developer/CodexWorkspace/2026-10-20/maestro-epic-428/runtime-observation/REPORT.md`.
+
+## Preparação Windows — #431
+
+O builder agora escolhe os dois nomes `.exe` no Windows, incluindo o runtime
+chamado por SessionStart. O manifesto Windows usa execução direta com
+`command`/`args`; o Unix mantém seu launcher anterior. O runner PowerShell
+5.1/7 e o workflow manual são sondas diretas sintéticas, descritas em
+[WINDOWS.md](WINDOWS.md). A definição de workflow não comprova execução hosted.
+
+Teste antes da implementação: `TestPlatformHookLaunch` falhou por ausência das
+funções de seleção da plataforma. Após a implementação, testes focais passaram
+no macOS arm64, incluindo o subteste de symlinks sem skip e os contratos de
+launch Windows/macOS/Linux. Nenhum resultado Windows nativo ou corporativo,
+Code tab, OneDrive, SmartScreen/WDAC/AppLocker ou reload de skill foi observado.
+F0 e #431 permanecem abertos.
+
+Validação adicional deste patch: `go vet ./dev/spikes/plugin429`, compilação
+cruzada do teste e dos dois helpers para Windows amd64 (PE32+), parser PowerShell
+7 e fast harness passaram. A fixture Windows foi aceita por `claude plugin
+validate` 2.1.233 com o warning de author já conhecido; esse comando valida
+manifestos e não prova execução dos handlers.
+
+Para verificar `args` na versão instalada, uma cópia isolada via `--plugin-dir`
+usou o helper macOS nativo com `command` separado de `args: ["session-start"]`.
+O CLI 2.1.233 emitiu `hook_started` e `hook_response`, exit 0 e o marker correto
+do modo SessionStart; sem esse argumento o helper não executaria o modo.
+A chamada de modelo terminou sem autenticação, custo zero, sem tools nem MCP.
+O artefato registrado de outro ensaio foi preservado. Essa observação prova
+despacho exec-form somente no macOS, nunca no Windows. Evidência:
+`Developer/CodexWorkspace/2026-10-20/maestro-epic-428/windows/mac-exec-form-observation.json`.
