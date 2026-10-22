@@ -68,8 +68,10 @@ sincronizada ainda não demonstrou essa capacidade. Um materializador local,
 bootstrapper adicional ou daemon mudaria esse fluxo e exige ratificação
 arquitetural explícita; nenhum deles está implicitamente incluído em #438.
 Enquanto esse consumidor e seu ponto de enforcement não forem definidos e
-qualificados, F1 permanece bloqueado e publicação assinada/piloto não é
-aceita. Nenhum plugin pode substituir sua própria raiz de confiança.
+qualificados, o freeze operacional de F1 e publicação assinada/piloto ficam
+bloqueados. Implementação e testes isolados podem preparar esses mecanismos,
+sem ativá-los em instalações reais. Nenhum plugin pode substituir sua própria
+raiz de confiança.
 
 ## Recall
 

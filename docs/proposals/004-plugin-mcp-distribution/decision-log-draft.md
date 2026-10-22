@@ -4,7 +4,8 @@
 este arquivo permanece DRAFT e não promove os gates ainda abertos.
 Autoridade: [epic #428](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/428)
 e [issue #432](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/432).
-Não é nova decisão inserida no histórico canônico nem autorização de release.
+O contrato de desenvolvimento é registrado no histórico canônico antes da
+implementação. Aceitar preparação isolada não autoriza release.
 
 ## Decisão condicionada
 
@@ -25,7 +26,8 @@ unsigned/HOLD. Aprovação do epic não transforma candidata em release assinada
 2. F1 (#432): reconciliar proposta, layout/contratos e achados; revisão e
    merge autorizados. Specs A/E propõem layout/locator e Spec B propõe
    roteamento por target. A admissão confiável pré-execução da Spec F ainda
-   exige decisão e prova do ponto de enforcement. Draft permanece bloqueado.
+   exige decisão e prova do ponto de enforcement. O merge da baseline permite
+   preparação isolada; o freeze operacional permanece bloqueado.
 3. F2 (#433/#434): resolver compartilhado e migração copy→verify→commit,
    equivalência, retidos acessíveis e rollback funcional; último ZIP e uma
    instalação real migrada sem perda.

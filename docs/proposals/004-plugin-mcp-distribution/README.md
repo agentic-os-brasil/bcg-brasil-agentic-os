@@ -1,9 +1,16 @@
 # Proposal 004 — Distribuição por plugin em pasta compartilhada
 
-**Status: DRAFT / F1 BLOCKED por F0.** Alvo proposto: v0.3.0.
+**Status: baseline de preparação; qualificação F0/F1 pendente.** Alvo: v0.3.0.
 Baseline atualizada em 2026-10-22: `origin/main` em
 `db2d3036e241acb2913648d66415754fb058e282`. Este texto corrige a proposta;
 não declara implementação, qualificação de runtime ou autorização de release.
+
+O merge desta baseline permite implementar e testar os contratos de estado,
+migração e empacotamento em ambiente isolado, com fixtures sintéticas. Essa
+preparação pode avançar antes da conclusão de F0. F0 e a admissão independente
+da Spec F continuam exigidos para freeze operacional, instalação de colegas,
+migração real, distribuição e piloto. Resultados ainda não observados
+permanecem pendentes; código preparado não os converte em PASS.
 
 O [epic #428](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/428)
 autoriza a execução condicionada: dois plugins no Code tab do Claude desktop,

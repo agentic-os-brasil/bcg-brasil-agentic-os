@@ -1,9 +1,11 @@
 # Plano — ZIP para plugin em pasta compartilhada
 
-**DRAFT / F1 BLOCKED por F0.** Sequência autorizada pelo
+**Baseline de preparação; qualificação F0/F1 pendente.** Escopo do
 [epic #428](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/428).
-Preparar documentação enquanto o spike avança não aprova o design nem libera
-implementação dependente dos resultados abertos.
+Merge de source e implementação isolada com fixtures sintéticas podem avançar
+enquanto o spike permanece aberto. Freeze operacional, instalação de colegas,
+migração real e distribuição continuam condicionados às provas de F0 e à
+admissão confiável da Spec F. Hipóteses de host não viram capacidades entregues.
 
 ## Evidência e lacunas de F0
 
