@@ -1,0 +1,36 @@
+{
+  "observed_date": "2026-10-22",
+  "runtime": "Claude Code CLI 2.1.233 / macOS arm64",
+  "scope": "isolated profiles; final fixture MCP health plus same-code V1 startup observation",
+  "plugin_validation": "PASS with optional author attribution warning",
+  "plugin_mcp_health": "CONNECTED",
+  "startup_orientation": {
+    "type": "system",
+    "subtype": "hook_response",
+    "hook_name": "SessionStart:startup",
+    "stdout": "MAESTRO_MCP_SPIKE_REVISION=0.0.1\nMaestro synthetic architecture spike: use maestro_context before work. Filesystem is the source of truth. Save a concise checkpoint and next step with maestro_checkpoint; pause explicitly before a later maestro_resume. Tools are bound to one synthetic case. Never reuse another case's context or write across cases. Plugin revision is independent of user state. This is dev evidence, not production qualification.\n",
+    "stderr": "",
+    "exit_code": 0,
+    "outcome": "success"
+  },
+  "startup_mcp_servers": [
+    {
+      "name": "plugin:maestro-architecture-spike:maestro",
+      "status": "connected"
+    }
+  ],
+  "registered_skills": [
+    "maestro-architecture-spike:operator",
+    "maestro-architecture-spike:resume"
+  ],
+  "model": {
+    "state": "BLOCKED_MISSING_AUTH",
+    "qualified": false,
+    "authMethod": "none",
+    "total_cost_usd": 0,
+    "duration_api_ms": 0
+  },
+  "normal_profile_changed": false,
+  "code_tab": "NOT_RUN",
+  "windows": "NOT_RUN"
+}

@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "sdk": "github.com/modelcontextprotocol/go-sdk@v1.8.0",
+  "transport": "official Go SDK CommandTransport / stdio",
+  "observations": [
+    {
+      "name": "new_synthetic_ledger_seeded",
+      "status": "PASS",
+      "evidence": {
+        "existing_state_reused": false,
+        "root": "<architecture-demo>/State Final"
+      }
+    },
+    {
+      "name": "native_plugins_built_outside_owner_state",
+      "status": "PASS",
+      "evidence": {
+        "plugin_v1": "<architecture-demo>/Plugins Final/v1",
+        "plugin_v2": "<architecture-demo>/Plugins Final/v2",
+        "state_root": "<architecture-demo>/State Final"
+      }
+    },
+    {
+      "name": "sdk_initialize_and_tools_discovery",
+      "status": "PASS",
+      "evidence": {
+        "protocol_version": "2026-07-28",
+        "server": {
+          "name": "maestro-architecture-spike",
+          "version": "0.0.1"
+        },
+        "tools": [
+          "maestro_checkpoint",
+          "maestro_context",
+          "maestro_resume"
+        ]
+      }
+    },
+    {
+      "name": "bounded_context_reads_do_not_mutate_files",
+      "status": "PASS",
+      "evidence": {
+        "ledger_files": 10,
+        "max_response_bytes": 4096,
+        "state_revision": 2
+      }
+    },
+    {
+      "name": "checkpoint_and_pause_survive_fresh_server_process",
+      "status": "PASS",
+      "evidence": {
+        "next_step": "Read the synthetic artifact and validate recommendation A",
+        "state": "paused",
+        "state_revision": 4,
+        "summary": "MCP_REHEARSAL_CASE_A_PRIVATE_CHECKPOINT"
+      }
+    },
+    {
+      "name": "plugin_revision_switch_uses_same_checkpoint",
+      "status": "PASS",
+      "evidence": {
+        "host_update_semantics": "NOT_RUN",
+        "launch_source": "each plugin .mcp.json bundled executable",
+        "plugin_versions": [
+          "0.0.1",
+          "0.0.2"
+        ],
+        "product_files_unchanged": true,
+        "state_files_unchanged": true
+      }
+    },
+    {
+      "name": "resume_creates_new_attempt",
+      "status": "PASS",
+      "evidence": {
+        "checkpoint_preserved": true,
+        "new_attempt": true,
+        "state_revision": 5
+      }
+    },
+    {
+      "name": "prior_attempt_cannot_checkpoint_after_resume",
+      "status": "PASS"
+    },
+    {
+      "name": "stale_revision_cannot_resume",
+      "status": "PASS"
+    },
+    {
+      "name": "all_three_tools_reject_root_workspace_and_item_overrides",
+      "status": "PASS",
+      "evidence": {
+        "rejected_calls": 9
+      }
+    },
+    {
+      "name": "oversized_checkpoint_rejected_without_ledger_mutation",
+      "status": "PASS",
+      "evidence": {
+        "summary_bytes": 102400
+      }
+    },
+    {
+      "name": "workspace_b_neither_reads_nor_accepts_a_checkpoint",
+      "status": "PASS",
+      "evidence": {
+        "unchanged_revision": 2,
+        "workspace": "case-b"
+      }
+    },
+    {
+      "name": "authoritative_checkpoint_preserved_after_negative_probes",
+      "status": "PASS",
+      "evidence": {
+        "state_revision": 5,
+        "summary": "MCP_REHEARSAL_CASE_A_PRIVATE_CHECKPOINT"
+      }
+    }
+  ],
+  "limits": [
+    "No model or Claude host was invoked",
+    "No Code tab, corporate policy, synced-folder or production migration qualification",
+    "Synthetic execution ledger only; filesystem access by an arbitrary model tool is not sandboxed by this MCP"
+  ]
+}
