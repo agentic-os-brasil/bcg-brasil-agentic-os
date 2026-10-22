@@ -47,7 +47,10 @@ origem confirmada; resolver e doctor nunca criam ou ativam nada.
    home é conflito: pode reportar o path selecionado, mas `writable=false`.
    Trocar de home exige operação explícita futura; não é efeito do resolver.
 
-Home ausente ou sem origem é `fresh-unconfirmed`, sem permissão de escrita.
+Locator existente cujo destino não é mais um diretório acessível retorna
+FAIL `marker-target-missing` ou erro de acesso, com `writable=false`; não
+recriar o destino, perguntar por instalação nova nem cair no default.
+Sem locator, home ausente ou sem origem é `fresh-unconfirmed`, sem escrita.
 Antes de scaffold, perguntar “Usava Maestro por ZIP nesta máquina?”. “Sim”
 exige SOURCE explícito e #434; “não” confirma instalação nova. Home populado
 sem origem, legado não vinculado ou origem contraditória é FAIL, sem merge.

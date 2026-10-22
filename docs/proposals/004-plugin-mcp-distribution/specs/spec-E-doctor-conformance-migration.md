@@ -106,6 +106,9 @@ exato. Qualquer drift, symlink/reparse ou mudança de tipo bloqueia.
 Após commit, edições regulares no destino geram `target_evolved`, preservam
 uso normal e não provocam recópia, como em v1. Recibo histórico não é PASS
 fresco. Symlink, tipos incorretos e falhas de IO nunca viram evolução normal.
+Repetir a mesma tentativa com origin ativa e vínculos válidos retorna
+`already migrated`, sem cópia, rename ou reescrita de registros. Essa resposta
+continua sendo no-op com `target_evolved`; não equivale a equivalência fresca.
 
 ## Retidos e propriedade dos hooks
 
@@ -119,7 +122,8 @@ de namespace retido para HOME é implicitamente autorizada.
 O último ZIP deve detectar locator vinculado ou `data.migrated/` antes de
 logging, recovery ou scaffold. Com migração ativa, seus hooks não escrevem
 estado legado nem recriam `data/`; mostram a orientação para a sessão plugin.
-Com transação pendente/revogada, informam recuperação e bloqueiam inicialização.
+Com transação pendente/revogada, informam recuperação e bloqueiam inicialização
+comum. A única exceção é o handoff explícito de rollback definido abaixo.
 Ausência do locator com data.migrated presente não é instalação nova.
 
 Abrir o root do ZIP com plugin global pode despachar hooks de ambos. O desenho
@@ -159,6 +163,24 @@ o plugin global. Se a seleção exclusiva não puder ser demonstrada, restauraç
 de arquivos é parcial e F2 não passa. Locator permanece como revogado para
 impedir reativação silenciosa do plugin; retomada da migração exige ação
 explícita. Repetir rollback verifica o mesmo resultado, sem apagar HOME.
+
+Para o ZIP consciente da migração funcionar apesar desse locator revogado,
+o comando explícito de rollback estabelece um handoff limitado: conferir o
+root, versão e manifest exatos de `previous_runtime`, vínculo ao SOURCE
+restaurado, journal rolled_back na fase source_restored e fingerprint da
+origem antes da primeira abertura de teste. Essa fase autoriza apenas a
+sessão de qualificação selecionada; a seleção de hooks deve estar comprovada. Somente esse ZIP
+pode ler/escrever seu `data/` restaurado e executar seu guard; HOME e hooks do
+plugin continuam sem permissão de escrita. Outro root ou abertura comum de
+um ZIP não recebe essa exceção automaticamente.
+
+Após a prova e rollback_verified, o mesmo vínculo autoriza uso normal do ZIP.
+Edições legítimas posteriores em `data/` são preservadas e não invalidam o
+fingerprint histórico de restauração; identidade do runtime, paths, tipos e
+autoridade do guard continuam validados. Drift anterior ao handoff validado
+continua bloqueado, sem ser reinterpretado como evolução posterior. Implementar esse handoff no último
+ZIP e testá-lo com o plugin instalado faz parte de #434. Sem esse suporte,
+revogação e arquivos restaurados continuam resultado parcial.
 
 ## Aceite
 
