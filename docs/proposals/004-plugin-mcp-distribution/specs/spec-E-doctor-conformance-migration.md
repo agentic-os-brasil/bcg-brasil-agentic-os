@@ -1,138 +1,200 @@
-# Spec E — Doctor: Migração + Conformance Check
+# Spec E — Doctor, origem e migração verificável
 
-**Status:** DRAFT — proposal 004 (pendente aprovação do owner)
-**Implementa:** Migração da Decisão D1 + Testing Decisions 1 e 4 do [PRD](../PRD.md) · Fallback Codex da Decisão D5 · Tickets T2 (migração) e parte do T4/T5 (conformance) · Stories US-C4, US-R2, parte de US-S1
-**Depende de:** Spec A (resolver + markers definidos lá).
-**Gate associado:** G1 (migração shipada e verificada) · G2/G3 (conformance em uso no piloto).
+**DRAFT / F1 BLOCKED.** Contrato proposto em #432; #434 estende migração e #437
+implementa doctor. Consome [Spec A](spec-A-data-home-decoupling.md) e
+[Spec F](spec-F-trust-release-pipeline.md). Nenhum fluxo abaixo está implementado.
 
----
+## Origem e diagnóstico somente leitura
 
-## 1. Problem
+`/maestro:doctor` mostra versão plugin/runtime, marketplace ativo, home,
+`selected_by`, origem e permissão lógica de escrita. Origem é `migrated`,
+`fresh-confirmed` ou `fresh-unconfirmed`; diagnóstico também expõe erro,
+fase pendente ou revogação, sem disfarçá-los de instalação nova. Cada check
+mostra PASS/FAIL/UNKNOWN, autoridade usada e próxima ação suportada.
+Resolver, dry-run, status e doctor não criam nem consertam registros.
 
-Dois problemas distintos, um veículo (`/maestro:doctor`):
+Home sem confirmação exige a pergunta sobre ZIP anterior antes da primeira
+escrita. “Sim” requer SOURCE explícito e esta migração; “não” confirma
+instalação nova. Home populado mais legado sem vínculo comprovado é ambíguo:
+FAIL com os paths, sem merge. Erros de leitura nunca contam como ausência.
 
-**Migração.** A base instalada (0.1.x/0.2.0 por ZIP) tem `data/` co-locado com o produto. O plugin (Spec B) não pode migrar esse estado — ele nem existe na máquina do colega antes do install, e plugins são imutáveis. Se a migração não acontecer **antes** do primeiro install de plugin, o colega instala o Maestro novo e encontra memória vazia: o pior failure mode possível para adoção (US-C4). A migração precisa viajar no canal que a base instalada já tem: **o último release ZIP (v0.2.x)**.
+Checks cobrem assinatura/autoridade, hashes, helper da plataforma, igualdade
+plugin↔runtime, resolução/origem e integridade da transação. Mismatch é FAIL:
+reabrir sessão na versão completa verificada ou usar recall. Configuração de
+hook não prova execução. Offline não atesta freshness de recall: UNKNOWN.
+Doctor não executa helper ainda não autenticado para avaliar a própria confiança.
 
-**Conformance.** Hoje não há sinal pós-install/pós-update de que a instalação está íntegra: versão certa, bytes certos, assinatura válida, runtime sincronizado, hooks rodando. O ritual ZIP mascarava isso com "rode o doctor e torça"; a fase plugin exige um veredito PASS/FAIL observável e auditável (US-S1), que é também o instrumento dos gates G1–G3.
+## Uma extensão versionada do motor existente
 
-## 2. Solution
+Reusar `internal/zipmigration` e
+[ZIP migration v1](../../../../acceptance/migration/CONTRACT.md): mesmo inventário,
+`targetFor`, colisões portáveis, confinamento `os.Root`, staging, hashes,
+no-overwrite e validação de retidos. Não criar outro motor Python/shell/MCP.
+O v1 permanece legível sob seu contrato original; não converter seu recibo
+em prova de uma transação para HOME que ele nunca realizou.
 
-O doctor ganha duas responsabilidades separadas e sequenciadas no tempo:
+Propor schema `2` para plano, estado e recibo do destino externo. O plano
+preserva campos v1 e adiciona `home`, `source_before="data"`,
+`source_after="data.migrated"`, `mapping_version="zip-to-home-v1"` e
+`previous_runtime`. Este último contém root absoluto da instalação anterior,
+versão e digest do manifest de runtime verificado. Não inventar root nem
+admitir um pacote anterior já substituído: reusar backup/artefato verificável
+do fluxo ZIP, ou exigir a instalação anterior intacta antes de começar.
 
-- **(a) Migração** — shipada no último ZIP v0.2.x: detecta `data/` co-locado → move para `~/.maestro/` → grava markers → idempotente → rollback documentado. A base instalada chega à fase plugin **já migrada**.
-- **(b) Conformance** — fase plugin em diante: pós-install e pós-update, emite relatório PASS/FAIL contra o manifest assinado da release, reusando a máquina de verificação do `eval-release.sh` existente, reapontada para os artefatos plugin+binário. Inclui detecção de runtime Codex e instalação do fallback de hooks (D5).
+`project` continua sendo SOURCE. `entries[].source` e `legacy_map` passam a
+representar paths lógicos relativos à árvore legada; `entries[].target` é
+relativo a `HOME/brain/`. O schema distinto impede interpretar esses paths
+como o antigo `SOURCE/brain/`. Preservar ID aleatória, hash dos bytes exatos
+do plano e fingerprints do inventário definidos em v1. Não alterar o plano
+para acompanhar rename; validar a raiz física a partir da fase.
 
-## 3. Design
+Usar somente `HOME/brain/.maestro/migration/state.json` como journal mutável.
+Além do resultado v1, estado v2 vincula `home`, `phase` e
+`rollback_runtime_verified` (inicialmente false). Fases:
+`copying`, `verified`, `source_retained`, `active`,
+`rollback_pending`, `source_restored`, `rollback_verified`.
+Estados externos continuam `planned|partial|blocked|committed|rolled_back`;
+fase incompleta nunca autoriza escrita comum. O recibo de commit v2 é imutável,
+vincula source/home/plano/fingerprints e `previous_runtime`; revogação e prova
+nova de rollback são eventos separados no journal, sem reescrever o recibo.
+Esses vínculos são consistência local, não assinatura organizacional nem
+proteção contra um dono que reescreva todas as autoridades.
 
-### 3.1 Responsabilidade (a) — Migração
+## Ordem de efeitos e recuperação
 
-#### 3.1.1 Detecção
+1. **Planejar.** Parar writers do ZIP e do plugin por este fluxo explícito;
+   não migrar com sessões escrevendo em paralelo. Validar SOURCE, HOME e
+   runtime anterior, inventariar arquivos ocultos/diretórios vazios e mapear
+   cada item. `--dry-run` só retorna o plano em memória. Aplicação explícita
+   grava plano e journal antes de reservar o locator da Spec A. Se existir
+   locator/origem de outra tentativa ou conteúdo de destino não pertencente
+   ao plano, bloquear sem sobrescrever. Retomada usa o mesmo ID.
+2. **Copiar.** Só criar outputs ausentes e pertencentes ao plano em
+   `HOME/brain/`; staging fica no mesmo filesystem do destino. Copiar,
+   fsync, rehash e publicar sem overwrite, como no motor atual. Falta de
+   hard-link seguro retorna partial; não trocar por cópia insegura.
+3. **Verificar.** Revalidar árvore completa da origem, destinos, transformações
+   e runtime anterior. Publicar fase verified após digests corretos. Até aqui
+   `SOURCE/data/` permanece intacto e origin não existe.
+4. **Reter.** Renomear `SOURCE/data/` para `SOURCE/data.migrated/` somente
+   com destino de rename ausente; ambos ficam no filesystem da SOURCE.
+   Revalidar inventário completo pela nova raiz antes de source_retained.
+   Não é rename entre SOURCE e HOME. Falha de rename/flush no Windows é
+   observável e retomável; não presumir atomicidade conjunta entre roots.
+5. **Commit e ativação.** Gravar recibo imutável, depois estado committed com
+   fase active, depois publicar origin v1 como último limite de ativação.
+   Locator reservado só permite descoberta; somente a concordância
+   origin↔locator↔journal↔plano↔recibo libera estado. Falha intermediária
+   mantém HOME bloqueado até retomar e revalidar. O motor não executa
+   scaffold para “completar” bytes ausentes.
+6. **Retomar.** Ler locator/plano/journal e revalidar outputs já pertencentes
+   à tentativa. Se rename ocorreu antes do journal, verified mais somente
+   data.migrated com o fingerprint original permite concluir retenção.
+   Se recibo existe sem journal/origin final, validar todos os vínculos antes
+   de concluir a ativação. Plano sem locator ainda pode ser retomado com
+   SOURCE e HOME explícitos; não procurar destinos pelo disco.
 
-Doctor detecta instalação ZIP com `data/` co-locado na raiz da instalação (padrão 0.1.x/0.2.0). Pré-condições para iniciar:
+Nunca existe commit atômico global entre origem, home e USERHOME. A ordem
+registrada e inspeção das árvores reais resolvem interrupções. `data/` e
+`data.migrated/` coexistindo é conflito, mesmo com hashes iguais: não apagar,
+fundir nem escolher por data/mtime. Nenhuma das duas presente é perda de
+origem e bloqueia. Em copying/verified, apenas data/ é o estado esperado;
+em source_retained/active, apenas data.migrated/. Uma diferença legítima
+entre rename e journal só é aceita na transição descrita, com inventário
+exato. Qualquer drift, symlink/reparse ou mudança de tipo bloqueia.
 
-- `data/` existe no local legado E o marker de migração (Spec A §3.4) **não** existe.
-- Se `~/.maestro/data/` já existe E não há marker: estado ambíguo (duas fontes possíveis de verdade) → doctor **não migra**, reporta FAIL com as duas localizações e instrução manual. Nunca merge automático, nunca sobrescrita.
+Após commit, edições regulares no destino geram `target_evolved`, preservam
+uso normal e não provocam recópia, como em v1. Recibo histórico não é PASS
+fresco. Symlink, tipos incorretos e falhas de IO nunca viram evolução normal.
+Repetir a mesma tentativa com origin ativa e vínculos válidos retorna
+`already migrated`, sem cópia, rename ou reescrita de registros. Essa resposta
+continua sendo no-op com `target_evolved`; não equivale a equivalência fresca.
 
-#### 3.1.2 Procedimento (copy → verify → commit, nunca move destrutivo direto)
+## Retidos e propriedade dos hooks
 
-1. **Inventário**: lista recursiva de `data/` legado com sha256 por arquivo.
-2. **Cópia**: para `~/.maestro/data/` (criado se ausente), layout preservado 1:1 (Spec A §3.1).
-3. **Verificação**: re-hash do destino; qualquer divergência → aborta, destino parcial é removido, origem intacta, FAIL com relatório.
-4. **Commit**: grava `~/.maestro/home.json` (origem = path da instalação ZIP) e o marker de migração no local antigo (ponteiro para o home + hash do inventário). Só então a origem é renomeada para `data.migrated/` — **preservada, não deletada** (é o insumo do rollback).
-5. **Relatório**: contagem de arquivos, bytes, hash do inventário, localizações de origem/destino.
+`--resolve-legacy agents|workspaces|canary` verifica o namespace pedido contra
+o inventário original e retorna `SOURCE/data.migrated/<namespace>` quando
+active. Não retorna path da fase antiga nem transforma um diretório ausente
+em namespace vazio. Edições autorais comuns no destino não bloqueiam a leitura
+dos retidos, mas alteração nos retidos bloqueia essa resolução. Nenhuma cópia
+de namespace retido para HOME é implicitamente autorizada.
 
-#### 3.1.3 Idempotência
+O último ZIP deve detectar locator vinculado ou `data.migrated/` antes de
+logging, recovery ou scaffold. Com migração ativa, seus hooks não escrevem
+estado legado nem recriam `data/`; mostram a orientação para a sessão plugin.
+Com transação pendente/revogada, informam recuperação e bloqueiam inicialização
+comum. A única exceção é o handoff explícito de rollback definido abaixo.
+Ausência do locator com data.migrated presente não é instalação nova.
 
-Segunda execução = no-op observável: marker presente + inventário do home válido → doctor reporta "já migrado em <data>, nada a fazer" e sai PASS. Execução após migração interrompida (ver §3.3) **retoma**, não duplica.
+Abrir o root do ZIP com plugin global pode despachar hooks de ambos. O desenho
+não presume execução exclusiva: startup e doctor identificam o conflito.
+Hooks legados não podem desabilitar o guard do plugin; seu guard deve consumir
+o resolver verificado ou recusar a operação, nunca permitir silenciosamente.
+Até provar a seleção de hooks no host real, trabalhar a partir desse root é
+estado não qualificado. Handoff de writers e guard são critérios próprios;
+não desabilitar ambos para obter um primeiro turno bem-sucedido.
 
-#### 3.1.4 Rollback (documentado e testado — teste 4, PRD §5)
+## Rollback funcional, separado de revogação
 
-Procedimento inverso, documentado no relatório de migração e no README do release v0.2.x:
+O rollback v1 só revoga e retorna `restored_runtime=false`; ele não satisfaz
+#434. A extensão começa por revogar permissão de escrita no HOME, registrando
+rolled_back/rollback_pending. Preserva HOME inteiro, inclusive edições novas,
+e todos os recibos; não tenta aplicar essas edições na árvore legada.
 
-1. Renomear `data.migrated/` de volta para `data/` no local legado.
-2. Deletar o marker de migração do local antigo.
-3. (Opcional, para rollback completo) remover `~/.maestro/data/` — somente após confirmar que o `data/` legado restaurado está íntegro.
+Com writers parados, verificar fingerprint de data.migrated e ausência de
+data/, então renomear de volta para data/ sem overwrite e revalidar. Antes da
+retenção, rollback apenas verifica data/ intacto. Registrar source_restored;
+se cair após rename e antes do journal, somente data/ com inventário exato
+permite retomar. Conflito ou drift bloqueia, preservando ambas as árvores.
 
-Pós-rollback, a instalação ZIP v0.2.x anterior volta a funcionar como antes (circuit breaker do risco "migração corrompe estado", migration-plan §2).
+Reabrir o runtime anterior verificado em `previous_runtime.root`, com data/
+restaurado disponível no root que ele de fato consome. Se for outro root, o
+plano só é admissível se já documentar o vínculo real de dados do fluxo ZIP;
+não inventar cópia/merge automático. Validar abertura, leitura de conteúdo
+legado e uma operação normal sem perda. Registrar versão, manifest verificado
+e evidência nova; só então marcar rollback_verified e
+`rollback_runtime_verified=true`. `restored_runtime` só pode ser true após
+essa prova, nunca pelo sucesso do rename.
 
-### 3.2 Responsabilidade (b) — Conformance check
+A sessão de rollback precisa de seleção de hooks suportada pelo host que
+mantenha o runtime ZIP e seu guard como autoridade efetiva. Não alterar
+managed settings, remover segurança nem supor que abrir outra janela desliga
+o plugin global. Se a seleção exclusiva não puder ser demonstrada, restauração
+de arquivos é parcial e F2 não passa. Locator permanece como revogado para
+impedir reativação silenciosa do plugin; retomada da migração exige ação
+explícita. Repetir rollback verifica o mesmo resultado, sem apagar HOME.
 
-#### 3.2.1 Verificação contra o manifest assinado
+Para o ZIP consciente da migração funcionar apesar desse locator revogado,
+o comando explícito de rollback estabelece um handoff limitado: conferir o
+root, versão e manifest exatos de `previous_runtime`, vínculo ao SOURCE
+restaurado, journal rolled_back na fase source_restored e fingerprint da
+origem antes da primeira abertura de teste. Essa fase autoriza apenas a
+sessão de qualificação selecionada; a seleção de hooks deve estar comprovada. Somente esse ZIP
+pode ler/escrever seu `data/` restaurado e executar seu guard; HOME e hooks do
+plugin continuam sem permissão de escrita. Outro root ou abertura comum de
+um ZIP não recebe essa exceção automaticamente.
 
-Pós-install e pós-update, o doctor executa, nesta ordem fail-closed (cada passo só roda se o anterior passou):
+Após a prova e rollback_verified, o mesmo vínculo autoriza uso normal do ZIP.
+Edições legítimas posteriores em `data/` são preservadas e não invalidam o
+fingerprint histórico de restauração; identidade do runtime, paths, tipos e
+autoridade do guard continuam validados. Drift anterior ao handoff validado
+continua bloqueado, sem ser reinterpretado como evolução posterior. Implementar esse handoff no último
+ZIP e testá-lo com o plugin instalado faz parte de #434. Sem esse suporte,
+revogação e arquivos restaurados continuam resultado parcial.
 
-1. **Assinatura**: verifica a assinatura Ed25519 destacada do manifest da release contra o registry local de chaves aprovadas — mesma disciplina da Spec 020 (assinatura sobre os bytes exatos; parsing não estabelece trust). **Reusa a máquina de verificação do `eval-release.sh` atual, reapontada** para os artefatos da release plugin (Testing Decision 1 do PRD) — não se escreve um segundo verificador.
-2. **Conteúdo do plugin**: hashes dos arquivos instalados vs manifest. Qualquer arquivo ausente, excedente ou com hash divergente → FAIL nomeando o arquivo.
-3. **Versão travada**: `plugin_version == runtime_version` (binário `maestro-mcp` em `~/.maestro/bin/` reporta versão; sha256 do binário vs manifest por target). Dessincronia → FAIL com estado distinto "plugin↔runtime dessincronizado" (US-D2 exige esse estado visível também na telemetria).
-4. **Data home**: cadeia de resolução da Spec A íntegra (home existe, `home.json` válido, sem `data/` órfão co-locado).
-5. **Revogação**: versão instalada ainda presente/não-revogada no marketplace (canal de revogação definido na Spec F §revocação). Versão revogada → FAIL com instrução de update.
+## Aceite
 
-Saída: relatório PASS/FAIL por check + veredito agregado + versão + data da release + "assinatura verificada" explícitos (trust signal da lente UX 3 do PRD §6). PASS exige todos os checks verdes.
-
-#### 3.2.2 Fallback de hooks no Codex (D5)
-
-Em runtime Codex, o doctor adicionalmente:
-
-1. **Detecta se hooks entregues pelo plugin executaram** — evidência observável de execução do `session_start` (ex.: receipt gravado pelo próprio hook no data home), não inferência por configuração.
-2. **Se não executaram**: instala a projeção `.codex/hooks.json` project-level — mecanismo **já existente e testado** no Maestro (Fato F7), trust-gated por hash: a projeção só é escrita se o hash do conteúdo projetado bater com o esperado pelo manifest da release.
-3. Reporta no veredito o modo ativo: `hooks-via-plugin` ou `hooks-via-projeção (degraded)` — alimenta a matriz de paridade em `acceptance/parity/` (US-R1/US-R2).
-
-### 3.3 Failure modes
-
-| Failure mode | Detecção | Comportamento |
-|---|---|---|
-| **Migração interrompida** (kill/queda no meio da cópia) | Re-run do doctor: destino parcial sem commit (sem marker, sem `home.json` de origem ZIP) | Retoma do inventário: re-copia/re-verifica divergentes; origem nunca foi tocada antes do commit, então nenhum estado se perdeu. Nunca apresenta instalação parcial como migrada |
-| **Interrupção pós-commit, pré-rename** | Marker existe + `data/` legado ainda com nome original | Doctor completa o rename para `data.migrated/` e reporta migração concluída |
-| **Update parcial** (`claude plugin update` interrompido; plugin novo + binário antigo ou vice-versa) | Check 3 do conformance (versão travada) | FAIL "dessincronizado" + instrução de re-run do update; nunca estado corrompido silencioso (US-C2) |
-| **Versão revogada instalada** | Check 5 do conformance + SessionStart notice (Spec F) | FAIL com aviso explícito e instrução de `claude plugin update` |
-| **Estado ambíguo** (duas fontes de `data/`) | §3.1.1 | FAIL, sem migração automática, instrução manual |
-| **Manifest inacessível** (offline) | Check 1 sem rede | Conformance degrada para verificação local (assinatura + hashes do manifest cacheado na release instalada); checks que exigem rede (revogação) reportam SKIPPED, nunca PASS falso |
-
-### 3.4 Sequenciamento de release
-
-- **v0.2.x (último ZIP)**: carrega (a) migração. É o único veículo que alcança a base instalada antes do plugin existir (migration-plan P1/G1).
-- **v0.3.0 (primeiro plugin)**: carrega (b) conformance. A migração permanece no doctor como detecção/FAIL (não executa mais o move automático — instalação não-migrada na fase plugin é roteada para §3.5), coerente com a janela de compat da Spec A §3.5.
-
-### 3.5 Descoberta de legado na fase plugin (anti-SPOF — colega que pulou o último ZIP)
-
-O pior caminho silencioso: colega em 0.1.x que NUNCA roda o ZIP v0.2.x e instala o plugin direto. Sem tratamento, `first-run-scaffold` cria `~/.maestro/` fresco e a memória antiga fica encalhada numa pasta que o doctor não sabe localizar — perda de memória sem erro.
-
-Tratamento obrigatório:
-
-1. **Onboarding do plugin pergunta antes de escrever.** Ao detectar que `~/.maestro/` não existe ou tem origem `fresh` (sem marker de migração), `/maestro:onboarding` pergunta explicitamente: "Usava Maestro por ZIP nesta máquina?" — ANTES de popular qualquer estado.
-   - "Sim" → migração assistida: usuário informa o path da instalação antiga; doctor executa o MESMO procedimento §3.1.2 (copy→verify→commit) a partir do path informado. O código de migração, portanto, NÃO sai do doctor na v0.3.0 — só o scan automático de `data/` co-locado sai; o procedimento permanece invocável com origem explícita.
-   - "Não" → origem `fresh` gravada no `home.json` com a resposta registrada (auditável).
-2. **Origem distinguível na telemetria.** `home.json` registra `origin: migrated | fresh-confirmed | fresh-unconfirmed`. O canary (Spec 054) reporta a origem — G4 consegue distinguir "migrado" de "fresh que deveria ter migrado" (`fresh-unconfirmed` em máquina de destinatário de ZIP = flag de follow-up do maintainer).
-3. **Best-effort scan.** Antes de perguntar, o doctor tenta localizar instalações ZIP em paths convencionais documentados dos releases anteriores (lista fixa, sem varredura de disco); se encontrar, oferece o path como default da pergunta.
-
-## 4. Acceptance Criteria
-
-- [ ] **AC-E1** Teste 4 do PRD §5: fixtures sintéticas 0.1.11 e 0.2.0 com `data/` co-locado → doctor migra → equivalência byte a byte + markers gravados + relatório emitido.
-- [ ] **AC-E2** Idempotência: segunda execução sobre instalação migrada = no-op com saída PASS explicitando "já migrado".
-- [ ] **AC-E3** Rollback testado: procedimento §3.1.4 restaura a instalação ZIP funcional; doctor pós-rollback volta a detectar `data/` co-locado (estado pré-migração limpo).
-- [ ] **AC-E4** Migração interrompida (kill simulado em cada passo 1–5): re-run converge para migração completa sem perda nem duplicação; origem intacta até o commit.
-- [ ] **AC-E5** Estado ambíguo (home populado + legado sem marker): doctor NÃO migra, FAIL com ambas as localizações.
-- [ ] **AC-E6** Conformance pós-install e pós-update em máquina limpa (macOS arm64/x64, Windows x64): PASS com versão + assinatura verificada no output (US-C1/US-C2).
-- [ ] **AC-E7** Manifest adulterado, arquivo de plugin alterado, ou binário com sha256 divergente → FAIL nomeando o item; nunca PASS com assinatura inválida.
-- [ ] **AC-E8** Update parcial simulado (plugin vN+1 + binário vN) → FAIL "plugin↔runtime dessincronizado" + instrução de re-run.
-- [ ] **AC-E9** Versão revogada no marketplace → doctor FAIL sinalizando revogação (par com SessionStart notice, Spec F).
-- [ ] **AC-E10** Codex sem hooks-via-plugin: doctor instala projeção `.codex/hooks.json` trust-gated por hash; hash divergente → projeção NÃO é escrita, FAIL explícito. Modo degraded registrado em `acceptance/parity/`.
-- [ ] **AC-E11** Gate G1: release ZIP v0.2.x publicada com a migração; ≥1 instalação real migrada sem perda, verificada por doctor PASS; entrada em P2 condicionada a cobertura de migração MEDIDA contra a lista de destinatários de ZIP (migration-plan §1).
-- [ ] **AC-E12** Fixture "pulou o último ZIP": instalação 0.1.x sintética + install direto do plugin → onboarding pergunta antes de escrever estado; resposta "sim" + path → migração assistida equivalente ao AC-E1; resposta "não" → `origin: fresh-confirmed` gravado e reportado via canary. Em NENHUM caminho a memória antiga é sobrescrita ou órfã silenciosa.
-
-## 5. Out of Scope
-
-- Definição do data home, resolver e markers — Spec A (esta spec os consome).
-- Pipeline que gera e assina o manifest, e o canal de revogação em si — Spec F (esta spec os verifica/consome).
-- Bootstrap do binário `maestro-mcp` — Spec C (esta spec verifica o resultado).
-- Merge automático de dois estados divergentes — nunca; sempre FAIL + procedimento manual.
-- Migração de instalações anteriores a 0.1.x — fora do suporte declarado (0.1.x/0.2.0).
-
-## 6. Open Questions
-
-| # | Questão | Decide | Quando |
-|---|---|---|---|
-| QE-1 | Localização e interface exatas da máquina de verificação do `eval-release.sh` atual (o que precisa mudar para "reapontar" para artefatos plugin+binário) — verificação no repo sobre a v0.2.0 merged | implementação | Início de T2, pós-G0 |
-| QE-2 | Evidência canônica de "hook executou" no Codex (receipt file? qual?) — depende do resultado do T3 (teste de 30min, pré-freeze Spec B) | Daniel + resultado T3 | Gate G0 |
-| QE-3 | O conformance roda automaticamente pós-update (trigger) ou permanece comando explícito recomendado pelo update notice? Recomendação: explícito, consistente com a doutrina de consent | Daniel | Freeze Spec E |
-| QE-4 | `data.migrated/` legado: TTL de preservação antes de instruir o usuário a remover (hoje o ritual ZIP já pede "apagar a pasta antiga depois de uma semana") | Daniel | Freeze Spec E |
+- [ ] Resolver, dry-run/status e doctor não escrevem; fresh-unconfirmed não
+  dispara scaffold nem bypass por env explícita.
+- [ ] Fixtures 0.1.11/0.1.12 provam equivalência, retidos, colisões e ambiguidades;
+  interrupções em cada limite acima retomam sem overwrite ou perda.
+- [ ] Recibos v1 não viram v2 implicitamente; adulteração, conflito de locator,
+  coexistência data/data.migrated e tipos inseguros ficam bloqueados.
+- [ ] Windows nativo prova rename/retomada com arquivos abertos, paths com
+  espaços e HOME em drive diferente; teste cruzado não é qualificação.
+- [ ] Guard e writers têm handoff observado em sessão real; rollback inclui
+  runtime anterior funcional e preserva edições posteriores no HOME.
+- [ ] Último ZIP pelo fluxo existente de build/release e uma instalação real
+  migrada com doctor PASS satisfazem F2; distribuição permanece HITL.
+- [ ] Install/update/recall reportam versão, home/origem e mismatch; colega que
+  pulou o último ZIP recebe migração explícita antes de qualquer escrita nova.

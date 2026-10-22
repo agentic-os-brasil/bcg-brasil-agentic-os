@@ -1,41 +1,52 @@
 # Decision Log Draft — Proposal 004
 
-**Formato:** `pm-decision-log-entry`. Entry abaixo é DRAFT — só entra no decision log oficial após decisão do owner.
+**Status: approved with conditions.** Aprovação para executar o epic #428;
+este arquivo permanece DRAFT e não promove os gates ainda abertos.
+Autoridade: [epic #428](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/428)
+e [issue #432](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/432).
+O contrato de desenvolvimento é registrado no histórico canônico antes da
+implementação. Aceitar preparação isolada não autoriza release.
 
----
+## Decisão condicionada
 
-## D-NNN — Distribuição do Maestro migra de ZIP-por-email para Plugin + MCP + Connector (v0.3.0)
+Distribuir base e tech-core como dois plugins no Code tab do Claude desktop,
+por marketplace local em pasta compartilhada somente leitura. Estado separado
+em `~/.maestro/` por uma migração direta do ZIP de campo; helper CLI em
+`scripts/`, nove hooks e guard preservados. Retirar MCP/connector da v0.3.0.
+Atualização na próxima sessão sem `plugin update` é requisito a provar.
 
-- **Decider:** Daniel Scardini (owner) — PENDENTE
-- **Date:** PENDENTE
-- **Status:** PROPOSED
+A v0.2.0 já foi incorporada por #425 em 2026-09-29; ainda é candidata
+unsigned/HOLD. Aprovação do epic não transforma candidata em release assinada.
 
-### Context
-Distribuição atual (ZIP assinado por email + ritual manual de update) gera dor estrutural: 25 PRs de fix nas releases 0.1.10–11 concentrados em path/hook/onboarding, causados por produto e estado do usuário coabitarem pasta movida manualmente. Maintainer sem canal de revogação nem telemetria de versão. Estudo validado hands-on (2026-10-09, Walter refine-and-return absorvido) confirma viabilidade: marketplace git + plugin install/update funcionam em Claude Code e Codex; `${CLAUDE_PLUGIN_ROOT}` oficial; SessionStart injection via plugin comprovada.
+## Condições não satisfeitas
 
-### Decision (proposta)
-1. Separar estado do produto: `data/` → `~/.maestro/` (Spec A), com migração automática via doctor shipada no ÚLTIMO release ZIP (Spec E).
-2. Três plugins mapeando os bundles existentes: `maestro`, `maestro-tech-core`, `maestro-pm-core` (Spec B).
-3. Runtime Go empacotado como binário `maestro-mcp` declarado no `.mcp.json` do plugin, bootstrap verificado sha256+Ed25519 (Spec C).
-4. Connector = mesmo binário registrado no Claude Desktop local (Spec D).
-5. Trust chain reusa manifest Ed25519 da Spec 020; doctor como conformance check (Specs E/F).
-6. Paridade Codex por degradação graciosa (projeção `.codex/hooks.json` via doctor).
-7. Scheduler permanece fora do plugin (enrollment consentido).
+1. F0 (#429–#431): fechar OneDrive/paths, enforcement do guard no Code tab,
+   Agent/Task real, nova revisão/sessão, Gatekeeper e política do tier padrão;
+   qualificar Windows corporativo não elevado com seu padrão de hooks.
+2. F1 (#432): reconciliar proposta, layout/contratos e achados; revisão e
+   merge autorizados. Specs A/E propõem layout/locator e Spec B propõe
+   roteamento por target. A admissão confiável pré-execução da Spec F ainda
+   exige decisão e prova do ponto de enforcement. O merge da baseline permite
+   preparação isolada; o freeze operacional permanece bloqueado.
+3. F2 (#433/#434): resolver compartilhado e migração copy→verify→commit,
+   equivalência, retidos acessíveis e rollback funcional; último ZIP e uma
+   instalação real migrada sem perda.
+4. F3 (#435–#438): bootstrap substitui CLAUDE.md, dois plugins/nove hooks,
+   helper, doctor e publicação/recall íntegros; Code tab Mac/Windows prova
+   install e N→N+1 com estado byte-idêntico no ensaio controlado.
+5. F4 (#439/#440): dois colegas cobrem Mac/Windows sem suporte; uma versão
+   de convivência e cada destinatário contabilizado antes de retirar ZIP.
+6. Autoridade, assinatura e aprovação de distribuição são evidências próprias;
+   testes locais, docs, cross-build e startup CLI não as substituem.
 
-### Rationale
-- Elimina a classe inteira de bugs de path por construção (plugin imutável + `${CLAUDE_PLUGIN_ROOT}` + home fixo).
-- Update de ~10 min com medo → 1 comando (`claude plugin update`) com estado intocado.
-- Usa o trilho nativo da plataforma em vez de lutar contra ela (installers/wizards).
-- Mantém (não rebaixa) a cadeia de proveniência Ed25519 existente, somando revogação e telemetria de versão.
+## Defaults ainda pendentes de ratificação
 
-### Gates condicionantes (não são decisão, são pré-condições)
-- G0: merge da v0.2.0 em main (ação do owner) + teste T3 (hooks-via-plugin no Codex, ~30min).
-- G2: piloto com 1 colega valida auth GitHub EMU/SAML antes de rollout — se proibitiva, decisão Q2 reabre o canal.
+Specs C/D ficam fora. Caminho da pasta permanece em aberto: default de
+OneDrive no spike e SharePoint no rollout não seleciona um path concreto.
+Comando alvo `/maestro:doctor`; onboarding menciona o antigo `/maestro-doctor`,
+sem declarar alias executável. Política restritiva aciona avaliação da
+biblioteca organizacional como plano B, não contorno do canal.
 
-### Linked
-- `docs/proposals/004-plugin-mcp-distribution/` (PRD, migration-plan, user-stories, specs A–F)
-- Spec 020 (release manifest Ed25519), Spec 040/049 (native agents — conteúdo do plugin base)
-- Estudo de origem: kowalski-os `wiki/investigations/2026-10-09-agentic-os-brasil-plugin-mcp-study.md`
-
-### Review
-- Revisit se: T3 falhar sem fallback viável; piloto G2 revelar fricção de auth proibitiva; feature "mods" amadurecer (TTL watch 2026-11-09) a ponto de mudar o desenho do onboarding.
+Rastreio dos gates e riscos: [plano](migration-plan.md). Reabrir o desenho se
+F0 contrariar resolução de fontes, bloqueio de escrita, disponibilidade da
+pasta ou execução nativa; não reinterpretar resultado inconclusivo como PASS.

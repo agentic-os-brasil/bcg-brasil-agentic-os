@@ -1,124 +1,129 @@
-# Spec A — Data Home Decoupling (`~/.maestro/`)
+# Spec A — Um data home fora do produto
 
-**Status:** DRAFT — proposal 004 (pendente aprovação do owner)
-**Implementa:** Decisão D1 do [PRD](../PRD.md) · Ticket T1 do [task graph](../user-stories.md#5-task-graph)
-**Pré-condição de:** Specs B, C, D, E, F — nada downstream começa antes desta.
-**Baseline:** v0.2.0 (branch `codex/release-0.2.0-consolidation`, merge pendente — Gate G0).
+**DRAFT / F1 BLOCKED.** Contrato proposto em #432; implementação futura #433 e
+migração #434. Não é comportamento entregue nem decisão aceita.
+Escopo e sequência: [PRD](../PRD.md), [plano](../migration-plan.md).
 
----
+## Layout proposto
 
-## 1. Problem
+`HOME` é o data home Maestro; `USERHOME` é o diretório do usuário do SO,
+obtido pela API do SO (`%USERPROFILE%` no Windows), não o cwd do caso nem o
+root do plugin. Default: `USERHOME/.maestro/`.
 
-O estado do usuário (`data/`: memória, perfil, workspaces, owner, agents) coabita a árvore do produto, que é movida manualmente a cada update ZIP. Consequências estruturais, não incidentais:
+| Path | Autoridade e uso |
+|---|---|
+| `HOME/brain/` | Estado do dono; preserva os paths lógicos atuais de brain |
+| `HOME/brain/{owner,accounts,daily,craft,learnings,people}/` | Conteúdo mapeado pelo motor ZIP atual |
+| `HOME/brain/.maestro/` | Estado de máquina, lifecycle/context e controle dos callers ZIP |
+| `HOME/brain/.maestro/migration/state.json` | Único journal mutável de migração; fases e revogação |
+| `HOME/brain/.maestro/migration/attempts/ID/{plan,receipt}.json` | Plano e recibo imutáveis da tentativa |
+| `HOME/brain/.maestro/origin.json` | Ativação explícita e vínculo à migração, quando houver |
+| `USERHOME/.maestro-home.json` | Locator estável, inclusive para descobrir HOME não default sem env |
+| `SOURCE/data.migrated/` | Árvore legada preservada; namespaces retidos continuam aqui |
 
-- **25 PRs de fix nas v0.1.10–0.1.11** concentrados em três categorias — resolução de paths (Windows drive letters, symlinks, espaços, unicode), hooks apontando para arquivos inexistentes, onboarding divergindo do estado real (Fato F8 do migration-plan).
-- O ritual de update exige copiar `data/` de volta "no lugar certo"; errar um passo = perda de memória ou quebra silenciosa.
-- Plugins Claude Code são **imutáveis por construção** — o modelo de distribuição alvo (Spec B) é incompatível com estado mutável dentro do produto. Sem esta spec, a migração para plugin não existe.
+`SOURCE` é o root absoluto da instalação ZIP explicitamente selecionada.
+Helper e manifests continuam no produto em `scripts/`; estado persistente
+não usa `${CLAUDE_PLUGIN_DATA}`. Não criar executáveis em HOME.
 
-## 2. Solution
+O layout usa `HOME/brain/` para reaproveitar `targetFor` e os paths de
+`internal/zipruntime`. Callers passam a distinguir produto e estado; pacotes
+com `DataRoot` explícito mantêm a injeção e seu subdiretório contratado. Isto
+não autoriza prefixar todos os DataRoot com `brain/.maestro`.
 
-Separar permanentemente produto e estado:
+## Resolver único e somente leitura
 
-- **Produto** (skills, agents, commands, hooks, schemas, binários): imutável, versionado, resolvido via `${CLAUDE_PLUGIN_ROOT}` na fase plugin.
-- **Estado do usuário**: vive em `~/.maestro/`, fora de qualquer árvore de produto, e **nunca é tocado por update**.
-- Hooks e commands resolvem o data home por uma ordem de resolução determinística (env var → marker → default), **nunca por path relativo ao projeto**.
+Retorna `home`, `brain_root`, `selected_by` (`env`, `marker` ou `default`),
+`origin`, `writable` e diagnóstico. `writable` é permissão lógica de usar
+origem confirmada; resolver e doctor nunca criam ou ativam nada.
 
-Resultado observável para a Carla (US-C2, US-C4): `claude plugin update` jamais toca memória/perfil; a classe inteira de bugs de path do ritual ZIP deixa de existir por construção.
+1. Se `MAESTRO_HOME` está definida, selecionar seu path absoluto. Valor vazio,
+   relativo, inválido ou inacessível é erro, sem expansão de shell ou `~`.
+2. Sem env, ler `USERHOME/.maestro-home.json`, se existir. Não buscar markers
+   recursivamente em cases, cwd ou plugins.
+3. Sem locator, selecionar `USERHOME/.maestro/`. Apenas inspecionar não cria
+   home ou locator. Instalação nova no default pode usar somente origin record.
+4. Validar path, registros e origem. Locator quebrado nunca cai no default.
+   Mesmo com env explícita, locator existente inválido ou apontando para outro
+   home é conflito: pode reportar o path selecionado, mas `writable=false`.
+   Trocar de home exige operação explícita futura; não é efeito do resolver.
 
-## 3. Design
+Locator existente cujo destino não é mais um diretório acessível retorna
+FAIL `marker-target-missing` ou erro de acesso, com `writable=false`; não
+recriar o destino, perguntar por instalação nova nem cair no default.
+Sem locator, home ausente ou sem origem é `fresh-unconfirmed`, sem escrita.
+Antes de scaffold, perguntar “Usava Maestro por ZIP nesta máquina?”. “Sim”
+exige SOURCE explícito e #434; “não” confirma instalação nova. Home populado
+sem origem, legado não vinculado ou origem contraditória é FAIL, sem merge.
+Nenhum hook infere instalação nova pela ausência de dados.
 
-### 3.1 Layout de `~/.maestro/`
+Roots e ancestrais existentes devem ser diretórios comuns: rejeitar symlinks,
+reparse points, troca de tipo e sobreposição HOME↔SOURCE/produto gerenciado.
+Não exigir posse exclusiva de ancestrais de sistema; validar posse/ACL de
+USERHOME, HOME e registros segundo a plataforma. Destino ausente é reportado
+sem `mkdir`; erro de acesso não equivale a ausência. Revalidar caminho físico
+e confinamento antes de cada efeito do motor, inclusive substituição concorrente.
 
-```
-~/.maestro/
-├── data/                      # estado do usuário (conteúdo migrado 1:1 do data/ co-locado)
-│   ├── memory/                # memória / dreaming
-│   ├── profile/               # perfil e interaction profile
-│   ├── workspaces/            # metadata de workspaces
-│   ├── owner/                 # owner context / onboarding registry
-│   └── agents/                # estado de agents (agentstate)
-├── bin/                       # binários de runtime (maestro-mcp — Spec C)
-└── home.json                  # state marker do data home (ver §3.3)
-```
+## Registros de descoberta e origem
 
-Notas:
-- A estrutura interna de `data/` preserva o layout existente da v0.2.0 — esta spec move a raiz, **não reorganiza o conteúdo** (equivalência byte a byte é critério do teste 4 do PRD §5).
-- `bin/` é definido aqui como parte do layout, mas populado pela Spec C (bootstrap do `maestro-mcp`).
+JSON UTF-8 sem BOM, objeto único, sem chaves duplicadas, campos desconhecidos
+ou conteúdo após o objeto; máximo 16 KiB por locator/origin. Schema inteiro
+diferente de `1` bloqueia com erro de versão. Paths absolutos preservam grafia
+do filesystem; comparação e colisões seguem as regras portáveis do motor,
+com semântica nativa de drive e separadores. Não assumir drive C:.
 
-### 3.2 Equivalente Windows
+Locator v1 tem exatamente `schema_version`, `home` e `attempt_id`. O último
+é ID de migração com 32 hex minúsculos, ou string vazia para instalação nova.
+Só roteia e vincula a tentativa. Na migração, pode ser reservado depois do
+plano durável e antes da cópia, permitindo redescobrir uma interrupção. Reserva
+sem ativação válida mantém escrita bloqueada; o locator não autoriza execução.
 
-- Default: `%USERPROFILE%\.maestro` (mesma semântica, mesmo layout).
-- Toda resolução de path usa APIs portáveis do Go (`os.UserHomeDir` + `filepath.Join`) — nunca concatenação de strings com separador fixo. Esta é exatamente a categoria de bug (drive letters, separadores) que motivou parte dos 25 PRs de fix.
+Origin v1 tem exatamente `schema_version`, `home`, `origin`, `attempt_id` e
+`plan_sha256`. `origin` é `fresh-confirmed` ou `migrated`. No primeiro caso,
+os dois últimos campos são vazios; no segundo, ID e digest SHA-256 (64 hex
+minúsculos) coincidem com plano, recibo e estado committed. `home` deve
+coincidir com o path físico selecionado. Publicar origin atomicamente após
+confirmação nova ou após commit validado. Commit sem origin exige retomada,
+nunca scaffold; locator com ID divergente também bloqueia.
 
-### 3.3 Ordem de resolução do data home
+Somente onboarding/migração explícitos escrevem esses registros, com acesso
+restrito ao dono e sem substituir autoridade conflitante. Para instalação
+nova fora do default, origin precede locator; falha ao publicar locator é
+ativação incompleta, exige concluir a mesma operação e preserva o home.
+Mesmo selecionado por env, HOME não default exige locator válido correspondente
+para liberar escrita. O default não requer locator novo. Registros são evidência local de vínculo,
+não assinatura: [Spec F](spec-F-trust-release-pipeline.md) governa confiança do código.
 
-Todo componente que precisa do estado (hooks, commands, pacotes Go, doctor, onboarding) resolve na mesma ordem, implementada **uma vez** em um resolver compartilhado:
+## Equivalência e namespaces retidos
 
-1. **`MAESTRO_HOME`** (env var) — override explícito. Casos: testes/CI com fixtures determinísticas (teste 3 do PRD §5), ambientes corporativos com home remapeado.
-2. **Marker file** — janela de compatibilidade (ver §3.5): instalação ZIP migrada carrega, no local antigo do `data/`, um marker apontando para o novo home. Código legado que ainda resolve project-relative segue o ponteiro em vez de encontrar (ou recriar) um `data/` órfão.
-3. **Default** — `~/.maestro/` (macOS/Linux) / `%USERPROFILE%\.maestro` (Windows). Se não existir, é criado idempotentemente no primeiro uso (fresh install nunca passa por migração).
+Reusar [ZIP migration v1](../../../../acceptance/migration/CONTRACT.md) e
+`internal/zipmigration/`: profile→owner, atlas conhecido→raízes correspondentes,
+casos→accounts e transformação `legacy_case_marker`. Destinos copiados:
+`HOME/brain/<entry.target>`. Cada path original consta do plano, inclusive
+ocultos, diretórios vazios e retidos. Bytes autorais permanecem; transformações
+precisam de nome versionado e teste de saída esperada.
 
-Regras fail-closed:
-- Resolver NUNCA retorna path relativo ao cwd ou à árvore do produto.
-- Marker com destino inexistente ou ilegível → erro explícito com instrução de rodar `/maestro:doctor`; nunca fallback silencioso para criar `data/` novo (isso mascararia perda de estado — o anti-padrão exato do onboarding divergente, F8).
+`agents`, `workspaces` e `canary` ficam em
+`SOURCE/data.migrated/<namespace>`. README, controles e outros paths não
+copiados continuam inventariados, sem descarte. `--resolve-legacy` valida o
+namespace contra o plano e retorna root atual; não reutiliza o antigo path
+`data/`. Paths do plano permanecem relativos à árvore legada; sua raiz física
+é derivada da fase, conforme [Spec E](spec-E-doctor-conformance-migration.md).
 
-### 3.4 State markers
+Estado do dono e conteúdo de workspace são autoridades distintas. `brain`
+em `internal/workspace`, `internal/atlas` e `internal/priorwork` pode designar
+conteúdo local de caso: esses roots não viram home global. `accounts/` legado
+já do dono migra preservando escopo, sem importar outros workspaces ou conceder
+acesso entre casos. Credenciais continuam no credential store do SO.
 
-Dois markers com papéis distintos:
+## Aceite de #433
 
-| Marker | Onde vive | Papel | Dono |
-|---|---|---|---|
-| `~/.maestro/home.json` | data home | Identidade do home: versão de schema, data de criação/migração, origem (`fresh` ou path da instalação ZIP de origem) | Spec A (escrita: doctor/onboarding) |
-| Marker de migração no local antigo | raiz da instalação ZIP migrada | Ponteiro para o data home + hash do inventário migrado; sinaliza "data/ já migrado, não recriar" | Spec E (escrito pela migração; deletado no rollback) |
-
-Ambos são JSON estrito com parsing fail-closed (campos desconhecidos rejeitados), consistente com a disciplina de parsing da Spec 020.
-
-### 3.5 Janela de backward-compat
-
-- A resolução via marker (passo 2) existe para **uma janela de convivência de 1 release** (alinhada ao migration-plan P4: convivência ZIP/plugin = 1 release, depois ZIP descontinuado).
-- Pós-janela: passo 2 é removido do resolver; a ordem vira env var → default. Instalação não-migrada nesse ponto é detectada pelo doctor (Spec E) como estado FAIL com instrução de migração manual documentada.
-- Nenhum código novo (fase plugin em diante) pode depender do passo 2.
-
-### 3.6 O que fica na árvore do produto
-
-**Nada user-mutável.** Critério operacional: qualquer arquivo que algum fluxo em runtime escreva, modifique ou precise preservar entre versões pertence ao data home. A árvore do produto (ZIP hoje, plugin amanhã) contém exclusivamente conteúdo reviewed e versionado — coerente com a distribution boundary da Spec 020 ("releases may never contain user preferences, memory, logs or local configuration").
-
-### 3.7 Categorias de touchpoints de código
-
-Inventário por categoria (enumeração exata arquivo a arquivo é tarefa de implementação sobre a v0.2.0 merged — ver Open Questions):
-
-1. **Hooks** — `session_start`, `user_prompt_submit`, `pre_tool_use`, `session_end`: todo acesso a estado passa a usar o resolver §3.3. São o touchpoint mais crítico: rodam em toda sessão e eram a fonte da categoria "hooks apontando para arquivos inexistentes".
-2. **Pacotes Go** — `agentstate` e demais pacotes do substrate (memória/dreaming, scheduler, adapters, canary — F5: 70+ pacotes vivos) que leem/escrevem estado: trocam resolução própria pelo resolver compartilhado. Um único ponto de resolução, não N reimplementações.
-3. **Onboarding** — `/maestro:onboarding` inicializa owner/profile/workspaces diretamente em `~/.maestro/data/`; nunca cria `data/` co-locado, nem em fresh install.
-4. **Doctor** — `/maestro:doctor` valida a cadeia de resolução (env/marker/default), reporta o home ativo e sua origem, e é o veículo da migração (Spec E).
-
-## 4. Acceptance Criteria
-
-Observáveis, incluindo failure modes:
-
-- [ ] **AC-A1** Fresh install (sem `data/` legado): primeiro uso cria `~/.maestro/` com layout §3.1 + `home.json` com origem `fresh`. Nenhum `data/` surge na árvore do produto.
-- [ ] **AC-A2** Com `MAESTRO_HOME` setado para diretório de fixture: todos os hooks e commands leem/escrevem exclusivamente lá (verificável no teste 3 do PRD §5 em CI).
-- [ ] **AC-A3** Ordem de resolução respeitada: env var presente vence marker; marker presente vence default. Teste com os três cenários montados.
-- [ ] **AC-A4** Teste de update com estado (teste 3, PRD §5): instalar vN, popular `~/.maestro/` com fixture, atualizar para vN+1 → `~/.maestro/` byte-idêntico + skills novas ativas.
-- [ ] **AC-A5** Windows: AC-A1–A4 passam com `%USERPROFILE%\.maestro`, incluindo home em path com espaços e drive letter ≠ C:.
-- [ ] **AC-A6** Nenhum fluxo (hook, command, onboarding, doctor, pacote Go) escreve dentro da árvore do produto — verificável com árvore de produto read-only durante a suite.
-- [ ] **AC-A7** Failure mode — marker quebrado: marker aponta para destino inexistente → erro explícito instruindo `/maestro:doctor`; nenhum `data/` novo criado silenciosamente.
-- [ ] **AC-A8** Failure mode — home parcialmente ausente: `~/.maestro/` existe mas subdiretório esperado falta → componente recria apenas estrutura vazia faltante quando seguro, ou reporta FAIL via doctor quando a ausência indica migração interrompida (coordenação com Spec E §failure modes).
-- [ ] **AC-A9** Gate G1 (migration-plan): fixtures 0.1.11 e 0.2.0 migram com equivalência verificada — critério compartilhado com Spec E.
-
-## 5. Out of Scope
-
-- A migração em si (detecção, move, rollback) — Spec E.
-- Bootstrap e verificação do binário em `~/.maestro/bin/` — Spec C.
-- Empacotamento do produto como plugin e uso de `${CLAUDE_PLUGIN_ROOT}` — Spec B.
-- Reorganização interna do conteúdo de `data/` — explicitamente não: move de raiz, layout preservado.
-- Multi-profile / múltiplos data homes por máquina — fora da v0.3.0.
-
-## 6. Open Questions
-
-| # | Questão | Decide | Quando |
-|---|---|---|---|
-| QA-1 | Inventário exato dos pacotes Go que tocam `data/` (quais dos 70+ pacotes leem/escrevem estado) — precisa de varredura sobre a v0.2.0 **merged**, não sobre main 0.1.11 | implementação (verificação no repo) | Início de T1, pós-G0 |
-| QA-2 | Nome e formato final do marker de migração no local antigo (coordenar com Spec E, que o escreve) | Daniel | Freeze Spec A+E |
-| QA-3 | `~/.maestro/` fixo vs respeitar `XDG_DATA_HOME` no macOS/Linux — recomendação: fixo (menos superfície de bug de path, público não-técnico nunca customiza XDG) | Daniel | Freeze Spec A |
-| QA-4 | `MAESTRO_HOME` deve ser documentado para usuário final ou permanecer interno (testes/CI)? Recomendação: interno — Carla nunca vê path nenhum (US-C1) | Daniel | Freeze Spec A |
+- [ ] Nove pares `.sh`/`.ps1`, skills, scaffold e callers Go usam resolver
+  para estado do dono; roots locais de caso e fixtures mantêm seu escopo.
+- [ ] Env/marker/default, env vazia, locator quebrado/conflitante, origem
+  incompleta e symlink/reparse falham sem escrita.
+- [ ] Redescoberta sem env de HOME não default, Windows em drive diferente de
+  C: e paths com espaços; inspeção não cria locator.
+- [ ] Hooks com produto somente leitura não escrevem nele; snapshot fica
+  intacto na troca N→N+1 sem trabalho concorrente.
+- [ ] #434 valida mapeamento, retidos, retomada e rollback neste layout.
+  F0 e revisão dos contratos continuam obrigatórios antes de F1.
