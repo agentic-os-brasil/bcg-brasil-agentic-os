@@ -7,7 +7,8 @@ Contrato de confiança existente: [Spec 020](../../../../specs/020-release-distr
 
 Marketplace local `directory` em pasta compartilhada somente leitura para
 colegas; apenas publicador autorizado escreve. `.claude-plugin/marketplace.json`
-usa fontes relativas para plugins em `versions/<versao>/`. Conteúdo, handlers
+usa fontes relativas para plugins em `versions/<versao>/`, dentro de cada raiz
+de plataforma definida na [Spec B](spec-B-plugin-packaging.md). Conteúdo, handlers
 e helper nativo são versionados juntos; fonte do repositório não é distribuída.
 Pasta concreta ainda não foi selecionada. Disponibilidade offline, sincronização
 e políticas são condições a verificar, não garantias da abstração de diretório.
@@ -26,20 +27,49 @@ skill e troca N→N+1 no Code tab real, Mac/Windows e pasta sincronizada.
    `versions/<versao>/` e verificar hashes **no destino**. Falha preserva versão ativa.
 3. Verificar autoridade e assinatura antes de promover. Versão existente só
    admite repetição byte-idêntica; bytes diferentes são recusados.
-4. Só após essas verificações, substituir o marketplace por uma escrita local
-   atômica que referencia essa versão. Nunca editar uma versão publicada.
+4. Só após essas verificações, substituir o marketplace de cada target por uma
+   escrita local atômica que referencia ambos plugins dessa versão. Cada raiz
+   promove independentemente; falha em outro target não autoriza declarar o
+   release completo. Nunca editar uma versão publicada.
 5. Observar nova sessão, versão ativa e estado preservado. OneDrive pode
    sincronizar ponteiro e payload fora de ordem: troca local atômica não prova
    atomicidade entre máquinas; doctor deve detectar incompletude e bloquear PASS.
 
-Reusar hashes/verificação existentes. A Spec 020 define Ed25519 e raiz local
-aprovada independente do provedor, mas manifest v1 descreve CLI/base, não dois
-plugins. #436/#438 devem fechar extensão versionada e compatibilidade antes
-de chamar o pacote assinado. SHA-256 isolado não atesta autenticidade.
-Chave privada não acompanha produto, pasta nem repositório. Doctor executado
-depois do hook não é controle preventivo: verificação pré-execução precisa de
-verificador já confiável e registro de chaves independente, ainda a fechar.
-Nenhum plugin pode autenticar sua própria substituição de raiz de confiança.
+## Autenticar publicação e admitir execução
+
+Reusar as primitivas de assinatura, parsing estrito e hashing existentes. O
+manifest v1 da Spec 020 descreve arquivos planos CLI/base; seus validadores
+rejeitam campos desconhecidos. A proposta requer um contrato de release de
+plugin com versão própria, validado explicitamente. Não acrescentar campos
+ignorados ao v1 nem chamar uma árvore de plugin de bundle CLI/base.
+
+O novo contrato deve vincular produto, release imutável, target, versões dos
+dois plugins, versão do helper e compatibilidade; enumerar o conjunto fechado
+de arquivos de ambos plugins, inclusive manifests, hooks e recursos, com paths
+relativos confinados e hashes. Reutilizar Ed25519 sobre bytes exatos e registro
+de chaves aprovado, com rejeição de paths extras, colisões, links e targets
+incompatíveis. A assinatura precisa autenticar as referências promovidas pelo
+marketplace, não apenas um arquivo de checksums independente. O schema e seus
+testes de compatibilidade serão definidos no contrato aprovado antes de
+#436/#438 implementarem publicação assinada. SHA-256 isolado não atesta
+autenticidade; chave privada não acompanha produto, pasta nem repositório.
+
+Há duas verificações distintas. O publicador verifica a árvore no destino e
+a autoridade antes de trocar o ponteiro. Cada cliente precisa admitir os
+bytes e o target **antes de o host consumir manifests, skills ou agentes e
+executar hooks ou helpers**. Um wrapper distribuído na própria árvore, o guard e o doctor
+posterior já executam código dessa origem e não constituem essa admissão.
+
+**Decisão de F1 ainda aberta:** identificar um consumidor previamente
+confiável, com registro de chaves entregue por canal independente, capaz de
+mediar o carregamento real no Code tab; ou comprovar suporte equivalente do
+loader organizacional. O fluxo direto de dois comandos sobre pasta
+sincronizada ainda não demonstrou essa capacidade. Um materializador local,
+bootstrapper adicional ou daemon mudaria esse fluxo e exige ratificação
+arquitetural explícita; nenhum deles está implicitamente incluído em #438.
+Enquanto esse consumidor e seu ponto de enforcement não forem definidos e
+qualificados, F1 permanece bloqueado e publicação assinada/piloto não é
+aceita. Nenhum plugin pode substituir sua própria raiz de confiança.
 
 ## Recall
 

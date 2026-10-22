@@ -48,8 +48,24 @@ aspas. Para handlers PowerShell, candidato exec-form é `command: powershell.exe
 com vetor `args: [-NoProfile, -File, ${CLAUDE_PLUGIN_ROOT}/scripts/<handler>.ps1]`.
 Cada path ocupa um argumento; não inserir aspas literais no vetor.
 O spike Go usa diretamente `.exe` e vetor de argumentos, sem wrapper.
-Direcionar cada cliente ao manifesto correto na pasta compartilhada também
-precisa ser fechado em #431/#436; não presumir seleção automática por OS.
+O roteamento proposto usa três raízes de marketplace na mesma pasta
+compartilhada: `darwin-arm64/`, `darwin-amd64/` e `windows-amd64/`. Cada raiz
+contém `.claude-plugin/marketplace.json` e
+`versions/<release>/{maestro,maestro-tech-core}/`, com os mesmos nomes de
+marketplace e plugins. O comando de instalação recebe a raiz correspondente
+à plataforma e arquitetura do cliente; o material de onboarding identifica
+essa escolha antes dos dois comandos. Não há seleção por campo per-OS nem
+troca automática de arquitetura. Migrar a raiz já registrada exige um fluxo
+explícito e validado; não registrar simultaneamente raízes com o mesmo nome.
+
+Os dois plugins de cada raiz pertencem ao mesmo release; o marketplace troca
+as duas referências numa única publicação. A raiz é uma escolha de
+distribuição, não prova de compatibilidade ou autenticidade. O contrato de
+admissão da [Spec F](spec-F-trust-release-pipeline.md) deve rejeitar target
+incorreto antes de executar o primeiro handler. Doctor posterior não satisfaz
+essa barreira. #431 qualifica o padrão de manifesto pelo spike no host
+suportado antes do freeze F1; #436 aplica o padrão aprovado ao produto e
+valida árvores e comandos por target em F3.
 
 Essa escolha ainda precisa provar Code tab, PowerShell 5.1/7, stdin/exit codes,
 paths com espaços, política corporativa e processo não elevado em Windows.

@@ -23,7 +23,9 @@ unsigned/HOLD. Aprovação do epic não transforma candidata em release assinada
    Agent/Task real, nova revisão/sessão, Gatekeeper e política do tier padrão;
    qualificar Windows corporativo não elevado com seu padrão de hooks.
 2. F1 (#432): reconciliar proposta, layout/contratos e achados; revisão e
-   merge autorizados. Draft antecipado permanece bloqueado por F0.
+   merge autorizados. Specs A/E propõem layout/locator e Spec B propõe
+   roteamento por target. A admissão confiável pré-execução da Spec F ainda
+   exige decisão e prova do ponto de enforcement. Draft permanece bloqueado.
 3. F2 (#433/#434): resolver compartilhado e migração copy→verify→commit,
    equivalência, retidos acessíveis e rollback funcional; último ZIP e uma
    instalação real migrada sem perda.

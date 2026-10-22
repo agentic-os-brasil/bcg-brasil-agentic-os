@@ -16,12 +16,15 @@ implementação dependente dos resultados abertos.
 | Code tab e troca de versão por marketplace | Não observados; CLI não qualifica Code tab nem informa sua autenticação |
 | OneDrive com espaços e Gatekeeper nesse caminho | Não executados; artefato local com espaços não é pasta sincronizada |
 | Windows corporativo não elevado | Não qualificado; cross-build e fixtures diretas não substituem host real |
+| Windows hospedado — [run 39538995212](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/actions/runs/39538995212) | #444/#445 incorporados; bytes/exit codes em Bash, PowerShell 5.1/7 e probes sintéticos passaram; SessionStart BLOCKED_ELEVATED, Code tab/corporate Windows NOT_RUN |
 | Managed settings do tier padrão | Frota desconhecida; um Mac Power User não representa os demais |
 
 Evidência comprometida do spike: [README](../../../dev/spikes/plugin429/README.md)
 e [RESULTS](../../../dev/spikes/plugin429/RESULTS.md). Observações CLI adicionais
 de 2026-10-20: pacote de sessão `runtime-observation/REPORT.md`, entregue no
 handoff de #432; não convertem NOT_RUN da matriz do Code tab em PASS.
+Autenticação do CLI foi reconferida em 2026-10-22: `loggedIn=false`,
+`authMethod=none`. Isso não informa a autenticação do Code tab.
 
 ## Sequência e critérios de conclusão
 
@@ -37,6 +40,17 @@ Issues pertencem a `agentic-os-brasil/bcg-brasil-agentic-os`.
 Fonte de aceite: [#432](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/432)
 e #433–#440. A v0.2.0 incorporada não é gate de merge pendente;
 sua distribuição HOLD continua sendo uma restrição real.
+
+## Contratos do draft antes do freeze
+
+Specs A/E definem layout, descoberta do home, origem e recuperação da
+migração; Spec B define três raízes de marketplace por target. São propostas
+de implementação para revisão, ainda sujeitas aos resultados de F0.
+A Spec F separa verificação no publicador de admissão pré-execução no cliente.
+Essa admissão ainda precisa de consumidor confiável e ponto de enforcement
+demonstrado; resolver isso exige ratificação antes de declarar F1 completo.
+Os testes de #433/#434 validam o contrato aprovado depois, sem criar um ciclo
+em que F1 dependa da implementação de F2 para decidir seu próprio desenho.
 
 ## Riscos e respostas
 

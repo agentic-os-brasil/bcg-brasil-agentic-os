@@ -14,11 +14,15 @@ versão publicada na próxima sessão e preservar o estado fora do produto.
 O fluxo alvo usa um caminho previamente aprovado e disponível localmente:
 
 ```text
-claude plugin marketplace add "<pasta-compartilhada-aprovada>"
+claude plugin marketplace add "<pasta-compartilhada-aprovada>/<target>"
 claude plugin install maestro@maestro-releases
 ```
 
 Depois, `/maestro:doctor` identifica versão, marketplace e origem do data home.
+`<target>` é `darwin-arm64`, `darwin-amd64` ou `windows-amd64`, escolhido
+antes da instalação conforme a [Spec B](specs/spec-B-plugin-packaging.md).
+Esse fluxo direto ainda depende da decisão de admissão pré-execução descrita
+na [Spec F](specs/spec-F-trust-release-pipeline.md); não é um fluxo qualificado.
 Onboarding menciona `/maestro-doctor` como nome do ZIP e orienta para o novo
 namespace; alias executável ainda exige implementação. Abertura, autenticação
 e permissões normais do host permanecem requisitos. Os dois comandos não

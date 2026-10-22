@@ -1,8 +1,8 @@
 # Proposal 004 — Distribuição por plugin em pasta compartilhada
 
 **Status: DRAFT / F1 BLOCKED por F0.** Alvo proposto: v0.3.0.
-Baseline verificada em 2026-10-20: `origin/main` em
-`c88dd40886ddafaeaffc7d9c17de60e18cc1a123`. Este texto corrige a proposta;
+Baseline atualizada em 2026-10-22: `origin/main` em
+`db2d3036e241acb2913648d66415754fb058e282`. Este texto corrige a proposta;
 não declara implementação, qualificação de runtime ou autorização de release.
 
 O [epic #428](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/428)
@@ -36,3 +36,15 @@ Modelo, guard real e delegação ficaram bloqueados por autenticação **do CLI*
 não foi inspecionada a autenticação do Code tab. Code tab, Windows corporativo
 e OneDrive/Gatekeeper continuam pendentes. Atualização na próxima sessão
 permanece critério a provar nesses ambientes.
+
+O coletor de política #442 e o ensaio Windows #444/#445 estão incorporados.
+No [ensaio nativo Windows](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/actions/runs/39538995212),
+o transporte exato de bytes/exit codes passou em Bash, PowerShell 5.1 e 7;
+os probes sintéticos de guard/delegação passaram. SessionStart foi
+`BLOCKED_ELEVATED`, porque o runner é elevado. Os jobs verdes validam esse
+recibo parcial; Code tab e Windows corporativo permanecem `NOT_RUN`.
+
+Os contratos propostos de layout/locator e roteamento por target estão nas
+Specs A/E e B. A admissão confiável antes de executar código do plugin continua
+como decisão de arquitetura aberta na Spec F. Detalhar esses contratos no
+draft não aprova F1 nem implementa #433–#438.
