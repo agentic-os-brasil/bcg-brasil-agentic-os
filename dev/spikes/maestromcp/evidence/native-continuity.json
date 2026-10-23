@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "observed_date": "2026-10-23",
+  "verdict": "PASS_SYNTHETIC_NATIVE_CODE_DESKTOP_CONTINUITY",
+  "scope": "Attended macOS arm64 experiment with synthetic execution state",
+  "implementation_source": "fc5c9dc30608ecb90303f99d9ffd6aa177d5c27d",
+  "server_binary_sha256": "bdbeb462c8ec36a22b6a98c6c6dc9655325bdcae2c75ef09b55a21c9b044957f",
+  "code": {
+    "version": "2.1.233",
+    "model_requested": "claude-haiku-5-5",
+    "isolated_profile": true,
+    "same_conversation_resumed": true,
+    "built_in_tools": [],
+    "observed_tool_names": [
+      "mcp__plugin_maestro-architecture-spike_maestro__maestro_checkpoint",
+      "mcp__plugin_maestro-architecture-spike_maestro__maestro_context"
+    ]
+  },
+  "desktop": {
+    "status": "PASS",
+    "host_version": "3.1623.0",
+    "extension_version": "0.0.2",
+    "method": "Attended native Desktop conversation; user-provided tool transcript corroborated by extension log and canonical ledger",
+    "context": {
+      "workspace": "case-a",
+      "state": "paused",
+      "state_revision": 4,
+      "exact_summary_verified": true
+    },
+    "resume": {
+      "calls": 1,
+      "expected_revision": 4,
+      "state": "running",
+      "state_revision": 5,
+      "new_attempt": true,
+      "checkpoint_preserved": true
+    },
+    "log_evidence_limit": "Native log records methods and request IDs, not argument/result bodies. Tool names and contents are supported by the user witness and ledger, not inferred solely from the log.",
+    "capture_timing_limit": "The resume-start log offset was captured after the two calls; timestamped existing lines are used instead of that offset."
+  },
+  "manual_extension_update": {
+    "from": "0.0.1",
+    "to": "0.0.2",
+    "enabled": true,
+    "external_state_files_byte_identical": 63
+  },
+  "checkpoint": {
+    "status": "PASS_ACTION",
+    "context_before_mutation": true,
+    "single_call": true,
+    "revision_before": 2,
+    "state_after": "paused",
+    "revision_after": 4,
+    "summary": "MAESTRO_NATIVE_CODE_TO_DESKTOP_2026_10_23",
+    "next_step": "Retomar o mesmo caso no Claude Desktop pela extens\u00e3o local.",
+    "matched_tool_result": true,
+    "cli_exit_code": 1,
+    "cli_result_subtype": "error_max_budget_usd"
+  },
+  "stale_writer": {
+    "status": "PASS",
+    "same_original_code_conversation": true,
+    "single_checkpoint_call": true,
+    "expected_revision": 2,
+    "original_attempt_submitted": true,
+    "matched_tool_result_is_error": true,
+    "exact_error": "revision_conflict",
+    "context_after_rejection": {
+      "state": "running",
+      "state_revision": 5,
+      "checkpoint_preserved": true
+    },
+    "all_state_file_hashes_unchanged": true,
+    "cli_exit_code": 0,
+    "cli_result_subtype": "success"
+  },
+  "runtime_accounting": {
+    "code_run_1_estimated_usd": 0.964737,
+    "code_run_2_estimated_usd": 2.01502215,
+    "desktop_cost": "UNATTESTED",
+    "billing": "UNATTESTED",
+    "first_run_exceeded_initial_allowance": true,
+    "subsequent_run_authorized_by_explicit_user_budget_override": true,
+    "cli_unrecognized_model_warning_observed": true,
+    "budget_flag_limit": "Checked after responses; not a strict pre-request ceiling"
+  },
+  "evidence_boundary": {
+    "code": "Matched raw tool-use/tool-result traces and canonical ledger, inspected locally",
+    "desktop": "Attended native Desktop conversation; user-provided tool transcript corroborated by extension log and canonical ledger",
+    "raw_private_traces_committed": false,
+    "machine_paths_account_session_identity_and_screenshots_excluded": true,
+    "assistant_narrative_is_not_authority": true
+  },
+  "unqualified": [
+    "Code tab inside Desktop",
+    "Full plugin catalog and production memory",
+    "Windows runtime",
+    "Remote MCP/OAuth/web/mobile",
+    "Marketplace automatic updates",
+    "Extension removal",
+    "Platform signing",
+    "Corporate policy and shared-folder qualification",
+    "Production migration, pilot and rollout"
+  ]
+}

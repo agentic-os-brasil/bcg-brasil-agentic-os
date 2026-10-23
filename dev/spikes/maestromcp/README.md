@@ -7,6 +7,12 @@ For the observed verdict and sanitized receipts, read [RESULTS](RESULTS.md).
 For the second-surface experiment using a local Desktop connector, read
 [DESKTOP](DESKTOP.md).
 
+The attended native experiment passed on 2026-10-23: Code checkpoint/pause,
+Desktop resume and stale-writer rejection in the original Code conversation.
+See the [sanitized native receipt](evidence/native-continuity.json) and the
+[dated verdict](RESULTS.md#authenticated-native-continuity--2026-10-23), including
+the first CLI invocation's budget failure and the remaining product limits.
+
 The plugin supplies startup orientation and operator/resume skills. Its
 `.mcp.json` starts a bundled native stdio server. Three MCP tools adapt the
 existing `internal/execution.Store`: bounded context, fenced checkpoint/pause,
