@@ -1,0 +1,15 @@
+{
+  "scope": "Actual native installer with compiled pinned key; isolated Code CLI profile; synthetic local stand-in for synced feed",
+  "status": "PASS",
+  "install_version": "0.0.3",
+  "update_version": "0.0.4",
+  "code_install_commands": "PASS",
+  "code_update_command": "PASS",
+  "code_installed_version_readback": "0.0.4",
+  "state_file_hashes_unchanged": true,
+  "code_native_model_session": "NOT_RUN",
+  "desktop_installation": "NOT_RUN",
+  "real_sharepoint_sync": "NOT_RUN",
+  "profile_isolated": true,
+  "model_calls": 0
+}

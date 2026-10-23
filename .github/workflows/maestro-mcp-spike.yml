@@ -36,6 +36,6 @@ jobs:
           echo "TMPDIR=$HOME/Developer/tmp/maestro-mcp-spike" >> "$GITHUB_ENV"
           echo "GOTMPDIR=$HOME/Developer/tmp/maestro-mcp-spike" >> "$GITHUB_ENV"
       - name: Test adapter and package contracts
-        run: go test ./spike ./cmd/build-plugin ./cmd/build-extension ./cmd/rehearse-desktop
+        run: go test ./spike ./packaging ./distribution ./cmd/build-plugin ./cmd/build-extension ./cmd/rehearse-desktop ./cmd/team-install ./cmd/team-release ./cmd/rehearse-team
       - name: Vet experimental commands
-        run: go vet ./spike ./cmd/server ./cmd/build-plugin ./cmd/build-extension ./cmd/rehearse ./cmd/rehearse-desktop
+        run: go vet ./spike ./packaging ./distribution ./cmd/server ./cmd/build-plugin ./cmd/build-extension ./cmd/rehearse ./cmd/rehearse-desktop ./cmd/team-install ./cmd/team-release ./cmd/rehearse-team

@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "target": "darwin-arm64",
+  "sdk": "github.com/modelcontextprotocol/go-sdk@v1.8.0 CommandTransport",
+  "observations": [
+    {
+      "name": "signed_publication_materializes_local_plugin_and_mcpb",
+      "status": "PASS",
+      "evidence": {
+        "installer_executed": false,
+        "installer_sha256": "20ae6d9decf584c9e26ad0df04699f91f9c555f2595bca0cfa1c549f2da3bf68",
+        "sequence": 1,
+        "server_sha256": "bdbeb462c8ec36a22b6a98c6c6dc9655325bdcae2c75ef09b55a21c9b044957f",
+        "version": "0.0.3"
+      }
+    },
+    {
+      "name": "real_v003_mcp_saves_exact_checkpoint_and_pauses",
+      "status": "PASS",
+      "evidence": {
+        "all_state_files_snapshotted": 65,
+        "initial_revision": 2,
+        "paused_revision": 4,
+        "summary": "TEAM_SHAREPOINT_CONTINUITY"
+      }
+    },
+    {
+      "name": "v004_update_preserves_all_state_and_previous_generation",
+      "status": "PASS",
+      "evidence": {
+        "previous_generation_unchanged": true,
+        "sequence": 2,
+        "state_unchanged": true,
+        "version": "0.0.4"
+      }
+    },
+    {
+      "name": "same_signed_feed_is_noop",
+      "status": "PASS",
+      "evidence": {
+        "all_local_files_unchanged": true,
+        "changed": false
+      }
+    },
+    {
+      "name": "new_generation_mcp_reads_exact_checkpoint_and_resumes",
+      "status": "PASS",
+      "evidence": {
+        "new_attempt": true,
+        "next_step_preserved": true,
+        "read_revision": 4,
+        "resumed_revision": 5,
+        "summary_preserved": true
+      }
+    },
+    {
+      "name": "old_live_writer_rejected_without_any_state_change",
+      "status": "PASS",
+      "evidence": {
+        "all_state_files_unchanged": true,
+        "attempted_revision": 2,
+        "code": "revision_conflict",
+        "current_revision": 5
+      }
+    },
+    {
+      "name": "corrupt_future_payload_preserves_active_v004_and_state",
+      "status": "PASS",
+      "evidence": {
+        "active_version": "0.0.4",
+        "all_local_files_unchanged": true,
+        "rejected_sequence": 3
+      }
+    },
+    {
+      "name": "older_valid_signed_publication_rejected_without_change",
+      "status": "PASS",
+      "evidence": {
+        "active_sequence": 2,
+        "active_version": "0.0.4",
+        "all_local_files_unchanged": true,
+        "replayed_sequence": 1,
+        "state_revision": 5
+      }
+    }
+  ],
+  "limits": [
+    "Actual Claude Code and Desktop host installation, registration and activation: NOT_RUN",
+    "Actual SharePoint upload, OneDrive synchronization and team onboarding: NOT_RUN",
+    "Installer subprocess and embedded installer key binding: NOT_RUN; Apply library uses an ephemeral synthetic key",
+    "Ephemeral Ed25519 key exists only in this process; no production or team release authority granted",
+    "Model calls, authentication, hooks, permissions and native Windows qualification: NOT_RUN"
+  ]
+}
