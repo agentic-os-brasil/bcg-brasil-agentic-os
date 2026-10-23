@@ -46,6 +46,10 @@ The terminology follows the official distinction between
 [local Desktop extensions and remote connectors](https://support.claude.com/en/articles/11725091-when-to-use-desktop-and-web-connectors).
 Packaging follows the [official MCPB manifest specification](https://github.com/anthropics/mcpb/blob/main/MANIFEST.md).
 Observed results are recorded in [RESULTS.md](RESULTS.md).
+The attended 2026-10-23 run completed Code checkpoint/pause, native Desktop
+resume and stale-write rejection in the original Code conversation. Its
+[sanitized receipt](evidence/native-continuity.json) distinguishes tool/ledger
+evidence, manual extension update and the initial CLI budget failure.
 
 ## Run the focused rehearsal
 

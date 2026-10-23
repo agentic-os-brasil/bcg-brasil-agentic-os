@@ -1,10 +1,11 @@
-# Observed architecture verdict — 2026-10-22
+# Observed architecture verdict — 2026-10-23
 
-The local composition works at the protocol, execution-ledger and plugin-loading
-layers. An enabled Claude plugin can supply its own native MCP server while
-ordinary files preserve Maestro execution state outside the plugin. Model-driven
-use of the operator skills remains unqualified because CLI authentication was
-absent. This verdict is limited to a synthetic macOS arm64 experiment.
+The local composition now works through authenticated native Code and Desktop
+clients: Code saved and paused a checkpoint, Desktop resumed it, and the original
+Code conversation received `revision_conflict` when it tried to write with its
+old revision and attempt. Files preserved the same checkpoint outside both
+packages. This verdict is limited to an attended synthetic macOS arm64 experiment.
+The dated observations below preserve the earlier protocol and SDK evidence.
 
 | Observation | Result | Evidence boundary |
 |---|---|---|
@@ -15,7 +16,7 @@ absent. This verdict is limited to a synthetic macOS arm64 experiment.
 | Native plugin validation | PASS | CLI 2.1.233; optional author attribution warning |
 | Native plugin-provided MCP | CONNECTED | Actual CLI health check with final fixture, isolated profile |
 | Native SessionStart and skills | PASS | Same-code V1 startup: orientation exit 0, two skills registered, MCP connected |
-| Model orchestration | BLOCKED | Missing login; zero model cost and API duration |
+| Model orchestration on 2026-10-22 | BLOCKED then | Superseded by the native qualification below |
 | Code tab, Windows and host-managed update | NOT_RUN | Separate qualification remains required |
 
 The final integrated rehearsal passed all 13 observations after the review
@@ -86,3 +87,43 @@ See [Desktop SDK receipt](evidence/desktop-sdk-rehearsal.json),
 [official validation summary](evidence/desktop-validation.json),
 [fresh Code health receipt](evidence/desktop-code-health.json) and
 [reproduction instructions](DESKTOP.md#run-the-focused-rehearsal).
+
+## Authenticated native continuity — 2026-10-23
+
+Claude Code 2.1.233 loaded the plugin in an authenticated isolated profile.
+Claude Desktop 3.1623.0 installed and enabled the local extension, then manually
+updated it from 0.0.1 to 0.0.2. All 63 external synthetic files remained
+byte-identical across that update. Both packages used the same server binary.
+
+| Native observation | Result | Evidence |
+|---|---|---|
+| Code operator reads context, saves exact checkpoint and pauses | PASS action | Matched tool-use/result; revision 2 to paused revision 4 |
+| Desktop reads paused revision 4 and resumes exactly once | PASS | Attended user tool transcript, extension call log and canonical ledger; running revision 5, new attempt, same checkpoint |
+| Original Code conversation submits its old revision and attempt | PASS | Resumed same CLI session; single rejected call, exact `revision_conflict` tool error |
+| Code reads context after rejection | PASS | Running revision 5 and preserved handoff; all state file hashes unchanged |
+| Manual native extension update | PASS | 0.0.1 to 0.0.2; external state unchanged |
+
+The exact checkpoint summary was `MAESTRO_NATIVE_CODE_TO_DESKTOP_2026_10_23`.
+Its next step was `Retomar o mesmo caso no Claude Desktop pela extensão local.`
+The Desktop log contains request IDs and call/result timestamps rather than
+argument/result bodies. Its content attribution relies on the attended user
+transcript plus the ledger. A log offset captured after the calls was not used
+as proof of absence. Raw traces, account/session identity, machine paths and
+screenshots remain local; the [public receipt](evidence/native-continuity.json)
+contains an allowlisted summary. Assistant prose is not the state authority.
+
+The first Code action succeeded, but that CLI invocation exited with
+`error_max_budget_usd` after reporting an estimate of USD 0.964737 against an
+initial USD 0.25 per-run limit. Calls were suspended until the user explicitly
+removed the budget restriction. The final stale-writer call exited successfully
+and reported USD 2.01502215. These are separate CLI estimates, not verified
+billing; Desktop cost is unattested. An `unrecognized_model` warning also limits
+pricing confidence. Preserve the incident rather than marking the first CLI
+invocation successful. The documented budget check happens after responses and
+can overshoot: [budget headroom](https://code.claude.com/docs/en/agent-sdk/agent-loop#budget-headroom).
+
+The experiment now proves native local continuity across the two clients.
+It leaves the Desktop Code tab, Windows, remote transport/OAuth, full memory and
+skill catalog, marketplace automatic updates, removal, platform signing,
+corporate/shared-folder admission, migration, pilot and rollout unqualified.
+No additional product code changed for this attended qualification.
