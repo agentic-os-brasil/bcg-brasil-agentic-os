@@ -1,0 +1,145 @@
+{
+  "scope": "Local macOS ARM64; synthetic fixture; no model calls",
+  "mcpb_validator": "@anthropic-ai/mcpb@2.1.2",
+  "manifest_versions_checked": [
+    "0.0.1",
+    "0.0.2"
+  ],
+  "manifest_schema_version": "0.3",
+  "official_unpack": "PASS",
+  "official_unpack_binary_sha_and_executable_permission": "PASS",
+  "checks": [
+    {
+      "name": "targeted-tests",
+      "exit_code": 0,
+      "command": [
+        "/opt/homebrew/bin/go",
+        "test",
+        "./spike",
+        "./cmd/build-plugin",
+        "./cmd/build-extension",
+        "./cmd/rehearse-desktop",
+        "-count=1"
+      ]
+    },
+    {
+      "name": "targeted-vet",
+      "exit_code": 0,
+      "command": [
+        "/opt/homebrew/bin/go",
+        "vet",
+        "./spike",
+        "./cmd/server",
+        "./cmd/build-plugin",
+        "./cmd/build-extension",
+        "./cmd/rehearse",
+        "./cmd/rehearse-desktop"
+      ]
+    },
+    {
+      "name": "build-maestro-mcp-spike",
+      "exit_code": 0,
+      "command": [
+        "/opt/homebrew/bin/go",
+        "build",
+        "-o",
+        "<artifacts>/bin/maestro-mcp-spike",
+        "./cmd/server"
+      ]
+    },
+    {
+      "name": "build-build-plugin",
+      "exit_code": 0,
+      "command": [
+        "/opt/homebrew/bin/go",
+        "build",
+        "-o",
+        "<artifacts>/bin/build-plugin",
+        "./cmd/build-plugin"
+      ]
+    },
+    {
+      "name": "build-build-extension",
+      "exit_code": 0,
+      "command": [
+        "/opt/homebrew/bin/go",
+        "build",
+        "-o",
+        "<artifacts>/bin/build-extension",
+        "./cmd/build-extension"
+      ]
+    },
+    {
+      "name": "build-rehearse-desktop",
+      "exit_code": 0,
+      "command": [
+        "/opt/homebrew/bin/go",
+        "build",
+        "-o",
+        "<artifacts>/bin/rehearse-desktop",
+        "./cmd/rehearse-desktop"
+      ]
+    },
+    {
+      "name": "sdk-rehearsal",
+      "exit_code": 0,
+      "command": [
+        "<artifacts>/bin/rehearse-desktop",
+        "--server",
+        "<artifacts>/bin/maestro-mcp-spike",
+        "--plugin-builder",
+        "<artifacts>/bin/build-plugin",
+        "--extension-builder",
+        "<artifacts>/bin/build-extension",
+        "--destination",
+        "<artifacts>/Rehearsal Final"
+      ]
+    },
+    {
+      "name": "manifest-V1",
+      "exit_code": 0,
+      "command": [
+        "/opt/homebrew/bin/node",
+        "<Developer>/ToolData/maestro-mcpb-validator/node_modules/@anthropic-ai/mcpb/dist/cli/cli.js",
+        "validate",
+        "<artifacts>/Rehearsal Final/ExtensionV1/manifest.json"
+      ]
+    },
+    {
+      "name": "manifest-V2",
+      "exit_code": 0,
+      "command": [
+        "/opt/homebrew/bin/node",
+        "<Developer>/ToolData/maestro-mcpb-validator/node_modules/@anthropic-ai/mcpb/dist/cli/cli.js",
+        "validate",
+        "<artifacts>/Rehearsal Final/ExtensionV2/manifest.json"
+      ]
+    },
+    {
+      "name": "official-bundle-unpack",
+      "exit_code": 0,
+      "command": [
+        "/opt/homebrew/bin/node",
+        "<Developer>/ToolData/maestro-mcpb-validator/node_modules/@anthropic-ai/mcpb/dist/cli/cli.js",
+        "unpack",
+        "<artifacts>/Rehearsal Final/ExtensionV1.mcpb",
+        "<artifacts>/Official Unpack"
+      ]
+    },
+    {
+      "name": "native-plugin-health",
+      "exit_code": 0,
+      "command": [
+        "python3",
+        "<Developer>/tmp/maestro-observe-plugin-mcp.py",
+        "--plugin",
+        "<artifacts>/Rehearsal Final/PluginV1",
+        "--destination",
+        "<artifacts>/Code Health"
+      ]
+    }
+  ],
+  "native_desktop_installation": "NOT_RUN",
+  "model_orchestration": "NOT_RUN",
+  "full_local_suite": "NOT_RUN"
+}

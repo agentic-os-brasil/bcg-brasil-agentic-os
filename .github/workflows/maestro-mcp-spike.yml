@@ -1,0 +1,41 @@
+name: Maestro MCP experimental contracts
+
+on:
+  pull_request:
+    paths:
+      - 'dev/spikes/maestromcp/**'
+      - 'internal/execution/**'
+      - '.github/workflows/maestro-mcp-spike.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'dev/spikes/maestromcp/**'
+      - 'internal/execution/**'
+      - '.github/workflows/maestro-mcp-spike.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: MCP spike focused contracts (Linux; no native Desktop qualification)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: dev/spikes/maestromcp
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: dev/spikes/maestromcp/go.mod
+          cache-dependency-path: dev/spikes/maestromcp/go.sum
+      - name: Keep synthetic fixtures under Developer
+        run: |
+          mkdir -p "$HOME/Developer/tmp/maestro-mcp-spike"
+          echo "TMPDIR=$HOME/Developer/tmp/maestro-mcp-spike" >> "$GITHUB_ENV"
+          echo "GOTMPDIR=$HOME/Developer/tmp/maestro-mcp-spike" >> "$GITHUB_ENV"
+      - name: Test adapter and package contracts
+        run: go test ./spike ./cmd/build-plugin ./cmd/build-extension ./cmd/rehearse-desktop
+      - name: Vet experimental commands
+        run: go vet ./spike ./cmd/server ./cmd/build-plugin ./cmd/build-extension ./cmd/rehearse ./cmd/rehearse-desktop
