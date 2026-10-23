@@ -127,3 +127,39 @@ It leaves the Desktop Code tab, Windows, remote transport/OAuth, full memory and
 skill catalog, marketplace automatic updates, removal, platform signing,
 corporate/shared-folder admission, migration, pilot and rollout unqualified.
 No additional product code changed for this attended qualification.
+
+## Experimental team distribution — 2026-10-23
+
+The synthetic experiment now has a native publisher and participant installer.
+A typed Ed25519-signed feed binds target, version, monotonic sequence and the
+sizes/hashes of exactly two artifacts. The participant installer pins its
+public key independently, verifies a payload snapshot and materializes local
+plugin/MCPB generations bound to that participant's synthetic state. The local
+marketplace is promoted last; old generations and state remain available.
+
+Two separate proofs passed on macOS arm64:
+
+| Proof | Observations | Boundary |
+|---|---|---|
+| [Real-binary SDK rehearsal](evidence/team-distribution-rehearsal.json) | Eight PASS: install, checkpoint/pause, update, no-op, resume, stale writer, damaged payload and replay | Uses the Apply library and an ephemeral key; does not execute the installer or install in either Claude host |
+| [Native installer and Code CLI](evidence/team-distribution-cli.json) | Actual pinned installer ran install/update, official CLI commands succeeded, installed plugin read back as 0.0.4, all state hashes unchanged | Isolated Code profile; no model call, Desktop installation or real SharePoint synchronization |
+
+Focused tests cover signed-feed/path validation, mutation, incomplete sync,
+replay, state preservation, package identity, native binary parsing and launcher
+arguments. A publisher symlink-escape regression failed before the correction
+and passed after ordinary-directory confinement was applied. The publisher
+stages artifacts under Developer; upload/copy to the selected library remains
+an external delivery operation. No library has been selected by this code.
+
+The generated entry points are Instalar Maestro and Atualizar Maestro. Code
+activation uses supported CLI commands and reports command success separately
+from host execution. Desktop opening remains `DESKTOP_CONFIRMATION_REQUIRED`.
+The first installer needs independently checked provenance; feed signatures
+cannot authenticate the executable that first performs verification.
+
+Builds exist for macOS ARM64/AMD64 and Windows AMD64. Only macOS ARM64 has the
+native installer/CLI proof above. The other builds and header tests do not
+qualify native host behavior. Platform signing/notarization/Authenticode are
+unattested; the experimental key grants no production authority. Actual
+SharePoint upload/hydration, clean team devices, Desktop confirmation and
+full Maestro product admission remain pending. See [TEAM-PILOT](TEAM-PILOT.md).

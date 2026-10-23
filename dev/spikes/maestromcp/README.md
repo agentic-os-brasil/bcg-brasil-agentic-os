@@ -6,6 +6,8 @@ It is separate from the v0.3.0 release scope and performs no migration.
 For the observed verdict and sanitized receipts, read [RESULTS](RESULTS.md).
 For the second-surface experiment using a local Desktop connector, read
 [DESKTOP](DESKTOP.md).
+For the synthetic team installer/updater and SharePoint transport boundary,
+read [TEAM-PILOT](TEAM-PILOT.md) and [its signed-feed contract](TEAM-CONTRACT.md).
 
 The attended native experiment passed on 2026-10-23: Code checkpoint/pause,
 Desktop resume and stale-writer rejection in the original Code conversation.

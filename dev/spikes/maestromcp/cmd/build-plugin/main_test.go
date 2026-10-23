@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"debug/macho"
+	"encoding/binary"
 	"encoding/json"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/dev/spikes/maestromcp/spike"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -13,15 +15,19 @@ import (
 func TestBuildConnectsPluginToExternalStateAndRefusesOverwrite(t *testing.T) {
 	base := t.TempDir()
 	server := filepath.Join(base, "native server")
-	if err := os.WriteFile(server, []byte("synthetic executable fixture"), 0700); err != nil {
+	if err := os.WriteFile(server, pluginMachOFixture(), 0700); err != nil {
 		t.Fatal(err)
 	}
 	state := filepath.Join(base, "synthetic state with spaces")
-	if err := os.Mkdir(state, 0700); err != nil {
+	if _, err := spike.Seed(state); err != nil {
 		t.Fatal(err)
 	}
 	stateFile := filepath.Join(state, "do-not-change")
 	if err := os.WriteFile(stateFile, []byte("unchanged"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	entriesBefore, err := os.ReadDir(state)
+	if err != nil {
 		t.Fatal(err)
 	}
 	destination := filepath.Join(base, "plugin with spaces")
@@ -52,13 +58,10 @@ func TestBuildConnectsPluginToExternalStateAndRefusesOverwrite(t *testing.T) {
 		t.Fatalf("wrong launch: %+v", entry)
 	}
 	wantCommand := "${CLAUDE_PLUGIN_ROOT}/scripts/maestro-mcp-spike"
-	if runtime.GOOS == "windows" {
-		wantCommand += ".exe"
-	}
 	if entry.Command != wantCommand {
 		t.Fatalf("command=%q", entry.Command)
 	}
-	if b := read(filepath.FromSlash(strings.TrimPrefix(wantCommand, "${CLAUDE_PLUGIN_ROOT}/"))); string(b) != "synthetic executable fixture" {
+	if b := read(filepath.FromSlash(strings.TrimPrefix(wantCommand, "${CLAUDE_PLUGIN_ROOT}/"))); !bytes.Equal(b, pluginMachOFixture()) {
 		t.Fatal("server was not copied")
 	}
 	for _, name := range []string{"operator", "resume"} {
@@ -80,7 +83,7 @@ func TestBuildConnectsPluginToExternalStateAndRefusesOverwrite(t *testing.T) {
 		t.Fatal("external state changed")
 	}
 	entries, err := os.ReadDir(state)
-	if err != nil || len(entries) != 1 {
+	if err != nil || len(entries) != len(entriesBefore) {
 		t.Fatal("builder wrote state")
 	}
 }
@@ -109,4 +112,12 @@ func TestBuildRejectsInvalidConfigurationBeforeCreatingDestination(t *testing.T)
 			}
 		})
 	}
+}
+
+func pluginMachOFixture() []byte {
+	var body bytes.Buffer
+	for _, word := range []uint32{macho.Magic64, uint32(macho.CpuArm64), 0, uint32(macho.TypeExec), 0, 0, 0, 0} {
+		_ = binary.Write(&body, binary.LittleEndian, word)
+	}
+	return body.Bytes()
 }
