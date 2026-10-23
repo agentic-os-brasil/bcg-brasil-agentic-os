@@ -217,6 +217,12 @@ func (b *Bound) Checkpoint(ctx context.Context, input CheckpointInput) (Checkpoi
 	}
 	item, err := b.store.Checkpoint(b.fixture.WorkspaceID, b.fixture.ItemID, execution.CheckpointInput{ExpectedRevision: input.ExpectedRevision, AttemptID: input.AttemptID, Summary: input.Summary, NextStep: input.NextStep})
 	if err != nil {
+		if errors.Is(err, execution.ErrRevisionConflict) {
+			return CheckpointOutput{}, errors.New("revision_conflict")
+		}
+		if errors.Is(err, execution.ErrItemBusy) {
+			return CheckpointOutput{}, errors.New("item_busy")
+		}
 		return CheckpointOutput{}, errors.New("checkpoint rejected; refresh bound case context and verify size, revision and attempt")
 	}
 	checkpointID := item.Checkpoint.CheckpointID

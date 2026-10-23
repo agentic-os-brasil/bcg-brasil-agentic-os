@@ -1,0 +1,42 @@
+{
+  "scope": "isolated profile; validation and MCP health only",
+  "plugin": "<artifacts>/Rehearsal Final/PluginV1",
+  "model_call_attempted": false,
+  "global_profile_changed": false,
+  "observations": [
+    {
+      "command": [
+        "claude",
+        "--version"
+      ],
+      "exit_code": 0,
+      "stdout": "2.1.233 (Claude Code)\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "claude",
+        "plugin",
+        "validate",
+        "<artifacts>/Rehearsal Final/PluginV1"
+      ],
+      "exit_code": 0,
+      "stdout": "Validating plugin manifest: <artifacts>/Rehearsal Final/PluginV1/.claude-plugin/plugin.json\n\n\u26a0 Found 1 warning:\n\n  \u276f author: No author information provided. Consider adding author details for plugin attribution\n\n\u2714 Validation passed with warnings\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "claude",
+        "--plugin-dir",
+        "<artifacts>/Rehearsal Final/PluginV1",
+        "--setting-sources",
+        "project,local",
+        "mcp",
+        "list"
+      ],
+      "exit_code": 0,
+      "stdout": "Checking MCP server health\u2026\n\nplugin:maestro-architecture-spike:maestro: <artifacts>/Rehearsal Final/PluginV1/scripts/maestro-mcp-spike serve --root <artifacts>/Rehearsal Final/State --workspace case-a - \u2714 Connected\n",
+      "stderr": ""
+    }
+  ]
+}

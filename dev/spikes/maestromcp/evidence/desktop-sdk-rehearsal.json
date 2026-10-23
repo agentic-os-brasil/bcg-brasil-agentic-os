@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "sdk": "github.com/modelcontextprotocol/go-sdk@v1.8.0 CommandTransport",
+  "observations": [
+    {
+      "name": "both_adapters_bundle_identical_server_without_mutating_state",
+      "status": "PASS",
+      "evidence": {
+        "initial_ledger_files": 10,
+        "server_sha256": "bdbeb462c8ec36a22b6a98c6c6dc9655325bdcae2c75ef09b55a21c9b044957f"
+      }
+    },
+    {
+      "name": "code_packaging_adapter_connects_via_official_sdk",
+      "status": "PASS",
+      "evidence": {
+        "actual_code_host": "NOT_RUN",
+        "command_source": "PluginV1/.mcp.json",
+        "protocol_version": "2026-07-28"
+      }
+    },
+    {
+      "name": "independent_desktop_adapter_reads_exact_paused_checkpoint",
+      "status": "PASS",
+      "evidence": {
+        "actual_desktop_host": "NOT_RUN",
+        "protocol_version": "2026-07-28",
+        "state_revision": 4,
+        "summary": "CODE_TO_DESKTOP_CHECKPOINT"
+      }
+    },
+    {
+      "name": "desktop_resume_creates_new_attempt_and_preserves_handoff",
+      "status": "PASS",
+      "evidence": {
+        "new_attempt": true,
+        "state_revision": 5
+      }
+    },
+    {
+      "name": "old_code_revision_and_attempt_rejected_without_mutation",
+      "status": "PASS",
+      "evidence": {
+        "rejected_calls": 2
+      }
+    },
+    {
+      "name": "two_live_processes_contend_one_revision_without_lost_update",
+      "status": "PASS",
+      "evidence": {
+        "after_revision": 6,
+        "attempted_writers": 2,
+        "before_revision": 5,
+        "code_process_id": 68658,
+        "desktop_process_id": 68659,
+        "earlier_commits_unchanged": true,
+        "immutable_revisions": 6,
+        "loser_code": "item_busy",
+        "loser_mcp_is_error": true,
+        "rejected_writers": 1,
+        "successful_writers": 1,
+        "winner": "desktop_adapter"
+      }
+    },
+    {
+      "name": "v2_package_reconnect_preserves_ledger_and_v1_products",
+      "status": "PASS",
+      "evidence": {
+        "actual_host_update": "NOT_RUN",
+        "source_and_v1_files_unchanged": true,
+        "state_files_unchanged": true,
+        "state_revision": 6,
+        "versions": [
+          "0.0.1",
+          "0.0.2"
+        ]
+      }
+    },
+    {
+      "name": "artifacts_ready_for_host_tests",
+      "status": "PASS",
+      "evidence": {
+        "extension_v1": "<artifacts>/Rehearsal Final/ExtensionV1.mcpb",
+        "extension_v2": "<artifacts>/Rehearsal Final/ExtensionV2.mcpb",
+        "plugin": "<artifacts>/Rehearsal Final/PluginV1",
+        "state_root": "<artifacts>/Rehearsal Final/State"
+      }
+    }
+  ],
+  "limits": [
+    "Actual Claude Code host: NOT_RUN",
+    "Actual Claude Desktop host and extension installation: NOT_RUN",
+    "Model calls, skills, hooks, host permissions and authentication: NOT_RUN",
+    "Synthetic ledger only; this MCP does not sandbox arbitrary host filesystem tools"
+  ]
+}

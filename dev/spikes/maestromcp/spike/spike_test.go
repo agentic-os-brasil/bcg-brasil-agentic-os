@@ -102,3 +102,61 @@ func TestSeedRefusesReuseAndAliases(t *testing.T) {
 		t.Fatal("unknown workspace accepted")
 	}
 }
+
+func TestCheckpointReturnsBoundedConflictClassification(t *testing.T) {
+	for _, kind := range []string{"revision_conflict", "item_busy", "generic"} {
+		t.Run(kind, func(t *testing.T) {
+			root := fixtureRoot(t)
+			if _, err := Seed(root); err != nil {
+				t.Fatal(err)
+			}
+			bound, err := Open(root, "case-a")
+			if err != nil {
+				t.Fatal(err)
+			}
+			before, err := bound.Context(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			input := CheckpointInput{ExpectedRevision: before.StateRevision, AttemptID: before.AttemptID, Summary: "must not persist", NextStep: "reject", Pause: false}
+			var lock string
+			switch kind {
+			case "revision_conflict":
+				input.ExpectedRevision--
+			case "item_busy":
+				lock = filepath.Join(bound.store.Root, "workspaces", bound.fixture.WorkspaceID, "execution", "items", bound.fixture.ItemID, ".mutation.lock")
+				if err := os.Mkdir(lock, 0700); err != nil {
+					t.Fatal(err)
+				}
+			case "generic":
+				input.AttemptID = "wrong-attempt"
+			}
+			_, err = bound.Checkpoint(context.Background(), input)
+			if err == nil {
+				t.Fatal("invalid checkpoint accepted")
+			}
+			want := kind
+			if kind == "generic" {
+				want = "checkpoint rejected; refresh bound case context and verify size, revision and attempt"
+			}
+			if err.Error() != want {
+				t.Fatalf("classification=%q, want %q", err, want)
+			}
+			if strings.Contains(err.Error(), root) {
+				t.Fatal("classification disclosed a path")
+			}
+			if lock != "" {
+				if err := os.Remove(lock); err != nil {
+					t.Fatal(err)
+				}
+			}
+			after, err := bound.Context(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if before.StateRevision != after.StateRevision || before.Summary != after.Summary {
+				t.Fatal("rejected checkpoint changed state")
+			}
+		})
+	}
+}

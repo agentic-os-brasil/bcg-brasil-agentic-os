@@ -4,6 +4,8 @@ Development-only experiment reopened by the architecture question in epic
 [#428](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/428).
 It is separate from the v0.3.0 release scope and performs no migration.
 For the observed verdict and sanitized receipts, read [RESULTS](RESULTS.md).
+For the second-surface experiment using a local Desktop connector, read
+[DESKTOP](DESKTOP.md).
 
 The plugin supplies startup orientation and operator/resume skills. Its
 `.mcp.json` starts a bundled native stdio server. Three MCP tools adapt the
