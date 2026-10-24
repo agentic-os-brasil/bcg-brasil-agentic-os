@@ -7,6 +7,38 @@ import (
 	"testing"
 )
 
+func TestValidateDirectoryAllowsOrdinaryReadOnlyAncestor(t *testing.T) {
+	path, err := CanonicalPrivatePath(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateDirectory(path); err != nil {
+		t.Fatalf("ordinary ancestor: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0755 {
+		t.Fatal("validation changed directory permissions")
+	}
+	if err := ValidateDirectory(filepath.Join(path, "missing")); !os.IsNotExist(err) {
+		t.Fatalf("missing directory = %v", err)
+	}
+	if runtime.GOOS != "windows" {
+		link := filepath.Join(path, "link")
+		if err := os.Symlink(path, link); err != nil {
+			t.Fatal(err)
+		}
+		if err := ValidateDirectory(filepath.Join(link, "missing")); err == nil || os.IsNotExist(err) {
+			t.Fatalf("symlink mistaken for absent path: %v", err)
+		}
+	}
+}
+
 // The owner atlas needs to rewrite a page it did not create, without ever
 // following a link and without silently creating a page that is absent.
 // WriteNewPrivateFile cannot do it (it fails closed on an existing leaf) and

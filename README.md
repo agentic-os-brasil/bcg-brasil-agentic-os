@@ -32,6 +32,11 @@
 
 ## v0.2.0 consolidation — engineering candidate
 
+The complete MCP/plugin construction plan is tracked in the
+[full-parity checklist](docs/plans/2026-10-24-maestro-full-parity.md).
+For home/locator conflicts while preparing that work, use the read-only
+[data-home diagnostic](docs/development/data-home-inspection.md).
+
 The ZIP release line is being consolidated from the field 0.1.11 baseline and the
 0.1.12 fixes with Marcelo’s structural work. This is a recipes/runtime update,
 not a replacement for an owner’s personal Maestro. See the

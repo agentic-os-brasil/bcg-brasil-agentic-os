@@ -18,6 +18,9 @@ func run(args []string, in io.Reader, out, diagnostic io.Writer) int {
 		fmt.Fprintln(diagnostic, "managed runtime command required")
 		return 2
 	}
+	if args[0] == "home" {
+		return inspectHome(args[1:], out, diagnostic)
+	}
 	if len(args) == 1 && args[0] == "preflight" {
 		if err := userlevel.EnsureNotElevated(); err != nil {
 			fmt.Fprintln(diagnostic, err)
