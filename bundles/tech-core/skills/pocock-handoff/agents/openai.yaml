@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pocock — Passagem de contexto"
+  short_description: "Prepara um documento enxuto para outra sessão continuar o trabalho"
+  default_prompt: "Use $pocock-handoff para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."
+policy:
+  allow_implicit_invocation: false

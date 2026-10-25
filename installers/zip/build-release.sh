@@ -35,18 +35,18 @@ case "$PLATFORM" in
   *) echo "platform must be macos or windows-powershell: got '$PLATFORM'" >&2; exit 2 ;;
 esac
 
-STAGE_DIR=$(mktemp -d)
+STAGE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/maestro-release.XXXXXX")
 trap 'rm -rf "$STAGE_DIR"' EXIT
 
 MAESTRO_DIR="$STAGE_DIR/Maestro"
 mkdir -p "$MAESTRO_DIR"
 
 echo "==> Staging core files"
+command -v go >/dev/null 2>&1 || { echo 'FATAL: Go is required by the release factory' >&2; exit 1; }
 cp -R "$TEMPLATE_DIR/." "$MAESTRO_DIR/"
 cp -R "$BUNDLES_DIR" "$MAESTRO_DIR/bundles"
-# Native Codex discovery uses real copies, not symlinks requiring Windows privileges.
-mkdir -p "$MAESTRO_DIR/.agents/skills"
-cp -R "$BUNDLES_DIR/base/skills/." "$MAESTRO_DIR/.agents/skills/"
+# Native discovery carries the same complete method packages on both hosts.
+(cd "$REPO_ROOT" && go run ./dev/skillpack --root "$MAESTRO_DIR")
 cp "$BUNDLES_DIR/base/skills/caseos-tutorial/references/guide.md" "$MAESTRO_DIR/CASEOS-GUIDE.md"
 if [ -d "$REPO_ROOT/schemas" ]; then
   cp -R "$REPO_ROOT/schemas" "$MAESTRO_DIR/schemas"
@@ -54,7 +54,6 @@ fi
 
 # The factory needs Go; recipients do not. One shared, dependency-free engine
 # backs migration and native host adapters on both supported architectures.
-command -v go >/dev/null 2>&1 || { echo 'FATAL: Go is required by the release factory' >&2; exit 1; }
 if [ "$PLATFORM" = "windows-powershell" ]; then
   TARGET_OS=windows
   EXE_SUFFIX=.exe

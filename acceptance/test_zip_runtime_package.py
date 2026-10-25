@@ -56,6 +56,29 @@ class RuntimePackage(unittest.TestCase):
                 self.assertEqual(z.read(source), z.read(target))
             self.assertIn("Maestro/.agents/skills/caseos-connect/SKILL.md", z.namelist())
 
+    def test_pocock_methods_are_complete_in_both_native_surfaces(self):
+        with zipfile.ZipFile(ZIP) as z:
+            catalog = json.loads(z.read("Maestro/bundles/tech-core/skills/catalog.json"))
+            methods = [entry for entry in catalog["skills"] if entry["id"].startswith("pocock-")]
+            self.assertEqual(len(methods), 27)
+            for method in methods:
+                prefix = f"Maestro/bundles/tech-core/skills/{method['id']}/"
+                resources = [name for name in z.namelist() if name.startswith(prefix) and not name.endswith("/")]
+                self.assertIn(prefix + "LICENSE", resources)
+                for surface in (".claude/skills", ".agents/skills"):
+                    for source in resources:
+                        target = source.replace("bundles/tech-core/skills", surface, 1)
+                        self.assertIn(target, z.namelist())
+                        self.assertEqual(z.read(source), z.read(target))
+            for surface in (".claude/skills", ".agents/skills"):
+                combined = json.loads(z.read(f"Maestro/{surface}/catalog.json"))
+                self.assertEqual(len(combined["skills"]), 92)
+                manual = next(entry for entry in combined["skills"] if entry["id"] == "pocock-implement")
+                self.assertTrue(manual["user_invoked_only"])
+                base = f"Maestro/{surface}/pocock-tdd/"
+                self.assertIn(base + "tests.md", z.namelist())
+                self.assertIn(base + "mocking.md", z.namelist())
+
     def test_managed_helper_manifest_matches_both_architectures(self):
         with zipfile.ZipFile(ZIP) as z:
             manifest = json.loads(z.read("Maestro/runtime/manifest.json"))

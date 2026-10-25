@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pocock — Configuração dos métodos Pocock"
+  short_description: "Configura tracker, papéis de triagem e documentação de um projeto"
+  default_prompt: "Use $pocock-setup-matt-pocock-skills para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."
+policy:
+  allow_implicit_invocation: false

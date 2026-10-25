@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pocock — Reexplicação com contexto"
+  short_description: "Reformula uma explicação que não ficou clara com contexto suficiente"
+  default_prompt: "Use $pocock-wait-what para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."
+policy:
+  allow_implicit_invocation: false

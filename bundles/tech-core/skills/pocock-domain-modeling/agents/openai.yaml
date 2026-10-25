@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pocock — Modelagem de domínio"
+  short_description: "Define termos do domínio e registra decisões arquiteturais duráveis"
+  default_prompt: "Use $pocock-domain-modeling para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."

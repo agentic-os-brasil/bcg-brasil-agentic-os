@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pocock — Revisão de código por dois eixos"
+  short_description: "Revisa uma mudança contra a especificação e os padrões do repositório"
+  default_prompt: "Use $pocock-code-review para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."

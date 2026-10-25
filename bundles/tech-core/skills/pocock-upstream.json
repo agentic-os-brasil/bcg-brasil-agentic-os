@@ -1,0 +1,762 @@
+{
+  "schema_version": 1,
+  "upstream_repository": "https://github.com/mattpocock/skills",
+  "upstream_version": "1.3.1",
+  "upstream_revision": "49dd158d1076134a641b33efb035946536778336",
+  "license": "MIT",
+  "selection": ".claude-plugin/plugin.json skills (stable manifest only)",
+  "adaptations": [
+    "pocock- namespace and cross-method routing",
+    "Portuguese discovery metadata",
+    "Maestro interaction profile and workspace authority",
+    "PR frontmatter credits retained in upstream CREDITS.md"
+  ],
+  "skills": [
+    {
+      "id": "pocock-ask-matt",
+      "upstream_path": "skills/engineering/ask-matt",
+      "user_invoked_only": true,
+      "files": [
+        {
+          "path": "PHASE-BOUNDARIES.md",
+          "upstream_sha256": "a8aa20158609ef39e2b308b6ba0660c91066838d07a867202e63a7744a88a3ed",
+          "shipped_sha256": "020360f83fb78ca634a92b5d611b014db243458f02ae206738f3ced0f2f056a9"
+        },
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "1371f5ce005de0992a44b137748bfb960a56948aa9871b405fe9d90b24332e3c",
+          "shipped_sha256": "6f4d8e90976144afaea1e4cf69e0144da5a9d39327aaa90ed6ed3ef19ce063d0"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "bdffbc5a0a99ed1b6ef3253d251d755fd18162b9845972e380007f844b09b05c",
+          "shipped_sha256": "42b940d648ff47863f05b0a1eb06bbb6c4f0679c0cdf613d3337771d184d3d82"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-diagnosing-bugs",
+      "upstream_path": "skills/engineering/diagnosing-bugs",
+      "user_invoked_only": false,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "849198df88cdb65fd0d97236604c1fca7ff2f22d2f705f9724a800d0266b118d",
+          "shipped_sha256": "8d1346906d0ee2720ddc858343424a6ef879c1f7c757e748e1eee40d3b17c773"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "3e430dbe4334a87597488c060cb3dc3786bb00c9182877d6f5ec41f62490e90b",
+          "shipped_sha256": "b59c07e58c4309ebea7f5a48d897151a692bd7a840aa04385c8dde3a7cd19141"
+        },
+        {
+          "path": "scripts/hitl-loop.template.sh",
+          "upstream_sha256": "35103539fc36873eea36074769ad454f9379d6fc8b2dc0e26ce987fd3bfe5503",
+          "shipped_sha256": "35103539fc36873eea36074769ad454f9379d6fc8b2dc0e26ce987fd3bfe5503"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-grill-with-docs",
+      "upstream_path": "skills/engineering/grill-with-docs",
+      "user_invoked_only": true,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "7de372c13488f1ee96cc11cd8907b56b6809cc93eef776eeddd37de6b6cbe3fe",
+          "shipped_sha256": "1348323e807a63e39076b6e79e9dd5b89ee459c0df22bcfaa65628b09e335f80"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "94cd0ab161fb468a836349f5ed482ba58ce8e709a05c57ce533d739dbd35cca9",
+          "shipped_sha256": "577ab014126ba1790a789da43e7b5fd937e45b14ca733124a9ba50fbe2ca4243"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-triage",
+      "upstream_path": "skills/engineering/triage",
+      "user_invoked_only": true,
+      "files": [
+        {
+          "path": "AGENT-BRIEF.md",
+          "upstream_sha256": "7f5f87fed3033df1b06e083c480f3e847b1fbb0647746b8a4c6a50f9f26ef44f",
+          "shipped_sha256": "9fc773fc415814c1718c2914bfcfe57b34a12e43294c39434beb293130c85fb2"
+        },
+        {
+          "path": "OUT-OF-SCOPE.md",
+          "upstream_sha256": "1fbf9b432130c6380aa65813b55553cfda150309b27c595e183f8e335b8a190d",
+          "shipped_sha256": "1fbf9b432130c6380aa65813b55553cfda150309b27c595e183f8e335b8a190d"
+        },
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "917b0baf74be583e74f110857ed45df2766617f75c00baf61fd136d7af515edf",
+          "shipped_sha256": "77f88bd5c53b26dee814c7281ef8b64fc8ced6fe8fc3de4ad4e58aa5e9da7bb4"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "2e683717720cf456d165d0bb1a68bb600d0b6a8ccb61841c172e50d26f95351c",
+          "shipped_sha256": "8c8ea8f3418ddab3c856206ffa1f33d1afac2858423abbfe476f7df25884fc41"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-improve-codebase-architecture",
+      "upstream_path": "skills/engineering/improve-codebase-architecture",
+      "user_invoked_only": true,
+      "files": [
+        {
+          "path": "HTML-REPORT.md",
+          "upstream_sha256": "581e8bb5a521e46bbda8ca7e19b15948bed882187108092ebb90c62513b77528",
+          "shipped_sha256": "52dbbb5d250cb1dc5c43822ffdfe8344adf25077e015e13e1c3ed5b527e1ab96"
+        },
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "552240a5ab5cec6b67c15dd1ad6e9f6962b1bca6ce870059a8c2713760c20392",
+          "shipped_sha256": "b48a9ef7a8560964b4168020a37bb0fe4408da134c7bf09aa31fc12f1bdaa159"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "c8cb20f68ebf0edb4e497bc11ae5fcaa196004e661cd189015b04f4109ced7f1",
+          "shipped_sha256": "bf86a3e4541a1263d3ae585de3ff8e54261f37d87ff39d251f0deb863ae9ba9c"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-setup-matt-pocock-skills",
+      "upstream_path": "skills/engineering/setup-matt-pocock-skills",
+      "user_invoked_only": true,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "f148858ffb7f63c03c06fca06e6fdb1d91a35c6b293244b8fdfacd5f4cc028c4",
+          "shipped_sha256": "54c4cbfb1478700ebb920f4053fe4d56b86435b00e24bc06a58414de3b8e3ce9"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "9527de0110541c45712319025155aeab8dc7d77c6ed6e5e83271bab1851ab939",
+          "shipped_sha256": "7fea9d3c6beaa3d22cf93f21e4cea2d37f1c4dd7cc2307cac2a743a5fa9d13de"
+        },
+        {
+          "path": "domain.md",
+          "upstream_sha256": "593a7042218689f1d24df89df14eaf0a20e19e0d0a7d479a01947ac78f0784b9",
+          "shipped_sha256": "4d703a0a316db390a660c784616997fe2a5ab8c2b4edb50b9fa624b230e163f7"
+        },
+        {
+          "path": "issue-tracker-github.md",
+          "upstream_sha256": "f0653fe106dd8ee7b33be27bd7fe3104b40555896cb45f61997aed20467020c3",
+          "shipped_sha256": "1d0ae9ae8e96475d45701ccd6d4f6ccddcae27f4cf9b7f87c00157327574176f"
+        },
+        {
+          "path": "issue-tracker-gitlab.md",
+          "upstream_sha256": "591a9e7057382aaccdfbed3f7ea3f2ad07e0cd29f012d18b82ee4e485fd81e24",
+          "shipped_sha256": "cd9705b99936e9b2c3764c359f5918216e4b8f73dd8c125ba8b0e4fd0260eb1b"
+        },
+        {
+          "path": "issue-tracker-local.md",
+          "upstream_sha256": "7dcda20a2eb4bdc89b95d1143423c0691309921cadae3132e6424f371030506e",
+          "shipped_sha256": "4a87911669213c8389721f86d7611ee506de887a439d347c942278310f6891dc"
+        },
+        {
+          "path": "triage-labels.md",
+          "upstream_sha256": "ae512af838c78b8750471c42cd2b20fa32319553e61d84c9a23d171b40ce14aa",
+          "shipped_sha256": "ae512af838c78b8750471c42cd2b20fa32319553e61d84c9a23d171b40ce14aa"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-tdd",
+      "upstream_path": "skills/engineering/tdd",
+      "user_invoked_only": false,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "5505d25bbaa8fc14a79e4d20163936958992a2995b7f1dd1d6197edc9ed722e0",
+          "shipped_sha256": "54789e14b9a86bcb16dbf5fccf63e7f91c0aa03a8e33e2477f1ea86bcd3fed0e"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "ea6f01cf1b8c06a4b0f5b649d74b1b8ce8685e72af1b38d70d877693e092af0b",
+          "shipped_sha256": "7c3cef004be36f07c8350b5d55de9093f1134e64e14ce2c5332713a0e42d97c2"
+        },
+        {
+          "path": "mocking.md",
+          "upstream_sha256": "3ceb807fdf4a47d6a93d4d9a891e5ba6d362a6247bd08adc451feebfc17361ef",
+          "shipped_sha256": "3ceb807fdf4a47d6a93d4d9a891e5ba6d362a6247bd08adc451feebfc17361ef"
+        },
+        {
+          "path": "tests.md",
+          "upstream_sha256": "859f9e592c188fda4fc7277dd180e4ce9c7a2e13f6efe1f6f29eccc9d28c106a",
+          "shipped_sha256": "859f9e592c188fda4fc7277dd180e4ce9c7a2e13f6efe1f6f29eccc9d28c106a"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-to-spec",
+      "upstream_path": "skills/engineering/to-spec",
+      "user_invoked_only": true,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "43ad9cf318e5e7d3d1fa360253a37021796dc87a0c2e595ad262661a10f85088",
+          "shipped_sha256": "b7d12ae40047e375ea0304d113131e37d8af9e93add1ac136b385805a09a7bff"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "1c5b4d1e3d8e52287ef19cc2742fdbbfae1914ac75d33af3e4c8174f08cc55bb",
+          "shipped_sha256": "e7269919f98cd37db4d9c8909c7711f7f1b5355d0a0feeec0de3df426d223b4d"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-to-tickets",
+      "upstream_path": "skills/engineering/to-tickets",
+      "user_invoked_only": true,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "56ec23c5b2782785d4e65bff9e315b6d3aeb4ef977c174a219e99489fada1995",
+          "shipped_sha256": "8e6f9706bbb6dcc2a637d2e7eac9f8a50071caeb38ada1739aadb9f606398994"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "21bc6215fffcd7614e9f772bb1760e87cc5fc7dcc707e7d282bc9414267a6090",
+          "shipped_sha256": "ca2ad18e23435f9adc9e4022c179fe6f4408aef0af91d66190e50442a9b8cb9d"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-wayfinder",
+      "upstream_path": "skills/engineering/wayfinder",
+      "user_invoked_only": true,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "9be7b478c389605a24517d27752f278933588da97a1b5921b165f455edf4c5b7",
+          "shipped_sha256": "6efe5c367c8d968377929e7c16df65c05d0ca04b3df8d814e7e2990e04e42ce0"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "88bc81a11a6d52ac67aeaa76b8b619e387020d47c5133a4dd4927fd15c4ad073",
+          "shipped_sha256": "87e75d74d29bc2e34878967ef2298df523ddf1ae1d482cc37fcfa8c76f6e01e0"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-implement",
+      "upstream_path": "skills/engineering/implement",
+      "user_invoked_only": true,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "483bdc4ccf4ac31d86ac7beeaa0d0db80313e71e120bb8c59b3196ae5decd53d",
+          "shipped_sha256": "29e7120f366f0ec699564b97ba95d6f92e971a3910b97c1f853ba9188d3b86da"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "8970a8596ade0c28ab427f41a4ea242d6bdf6186c59ebf55e1238dbecaab79dc",
+          "shipped_sha256": "8d4f26682d6a5dea7aa080b067ce3ab54651b010a370423b173a260b33dac0f2"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-implement-spec",
+      "upstream_path": "skills/engineering/implement-spec",
+      "user_invoked_only": true,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "7a22dd2e60b8fcece478ced9d2533582adf3520d695acd3ab715341535c9e56d",
+          "shipped_sha256": "f48e4fae5e856ee879bde48521f2e2d9d9db7b77eaebff5c4d40fce4d06ac906"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "fd41efb42c60c96320d6531be7e4bf15cbf5518cd652d57dff27ccffa46988e9",
+          "shipped_sha256": "8a0adbe189985002530180ae4fcbf111a0b41ad6dfad5ea8c3f9e58455ab9415"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-prototype",
+      "upstream_path": "skills/engineering/prototype",
+      "user_invoked_only": false,
+      "files": [
+        {
+          "path": "LOGIC.md",
+          "upstream_sha256": "f61c7d249e786a79ef289018901c348271e1798dd0b0bc5607b5c6f4d4a01ab9",
+          "shipped_sha256": "f61c7d249e786a79ef289018901c348271e1798dd0b0bc5607b5c6f4d4a01ab9"
+        },
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "714de632d116bb73f65cdb5a882db15b9369a6713b9a47c0fad827848f0bfbe3",
+          "shipped_sha256": "f5069b5a4359d00eac98a85077a5554fe22586aceb2048056ec831cdc566d800"
+        },
+        {
+          "path": "UI.md",
+          "upstream_sha256": "723211e878acbc7b6ff09755263f3295cde724ba902ff0064da41eed51d45ad3",
+          "shipped_sha256": "723211e878acbc7b6ff09755263f3295cde724ba902ff0064da41eed51d45ad3"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "5af65e43ab41a350436697b81e27b7f848d36782043b73c322bb2c9fa9cc55dc",
+          "shipped_sha256": "14f9d123e8594e5d13b132b23be82c234e36c60189ff1e80aa7d898c0e43b33a"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-research",
+      "upstream_path": "skills/engineering/research",
+      "user_invoked_only": false,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "985569f15739c713d6784887c3d186d4ef9ac85bec5ad9c068d25bf0739928e4",
+          "shipped_sha256": "964297a7b533b56802a06ce29bb1523e2ae3cca8869b511f4cf379cf167759c5"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "9b4c470d63221c1f68f22df70b83e2f12401b317babe0d1b7b5f24a974474d0d",
+          "shipped_sha256": "353f6a03e3cad41866d9678d762584fa4a57e235529282cfd56d4455de9101f9"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-domain-modeling",
+      "upstream_path": "skills/engineering/domain-modeling",
+      "user_invoked_only": false,
+      "files": [
+        {
+          "path": "ADR-FORMAT.md",
+          "upstream_sha256": "944c92aa790e8fbdc9199640b170979abb8a34ba8d0fe18c2a01a63bce140ca0",
+          "shipped_sha256": "944c92aa790e8fbdc9199640b170979abb8a34ba8d0fe18c2a01a63bce140ca0"
+        },
+        {
+          "path": "GLOSSARY-FORMAT.md",
+          "upstream_sha256": "21dcc40cdec8e151a829b98ab1517c1867bc444e3665134a98c6983411996801",
+          "shipped_sha256": "21dcc40cdec8e151a829b98ab1517c1867bc444e3665134a98c6983411996801"
+        },
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "7b925d7b1e341a2eeae33ad68a8a8c0ab889a38ddd22a7598e4c240e5a7556a3",
+          "shipped_sha256": "1ed5e097adf88e47ad5b94b7646d64a5c8cc1572b936c1e0712c3cded553186b"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "f6bf2aa996c6e6f53fdd0708e18a0d16a56aed8322cca59fedbe3c0d2c75f06b",
+          "shipped_sha256": "5e226267cdd2288f49ad4c4a9daf6cb0d5b422dee6573cce8bdd91165c4f4cbd"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-codebase-design",
+      "upstream_path": "skills/engineering/codebase-design",
+      "user_invoked_only": false,
+      "files": [
+        {
+          "path": "DEEPENING.md",
+          "upstream_sha256": "f3dd099ce99289bd213914d8ee3e2429b78309c3957ca4583f7659551b1d53c1",
+          "shipped_sha256": "f3dd099ce99289bd213914d8ee3e2429b78309c3957ca4583f7659551b1d53c1"
+        },
+        {
+          "path": "DESIGN-IT-TWICE.md",
+          "upstream_sha256": "52b52e75655a27aea59c6966b410bac82448968ad46ef1ebb9f07c274e3ae010",
+          "shipped_sha256": "52b52e75655a27aea59c6966b410bac82448968ad46ef1ebb9f07c274e3ae010"
+        },
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "2c20617f87ec8af6a434859f381b2f061a69b530444e74eb39e78bb016a6d1e2",
+          "shipped_sha256": "da7423caa2e762cc024e4387b5511e41d27bebab00bfbd6ea9fcc9c0031adce1"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "edebc9e4fcfe102114012575eaa9600b9b5fd08c311664f389c36e7bc717740f",
+          "shipped_sha256": "2e74b0161f71931fd026b8c0a7b53dd2c42f8beb41fb95c8799ef0ff891950a8"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-code-review",
+      "upstream_path": "skills/engineering/code-review",
+      "user_invoked_only": false,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "09eb147f793e4647949edd32dbad278f0554dfb56e0d46b699cd4c2c55bf0357",
+          "shipped_sha256": "75e108de175e90c5091deeed229b68df75c9d841ecab24001b1edd7e31d26374"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "8229ca854e11dc8e6aef2131ee03f31fb1561cf905fab9ccc325180cf3331352",
+          "shipped_sha256": "757a8848eb55b854c115854e8cd32d5305b6bcbf3305f7372a17583353ccd8db"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-pr",
+      "upstream_path": "skills/engineering/pr",
+      "user_invoked_only": false,
+      "files": [
+        {
+          "path": "CREDITS.md",
+          "upstream_sha256": "a7a087127665d7298a72280ef6e19c41ad8404523712a788c8dc3ab414bc2497",
+          "shipped_sha256": "a7a087127665d7298a72280ef6e19c41ad8404523712a788c8dc3ab414bc2497"
+        },
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "ab63f1cf78647389edcd386c9427c5dfca27ed2836930c24773ffee834c19bcd",
+          "shipped_sha256": "0b35a9c3aacc7d701216dadede9d62e90ae0fda80f23bffda97e4cb351a1dd9d"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "2295b586624db4ef546f3fd4695492f039d941a46d8a1593a702ce3ca511b8ad",
+          "shipped_sha256": "cec66e7ffe827692b299a99a3e2be23c6417796e7c8422dc020640a19986b643"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-retro",
+      "upstream_path": "skills/engineering/retro",
+      "user_invoked_only": true,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "33fbc28568e3146f20fd908b12998bc0ab30aa4f4c87288199a40793efa94696",
+          "shipped_sha256": "b3b86cc6daeeaf2666c82ead9b5061a5837fb99f080781b7845d2b99fb79e0c2"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "cb6fb9d7e6b4be5975f41f6def1dd00a1255bad5d9b02696b124c924a8b8745c",
+          "shipped_sha256": "953e14ee214560da418a8769e08b56f20453886953b0e4c951fbd43032f2b78e"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-wizard",
+      "upstream_path": "skills/engineering/wizard",
+      "user_invoked_only": false,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "bdf31d48211ea559878f95a4f344aeabf8d85897488ba564382bab0b000daac1",
+          "shipped_sha256": "f27a328ac5c1c173938a0a8dd789ff6de0ee55186b6d490faff46e6ea08745a8"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "98f44d682d58e262f160dc59a8befc365e0aa65820dd0261864af26aa8e59d83",
+          "shipped_sha256": "4ec7d1c5bd4c98280f785641d721702684cc2b889cc597be5375d51cd18e45dc"
+        },
+        {
+          "path": "template.sh",
+          "upstream_sha256": "6566f147299bc6f1d941e64591ed04385416d543e11f96f564c7228f5018d0ed",
+          "shipped_sha256": "74cbe04581b5fbe7d58b9f07381f953526f343c3d7a80fadecb99bbcbf4c715e"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-grill-me",
+      "upstream_path": "skills/productivity/grill-me",
+      "user_invoked_only": true,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "caaf8b8de1684f96e26b28f3c29189db5c89cce4b73e1c93d86164f66ef88637",
+          "shipped_sha256": "d08b85194e0ebad70a0cf3886da5af53ddbb364ba81a8f152ae13a4c7f3419b1"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "c061e39c3e0f9d865fb1b97556d485704af2a8a58f4b8221a8917a5c2074a32b",
+          "shipped_sha256": "a595e04070d3a2c0015676899adcddb73491b287687dc00afb90d767ed7f3629"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-grilling",
+      "upstream_path": "skills/productivity/grilling",
+      "user_invoked_only": false,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "befdff1e27a1dfe2a294d5871169ac1afe16d983911daa4f32627514a48c1e15",
+          "shipped_sha256": "e74c5911157b075c51d0a8233dae8648d16da6dae351f97fbcc4b5912223fb17"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "1411d7df7d99b7e621a1ff8283c8133cc2464be63d064e52d8ce169c6800ee9b",
+          "shipped_sha256": "a267861d03452db049474c41f1bc5c6d7b7a95f0515e406e940e7319036e01cb"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-handoff",
+      "upstream_path": "skills/productivity/handoff",
+      "user_invoked_only": true,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "4cbb043950dad2ffd3662ff1a5a0b51ae676004b5cae10e3787e8ee7a4ee69d3",
+          "shipped_sha256": "fe336c5abde124bbc91cc0a74a07b5398b15a614c35591dbe4f0af4bb61c1c71"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "5c479fd562c691851690e8b18c8501045bef0943c10743d636b2fae26add1d28",
+          "shipped_sha256": "cbb9d59db7adcd44cb31a39d2045868d019a59add1b0d5159316a7bd49f1c690"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-teach",
+      "upstream_path": "skills/productivity/teach",
+      "user_invoked_only": true,
+      "files": [
+        {
+          "path": "GLOSSARY-FORMAT.md",
+          "upstream_sha256": "9b99859ec28437668130d8f2ce5a342938970f8a1ed4fd38c3eab4f4b5fff210",
+          "shipped_sha256": "9b99859ec28437668130d8f2ce5a342938970f8a1ed4fd38c3eab4f4b5fff210"
+        },
+        {
+          "path": "LEARNING-RECORD-FORMAT.md",
+          "upstream_sha256": "701fa34b6748aa89e6c960ffb815257f481a7d77fb2900f9028f7edf3fdd6052",
+          "shipped_sha256": "701fa34b6748aa89e6c960ffb815257f481a7d77fb2900f9028f7edf3fdd6052"
+        },
+        {
+          "path": "MISSION-FORMAT.md",
+          "upstream_sha256": "8cacbb3c0644d3ae0ea4965564797099401a6930a23f7cf462918576587f2418",
+          "shipped_sha256": "8cacbb3c0644d3ae0ea4965564797099401a6930a23f7cf462918576587f2418"
+        },
+        {
+          "path": "RESOURCES-FORMAT.md",
+          "upstream_sha256": "e9cacf34026e11a8d1c8f9de88abe5bcbf654f4ebdb25cae8c0de0d5f48f44ec",
+          "shipped_sha256": "e9cacf34026e11a8d1c8f9de88abe5bcbf654f4ebdb25cae8c0de0d5f48f44ec"
+        },
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "550482c2d674b085c9043b87bfdc14a8f2ec453c736119e7fcbb1e9332bffeba",
+          "shipped_sha256": "740524d550e8bacb76b115068b9be55a24c8aaead220ee570c13ec9e65e50446"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "5856f3ae8aec742f1499c640aecdd5f1d6af5fa210a7c6ec794de8263a6f733f",
+          "shipped_sha256": "ac1005e2c13f700043a05f1dd416ecfe3a51c91e64331e9d1f556e281a08097f"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-to-questionnaire",
+      "upstream_path": "skills/productivity/to-questionnaire",
+      "user_invoked_only": true,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "b5eb929842ee0e93d867c5e906d183d350f2f2d149eaeaa86967d94d8eda1d3b",
+          "shipped_sha256": "be7073d370173fbefad4f94cdb81783f2a056576e3e39737f7d0ed3b6058f5e2"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "9e8a06c38c8842eea8d4922cb9d1ead8e3ace647bab259b943c994a1b4742bc2",
+          "shipped_sha256": "a1c7823b7e3154b798335838299df678105ce722163f48d3dde12a943f4121b7"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-wait-what",
+      "upstream_path": "skills/productivity/wait-what",
+      "user_invoked_only": true,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "d961bb37defd975c539427edb8f450cdbccdcdd552e213c1ece46676a7970905",
+          "shipped_sha256": "717b8402e2fc0ad77a88f8429ba48fe871e064fb9b10cf535e666b0a5add1f55"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "b41faadf741d51e4ea184148b2d1854d93f947aaf754c7844f70a00f04194999",
+          "shipped_sha256": "2d64e38661b3f5dd654bedd860dbd8864de430183da2e0b6813bf79b15085c90"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "id": "pocock-writing-for-agents",
+      "upstream_path": "skills/productivity/writing-for-agents",
+      "user_invoked_only": false,
+      "files": [
+        {
+          "path": "SKILL-MECHANICS.md",
+          "upstream_sha256": "c768e6307c7c10728c401c213f2c4ba71c542127eeb7ad2956aabd15a0fa0059",
+          "shipped_sha256": "c768e6307c7c10728c401c213f2c4ba71c542127eeb7ad2956aabd15a0fa0059"
+        },
+        {
+          "path": "SKILL.md",
+          "upstream_sha256": "551adca942227b44192edba88acd4e8db911f0121ce58ad16944ccf6a896a74a",
+          "shipped_sha256": "c088dbe629c1cf77f357780dc79b04921d80f8a49bd6c862b518895f9683c2b9"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "upstream_sha256": "eacb24b2a618cfb81dacb0416f4fdd75ddf3a8060f8ddb99aae1b1e301907e4b",
+          "shipped_sha256": "8649e58acc02ed25c5a09c40f698306900c159f803591d4fe3edacb907bf7729"
+        },
+        {
+          "path": "LICENSE",
+          "upstream_source": "LICENSE",
+          "upstream_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "shipped_sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pocock — Entrevista sem persistência"
+  short_description: "Aprofunda uma ideia por entrevista sem criar documentação de projeto"
+  default_prompt: "Use $pocock-grill-me para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."
+policy:
+  allow_implicit_invocation: false

@@ -15,6 +15,32 @@ func TestValidateDirAcceptsValidSkill(t *testing.T) {
 	}
 }
 
+func TestValidateDirPreservesExplicitInvocationBoolean(t *testing.T) {
+	for _, value := range []string{"true", "false", "\"true\"", "yes", "1", "", "null"} {
+		t.Run(value, func(t *testing.T) {
+			root := t.TempDir()
+			writeSkill(t, root, "pocock-handoff", "pocock-handoff", "Prepare a bounded handoff.")
+			path := filepath.Join(root, "pocock-handoff", "SKILL.md")
+			body, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body = []byte(strings.Replace(string(body), "description:", "disable-model-invocation: "+value+"\nargument-hint: \"Next session focus\"\ndescription:", 1))
+			if err := os.WriteFile(path, body, 0644); err != nil {
+				t.Fatal(err)
+			}
+			err = ValidateDir(root)
+			if value == "true" || value == "false" {
+				if err != nil {
+					t.Fatalf("boolean invocation policy rejected: %v", err)
+				}
+			} else if err == nil {
+				t.Fatal("non-boolean invocation policy accepted")
+			}
+		})
+	}
+}
+
 func TestValidateDirRejectsUnfinishedDescription(t *testing.T) {
 	root := t.TempDir()
 	writeSkill(t, root, "develop-change", "develop-change", "TODO")

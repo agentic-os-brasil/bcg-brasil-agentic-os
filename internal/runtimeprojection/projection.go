@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -52,6 +53,7 @@ type manifest struct {
 	OrientationPath string            `json:"orientation_path"`
 	OrientationHash string            `json:"orientation_hash"`
 	SkillHashes     map[string]string `json:"skill_hashes"`
+	ResourceHashes  map[string]string `json:"resource_hashes,omitempty"`
 	PolicyPath      string            `json:"policy_path,omitempty"`
 	PolicyHash      string            `json:"policy_hash,omitempty"`
 }
@@ -70,11 +72,12 @@ type runtimeLayout struct {
 }
 
 type canonicalProjectionContract struct {
-	Catalog      skillsindex.Catalog
-	Policy       skillpolicy.Policy
-	SkillHashes  map[string]string
-	PolicyBody   []byte
-	PolicyDigest string
+	Catalog        skillsindex.Catalog
+	Policy         skillpolicy.Policy
+	SkillHashes    map[string]string
+	ResourceHashes map[string]string
+	PolicyBody     []byte
+	PolicyDigest   string
 }
 
 // ValidateInstall performs the projection preflight without writing files.
@@ -97,7 +100,7 @@ func ValidateInstallForTracks(runtimeName, workspace string, tracks []string) er
 	if err != nil {
 		return fmt.Errorf("load managed skills catalog: %w", err)
 	}
-	contents, hashes, err := skillContents(catalog)
+	contents, _, err := skillContents(catalog)
 	if err != nil {
 		return err
 	}
@@ -112,7 +115,7 @@ func ValidateInstallForTracks(runtimeName, workspace string, tracks []string) er
 	if old.Runtime != "" && old.Runtime != runtimeName {
 		return fmt.Errorf("workspace already has a %s runtime projection", old.Runtime)
 	}
-	if conflicts := preflight(workspace, layout, contents, hashes, digest(policyBody), old); len(conflicts) > 0 {
+	if conflicts := preflight(workspace, layout, contents, digest(policyBody), old); len(conflicts) > 0 {
 		return fmt.Errorf("runtime projection has conflicts: %s", strings.Join(conflicts, ", "))
 	}
 	return nil
@@ -141,8 +144,22 @@ func PlannedManagedPaths(runtimeName, workspace string, tracks []string) ([]stri
 		filepath.Join(workspace, ManifestRelativePath),
 		filepath.Join(workspace, PolicyRelativePath),
 	}
-	for _, skill := range catalog.Skills {
-		paths = append(paths, filepath.Join(workspace, layout.root, skill.ID, "SKILL.md"))
+	contents, _, err := skillContents(catalog)
+	if err != nil {
+		return nil, err
+	}
+	old, err := readManifest(filepath.Join(workspace, ManifestRelativePath))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	for relative := range managedHashes(old) {
+		contents[relative] = nil
+	}
+	for relative := range contents {
+		if err := rejectSymlinkComponents(workspace, filepath.Join(layout.root, filepath.FromSlash(relative))); err != nil {
+			return nil, err
+		}
+		paths = append(paths, filepath.Join(workspace, layout.root, filepath.FromSlash(relative)))
 	}
 	sort.Strings(paths)
 	return paths, nil
@@ -198,16 +215,16 @@ func InstallForTracks(runtimeName, workspace string, tracks []string) (Status, e
 	if old.Runtime != "" && old.Runtime != runtimeName {
 		return Status{}, fmt.Errorf("workspace already has a %s runtime projection", old.Runtime)
 	}
-	if conflicts := preflight(workspace, layout, contents, hashes, policyHash, old); len(conflicts) > 0 {
-		return Status{Runtime: runtimeName, State: "conflict", OrientationPath: filepath.Join(workspace, layout.orientation), SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: filepath.Join(workspace, ManifestRelativePath), PolicyPath: filepath.Join(workspace, PolicyRelativePath), SkillCount: len(contents), Conflicts: conflicts, Reason: "existing user files were preserved; no projection files were changed"}, fmt.Errorf("runtime projection has conflicts: %s", strings.Join(conflicts, ", "))
+	if conflicts := preflight(workspace, layout, contents, policyHash, old); len(conflicts) > 0 {
+		return Status{Runtime: runtimeName, State: "conflict", OrientationPath: filepath.Join(workspace, layout.orientation), SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: filepath.Join(workspace, ManifestRelativePath), PolicyPath: filepath.Join(workspace, PolicyRelativePath), SkillCount: len(hashes), Conflicts: conflicts, Reason: "existing user files were preserved; no projection files were changed"}, fmt.Errorf("runtime projection has conflicts: %s", strings.Join(conflicts, ", "))
 	}
 	paths := []string{filepath.Join(workspace, layout.orientation), filepath.Join(workspace, ManifestRelativePath), filepath.Join(workspace, PolicyRelativePath)}
-	for id := range contents {
-		paths = append(paths, filepath.Join(workspace, layout.root, id, "SKILL.md"))
+	for relative := range contents {
+		paths = append(paths, filepath.Join(workspace, layout.root, filepath.FromSlash(relative)))
 	}
-	for id := range old.SkillHashes {
-		if _, current := contents[id]; !current {
-			paths = append(paths, filepath.Join(workspace, layout.root, id, "SKILL.md"))
+	for relative := range managedHashes(old) {
+		if _, current := contents[relative]; !current {
+			paths = append(paths, filepath.Join(workspace, layout.root, filepath.FromSlash(relative)))
 		}
 	}
 	snapshots, err := snapshotFiles(paths)
@@ -223,32 +240,32 @@ func InstallForTracks(runtimeName, workspace string, tracks []string) (Status, e
 	if err := writeOrientation(filepath.Join(workspace, layout.orientation), orientation); err != nil {
 		return Status{}, rollback(err)
 	}
-	for id, body := range contents {
-		if err := writeManagedFile(filepath.Join(workspace, layout.root, id, "SKILL.md"), body); err != nil {
-			return Status{}, rollback(fmt.Errorf("write installed skill %s: %w", id, err))
+	for relative, body := range contents {
+		if err := writeManagedFile(filepath.Join(workspace, layout.root, filepath.FromSlash(relative)), body); err != nil {
+			return Status{}, rollback(fmt.Errorf("write installed skill resource %s: %w", relative, err))
 		}
 	}
 	if err := writeManagedFile(filepath.Join(workspace, PolicyRelativePath), policyBody); err != nil {
 		return Status{}, rollback(fmt.Errorf("write selection-scoped skill policy: %w", err))
 	}
-	for id, expected := range old.SkillHashes {
-		if _, current := contents[id]; current {
+	for relative, expected := range managedHashes(old) {
+		if _, current := contents[relative]; current {
 			continue
 		}
-		path := filepath.Join(workspace, layout.root, id, "SKILL.md")
+		path := filepath.Join(workspace, layout.root, filepath.FromSlash(relative))
 		body, readErr := os.ReadFile(path)
 		if readErr == nil && digest(body) == expected {
 			if err := os.Remove(path); err != nil {
-				return Status{}, rollback(fmt.Errorf("remove retired managed skill %s: %w", id, err))
+				return Status{}, rollback(fmt.Errorf("remove retired managed skill resource %s: %w", relative, err))
 			}
-			_ = os.Remove(filepath.Dir(path))
+			removeEmptyResourceDirectories(filepath.Dir(path), filepath.Join(workspace, layout.root))
 		}
 	}
-	newManifest := manifest{SchemaVersion: SchemaVersion, Runtime: runtimeName, OrientationPath: layout.orientation, OrientationHash: orientationDigest(orientation), SkillHashes: hashes, PolicyPath: PolicyRelativePath, PolicyHash: policyHash}
+	newManifest := manifest{SchemaVersion: SchemaVersion, Runtime: runtimeName, OrientationPath: layout.orientation, OrientationHash: orientationDigest(orientation), SkillHashes: hashes, ResourceHashes: resourceHashes(contents), PolicyPath: PolicyRelativePath, PolicyHash: policyHash}
 	if err := writeJSON(filepath.Join(workspace, ManifestRelativePath), newManifest); err != nil {
 		return Status{}, rollback(fmt.Errorf("write runtime projection manifest: %w", err))
 	}
-	return Status{Runtime: runtimeName, State: "installed", OrientationPath: filepath.Join(workspace, layout.orientation), SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: filepath.Join(workspace, ManifestRelativePath), PolicyPath: filepath.Join(workspace, PolicyRelativePath), SkillCount: len(contents)}, nil
+	return Status{Runtime: runtimeName, State: "installed", OrientationPath: filepath.Join(workspace, layout.orientation), SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: filepath.Join(workspace, ManifestRelativePath), PolicyPath: filepath.Join(workspace, PolicyRelativePath), SkillCount: len(hashes)}, nil
 }
 
 func Inspect(runtimeName, workspace string) (Status, error) {
@@ -337,16 +354,15 @@ func Uninstall(runtimeName, workspace string) (Status, error) {
 	if current.Runtime != runtimeName {
 		return Status{}, fmt.Errorf("runtime projection manifest belongs to %s", current.Runtime)
 	}
-	for id := range current.SkillHashes {
-		if err := rejectSymlinkComponents(workspace, filepath.Join(layout.root, id, "SKILL.md")); err != nil {
-			return Status{Runtime: runtimeName, State: "conflict", OrientationPath: filepath.Join(workspace, layout.orientation), SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: manifestPath, SkillCount: len(current.SkillHashes), Conflicts: []string{filepath.Join(layout.root, id, "SKILL.md")}, Reason: "managed skill path contains a symlink; no projection files were removed"}, err
-		}
+	canonical, canonicalErr := canonicalProjection(current)
+	if conflicts := projectionConflicts(workspace, layout, current, canonical, canonicalErr); len(conflicts) > 0 {
+		return Status{Runtime: runtimeName, State: "conflict", OrientationPath: filepath.Join(workspace, layout.orientation), SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: manifestPath, PolicyPath: filepath.Join(workspace, PolicyRelativePath), SkillCount: len(current.SkillHashes), Conflicts: conflicts, Reason: "modified managed files were preserved; no projection files were removed"}, errors.New("managed projection has integrity conflicts")
 	}
 	orientationPath := filepath.Join(workspace, layout.orientation)
 	policyPath := filepath.Join(workspace, PolicyRelativePath)
 	paths := []string{orientationPath, manifestPath, policyPath}
-	for id := range current.SkillHashes {
-		paths = append(paths, filepath.Join(workspace, layout.root, id, "SKILL.md"))
+	for relative := range managedHashes(current) {
+		paths = append(paths, filepath.Join(workspace, layout.root, filepath.FromSlash(relative)))
 	}
 	snapshots, err := snapshotFiles(paths)
 	if err != nil {
@@ -362,26 +378,6 @@ func Uninstall(runtimeName, workspace string) (Status, error) {
 	if err != nil {
 		return Status{}, rollback(err)
 	}
-	if !orientationMatchesManifest(string(orientation), current.OrientationHash) {
-		return Status{Runtime: runtimeName, State: "conflict", OrientationPath: orientationPath, SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: manifestPath, SkillCount: len(current.SkillHashes), Conflicts: []string{layout.orientation}, Reason: "managed orientation was changed or its markers are missing; no projection files were removed"}, errors.New("managed orientation was changed or its markers are missing")
-	}
-	var conflicts []string
-	for id, expected := range current.SkillHashes {
-		path := filepath.Join(workspace, layout.root, id, "SKILL.md")
-		body, readErr := os.ReadFile(path)
-		if readErr != nil || digest(body) != expected {
-			conflicts = append(conflicts, path)
-		}
-	}
-	if current.PolicyPath != PolicyRelativePath || current.PolicyHash == "" {
-		conflicts = append(conflicts, policyPath)
-	} else if body, readErr := os.ReadFile(policyPath); readErr != nil || digest(body) != current.PolicyHash {
-		conflicts = append(conflicts, policyPath)
-	}
-	if len(conflicts) > 0 {
-		sort.Strings(conflicts)
-		return Status{Runtime: runtimeName, State: "conflict", OrientationPath: orientationPath, SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: manifestPath, SkillCount: len(current.SkillHashes), Conflicts: conflicts, Reason: "modified skill files were preserved"}, errors.New("modified managed skill files were preserved")
-	}
 	updated, err := removeOrientationBlock(string(orientation))
 	if err != nil {
 		return Status{}, rollback(err)
@@ -393,12 +389,12 @@ func Uninstall(runtimeName, workspace string) (Status, error) {
 	} else if err := writeManagedFile(orientationPath, []byte(updated)); err != nil {
 		return Status{}, rollback(err)
 	}
-	for id := range current.SkillHashes {
-		path := filepath.Join(workspace, layout.root, id, "SKILL.md")
+	for relative := range managedHashes(current) {
+		path := filepath.Join(workspace, layout.root, filepath.FromSlash(relative))
 		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return Status{}, rollback(err)
 		}
-		_ = os.Remove(filepath.Dir(path))
+		removeEmptyResourceDirectories(filepath.Dir(path), filepath.Join(workspace, layout.root))
 	}
 	_ = os.Remove(filepath.Join(workspace, layout.root))
 	if err := os.Remove(policyPath); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -478,22 +474,54 @@ func rejectSymlinkComponents(workspace, relative string) error {
 		if info.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("refusing to follow symlink in managed path %s", current)
 		}
+		if !info.IsDir() && !info.Mode().IsRegular() {
+			return fmt.Errorf("refusing non-regular managed path %s", current)
+		}
 	}
 	return nil
 }
 
 func skillContents(catalog skillsindex.Catalog) (map[string][]byte, map[string]string, error) {
-	contents := make(map[string][]byte, len(catalog.Skills))
+	contents := make(map[string][]byte)
 	hashes := make(map[string]string, len(catalog.Skills))
 	for _, skill := range catalog.Skills {
-		body, err := skillBody(skill.ID)
+		files, err := baseskills.Files(skill.ID)
+		if err != nil {
+			files, err = techcoreskills.Files(skill.ID)
+		}
 		if err != nil {
 			return nil, nil, err
 		}
-		contents[skill.ID] = body
-		hashes[skill.ID] = digest(body)
+		if _, exists := files["SKILL.md"]; !exists {
+			return nil, nil, fmt.Errorf("skill %s has no method", skill.ID)
+		}
+		for relative, body := range files {
+			contents[skill.ID+"/"+relative] = body
+		}
+		hashes[skill.ID] = digest(files["SKILL.md"])
 	}
 	return contents, hashes, nil
+}
+
+func resourceHashes(contents map[string][]byte) map[string]string {
+	hashes := make(map[string]string)
+	for relative, body := range contents {
+		if _, name, _ := strings.Cut(relative, "/"); name != "SKILL.md" {
+			hashes[relative] = digest(body)
+		}
+	}
+	return hashes
+}
+
+func managedHashes(current manifest) map[string]string {
+	hashes := make(map[string]string, len(current.SkillHashes)+len(current.ResourceHashes))
+	for id, hash := range current.SkillHashes {
+		hashes[id+"/SKILL.md"] = hash
+	}
+	for relative, hash := range current.ResourceHashes {
+		hashes[relative] = hash
+	}
+	return hashes
 }
 
 func canonicalProjection(current manifest) (canonicalProjectionContract, error) {
@@ -542,7 +570,11 @@ func canonicalProjection(current manifest) (canonicalProjectionContract, error) 
 		return canonicalProjectionContract{}, err
 	}
 	policyBody = append(policyBody, '\n')
-	return canonicalProjectionContract{Catalog: active, Policy: policy, SkillHashes: hashes, PolicyBody: policyBody, PolicyDigest: digest(policyBody)}, nil
+	contents, _, err := skillContents(active)
+	if err != nil {
+		return canonicalProjectionContract{}, err
+	}
+	return canonicalProjectionContract{Catalog: active, Policy: policy, SkillHashes: hashes, ResourceHashes: resourceHashes(contents), PolicyBody: policyBody, PolicyDigest: digest(policyBody)}, nil
 }
 
 func projectionConflicts(workspace string, layout runtimeLayout, current manifest, canonical canonicalProjectionContract, canonicalErr error) []string {
@@ -565,6 +597,17 @@ func projectionConflicts(workspace string, layout runtimeLayout, current manifes
 		body, readErr := os.ReadFile(filepath.Join(workspace, relative))
 		if readErr != nil || current.SkillHashes[id] != expected || digest(body) != expected {
 			conflicts = append(conflicts, relative)
+		}
+	}
+	for relative, expected := range canonical.ResourceHashes {
+		resourcePath := filepath.Join(layout.root, filepath.FromSlash(relative))
+		if err := rejectSymlinkComponents(workspace, resourcePath); err != nil {
+			conflicts = append(conflicts, resourcePath)
+			continue
+		}
+		body, err := os.ReadFile(filepath.Join(workspace, resourcePath))
+		if err != nil || current.ResourceHashes[relative] != expected || digest(body) != expected {
+			conflicts = append(conflicts, resourcePath)
 		}
 	}
 	policyPath := filepath.Join(workspace, PolicyRelativePath)
@@ -729,7 +772,7 @@ func runtimeID(layout runtimeLayout) string {
 	return "codex"
 }
 
-func preflight(workspace string, layout runtimeLayout, contents map[string][]byte, hashes map[string]string, policyHash string, old manifest) []string {
+func preflight(workspace string, layout runtimeLayout, contents map[string][]byte, policyHash string, old manifest) []string {
 	var conflicts []string
 	orientationPath := filepath.Join(workspace, layout.orientation)
 	currentOrientation, orientationErr := os.ReadFile(orientationPath)
@@ -740,15 +783,22 @@ func preflight(workspace string, layout runtimeLayout, contents map[string][]byt
 	} else if orientationErr == nil && (strings.Contains(string(currentOrientation), OrientationBegin) || strings.Contains(string(currentOrientation), OrientationEnd)) {
 		conflicts = append(conflicts, orientationPath)
 	}
-	for id := range contents {
-		relative := filepath.Join(layout.root, id, "SKILL.md")
-		path := filepath.Join(workspace, relative)
-		if err := rejectSymlinkComponents(workspace, relative); err != nil {
+	oldHashes := managedHashes(old)
+	for relative, expected := range old.ResourceHashes {
+		// Resource changes need reviewed prior-version authority; the local manifest is untrusted.
+		body, known := contents[relative]
+		if !known || digest(body) != expected {
+			conflicts = append(conflicts, filepath.Join(workspace, layout.root, filepath.FromSlash(relative)))
+		}
+	}
+	for relative, body := range contents {
+		path := filepath.Join(workspace, layout.root, filepath.FromSlash(relative))
+		if err := rejectSymlinkComponents(workspace, filepath.Join(layout.root, filepath.FromSlash(relative))); err != nil {
 			conflicts = append(conflicts, path)
 			continue
 		}
 		if info, err := os.Lstat(path); err == nil {
-			if info.Mode()&os.ModeSymlink != 0 {
+			if !info.Mode().IsRegular() {
 				conflicts = append(conflicts, path)
 				continue
 			}
@@ -757,25 +807,27 @@ func preflight(workspace string, layout runtimeLayout, contents map[string][]byt
 				conflicts = append(conflicts, path)
 				continue
 			}
-			currentHash := digest(current)
-			oldHash := old.SkillHashes[id]
-			if currentHash != hashes[id] && (oldHash == "" || currentHash != oldHash) {
+			oldHash := oldHashes[relative]
+			// Legacy manifests own only SKILL.md; existing resource files remain user-owned.
+			_, name, _ := strings.Cut(relative, "/")
+			if oldHash == "" && name != "SKILL.md" || digest(current) != digest(body) && (oldHash == "" || digest(current) != oldHash) {
 				conflicts = append(conflicts, path)
 			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			conflicts = append(conflicts, path)
 		}
 	}
-	for id, expected := range old.SkillHashes {
-		if _, current := contents[id]; current {
+	for relative, expected := range oldHashes {
+		if _, current := contents[relative]; current {
 			continue
 		}
-		relative := filepath.Join(layout.root, id, "SKILL.md")
-		path := filepath.Join(workspace, relative)
-		if err := rejectSymlinkComponents(workspace, relative); err != nil {
+		path := filepath.Join(workspace, layout.root, filepath.FromSlash(relative))
+		if err := rejectSymlinkComponents(workspace, filepath.Join(layout.root, filepath.FromSlash(relative))); err != nil {
 			conflicts = append(conflicts, path)
 			continue
 		}
 		body, err := os.ReadFile(path)
-		if err == nil && digest(body) != expected {
+		if err != nil && !errors.Is(err, os.ErrNotExist) || err == nil && digest(body) != expected {
 			conflicts = append(conflicts, path)
 		}
 	}
@@ -885,6 +937,31 @@ func readManifest(path string) (manifest, error) {
 			return manifest{}, fmt.Errorf("runtime projection manifest contains unsafe skill ID %q", id)
 		}
 	}
+	resourceFiles := make(map[string]map[string][]byte)
+	for relative, hash := range value.ResourceHashes {
+		parts := strings.SplitN(relative, "/", 2)
+		if !fs.ValidPath(relative) || strings.Contains(relative, "\\") || len(parts) != 2 || parts[1] == "SKILL.md" || value.SkillHashes[parts[0]] == "" {
+			return manifest{}, fmt.Errorf("runtime projection contains unsafe resource path %q", relative)
+		}
+		files, exists := resourceFiles[parts[0]]
+		if !exists {
+			var err error
+			files, err = baseskills.Files(parts[0])
+			if err != nil {
+				files, err = techcoreskills.Files(parts[0])
+			}
+			if err != nil {
+				return manifest{}, fmt.Errorf("runtime projection resource is outside embedded catalogs: %q", relative)
+			}
+			resourceFiles[parts[0]] = files
+		}
+		if _, exists := files[parts[1]]; !exists {
+			return manifest{}, fmt.Errorf("runtime projection contains unknown resource %q", relative)
+		}
+		if _, err := hex.DecodeString(hash); err != nil || len(hash) != sha256.Size*2 || strings.ToLower(hash) != hash {
+			return manifest{}, fmt.Errorf("runtime projection contains invalid resource digest for %q", relative)
+		}
+	}
 	if (value.PolicyPath == "") != (value.PolicyHash == "") {
 		return manifest{}, errors.New("runtime projection manifest has an incomplete skill policy identity")
 	}
@@ -924,8 +1001,8 @@ func snapshotFiles(paths []string) ([]fileSnapshot, error) {
 		if err != nil {
 			return nil, err
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			return nil, fmt.Errorf("refusing to snapshot symlink %s", path)
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("refusing to snapshot non-regular managed file %s", path)
 		}
 		body, err := os.ReadFile(path)
 		if err != nil {
@@ -994,4 +1071,13 @@ func writeManagedFile(path string, body []byte) error {
 func digest(body []byte) string {
 	digest := sha256.Sum256(body)
 	return hex.EncodeToString(digest[:])
+}
+
+func removeEmptyResourceDirectories(path, root string) {
+	for path != root && strings.HasPrefix(path, root+string(filepath.Separator)) {
+		if err := os.Remove(path); err != nil {
+			return
+		}
+		path = filepath.Dir(path)
+	}
 }

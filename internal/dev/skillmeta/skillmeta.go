@@ -12,7 +12,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/clauderouting"
 )
 
-var allowedKeys = map[string]bool{"name": true, "description": true}
+var allowedKeys = map[string]bool{"name": true, "description": true, "disable-model-invocation": true, "argument-hint": true}
 
 type claudeSettings struct {
 	MinimumVersion string                          `json:"minimumVersion"`
@@ -301,6 +301,18 @@ func validateSkill(skillDir, expectedName string, requireInteractionProfile bool
 		value := strings.Trim(strings.TrimSpace(parts[1]), `"'`)
 		if !allowedKeys[key] {
 			return fmt.Errorf("skill %s: unsupported frontmatter key %q", expectedName, key)
+		}
+		if _, exists := metadata[key]; exists {
+			return fmt.Errorf("skill %s: duplicate frontmatter key %q", expectedName, key)
+		}
+		if key == "disable-model-invocation" {
+			raw := strings.TrimSpace(parts[1])
+			if raw != "true" && raw != "false" {
+				return fmt.Errorf("skill %s: disable-model-invocation must be a boolean", expectedName)
+			}
+		}
+		if key == "argument-hint" && value == "" {
+			return fmt.Errorf("skill %s: argument-hint cannot be empty", expectedName)
 		}
 		metadata[key] = value
 	}

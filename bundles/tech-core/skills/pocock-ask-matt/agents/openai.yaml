@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pocock — Roteador de métodos Pocock"
+  short_description: "Escolhe o método ou fluxo de engenharia adequado à situação"
+  default_prompt: "Use $pocock-ask-matt para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."
+policy:
+  allow_implicit_invocation: false

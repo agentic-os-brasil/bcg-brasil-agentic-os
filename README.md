@@ -32,6 +32,11 @@
 
 ## v0.2.0 consolidation — engineering candidate
 
+The Tech Core now includes the complete pinned
+[Pocock engineering method set](docs/onboarding/pocock-methods.md), with native
+discovery, method resources and integrity-aware installation. Package and native
+runtime qualification remain separate evidence.
+
 The ZIP release line is being consolidated from the field 0.1.11 baseline and the
 0.1.12 fixes with Marcelo’s structural work. This is a recipes/runtime update,
 not a replacement for an owner’s personal Maestro. See the

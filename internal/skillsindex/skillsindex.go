@@ -20,12 +20,13 @@ type Catalog struct {
 }
 
 type Skill struct {
-	ID            string `json:"id"`
-	DisplayName   string `json:"display_name"`
-	Trigger       string `json:"trigger"`
-	DefaultPrompt string `json:"default_prompt"`
-	RelativePath  string `json:"relative_path"`
-	Bundle        string `json:"-"`
+	ID              string `json:"id"`
+	DisplayName     string `json:"display_name"`
+	Trigger         string `json:"trigger"`
+	DefaultPrompt   string `json:"default_prompt"`
+	RelativePath    string `json:"relative_path"`
+	UserInvokedOnly bool   `json:"user_invoked_only,omitempty"`
+	Bundle          string `json:"-"`
 }
 
 func Build(root string) (Catalog, error) {
@@ -47,7 +48,7 @@ func Build(root string) (Catalog, error) {
 		if err != nil {
 			return Catalog{}, err
 		}
-		name, _, err := frontmatter(body)
+		name, _, userInvokedOnly, err := frontmatter(body)
 		if err != nil {
 			return Catalog{}, fmt.Errorf("read %s: %w", id, err)
 		}
@@ -66,7 +67,8 @@ func Build(root string) (Catalog, error) {
 		}
 		catalog.Skills = append(catalog.Skills, Skill{
 			ID: id, DisplayName: displayName, Trigger: trigger, DefaultPrompt: prompt,
-			RelativePath: "skills/" + id + "/SKILL.md",
+			RelativePath:    "skills/" + id + "/SKILL.md",
+			UserInvokedOnly: userInvokedOnly,
 		})
 	}
 	sort.Slice(catalog.Skills, func(left, right int) bool { return catalog.Skills[left].ID < catalog.Skills[right].ID })
@@ -182,10 +184,10 @@ func Write(root string) error {
 	return os.WriteFile(filepath.Join(root, "INDEX.md"), markdownBody, 0o644)
 }
 
-func frontmatter(body []byte) (string, string, error) {
+func frontmatter(body []byte) (string, string, bool, error) {
 	lines := strings.Split(string(body), "\n")
 	if len(lines) < 4 || strings.TrimSpace(lines[0]) != "---" {
-		return "", "", errors.New("missing YAML frontmatter")
+		return "", "", false, errors.New("missing YAML frontmatter")
 	}
 	values := map[string]string{}
 	for _, line := range lines[1:] {
@@ -199,9 +201,13 @@ func frontmatter(body []byte) (string, string, error) {
 		}
 	}
 	if values["name"] == "" || values["description"] == "" {
-		return "", "", errors.New("frontmatter requires name and description")
+		return "", "", false, errors.New("frontmatter requires name and description")
 	}
-	return values["name"], values["description"], nil
+	invocation := values["disable-model-invocation"]
+	if invocation != "" && invocation != "true" && invocation != "false" {
+		return "", "", false, errors.New("disable-model-invocation must be a boolean")
+	}
+	return values["name"], values["description"], invocation == "true", nil
 }
 
 func yamlValue(body []byte, key string) string {

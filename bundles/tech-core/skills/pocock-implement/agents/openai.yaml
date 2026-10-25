@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pocock — Implementação de uma entrega"
+  short_description: "Implementa um ticket ou especificação com testes e revisão proporcionais"
+  default_prompt: "Use $pocock-implement para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."
+policy:
+  allow_implicit_invocation: false

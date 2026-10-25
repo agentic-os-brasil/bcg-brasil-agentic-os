@@ -1,11 +1,33 @@
 package baseskills
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 )
+
+func TestFilesIncludesNestedResourcesAndRejectsFactoryPaths(t *testing.T) {
+	files, err := Files("case-canon-ingest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files["SKILL.md"]) == 0 || len(files["agents/openai.yaml"]) == 0 {
+		t.Fatalf("incomplete method files: %v", files)
+	}
+	original := append([]byte(nil), files["SKILL.md"]...)
+	files["SKILL.md"][0] ^= 1
+	again, err := Files("case-canon-ingest")
+	if err != nil || !bytes.Equal(again["SKILL.md"], original) {
+		t.Fatal("callers can mutate embedded method")
+	}
+	for _, id := range []string{"", "..", "../catalog.json", "catalog.json", "unknown-method"} {
+		if _, err := Files(id); err == nil {
+			t.Fatalf("accepted factory path %q", id)
+		}
+	}
+}
 
 func TestGuidedOwnerSkillsCarryExactResumableReviewCommands(t *testing.T) {
 	for _, test := range []struct {

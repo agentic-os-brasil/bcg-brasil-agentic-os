@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pocock — Especificação para tickets"
+  short_description: "Divide uma entrega em tickets verticais com dependências explícitas"
+  default_prompt: "Use $pocock-to-tickets para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."
+policy:
+  allow_implicit_invocation: false

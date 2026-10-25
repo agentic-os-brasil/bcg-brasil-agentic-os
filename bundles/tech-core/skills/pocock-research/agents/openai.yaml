@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pocock — Pesquisa com fontes primárias"
+  short_description: "Investiga uma pergunta e registra conclusões com fontes verificáveis"
+  default_prompt: "Use $pocock-research para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."

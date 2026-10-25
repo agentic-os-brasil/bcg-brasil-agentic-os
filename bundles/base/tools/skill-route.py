@@ -105,7 +105,8 @@ def newest_mtime():
 def read_frontmatter(path):
     """name, description e o primeiro paragrafo util depois do H1."""
     try:
-        raw = io.open(path, encoding="utf-8", errors="replace").read()
+        with io.open(path, encoding="utf-8", errors="replace") as source:
+            raw = source.read()
     except OSError:
         return None
     fm, name, desc = {}, "", ""
@@ -132,7 +133,8 @@ def read_frontmatter(path):
             body.append(s)
             if len(body) >= 3:
                 break
-    return {"name": name, "description": desc, "heading": heading, "body": " ".join(body)}
+    return {"name": name, "description": desc, "heading": heading, "body": " ".join(body),
+            "user_invoked_only": fm.get("disable-model-invocation") == "true"}
 
 
 
@@ -154,7 +156,8 @@ def parse_operator_table():
     devolve vazio e o roteamento cai para catalogo + frontmatter.
     """
     try:
-        raw = io.open(OPERATOR, encoding="utf-8", errors="replace").read()
+        with io.open(OPERATOR, encoding="utf-8", errors="replace") as source:
+            raw = source.read()
     except OSError:
         return {}
     out, in_table = {}, False
@@ -181,7 +184,8 @@ def build():
     operator = parse_operator_table()
     for cf in catalog_files():
         try:
-            data = json.load(io.open(cf, encoding="utf-8"))
+            with io.open(cf, encoding="utf-8") as source:
+                data = json.load(source)
         except (OSError, ValueError):
             continue
         for s in data.get("skills", []):
@@ -204,6 +208,7 @@ def build():
             "label": fmt["heading"] or sid,
             # resumo curto para o hook nao reabrir arquivo nenhum
             "summary": (triggers.get(sid) or fmt["description"])[:110],
+            "user_invoked_only": fmt["user_invoked_only"],
         }
         weighted = {}
         for field, text in (("operator", operator.get(sid, "")),
@@ -223,17 +228,18 @@ def build():
         for t, w in weighted.items():
             inverted.setdefault(t, {})[sid] = round(w, 3)
 
-    return {"schema_version": 1, "built_from_mtime": newest_mtime(),
+    return {"schema_version": 2, "built_from_mtime": newest_mtime(),
             "skills": skills, "terms": inverted}
 
 
 def load(rebuild=False):
     if not rebuild and os.path.exists(CACHE):
         try:
-            idx = json.load(io.open(CACHE, encoding="utf-8"))
+            with io.open(CACHE, encoding="utf-8") as source:
+                idx = json.load(source)
             if not isinstance(idx, dict):
                 raise ValueError("cache com forma inesperada")
-            if idx.get("built_from_mtime") == newest_mtime():
+            if idx.get("schema_version") == 2 and idx.get("built_from_mtime") == newest_mtime():
                 return idx
         except (OSError, ValueError):
             pass
@@ -241,8 +247,8 @@ def load(rebuild=False):
     try:
         os.makedirs(os.path.dirname(CACHE), exist_ok=True)
         tmp = CACHE + ".tmp"
-        io.open(tmp, "w", encoding="utf-8", newline="\n").write(
-            json.dumps(idx, ensure_ascii=False) + "\n")
+        with io.open(tmp, "w", encoding="utf-8", newline="\n") as destination:
+            destination.write(json.dumps(idx, ensure_ascii=False) + "\n")
         os.replace(tmp, CACHE)                # publicacao atomica, como no brain
     except OSError:
         pass
@@ -257,6 +263,13 @@ def route(idx, text, top_n=5):
     if exact in idx["skills"]:
         return [(exact, 999.0)]
 
+    explicit = []
+    for sid in re.findall(r"(?:^|[\s`\"'(\[{])[$/]([a-z][a-z0-9-]*)(?![a-z0-9/\\-]|\.[a-z0-9-])", text.lower()):
+        if sid in idx["skills"] and sid not in explicit:
+            explicit.append(sid)
+    if explicit:
+        return [(sid, 999.0) for sid in explicit[:top_n]]
+
     uni, bi = terms_of(text)
     if not uni and not bi:
         return []
@@ -269,6 +282,8 @@ def route(idx, text, top_n=5):
         # idf: um termo que casa com meia biblioteca nao decide nada
         idf = 1.0 + (n / max(len(hits), 1)) ** 0.5
         for sid, w in hits.items():
+            if idx["skills"][sid].get("user_invoked_only", False):
+                continue
             scores[sid] = scores.get(sid, 0.0) + w * idf
             matched[sid] = matched.get(sid, 0) + 1
             best_df[sid] = max(best_df.get(sid, 0), len(hits))

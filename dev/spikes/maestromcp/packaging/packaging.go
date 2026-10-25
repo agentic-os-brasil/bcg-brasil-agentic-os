@@ -18,6 +18,8 @@ import (
 	"regexp"
 	"strings"
 
+	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
+	techcoreskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/tech-core/skills"
 	assets "github.com/agentic-os-brasil/bcg-brasil-agentic-os/dev/spikes/maestromcp/plugin-assets"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/dev/spikes/maestromcp/spike"
 )
@@ -129,7 +131,7 @@ func BuildPlugin(options Options) error {
 	}
 	command := "${CLAUDE_PLUGIN_ROOT}/scripts/" + name
 	manifests := map[string]any{
-		".claude-plugin/plugin.json": map[string]any{"name": o.Name, "version": o.Version, "description": "Non-production synthetic MCP, plugin and filesystem experiment"},
+		".claude-plugin/plugin.json": map[string]any{"name": o.Name, "version": o.Version, "description": "Non-production synthetic MCP, plugin and filesystem experiment", "author": map[string]string{"name": "Agentic OS Brasil"}},
 		".mcp.json":                  map[string]any{"mcpServers": map[string]any{"maestro": map[string]any{"type": "stdio", "command": command, "args": []string{"serve", "--root", o.StateRoot, "--workspace", o.Workspace}}}},
 		"hooks/hooks.json":           map[string]any{"hooks": map[string]any{"SessionStart": []any{map[string]any{"hooks": []any{map[string]any{"type": "command", "command": command, "args": []string{"orient", "--revision", o.Version}}}}}}},
 	}
@@ -142,7 +144,7 @@ func BuildPlugin(options Options) error {
 			return err
 		}
 	}
-	return fs.WalkDir(assets.Files, "skills", func(path string, entry fs.DirEntry, walkErr error) error {
+	err = fs.WalkDir(assets.Files, "skills", func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -157,6 +159,76 @@ func BuildPlugin(options Options) error {
 		body = []byte(strings.ReplaceAll(strings.ReplaceAll(string(body), "{{VERSION}}", o.Version), "/maestro-architecture-spike:", "/"+o.Name+":"))
 		return os.WriteFile(target, body, 0600)
 	})
+	if err != nil {
+		return err
+	}
+	return writePocockMethods(o)
+}
+
+func writePocockMethods(o Options) error {
+	catalog, err := techcoreskills.Catalog()
+	if err != nil {
+		return err
+	}
+	methods := map[string]map[string][]byte{}
+	for _, skill := range catalog.Skills {
+		if strings.HasPrefix(skill.ID, "pocock-") {
+			files, err := techcoreskills.Files(skill.ID)
+			if err != nil {
+				return err
+			}
+			methods[skill.ID] = files
+		}
+	}
+	methods["interaction-profile"], err = baseskills.Files("interaction-profile")
+	if err != nil {
+		return err
+	}
+	for id, files := range methods {
+		for relative, body := range files {
+			target := filepath.Join(o.Destination, "skills", id, filepath.FromSlash(relative))
+			if strings.HasSuffix(relative, ".md") {
+				body = namespaceMethodReferences(body, o.Name)
+			}
+			if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {
+				return err
+			}
+			if err := os.WriteFile(target, body, 0600); err != nil {
+				return err
+			}
+		}
+	}
+	provenance, err := json.MarshalIndent(map[string]any{
+		"canonical":  json.RawMessage(techcoreskills.Provenance()),
+		"projection": "markdown_invocation_namespace",
+		"namespace":  o.Name,
+		"hash_scope": "canonical_product_source_before_projection",
+	}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(o.Destination, "pocock-upstream.json"), append(provenance, '\n'), 0600)
+}
+
+// Claude resolves plugin methods by qualified name; canonical IDs and metadata
+// remain shared with ZIP and other runtimes.
+func namespaceMethodReferences(body []byte, namespace string) []byte {
+	frontmatter := []byte{}
+	if bytes.HasPrefix(body, []byte("---\n")) {
+		if end := bytes.Index(body[4:], []byte("\n---\n")); end >= 0 {
+			end += 9
+			frontmatter, body = body[:end], body[end:]
+		}
+	}
+	reference := regexp.MustCompile("[/\\$\"`](?:pocock-[a-z0-9-]+|interaction-profile)\\b")
+	projected := reference.ReplaceAllStringFunc(string(body), func(match string) string {
+		prefix := match[:1]
+		if prefix == "$" {
+			prefix = "/"
+		}
+		return prefix + namespace + ":" + match[1:]
+	})
+	return append(append([]byte{}, frontmatter...), projected...)
 }
 
 // BuildExtension writes only a manifest and selected executable to a new MCPB.

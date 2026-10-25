@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pocock — Escrita para agentes"
+  short_description: "Escreve instruções, skills e documentos claros para consumo por agentes"
+  default_prompt: "Use $pocock-writing-for-agents para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."

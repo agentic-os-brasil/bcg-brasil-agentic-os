@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pocock — Desenvolvimento orientado por testes"
+  short_description: "Constrói comportamentos por ciclos red e green em interfaces acordadas"
+  default_prompt: "Use $pocock-tdd para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."

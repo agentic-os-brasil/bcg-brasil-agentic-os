@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pocock — Investigação de uma decisão"
+  short_description: "Questiona premissas e esclarece uma decisão em rodadas curtas"
+  default_prompt: "Use $pocock-grilling para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."

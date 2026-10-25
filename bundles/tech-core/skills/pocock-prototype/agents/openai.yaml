@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pocock — Protótipo de decisão"
+  short_description: "Constrói um protótipo pequeno para responder a uma pergunta de desenho"
+  default_prompt: "Use $pocock-prototype para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."
