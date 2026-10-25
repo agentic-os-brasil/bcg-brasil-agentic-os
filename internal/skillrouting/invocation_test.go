@@ -17,15 +17,15 @@ func TestRouteExplicitOnlyMethodRequiresReference(t *testing.T) {
 		Installed: []InstalledSkill{{ID: "pocock-implement", Pointer: ".claude/skills/pocock-implement/SKILL.md"}},
 	}
 	for prompt, count := range map[string]int{
-		"Implement software with tests":         0,
-		"Use $pocock-implement for this change": 1,
-		"/pocock-implement for this change":     1,
-		"Use `$pocock-implement` for this change": 1,
+		"Implement software with tests":                          0,
+		"Use $pocock-implement for this change":                  1,
+		"/pocock-implement for this change":                      1,
+		"Use `$pocock-implement` for this change":                1,
 		"Read https://example.test/pocock-implement for context": 0,
-		"Read docs/pocock-implement/SKILL.md": 0,
-		"Read /pocock-implement/SKILL.md": 0,
-		"Read ./pocock-implement": 0,
-		"Read https://pocock-implement.example": 0,
+		"Read docs/pocock-implement/SKILL.md":                    0,
+		"Read /pocock-implement/SKILL.md":                        0,
+		"Read ./pocock-implement":                                0,
+		"Read https://pocock-implement.example":                  0,
 	} {
 		request.Prompt = prompt
 		got, err := Route(request)
