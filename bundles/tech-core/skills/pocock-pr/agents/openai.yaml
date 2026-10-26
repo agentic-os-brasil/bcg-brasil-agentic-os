@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pocock — Descrição de pull request"
+  short_description: "Escreve uma descrição de PR com problema, evidência e consequências"
+  default_prompt: "Use $pocock-pr para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."

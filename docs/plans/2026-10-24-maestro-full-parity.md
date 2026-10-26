@@ -44,6 +44,19 @@ transporte remoto/web/mobile exigem escopo/qualificação próprios.
 | Capacidades runtime | 13 | Declarações de capacidade; não são 13 provas nativas |
 | Rotinas de manutenção | 18 | Jobs declarados; catálogo está unavailable sem enrollment/qualificação |
 
+## Ampliação do escopo ativo — Spec 056
+
+O inventário acima e o anexo preservam a foto histórica de 2026-10-23. A
+[Spec 056](../../specs/056-pocock-product-skillset.md) acrescenta 27 métodos
+Pocock ao Tech Core: o aceite ativo passa a cobrir 53 skills base, 39 Tech Core
+e 92 IDs totais, incluindo os recursos auxiliares e a política de invocação
+explícita. O [guia dos métodos](../onboarding/pocock-methods.md) descreve uso,
+proveniência e limites de atualização.
+
+D02, G06, K08 e o aceite final incluem essa expansão. Implementação, pacote e
+testes dos métodos não fecham a paridade MCP/Desktop nem a qualificação por
+cliente; os checkboxes correspondentes permanecem abertos até a prova inteira.
+
 ## Provas técnicas já concluídas — escopo limitado
 
 - [x] Três ferramentas MCP com checkpoint/pause/resume e validação de revisão/tentativa.
@@ -93,7 +106,7 @@ MCP/plugin de produto nem qualificam computadores dos colegas ou Windows.
 ### D. Plugin completo do Code
 
 - [ ] **D01 — Empacotar as 53 skills base.** Aceite: Cada ID do inventário tem conteúdo, recursos transitivos, descoberta, invocação e teste funcional no pacote instalado.
-- [ ] **D02 — Empacotar as 12 skills Tech Core.** Aceite: Seleção técnica explícita, dependência da base, namespaces/IDs sem colisões e inventário consistente.
+- [ ] **D02 — Empacotar as 39 skills Tech Core.** Aceite: Seleção técnica explícita, dependência da base, namespaces/IDs sem colisões e inventário consistente.
 - [ ] **D03 — Empacotar os sete agentes e templates admitidos.** Aceite: Identidades, registries e políticas chegam íntegros; nomes personalizados e contexto permanecem locais.
 - [ ] **D04 — Transportar orientação do CLAUDE.md e AGENTS.md.** Aceite: Mapear cada instrução para bootstrap, skill ou política canônica; nenhuma regra depende de estar na raiz do ZIP antigo.
 - [ ] **D05 — Preservar os nove handlers do bundle.** Aceite: Eventos, matchers, criticidade, stdin/stdout/exit, codificação e orçamento do host cobertos por contratos.
@@ -125,7 +138,7 @@ MCP/plugin de produto nem qualificam computadores dos colegas ou Windows.
 - [ ] **G03 — Conta, case e canon.** Aceite: Criação, kickoff, fontes, mapeamento SharePoint, ingestão de canon e decisões preservam referências e isolamento.
 - [ ] **G04 — Análise e entregas.** Aceite: Qualitativa, quantitativa, entrevistas, reuniões, storyline, slides, Excel, escrita e gates funcionam com entradas/saídas rastreáveis.
 - [ ] **G05 — Desenvolvimento profissional.** Aceite: Feedback, upward feedback, FoDAIS, trajetória, métodos e aprendizados preservam validação individual e privacidade.
-- [ ] **G06 — Qualidade e engenharia.** Aceite: As 12 skills técnicas, investigate, QA, Gamma e Yoda produzem evidência proporcional e mantêm limites de ação.
+- [ ] **G06 — Qualidade e engenharia.** Aceite: As 39 skills técnicas, incluindo os 27 métodos da Spec 056, investigate, QA, Gamma e Yoda produzem evidência proporcional e mantêm limites de ação.
 
 ### H. Documentos, SharePoint, caseOS e atlas
 
@@ -168,7 +181,7 @@ MCP/plugin de produto nem qualificam computadores dos colegas ou Windows.
 - [ ] **K05 — Negativos de escopo e integridade.** Aceite: Cross-case, revisão/tentativa antiga, fonte não autorizada, pacote incompleto, assinatura inválida, replay, indisponibilidade e interrupção.
 - [ ] **K06 — Revisar com quatro lentes.** Aceite: Especificação, standards, segurança/autoridade e interoperabilidade sobre a mesma árvore e os artefatos exatos.
 - [ ] **K07 — Executar piloto de produto com participantes.** Aceite: 2–3 participantes de perfis/plataformas definidos, suporte/feedback, critérios de sucesso e evidências de primeira instalação; ainda não iniciado.
-- [ ] **K08 — Fechar a matriz inteira antes de declarar paridade.** Aceite: Todo item da baseline tem teste nos clientes-alvo; exceção exige decisão explícita, não exclusão silenciosa do inventário.
+- [ ] **K08 — Fechar a matriz inteira antes de declarar paridade.** Aceite: Todo item da baseline e das ampliações admitidas, incluindo a Spec 056, tem teste nos clientes-alvo; exceção exige decisão explícita, não exclusão silenciosa do inventário.
 
 ## Ordem de execução
 
@@ -246,7 +259,7 @@ não declaração de execução nativa da função inteira.
 - [ ] `writing-tighten` — Apertar a escrita.
 - [ ] `yoda` — Yoda — pressure-test.
 
-### tech-core — 12 skills
+### tech-core — 12 skills da baseline histórica
 
 - [ ] `coverage-diagnose` — Diagnóstico de cobertura.
 - [ ] `data-pipeline-quality` — Qualidade de pipeline de dados.
@@ -357,7 +370,7 @@ um próximo freeze caso a intenção seja incluí-lo.
 
 ## Definition of done do Maestro completo nesta arquitetura
 
-- [ ] Todas as 65 skills têm pacote, descoberta, dependências e evidência funcional nos clientes-alvo.
+- [ ] Todas as 92 skills do escopo ativo têm pacote, descoberta, dependências e evidência funcional nos clientes-alvo.
 - [ ] Os sete agentes, nove handlers e suas projeções adicionais têm comportamento preservado ou adaptação explicitamente validada.
 - [ ] Contexto, execução, memória, conhecimento, owner e manutenção usam autoridades/stores únicos.
 - [ ] Funções inicialmente unavailable são entregues e qualificadas quando incluídas no escopo final; nenhuma é marcada pronta por estar listada.

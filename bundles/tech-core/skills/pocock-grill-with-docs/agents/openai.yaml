@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pocock — Entrevista com documentação"
+  short_description: "Aprofunda uma ideia e registra vocabulário e decisões no projeto"
+  default_prompt: "Use $pocock-grill-with-docs para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."
+policy:
+  allow_implicit_invocation: false

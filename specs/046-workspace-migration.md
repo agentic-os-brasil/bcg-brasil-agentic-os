@@ -70,7 +70,8 @@ Recovery binds the marker and snapshot to the canonical plan root, plan ID,
 runtime, workspace and source digest. A terminal `applied` receipt wins over a
 leftover marker and prevents recovery from undoing a completed migration; marker
 removal is verified rather than ignored.
-Snapshot limits are 128 files, 512 KiB per file and 4 MiB total. User-authored
+Snapshot limits are 256 files, 512 KiB per file and 4 MiB total. Managed method
+resources count toward the file limit and participate in rollback. User-authored
 files are never selected as managed targets; when a managed file contains an
 authored prefix (for example `CLAUDE.md`/`AGENTS.md`), the complete bounded
 file is snapshotted only to preserve it during rollback.

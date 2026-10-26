@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pocock — Desenho de módulos"
+  short_description: "Projeta módulos profundos e interfaces pequenas com vocabulário consistente"
+  default_prompt: "Use $pocock-codebase-design para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."

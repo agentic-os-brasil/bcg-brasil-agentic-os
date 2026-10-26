@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	techcoreskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/tech-core/skills"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/dev/spikes/maestromcp/spike"
 )
 
@@ -91,6 +92,116 @@ func TestPluginNamespacedAndStatePreserved(t *testing.T) {
 	}
 	if err := BuildPlugin(opts); err == nil {
 		t.Fatal("existing destination accepted")
+	}
+}
+
+func TestPluginIncludesPocockMethodsWithResourcesAndNativeReferences(t *testing.T) {
+	for _, name := range []string{"maestro-team-pilot", "maestro-architecture-spike"} {
+		t.Run(name, func(t *testing.T) {
+			opts := fixture(t, "darwin")
+			opts.Name = name
+			before := snapshot(t, opts.StateRoot)
+			if err := BuildPlugin(opts); err != nil {
+				t.Fatal(err)
+			}
+			catalog, err := techcoreskills.Catalog()
+			if err != nil {
+				t.Fatal(err)
+			}
+			methods, manual := 0, 0
+			for _, skill := range catalog.Skills {
+				if !strings.HasPrefix(skill.ID, "pocock-") {
+					continue
+				}
+				methods++
+				resources, err := techcoreskills.Files(skill.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for relative, original := range resources {
+					path := filepath.Join(opts.Destination, "skills", skill.ID, filepath.FromSlash(relative))
+					got, err := os.ReadFile(path)
+					if err != nil {
+						t.Fatal(err)
+					}
+					info, err := os.Stat(path)
+					if err != nil || info.Mode().Perm()&0111 != 0 {
+						t.Fatalf("method resource must be inert: %s", path)
+					}
+					if relative == "SKILL.md" {
+						frontmatter := strings.SplitN(string(original), "\n---\n", 2)[0] + "\n---\n"
+						if !bytes.HasPrefix(got, []byte(frontmatter)) || !bytes.Contains(got, []byte("/"+name+":interaction-profile")) {
+							t.Fatalf("frontmatter or dependency reference lost: %s", skill.ID)
+						}
+						if skill.UserInvokedOnly {
+							manual++
+							if !bytes.Contains(got, []byte("disable-model-invocation: true")) {
+								t.Fatalf("manual-only policy lost: %s", skill.ID)
+							}
+						}
+					}
+					if strings.HasSuffix(relative, ".md") {
+						canonical := strings.ReplaceAll(string(got), name+":", "")
+						if canonical != strings.ReplaceAll(string(original), "$interaction-profile", "/interaction-profile") {
+							t.Fatalf("Markdown changed beyond invocation projection: %s/%s", skill.ID, relative)
+						}
+					} else if !bytes.Equal(got, original) {
+						t.Fatalf("non-Markdown resource changed: %s/%s", skill.ID, relative)
+					}
+				}
+				if len(resources["LICENSE"]) == 0 {
+					t.Fatalf("missing upstream license: %s", skill.ID)
+				}
+			}
+			if methods != 27 || manual != 16 {
+				t.Fatalf("packaged methods=%d manual-only=%d; want 27 and 16", methods, manual)
+			}
+			read := func(id, relative string) string {
+				t.Helper()
+				body, err := os.ReadFile(filepath.Join(opts.Destination, "skills", id, relative))
+				if err != nil {
+					t.Fatal(err)
+				}
+				return string(body)
+			}
+			if !strings.Contains(read("pocock-grill-with-docs", "SKILL.md"), `for "`+name+`:pocock-grilling" and "`+name+`:pocock-domain-modeling"`) {
+				t.Fatal("Skill tool cross-method calls are not plugin namespaced")
+			}
+			if !strings.Contains(read("pocock-ask-matt", "SKILL.md"), "/"+name+":pocock-to-spec") || !strings.Contains(read("pocock-improve-codebase-architecture", "HTML-REPORT.md"), "/"+name+":pocock-codebase-design") {
+				t.Fatal("slash invocation in method or linked resource is not plugin namespaced")
+			}
+			read("interaction-profile", "SKILL.md")
+			provenanceBody, err := os.ReadFile(filepath.Join(opts.Destination, "pocock-upstream.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var provenance struct {
+				Canonical  json.RawMessage `json:"canonical"`
+				Projection string          `json:"projection"`
+				Namespace  string          `json:"namespace"`
+				HashScope  string          `json:"hash_scope"`
+			}
+			if err := json.Unmarshal(provenanceBody, &provenance); err != nil {
+				t.Fatal(err)
+			}
+			var canonical struct {
+				Version  string `json:"upstream_version"`
+				Revision string `json:"upstream_revision"`
+			}
+			if err := json.Unmarshal(provenance.Canonical, &canonical); err != nil {
+				t.Fatal(err)
+			}
+			if canonical.Version != "1.3.1" || canonical.Revision != "49dd158d1076134a641b33efb035946536778336" || provenance.Projection != "markdown_invocation_namespace" || provenance.Namespace != name || provenance.HashScope != "canonical_product_source_before_projection" {
+				t.Fatal("upstream pin or plugin projection provenance lost")
+			}
+			var expected, actual bytes.Buffer
+			if json.Compact(&expected, techcoreskills.Provenance()) != nil || json.Compact(&actual, provenance.Canonical) != nil || !bytes.Equal(expected.Bytes(), actual.Bytes()) {
+				t.Fatal("canonical upstream provenance changed")
+			}
+			if !reflect.DeepEqual(before, snapshot(t, opts.StateRoot)) {
+				t.Fatal("external state changed while packaging methods")
+			}
+		})
 	}
 }
 func TestExtensionTargetAndExactBinary(t *testing.T) {

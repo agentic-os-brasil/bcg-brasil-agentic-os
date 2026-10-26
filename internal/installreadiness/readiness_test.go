@@ -98,6 +98,12 @@ func TestVerifyRejectsMissingAndTamperedSurfaces(t *testing.T) {
 		failedID string
 		mutate   func(*testing.T, readinessFixture)
 	}{
+		{name: "tampered skill resource", failedID: "runtime_projection", mutate: func(t *testing.T, f readinessFixture) {
+			path := filepath.Join(f.workspace, ".codex", "skills", "case-canon-ingest", "agents", "openai.yaml")
+			if err := os.WriteFile(path, []byte("modified resource\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}},
 		{name: "missing workspace manifest", failedID: "workspace_identity", mutate: func(t *testing.T, f readinessFixture) {
 			removeFile(t, filepath.Join(f.workspace, ".bcgos", "workspace.json"))
 		}},

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pocock — Diagnóstico de bugs"
+  short_description: "Investiga bugs e regressões com um ciclo curto que reproduz a falha"
+  default_prompt: "Use $pocock-diagnosing-bugs para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."

@@ -1,0 +1,65 @@
+name: Maestro method delivery
+
+on:
+  pull_request:
+    paths:
+      - 'bundles/base/skills/**'
+      - 'bundles/tech-core/skills/**'
+      - 'bundles/base/tools/skill-route.py'
+      - 'internal/runtimeprojection/**'
+      - 'internal/installreadiness/**'
+      - 'internal/workspacemigration/**'
+      - 'internal/skillsindex/**'
+      - 'internal/skillrouting/**'
+      - 'dev/skillpack/**'
+      - 'installers/zip/build-release.sh'
+      - 'acceptance/test_pocock_routing.py'
+      - 'acceptance/test_zip_runtime_package.py'
+      - '.github/workflows/maestro-methods.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'bundles/**'
+      - 'internal/runtimeprojection/**'
+      - 'internal/installreadiness/**'
+      - 'internal/workspacemigration/**'
+      - 'internal/skillsindex/**'
+      - 'internal/skillrouting/**'
+      - 'dev/skillpack/**'
+      - '.github/workflows/maestro-methods.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  installed-methods:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - name: Installed method, resource and invocation contracts
+        run: go test ./internal/skillsindex ./internal/skillrouting ./internal/runtimeprojection ./dev/skillpack ./bundles/base/skills ./bundles/tech-core/skills -timeout=180s
+      - name: Readiness and migration integration on Unix fixtures
+        if: runner.os != 'Windows'
+        run: go test ./internal/installreadiness ./internal/workspacemigration -timeout=180s
+      # Windows readiness needs the separate non-elevated qualification runner.
+      - name: Python explicit-invocation contract
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python -m unittest acceptance.test_pocock_routing
+      - name: Build the ZIP artifact on the factory runner
+        if: runner.os == 'Linux'
+        run: bash installers/zip/build-release.sh 0.2.1 macos
+      - name: Verify the actual ZIP contents
+        if: runner.os == 'Linux'
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          MAESTRO_ZIP: dist/Maestro-v0.2.1-macos.zip
+        run: python -m unittest acceptance.test_zip_runtime_package

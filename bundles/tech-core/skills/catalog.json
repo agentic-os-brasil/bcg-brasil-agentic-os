@@ -30,6 +30,211 @@
       "relative_path": "skills/decision-log-entry/SKILL.md"
     },
     {
+      "id": "pocock-ask-matt",
+      "display_name": "Pocock — Roteador de métodos Pocock",
+      "trigger": "Escolhe o método ou fluxo de engenharia adequado à situação",
+      "default_prompt": "Use $pocock-ask-matt para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-ask-matt/SKILL.md",
+      "user_invoked_only": true
+    },
+    {
+      "id": "pocock-code-review",
+      "display_name": "Pocock — Revisão de código por dois eixos",
+      "trigger": "Revisa uma mudança contra a especificação e os padrões do repositório",
+      "default_prompt": "Use $pocock-code-review para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-code-review/SKILL.md"
+    },
+    {
+      "id": "pocock-codebase-design",
+      "display_name": "Pocock — Desenho de módulos",
+      "trigger": "Projeta módulos profundos e interfaces pequenas com vocabulário consistente",
+      "default_prompt": "Use $pocock-codebase-design para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-codebase-design/SKILL.md"
+    },
+    {
+      "id": "pocock-diagnosing-bugs",
+      "display_name": "Pocock — Diagnóstico de bugs",
+      "trigger": "Investiga bugs e regressões com um ciclo curto que reproduz a falha",
+      "default_prompt": "Use $pocock-diagnosing-bugs para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-diagnosing-bugs/SKILL.md"
+    },
+    {
+      "id": "pocock-domain-modeling",
+      "display_name": "Pocock — Modelagem de domínio",
+      "trigger": "Define termos do domínio e registra decisões arquiteturais duráveis",
+      "default_prompt": "Use $pocock-domain-modeling para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-domain-modeling/SKILL.md"
+    },
+    {
+      "id": "pocock-grill-me",
+      "display_name": "Pocock — Entrevista sem persistência",
+      "trigger": "Aprofunda uma ideia por entrevista sem criar documentação de projeto",
+      "default_prompt": "Use $pocock-grill-me para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-grill-me/SKILL.md",
+      "user_invoked_only": true
+    },
+    {
+      "id": "pocock-grill-with-docs",
+      "display_name": "Pocock — Entrevista com documentação",
+      "trigger": "Aprofunda uma ideia e registra vocabulário e decisões no projeto",
+      "default_prompt": "Use $pocock-grill-with-docs para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-grill-with-docs/SKILL.md",
+      "user_invoked_only": true
+    },
+    {
+      "id": "pocock-grilling",
+      "display_name": "Pocock — Investigação de uma decisão",
+      "trigger": "Questiona premissas e esclarece uma decisão em rodadas curtas",
+      "default_prompt": "Use $pocock-grilling para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-grilling/SKILL.md"
+    },
+    {
+      "id": "pocock-handoff",
+      "display_name": "Pocock — Passagem de contexto",
+      "trigger": "Prepara um documento enxuto para outra sessão continuar o trabalho",
+      "default_prompt": "Use $pocock-handoff para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-handoff/SKILL.md",
+      "user_invoked_only": true
+    },
+    {
+      "id": "pocock-implement",
+      "display_name": "Pocock — Implementação de uma entrega",
+      "trigger": "Implementa um ticket ou especificação com testes e revisão proporcionais",
+      "default_prompt": "Use $pocock-implement para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-implement/SKILL.md",
+      "user_invoked_only": true
+    },
+    {
+      "id": "pocock-implement-spec",
+      "display_name": "Pocock — Implementação de especificação",
+      "trigger": "Coordena a execução dos tickets de uma especificação em uma branch integrada",
+      "default_prompt": "Use $pocock-implement-spec para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-implement-spec/SKILL.md",
+      "user_invoked_only": true
+    },
+    {
+      "id": "pocock-improve-codebase-architecture",
+      "display_name": "Pocock — Melhoria da arquitetura",
+      "trigger": "Identifica oportunidades de simplificar módulos e discute alternativas",
+      "default_prompt": "Use $pocock-improve-codebase-architecture para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-improve-codebase-architecture/SKILL.md",
+      "user_invoked_only": true
+    },
+    {
+      "id": "pocock-pr",
+      "display_name": "Pocock — Descrição de pull request",
+      "trigger": "Escreve uma descrição de PR com problema, evidência e consequências",
+      "default_prompt": "Use $pocock-pr para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-pr/SKILL.md"
+    },
+    {
+      "id": "pocock-prototype",
+      "display_name": "Pocock — Protótipo de decisão",
+      "trigger": "Constrói um protótipo pequeno para responder a uma pergunta de desenho",
+      "default_prompt": "Use $pocock-prototype para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-prototype/SKILL.md"
+    },
+    {
+      "id": "pocock-research",
+      "display_name": "Pocock — Pesquisa com fontes primárias",
+      "trigger": "Investiga uma pergunta e registra conclusões com fontes verificáveis",
+      "default_prompt": "Use $pocock-research para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-research/SKILL.md"
+    },
+    {
+      "id": "pocock-retro",
+      "display_name": "Pocock — Retrospectiva de engenharia",
+      "trigger": "Extrai melhorias do ambiente de trabalho a partir de uma sessão de execução",
+      "default_prompt": "Use $pocock-retro para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-retro/SKILL.md",
+      "user_invoked_only": true
+    },
+    {
+      "id": "pocock-setup-matt-pocock-skills",
+      "display_name": "Pocock — Configuração dos métodos Pocock",
+      "trigger": "Configura tracker, papéis de triagem e documentação de um projeto",
+      "default_prompt": "Use $pocock-setup-matt-pocock-skills para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-setup-matt-pocock-skills/SKILL.md",
+      "user_invoked_only": true
+    },
+    {
+      "id": "pocock-tdd",
+      "display_name": "Pocock — Desenvolvimento orientado por testes",
+      "trigger": "Constrói comportamentos por ciclos red e green em interfaces acordadas",
+      "default_prompt": "Use $pocock-tdd para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-tdd/SKILL.md"
+    },
+    {
+      "id": "pocock-teach",
+      "display_name": "Pocock — Aprendizagem guiada",
+      "trigger": "Ensina um conceito em um workspace de aprendizagem com progresso registrado",
+      "default_prompt": "Use $pocock-teach para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-teach/SKILL.md",
+      "user_invoked_only": true
+    },
+    {
+      "id": "pocock-to-questionnaire",
+      "display_name": "Pocock — Preparação de questionário",
+      "trigger": "Prepara perguntas para obter de outra pessoa a informação que falta",
+      "default_prompt": "Use $pocock-to-questionnaire para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-to-questionnaire/SKILL.md",
+      "user_invoked_only": true
+    },
+    {
+      "id": "pocock-to-spec",
+      "display_name": "Pocock — Conversa para especificação",
+      "trigger": "Transforma uma conversa em especificação revisável no tracker configurado",
+      "default_prompt": "Use $pocock-to-spec para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-to-spec/SKILL.md",
+      "user_invoked_only": true
+    },
+    {
+      "id": "pocock-to-tickets",
+      "display_name": "Pocock — Especificação para tickets",
+      "trigger": "Divide uma entrega em tickets verticais com dependências explícitas",
+      "default_prompt": "Use $pocock-to-tickets para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-to-tickets/SKILL.md",
+      "user_invoked_only": true
+    },
+    {
+      "id": "pocock-triage",
+      "display_name": "Pocock — Triagem de solicitações",
+      "trigger": "Classifica issues externas e prepara pedidos com evidência para execução",
+      "default_prompt": "Use $pocock-triage para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-triage/SKILL.md",
+      "user_invoked_only": true
+    },
+    {
+      "id": "pocock-wait-what",
+      "display_name": "Pocock — Reexplicação com contexto",
+      "trigger": "Reformula uma explicação que não ficou clara com contexto suficiente",
+      "default_prompt": "Use $pocock-wait-what para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-wait-what/SKILL.md",
+      "user_invoked_only": true
+    },
+    {
+      "id": "pocock-wayfinder",
+      "display_name": "Pocock — Mapa de decisões",
+      "trigger": "Organiza decisões de uma iniciativa extensa e resolve incertezas por etapas",
+      "default_prompt": "Use $pocock-wayfinder para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-wayfinder/SKILL.md",
+      "user_invoked_only": true
+    },
+    {
+      "id": "pocock-wizard",
+      "display_name": "Pocock — Assistente de passos humanos",
+      "trigger": "Prepara um roteiro interativo para etapas que exigem uma pessoa",
+      "default_prompt": "Use $pocock-wizard para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-wizard/SKILL.md"
+    },
+    {
+      "id": "pocock-writing-for-agents",
+      "display_name": "Pocock — Escrita para agentes",
+      "trigger": "Escreve instruções, skills e documentos claros para consumo por agentes",
+      "default_prompt": "Use $pocock-writing-for-agents para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro.",
+      "relative_path": "skills/pocock-writing-for-agents/SKILL.md"
+    },
+    {
       "id": "pr-quality-loop",
       "display_name": "Quality loop de PR",
       "trigger": "Orquestra QA e revisão de PR sem duplicar coleta ou pular gates",

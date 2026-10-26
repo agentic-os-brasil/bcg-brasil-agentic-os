@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pocock — Aprendizagem guiada"
+  short_description: "Ensina um conceito em um workspace de aprendizagem com progresso registrado"
+  default_prompt: "Use $pocock-teach para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."
+policy:
+  allow_implicit_invocation: false

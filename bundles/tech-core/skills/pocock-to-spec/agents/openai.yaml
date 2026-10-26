@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pocock — Conversa para especificação"
+  short_description: "Transforma uma conversa em especificação revisável no tracker configurado"
+  default_prompt: "Use $pocock-to-spec para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."
+policy:
+  allow_implicit_invocation: false

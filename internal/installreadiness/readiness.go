@@ -92,6 +92,7 @@ type projectionManifest struct {
 	OrientationPath string            `json:"orientation_path"`
 	OrientationHash string            `json:"orientation_hash"`
 	SkillHashes     map[string]string `json:"skill_hashes"`
+	ResourceHashes  map[string]string `json:"resource_hashes,omitempty"`
 	PolicyPath      string            `json:"policy_path"`
 	PolicyHash      string            `json:"policy_hash"`
 }
@@ -377,6 +378,13 @@ func verifyProjection(runtimeName, workspacePath string, tracks []string) error 
 	}
 	if !equalHashes(manifest.SkillHashes, expectedHashes) {
 		return errors.New("runtime projection skill identities do not match the active embedded bundle")
+	}
+	projection, err := runtimeprojection.Inspect(runtimeName, workspacePath)
+	if err != nil {
+		return fmt.Errorf("verify embedded skill resources: %w", err)
+	}
+	if projection.State != "installed" {
+		return errors.New("runtime projection resources do not match the active embedded bundle")
 	}
 
 	expectedOrientation, err := renderOrientation(runtimeName, catalog.Skills)

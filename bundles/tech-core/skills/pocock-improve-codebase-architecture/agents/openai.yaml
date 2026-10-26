@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pocock — Melhoria da arquitetura"
+  short_description: "Identifica oportunidades de simplificar módulos e discute alternativas"
+  default_prompt: "Use $pocock-improve-codebase-architecture para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."
+policy:
+  allow_implicit_invocation: false

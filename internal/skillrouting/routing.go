@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
@@ -98,7 +99,7 @@ func Route(request Request) ([]Selection, error) {
 		if frequency[item.skill.Bundle] == nil {
 			frequency[item.skill.Bundle] = map[string]int{}
 		}
-		if selected[item.skill.ID] {
+		if selected[item.skill.ID] || item.skill.UserInvokedOnly {
 			continue
 		}
 		for token := range item.tokens {
@@ -106,7 +107,7 @@ func Route(request Request) ([]Selection, error) {
 		}
 	}
 	for index := range eligible {
-		if selected[eligible[index].skill.ID] {
+		if selected[eligible[index].skill.ID] || eligible[index].skill.UserInvokedOnly {
 			continue
 		}
 		for token := range eligible[index].tokens {
@@ -147,20 +148,37 @@ func installedPointers(skills []InstalledSkill) (map[string]string, error) {
 }
 
 func explicitReferencePosition(prompt, skillID string) int {
-	wanted := "$" + skillID
 	for offset := 0; offset < len(prompt); {
-		index := strings.Index(prompt[offset:], wanted)
+		index := strings.IndexAny(prompt[offset:], "$/")
 		if index < 0 {
 			return -1
 		}
 		index += offset
-		after := index + len(wanted)
-		if after == len(prompt) || !isSkillIDByte(prompt[after]) {
+		after := index + 1 + len(skillID)
+		if explicitReferenceStart(prompt, index) && strings.HasPrefix(prompt[index+1:], skillID) && explicitReferenceEnd(prompt, after) {
 			return index
 		}
-		offset = after
+		offset = index + 1
 	}
 	return -1
+}
+
+func explicitReferenceStart(prompt string, index int) bool {
+	if index == 0 {
+		return true
+	}
+	previous, _ := utf8.DecodeLastRuneInString(prompt[:index])
+	return unicode.IsSpace(previous) || strings.ContainsRune("`\"'([{", previous)
+}
+
+func explicitReferenceEnd(prompt string, after int) bool {
+	if after == len(prompt) {
+		return true
+	}
+	if isSkillIDByte(prompt[after]) || prompt[after] == '/' || prompt[after] == '\\' {
+		return false
+	}
+	return prompt[after] != '.' || after+1 == len(prompt) || !isSkillIDByte(prompt[after+1])
 }
 
 func isSkillIDByte(value byte) bool {

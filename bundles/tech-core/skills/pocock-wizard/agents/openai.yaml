@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pocock — Assistente de passos humanos"
+  short_description: "Prepara um roteiro interativo para etapas que exigem uma pessoa"
+  default_prompt: "Use $pocock-wizard para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pocock — Triagem de solicitações"
+  short_description: "Classifica issues externas e prepara pedidos com evidência para execução"
+  default_prompt: "Use $pocock-triage para aplicar este método à solicitação atual, respeitando o escopo e as políticas do Maestro."
+policy:
+  allow_implicit_invocation: false
