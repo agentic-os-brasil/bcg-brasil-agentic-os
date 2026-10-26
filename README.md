@@ -32,6 +32,11 @@
 
 ## v0.2.0 consolidation — engineering candidate
 
+The complete MCP/plugin construction plan is tracked in the
+[full-parity checklist](docs/plans/2026-10-24-maestro-full-parity.md).
+For home/locator conflicts while preparing that work, use the read-only
+[data-home diagnostic](docs/development/data-home-inspection.md).
+
 The Tech Core now includes the complete pinned
 [Pocock engineering method set](docs/onboarding/pocock-methods.md), with native
 discovery, method resources and integrity-aware installation. Package and native

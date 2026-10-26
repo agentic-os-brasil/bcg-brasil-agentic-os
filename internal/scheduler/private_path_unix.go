@@ -76,7 +76,8 @@ func (directory *secureDirectory) openFile(name string, flags int, perm os.FileM
 	if secureLeafStepHook != nil {
 		secureLeafStepHook(filepath.Join(directory.path, name))
 	}
-	fd, err := unix.Openat(directory.fd, name, flags|unix.O_CLOEXEC|unix.O_NOFOLLOW, uint32(perm.Perm()))
+	// Nonblocking open reaches the regular-file check even for a hostile FIFO.
+	fd, err := unix.Openat(directory.fd, name, flags|unix.O_CLOEXEC|unix.O_NOFOLLOW|unix.O_NONBLOCK, uint32(perm.Perm()))
 	if err != nil {
 		return nil, &os.PathError{Op: "openat", Path: filepath.Join(directory.path, name), Err: err}
 	}
