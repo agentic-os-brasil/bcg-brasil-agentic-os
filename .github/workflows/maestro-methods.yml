@@ -8,6 +8,7 @@ on:
       - 'bundles/base/tools/skill-route.py'
       - 'internal/runtimeprojection/**'
       - 'internal/installreadiness/**'
+      - 'internal/workspacemigration/**'
       - 'internal/skillsindex/**'
       - 'internal/skillrouting/**'
       - 'dev/skillpack/**'
@@ -21,6 +22,7 @@ on:
       - 'bundles/**'
       - 'internal/runtimeprojection/**'
       - 'internal/installreadiness/**'
+      - 'internal/workspacemigration/**'
       - 'internal/skillsindex/**'
       - 'internal/skillrouting/**'
       - 'dev/skillpack/**'
@@ -43,7 +45,11 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Installed method, resource and invocation contracts
-        run: go test ./internal/skillsindex ./internal/skillrouting ./internal/runtimeprojection ./internal/installreadiness ./dev/skillpack ./bundles/base/skills ./bundles/tech-core/skills -timeout=180s
+        run: go test ./internal/skillsindex ./internal/skillrouting ./internal/runtimeprojection ./dev/skillpack ./bundles/base/skills ./bundles/tech-core/skills -timeout=180s
+      - name: Readiness and migration integration on Unix fixtures
+        if: runner.os != 'Windows'
+        run: go test ./internal/installreadiness ./internal/workspacemigration -timeout=180s
+      # Windows readiness needs the separate non-elevated qualification runner.
       - name: Python explicit-invocation contract
         env:
           PYTHONDONTWRITEBYTECODE: '1'

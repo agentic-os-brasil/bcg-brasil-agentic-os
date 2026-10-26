@@ -1,7 +1,9 @@
 package workspacemigration
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -14,6 +16,128 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimeprojection"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
+
+func TestBuildPlanSnapshotsEveryInstalledMethodResourceWithinFiniteBudget(t *testing.T) {
+	workspacePath, dataRoot := initializedWorkspace(t)
+	if _, err := runtimeprojection.InstallForTracks("codex", workspacePath, []string{"software-engineering"}); err != nil {
+		t.Fatal(err)
+	}
+	options := PlanOptions{WorkspacePath: workspacePath, DataRoot: dataRoot, Runtime: "codex", Executable: "/opt/maestro/v2/bcgos", TargetRelease: "0.2.0", TargetBundle: "0.2.0", CapabilityTracks: []string{"software-engineering"}}
+	plan, err := BuildPlan(options)
+	if err != nil || plan.Execution != "available" {
+		t.Fatalf("installed resource plan unavailable: execution=%s managed_files=%d error=%v", plan.Execution, len(plan.ManagedPaths), err)
+	}
+	if len(plan.ManagedPaths) <= 128 || len(plan.ManagedPaths) > 256 || plan.SnapshotMaxFiles != 256 || plan.SnapshotMaxFileSize != 512<<10 || plan.SnapshotMaxBytes != 4<<20 {
+		t.Fatalf("unexpected bounded resource snapshot: files=%d limits=%d/%d/%d", len(plan.ManagedPaths), plan.SnapshotMaxFiles, plan.SnapshotMaxFileSize, plan.SnapshotMaxBytes)
+	}
+	if err := StagePlan(dataRoot, plan); err != nil {
+		t.Fatal(err)
+	}
+	confirmed, err := confirmInternal(dataRoot, plan.ID, testCore(), testTime())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value snapshot
+	if err := readJSON(confirmed.SnapshotPath, &value); err != nil {
+		t.Fatal(err)
+	}
+	if len(value.Entries) != len(plan.ManagedPaths) || value.TotalBytes <= 0 || value.TotalBytes > 4<<20 {
+		t.Fatalf("snapshot accounting files=%d bytes=%d", len(value.Entries), value.TotalBytes)
+	}
+	resourcePath := filepath.Join(workspacePath, ".codex", "skills", "pocock-tdd", "tests.md")
+	resource, err := os.ReadFile(resourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, entry := range value.Entries {
+		if entry.Path == resourcePath {
+			found = entry.Exists && bytes.Equal(entry.Body, resource)
+		}
+	}
+	if !found {
+		t.Fatal("resource was omitted from durable rollback snapshot")
+	}
+	t.Logf("bounded resource migration snapshot: %d managed files, %d payload bytes", len(value.Entries), value.TotalBytes)
+}
+
+func TestSnapshotFiniteFileAndByteLimitsRemainEnforced(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		count     int
+		fileBytes int
+		wantError string
+	}{
+		{name: "file count at limit", count: 256},
+		{name: "file count over limit", count: 257, wantError: "file limit"},
+		{name: "single file over limit", count: 1, fileBytes: 512<<10 + 1, wantError: "file exceeds"},
+		{name: "aggregate at limit", count: 8, fileBytes: 512 << 10},
+		{name: "aggregate over limit", count: 9, fileBytes: 512 << 10, wantError: "byte limit"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			plan := Plan{Runtime: "codex", WorkspacePath: root}
+			for index := 0; index < test.count; index++ {
+				path := filepath.Join(root, fmt.Sprintf("managed-%03d", index))
+				plan.ManagedPaths = append(plan.ManagedPaths, path)
+				if test.fileBytes > 0 {
+					if err := os.WriteFile(path, bytes.Repeat([]byte{'x'}, test.fileBytes), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			entries, total, err := makeSnapshotEntries(plan)
+			if test.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantError) {
+					t.Fatalf("snapshot accepted over-budget input: %v", err)
+				}
+			} else if err != nil || len(entries) != test.count || total != int64(test.count*test.fileBytes) {
+				t.Fatalf("bounded snapshot files=%d bytes=%d error=%v", len(entries), total, err)
+			}
+		})
+	}
+}
+
+func TestFailedProjectionRestoresExistingMethodResource(t *testing.T) {
+	workspacePath, dataRoot := initializedWorkspace(t)
+	if _, err := runtimeprojection.InstallForTracks("codex", workspacePath, []string{"software-engineering"}); err != nil {
+		t.Fatal(err)
+	}
+	resourcePath := filepath.Join(workspacePath, ".codex", "skills", "pocock-tdd", "tests.md")
+	before, err := os.ReadFile(resourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := BuildPlan(PlanOptions{WorkspacePath: workspacePath, DataRoot: dataRoot, Runtime: "codex", Executable: "/opt/maestro/v2/bcgos", TargetRelease: "0.2.0", TargetBundle: "0.2.0", CapabilityTracks: []string{"software-engineering"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := StagePlan(dataRoot, plan); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := confirmInternal(dataRoot, plan.ID, testCore(), testTime()); err != nil {
+		t.Fatal(err)
+	}
+	original := installProjection
+	installProjection = func(runtimeName, path string, selected []string) (runtimeprojection.Status, error) {
+		status, err := original(runtimeName, path, selected)
+		if err != nil {
+			return status, err
+		}
+		if err := os.WriteFile(resourcePath, []byte("interrupted resource write\n"), 0o600); err != nil {
+			return status, err
+		}
+		return status, errors.New("synthetic interruption after resource write")
+	}
+	defer func() { installProjection = original }()
+	receipt, err := applyInternal(dataRoot, plan.ID, testCore(), testTime())
+	if err == nil || receipt.State != "rolled_back" || !receipt.Restored {
+		t.Fatalf("resource rollback = %#v, %v", receipt, err)
+	}
+	if after, err := os.ReadFile(resourcePath); err != nil || !bytes.Equal(after, before) {
+		t.Fatalf("existing resource was not restored: %v", err)
+	}
+}
 
 func TestBuildConfirmAndApplyPreservesAuthoredWorkspaceContent(t *testing.T) {
 	workspacePath, dataRoot := initializedWorkspace(t)
@@ -193,6 +317,20 @@ func TestInternalEngineRejectsSymlinkedManagedParent(t *testing.T) {
 	}
 }
 
+func TestInspectRejectsSymlinkedProjectionManifest(t *testing.T) {
+	workspacePath, dataRoot := initializedWorkspace(t)
+	target := filepath.Join(t.TempDir(), "owner-manifest.json")
+	if err := os.WriteFile(target, []byte(`{"legacy":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(workspacePath, runtimeprojection.ManifestRelativePath)); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if _, err := Inspect(PlanOptions{WorkspacePath: workspacePath, DataRoot: dataRoot, Runtime: "codex"}); err == nil {
+		t.Fatal("inspection followed a symlinked projection manifest through digest fallback")
+	}
+}
+
 func TestFailedProjectionRemovesNewManagedSkills(t *testing.T) {
 	workspacePath, dataRoot := initializedWorkspace(t)
 	tracks := []string{"software-engineering"}
@@ -224,9 +362,9 @@ func TestFailedProjectionRemovesNewManagedSkills(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, path := range paths {
-		if strings.HasSuffix(path, "SKILL.md") {
+		if strings.Contains(path, string(filepath.Separator)+"skills"+string(filepath.Separator)) {
 			if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
-				t.Fatalf("failed migration left prospective skill %s: %v", path, statErr)
+				t.Fatalf("failed migration left prospective method or resource %s: %v", path, statErr)
 			}
 		}
 	}

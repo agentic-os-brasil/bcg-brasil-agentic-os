@@ -48,6 +48,8 @@ Adding resources at free paths and reinstalling identical resources are supporte
 Changing or retiring a previously managed resource fails closed: a future package
 must carry reviewed prior-version migration authority before that transition can
 be supported. This release does not infer such authority from local hashes.
+Workspace migration reuses the same managed-path inventory, including resources,
+with a finite 256-file snapshot cap and unchanged 512 KiB/file, 4 MiB total caps.
 
 `disable-model-invocation: true` remains explicit-only in Claude metadata,
 Codex metadata, the compact catalog and both product routers. An explicit

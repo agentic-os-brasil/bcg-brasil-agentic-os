@@ -54,7 +54,9 @@ arquivo que já existia sem ownership, mesmo com os mesmos bytes.
 Adicionar recursos em caminhos livres e reinstalar os mesmos recursos é
 suportado. Alterar ou retirar um recurso gerenciado de uma versão anterior
 interrompe a atualização até existir uma autoridade de migração revisada para
-essa versão. O manifesto local não fornece essa autorização.
+essa versão. O manifesto local não fornece essa autorização. A migração do
+workspace inclui os recursos no snapshot e rollback; seus limites são 256
+arquivos, 512 KiB por arquivo e 4 MiB no total.
 
 As instruções dos métodos operam dentro do workspace e da autoridade já
 concedidos ao Maestro. Publicações, mensagens, dependências, ações destrutivas

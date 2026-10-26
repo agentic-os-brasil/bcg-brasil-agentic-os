@@ -513,11 +513,15 @@ func TestInstallPreservesUserOrientationAndFailsClosedOnModifiedSkill(t *testing
 	if err := os.WriteFile(filepath.Join(workspace, "CLAUDE.md"), []byte(userOrientation), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	before, err := os.Stat(filepath.Join(workspace, "CLAUDE.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := Install("claude", workspace); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(filepath.Join(workspace, "CLAUDE.md"))
-	if err != nil || info.Mode().Perm() != 0o644 {
+	if err != nil || info.Mode().Perm() != before.Mode().Perm() {
 		t.Fatalf("user orientation mode changed: %v, %v", info, err)
 	}
 	orientation, err := os.ReadFile(filepath.Join(workspace, "CLAUDE.md"))

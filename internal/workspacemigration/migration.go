@@ -26,7 +26,7 @@ import (
 const (
 	SchemaVersion           = 1
 	ExpectedWorkspaceSchema = 1
-	MaxSnapshotFiles        = 128
+	MaxSnapshotFiles        = 256 // Includes method resources; per-file and aggregate byte caps stay unchanged.
 	MaxSnapshotFileSize     = 512 << 10
 	MaxSnapshotBytes        = 4 << 20
 	StableBootstrapper      = "stable-bootstrapper"
@@ -723,41 +723,6 @@ func ensureNoSymlinkParents(root, target string) error {
 func managedPaths(options PlanOptions) ([]string, error) {
 	runtimeName, workspacePath := options.Runtime, options.WorkspacePath
 	paths := fixedManagedPaths(runtimeName, workspacePath)
-	manifestPath := filepath.Join(workspacePath, runtimeprojection.ManifestRelativePath)
-	if safetyRoot, rootErr := managedPathSafetyRoot(runtimeName, workspacePath, manifestPath); rootErr != nil {
-		return nil, rootErr
-	} else if err := ensureNoSymlinkParents(safetyRoot, manifestPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	}
-	body, err := os.ReadFile(manifestPath)
-	if err == nil {
-		var manifest struct {
-			SchemaVersion   int               `json:"schema_version"`
-			Runtime         string            `json:"runtime"`
-			OrientationPath string            `json:"orientation_path"`
-			OrientationHash string            `json:"orientation_hash"`
-			SkillHashes     map[string]string `json:"skill_hashes"`
-			PolicyPath      string            `json:"policy_path,omitempty"`
-			PolicyHash      string            `json:"policy_hash,omitempty"`
-		}
-		decoder := json.NewDecoder(bytes.NewReader(body))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&manifest); err != nil {
-			return nil, fmt.Errorf("decode managed projection manifest: %w", err)
-		}
-		skillsRoot := filepath.Join(workspacePath, ".codex", "skills")
-		if runtimeName == "claude" {
-			skillsRoot = filepath.Join(workspacePath, ".claude", "skills")
-		}
-		for id := range manifest.SkillHashes {
-			if filepath.Clean(id) != id || id == "." || id == ".." || strings.ContainsAny(id, `/\\`) {
-				return nil, fmt.Errorf("managed projection skill ID is unsafe: %q", id)
-			}
-			paths = append(paths, filepath.Join(skillsRoot, id, "SKILL.md"))
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	}
 	planned, err := runtimeprojection.PlannedManagedPaths(runtimeName, workspacePath, options.CapabilityTracks)
 	if err != nil {
 		return nil, err
@@ -806,6 +771,13 @@ func sourceDigest(options PlanOptions) (string, error) {
 		}
 		if parentErr := ensureNoSymlinkParents(safetyRoot, path); parentErr != nil && !errors.Is(parentErr, os.ErrNotExist) {
 			return "", parentErr
+		}
+		if info, statErr := os.Lstat(path); statErr == nil {
+			if !info.Mode().IsRegular() {
+				return "", fmt.Errorf("managed digest target is not a regular file: %s", path)
+			}
+		} else if !errors.Is(statErr, os.ErrNotExist) {
+			return "", statErr
 		}
 		body, err := os.ReadFile(path)
 		if errors.Is(err, os.ErrNotExist) {
