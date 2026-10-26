@@ -22,6 +22,13 @@ func EnsurePrivateDirectory(path string) error {
 	return secureEnsurePrivatePath(path)
 }
 
+// ValidateDirectory traverses an existing directory without following links or
+// reparse points, creating entries or changing permissions. Ordinary ancestors
+// such as the OS user directory need not be owner-private.
+func ValidateDirectory(path string) error {
+	return secureLookupPrivatePath(path)
+}
+
 // ValidatePrivateDirectory proves that the complete path is traversable
 // without following links or Windows reparse points. Unix callers additionally
 // require an owner-only directory; Windows relies on the native protected data
