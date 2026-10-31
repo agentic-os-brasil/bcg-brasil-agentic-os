@@ -33,6 +33,37 @@ jobs:
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: adapters/mcp/go.mod
+      - name: Inspect Windows trusted Go installation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          go env GOROOT
+          $probe = Join-Path $env:RUNNER_TEMP 'maestro-goroot-probe.go'
+          @'
+          package main
+          import ("encoding/json"; "os"; "path/filepath"; "runtime")
+          func main() {
+            root := runtime.GOROOT()
+            candidate := filepath.Join(root, "bin", "go.exe")
+            resolved, resolveErr := filepath.EvalSymlinks(candidate)
+            info, statErr := os.Stat(resolved)
+            out := map[string]any{"compiled_root": root, "candidate": candidate, "resolved": resolved, "runtime_version": runtime.Version(), "trusted_go_regular": statErr == nil && info.Mode().IsRegular()}
+            if resolveErr != nil { out["resolve_error"] = resolveErr.Error() }
+            if statErr != nil { out["stat_error"] = statErr.Error() }
+            json.NewEncoder(os.Stdout).Encode(out)
+          }
+          '@ | Set-Content -Path $probe -Encoding utf8NoBOM
+          $binary = Join-Path $env:RUNNER_TEMP 'maestro-goroot-probe.exe'
+          go build -o $binary $probe
+          if ($LASTEXITCODE -ne 0) { throw 'Go diagnostic build failed' }
+          $savedGoRoot = $env:GOROOT
+          [Environment]::SetEnvironmentVariable('GOROOT', $null, 'Process')
+          try {
+            & $binary
+            if ($LASTEXITCODE -ne 0) { throw 'Go diagnostic execution failed' }
+          } finally {
+            [Environment]::SetEnvironmentVariable('GOROOT', $savedGoRoot, 'Process')
+          }
       - name: Canonical ledger and HOME contracts
         run: go test ./internal/execution ./internal/datahome -timeout=180s
       - name: Canonical workspace initialization contracts on admitted Unix runners

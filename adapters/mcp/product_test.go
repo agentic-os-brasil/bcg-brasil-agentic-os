@@ -31,7 +31,7 @@ func runWorkflow(t *testing.T, stdio bool) {
 	if runtime.GOOS == "windows" {
 		t.Skip("verified owner admission unavailable")
 	}
-	base := t.TempDir()
+	base := physicalTempDir(t)
 	prod := filepath.Join(base, "product")
 	home := filepath.Join(base, "owner")
 	ws := filepath.Join(base, "workspace")
@@ -316,7 +316,7 @@ func TestWindowsAdmissionRefused(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("Windows admission contract")
 	}
-	base := t.TempDir()
+	base := physicalTempDir(t)
 	prod := filepath.Join(base, "product")
 	home := filepath.Join(base, "owner")
 	for _, path := range []string{prod, home} {
@@ -341,13 +341,13 @@ func TestCLIInitRefusesUnsafeBindingsWithoutWrites(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("positive init admission unavailable")
 	}
-	binary := filepath.Join(t.TempDir(), "maestro-mcp")
+	binary := filepath.Join(physicalTempDir(t), "maestro-mcp")
 	if out, err := exec.Command("go", "build", "-o", binary, "./cmd/maestro-mcp").CombinedOutput(); err != nil {
 		t.Fatalf("build %s: %v", out, err)
 	}
 	for _, kind := range []string{"product", "private-home", "symlink", "symlink-ancestor", "brain-child", "metadata-child", "leaf-child"} {
 		t.Run(kind, func(t *testing.T) {
-			base := t.TempDir()
+			base := physicalTempDir(t)
 			prod, home, target := filepath.Join(base, "product"), filepath.Join(base, "owner"), filepath.Join(base, "target")
 			for _, p := range []string{prod, home, target} {
 				if err := os.Mkdir(p, 0700); err != nil {
@@ -395,4 +395,14 @@ func TestCLIInitRefusesUnsafeBindingsWithoutWrites(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Match strict production binding admission while retaining deliberately selected test symlinks.
+func physicalTempDir(t *testing.T) string {
+	t.Helper()
+	path, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
