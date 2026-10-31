@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -335,7 +334,7 @@ func safeCustodyIdentity(value string) bool {
 
 func (store Store) yodaReviews(workspaceID, itemID string) ([]YodaReviewReceipt, error) {
 	root := filepath.Join(store.itemRoot(workspaceID, itemID), "revisions")
-	entries, err := os.ReadDir(root)
+	entries, err := ledgerReadDir(root)
 	if err != nil {
 		return nil, err
 	}

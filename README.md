@@ -34,6 +34,8 @@
 
 The complete MCP/plugin construction plan is tracked in the
 [full-parity checklist](docs/plans/2026-10-24-maestro-full-parity.md).
+The [product construction plan](docs/plans/2026-10-31-maestro-product-mcp.md)
+orders the complete implementation and records external qualification gates.
 For home/locator conflicts while preparing that work, use the read-only
 [data-home diagnostic](docs/development/data-home-inspection.md).
 

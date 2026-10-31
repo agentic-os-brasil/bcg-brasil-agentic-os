@@ -1,0 +1,86 @@
+name: Maestro product MCP contracts
+
+on:
+  pull_request:
+    paths:
+      - 'adapters/mcp/**'
+      - 'internal/execution/**'
+      - 'internal/datahome/**'
+      - 'internal/workspace/**'
+      - '.github/workflows/product-mcp.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'adapters/mcp/**'
+      - 'internal/execution/**'
+      - 'internal/datahome/**'
+      - 'internal/workspace/**'
+      - '.github/workflows/product-mcp.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  product-contracts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: adapters/mcp/go.mod
+      # shortcut: runner toolcache paths fail Go canonicalization; remove when unchanged witness tests pass there.
+      # Related upstream report: https://github.com/golang/go/issues/82447
+      - name: Stage Windows SDK for canonical command evidence
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installedRoot = (go env GOROOT).Trim()
+          if ($LASTEXITCODE -ne 0) { throw 'Installed Go SDK lookup failed' }
+          if ($env:GOROOT) { throw 'Command evidence requires no caller-supplied GOROOT' }
+          $stagedRoot = Join-Path $env:RUNNER_TEMP 'maestro-go-sdk'
+          $freshCache = Join-Path $env:RUNNER_TEMP 'maestro-go-build'
+          New-Item -ItemType Directory -Path $stagedRoot -ErrorAction Stop | Out-Null
+          New-Item -ItemType Directory -Path $freshCache -ErrorAction Stop | Out-Null
+          Get-ChildItem -LiteralPath $installedRoot -Force -ErrorAction Stop |
+            Copy-Item -Destination $stagedRoot -Recurse -ErrorAction Stop
+          $installedGo = Join-Path $installedRoot 'bin/go.exe'
+          $stagedBin = Join-Path $stagedRoot 'bin'
+          $stagedGo = Join-Path $stagedBin 'go.exe'
+          if ((Get-FileHash -LiteralPath $installedGo -Algorithm SHA256).Hash -ne
+              (Get-FileHash -LiteralPath $stagedGo -Algorithm SHA256).Hash) {
+            throw 'Staged Go executable differs from pinned SDK'
+          }
+          $selectedRoot = (& $stagedGo env GOROOT).Trim()
+          if ($LASTEXITCODE -ne 0 -or $selectedRoot -ne $stagedRoot) {
+            throw 'Staged Go executable did not select its copied SDK'
+          }
+          $stagedBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "GOCACHE=$freshCache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Canonical ledger and HOME contracts
+        run: go test ./internal/execution ./internal/datahome -timeout=180s
+      - name: Canonical workspace initialization contracts on admitted Unix runners
+        if: runner.os != 'Windows'
+        run: go test ./internal/workspace -timeout=180s
+      # Windows must preserve ownership refusals; this job is not native admission.
+      # Its elevated runner cannot qualify ordinary-user workspace initialization.
+      - name: Product protocol, bootstrap refusal and package contracts
+        working-directory: adapters/mcp
+        run: go test ./... -timeout=180s
+      - name: Product module static checks
+        working-directory: adapters/mcp
+        run: go vet ./...
+      - name: Product binary excludes development packages
+        if: runner.os == 'Linux'
+        working-directory: adapters/mcp
+        shell: bash
+        run: |
+          dependencies=$(go list -deps ./cmd/maestro-mcp)
+          if printf '%s\n' "$dependencies" | grep -E '/(dev/|internal/dev/)'; then
+            echo 'A product executable cannot depend on development packages.' >&2
+            exit 1
+          fi
