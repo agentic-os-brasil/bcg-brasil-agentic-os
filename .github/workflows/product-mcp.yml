@@ -37,7 +37,18 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          go env GOROOT
+          $installedRoot = (go env GOROOT).Trim()
+          $candidate = Join-Path $installedRoot 'bin/go.exe'
+          [PSCustomObject]@{
+            installed_root = $installedRoot
+            command_source = (Get-Command go -CommandType Application).Source
+            candidate_exists = Test-Path -LiteralPath $candidate -PathType Leaf
+          } | ConvertTo-Json -Compress |
+            ForEach-Object { Write-Host "[DEBUG-maestro-go-root] $_" }
+          Get-ChildItem -LiteralPath (Join-Path $installedRoot 'bin') |
+            Select-Object -First 8 Name, FullName, Length, Attributes, LinkType, Target |
+            ConvertTo-Json -Compress |
+            ForEach-Object { Write-Host "[DEBUG-maestro-go-root] $_" }
           $probe = Join-Path $env:RUNNER_TEMP 'maestro-goroot-probe.go'
           @'
           package main
@@ -45,9 +56,11 @@ jobs:
           func main() {
             root := runtime.GOROOT()
             candidate := filepath.Join(root, "bin", "go.exe")
+            candidateInfo, candidateErr := os.Stat(candidate)
             resolved, resolveErr := filepath.EvalSymlinks(candidate)
             info, statErr := os.Stat(resolved)
-            out := map[string]any{"compiled_root": root, "candidate": candidate, "resolved": resolved, "runtime_version": runtime.Version(), "trusted_go_regular": statErr == nil && info.Mode().IsRegular()}
+            out := map[string]any{"compiled_root": root, "candidate": candidate, "candidate_regular": candidateErr == nil && candidateInfo.Mode().IsRegular(), "resolved": resolved, "runtime_version": runtime.Version(), "trusted_go_regular": statErr == nil && info.Mode().IsRegular()}
+            if candidateErr != nil { out["candidate_stat_error"] = candidateErr.Error() }
             if resolveErr != nil { out["resolve_error"] = resolveErr.Error() }
             if statErr != nil { out["stat_error"] = statErr.Error() }
             json.NewEncoder(os.Stdout).Encode(out)
@@ -59,7 +72,7 @@ jobs:
           $savedGoRoot = $env:GOROOT
           [Environment]::SetEnvironmentVariable('GOROOT', $null, 'Process')
           try {
-            & $binary
+            & $binary | ForEach-Object { Write-Host "[DEBUG-maestro-go-root] $_" }
             if ($LASTEXITCODE -ne 0) { throw 'Go diagnostic execution failed' }
           } finally {
             [Environment]::SetEnvironmentVariable('GOROOT', $savedGoRoot, 'Process')
