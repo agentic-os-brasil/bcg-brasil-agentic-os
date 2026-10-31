@@ -60,15 +60,16 @@ const (
 )
 
 var (
-	ErrRevisionConflict     = errors.New("execution item state revision conflict")
-	ErrAttemptConflict      = errors.New("execution item attempt conflict")
-	ErrContractChanged      = errors.New("execution item contract changed")
-	ErrConfirmationRequired = errors.New("explicit confirmation is required")
-	ErrItemBusy             = errors.New("execution item is busy")
-	ErrActiveItemAmbiguous  = errors.New("multiple active execution items require an explicit item ID")
-	idPattern               = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$`)
-	workspaceIDPattern      = regexp.MustCompile(`^[a-f0-9]{32}$`)
-	logicalRefPattern       = regexp.MustCompile(`^bcgos://[A-Za-z0-9/_.-]+$`)
+	ErrConfinementUnavailable = errors.New("execution filesystem confinement is unavailable")
+	ErrRevisionConflict       = errors.New("execution item state revision conflict")
+	ErrAttemptConflict        = errors.New("execution item attempt conflict")
+	ErrContractChanged        = errors.New("execution item contract changed")
+	ErrConfirmationRequired   = errors.New("explicit confirmation is required")
+	ErrItemBusy               = errors.New("execution item is busy")
+	ErrActiveItemAmbiguous    = errors.New("multiple active execution items require an explicit item ID")
+	idPattern                 = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$`)
+	workspaceIDPattern        = regexp.MustCompile(`^[a-f0-9]{32}$`)
+	logicalRefPattern         = regexp.MustCompile(`^bcgos://[A-Za-z0-9/_.-]+$`)
 )
 
 const (
@@ -330,18 +331,14 @@ func (store Store) Create(input CreateInput) (Item, error) {
 
 	itemsRoot := store.itemsRoot(input.WorkspaceID)
 	stagingRoot := filepath.Join(store.executionRoot(input.WorkspaceID), ".transactions")
-	if err := os.MkdirAll(stagingRoot, 0o700); err != nil {
+	if err := ledgerMkdirAll(stagingRoot, 0o700); err != nil {
 		return Item{}, err
 	}
-	staging, err := os.MkdirTemp(stagingRoot, "create-")
+	staging, err := ledgerMkdirTemp(stagingRoot, "create-")
 	if err != nil {
 		return Item{}, err
 	}
-	if err := os.Chmod(staging, 0o700); err != nil {
-		_ = os.RemoveAll(staging)
-		return Item{}, err
-	}
-	defer os.RemoveAll(staging)
+	defer ledgerRemoveAll(staging)
 	if err := writeNewJSON(filepath.Join(staging, "contract.v1.json"), contract); err != nil {
 		return Item{}, err
 	}
@@ -351,7 +348,7 @@ func (store Store) Create(input CreateInput) (Item, error) {
 	if err := writeNewJSON(filepath.Join(staging, "revisions", revisionName(1)), revision); err != nil {
 		return Item{}, err
 	}
-	if err := os.MkdirAll(itemsRoot, 0o700); err != nil {
+	if err := ledgerMkdirAll(itemsRoot, 0o700); err != nil {
 		return Item{}, err
 	}
 	destination := filepath.Join(itemsRoot, itemID)
@@ -700,7 +697,7 @@ func (store Store) activeItemIDs(workspaceID string) ([]string, error) {
 	if err := validateID("workspace", workspaceID); err != nil {
 		return nil, err
 	}
-	entries, err := os.ReadDir(store.itemsRoot(workspaceID))
+	entries, err := ledgerReadDir(store.itemsRoot(workspaceID))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -761,7 +758,7 @@ func (store Store) List(workspaceID string) ([]Summary, error) {
 	if err := validateID("workspace", workspaceID); err != nil {
 		return nil, err
 	}
-	entries, err := os.ReadDir(store.itemsRoot(workspaceID))
+	entries, err := ledgerReadDir(store.itemsRoot(workspaceID))
 	if errors.Is(err, os.ErrNotExist) {
 		return []Summary{}, nil
 	}
@@ -902,19 +899,19 @@ func (store Store) Delete(workspaceID, itemID string, expectedRevision int, conf
 	}
 	root := store.itemRoot(workspaceID, itemID)
 	trashRoot := filepath.Join(store.executionRoot(workspaceID), ".trash")
-	if err := os.MkdirAll(trashRoot, 0o700); err != nil {
+	if err := ledgerMkdirAll(trashRoot, 0o700); err != nil {
 		return err
 	}
 	target := filepath.Join(trashRoot, itemID+"-"+hex.EncodeToString(randomBytes(6)))
 	if err := durableRename(root, target); err != nil {
 		return err
 	}
-	return os.RemoveAll(target)
+	return ledgerRemoveAll(target)
 }
 
 func (store Store) transitions(workspaceID, itemID string) ([]Transition, error) {
 	root := filepath.Join(store.itemRoot(workspaceID, itemID), "revisions")
-	entries, err := os.ReadDir(root)
+	entries, err := ledgerReadDir(root)
 	if err != nil {
 		return nil, err
 	}
@@ -948,30 +945,30 @@ func (store Store) lock(workspaceID, itemID string) (func(), error) {
 	token := hex.EncodeToString(randomBytes(12))
 	ownerPath := filepath.Join(path, "owner-"+token)
 	acquire := func() error {
-		if err := os.Mkdir(path, 0o700); err != nil {
+		if err := ledgerMkdir(path, 0o700); err != nil {
 			return err
 		}
-		file, err := os.OpenFile(ownerPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		file, err := ledgerOpen(ownerPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if err != nil {
-			_ = os.Remove(path)
+			_ = ledgerRemove(path)
 			return err
 		}
 		if err := file.Sync(); err != nil {
 			_ = file.Close()
-			_ = os.Remove(ownerPath)
-			_ = os.Remove(path)
+			_ = ledgerRemove(ownerPath)
+			_ = ledgerRemove(path)
 			return err
 		}
 		if err := file.Close(); err != nil {
-			_ = os.Remove(ownerPath)
-			_ = os.Remove(path)
+			_ = ledgerRemove(ownerPath)
+			_ = ledgerRemove(path)
 			return err
 		}
 		return nil
 	}
 	err := acquire()
 	if errors.Is(err, os.ErrExist) {
-		info, statErr := os.Stat(path)
+		info, statErr := ledgerStatDirectory(path)
 		if statErr != nil || store.now().Sub(info.ModTime()) <= 2*time.Minute {
 			return nil, ErrItemBusy
 		}
@@ -979,17 +976,17 @@ func (store Store) lock(workspaceID, itemID string) (func(), error) {
 		if renameErr := durableRename(path, stalePath); renameErr != nil {
 			return nil, ErrItemBusy
 		}
-		defer os.RemoveAll(stalePath)
+		defer ledgerRemoveAll(stalePath)
 		err = acquire()
 	}
 	if err != nil {
 		return nil, err
 	}
 	return func() {
-		if err := os.Remove(ownerPath); err != nil {
+		if err := ledgerRemove(ownerPath); err != nil {
 			return
 		}
-		_ = os.Remove(path)
+		_ = ledgerRemove(path)
 	}, nil
 }
 
@@ -1431,44 +1428,53 @@ func revisionName(revision int) string {
 
 func latestValidRevision(itemRoot string) (Revision, error) {
 	root := filepath.Join(itemRoot, "revisions")
-	entries, err := os.ReadDir(root)
+	entries, err := ledgerReadDir(root)
 	if err != nil {
 		return Revision{}, err
 	}
 	sort.Slice(entries, func(left, right int) bool { return entries[left].Name() > entries[right].Name() })
-	var invalid bool
 	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+		if filepath.Ext(entry.Name()) != ".json" {
 			continue
 		}
 		var revision Revision
+		// Only published JSON is authoritative; unfinished temporary files have
+		// no .json extension. Never recover an older attempt past corruption.
 		if err := readStrictJSON(filepath.Join(root, entry.Name()), &revision); err != nil {
-			invalid = true
-			continue
+			return Revision{}, err
 		}
 		if err := validateRevision(revision); err != nil {
-			invalid = true
-			continue
+			return Revision{}, err
 		}
 		if entry.Name() != revisionName(revision.State.StateRevision) {
-			invalid = true
-			continue
+			return Revision{}, errors.New("execution revision filename does not match its revision")
 		}
 		return revision, nil
-	}
-	if invalid {
-		return Revision{}, errors.New("execution revisions exist but none is valid")
 	}
 	return Revision{}, os.ErrNotExist
 }
 
 func readStrictJSON(path string, target any) error {
-	file, err := os.Open(path)
+	file, err := ledgerOpen(path, os.O_RDONLY, 0)
+	if err != nil {
+		return fmt.Errorf("%w: %w", errUnsafeLedgerFile, err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("%w: %w", errUnsafeLedgerFile, err)
+	}
+	if !info.Mode().IsRegular() || info.Size() > maximumLedgerJSONBytes {
+		return errUnsafeLedgerFile
+	}
+	body, err := io.ReadAll(io.LimitReader(file, maximumLedgerJSONBytes+1))
 	if err != nil {
 		return err
 	}
-	defer file.Close()
-	decoder := json.NewDecoder(file)
+	if len(body) > maximumLedgerJSONBytes {
+		return errUnsafeLedgerFile
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return err
@@ -1484,16 +1490,18 @@ func readStrictJSON(path string, target any) error {
 }
 
 func writeNewJSON(path string, value any) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	body, err := boundedJSON(value)
 	if err != nil {
 		return err
 	}
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(value); err != nil {
+	if err := ledgerMkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	file, err := ledgerOpen(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := file.Write(body); err != nil {
 		_ = file.Close()
 		return err
 	}
@@ -1504,74 +1512,35 @@ func writeNewJSON(path string, value any) error {
 	return file.Close()
 }
 
+var errUnsafeLedgerFile = errors.New("execution JSON requires a bounded regular no-follow file")
+
+const maximumLedgerJSONBytes = 1 << 20
+
 func writeImmutableRevision(path string, value Revision) error {
-	directory := filepath.Dir(path)
-	info, err := os.Stat(directory)
+	body, err := boundedJSON(value)
 	if err != nil {
 		return err
 	}
-	if !info.IsDir() {
-		return errors.New("execution revision parent is not a directory")
-	}
-	if _, err := os.Stat(path); err == nil {
-		return os.ErrExist
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	file, err := os.CreateTemp(directory, ".revision-")
-	if err != nil {
-		return err
-	}
-	temp := file.Name()
-	defer os.Remove(temp)
-	if err := file.Chmod(0o600); err != nil {
-		_ = file.Close()
-		return err
-	}
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(value); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if err := file.Close(); err != nil {
-		return err
-	}
-	return durablePublishNoClobber(temp, path)
+	return ledgerPublishJSON(path, body, true)
 }
 
 func writeAtomicJSON(path string, value any) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	file, err := os.CreateTemp(filepath.Dir(path), ".state-")
+	body, err := boundedJSON(value)
 	if err != nil {
 		return err
 	}
-	temp := file.Name()
-	defer os.Remove(temp)
-	if err := file.Chmod(0o600); err != nil {
-		_ = file.Close()
-		return err
+	return ledgerPublishJSON(path, body, false)
+}
+
+func boundedJSON(value any) ([]byte, error) {
+	body, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return nil, err
 	}
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(value); err != nil {
-		_ = file.Close()
-		return err
+	if len(body)+1 > maximumLedgerJSONBytes {
+		return nil, errors.New("execution JSON exceeds size limit")
 	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if err := file.Close(); err != nil {
-		return err
-	}
-	return durableReplace(temp, path)
+	return append(body, '\n'), nil
 }
 
 func randomBytes(size int) []byte {

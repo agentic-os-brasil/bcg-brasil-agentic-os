@@ -3,39 +3,26 @@
 package execution
 
 import (
-	"os"
+	"golang.org/x/sys/unix"
 	"path/filepath"
 )
 
 func durableRename(source, target string) error {
-	if err := os.Rename(source, target); err != nil {
-		return err
-	}
-	return syncParent(target)
-}
-
-func durableReplace(source, target string) error {
-	if err := os.Rename(source, target); err != nil {
-		return err
-	}
-	return syncParent(target)
-}
-
-func durablePublishNoClobber(source, target string) error {
-	if err := os.Link(source, target); err != nil {
-		return err
-	}
-	if err := syncParent(target); err != nil {
-		return err
-	}
-	return os.Remove(source)
-}
-
-func syncParent(path string) error {
-	directory, err := os.Open(filepath.Dir(path))
+	from, err := openLedgerDirectory(filepath.Dir(source), false)
 	if err != nil {
 		return err
 	}
-	defer directory.Close()
-	return directory.Sync()
+	defer from.Close()
+	to, err := openLedgerDirectory(filepath.Dir(target), false)
+	if err != nil {
+		return err
+	}
+	defer to.Close()
+	if err := unix.Renameat(int(from.Fd()), filepath.Base(source), int(to.Fd()), filepath.Base(target)); err != nil {
+		return err
+	}
+	if err := to.Sync(); err != nil {
+		return err
+	}
+	return from.Sync()
 }

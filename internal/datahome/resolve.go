@@ -1,4 +1,4 @@
-// Package datahome inspects owner state locations without creating or activating them.
+// Package datahome resolves owner state read-only and explicitly bootstraps fresh homes.
 package datahome
 
 import (

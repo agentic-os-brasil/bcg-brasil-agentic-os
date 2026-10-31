@@ -3,7 +3,6 @@ package execution
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"time"
@@ -248,7 +247,7 @@ func (store Store) latestToolCalls(workspaceID, itemID string) (map[string]ToolC
 
 func (store Store) toolCalls(workspaceID, itemID string) ([]ToolCallReceipt, error) {
 	root := filepath.Join(store.itemRoot(workspaceID, itemID), "revisions")
-	entries, err := os.ReadDir(root)
+	entries, err := ledgerReadDir(root)
 	if err != nil {
 		return nil, err
 	}
