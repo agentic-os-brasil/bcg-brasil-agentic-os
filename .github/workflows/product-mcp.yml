@@ -33,50 +33,34 @@ jobs:
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: adapters/mcp/go.mod
-      - name: Inspect Windows trusted Go installation
+      # shortcut: runner toolcache paths fail Go canonicalization; remove when unchanged witness tests pass there.
+      # Related upstream report: https://github.com/golang/go/issues/82447
+      - name: Stage Windows SDK for canonical command evidence
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $installedRoot = (go env GOROOT).Trim()
-          $candidate = Join-Path $installedRoot 'bin/go.exe'
-          [PSCustomObject]@{
-            installed_root = $installedRoot
-            command_source = (Get-Command go -CommandType Application).Source
-            candidate_exists = Test-Path -LiteralPath $candidate -PathType Leaf
-          } | ConvertTo-Json -Compress |
-            ForEach-Object { Write-Host "[DEBUG-maestro-go-root] $_" }
-          Get-ChildItem -LiteralPath (Join-Path $installedRoot 'bin') |
-            Select-Object -First 8 Name, FullName, Length, Attributes, LinkType, Target |
-            ConvertTo-Json -Compress |
-            ForEach-Object { Write-Host "[DEBUG-maestro-go-root] $_" }
-          $probe = Join-Path $env:RUNNER_TEMP 'maestro-goroot-probe.go'
-          @'
-          package main
-          import ("encoding/json"; "os"; "path/filepath"; "runtime")
-          func main() {
-            root := runtime.GOROOT()
-            candidate := filepath.Join(root, "bin", "go.exe")
-            candidateInfo, candidateErr := os.Stat(candidate)
-            resolved, resolveErr := filepath.EvalSymlinks(candidate)
-            info, statErr := os.Stat(resolved)
-            out := map[string]any{"compiled_root": root, "candidate": candidate, "candidate_regular": candidateErr == nil && candidateInfo.Mode().IsRegular(), "resolved": resolved, "runtime_version": runtime.Version(), "trusted_go_regular": statErr == nil && info.Mode().IsRegular()}
-            if candidateErr != nil { out["candidate_stat_error"] = candidateErr.Error() }
-            if resolveErr != nil { out["resolve_error"] = resolveErr.Error() }
-            if statErr != nil { out["stat_error"] = statErr.Error() }
-            json.NewEncoder(os.Stdout).Encode(out)
+          if ($LASTEXITCODE -ne 0) { throw 'Installed Go SDK lookup failed' }
+          if ($env:GOROOT) { throw 'Command evidence requires no caller-supplied GOROOT' }
+          $stagedRoot = Join-Path $env:RUNNER_TEMP 'maestro-go-sdk'
+          $freshCache = Join-Path $env:RUNNER_TEMP 'maestro-go-build'
+          New-Item -ItemType Directory -Path $stagedRoot -ErrorAction Stop | Out-Null
+          New-Item -ItemType Directory -Path $freshCache -ErrorAction Stop | Out-Null
+          Get-ChildItem -LiteralPath $installedRoot -Force -ErrorAction Stop |
+            Copy-Item -Destination $stagedRoot -Recurse -ErrorAction Stop
+          $installedGo = Join-Path $installedRoot 'bin/go.exe'
+          $stagedBin = Join-Path $stagedRoot 'bin'
+          $stagedGo = Join-Path $stagedBin 'go.exe'
+          if ((Get-FileHash -LiteralPath $installedGo -Algorithm SHA256).Hash -ne
+              (Get-FileHash -LiteralPath $stagedGo -Algorithm SHA256).Hash) {
+            throw 'Staged Go executable differs from pinned SDK'
           }
-          '@ | Set-Content -Path $probe -Encoding utf8NoBOM
-          $binary = Join-Path $env:RUNNER_TEMP 'maestro-goroot-probe.exe'
-          go build -o $binary $probe
-          if ($LASTEXITCODE -ne 0) { throw 'Go diagnostic build failed' }
-          $savedGoRoot = $env:GOROOT
-          [Environment]::SetEnvironmentVariable('GOROOT', $null, 'Process')
-          try {
-            & $binary | ForEach-Object { Write-Host "[DEBUG-maestro-go-root] $_" }
-            if ($LASTEXITCODE -ne 0) { throw 'Go diagnostic execution failed' }
-          } finally {
-            [Environment]::SetEnvironmentVariable('GOROOT', $savedGoRoot, 'Process')
+          $selectedRoot = (& $stagedGo env GOROOT).Trim()
+          if ($LASTEXITCODE -ne 0 -or $selectedRoot -ne $stagedRoot) {
+            throw 'Staged Go executable did not select its copied SDK'
           }
+          $stagedBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "GOCACHE=$freshCache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Canonical ledger and HOME contracts
         run: go test ./internal/execution ./internal/datahome -timeout=180s
       - name: Canonical workspace initialization contracts on admitted Unix runners
