@@ -35,7 +35,11 @@ jobs:
           go-version-file: adapters/mcp/go.mod
       - name: Canonical ledger and HOME contracts
         run: go test ./internal/execution ./internal/datahome -timeout=180s
+      - name: Canonical workspace initialization contracts on admitted Unix runners
+        if: runner.os != 'Windows'
+        run: go test ./internal/workspace -timeout=180s
       # Windows must preserve ownership refusals; this job is not native admission.
+      # Its elevated runner cannot qualify ordinary-user workspace initialization.
       - name: Product protocol, bootstrap refusal and package contracts
         working-directory: adapters/mcp
         run: go test ./... -timeout=180s

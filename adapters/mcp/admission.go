@@ -3,14 +3,13 @@ package product
 import (
 	"encoding/json"
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
 // Preflight validates selected paths without creating state or following links.
@@ -30,21 +29,10 @@ func resolveBinding(o Options) (datahome.Result, error) {
 			return h, errors.New("binding_overlap")
 		}
 	}
-	// Validate the nearest existing ancestor with the canonical no-follow walk.
-	for {
-		err = scheduler.ValidateDirectory(path)
-		if err == nil {
-			return h, nil
-		}
-		if !errors.Is(err, os.ErrNotExist) {
-			return h, errors.New("workspace_unavailable")
-		}
-		parent := filepath.Dir(path)
-		if parent == path {
-			return h, errors.New("workspace_unavailable")
-		}
-		path = parent
+	if err := workspace.PreflightInitialize(workspace.Options{WorkspacePath: o.WorkspacePath, DataRoot: filepath.Join(h.Home, "state")}); err != nil {
+		return h, errors.New("workspace_unavailable")
 	}
+	return h, nil
 }
 
 type artifactMetadata struct {

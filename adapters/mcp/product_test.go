@@ -32,9 +32,6 @@ func runWorkflow(t *testing.T, stdio bool) {
 		t.Skip("verified owner admission unavailable")
 	}
 	base := t.TempDir()
-	if !strings.Contains(base, "Developer") {
-		t.Fatal("fixtures must live under Developer; set TMPDIR")
-	}
 	prod := filepath.Join(base, "product")
 	home := filepath.Join(base, "owner")
 	ws := filepath.Join(base, "workspace")
@@ -348,7 +345,7 @@ func TestCLIInitRefusesUnsafeBindingsWithoutWrites(t *testing.T) {
 	if out, err := exec.Command("go", "build", "-o", binary, "./cmd/maestro-mcp").CombinedOutput(); err != nil {
 		t.Fatalf("build %s: %v", out, err)
 	}
-	for _, kind := range []string{"product", "private-home", "symlink", "symlink-ancestor"} {
+	for _, kind := range []string{"product", "private-home", "symlink", "symlink-ancestor", "brain-child", "metadata-child", "leaf-child"} {
 		t.Run(kind, func(t *testing.T) {
 			base := t.TempDir()
 			prod, home, target := filepath.Join(base, "product"), filepath.Join(base, "owner"), filepath.Join(base, "target")
@@ -359,6 +356,21 @@ func TestCLIInitRefusesUnsafeBindingsWithoutWrites(t *testing.T) {
 			}
 			ws := prod
 			switch kind {
+			case "brain-child", "metadata-child", "leaf-child":
+				ws = filepath.Join(base, "workspace")
+				if err := os.Mkdir(ws, 0700); err != nil {
+					t.Fatal(err)
+				}
+				leaf := "brain"
+				if kind == "metadata-child" {
+					leaf = ".bcgos"
+				}
+				if kind == "leaf-child" {
+					leaf = "README.md"
+				}
+				if err := os.Symlink(prod, filepath.Join(ws, leaf)); err != nil {
+					t.Fatal(err)
+				}
 			case "private-home":
 				ws = filepath.Join(home, ".maestro", "brain", "workspace")
 			case "symlink", "symlink-ancestor":

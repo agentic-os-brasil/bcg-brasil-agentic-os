@@ -153,7 +153,11 @@ func homeSnapshot(t *testing.T, root string) map[string]string {
 		if err != nil {
 			return err
 		}
-		value := info.Mode().String() + " " + info.ModTime().String()
+		value := info.Mode().String()
+		// NTFS can defer directory timestamps from fixture creation until inspection.
+		if runtime.GOOS != "windows" || !info.IsDir() {
+			value += " " + info.ModTime().String()
+		}
 		if entry.Type()&os.ModeSymlink != 0 {
 			target, err := os.Readlink(path)
 			if err != nil {
