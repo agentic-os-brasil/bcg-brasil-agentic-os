@@ -1,0 +1,58 @@
+name: Maestro product MCP contracts
+
+on:
+  pull_request:
+    paths:
+      - 'adapters/mcp/**'
+      - 'internal/execution/**'
+      - 'internal/datahome/**'
+      - 'internal/workspace/**'
+      - '.github/workflows/product-mcp.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'adapters/mcp/**'
+      - 'internal/execution/**'
+      - 'internal/datahome/**'
+      - 'internal/workspace/**'
+      - '.github/workflows/product-mcp.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  product-contracts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: adapters/mcp/go.mod
+      - name: Canonical ledger and HOME contracts
+        run: go test ./internal/execution ./internal/datahome -timeout=180s
+      - name: Canonical workspace initialization contracts on admitted Unix runners
+        if: runner.os != 'Windows'
+        run: go test ./internal/workspace -timeout=180s
+      # Windows must preserve ownership refusals; this job is not native admission.
+      # Its elevated runner cannot qualify ordinary-user workspace initialization.
+      - name: Product protocol, bootstrap refusal and package contracts
+        working-directory: adapters/mcp
+        run: go test ./... -timeout=180s
+      - name: Product module static checks
+        working-directory: adapters/mcp
+        run: go vet ./...
+      - name: Product binary excludes development packages
+        if: runner.os == 'Linux'
+        working-directory: adapters/mcp
+        shell: bash
+        run: |
+          dependencies=$(go list -deps ./cmd/maestro-mcp)
+          if printf '%s\n' "$dependencies" | grep -E '/(dev/|internal/dev/)'; then
+            echo 'A product executable cannot depend on development packages.' >&2
+            exit 1
+          fi

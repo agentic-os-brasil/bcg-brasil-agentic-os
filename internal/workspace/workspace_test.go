@@ -304,3 +304,103 @@ func TestDefaultDataRootUsesPerUserApplicationStorage(t *testing.T) {
 		})
 	}
 }
+
+func TestInitializeRejectsUnsafeWriteFootprintWithoutWrites(t *testing.T) {
+	for _, kind := range []string{"brain", "metadata", "visible-leaf", "orchestration-leaf", "lock-leaf", "private-directory", "binding-registry", "nonregular-leaf"} {
+		t.Run(kind, func(t *testing.T) {
+			base := t.TempDir()
+			ws, data, target := filepath.Join(base, "workspace"), filepath.Join(base, "data"), filepath.Join(base, "target")
+			for _, p := range []string{ws, data, target} {
+				if err := os.Mkdir(p, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			path := filepath.Join(ws, "brain")
+			switch kind {
+			case "metadata":
+				path = filepath.Join(ws, ".bcgos")
+			case "visible-leaf":
+				path = filepath.Join(ws, "README.md")
+			case "orchestration-leaf":
+				path = filepath.Join(ws, ".bcgos", "maestro-orchestration-state.json")
+			case "lock-leaf":
+				path = filepath.Join(ws, ".bcgos", "maestro-orchestration-state.json.lock")
+			case "private-directory":
+				path = filepath.Join(data, "memory")
+			case "binding-registry":
+				path = filepath.Join(data, "workspaces")
+			case "nonregular-leaf":
+				path = filepath.Join(ws, "README.md")
+			}
+			if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if kind == "nonregular-leaf" {
+				if err := os.Mkdir(path, 0700); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := os.Symlink(target, path); err != nil {
+				if runtime.GOOS == "windows" {
+					t.Skip("symlink capability unavailable")
+				}
+				t.Fatal(err)
+			}
+			before := footprintSnapshot(t, base)
+			if _, err := Initialize(Options{WorkspacePath: ws, DataRoot: data}); err == nil {
+				t.Fatal("unsafe write footprint admitted")
+			}
+			if after := footprintSnapshot(t, base); !reflect.DeepEqual(before, after) {
+				t.Fatal("refused initialization changed the selected filesystem footprint")
+			}
+		})
+	}
+}
+func footprintSnapshot(t *testing.T, root string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	err := filepath.WalkDir(root, func(path string, e os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		info, err := e.Info()
+		if err != nil {
+			return err
+		}
+		value := info.Mode().String()
+		if info.Mode().IsRegular() {
+			body, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			value += string(body)
+		}
+		out[path] = value
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+func TestInitializePreservesUnrelatedArtifactSymlink(t *testing.T) {
+	base := t.TempDir()
+	ws, data, target := filepath.Join(base, "workspace"), filepath.Join(base, "data"), filepath.Join(base, "artifacts")
+	for _, p := range []string{ws, target} {
+		if err := os.Mkdir(p, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(target, filepath.Join(ws, "my-artifacts")); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skip("symlink capability unavailable")
+		}
+		t.Fatal(err)
+	}
+	if _, err := Initialize(Options{WorkspacePath: ws, DataRoot: data}); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(target)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("unrelated artifacts modified")
+	}
+}

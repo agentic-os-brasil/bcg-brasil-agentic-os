@@ -19,7 +19,6 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentorchestration"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/userlevel"
 )
 
 var ErrSynchronizedWorkspace = errors.New("workspace appears to be inside a synchronized directory")
@@ -158,7 +157,7 @@ func DefaultDataRoot(platform, home, localAppData, xdgStateHome string) (string,
 }
 
 func Initialize(options Options) (Result, error) {
-	if err := userlevel.EnsureNotElevated(); err != nil {
+	if err := PreflightInitialize(options); err != nil {
 		return Result{}, err
 	}
 	workspacePath, dataRoot, err := normalize(options)
@@ -166,9 +165,6 @@ func Initialize(options Options) (Result, error) {
 		return Result{}, err
 	}
 	synchronized := IsSynchronizedPath(workspacePath)
-	if synchronized && !options.AllowSynchronizedRoot {
-		return Result{}, ErrSynchronizedWorkspace
-	}
 
 	existing, err := pathExists(workspacePath)
 	if err != nil {
@@ -177,25 +173,13 @@ func Initialize(options Options) (Result, error) {
 	if err := os.MkdirAll(workspacePath, 0o700); err != nil {
 		return Result{}, err
 	}
-	for _, directory := range []string{"config", "memory", "scheduler", "logs"} {
-		if err := os.MkdirAll(filepath.Join(dataRoot, directory), 0o700); err != nil {
-			return Result{}, err
-		}
-	}
-
 	id := workspaceID(workspacePath)
-	// Materialize the private workspace roots during installation. This makes
-	// memory and maintenance ready to receive their first attested event without
-	// placing personal history or scheduler receipts in the visible workspace.
-	for _, directory := range []string{
-		filepath.Join(dataRoot, "memory", "workspaces", id),
-		filepath.Join(dataRoot, "maintenance", "scheduler", "workspaces", id),
-		filepath.Join(dataRoot, "maintenance", "receipts", "workspaces", id),
-	} {
-		if err := os.MkdirAll(directory, 0o700); err != nil {
+	for _, directory := range bootstrapDirectories(dataRoot, id) {
+		if err := os.MkdirAll(directory, 0700); err != nil {
 			return Result{}, fmt.Errorf("bootstrap private workspace state: %w", err)
 		}
 	}
+
 	metadataRoot := filepath.Join(workspacePath, ".bcgos")
 	if err := os.MkdirAll(metadataRoot, 0o700); err != nil {
 		return Result{}, err
@@ -466,7 +450,7 @@ func ensureBinding(dataRoot string, value binding) error {
 		return err
 	}
 	directory := filepath.Join(dataRoot, "workspaces", value.WorkspaceID)
-	for _, privateDirectory := range []string{dataRoot, filepath.Join(dataRoot, "workspaces"), directory} {
+	for _, privateDirectory := range bindingDirectories(dataRoot, value.WorkspaceID) {
 		if err := scheduler.EnsurePrivateDirectory(privateDirectory); err != nil {
 			return err
 		}
@@ -512,7 +496,7 @@ func readBinding(path string) (binding, error) {
 }
 
 func validateBindingTree(dataRoot, workspaceID string) error {
-	for _, directory := range []string{dataRoot, filepath.Join(dataRoot, "workspaces"), filepath.Join(dataRoot, "workspaces", workspaceID)} {
+	for _, directory := range bindingDirectories(dataRoot, workspaceID) {
 		if err := scheduler.ValidatePrivateDirectory(directory); err != nil {
 			return err
 		}

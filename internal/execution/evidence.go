@@ -335,7 +335,7 @@ func (store Store) latestEvidence(workspaceID, itemID string) (map[string]Eviden
 
 func (store Store) evidences(workspaceID, itemID string) ([]EvidenceReceipt, error) {
 	root := filepath.Join(store.itemRoot(workspaceID, itemID), "revisions")
-	entries, err := os.ReadDir(root)
+	entries, err := ledgerReadDir(root)
 	if err != nil {
 		return nil, err
 	}
@@ -548,23 +548,26 @@ func resolveWorkspaceArtifact(workspaceRoot, reference string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	resolvedRoot, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		return "", err
+	if runtime.GOOS == "windows" {
+		resolvedRoot, err := filepath.EvalSymlinks(root)
+		if err != nil {
+			return "", err
+		}
+		resolved, err := filepath.EvalSymlinks(filepath.Join(resolvedRoot, relative))
+		if err != nil {
+			return "", err
+		}
+		inside, err := filepath.Rel(resolvedRoot, resolved)
+		if err != nil || inside == ".." || strings.HasPrefix(inside, ".."+string(filepath.Separator)) {
+			return "", errors.New("artifact target escapes the workspace")
+		}
+		return resolved, nil
 	}
-	resolved, err := filepath.EvalSymlinks(filepath.Join(resolvedRoot, relative))
-	if err != nil {
-		return "", err
-	}
-	inside, err := filepath.Rel(resolvedRoot, resolved)
-	if err != nil || inside == ".." || strings.HasPrefix(inside, ".."+string(filepath.Separator)) {
-		return "", errors.New("artifact target escapes the workspace")
-	}
-	return resolved, nil
+	return filepath.Join(root, relative), nil
 }
 
 func hashFile(path string) (string, int64, error) {
-	file, err := os.Open(path)
+	file, err := ledgerOpen(path, os.O_RDONLY, 0)
 	if err != nil {
 		return "", 0, err
 	}

@@ -1226,3 +1226,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Agents must prepare useful checkpoints before final responses and at interruption boundaries; a hook cannot invent useful content from telemetry. Missing capture and incomplete native qualification remain explicit. Dreaming retains separate provenance and retry semantics. Windows release qualification remains required.
 - Refs: MEMO; specs/006-memory-persistence.md; specs/002-data-boundaries.md; specs/004-runtime-portability.md; docs/superpowers/plans/2026-09-29-daily-continuity.md
 - Supersedes: none
+
+## PMCP - Expose canonical work through an admitted, bounded product MCP
+
+- Date: 2026-10-31
+- Status: accepted
+- Owner: Maestro
+- Context: The three-tool synthetic spike proves continuity but is not a product adapter; product paths, origin authority and ledger IO need admission before real-state mutation.
+- Decision: Implement a separate adapters/mcp product module using the pinned official SDK and canonical runtime engines, with locally selected HOME/workspace binding, explicit fresh bootstrap and closed read/mutation operation schemas. No tool chooses roots or grants itself producer/approval authority. Harden canonical execution IO before enabling mutations. Keep the development spike and its receipts unchanged.
+- Consequences: Code and Desktop share the same ledger without a second memory. Initial execution evidence is artifact_snapshot; command execution, full domain parity and platform admission retain their explicit gates. Unverified Windows ownership and migrated origin remain fail-closed. Source integration is separate from native qualification, signing, publication and rollout.
+- Refs: specs/057-product-mcp-execution.md; docs/plans/2026-10-31-maestro-product-mcp.md; internal/execution; internal/datahome; adapters/mcp
+- Supersedes: none
