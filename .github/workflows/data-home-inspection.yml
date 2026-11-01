@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'internal/datahome/**'
+      - 'internal/zipmigration/**'
       - 'internal/zipruntime/**'
       - 'internal/scheduler/**'
       - 'cmd/maestro-runtime/**'
@@ -17,6 +18,7 @@ on:
     branches: [main]
     paths:
       - 'internal/datahome/**'
+      - 'internal/zipmigration/**'
       - 'internal/zipruntime/**'
       - 'internal/scheduler/**'
       - 'cmd/maestro-runtime/**'
@@ -44,9 +46,9 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Inspection, shared path and consumer contracts
-        run: go test ./internal/datahome ./internal/scheduler ./internal/zipruntime ./cmd/maestro-runtime
+        run: go test ./internal/datahome ./internal/scheduler ./internal/zipmigration ./internal/zipruntime ./cmd/maestro-runtime
       - name: Static checks at the same boundaries
-        run: go vet ./internal/datahome ./internal/scheduler ./internal/zipruntime ./cmd/maestro-runtime
+        run: go vet ./internal/datahome ./internal/scheduler ./internal/zipmigration ./internal/zipruntime ./cmd/maestro-runtime
 
   packaged-consumers:
     strategy:
