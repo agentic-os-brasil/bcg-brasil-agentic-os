@@ -579,12 +579,14 @@ func externalMachine(relative string) bool {
 	if len(parts) > 4 && parts[0] == "accounts" && parts[2] == "cases" {
 		return externalMachine(strings.Join(parts[4:], "/"))
 	}
-	for _, prefix := range []string{".maestro", "owner/maestro", "maintenance", "workspaces", "updates", "runtime", ".codex", ".claude"} {
+	// Owner enrollment hashes, reviewed drafts, auto-approved proposals and
+	// confirmed observation evidence cannot authorize the relocated brain.
+	for _, prefix := range []string{".maestro", "owner/maestro", "owner/interview", "owner/refinement", "maintenance", "workspaces", "updates", "runtime", ".codex", ".claude"} {
 		if relative == prefix || strings.HasPrefix(relative, prefix+"/") {
 			return true
 		}
 	}
-	for _, name := range []string{".initialized", ".maestro-version", ".maestro-python", ".scaffold.log", ".upgrade-pending", "first-run-failed.txt", "memory/.dream-requested", "memory/.dream-ack", "memory/.dream-legacy-request", "owner/.eod-requested", "owner/.no-account-ack"} {
+	for _, name := range []string{".initialized", ".maestro-version", ".maestro-python", ".scaffold.log", ".upgrade-pending", "first-run-failed.txt", "memory/.dream-requested", "memory/.dream-ack", "memory/.dream-legacy-request", "owner/registry.json", "owner/observations/observations.jsonl", "owner/.eod-requested", "owner/.no-account-ack"} {
 		if relative == name {
 			return true
 		}

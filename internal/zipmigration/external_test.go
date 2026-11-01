@@ -1,6 +1,7 @@
 package zipmigration_test
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -8,10 +9,274 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/zipmigration"
 )
+
+func TestExternalOwnerAuthorityRequiresFreshEnrollment(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("external ownership unavailable")
+	}
+	o := externalFixture(t, "0.2.0")
+	sourceBrain := filepath.Join(o.SourceRoot, "brain")
+	if _, err := ownerctx.Initialize(sourceBrain); err != nil {
+		t.Fatal(err)
+	}
+	status, err := ownerctx.Inspect(sourceBrain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var automatic []string
+	for name, facet := range status.Facets {
+		if facet.Refinement == "automatic_with_audit" {
+			automatic = append(automatic, name)
+		}
+	}
+	sort.Strings(automatic)
+	if len(automatic) == 0 {
+		t.Fatal("no public automatic facet available for authority test")
+	}
+	facet := automatic[0]
+	facetPath := status.Facets[facet].Path
+	original, err := os.ReadFile(filepath.Join(sourceBrain, facetPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldCapability, err := ownerctx.AuthorizeProducer(sourceBrain, "synthetic-source-adapter")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A public Submit interrupted before its audit write preserves a genuinely
+	// authorized pending proposal; no registry/proposal JSON is manufactured.
+	interruption := filepath.Join(sourceBrain, "owner/refinement/audits")
+	externalPut(t, sourceBrain, "owner/refinement/audits", "synthetic interruption")
+	input := ownerctx.RefinementInput{Facet: facet, Evidence: "synthetic reviewed source", ProposedBody: "# Reviewed style\n\n## Current\n\nPrefer concise evidence-led updates.\n", ProducerID: "synthetic-source-adapter", Capability: oldCapability, OccurrenceID: "synthetic-migration-pending"}
+	if _, err = ownerctx.SubmitRefinement(sourceBrain, input); err == nil {
+		t.Fatal("synthetic interrupted submit unexpectedly completed")
+	}
+	if err = os.Remove(interruption); err != nil {
+		t.Fatal(err)
+	}
+	pending, err := ownerctx.SubmitRefinement(sourceBrain, input)
+	if err != nil || pending.State != "proposed" {
+		t.Fatal("public interrupted proposal was not retained", pending.State, err)
+	}
+	if current, err := os.ReadFile(filepath.Join(sourceBrain, facetPath)); err != nil || !bytes.Equal(current, original) {
+		t.Fatal("interrupted source submit changed authored facet", err)
+	}
+	sourceControls := map[string][]byte{}
+	for _, name := range []string{"owner/registry.json", "owner/refinement/proposals/" + pending.ID + ".json", "owner/refinement/versions/" + facet + "/" + pending.ID + ".before.md"} {
+		body, err := os.ReadFile(filepath.Join(sourceBrain, name))
+		if err != nil {
+			t.Fatal("source control unavailable", name, err)
+		}
+		sourceControls[name] = body
+	}
+	p, err := zipmigration.PlanExternal(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := externalDigest(t, p)
+	if migrated, err := zipmigration.ApplyExternal(p, digest, nil); err != nil || !migrated.Current {
+		t.Fatal("migration failed", err)
+	}
+	targetBrain := filepath.Join(o.Home, "brain")
+	for name, original := range sourceControls {
+		if _, err := os.Stat(filepath.Join(targetBrain, name)); !os.IsNotExist(err) {
+			t.Error("historical owner control remained active", name)
+		}
+		retained, err := os.ReadFile(filepath.Join(o.Home, "lineage", p.AttemptID, "brain", name))
+		if err != nil || !bytes.Equal(retained, original) {
+			t.Error("historical owner control was not retained intact", name, err)
+		}
+	}
+	if _, err = ownerctx.Initialize(targetBrain); err != nil {
+		t.Fatal(err)
+	}
+	if applied, err := ownerctx.ApplyRefinement(targetBrain, pending.ID, false); err == nil || applied.State == "applied" {
+		t.Error("historical authorized pending proposal reactivated after migration")
+	}
+	beforeReuse, err := os.ReadFile(filepath.Join(targetBrain, facetPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reused, err := ownerctx.SubmitRefinement(targetBrain, ownerctx.RefinementInput{Facet: facet, Evidence: "synthetic relocated producer", ProposedBody: "# Relocated authority\n\n## Current\n\nThis historical capability must not auto-apply.\n", ProducerID: input.ProducerID, Capability: oldCapability})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reused.State == "applied" {
+		t.Error("historical producer capability reactivated after migration")
+	}
+	afterReuse, err := os.ReadFile(filepath.Join(targetBrain, facetPath))
+	if err != nil || !bytes.Equal(beforeReuse, afterReuse) || !bytes.Equal(afterReuse, original) {
+		t.Error("historical owner authority changed migrated SELF", err)
+	}
+	// Explicit enrollment in the new brain restores the owning workflow; the
+	// fresh capability stays in test memory and is never printed or persisted.
+	freshCapability, err := ownerctx.AuthorizeProducer(targetBrain, input.ProducerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := ownerctx.SubmitRefinement(targetBrain, ownerctx.RefinementInput{Facet: facet, Evidence: "synthetic fresh enrollment", ProposedBody: "# Fresh authority\n\n## Current\n\nExplicitly enrolled after migration.\n", ProducerID: input.ProducerID, Capability: freshCapability})
+	if err != nil || fresh.State != "applied" {
+		t.Fatal("fresh explicit producer enrollment did not work", fresh.State, err)
+	}
+	if repeated, err := zipmigration.ApplyExternal(p, digest, nil); err != nil || !repeated.Current {
+		t.Fatal("repeat changed migration", err)
+	}
+	if current, err := os.ReadFile(filepath.Join(targetBrain, facetPath)); err != nil || !strings.Contains(string(current), "Explicitly enrolled after migration.") {
+		t.Error("repeat overwrote explicitly updated SELF", err)
+	}
+	if current, err := os.ReadFile(filepath.Join(sourceBrain, facetPath)); err != nil || !bytes.Equal(current, original) {
+		t.Fatal("migration changed preserved source SELF", err)
+	}
+	for name, original := range sourceControls {
+		body, err := os.ReadFile(filepath.Join(sourceBrain, name))
+		if err != nil || !bytes.Equal(body, original) {
+			t.Error("migration changed preserved source control", name, err)
+		}
+	}
+}
+
+func TestExternalOwnerControlsPreserveAuthoredNeighbors(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("external ownership unavailable")
+	}
+	for _, spelling := range []string{"canonical", "portable-case"} {
+		t.Run(spelling, func(t *testing.T) {
+			o := externalFixture(t, "0.2.0")
+			controls := []string{"owner/registry.json", "owner/interview/confirmations.json", "owner/interview/drafts/review.json", "owner/refinement/proposals/pending.json", "owner/refinement/audits/prepared.json", "owner/refinement/reversions/prior.json", "owner/refinement/versions/voice/prior.before.md", "owner/observations/observations.jsonl"}
+			for i, name := range controls {
+				if spelling == "portable-case" {
+					name = "owner/" + strings.ToUpper(strings.TrimPrefix(name, "owner/"))
+					controls[i] = name
+				}
+				externalPut(t, o.SourceRoot, "brain/"+name, "historical machine state\n")
+			}
+			authored := []string{"owner/self/voice.md", "owner/operating/work-state.md", "owner/sources/assessment.json", "owner/prompt-history/entries.jsonl", "owner/observations/notes.md", "owner/registry-notes.json", "owner/interview-notes.md", "owner/refinement-notes.json"}
+			for _, name := range authored {
+				externalPut(t, o.SourceRoot, "brain/"+name, "authored source/history\n")
+			}
+			p, err := zipmigration.PlanExternal(o)
+			if err != nil {
+				t.Fatal(err)
+			}
+			digest := externalDigest(t, p)
+			if _, err = zipmigration.ApplyExternal(p, digest, nil); err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range controls {
+				if _, err := os.Stat(filepath.Join(o.Home, "brain", name)); !os.IsNotExist(err) {
+					t.Error("owner control remained in active reader path", name)
+				}
+				for _, root := range []string{o.SourceRoot, filepath.Join(o.Home, "lineage", p.AttemptID)} {
+					body, err := os.ReadFile(filepath.Join(root, "brain", name))
+					if err != nil || string(body) != "historical machine state\n" {
+						t.Error("owner machine state lost or rewritten", name, err)
+					}
+				}
+			}
+			for _, name := range authored {
+				for _, root := range []string{o.SourceRoot, o.Home} {
+					body, err := os.ReadFile(filepath.Join(root, "brain", name))
+					if err != nil || string(body) != "authored source/history\n" {
+						t.Error("authored neighbor lost or rewritten", name, err)
+					}
+				}
+			}
+			externalPut(t, o.Home, "brain/owner/self/voice.md", "new authored edit\n")
+			if _, err = zipmigration.ApplyExternal(p, digest, nil); err != nil {
+				t.Fatal(err)
+			}
+			rolled, err := zipmigration.RollbackExternal(o.Home, p.AttemptID, digest, nil)
+			if err != nil || rolled.Current || rolled.RestoredRuntime {
+				t.Fatal("owner migration rollback failed", err)
+			}
+			body, err := os.ReadFile(filepath.Join(rolled.ArchiveRoot, "brain/owner/self/voice.md"))
+			if err != nil || string(body) != "new authored edit\n" {
+				t.Fatal("repeat/rollback did not preserve authored edit", err)
+			}
+		})
+	}
+}
+
+func TestExternalOwnerObservationsRequireFreshAttestation(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("external ownership unavailable")
+	}
+	o := externalFixture(t, "0.2.0")
+	sourceBrain := filepath.Join(o.SourceRoot, "brain")
+	if _, err := ownerctx.Initialize(sourceBrain); err != nil {
+		t.Fatal(err)
+	}
+	input := ownerctx.ObservationInput{SchemaVersion: 1, Signal: ownerctx.SignalExplicitCorrection, Facet: "voice", Claim: "concise_updates", EvidenceType: "owner_statement", SourceEvent: "interaction.completed", SourceDigest: strings.Repeat("a", 64), EpisodeID: "synthetic-source-episode", ScopeKind: "global", ScopeID: "synthetic-owner", Confidence: 1, Sensitivity: "professional", ExpiresAt: time.Now().UTC().Add(time.Hour), AuthenticatedOwner: true, Material: true, OwnerConfirmed: true}
+	first, evaluation, err := ownerctx.AppendObservation(sourceBrain, input)
+	if err != nil || !first.Persisted || !evaluation.Persist {
+		t.Fatal("public source observation was not persisted", err)
+	}
+	independent := input
+	independent.EpisodeID = "synthetic-independent-episode"
+	independent.SourceDigest = strings.Repeat("c", 64)
+	second, _, err := ownerctx.AppendObservation(sourceBrain, independent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, receipt := range []ownerctx.ObservationReceipt{first, second} {
+		eligible, err := ownerctx.TransitionObservation(sourceBrain, ownerctx.ObservationTransitionInput{ObservationID: receipt.ID, TransitionID: "eligible-" + receipt.EpisodeID, Next: ownerctx.ObservationEligible, ExpectedState: receipt.State, ExpectedRevision: receipt.Revision, OwnerAction: true})
+		if err != nil {
+			t.Fatal("public observation eligibility transition failed", err)
+		}
+		if receipt.ID == first.ID {
+			first = eligible
+		}
+	}
+	first, err = ownerctx.TransitionObservation(sourceBrain, ownerctx.ObservationTransitionInput{ObservationID: first.ID, TransitionID: "synthetic-corroborated", Next: ownerctx.ObservationCorroborated, ExpectedState: first.State, ExpectedRevision: first.Revision, OwnerAction: true})
+	if err != nil || !ownerctx.IsYodaWeeklyEligible(first) {
+		t.Fatal("public source observation did not become weekly-eligible", err)
+	}
+	original, err := os.ReadFile(filepath.Join(sourceBrain, "owner/observations/observations.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	externalPut(t, sourceBrain, "owner/observations/notes.md", "authored observation notes\n")
+	p, err := zipmigration.PlanExternal(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = zipmigration.ApplyExternal(p, externalDigest(t, p), nil); err != nil {
+		t.Fatal(err)
+	}
+	targetBrain := filepath.Join(o.Home, "brain")
+	if _, err = ownerctx.Initialize(targetBrain); err != nil {
+		t.Fatal(err)
+	}
+	if old, err := ownerctx.ListObservations(sourceBrain); err != nil || len(old) != 2 {
+		t.Fatal("original owner attestation was lost", err)
+	}
+	if active, err := ownerctx.ListObservations(targetBrain); err != nil || len(active) != 0 {
+		t.Error("historical owner attestation reactivated in new brain", err)
+	}
+	retained, err := os.ReadFile(filepath.Join(o.Home, "lineage", p.AttemptID, "brain/owner/observations/observations.jsonl"))
+	if err != nil || !bytes.Equal(retained, original) {
+		t.Error("historical observation ledger was not retained intact", err)
+	}
+	if body, err := os.ReadFile(filepath.Join(targetBrain, "owner/observations/notes.md")); err != nil || string(body) != "authored observation notes\n" {
+		t.Error("authored observation neighbor was not preserved", err)
+	}
+	input.EpisodeID = "synthetic-fresh-episode"
+	input.SourceDigest = strings.Repeat("b", 64)
+	if receipt, _, err := ownerctx.AppendObservation(targetBrain, input); err != nil || !receipt.Persisted {
+		t.Fatal("fresh explicit attestation failed", err)
+	}
+	if active, err := ownerctx.ListObservations(targetBrain); err != nil || len(active) != 1 || active[0].EpisodeID != input.EpisodeID {
+		t.Error("fresh observation store contains historical authority", err)
+	}
+}
 
 func TestExternalCurrentBrainSurvivesLegacyEvolution(t *testing.T) {
 	if runtime.GOOS == "windows" {

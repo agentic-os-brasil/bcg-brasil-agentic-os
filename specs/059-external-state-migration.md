@@ -44,6 +44,16 @@ an explicit inactive/reconfirmation status; automatic daily-group rebase is not
 delivered by copying or rewriting a single root field. Existing owning workflows
 must create fresh authority. Do not erase pending work or call it replayed.
 
+Owner controls include the exact `owner/registry.json` and
+`owner/observations/observations.jsonl` files and the `owner/interview/` and
+`owner/refinement/` trees, including portable spelling variants. Their root-free
+producer grants, pending approvals, interview confirmations and corroboration
+are historical evidence after relocation. Preserve SELF bodies, authored
+observation notes, prompt history and work state as authored content; do not
+archive the entire owner tree. Plans from older engineering candidates that
+classified these controls as live fail validation and must be rebuilt before
+application. No compatibility exception may reactivate their old authority.
+
 ## Four explicit operations
 
 Keep `PlanExternal`, `ApplyExternal`, `InspectExternal` and `RollbackExternal` in
