@@ -61,16 +61,30 @@ workspace instructions may be sent:
 ```bash
 bash acceptance/zip-update/live-agent-qualification.sh \
   --zip dist/Maestro-v0.1.12-macos.zip \
+  --profile /absolute/path/to/dedicated-test-profile \
   --trace macos-agent-trace.jsonl \
   --receipt macos-agent.json
 ```
 
-On Windows, run the native equivalent first in Windows PowerShell 5.1 and then
-in PowerShell 7 when available:
+For this command, authenticate Claude in the selected dedicated profile before
+running the attended qualification. The profile must be an absolute real
+directory, distinct from the operator's normal HOME; do not copy credentials.
+The command explicitly initializes its synthetic owner HOME under that profile,
+then runs the client with HOME/USERPROFILE bound there. A conflicting
+CLAUDE_CONFIG_DIR is rejected and the client uses the selected profile's default
+configuration. The caller's environment and normal owner locator are preserved.
+Missing authentication or unavailable binding remains a failure, never a receipt.
+
+On Windows, the attended equivalent also requires a dedicated authenticated
+profile. External HOME admission remains unavailable until native ownership is
+qualified; this command must refuse before starting a model in that state. Run
+only after that gate is implemented and proven, first in Windows PowerShell 5.1
+and then in PowerShell 7 when available:
 
 ```powershell
 .\acceptance\zip-update\live-agent-qualification.ps1 `
   -Zip .\dist\Maestro-v0.1.12-windows-powershell.zip `
+  -Profile C:\dedicated-test-profile `
   -Trace .\windows-agent-trace.jsonl `
   -Receipt .\windows-agent.json
 ```
@@ -95,3 +109,8 @@ identical and only the new core may report 0.1.12. Repeat on both platforms.
 
 The release gate is closed only when offline and live receipts pass for each
 platform ZIP digest and both update rehearsals preserve `data/`.
+
+The PowerShell source classifier can be checked independently with
+`pwsh -NoProfile -File acceptance/zip-update/test-live-agent-qualification.ps1`.
+It consumes synthetic traces and issues only `TRACE_PASS` classifications with
+`runtime_qualified: false`; it does not call Claude or bypass HOME admission.

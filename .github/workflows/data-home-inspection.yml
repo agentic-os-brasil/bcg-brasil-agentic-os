@@ -4,8 +4,12 @@ on:
   pull_request:
     paths:
       - 'internal/datahome/**'
+      - 'internal/zipruntime/**'
       - 'internal/scheduler/**'
       - 'cmd/maestro-runtime/**'
+      - 'acceptance/test_canonical_home_*.py'
+      - 'installers/zip/user-template/.claude/hooks/**'
+      - 'bundles/base/tools/**'
       - '.github/workflows/data-home-inspection.yml'
       - 'go.mod'
       - 'go.sum'
@@ -13,8 +17,12 @@ on:
     branches: [main]
     paths:
       - 'internal/datahome/**'
+      - 'internal/zipruntime/**'
       - 'internal/scheduler/**'
       - 'cmd/maestro-runtime/**'
+      - 'acceptance/test_canonical_home_*.py'
+      - 'installers/zip/user-template/.claude/hooks/**'
+      - 'bundles/base/tools/**'
       - '.github/workflows/data-home-inspection.yml'
       - 'go.mod'
       - 'go.sum'
@@ -35,7 +43,33 @@ jobs:
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
-      - name: Read-only inspection and shared path contracts
-        run: go test ./internal/datahome ./internal/scheduler ./cmd/maestro-runtime
+      - name: Inspection, shared path and consumer contracts
+        run: go test ./internal/datahome ./internal/scheduler ./internal/zipruntime ./cmd/maestro-runtime
       - name: Static checks at the same boundaries
-        run: go vet ./internal/datahome ./internal/scheduler ./cmd/maestro-runtime
+        run: go vet ./internal/datahome ./internal/scheduler ./internal/zipruntime ./cmd/maestro-runtime
+
+  packaged-consumers:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - name: Build the real runtime used by distributed hooks
+        shell: bash
+        run: go build -o "$RUNNER_TEMP/maestro-runtime" ./cmd/maestro-runtime
+      # PowerShell runs when present; Unix evidence never admits Windows writes.
+      - name: Public hook and Python workflows with isolated owner state
+        shell: bash
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          export TMPDIR="$RUNNER_TEMP"
+          export MAESTRO_TEST_TMP="$RUNNER_TEMP/maestro-python-consumers"
+          export MAESTRO_TEST_RUNTIME="$RUNNER_TEMP/maestro-runtime"
+          python3 -m unittest acceptance.test_canonical_home_hooks acceptance.test_canonical_home_tools -v

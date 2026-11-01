@@ -5,6 +5,9 @@ description: Recover explicitly requested prior professional material (past deck
 
 # Find Prior Work
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Skill de recuperação de material profissional prévio dentro da workspace Maestro. Ativa apenas quando o pedido é explícito ("acha o deck que fiz para o cliente X", "onde ficou aquele documento de kickoff do projeto Y", "recupera o material anterior sobre Z"). Não ativar para pesquisa geral, exploração de contexto ou dúvidas sobre SharePoint.
 
 ## Contrato de comunicação
@@ -20,7 +23,7 @@ Resolver [`interaction-profile`](../interaction-profile/SKILL.md) se presente. A
 
 ## Escopo desta release
 
-O Maestro atual (distribuição ZIP) indexa apenas o que já está local na workspace do usuário, sob `${CLAUDE_PROJECT_DIR}/brain/`. Fontes cobertas:
+O Maestro atual (distribuição ZIP) indexa apenas o que já está local na workspace do usuário, sob `<admitted brain_root>/`. Fontes cobertas:
 
 - `brain/memory/` — memória de longo prazo do Maestro (L1/L2/L3/lifetime) com decisões, contexto de projeto e sínteses de sessão.
 - `brain/accounts/<conta>/cases/<caso>/` — o material de caso: `deliverables/`, `sources/`, `canon/`, `decisions/`. É onde mora quase todo prior work de projeto.
@@ -55,7 +58,7 @@ O Maestro atual (distribuição ZIP) indexa apenas o que já está local na work
 Se o usuário confirma que o material existe mas está no SharePoint, OneDrive corporativo ou email:
 
 1. Explicar em uma frase que a integração com fontes remotas está prevista para uma release futura do Maestro.
-2. Orientar o caminho manual desta release: salvar ou sincronizar uma cópia do arquivo dentro de `${CLAUDE_PROJECT_DIR}/brain/accounts/<conta>/cases/<caso>/sources/` (por exemplo, arrastando pelo Finder a partir da pasta local do OneDrive) e pedir a busca de novo.
+2. Orientar o caminho manual desta release: salvar ou sincronizar uma cópia do arquivo dentro de `<admitted brain_root>/accounts/<conta>/cases/<caso>/sources/` (por exemplo, arrastando pelo Finder a partir da pasta local do OneDrive) e pedir a busca de novo.
 3. Não abrir browser, não pedir credencial, não tentar conector alternativo, não sugerir workaround técnico.
 
 ## O que esta skill nunca faz

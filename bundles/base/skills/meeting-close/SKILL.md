@@ -5,6 +5,9 @@ description: Produce a reviewable closure packet from supplied meeting notes by 
 
 # Meeting Close
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Use when a Case Agent needs a reliable end-of-meeting checkpoint. This is a
 bounded composition of [`meeting-to-work-items`](../meeting-to-work-items/SKILL.md); it stops before external
 systems, messages or durable memory.

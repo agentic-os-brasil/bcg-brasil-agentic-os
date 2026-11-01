@@ -39,21 +39,22 @@ set -eu
 . "$(dirname "${BASH_SOURCE[0]}")/lib/python.sh" 2>/dev/null || true
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
-BRAIN_DIR="$PROJECT_DIR/brain"
+. "$(dirname "${BASH_SOURCE[0]}")/lib/maestro-runtime.sh" || exit 0
+maestro_bind_home "$PROJECT_DIR" || exit 0
+BRAIN_DIR="$MAESTRO_BRAIN_ROOT"
 OWNER_DIR="$BRAIN_DIR/owner"
 MEMORY_DIR="$BRAIN_DIR/memory"
 
 FIRST_BUDGET=1600
 NEXT_BUDGET=160
 
-# Session marker directory. Prefer $HOME/.claude/state; fallback to /tmp.
-STATE_DIR="${HOME:-/tmp}/.claude/state"
-if ! mkdir -p "$STATE_DIR" 2>/dev/null; then
-  STATE_DIR="/tmp"
-fi
+# Session markers belong to the admitted owner, across product versions.
+STATE_DIR="$MAESTRO_METADATA_ROOT/context-state"
+mkdir -p "$STATE_DIR" 2>/dev/null || exit 0
 
 # Session id — use CLAUDE_SESSION_ID if present, else derive from PPID+date.
 SESSION_ID="${CLAUDE_SESSION_ID:-${PPID:-noppid}-$(date +%Y%m%d 2>/dev/null || echo nodate)}"
+SESSION_ID=$(printf '%s' "$SESSION_ID" | tr -c 'A-Za-z0-9._-' '_')
 MARKER="$STATE_DIR/context-inject-${SESSION_ID}.marker"
 
 truncate_stdout() {
@@ -75,7 +76,7 @@ emit_minimal() {
   # Absolute fallback — used on any read error. Points at the memory root,
   # which the scaffold always creates. Naming a specific index file here would
   # assert a path that may not exist.
-  printf '<!-- maestro:context-inject:minimal -->\nMemory: %s/brain/memory/ (load on demand).\n' "$PROJECT_DIR"
+  printf '<!-- maestro:context-inject:minimal -->\nMemory: %s/memory/ (load on demand).\n' "$BRAIN_DIR"
 }
 
 # Trap any unexpected error -> emit minimal, exit 0.
@@ -148,7 +149,7 @@ except Exception:
     if [ -n "${AGENT_PROMPT:-}" ]; then
       if [ -f "$SKILL_ROUTER" ]; then
         SKILLS_OUT=$( (cd "$PROJECT_DIR" && printf '%s' "$AGENT_PROMPT" \
-          | PYTHONIOENCODING=utf-8 maestro_py "$SKILL_ROUTER" --max 4 2>/dev/null) \
+          | PYTHONIOENCODING=utf-8 maestro_py "$SKILL_ROUTER" --product-root "$PROJECT_DIR" --max 4 2>/dev/null) \
           | truncate_stdout "$SKILL_BUDGET" || true)
         if [ -n "${SKILLS_OUT:-}" ]; then
           printf '%s\n' "$SKILLS_OUT"
@@ -158,7 +159,7 @@ except Exception:
       PROMPT_LEN=${#AGENT_PROMPT}
       if [ "$PROMPT_LEN" -ge 25 ] && [ -f "$BRAIN_ROUTER" ] && [ -f "$ROUTE_INDEX" ]; then
         PAGES_OUT=$( (cd "$PROJECT_DIR" && printf '%s' "$AGENT_PROMPT" \
-          | PYTHONIOENCODING=utf-8 maestro_py "$BRAIN_ROUTER" --max 5 2>/dev/null) \
+          | PYTHONIOENCODING=utf-8 maestro_py "$BRAIN_ROUTER" --product-root "$PROJECT_DIR" --max 5 2>/dev/null) \
           | truncate_stdout "$BRAIN_BUDGET" || true)
         if [ -n "${PAGES_OUT:-}" ]; then
           printf '%s\n' "$PAGES_OUT"
@@ -172,7 +173,7 @@ if [ -f "$MARKER" ]; then
   # -------- subsequent fires: stub only --------
   {
     printf '<!-- maestro:context-inject:stub -->\n'
-    printf 'Memory: %s/brain/memory/ · Load specific tiers on demand.\n' "$PROJECT_DIR"
+    printf 'Memory: %s/memory/ · Load specific tiers on demand.\n' "$BRAIN_DIR"
   } | truncate_stdout "$NEXT_BUDGET"
   exit 0
 fi
@@ -212,7 +213,7 @@ PY
   # actually exists: neither MEMORY.md nor decisions/decision-log.md is created
   # by the scaffold, and naming a file that is not there invites a failed read
   # on the first turn of every session.
-  printf 'Memory: %s/brain/memory/\n' "$PROJECT_DIR"
+  printf 'Memory: %s/memory/\n' "$BRAIN_DIR"
   if [ -f "$MEMORY_DIR/MEMORY.md" ]; then
     printf 'Memory index: %s/MEMORY.md\n' "$MEMORY_DIR"
   fi

@@ -5,6 +5,9 @@ description: Close the working day on the owner's daily page — what got done, 
 
 # End of Day
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Close the day honestly and leave tomorrow a starting point.
 
 All reads and writes use direct file operations on the owner atlas paths (`brain/owner/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.

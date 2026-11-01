@@ -4,6 +4,10 @@
 from __future__ import annotations
 
 import unittest
+import os
+import subprocess
+import tempfile
+import shutil
 import sys
 from pathlib import Path
 
@@ -103,6 +107,67 @@ class EvaluateTraceTest(unittest.TestCase):
         events.insert(-1, stop)
         checks, _ = evaluate(events, 0)
         self.assertFalse(checks["stop_hook_succeeded_after_hub"])
+
+
+class LiveQualificationProfileTests(unittest.TestCase):
+    def test_missing_or_unsafe_profile_stops_before_model_and_state_effects(self):
+        self.check_profile_refusals(False)
+
+    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell source parser unavailable")
+    def test_powershell_profile_refusals_precede_model_and_native_admission(self):
+        self.check_profile_refusals(True)
+
+    def check_profile_refusals(self, powershell):
+        script = Path(__file__).with_name("live-agent-qualification.ps1" if powershell else "live-agent-qualification.sh")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            current = root / "operator-profile"
+            current.mkdir(mode=0o700)
+            dedicated = root / "dedicated-profile"
+            dedicated.mkdir(mode=0o700)
+            alias = root / "profile-alias"
+            alias.symlink_to(dedicated, target_is_directory=True)
+            commands = root / "bin"
+            commands.mkdir()
+            invoked = root / "model-invoked"
+            (commands / "claude").write_text('#!/bin/sh\nprintf invoked > "$MODEL_MARKER"\n', encoding="utf-8")
+            (commands / "claude").chmod(0o755)
+            archive = root / "candidate.zip"
+            archive.write_bytes(b"profile validation must precede extraction")
+            trace, receipt = root / "trace.jsonl", root / "receipt.json"
+            environment = dict(os.environ, HOME=str(current), USERPROFILE=str(current),
+                               PATH=str(commands) + os.pathsep + os.environ["PATH"],
+                               MODEL_MARKER=str(invoked), MAESTRO_HOME=str(root / "outside-owner"))
+            environment.pop("CLAUDE_CONFIG_DIR", None)
+            (current / "sentinel.txt").write_text("preserved operator state", encoding="utf-8")
+            # Initialize the shell host's own cache before measuring product effects.
+            if powershell:
+                subprocess.run(["pwsh", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "exit 0"],
+                               env=environment, capture_output=True, check=True)
+            operator_before = {str(path.relative_to(current)): None if path.is_dir() else path.read_bytes()
+                               for path in current.rglob("*")}
+            cases = [([], {}), (["--profile", "relative-profile"], {}),
+                     (["--profile", str(alias)], {}), (["--profile", str(current)], {}),
+                     (["--profile", str(dedicated)], {"CLAUDE_CONFIG_DIR": str(current / ".claude")})]
+            for arguments, overrides in cases:
+                with self.subTest(arguments=arguments, overrides=overrides):
+                    if powershell:
+                        profile_args = ["-Profile" if value == "--profile" else value for value in arguments]
+                        command = ["pwsh", "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(script),
+                                   "-Zip", str(archive), "-Trace", str(trace), "-Receipt", str(receipt), *profile_args]
+                    else:
+                        command = ["bash", str(script), "--zip", str(archive),
+                                   "--trace", str(trace), "--receipt", str(receipt), *arguments]
+                    result = subprocess.run(command, env={**environment, **overrides}, text=True, capture_output=True)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("profile", result.stderr.lower())
+                    self.assertFalse(invoked.exists())
+                    self.assertFalse(trace.exists())
+                    self.assertFalse(receipt.exists())
+                    self.assertEqual({str(path.relative_to(current)): None if path.is_dir() else path.read_bytes()
+                                      for path in current.rglob("*")}, operator_before)
+                    self.assertEqual(list(dedicated.iterdir()), [])
+                    self.assertFalse((root / "outside-owner").exists())
 
 
 if __name__ == "__main__":

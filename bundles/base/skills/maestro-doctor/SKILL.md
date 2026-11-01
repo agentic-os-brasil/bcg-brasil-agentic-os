@@ -5,6 +5,9 @@ description: Runs a plain-language health check of the user's Maestro install. V
 
 # Maestro Doctor
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Diagnose a Maestro install without technical jargon. Report in one paragraph plus a short list. Never ask the user to open a terminal — inspect files yourself.
 
 ## Interaction profile
@@ -13,8 +16,19 @@ Resolve [`interaction-profile`](../interaction-profile/SKILL.md) if present. Adj
 
 ## Checks (run in order, silent on success)
 
-0. **Migração validada agora** — antes de considerar `.initialized`, se `data/`
-   ou `brain/.maestro/migration/state.json` existir, executar somente leitura pelo
+0. **Binding do estado** — obter `home paths` pelo helper gerenciado verificado,
+   usando a raiz de produto confirmada. Somente o resultado atual admitido fornece
+   `brain_root` e `metadata_root`. `brain/` abaixo é um prefixo lógico desse brain.
+   Diagnóstico desconhecido, pendente, revogado, conflitante ou não verificado é
+   UNAVAILABLE/FAIL conforme o contrato, antes de logging, scaffold ou reparo.
+   Não ler origin/locator por conta própria nem criar uma pasta para a checagem.
+   Checks de núcleo podem continuar para diagnóstico; um status v1 não substitui
+   uma autoridade HOME bloqueada. Setup novo exige escolha explícita; não faz
+   migração externa, que permanece uma entrega separada.
+
+0b. **Estado legado validado agora** — somente para binding legado admitido ou
+   diagnóstico que exija inspecionar a migração v1, se `data/` ou o journal legado
+   existir na instalação de origem, executar somente leitura pelo
    helper gerenciado e verificado: `maestro-runtime migration --project <raiz> --status`.
    No Mac, usar `.claude/hooks/lib/maestro-runtime.sh` e
    `maestro_runtime <raiz> migration --project <raiz> --status`; no Windows,
@@ -23,7 +37,7 @@ Resolve [`interaction-profile`](../interaction-profile/SKILL.md) if present. Adj
    O comando revalida inventário e hashes da origem, plano imutável e recibo da
    mesma tentativa, além dos destinos. Ler um JSON antigo não substitui isso.
 
-   - `committed` ou `not_needed`: continuar os demais checks. `committed` prova
+   - `committed` ou `not_needed`: continuar os checks de estado somente se o binding também estiver admitido. `committed` prova
      esta cópia validada, não qualificação do runtime ou autorização para apagar backup.
 Se verification=target_evolved e current=false, o recibo comprova a cópia
      histórica e o dono já alterou brain/. Isso não bloqueia uso normal, não
@@ -72,13 +86,13 @@ Se verification=target_evolved e current=false, o recibo comprova a cópia
 
 5. **Hook executable** (Mac/Linux only) — verify the hook under `.claude/hooks/` has execute permission. On Windows the permission bit is not the constraint, so skip it here — whether the hooks ran at all is covered by check 11.
 
-6. **Cloud-sync path** — inspect `${CLAUDE_PROJECT_DIR}` for substrings `OneDrive`, `Dropbox`, `Google Drive`, `iCloud`, `iCloudDrive`, `pCloud`, `Box Sync`. If any match, sinalizar como ponto a verificar. Pasta sincronizada em nuvem pode causar conflitos de arquivo e perda de `brain/` durante extração do ZIP novo. Recomendar mover a pasta `Maestro/` para um local não-sincronizado, por exemplo `Documents/Maestro/` (Mac) ou `Documentos\Maestro\` local (Windows).
+6. **Filesystem do estado** — verificar o `brain_root` admitido e o tipo de filesystem. OneDrive, Dropbox e outros caminhos sincronizados exigem a qualificação correspondente; sincronização não prova transação nem recuperação. Não mover estado nem serviços automaticamente. Núcleo, feed de distribuição e HOME são superfícies distintas.
 
 7. **Problemas conhecidos** — ler `${CLAUDE_PROJECT_DIR}/bundles/base/known-issues.md`. Se o arquivo listar entradas ativas (qualquer coisa além do bloco "nenhuma"), surfar cada uma como um "ponto a verificar" com o contorno indicado. Se listar "nenhuma" ou estiver ausente, seguir em silêncio.
 
-8. **Workspace recuperada** — listar `${CLAUDE_PROJECT_DIR}/brain/.recovered-*`. Se houver algum, surfar como ponto informativo (não é erro): "workspace foi recuperada em <timestamp extraído do nome do arquivo>, nenhuma ação necessária". Isso sinaliza que o hook de scaffold detectou `brain/` sem marcador (restauração de backup ou marker apagado em update).
+8. **Workspace recuperada** — listar `<admitted brain_root>/.recovered-*`. Se houver algum, surfar como ponto informativo (não é erro): "workspace foi recuperada em <timestamp extraído do nome do arquivo>, nenhuma ação necessária". Isso sinaliza que o hook de scaffold detectou `brain/` sem marcador (restauração de backup ou marker apagado em update).
 
-9. **Log do scaffold** — se `${CLAUDE_PROJECT_DIR}/brain/.scaffold.log` existir, ler as últimas 20 linhas. Se contiver `MKDIR FAIL` ou `ABORT`, surfar como ponto a verificar com a recomendação: "reinstale seguindo o passo a passo do `README-INSTALL.md` na raiz da pasta Maestro. Sua `brain/` é preservada porque o ritual copia ela para a instalação nova." Se só houver linhas `MKDIR OK` e `DONE`, seguir em silêncio.
+9. **Log do scaffold** — se `<admitted brain_root>/.scaffold.log` existir, ler as últimas 20 linhas. Se contiver `MKDIR FAIL` ou `ABORT`, surfar como ponto a verificar com a recomendação: "reinstale seguindo o passo a passo do `README-INSTALL.md` na raiz da pasta Maestro. O estado admitido é preservado separadamente do núcleo; não copiar o HOME por cima da instalação." Se só houver linhas `MKDIR OK` e `DONE`, seguir em silêncio.
 
 10. **Drift de árvore do owner (onboarding pré-fix)** — detectar owners que fizeram onboarding antes do fix de fechamento da árvore de controle. Ler:
     - `brain/owner/registry.json` → campo `initialized`
@@ -87,30 +101,12 @@ Se verification=target_evolved e current=false, o recibo comprova a cópia
 
     Se `onboarding.json.status == "complete"` **e** (`registry.json.initialized == false` **ou** `confirmations.json.completed_tracks == []`), surfar como ponto informativo (não é erro funcional): "o onboarding foi concluído numa versão anterior do Maestro e dois arquivos de controle interno ficaram desatualizados. Nenhuma ação necessária — rodar o onboarding uma vez de novo (opcional) atualiza os arquivos. Isso não afeta o funcionamento do sistema." Se ambos os campos já refletem o estado concluído, seguir em silêncio.
 
-11. **As rotinas automáticas rodaram nesta máquina** — este é o único check que
-    detecta uma instalação onde os hooks nunca executaram. Comparar dois arquivos:
-
-    - `brain/.initialized` existe (a workspace foi montada), **e**
-    - `brain/.scaffold.log` **não** existe.
-
-    O hook `first-run-scaffold` escreve o log em toda execução, desde a primeira linha.
-    O caminho de emergência descrito no `CLAUDE.md` — em que o próprio assistente
-    monta a `brain/` dentro da conversa — não escreve o log. Portanto `brain/`
-    montada **sem** log significa que os hooks não rodaram ou não foram aceitos
-    pelo Claude Code.
-
-    Quando o par acima bater, surfar como ponto a verificar, em linguagem simples:
-    "algumas rotinas automáticas do Maestro não estão ativas nesta máquina — ele
-    funciona, mas não lembra sozinho do contexto entre conversas nem fecha o dia
-    por conta própria. Avise o time BCG Brasil AI; não é problema da sua pasta e
-    não dá pra resolver por aqui." Complementar com o contorno da entrada
-    `README-INSTALL.md`.
-
-    Se `brain/.scaffold.log` existir, ou se `brain/.initialized` não existir (aí o
-    caso é o check 2, não este), seguir em silêncio.
-
-    Nunca recomendar instalar Bash, Git for Windows ou WSL. No perfil Windows
-    desta versão, essas peças não participam dos hooks.
+11. **Execução observada no host** — configuração, marcador de inicialização e
+    log de scaffold não provam qualificação nativa. Confirmar os eventos esperados
+    no mecanismo real do host, com recibos atuais vinculados à versão/binding.
+    Sem essa prova, reportar UNAVAILABLE e o próximo passo suportado; não fabricar
+    recibo ou confiança de hook. Um log no brain pode ajudar a investigação,
+    inclusive depois de importação legada, mas não substitui o evento observado.
 
 12. **Interpretador das rotinas automáticas** — o check 11 responde "os hooks
     rodaram?"; este responde "eles tinham com que trabalhar?". Primeiro ler
@@ -134,33 +130,6 @@ Se verification=target_evolved e current=false, o recibo comprova a cópia
       de cliente são recusadas. Ele segue utilizável para conversar. Avise o time
       BCG Brasil AI." Encaminhar para a seção "Interpretador local" de
       `maestro-environment-setup`, que sabe
-      apontar o Maestro para um interpretador que exista fora do PATH.
-
-    Instalar um interpretador não está autorizado hoje: a decisão `PYUV` cobre
-    ambiente Python sob demanda para uma capacidade pedida pelo dono, e exige
-    justificativa própria para cada nova capacidade dependente de Python. As
-    rotinas automáticas são infraestrutura sempre-ligada, não capacidade sob
-    demanda. Enquanto isso não for decidido, este check reporta e encaminha —
-    nunca pede ao usuário para instalar Python nem abrir terminal.
-
-    `maestro-doctor` continua read-only: este check diagnostica e nomeia o
-    próximo passo; quem executa é a skill de setup.
-
-12. **Interpretador das rotinas automáticas** — o check 11 responde "os hooks
-    rodaram?"; este responde "eles tinham com que trabalhar?". Todo hook que lê
-    ou escreve JSON depende de um interpretador Python 3, e sem ele cada um sai
-    sem erro: memória entre conversas, roteamento de skills e separação entre
-    clientes ficam desligados sem nenhum sinal.
-
-    Rodar `bash -c '. "$CLAUDE_PROJECT_DIR/.claude/hooks/lib/python.sh"; maestro_python'`.
-
-    - Se imprimir algo, seguir em silêncio. O que imprime é o nome ou caminho
-      resolvido; não mostrar ao usuário.
-    - Se não imprimir nada, surfar como ponto a verificar: "uma peça do Maestro
-      não está instalada nesta máquina — por isso ele não lembra do contexto
-      entre conversas nem protege a separação entre clientes. Ele segue
-      utilizável para conversar. Avise o time BCG Brasil AI." Encaminhar para a
-      seção "Interpretador local" de [`maestro-environment-setup`](../maestro-environment-setup/SKILL.md), que sabe
       apontar o Maestro para um interpretador que exista fora do PATH.
 
     Instalar um interpretador não está autorizado hoje: a decisão `PYUV` cobre
@@ -225,4 +194,6 @@ Return a single message with:
 
 If more than 2 core files are missing, tell the user: "sua instalação parece corrompida — baixe o ZIP mais recente pelo email do time BCG Brasil AI e siga o passo a passo do `README-INSTALL.md`. Sua `brain/` é preservada pelo ritual."
 
-Se `brain/` estiver ausente mas core existir, apenas informe: "sua próxima sessão vai recriar `brain/` automaticamente."
+Se o estado estiver ausente mas o núcleo existir, consultar `home paths` e
+encaminhar o diagnóstico ao setup. Uma instalação nova exige a escolha do dono
+e `home init` explícito; reabrir o host não recria estado no produto.

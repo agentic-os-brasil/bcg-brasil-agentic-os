@@ -49,7 +49,8 @@ import importlib.util
 import unicodedata
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-POLICY = os.path.join("bundles", "base", "agents", "activation-policy.json")
+POLICY = os.path.normpath(os.path.join(HERE, "..", "agents", "activation-policy.json"))
+sys.dont_write_bytecode = True
 
 # A saida carrega emoji (🧙 🧬 🧪) e acento. No Windows o console entrega cp1252
 # e o print morre com UnicodeEncodeError na primeira linha — o hook fica sem

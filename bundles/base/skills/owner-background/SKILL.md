@@ -5,6 +5,9 @@ description: Capture the owner's background outside the current job — formal e
 
 # Owner Background
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Write one facet — `brain/owner/self/background.md` — with what came before the
 current role and what the owner is aiming at beyond it. Three questions, one
 page, done in five minutes.

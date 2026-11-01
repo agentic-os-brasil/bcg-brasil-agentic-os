@@ -10,6 +10,8 @@ Nunca um caso que nao seja o ativo — o isolamento vale aqui como vale na escri
 
 Uso:  echo '<texto>' | python3 bundles/base/tools/brain-route.py [--max N]
       python3 bundles/base/tools/brain-route.py --max 5 "texto"
+Configuracao local: --product-root ROOT e --user-home USER; por padrao,
+o produto vem do script e o usuario vem do helper canonico.
 """
 import io, os, re, sys, json, unicodedata
 
@@ -93,7 +95,14 @@ def active_scope():
 
 
 def main():
+    global BRAIN, ROUTE, ACTIVE
+    sys.dont_write_bytecode = True
+    from maestro_paths import consume_paths
     argv = sys.argv[1:]
+    paths = consume_paths(argv, __file__)
+    BRAIN = paths["brain_root"]
+    ROUTE = os.path.join(paths["metadata_root"], "route-index.json")
+    ACTIVE = os.path.join(BRAIN, "accounts", ".active")
     top_n = 5
     if "--max" in argv:
         i = argv.index("--max")

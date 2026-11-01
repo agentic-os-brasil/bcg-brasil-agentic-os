@@ -5,6 +5,9 @@ description: Capture formal feedback the owner received into owner development s
 
 # Feedback Capture
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Record what was said to the owner, then apply the effect it actually has on
 their objectives. Getting the capture right matters less than getting the
 effect right: the two feedback events are not the same kind of event.

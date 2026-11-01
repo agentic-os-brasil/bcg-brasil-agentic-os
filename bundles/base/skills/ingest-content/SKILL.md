@@ -5,6 +5,9 @@ description: Registra o conteúdo de um documento profissional (PDF, arquivo Off
 
 # Ingest Content
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Registrar um documento apontado pelo usuário como memória local do Maestro. Ler o arquivo com a ferramenta Read, sintetizar em Markdown enxuto e gravar em `brain/memory/` via Write. O conteúdo original nunca é copiado para dentro da workspace, apenas referenciado por caminho.
 
 ## Interaction profile
@@ -21,7 +24,7 @@ Resolver [`interaction-profile`](../interaction-profile/SKILL.md) se disponível
 
 ## Fluxo
 
-1. **Confirmar workspace.** Verificar que `${CLAUDE_PROJECT_DIR}/brain/memory/` existe. Se ausente, orientar: "feche a pasta Maestro no Claude Code e reabra. Na próxima abertura a workspace é criada automaticamente." e parar.
+1. **Confirmar estado admitido.** Obter `home paths` pelo helper verificado e usar `memory/` sob seu `brain_root`. Autoridade indisponível exige diagnóstico/setup, sem recriar workspace pelo produto ou por reabrir a janela. Se o binding estiver admitido mas a capacidade ainda faltar, reportar indisponibilidade antes de ingestão.
 
 2. **Identificar a fonte.** Perguntar (uma linha apenas) qual é o caminho absoluto do documento se ainda não foi fornecido. Aceitar PDF, arquivo de texto, Markdown, HTML salvo ou imagem com texto simples.
 

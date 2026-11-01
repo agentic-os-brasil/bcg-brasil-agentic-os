@@ -4,10 +4,108 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+func TestHomePathsCompiledCLI(t *testing.T) {
+	user, product, binaries := homeTestDirectory(t), homeTestDirectory(t), homeTestDirectory(t)
+	helper := filepath.Join(binaries, "maestro-runtime")
+	if runtime.GOOS == "windows" {
+		helper += ".exe"
+	}
+	if output, err := exec.Command("go", "build", "-o", helper, ".").CombinedOutput(); err != nil {
+		t.Fatalf("build helper: %v %s", err, output)
+	}
+	home := filepath.Join(user, "canonical owner")
+	invoke := func(command string, extra ...string) (int, string) {
+		t.Helper()
+		args := append([]string{"home", command, "--product-root", product, "--user-home", user}, extra...)
+		cmd := exec.Command(helper, args...)
+		for _, entry := range os.Environ() {
+			if !strings.HasPrefix(entry, "MAESTRO_HOME=") {
+				cmd.Env = append(cmd.Env, entry)
+			}
+		}
+		cmd.Env = append(cmd.Env, "MAESTRO_HOME="+home)
+		var out, diagnostic bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &out, &diagnostic
+		err := cmd.Run()
+		if err == nil {
+			return 0, out.String()
+		}
+		if exit, ok := err.(*exec.ExitError); ok {
+			return exit.ExitCode(), out.String()
+		}
+		t.Fatal(err)
+		return -1, ""
+	}
+	if code, body := invoke("paths"); code != 2 || !strings.Contains(body, `"mode":"initialization_required"`) || strings.Contains(body, `"home"`) {
+		t.Fatalf("unconfirmed: %d %s", code, body)
+	}
+	code, body := invoke("init")
+	if runtime.GOOS == "windows" {
+		if code != 2 || !strings.Contains(body, "ownership-unverified") {
+			t.Fatalf("Windows init: %d %s", code, body)
+		}
+		if _, err := os.Stat(home); !os.IsNotExist(err) {
+			t.Fatal("unqualified Windows init created HOME", err)
+		}
+		return
+	}
+	if code != 0 {
+		t.Fatalf("init: %d %s", code, body)
+	}
+	if code, body := invoke("paths", "--field", "owner-scope"); code != 0 || body != home+"\n" {
+		t.Fatalf("owner identity: %d %q", code, body)
+	}
+	if code, body := invoke("paths", "--field", "state"); code != 0 || body != filepath.Join(home, "state")+"\n" {
+		t.Fatalf("state path: %d %q", code, body)
+	}
+	entries, err := os.ReadDir(product)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("compiled helper changed product: %v %v", entries, err)
+	}
+}
+
+func TestHomePathsRequiresExplicitInitAndKeepsProductUntouched(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("external ownership remains unavailable")
+	}
+	user, product := homeTestDirectory(t), homeTestDirectory(t)
+	t.Setenv("MAESTRO_HOME", filepath.Join(user, "owner with spaces"))
+	invoke := func(command string, extra ...string) (int, string) {
+		var out, diagnostic bytes.Buffer
+		args := append([]string{"home", command, "--product-root", product, "--user-home", user}, extra...)
+		code := run(args, strings.NewReader(""), &out, &diagnostic)
+		return code, out.String()
+	}
+	code, body := invoke("paths")
+	var result map[string]any
+	if json.Unmarshal([]byte(body), &result) != nil || code != 2 || result["mode"] != "initialization_required" || len(result) != 3 {
+		t.Fatalf("uninitialized: code=%d body=%s", code, body)
+	}
+	if code, body = invoke("paths", "--field", "brain"); code != 2 || body != "" {
+		t.Fatalf("unavailable scalar %d %q", code, body)
+	}
+	if code, body = invoke("init"); code != 0 {
+		t.Fatalf("init: %d %s", code, body)
+	}
+	code, body = invoke("paths")
+	if json.Unmarshal([]byte(body), &result) != nil || code != 0 || result["mode"] != "external" || result["owner_scope_root"] != filepath.Join(user, "owner with spaces") {
+		t.Fatalf("admitted: %d %s", code, body)
+	}
+	if code, body = invoke("paths", "--field", "brain"); code != 0 || body != filepath.Join(user, "owner with spaces", "brain")+"\n" {
+		t.Fatalf("scalar %d %q", code, body)
+	}
+	entries, err := os.ReadDir(product)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("product changed: %v %v", entries, err)
+	}
+}
 
 func homeTestDirectory(t *testing.T) string {
 	t.Helper()

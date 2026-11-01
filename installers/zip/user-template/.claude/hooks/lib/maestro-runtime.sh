@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Verified managed helper. Signature: maestro_runtime ROOT COMMAND [ARGS...].
 # No installation, ambient Python, Git Bash or network is used.
+MAESTRO_BOUND_PRODUCT=''
 maestro_runtime() {
   local root="$1"
   shift
@@ -60,4 +61,20 @@ JXA
     return 2
   fi
   "$helper" "$@"
+}
+
+# Admission precedes every owner-state read/write, including Python records.
+# The helper alone interprets locator/origin authority; no shell fallback exists.
+maestro_bind_home() {
+  local root="$1" brain
+  brain="$(maestro_runtime "$root" home paths --product-root "$root" --field brain)" || {
+    unset MAESTRO_BRAIN_ROOT MAESTRO_METADATA_ROOT
+    printf '<!-- maestro:state-unavailable -->\n'
+    printf 'Maestro owner state unavailable. Run /maestro-doctor before initialization or recovery.\n' >&2
+    return 2
+  }
+  [ -n "$brain" ] || return 2
+  MAESTRO_BRAIN_ROOT="$brain"
+  MAESTRO_METADATA_ROOT="$brain/.maestro"
+  MAESTRO_BOUND_PRODUCT="$root"
 }

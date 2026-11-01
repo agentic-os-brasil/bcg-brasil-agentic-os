@@ -11,6 +11,15 @@ ZIP = Path(os.environ.get("MAESTRO_ZIP", str(ROOT / "dist/Maestro-v0.2.0-macos.z
 
 
 class RuntimePackage(unittest.TestCase):
+    def test_canonical_home_consumers_include_their_runtime_dependencies(self):
+        with zipfile.ZipFile(ZIP) as z:
+            self.assertIn("Maestro/bundles/base/tools/maestro_paths.py", z.namelist())
+            for surface in ("bundles/base/skills", ".claude/skills", ".agents/skills"):
+                guide = f"Maestro/{surface}/interaction-profile/resources/owner-paths.md"
+                self.assertIn(b"home paths", z.read(guide))
+            self.assertFalse(any("__pycache__" in name or "test_canonical_home_" in name
+                                 for name in z.namelist()), "development fixtures leaked")
+
     def test_caseos_enrichment_preparation_is_discoverable_from_catalog(self):
         with zipfile.ZipFile(ZIP) as z:
             for surface in ("bundles/base/skills", ".agents/skills"):

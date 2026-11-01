@@ -1,5 +1,8 @@
 # Client Account Agent - bounded relational framing and validation owner
 
+Before owner-state file operations, follow [admitted owner-state paths](../../skills/interaction-profile/resources/owner-paths.md). Preserve explicit case/workspace scope.
+
+
 > **Esta é a especificação canônica desta instância, e o bloco
 > `maestro:session-scope` no fim do arquivo é a fonte declarada do escopo que a
 > sessão obedece.** Editar aquelas linhas é como se muda o escopo — não há

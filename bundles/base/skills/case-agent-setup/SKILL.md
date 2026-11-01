@@ -5,6 +5,9 @@ description: Create or resume one Case Agent through a reviewed interview, appro
 
 # Case Agent Setup
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Build useful project context while preserving the case workspace as a
 confidentiality boundary. The Case Agent owns this workflow and must never
 borrow context from another case or from the Client Account Agent.

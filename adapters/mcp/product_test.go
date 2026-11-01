@@ -216,6 +216,10 @@ func runWorkflow(t *testing.T, stdio bool) {
 					t.Fatal(err)
 				}
 			}
+			pathsGuide, err := os.ReadFile(filepath.Join(packet.Destination, "skills", "interaction-profile", "resources", "owner-paths.md"))
+			if err != nil || !strings.Contains(string(pathsGuide), "home paths") {
+				t.Fatalf("packaged interaction profile lost its owner-path contract: %v", err)
+			}
 			manifest, err := os.ReadFile(filepath.Join(packet.Destination, ".mcp.json"))
 			if err != nil {
 				t.Fatal(err)

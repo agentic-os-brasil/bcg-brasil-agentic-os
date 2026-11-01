@@ -5,6 +5,9 @@ description: Lê uma pasta SharePoint do caso ativo (tipicamente a árvore "Modu
 
 # Case SharePoint Ingest
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Ler documentos de uma pasta SharePoint pertencente ao caso ativo e materializar
 cada um como candidato a artefato de canon do caso, nunca como memória do
 dono. A leitura acontece **em sessão**, usando o conector SharePoint MCP do

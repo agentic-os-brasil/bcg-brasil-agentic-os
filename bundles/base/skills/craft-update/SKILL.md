@@ -5,6 +5,9 @@ description: Capture or revise a personal method, framework or working preferenc
 
 # Craft Update
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Write one craft page properly, or revise one that already exists. The owner has
 already decided there is something to record; the work here is getting it into
 a shape that is still usable a year from now.

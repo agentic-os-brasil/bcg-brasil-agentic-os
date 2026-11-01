@@ -52,6 +52,9 @@ function Invoke-Hook([string]$HookName, [string]$ProjectDir, [string]$InputJson 
     $psi.CreateNoWindow = $true
     $psi.EnvironmentVariables['PATH'] = $script:EmptyPath
     $psi.EnvironmentVariables.Remove('MAESTRO_PYTHON')
+    $psi.EnvironmentVariables.Remove('MAESTRO_HOME')
+    $psi.EnvironmentVariables['HOME'] = $script:FixtureProfile
+    $psi.EnvironmentVariables['USERPROFILE'] = $script:FixtureProfile
     $psi.EnvironmentVariables['CLAUDE_PROJECT_DIR'] = $ProjectDir
     $psi.EnvironmentVariables['CLAUDE_SESSION_ID'] = 'powershell-smoke-session'
     $psi.EnvironmentVariables['MAESTRO_STATE_DIR'] = (Join-Path $ProjectDir '.state')
@@ -83,6 +86,23 @@ if (Test-Path -LiteralPath (Join-Path $root 'installers/zip/user-template') -Pat
     $bundlesRoot = Join-Path $root 'bundles'
 }
 $script:ContentRoot = $contentRoot
+. (Join-Path $script:ContentRoot '.claude/hooks/lib/maestro-runtime.ps1')
+
+function Invoke-FixtureRuntime([string]$Root, [string[]]$RuntimeArgs, [string]$Payload = '') {
+    $savedHome = $env:HOME
+    $savedProfile = $env:USERPROFILE
+    $savedSelection = $env:MAESTRO_HOME
+    try {
+        $env:HOME = $script:FixtureProfile
+        $env:USERPROFILE = $script:FixtureProfile
+        Remove-Item Env:MAESTRO_HOME -ErrorAction SilentlyContinue
+        Invoke-MaestroRuntime -Root $Root -RuntimeArgs $RuntimeArgs -Payload $Payload
+    } finally {
+        $env:HOME = $savedHome
+        $env:USERPROFILE = $savedProfile
+        $env:MAESTRO_HOME = $savedSelection
+    }
+}
 if (-not $SettingsPath) {
     $SettingsPath = Join-Path $contentRoot '.claude/settings.windows-powershell.json'
 }
@@ -124,6 +144,8 @@ if (Test-Path -LiteralPath $SettingsPath -PathType Leaf) {
 }
 
 $scratchParent = Join-Path ([System.IO.Path]::GetTempPath()) ('maestro-powershell-smoke-' + [Guid]::NewGuid().ToString('N'))
+$script:FixtureProfile = Join-Path $scratchParent 'isolated-profile'
+New-Item -ItemType Directory -Path $script:FixtureProfile -Force | Out-Null
 $project = Join-Path $scratchParent ('Maestro PowerShell Space ' + [char]0x00E3)
 New-Item -ItemType Directory -Path $project -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $contentRoot '.claude') -Destination $project -Recurse
@@ -148,7 +170,7 @@ if (Test-Path -LiteralPath (Join-Path $root 'runtime/manifest.json')) {
     @{schema_version=1;version='0.2.0';artifacts=@(@{os=$goos;arch=$goarch;path=$rel;sha256=(Get-FileHash -LiteralPath $bin -Algorithm SHA256).Hash.ToLowerInvariant()})} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $project 'runtime/manifest.json') -Encoding UTF8
 }
 
-# The real helper would let a fresh workspace initialize. Invalid binding metadata
+# Explicit setup is separate from hooks. Invalid binding metadata
 # must stop the wrapper before that mutation, even with a valid helper checksum.
 foreach ($invalidBinding in @('version-mismatch','version-missing','version-directory','version-alias','manifest-version-missing','manifest-version-number','duplicate-target','duplicate-target-other-path')) {
     $invalidRoot = Join-Path $scratchParent $invalidBinding
@@ -189,9 +211,14 @@ foreach ($invalidBinding in @('version-mismatch','version-missing','version-dire
     }
     $invalidManifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
     $rejected = Invoke-Hook 'first-run-scaffold.ps1' $invalidRoot
-    Assert-HookResult (($rejected.Stdout -match 'migration-blocked') -and -not (Test-Path -LiteralPath (Join-Path $invalidRoot 'brain/.initialized'))) "$invalidBinding rejects runtime binding before initialization" $rejected
+    Assert-HookResult (($rejected.Stdout -match 'state-unavailable') -and -not (Test-Path -LiteralPath (Join-Path $invalidRoot 'brain/.initialized'))) "$invalidBinding rejects runtime binding before initialization" $rejected
 }
 
+$uninitialized = Invoke-Hook 'first-run-scaffold.ps1' $project
+Assert-HookResult (($uninitialized.Stdout -match 'state-unavailable') -and -not (Test-Path -LiteralPath (Join-Path $project 'brain'))) 'uninitialized product cannot bootstrap owner state' $uninitialized
+# These ready contracts exercise an explicitly authored legacy binding, not Windows HOME admission.
+New-Item -ItemType Directory -Path (Join-Path $project 'brain') | Out-Null
+Set-Content -LiteralPath (Join-Path $project 'brain/.qualification-fixture') -Value 'synthetic legacy qualification fixture' -Encoding UTF8
 $scaffold = Invoke-Hook 'first-run-scaffold.ps1' $project
 Assert-True ($scaffold.ExitCode -eq 0) 'scaffold exits zero'
 Assert-True (Test-Path -LiteralPath (Join-Path $project 'brain/.initialized')) 'scaffold creates brain/.initialized'
@@ -336,7 +363,7 @@ Assert-True (Test-Path -LiteralPath (Join-Path $project 'brain/memory/.dream-req
 . (Join-Path $script:ContentRoot '.claude/hooks/lib/maestro-runtime.ps1')
 $dreamDigest = (Get-Content -LiteralPath (Join-Path $project 'brain/memory/.dream-requested') -Raw).Trim()
 $ackPayload = @{scope='owner';digest=$dreamDigest} | ConvertTo-Json -Compress
-$ack = Invoke-MaestroRuntime -Root $project -RuntimeArgs @('daily-dream-ack','--root',$project) -Payload $ackPayload
+$ack = Invoke-FixtureRuntime -Root $project -RuntimeArgs @('daily-dream-ack','--root',$project) -Payload $ackPayload
 Assert-True ((($ack -join "`n") | ConvertFrom-Json).state -eq 'acknowledged') 'Matching successful synthesis acknowledgement accepted'
 $dreamNoop = Invoke-Hook 'session-stop-dream.ps1' $project
 Assert-True (-not (Test-Path -LiteralPath (Join-Path $project 'brain/memory/.dream-requested'))) 'Acknowledged work remains clear after no-op Stop'
@@ -359,14 +386,18 @@ foreach ($baseline in @('0.1.11','0.1.12')) {
     Set-Content -LiteralPath (Join-Path $upgrade 'data/workspaces/example/local.md') -Value 'workspace-original' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $upgrade 'data/agents/custom/agent.md') -Value 'agent-original' -Encoding UTF8
     $before = (Get-FileHash -LiteralPath (Join-Path $upgrade 'data/profile/identity.json')).Hash
+    $pending = Invoke-Hook 'first-run-scaffold.ps1' $upgrade
+    Assert-HookResult (($pending.Stdout -match 'state-unavailable') -and -not (Test-Path -LiteralPath (Join-Path $upgrade 'brain'))) "$baseline startup cannot perform migration" $pending
+    $migration = Invoke-FixtureRuntime -Root $upgrade -RuntimeArgs @('migration','--project',$upgrade)
+    Assert-True (((($migration -join "`n") | ConvertFrom-Json).state) -eq 'committed') "$baseline explicit migration commits"
     $migrate = Invoke-Hook 'first-run-scaffold.ps1' $upgrade
-    Assert-HookResult ((Test-Path -LiteralPath (Join-Path $upgrade 'brain/.initialized')) -and ($migrate.Stdout -notmatch 'migration-blocked')) "$baseline upgrade commits before initialization" $migrate
+    Assert-HookResult ((Test-Path -LiteralPath (Join-Path $upgrade 'brain/.initialized')) -and ($migrate.Stdout -notmatch 'state-unavailable')) "$baseline upgrade commits before initialization" $migrate
     Assert-True ((Get-Content -LiteralPath (Join-Path $upgrade 'brain/accounts/.active') -Raw).Trim() -eq '_sem-conta/example') "$baseline active marker becomes account/case"
     Assert-True ((Get-FileHash -LiteralPath (Join-Path $upgrade 'data/profile/identity.json')).Hash -eq $before) "$baseline original identity preserved byte for byte"
     $legacy = Invoke-Hook 'session-start-memory-inject.ps1' $upgrade
     Assert-HookResult (($legacy.Stdout -match 'Validated retained legacy workspaces') -and ($legacy.Stdout -match 'Validated retained legacy agents')) "$baseline retained workspaces and agents are resolved for session consumption" $legacy
     $again = Invoke-Hook 'first-run-scaffold.ps1' $upgrade
-    Assert-HookResult ($again.Stdout -notmatch 'migration-blocked') "$baseline repeated startup remains usable" $again
+    Assert-HookResult ($again.Stdout -notmatch 'state-unavailable') "$baseline repeated startup remains usable" $again
 }
 $blocked = Join-Path $scratchParent 'blocked-upgrade'
 New-Item -ItemType Directory -Path (Join-Path $blocked 'data/owner'),(Join-Path $blocked 'brain/owner') -Force | Out-Null
@@ -375,17 +406,17 @@ Set-Content -LiteralPath (Join-Path $blocked 'VERSION') -Value '0.2.0' -Encoding
 Set-Content -LiteralPath (Join-Path $blocked 'data/owner/a.md') -Value 'old' -Encoding UTF8
 Set-Content -LiteralPath (Join-Path $blocked 'brain/owner/a.md') -Value 'new' -Encoding UTF8
 $blockedRun = Invoke-Hook 'first-run-scaffold.ps1' $blocked
-Assert-HookResult (($blockedRun.Stdout -match 'migration-blocked') -and -not (Test-Path -LiteralPath (Join-Path $blocked 'brain/.initialized'))) 'ambiguous dual tree cannot write initialized' $blockedRun
+Assert-HookResult (($blockedRun.Stdout -match 'state-unavailable') -and -not (Test-Path -LiteralPath (Join-Path $blocked 'brain/.initialized'))) 'ambiguous dual tree cannot write initialized' $blockedRun
 Assert-True (-not (Test-Path -LiteralPath (Join-Path $blocked 'brain/memory'))) 'blocked migration does not perform scaffold backfills'
 Assert-True ((Get-Content -LiteralPath (Join-Path $blocked 'brain/owner/a.md') -Raw).Trim() -eq 'new') 'blocked migration preserves current authored content'
 Set-Content -LiteralPath (Join-Path $blocked 'brain/.initialized') -Value 'stale-marker' -Encoding UTF8
 $staleRun = Invoke-Hook 'first-run-scaffold.ps1' $blocked
-Assert-HookResult (($staleRun.Stdout -match 'migration-blocked') -and -not (Test-Path -LiteralPath (Join-Path $blocked 'brain/memory'))) 'stale initialized marker cannot bypass migration gate' $staleRun
+Assert-HookResult (($staleRun.Stdout -match 'state-unavailable') -and -not (Test-Path -LiteralPath (Join-Path $blocked 'brain/memory'))) 'stale initialized marker cannot bypass migration gate' $staleRun
 $missingRuntime = Join-Path $scratchParent 'no-runtime'
 New-Item -ItemType Directory -Path (Join-Path $missingRuntime 'data/owner') -Force | Out-Null
 Set-Content -LiteralPath (Join-Path $missingRuntime 'data/owner/a.md') -Value 'preserved' -Encoding UTF8
 $unavailable = Invoke-Hook 'first-run-scaffold.ps1' $missingRuntime
-Assert-HookResult (($unavailable.Stdout -match 'migration-blocked') -and -not (Test-Path -LiteralPath (Join-Path $missingRuntime 'brain/.initialized'))) 'unavailable migration runtime cannot initialize' $unavailable
+Assert-HookResult (($unavailable.Stdout -match 'state-unavailable') -and -not (Test-Path -LiteralPath (Join-Path $missingRuntime 'brain/.initialized'))) 'unavailable migration runtime cannot initialize' $unavailable
 
 Write-Output ""
 Write-Output "Summary: $script:Passed pass, $script:Failed fail"

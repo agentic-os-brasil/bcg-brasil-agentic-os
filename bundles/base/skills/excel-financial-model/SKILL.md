@@ -5,6 +5,9 @@ description: Constrói ou reestrutura um modelo financeiro em Excel que precisa 
 
 # Modelo financeiro em Excel
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Um modelo que vai a comitê tem três obrigações: **cada número tem uma única
 origem rastreável**, **cada visão derivada amarra com a base na própria
 planilha**, e **quem abre o arquivo entende em trinta segundos onde digitar e

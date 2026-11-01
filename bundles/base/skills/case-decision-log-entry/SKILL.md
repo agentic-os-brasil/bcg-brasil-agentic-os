@@ -5,6 +5,9 @@ description: Register a case decision in the active case decision log. Use when 
 
 # Decision Log Entry
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) before proceeding. It governs
 explanation depth and disclosure; it never changes the confirmation gate or
 invariants below.

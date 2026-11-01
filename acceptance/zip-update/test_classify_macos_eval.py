@@ -112,11 +112,11 @@ class NativeSmokeWrapperTests(unittest.TestCase):
             target.mkdir(parents=True)
             for name in ("native-smoke.sh", "classify_macos_eval.py"):
                 shutil.copy2(HERE / name, target / name)
-            hooks = repo / "installers/zip/user-template/.claude/hooks/lib"
-            hooks.mkdir(parents=True)
-            shutil.copy2(HERE.parents[1] / "installers/zip/user-template/.claude/hooks/lib/python.sh", hooks / "python.sh")
+            # No product runtime, owner binding or shipped interpreter library:
+            # classification and receipt serialization are development tooling.
+            (repo / "installers/zip").mkdir(parents=True)
             evaluator = repo / "installers/zip/eval-release.sh"
-            evaluator.write_text('#!/bin/bash\ncat "$EVAL_FIXTURE_LOG"\nexit "$EVAL_FIXTURE_RC"\n', encoding="utf-8")
+            evaluator.write_text('#!/bin/bash\nif [ "${MAESTRO_HOME+x}" = x ]; then echo unsafe-owner-selection >&2; exit 76; fi\ncat "$EVAL_FIXTURE_LOG"\nexit "$EVAL_FIXTURE_RC"\n', encoding="utf-8")
             subprocess.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)
             subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
             subprocess.run(["git", "-C", str(repo), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "fixture"], check=True, capture_output=True)
@@ -135,8 +135,15 @@ class NativeSmokeWrapperTests(unittest.TestCase):
                 command.chmod(0o755)
             environment = dict(os.environ, PATH=str(commands) + os.pathsep + os.environ["PATH"], EVAL_FIXTURE_LOG=str(log), EVAL_FIXTURE_RC=str(eval_rc))
             environment.pop("CLAUDE_PROJECT_DIR", None)
+            owner = root / "outside-owner"
+            owner.mkdir()
+            sentinel = owner / "sentinel.txt"
+            sentinel.write_text("preserved operator state", encoding="utf-8")
+            environment["MAESTRO_HOME"] = str(owner)
             output = root / "receipt.json"
             completed = subprocess.run(["bash", str(target / "native-smoke.sh"), "--zip", str(archive), "--output", str(output)], cwd=repo, env=environment, capture_output=True, text=True)
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserved operator state")
+            self.assertEqual(environment["MAESTRO_HOME"], str(owner))
             receipt = json.loads(output.read_text(encoding="utf-8")) if output.exists() else None
             return completed, receipt
 

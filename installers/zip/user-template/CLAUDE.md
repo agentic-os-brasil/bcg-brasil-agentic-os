@@ -1,5 +1,10 @@
 # Maestro — orientação do runtime
 
+Before any owner-state effect, including automatic daily continuity, follow
+`bundles/base/skills/interaction-profile/resources/owner-paths.md`. Use the
+current admitted path response; unavailable state permits conversation without
+those effects. Never infer owner storage from cwd or the managed product.
+
 Before a material final response or interruption, follow the daily continuity
 checkpoint recipe in `bundles/base/skills/maestro-operator/SKILL.md`: select
 bounded agent-authored summary/decisions/next actions, bind the actual session,
@@ -15,16 +20,18 @@ automaticamente quando o usuário abre a pasta `Maestro/` no Claude Code desktop
 
 ## O que é o Maestro
 
-Maestro é um OS pessoal empacotado como pasta. Roda inteiramente dentro do
-Claude Code: não há binário externo, terminal ou instalação separada. Todo o
-trabalho acontece por dentro do chat.
+Maestro reúne métodos, agentes e um helper nativo gerenciado. O uso acontece
+pelo chat; o helper aplica os contratos locais sem exigir trabalho de terminal
+do dono. Configuração instalada e execução observada são provas distintas.
 
 ## Estrutura da pasta
 
 - `.claude/`: configuração (hooks, skills, settings).
 - `bundles/`: skills e agentes (núcleo do Maestro).
-- `brain/`: workspace do usuário. Nunca é sobrescrita em updates. Criada
-  automaticamente na primeira sessão pelo hook `first-run-scaffold` (`.sh` no Mac, `.ps1` no Windows).
+- `brain/` nas receitas é o prefixo lógico do brain do dono, resolvido pelo
+  helper canônico. No modo externo fica em `HOME/brain`, separado do núcleo.
+  Um binding legado admitido mantém sua localização; não há importação implícita.
+  O hook preenche apenas a árvore admitida após a inicialização explícita.
   Oito árvores no topo, cada uma com um dono claro:
   - `memory/` — memória consolidada, escrita pelo motor de dreaming.
   - `owner/` — quem é o dono: identidade, estilo, facetas SELF, estado de trabalho.
@@ -42,37 +49,25 @@ trabalho acontece por dentro do chat.
 
 Ao receber a primeira mensagem do usuário, execute esta sequência antes de responder:
 
-### Passo 1: Scaffold
+### Passo 1: Estado admitido e scaffold
 
-O hook `first-run-scaffold.sh` roda no início da sessão e monta `brain/` na
-primeira vez. Ele já resolve isso sozinho e injeta um aviso no contexto desta
-sessão quando algo precisa da sua atenção — não há Read nenhum a fazer aqui
-no caminho normal.
+Use o resultado atual de `home paths` emitido pelo helper verificado. `brain/`
+representa seu `brain_root`; `metadata_root` e o DataRoot canônico são distintos.
+Os assets de `bundles/` continuam no produto. Preserve paths locais de caso/workspace.
 
-- Se o contexto trouxer `<!-- maestro:scaffold-failed -->` (o hook escreveu
-  `FIRST-RUN-FAILED.txt` na raiz): scaffold falhou (permissões, OneDrive, disco
-  cheio). Apresente-se brevemente, leia `bundles/base/skills/maestro-doctor/SKILL.md` e execute o fluxo.
-  Pare aqui.
-- Se **não houver esse aviso**: scaffold OK, prossiga para o Passo 2.
-- Só no caso raro em que o hook não rodou nesta sessão (nem `brain/` existe,
-  nem apareceu aviso nenhum): execute o scaffold inline:
-  1. Crie os diretórios: `brain/`, `brain/accounts/`,
-     `brain/memory/`, `brain/memory/recent/`, `brain/memory/weekly/`, `brain/memory/medium-term/`,
-     `brain/memory/lifetime/`, `brain/memory/policies/`,
-     `brain/owner/`, `brain/owner/self/`, `brain/owner/operating/`,
-     `brain/owner/observations/`, `brain/owner/interview/`, `brain/owner/interview/drafts/`,
-     `brain/daily/`, `brain/craft/methods/`, `brain/craft/style/`,
-     `brain/learnings/`, `brain/people/`,
-     `brain/development/cdc/`, `brain/development/project-feedback/`,
-     `brain/development/upward-feedback/`, `brain/development/retros/`.
-  2. Escreva os arquivos:
-     - `brain/.initialized` — timestamp UTC atual (ex. `2026-08-13T00:00:00Z`)
-     - `brain/memory/.schema-version` — JSON: `{"schema_version": 1, "layers": ["recent", "weekly", "medium-term", "lifetime", "policies"], "policy_source": "bundles/base/memory/policy.json", "initialized_by": "inline-scaffold"}`
-     - `brain/memory/.gitignore` — conteúdo: `.dream-requested`
-     - `brain/memory/policies/lifetime.json` — JSON: `{"schema_version": 1, "policy_id": "deterministic-l3-continuity-v1", "min_l3_generations": 2, "promotion": "weekly_deep_dream", "automatic": true, "versioned_updates": true, "direct_overwrite": false, "provenance_required": true, "initialized_by": "inline-scaffold"}`
-     - `brain/.maestro-version` — leia o arquivo `VERSION` na raiz e escreva o valor encontrado (ex. `0.1.8`)
-  Se qualquer criação falhar, leia `bundles/base/skills/maestro-doctor/SKILL.md` e execute o
-  fluxo. Caso contrário, prossiga para o Passo 2.
+- Com `<!-- maestro:state-unavailable -->`, diagnóstico bloqueado ou resultado
+  ausente, não faça logging, mkdir, scaffold, recovery ou leitura por path adivinhado.
+  Carregue `maestro-doctor` e a orientação de setup. Continue conversa útil sem esses
+  efeitos. Ausência de aviso nunca comprova que o hook rodou ou que há autoridade.
+- Para instalação nova, confirme antes se existe um ZIP anterior. A inicialização
+  é a ação local explícita `home init` pelo helper verificado; não é um fallback
+  inline. Conteúdo anterior ou origem migrada não verificada exige diagnóstico,
+  sem criar uma árvore alternativa nem mesclar estados.
+- Só com paths admitidos o hook pode preencher arquivos ausentes sem sobrescrever.
+  Com `<!-- maestro:scaffold-failed -->`, use o diagnóstico no brain admitido e
+  `maestro-doctor`. Não escreva marcadores de erro no núcleo somente leitura.
+- Se o hook não foi observado, obtenha a inspeção canônica. Não substitua isso por
+  checar um diretório ou um `.initialized` e nunca execute migração por startup.
 
 ### Passo 2: Onboarding (obrigatório, nunca pulável)
 

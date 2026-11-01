@@ -28,7 +28,24 @@ env:
   TO_VERSION: ${{ inputs.to_version || '' }}
 
 jobs:
+  source-contracts:
+    name: Qualification classifier contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Reject false-positive traces and qualification receipts
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -m unittest acceptance/zip-update/test_eval_live_agent_trace.py acceptance/zip-update/test_classify_macos_eval.py
+      - name: PowerShell trace classification without a runtime receipt
+        shell: pwsh
+        run: ./acceptance/zip-update/test-live-agent-qualification.ps1
+
   offline-native:
+    # Qualification remains an explicit gate, separate from source integration.
+    # A hosted elevated Windows process must still fail the native preflight.
+    if: github.event_name == 'workflow_dispatch'
     name: ZIP offline native (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -65,8 +82,7 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          . installers/zip/user-template/.claude/hooks/lib/python.sh
-          maestro_py -m unittest acceptance/zip-update/test_eval_live_agent_trace.py acceptance/zip-update/test_classify_macos_eval.py
+          python3 -m unittest acceptance/zip-update/test_eval_live_agent_trace.py acceptance/zip-update/test_classify_macos_eval.py
       - name: Build exact macOS release ZIP
         if: runner.os == 'macOS'
         shell: bash

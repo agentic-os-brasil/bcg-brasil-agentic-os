@@ -45,6 +45,11 @@ import os
 import sys
 import argparse
 import datetime
+import stat
+from pathlib import Path
+sys.dont_write_bytecode = True
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from maestro_paths import read_regular_text, regular_source
 
 # Pagina gerada pelo compilador de indice nao e conteudo do dono. A regra vale
 # para todos os emissores — foi por faltar aqui que a memoria semanal sumiu.
@@ -56,16 +61,14 @@ def is_generated(path, name):
     if name in SKIP_NAMES or name.endswith("_index.md"):
         return True
     try:
-        with io.open(path, encoding="utf-8", errors="replace") as f:
-            return GENERATED_MARK in f.read(400)
+        return GENERATED_MARK in read_regular_text(path)[:400]
     except OSError:
         return True
 
 
 def read_text(path):
     try:
-        with io.open(path, encoding="utf-8", errors="replace") as f:
-            return f.read()
+        return read_regular_text(path)
     except OSError:
         return ""
 
@@ -88,15 +91,31 @@ def frontmatter_title(text, fallback):
 def md_files(dirpath, recursive=False):
     out = []
     try:
+        # A walk's root can itself be an alias even with followlinks=False.
+        for directory in [dirpath] + list(Path(dirpath).absolute().parents):
+            info = os.lstat(directory)
+            if not stat.S_ISDIR(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400:
+                return []
         if recursive:
             for root, _dirs, names in os.walk(dirpath):
+                safe_dirs = []
+                for name in _dirs:
+                    info = os.lstat(os.path.join(root, name))
+                    if stat.S_ISDIR(info.st_mode) and not getattr(info, 'st_file_attributes', 0) & 0x400:
+                        safe_dirs.append(name)
+                _dirs[:] = safe_dirs
                 for n in names:
                     if n.endswith(".md"):
-                        out.append(os.path.join(root, n))
+                        p = os.path.join(root, n)
+                        try: regular_source(p)
+                        except OSError: continue
+                        out.append(p)
         else:
             for n in os.listdir(dirpath):
                 p = os.path.join(dirpath, n)
-                if n.endswith(".md") and os.path.isfile(p):
+                if n.endswith(".md"):
+                    try: regular_source(p)
+                    except OSError: continue
                     out.append(p)
     except OSError:
         return []

@@ -17,8 +17,12 @@ Uso:  python3 bundles/base/tools/paths-check.py            # so o que quebrou
       python3 bundles/base/tools/paths-check.py --all      # tudo que foi visto
       python3 bundles/base/tools/paths-check.py --count    # so o numero, para hook
 Saida: 0 limpo, 1 com achado. Sempre com PYTHONIOENCODING=utf-8 no Windows.
+Configuracao local: --product-root ROOT e --user-home USER; por padrao,
+o produto vem do script e o usuario vem do helper canonico.
 """
 import io, os, re, sys, glob
+
+PRODUCT, BRAIN, METADATA = ".", "brain", os.path.join("brain", ".maestro")
 
 SOURCES = [
     "bundles/*/skills/*/SKILL.md",
@@ -79,6 +83,14 @@ def resolve(p):
     if p.startswith(IGNORE_PREFIX) or (p + "/").startswith(IGNORE_PREFIX):
         return True
     p = p.rstrip("/")
+    root, _, tail = p.partition("/")
+    if root == "brain":
+        p = os.path.join(BRAIN, tail)
+    elif root == ".maestro":
+        p = os.path.join(METADATA, tail)
+    else:
+        p = os.path.join(PRODUCT, p)
+    p = p.replace("\\", "/")
     if TPL_RE.search(p):
         g = TPL_RE.sub("*", p)
         if glob.glob(g) or glob.glob(os.path.dirname(g) or "."):
@@ -128,10 +140,15 @@ def resolve(p):
 
 
 def main():
+    global PRODUCT, BRAIN, METADATA
+    sys.dont_write_bytecode = True
+    from maestro_paths import consume_paths
     argv = sys.argv[1:]
+    paths = consume_paths(argv, __file__)
+    PRODUCT, BRAIN, METADATA = paths["product_root"], paths["brain_root"], paths["metadata_root"]
     show_all = "--all" in argv
     count_only = "--count" in argv          # modo para hook: so o numero
-    files = sorted({f for pat in SOURCES for f in glob.glob(pat)})
+    files = sorted({f for pat in SOURCES for f in glob.glob(os.path.join(PRODUCT, pat))})
     bad, seen = {}, 0
     for f in files:
         try:
@@ -141,7 +158,7 @@ def main():
         for p in sorted(set(PATH_RE.findall(s))):
             seen += 1
             if not resolve(p):
-                bad.setdefault(f.replace("\\", "/"), []).append(p)
+                bad.setdefault(os.path.relpath(f, PRODUCT).replace("\\", "/"), []).append(p)
 
     if count_only:
         print(sum(len(v) for v in bad.values()))

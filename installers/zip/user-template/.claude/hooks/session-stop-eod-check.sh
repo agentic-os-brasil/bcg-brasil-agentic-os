@@ -25,7 +25,9 @@
 set +e
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
-BRAIN_DIR="$PROJECT_DIR/brain"
+. "$(dirname "${BASH_SOURCE[0]}")/lib/maestro-runtime.sh" || exit 0
+maestro_bind_home "$PROJECT_DIR" || exit 0
+BRAIN_DIR="$MAESTRO_BRAIN_ROOT"
 DAILY_DIR="$BRAIN_DIR/daily"
 MARKER="$BRAIN_DIR/owner/.eod-requested"
 MACHINE="$BRAIN_DIR/.maestro"
@@ -39,15 +41,18 @@ maestro_python >/dev/null 2>&1 || exit 0
 
 mkdir -p "$MACHINE" 2>/dev/null
 
-PYTHONIOENCODING=utf-8 maestro_py - "$DAILY_DIR" "$MARKER" "$BRIEF" "$BRAIN_DIR" <<'PY' 2>/dev/null
-import datetime, glob, io, json, os, re, sys
+PYTHONIOENCODING=utf-8 maestro_py - "$DAILY_DIR" "$MARKER" "$BRIEF" "$BRAIN_DIR" "$PROJECT_DIR/bundles/base/tools" <<'PY' 2>/dev/null
+import sys
+sys.path = [sys.argv[5]] + [entry for entry in sys.path if entry]
+import datetime, glob, io, json, os, re
+from maestro_paths import read_regular_text
 
 daily_dir, marker_p, brief_p, brain = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 today = datetime.date.today()
 
 def read(path):
     try:
-        return io.open(path, encoding="utf-8").read()
+        return read_regular_text(path)
     except OSError:
         return None
 
@@ -88,6 +93,8 @@ pages = [p for p in pages if os.path.basename(p) != f"{today.isoformat()}.md"][:
 last_pages = []
 for p in pages:
     text = read(p)
+    if text is None:
+        continue
     date = os.path.basename(p)[:-3]
     last_pages.append({
         "date": date,

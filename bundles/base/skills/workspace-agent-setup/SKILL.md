@@ -3,6 +3,9 @@ name: workspace-agent-setup
 description: Cria ou retoma o agente de um workspace de caso (briefing revisto, plano de pesquisa pública aprovado, evidências com fonte e snapshot econômico público opcional). Use ao iniciar um novo projeto de cliente ou refrescar o briefing de um existente.
 ---
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 > **Deprecated alias.** This skill is now [`case-agent-setup`](../case-agent-setup/SKILL.md), which supersedes it entirely.
 > Maestro routes all new invocations to [`case-agent-setup`](../case-agent-setup/SKILL.md). This file is retained for
 > backward compatibility only and will be removed in v0.2.

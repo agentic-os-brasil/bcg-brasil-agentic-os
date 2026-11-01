@@ -5,6 +5,9 @@ description: Promote the learning candidates the owner noted on their daily page
 
 # Learnings Bridge
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Carry one candidate at a time off a daily page into the segment that should
 hold it. This is a curation conversation that produces pages, not a batch pass
 over a folder.

@@ -5,6 +5,9 @@ description: Percorre a árvore de pastas do SharePoint do caso ativo em profund
 
 # Case SharePoint Map
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Produzir um guia de navegação do SharePoint do caso ativo: não o conteúdo dos
 documentos, só onde cada tipo de informação provavelmente mora. É reconhecimento
 de estrutura, não ingestão — a leitura de conteúdo real, documento por

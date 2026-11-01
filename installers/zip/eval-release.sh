@@ -13,6 +13,8 @@
 # beyond unzip / shasum / python3 (for JSON parsing).
 
 set -u
+# This qualification subprocess must never select the operator's owner HOME.
+unset MAESTRO_HOME
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TEMPLATE_DIR="$REPO_ROOT/installers/zip/user-template"
@@ -45,16 +47,22 @@ if [ ! -f "$ZIP_PATH" ]; then
   exit 2
 fi
 
-# The evaluator must accept the same interpreter names as the shipped hooks.
-# Otherwise a supported Windows machine with only the python.org `py -3`
-# launcher cannot run the very gate intended to qualify it.
-# shellcheck source=user-template/.claude/hooks/lib/python.sh
-. "$TEMPLATE_DIR/.claude/hooks/lib/python.sh"
-if ! maestro_python >/dev/null 2>&1; then
-  echo "no Python 3 interpreter found (tried python3, python and py -3)" >&2
+# This development tool has no owner binding; product interpreter probes below do.
+EVAL_PYTHON=()
+for candidate in python3 python; do
+  if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c 'import sys; raise SystemExit(sys.version_info[0] != 3)' >/dev/null 2>&1; then
+    EVAL_PYTHON=("$candidate")
+    break
+  fi
+done
+if [ "${#EVAL_PYTHON[@]}" -eq 0 ] && command -v py >/dev/null 2>&1 && py -3 -c 'import sys; raise SystemExit(sys.version_info[0] != 3)' >/dev/null 2>&1; then
+  EVAL_PYTHON=(py -3)
+fi
+if [ "${#EVAL_PYTHON[@]}" -eq 0 ]; then
+  echo "no Python 3 tooling found (tried python3, python and py -3)" >&2
   exit 2
 fi
-eval_py() { maestro_py "$@"; }
+eval_py() { "${EVAL_PYTHON[@]}" "$@"; }
 
 RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; DIM=$'\033[2m'; RESET=$'\033[0m'
 
@@ -71,6 +79,8 @@ phase() { printf '\n%s%s%s\n' "$YELLOW" "$1" "$RESET"; }
 
 SCRATCH_ROOT=$(mktemp -d -t maestro-eval-XXXXXX)
 MAESTRO_DIR="$SCRATCH_ROOT/Maestro"
+QUALIFICATION_USER_HOME="$SCRATCH_ROOT/isolated-profile"
+mkdir -m 700 "$QUALIFICATION_USER_HOME"
 cleanup() {
   chmod -R u+w "$SCRATCH_ROOT" 2>/dev/null || true
   if [ "$KEEP_SCRATCH" = 1 ]; then
@@ -89,6 +99,9 @@ seed_managed_fixture() {
   mkdir -p "$destination"
   cp -R "$MAESTRO_DIR/runtime" "$MAESTRO_DIR/.claude" "$MAESTRO_DIR/bundles" "$destination/"
   cp "$MAESTRO_DIR/VERSION" "$destination/"
+  # Explicit synthetic legacy binding; fresh HOME admission has separate contracts.
+  mkdir -p "$destination/brain"
+  printf 'synthetic legacy qualification fixture\n' > "$destination/brain/.qualification-fixture"
 }
 
 printf '%sMaestro release eval%s\n' "$YELLOW" "$RESET"
@@ -250,8 +263,16 @@ phase "Phase 4 — First-run scaffold, happy path"
 # --------------------------------------------------------------------------
 
 HOOK="$MAESTRO_DIR/.claude/hooks/first-run-scaffold.sh"
-info "running: CLAUDE_PROJECT_DIR=$MAESTRO_DIR $HOOK"
-if CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$HOOK" >/dev/null 2>"$SCRATCH_ROOT/hook.stderr"; then
+UNINITIALIZED=$(HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$HOOK" 2>/dev/null)
+if [[ "$UNINITIALIZED" == *maestro:state-unavailable* ]] && [ ! -e "$MAESTRO_DIR/brain" ]; then
+  pass "uninitialized product does not bootstrap owner state"
+else
+  fail "uninitialized product unexpectedly bootstrapped owner state"
+fi
+mkdir -p "$MAESTRO_DIR/brain"
+printf 'synthetic legacy qualification fixture\n' > "$MAESTRO_DIR/brain/.qualification-fixture"
+info "running admitted legacy fixture hook: $HOOK"
+if HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$HOOK" >/dev/null 2>"$SCRATCH_ROOT/hook.stderr"; then
   pass "hook exit 0 on first run"
 else
   fail "hook non-zero exit on first run"
@@ -319,7 +340,7 @@ phase "Phase 5 — First-run scaffold, idempotency"
 # --------------------------------------------------------------------------
 
 LOG_BEFORE=$(wc -l < "$MAESTRO_DIR/brain/.scaffold.log" | tr -d ' ')
-if CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$HOOK" >/dev/null 2>&1; then
+if HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$HOOK" >/dev/null 2>&1; then
   pass "hook exit 0 on second run"
 else
   fail "hook non-zero on second run"
@@ -335,29 +356,29 @@ fi
 phase "Phase 6 — First-run scaffold, failure modes"
 # --------------------------------------------------------------------------
 
-# Scenario B: brain/ pre-exists and is unwritable. Parent writable → breadcrumb should surface.
+# Scenario B: unbound brain is unwritable; admission must stop before breadcrumbs.
 FAIL_SCRATCH=$(mktemp -d -t maestro-eval-failB-XXXXXX)
 unzip -q "$ZIP_PATH" -d "$FAIL_SCRATCH"
 FAIL_MAESTRO="$FAIL_SCRATCH/Maestro"
 mkdir "$FAIL_MAESTRO/brain"
 chmod 555 "$FAIL_MAESTRO/brain"
 
-if CLAUDE_PROJECT_DIR="$FAIL_MAESTRO" bash "$FAIL_MAESTRO/.claude/hooks/first-run-scaffold.sh" >/dev/null 2>&1; then
+if UNAVAILABLE_B=$(HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$FAIL_MAESTRO" bash "$FAIL_MAESTRO/.claude/hooks/first-run-scaffold.sh" 2>/dev/null); then
   pass "hook fail-open (exit 0) with unwritable brain/ (Scenario B)"
 else
   fail "hook non-zero when brain/ unwritable"
 fi
 
-if [ -f "$FAIL_MAESTRO/FIRST-RUN-FAILED.txt" ] && grep -q "maestro-doctor" "$FAIL_MAESTRO/FIRST-RUN-FAILED.txt"; then
-  pass "FIRST-RUN-FAILED.txt breadcrumb visible + points at /maestro-doctor (Scenario B)"
+if [[ "$UNAVAILABLE_B" == *maestro:state-unavailable* ]] && [ ! -e "$FAIL_MAESTRO/FIRST-RUN-FAILED.txt" ] && [ -z "$(ls -A "$FAIL_MAESTRO/brain")" ]; then
+  pass "unavailable owner state is visible without product breadcrumb or scaffold (Scenario B)"
 else
-  fail "FIRST-RUN-FAILED.txt breadcrumb missing under Scenario B (Yoda Fix 1)"
+  fail "unavailable state was hidden or wrote effects before admission (Scenario B)"
 fi
 
 chmod -R u+w "$FAIL_SCRATCH"
 rm -rf "$FAIL_SCRATCH"
 
-# Scenario A: whole project dir is read-only. Breadcrumb must land in $TMPDIR fallback.
+# Scenario A: unbound product is read-only; no owner effect may fall back to TMPDIR.
 FAIL_SCRATCH_A=$(mktemp -d -t maestro-eval-failA-XXXXXX)
 unzip -q "$ZIP_PATH" -d "$FAIL_SCRATCH_A"
 FAIL_MAESTRO_A="$FAIL_SCRATCH_A/Maestro"
@@ -366,23 +387,22 @@ chmod 555 "$FAIL_MAESTRO_A"
 TMPDIR_A=$(mktemp -d -t maestro-eval-tmpA-XXXXXX)
 SCEN_A_STDERR=$(mktemp -t maestro-eval-stderrA-XXXXXX)
 
-if CLAUDE_PROJECT_DIR="$FAIL_MAESTRO_A" TMPDIR="$TMPDIR_A" bash "$FAIL_MAESTRO_A/.claude/hooks/first-run-scaffold.sh" >/dev/null 2>"$SCEN_A_STDERR"; then
+if UNAVAILABLE_A=$(HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$FAIL_MAESTRO_A" TMPDIR="$TMPDIR_A" bash "$FAIL_MAESTRO_A/.claude/hooks/first-run-scaffold.sh" 2>"$SCEN_A_STDERR"); then
   pass "hook fail-open (exit 0) with read-only project dir (Scenario A)"
 else
   fail "hook non-zero when project dir read-only"
 fi
 
-FALLBACK_FOUND=$(find "$TMPDIR_A" -maxdepth 1 -name 'Maestro-FIRST-RUN-FAILED-*.txt' 2>/dev/null | head -1)
-if [ -n "$FALLBACK_FOUND" ] && grep -q "maestro-doctor" "$FALLBACK_FOUND"; then
-  pass "FIRST-RUN-FAILED breadcrumb fallback landed in \$TMPDIR (Scenario A, Yoda Wave 2 fix)"
+if [[ "$UNAVAILABLE_A" == *maestro:state-unavailable* ]] && [ -z "$(ls -A "$TMPDIR_A")" ] && [ ! -e "$FAIL_MAESTRO_A/brain" ]; then
+  pass "unavailable state creates no TMPDIR fallback or product brain (Scenario A)"
 else
-  fail "Scenario A breadcrumb fallback missing — expected file in \$TMPDIR"
+  fail "unavailable state was hidden or wrote a fallback (Scenario A)"
 fi
 
-if grep -q "Breadcrumb:" "$SCEN_A_STDERR"; then
-  pass "hook stderr surfaces fallback path to operator (Scenario A)"
+if grep -q "maestro-doctor" "$SCEN_A_STDERR"; then
+  pass "hook stderr points to diagnosis without publishing a fallback path (Scenario A)"
 else
-  fail "hook stderr does not surface fallback breadcrumb path"
+  fail "hook stderr does not point to diagnosis"
 fi
 
 rm -f "$SCEN_A_STDERR"
@@ -531,10 +551,10 @@ else
 fi
 
 CLAUDE_MD="$MAESTRO_DIR/CLAUDE.md"
-if grep -q "FIRST-RUN-FAILED.txt" "$CLAUDE_MD" && grep -q "maestro-doctor" "$CLAUDE_MD"; then
-  pass "CLAUDE.md references FIRST-RUN-FAILED.txt + /maestro-doctor (Yoda Fix 1)"
+if grep -q "state-unavailable" "$CLAUDE_MD" && grep -q "maestro-doctor" "$CLAUDE_MD"; then
+  pass "CLAUDE.md names unavailable state and the diagnostic next step"
 else
-  fail "CLAUDE.md missing FIRST-RUN-FAILED.txt breadcrumb reference"
+  fail "CLAUDE.md missing unavailable-state diagnostic contract"
 fi
 
 # --------------------------------------------------------------------------
@@ -684,7 +704,7 @@ DREAM_SCRATCH=$(mktemp -d -t maestro-eval-dream-XXXXXX)
 unzip -q "$ZIP_PATH" -d "$DREAM_SCRATCH"
 DREAM_MAESTRO="$DREAM_SCRATCH/Maestro"
 mkdir -p "$DREAM_MAESTRO/brain/memory"
-if CLAUDE_PROJECT_DIR="$DREAM_MAESTRO" bash "$DREAM_MAESTRO/.claude/hooks/session-stop-dream.sh" >/dev/null 2>&1; then
+if HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$DREAM_MAESTRO" bash "$DREAM_MAESTRO/.claude/hooks/session-stop-dream.sh" >/dev/null 2>&1; then
   pass "session-stop-dream.sh exits 0"
 else
   fail "session-stop-dream.sh non-zero exit"
@@ -705,7 +725,7 @@ checkpoint = dict(schema_version=1, id='eval-checkpoint', session_id='eval-sessi
                   decisions=[], next_actions=[], provenance='agent-authored')
 (root / 'brain/.maestro/daily-pending/eval-checkpoint.json').write_text(json.dumps(checkpoint), encoding='utf-8')
 PY
-CLAUDE_PROJECT_DIR="$DREAM_MAESTRO" bash "$DREAM_MAESTRO/.claude/hooks/session-stop-dream.sh" >/dev/null 2>&1
+HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$DREAM_MAESTRO" bash "$DREAM_MAESTRO/.claude/hooks/session-stop-dream.sh" >/dev/null 2>&1
 if [ -f "$DREAM_MAESTRO/brain/memory/.dream-requested" ] && [ -s "$DREAM_MAESTRO/brain/memory/.dream-requested" ]; then
   pass ".dream-requested fingerprint written after a persisted checkpoint"
 else
@@ -719,7 +739,7 @@ INJECT_SCRATCH=$(mktemp -d -t maestro-eval-inject-XXXXXX)
 unzip -q "$ZIP_PATH" -d "$INJECT_SCRATCH"
 INJECT_MAESTRO="$INJECT_SCRATCH/Maestro"
 # Do NOT create brain/ — simulate first session where scaffold hasn't run yet
-if CLAUDE_PROJECT_DIR="$INJECT_MAESTRO" bash "$INJECT_MAESTRO/.claude/hooks/session-start-memory-inject.sh" >/dev/null 2>&1; then
+if HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$INJECT_MAESTRO" bash "$INJECT_MAESTRO/.claude/hooks/session-start-memory-inject.sh" >/dev/null 2>&1; then
   pass "session-start-memory-inject.sh exits 0 when brain/ absent (fail-open)"
 else
   fail "session-start-memory-inject.sh blocks when brain/ absent"
@@ -739,7 +759,7 @@ printf '# Test memory entry\nThis is a recent memory.\n' \
   > "$INJECT2_MAESTRO/brain/memory/recent/$(date +%Y-%m-%d).md"
 printf '# professional-role\n\n## Current\n\nSenior AI Scientist.\n' \
   > "$INJECT2_MAESTRO/brain/owner/self/professional-role.md"
-INJECT2_OUT=$(CLAUDE_PROJECT_DIR="$INJECT2_MAESTRO" bash "$INJECT2_MAESTRO/.claude/hooks/session-start-memory-inject.sh" 2>/dev/null)
+INJECT2_OUT=$(HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$INJECT2_MAESTRO" bash "$INJECT2_MAESTRO/.claude/hooks/session-start-memory-inject.sh" 2>/dev/null)
 if echo "$INJECT2_OUT" | grep -q "maestro:session-context:start"; then
   pass "session-start-memory-inject.sh emits session-context markers"
 else
@@ -778,7 +798,7 @@ INJECT3_HOOK="$INJECT3_MAESTRO/.claude/hooks/session-start-memory-inject.sh"
 
 # Sub-check A: marker present → dream-trigger block emitted
 printf '%s\n' "2099-01-01T00:00:00Z" > "$INJECT3_MAESTRO/brain/memory/.dream-requested"
-INJECT3_OUT_WITH=$(CLAUDE_PROJECT_DIR="$INJECT3_MAESTRO" bash "$INJECT3_HOOK" 2>/dev/null)
+INJECT3_OUT_WITH=$(HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$INJECT3_MAESTRO" bash "$INJECT3_HOOK" 2>/dev/null)
 if echo "$INJECT3_OUT_WITH" | grep -q "maestro:dream-trigger\|dream-requested"; then
   pass "session-start-memory-inject.sh emits dream-trigger block when .dream-requested present"
 else
@@ -792,7 +812,7 @@ fi
 
 # Sub-check B: marker absent → dream-trigger block NOT emitted
 rm -f "$INJECT3_MAESTRO/brain/memory/.dream-requested"
-INJECT3_OUT_WITHOUT=$(CLAUDE_PROJECT_DIR="$INJECT3_MAESTRO" bash "$INJECT3_HOOK" 2>/dev/null)
+INJECT3_OUT_WITHOUT=$(HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$INJECT3_MAESTRO" bash "$INJECT3_HOOK" 2>/dev/null)
 if echo "$INJECT3_OUT_WITHOUT" | grep -q "maestro:dream-trigger"; then
   fail "session-start-memory-inject.sh emits dream-trigger block even without .dream-requested"
 else
@@ -858,7 +878,7 @@ fi
 # bundle root. When the pointer looks at the root the lines are silently never
 # emitted, so the session rollup names the bundle without ever telling the
 # runtime where its index is. Asserted against real hook output, not source.
-TC_OUT=$(CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$INJECT_HOOK_BUILT" 2>/dev/null)
+TC_OUT=$(HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$INJECT_HOOK_BUILT" 2>/dev/null)
 if [ -f "$MAESTRO_DIR/bundles/tech-core/skills/INDEX.md" ]; then
   if printf '%s' "$TC_OUT" | grep -q "tech-core/skills/INDEX.md"; then
     pass "tech-core pointer emits the real INDEX.md path"
@@ -992,7 +1012,7 @@ if [ -f "$XC_HOOK" ]; then
   xc_verdict() {
     local esc=${2//\\/\\\\}
     printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$esc" \
-      | CLAUDE_PROJECT_DIR="$1" bash "$XC_HOOK" >/dev/null 2>&1
+      | HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$1" bash "$XC_HOOK" >/dev/null 2>&1
     case "$?" in 0) printf 'allow' ;; 2) printf 'block' ;; *) printf 'error' ;; esac
   }
 
@@ -1001,13 +1021,13 @@ if [ -f "$XC_HOOK" ]; then
   xc_verdict_tool() {
     local proj="$1" tool="$2" key="$3" esc=${4//\\/\\\\}
     printf '{"tool_name":"%s","tool_input":{"%s":"%s"}}' "$tool" "$key" "$esc" \
-      | CLAUDE_PROJECT_DIR="$proj" bash "$XC_HOOK" >/dev/null 2>&1
+      | HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$proj" bash "$XC_HOOK" >/dev/null 2>&1
     case "$?" in 0) printf 'allow' ;; 2) printf 'block' ;; *) printf 'error' ;; esac
   }
 
   # verdict with a raw payload, for shapes that are not one tool plus one path.
   xc_verdict_raw() {
-    printf '%s' "$2" | CLAUDE_PROJECT_DIR="$1" bash "$XC_HOOK" >/dev/null 2>&1
+    printf '%s' "$2" | HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$1" bash "$XC_HOOK" >/dev/null 2>&1
     case "$?" in 0) printf 'allow' ;; 2) printf 'block' ;; *) printf 'error' ;; esac
   }
 
@@ -1111,7 +1131,7 @@ if [ -f "$XC_HOOK" ]; then
   # The runtime reads stdout only on exit 0, so a reason printed there on the
   # block path never reaches the model. It must be on stderr.
   XC_MSG=$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$XC_R/brain/accounts/beta/cases/tmo/x.md" \
-    | CLAUDE_PROJECT_DIR="$XC_R" bash "$XC_HOOK" 2>&1 >/dev/null)
+    | HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$XC_R" bash "$XC_HOOK" 2>&1 >/dev/null)
   case "$XC_MSG" in
     *"verified runtime unavailable"*) fail "guard fixture did not reach policy: $XC_MSG" ;;
     *"Cross-case write blocked:"*) pass "policy block reason reaches stderr, where the runtime reads it on exit 2" ;;
@@ -1148,7 +1168,7 @@ if [ -f "$CROSS_CASE_HOOK" ]; then
   XC_ERR="$XC_ROOT/block.err"
   printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' \
     "$XC_ROOT/brain/accounts/beta/cases/tmo/notes.md" \
-    | CLAUDE_PROJECT_DIR="$XC_ROOT" bash "$XC_ROOT/.claude/hooks/block-cross-case-writes.sh" \
+    | HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$XC_ROOT" bash "$XC_ROOT/.claude/hooks/block-cross-case-writes.sh" \
       >/dev/null 2>"$XC_ERR"
   XC_RC=$?
   XC_OUT=$(cat "$XC_ERR" 2>/dev/null)
@@ -1182,7 +1202,7 @@ if [ -f "$CTX_HOOK" ]; then
 
   # Fresh state dir so the "first fire" (richest) branch is the one exercised.
   CTX_HOME=$(mktemp -d -t maestro-eval-ctxhome-XXXXXX)
-  CTX_OUT=$(HOME="$CTX_HOME" CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$CTX_HOOK" 2>/dev/null)
+  CTX_OUT=$(HOME="$CTX_HOME" USERPROFILE="$CTX_HOME" CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$CTX_HOOK" 2>/dev/null)
 
   if [ -n "$CTX_OUT" ]; then
     pass "context-inject emits a first-fire bundle"
@@ -1311,10 +1331,13 @@ if [ -f "$PY_LIB" ]; then
     [ -z "$command_path" ] || ln -s "$command_path" "$PY_EMPTY_PATH/$native_command"
   done
 
+  PY_PROBE_ROOT=$(mktemp -d -t maestro-eval-pyprobe-XXXXXX)
+  seed_managed_fixture "$PY_PROBE_ROOT"
+
   if [ -n "$PY_REAL" ]; then
     PY_ONLY_PYTHON=$(py_stub_dir python "#!/bin/sh
 exec \"$PY_REAL\" \"\$@\"")
-    RESOLVED=$(env PATH="$PY_ONLY_PYTHON:$PY_EMPTY_PATH" /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+    RESOLVED=$(env HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$PY_PROBE_ROOT" PATH="$PY_ONLY_PYTHON:$PY_EMPTY_PATH" /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
     [ "$RESOLVED" = "python" ] \
       && pass "resolver finds 'python' when 'python3' is absent" \
       || fail "resolver did not find 'python' when 'python3' is absent (got: ${RESOLVED:-<none>})"
@@ -1322,7 +1345,7 @@ exec \"$PY_REAL\" \"\$@\"")
     PY_ONLY_LAUNCHER=$(py_stub_dir py "#!/bin/sh
 shift
 exec \"$PY_REAL\" \"\$@\"")
-    RESOLVED=$(env PATH="$PY_ONLY_LAUNCHER:$PY_EMPTY_PATH" /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+    RESOLVED=$(env HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$PY_PROBE_ROOT" PATH="$PY_ONLY_LAUNCHER:$PY_EMPTY_PATH" /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
     [ "$RESOLVED" = "py -3" ] \
       && pass "resolver falls back to the 'py -3' launcher" \
       || fail "resolver did not fall back to 'py -3' (got: ${RESOLVED:-<none>})"
@@ -1337,11 +1360,11 @@ exec \"$PY_REAL\" \"\$@\"")
   # the silent failure this resolver exists to end.
   PY_TWO=$(py_stub_dir python '#!/bin/sh
 exit 1')
-  RESOLVED=$(env PATH="$PY_TWO:$PY_EMPTY_PATH" /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+  RESOLVED=$(env HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$PY_PROBE_ROOT" PATH="$PY_TWO:$PY_EMPTY_PATH" /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
   [ -z "$RESOLVED" ] \
     && pass "resolver rejects a 'python' that is not Python 3" \
     || fail "resolver selected a non-Python-3 interpreter (got: $RESOLVED)"
-  rm -rf "$PY_TWO"
+  rm -rf "$PY_TWO" "$PY_PROBE_ROOT"
 
   # Regression guard: a hook that calls the interpreter by name again
   # reintroduces the bug for every owner whose Python is not called python3.
@@ -1366,7 +1389,7 @@ exit 1')
     chmod +x "$PY_REC_ROOT/with space/maestro-python"
     printf '%s\n' "$PY_REC_ROOT/with space/maestro-python" > "$PY_REC_ROOT/brain/.maestro-python"
 
-    RAN=$(env PATH="$PY_EMPTY_PATH" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" \
+    RAN=$(env PATH="$PY_EMPTY_PATH" HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" \
             /bin/bash -c ". '$PY_LIB'; maestro_py -c 'print(\"ran\")'" 2>/dev/null)
     [ "$RAN" = "ran" ] \
       && pass "a recorded interpreter resolves and runs, including a path with a space" \
@@ -1376,7 +1399,7 @@ exit 1')
     # carried in a workspace copied to another machine. It must be skipped, not
     # trusted, or provisioning leaves behind a permanent false positive.
     printf '%s\n' "$PY_REC_ROOT/gone/maestro-python" > "$PY_REC_ROOT/brain/.maestro-python"
-    RESOLVED=$(env PATH="$PY_EMPTY_PATH" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" \
+    RESOLVED=$(env PATH="$PY_EMPTY_PATH" HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" \
                  /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
     [ -z "$RESOLVED" ] \
       && pass "a stale interpreter record is rejected rather than trusted" \
@@ -1388,12 +1411,12 @@ exit 1')
     if [ -f "$MEM_HOOK" ]; then
       mkdir -p "$PY_REC_ROOT/brain/memory/recent"
       rm -f "$PY_REC_ROOT/brain/.maestro-python"
-      NUDGE=$(env PATH="$PY_EMPTY_PATH" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" /bin/bash "$MEM_HOOK" 2>/dev/null)
+      NUDGE=$(env PATH="$PY_EMPTY_PATH" HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" /bin/bash "$MEM_HOOK" 2>/dev/null)
       case "$NUDGE" in
         *maestro:python-missing*) pass "SessionStart names a missing interpreter instead of degrading in silence" ;;
         *) fail "SessionStart emitted no signal for a missing interpreter" ;;
       esac
-      QUIET=$(CLAUDE_PROJECT_DIR="$PY_REC_ROOT" bash "$MEM_HOOK" 2>/dev/null)
+      QUIET=$(HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" bash "$MEM_HOOK" 2>/dev/null)
       case "$QUIET" in
         *maestro:python-missing*) fail "SessionStart warns about a missing interpreter while one is available" ;;
         *) pass "SessionStart stays quiet when an interpreter is available" ;;
@@ -1427,7 +1450,7 @@ CASE_ROOT=$(mktemp -d -t maestro-eval-case-XXXXXX)
 seed_managed_fixture "$CASE_ROOT"
 
 # Scaffold first, so the fixture is the layout the product actually creates.
-CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/first-run-scaffold.sh" >/dev/null 2>&1 || true
+HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/first-run-scaffold.sh" >/dev/null 2>&1 || true
 
 if [ -d "$CASE_ROOT/brain/accounts" ]; then
   pass "scaffold builds brain/accounts/"
@@ -1442,8 +1465,8 @@ if [ -d "$CASE_ROOT/brain/accounts" ]; then
   printf '# Tarefa\n' > "$CASE_DIR/tasks/primeira.md"
   printf 'alfa/tmo\n' > "$CASE_ROOT/brain/accounts/.active"
 
-  SCAFFOLD_OUT=$(CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/first-run-scaffold.sh" 2>/dev/null)
-  MEMORY_OUT=$(CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/session-start-memory-inject.sh" 2>/dev/null)
+  SCAFFOLD_OUT=$(HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/first-run-scaffold.sh" 2>/dev/null)
+  MEMORY_OUT=$(HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/session-start-memory-inject.sh" 2>/dev/null)
   EMITTED="$SCAFFOLD_OUT
 $MEMORY_OUT"
 
@@ -1465,7 +1488,7 @@ $MEMORY_OUT"
   # A marker in the pre-accounts format cannot name an account. Guessing would
   # surface one client's brief while the owner works on another.
   printf 'tmo\n' > "$CASE_ROOT/brain/accounts/.active"
-  STALE=$(CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/session-start-memory-inject.sh" 2>/dev/null)
+  STALE=$(HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/session-start-memory-inject.sh" 2>/dev/null)
   case "$STALE" in
     *"Caso ativo"*) fail "a bare case id in .active still produced case context (which client did it pick?)" ;;
     *) pass "a bare case id in .active emits nothing instead of guessing an account" ;;
@@ -1599,7 +1622,7 @@ fi
 # transcript and never reaches the model.
 if [ -f "$ANNOUNCE_HOOK" ] && [ -n "${PY_REAL:-}" ]; then
   ANN=$(printf '{"tool_name":"Agent","tool_input":{"subagent_type":"yoda","prompt":"x"}}' \
-        | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$ANNOUNCE_HOOK" 2>/dev/null)
+        | HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$ANNOUNCE_HOOK" 2>/dev/null)
   ANN_OK=$(printf '%s' "$ANN" | "$PY_REAL" -c 'import sys,json
 try:
     d=json.load(sys.stdin)
@@ -1616,12 +1639,12 @@ print("ok" if h.get("additionalContext") else "nocontext")' 2>/dev/null)
   # A non-agent tool must be ignored, and absence of an interpreter must never
   # block a dispatch: this hook is a net, not a gate.
   printf '{"tool_name":"Write","tool_input":{"file_path":"x"}}' \
-    | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$ANNOUNCE_HOOK" >/dev/null 2>&1
+    | HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$ANNOUNCE_HOOK" >/dev/null 2>&1
   [ $? -eq 0 ] \
     && pass "announce hook ignores a non-agent tool and exits 0" \
     || fail "announce hook did not exit 0 for a non-agent tool"
 
-  env PATH="/usr/bin:/bin" CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$ANNOUNCE_HOOK" \
+  env PATH="/usr/bin:/bin" HOME="$QUALIFICATION_USER_HOME" USERPROFILE="$QUALIFICATION_USER_HOME" CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$ANNOUNCE_HOOK" \
     < /dev/null >/dev/null 2>&1
   [ $? -eq 0 ] \
     && pass "announce hook fails open without an interpreter (never blocks a dispatch)" \
@@ -1639,7 +1662,7 @@ CI_HOOK="$MAESTRO_DIR/.claude/hooks/context-inject-userprompt.sh"
 if [ -f "$CI_HOOK" ] && [ -f "$AGENT_ROUTER" ] && [ -n "${PY_REAL:-}" ]; then
   CI_HOME=$(mktemp -d -t maestro-eval-cihome-XXXXXX)
   CI_OUT=$(printf '{"prompt":"chama o yoda para revisar essa recomendacao"}' \
-           | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" HOME="$CI_HOME" bash "$CI_HOOK" 2>/dev/null)
+           | HOME="$CI_HOME" USERPROFILE="$CI_HOME" CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$CI_HOOK" 2>/dev/null)
   case "$CI_OUT" in
     *yoda*) pass "context-inject reaches the agent router and emits its line" ;;
     *) fail "context-inject produced no agent line for an explicit request — the router is wired but unreachable" ;;
@@ -1648,7 +1671,7 @@ if [ -f "$CI_HOOK" ] && [ -f "$AGENT_ROUTER" ] && [ -n "${PY_REAL:-}" ]; then
   # An ordinary request must not pay for this. A router that fires on everything
   # costs a model call per message and trains the owner to ignore the line.
   CI_QUIET=$(printf '{"prompt":"me ajuda a montar o slide de decisao"}' \
-             | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" HOME="$CI_HOME" bash "$CI_HOOK" 2>/dev/null)
+             | HOME="$CI_HOME" USERPROFILE="$CI_HOME" CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$CI_HOOK" 2>/dev/null)
   case "$CI_QUIET" in
     *yoda*|*darwin*|*gamma-guardian*) fail "context-inject emitted an agent line for ordinary work" ;;
     *) pass "context-inject stays quiet on ordinary work" ;;
@@ -1709,11 +1732,10 @@ RT_INDEXER="$MAESTRO_DIR/bundles/base/tools/brain-index.py"
 
 if [ -f "$RT_ROUTER" ] && [ -f "$RT_INDEXER" ] && [ -n "${PY_REAL:-}" ]; then
   RT_ROOT=$(mktemp -d -t maestro-eval-route-XXXXXX)
+  seed_managed_fixture "$RT_ROOT"
   mkdir -p "$RT_ROOT/bundles/base/tools" "$RT_ROOT/brain/learnings" \
            "$RT_ROOT/brain/craft/methods" "$RT_ROOT/brain/craft/style" \
            "$RT_ROOT/brain/people" "$RT_ROOT/brain/development"
-  cp "$RT_INDEXER" "$RT_ROUTER" "$RT_ROOT/bundles/base/tools/"
-  cp "$MAESTRO_DIR/bundles/base/brain-contract.md" "$RT_ROOT/bundles/base/" 2>/dev/null
 
   rt_page() {
     printf -- '---\nid: %s\ntitle: "%s"\nsummary: "%s"\ntype: %s\nscope: owner\nstatus: active\nsensitivity: owner-private\nupdated: 2026-09-01\n---\n\n# %s\n\n%s\n' \
@@ -1732,7 +1754,7 @@ if [ -f "$RT_ROUTER" ] && [ -f "$RT_INDEXER" ] && [ -n "${PY_REAL:-}" ]; then
   rt_page "development/objectives.md" development "Objetivos atuais" \
     "Pontos de desenvolvimento em lideranca de time e comunicacao executiva"
 
-  ( cd "$RT_ROOT" && PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/brain-index.py >/dev/null 2>&1 )
+  ( cd "$RT_ROOT" && PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/brain-index.py --user-home "$QUALIFICATION_USER_HOME" >/dev/null 2>&1 )
 
   if [ -f "$RT_ROOT/brain/.maestro/route-index.json" ]; then
     pass "the compiler writes route-index.json"
@@ -1743,7 +1765,7 @@ if [ -f "$RT_ROUTER" ] && [ -f "$RT_INDEXER" ] && [ -n "${PY_REAL:-}" ]; then
       || fail "the inverted index came back empty on a six-page corpus"
 
     RT_HIT=$(cd "$RT_ROOT" && printf 'kickoff sem agenda escrita no projeto' \
-             | PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/brain-route.py --max 5 2>/dev/null)
+             | PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/brain-route.py --user-home "$QUALIFICATION_USER_HOME" --max 5 2>/dev/null)
     case "$RT_HIT" in
       *kickoff-sem-agenda*) pass "the brain router resolves a page from that index" ;;
       *) fail "the router read the compiler's index and matched nothing — the index shape and the router disagree" ;;
@@ -1757,7 +1779,7 @@ if [ -f "$RT_ROUTER" ] && [ -f "$RT_INDEXER" ] && [ -n "${PY_REAL:-}" ]; then
     esac
 
     RT_QUIET=$(cd "$RT_ROOT" && printf 'oi' \
-               | PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/brain-route.py --max 5 2>/dev/null)
+               | PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/brain-route.py --user-home "$QUALIFICATION_USER_HOME" --max 5 2>/dev/null)
     [ -z "$RT_QUIET" ] \
       && pass "the brain router stays silent on a greeting" \
       || fail "the brain router fired on a two-letter greeting"
@@ -1774,14 +1796,14 @@ fi
 # literal request that exists for that skill.
 if [ -f "$RT_SKILL" ] && [ -n "${PY_REAL:-}" ]; then
   SK_HIT=$(cd "$MAESTRO_DIR" && printf 'eod' \
-           | PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/skill-route.py --max 4 2>/dev/null)
+           | PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/skill-route.py --user-home "$QUALIFICATION_USER_HOME" --max 4 2>/dev/null)
   case "$SK_HIT" in
     *eod*) pass "the skill router answers a three-character literal request" ;;
     *) fail "the skill router did not resolve 'eod' — a literal skill name must route" ;;
   esac
 
   SK_QUIET=$(cd "$MAESTRO_DIR" && printf 'oi' \
-             | PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/skill-route.py --max 4 2>/dev/null)
+             | PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/skill-route.py --user-home "$QUALIFICATION_USER_HOME" --max 4 2>/dev/null)
   [ -z "$SK_QUIET" ] \
     && pass "the skill router stays silent on a greeting" \
     || fail "the skill router fired on a greeting"
@@ -1804,8 +1826,7 @@ phase "Phase 24 — Every path the product cites exists on a fresh install"
 PATHS_TOOL_EVAL="$MAESTRO_DIR/bundles/base/tools/paths-check.py"
 if [ -f "$PATHS_TOOL_EVAL" ] && [ -n "${PY_REAL:-}" ]; then
   PC_ROOT=$(mktemp -d -t maestro-eval-paths-XXXXXX)
-  cp -R "$MAESTRO_DIR/bundles" "$PC_ROOT/" 2>/dev/null
-  cp -R "$MAESTRO_DIR/.claude" "$PC_ROOT/" 2>/dev/null
+  seed_managed_fixture "$PC_ROOT"
   cp -R "$MAESTRO_DIR/schemas" "$PC_ROOT/" 2>/dev/null
   cp "$MAESTRO_DIR/CLAUDE.md" "$PC_ROOT/" 2>/dev/null
   for sub in accounts craft/methods craft/style daily development/cdc \
@@ -1816,8 +1837,8 @@ if [ -f "$PATHS_TOOL_EVAL" ] && [ -n "${PY_REAL:-}" ]; then
     mkdir -p "$PC_ROOT/brain/$sub"
   done
 
-  PC_OUT=$(cd "$PC_ROOT" && PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/paths-check.py 2>/dev/null)
-  PC_COUNT=$(cd "$PC_ROOT" && PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/paths-check.py --count 2>/dev/null)
+  PC_OUT=$(cd "$PC_ROOT" && PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/paths-check.py --user-home "$QUALIFICATION_USER_HOME" 2>/dev/null)
+  PC_COUNT=$(cd "$PC_ROOT" && PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/paths-check.py --user-home "$QUALIFICATION_USER_HOME" --count 2>/dev/null)
   if [ "${PC_COUNT:-1}" = "0" ]; then
     pass "no dead paths cited anywhere in the shipped product"
   else

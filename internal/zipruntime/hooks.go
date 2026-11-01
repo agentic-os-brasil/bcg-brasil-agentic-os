@@ -8,7 +8,6 @@ import (
 	"errors"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/codexadapter"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/zipmigration"
 	"io"
 	"os"
 	"path/filepath"
@@ -18,15 +17,46 @@ import (
 // Run dispatches bounded native hook input. JSON denial uses exit zero, never
 // continue:false, which is not a supported PreToolUse enforcement response.
 func Run(args []string, in io.Reader, out io.Writer) error {
+	return RunWithOptions(args, in, out, Options{})
+}
+
+// RunWithOptions shares canonical admission across every owner-state consumer.
+func RunWithOptions(args []string, in io.Reader, out io.Writer, options Options) error {
+	if len(args) >= 2 && args[len(args)-2] == "--user-home" {
+		options.UserHome = args[len(args)-1]
+		args = args[:len(args)-2]
+	}
+	var paths Paths
+	for i := 1; i+1 < len(args); i++ {
+		if args[i] == "--root" && args[0] != "bind-codex" {
+			paths = ResolvePaths(args[i+1], options)
+			if !paths.Writable {
+				if paths.Diagnostic == "migration_required" && (args[0] == "daily-stop" || args[0] == "daily-dream-ack") {
+					return json.NewEncoder(out).Encode(dailyReceipt{State: "migration_blocked", Failed: 1})
+				}
+				if paths.Diagnostic == "migration_required" && args[0] == "codex-hook" && args[1] == "Stop" {
+					return json.NewEncoder(out).Encode(map[string]string{"systemMessage": "daily_recovery migration_blocked; checkpoints retained."})
+				}
+				if args[0] == "codex-hook" && args[1] == "PreToolUse" {
+					return json.NewEncoder(out).Encode(codexadapter.FailClosedDenial())
+				}
+				if args[0] == "codex-hook" && (args[1] == "SessionStart" || args[1] == "UserPromptSubmit") {
+					return json.NewEncoder(out).Encode(map[string]any{"continue": false, "stopReason": "<!-- maestro:state-unavailable --> Maestro owner state unavailable: " + paths.Diagnostic})
+				}
+				return errors.New("Maestro owner state unavailable: " + paths.Diagnostic)
+			}
+			break
+		}
+	}
 	if len(args) == 3 && args[1] == "--root" {
 		if args[0] == "daily-stop" {
-			return dailyStop(args[2], out)
+			return dailyStop(paths.OwnerScopeRoot, out)
 		}
 		if args[0] == "daily-context" {
-			return dailyContext(args[2], out)
+			return dailyContext(paths.OwnerScopeRoot, out)
 		}
 		if args[0] == "daily-dream-ack" {
-			return dailyDreamAck(args[2], in, out)
+			return dailyDreamAck(paths.OwnerScopeRoot, in, out)
 		}
 	}
 	if len(args) == 3 && args[0] == "bind-codex" && args[1] == "--root" {
@@ -36,7 +66,7 @@ func Run(args []string, in io.Reader, out io.Writer) error {
 		return json.NewEncoder(out).Encode(map[string]string{"state": "configured", "native_qualification": "unattested"})
 	}
 	if len(args) == 5 && args[0] == "context-cap" && args[1] == "--root" && args[3] == "--max" {
-		return capContext(args[2], args[4], in, out)
+		return capContext(paths.OwnerScopeRoot, args[4], in, out)
 	}
 	if len(args) == 1 && args[0] == "caseos-check" {
 		body, err := io.ReadAll(io.LimitReader(in, 4097))
@@ -55,7 +85,7 @@ func Run(args []string, in io.Reader, out io.Writer) error {
 	if len(args) != 4 || args[0] != "codex-hook" || args[2] != "--root" {
 		return errors.New("usage: codex-hook EVENT --root ROOT")
 	}
-	event, root := args[1], args[3]
+	event, root := args[1], paths.OwnerScopeRoot
 	body, readErr := io.ReadAll(io.LimitReader(in, codexadapter.MaximumNativeInputBytes+1))
 	input, err := codexadapter.ParseReader(bytes.NewReader(body))
 	if readErr != nil {
@@ -67,7 +97,7 @@ func Run(args []string, in io.Reader, out io.Writer) error {
 	}
 	cwd := native.CWD
 	if cwd == "" {
-		cwd = root
+		cwd = paths.ProductRoot
 	}
 	if event == "PreToolUse" {
 		decision := codexadapter.FailClosedDenial()
@@ -81,13 +111,7 @@ func Run(args []string, in io.Reader, out io.Writer) error {
 	}
 	switch event {
 	case "SessionStart", "UserPromptSubmit":
-		if event == "SessionStart" {
-			migration := zipmigration.Run(root, zipmigration.Options{})
-			if migration.State != "committed" && migration.State != "not_needed" {
-				return json.NewEncoder(out).Encode(map[string]any{"continue": false, "stopReason": "Maestro migration is " + migration.State + ". Retained data remains available in the prior installation. Resolve migration before new writes."})
-			}
-		}
-		context := "You are Maestro for this professional workspace. Read AGENTS.md and load the maestro-operator skill. Use brain/accounts/.active to resolve case scope. Continue from explicit checkpoints; do not infer missing state. caseOS requires the caseos-connect skill and a current consented, allowlisted connection. Hooks are configured; this adapter invocation does not prove native qualification."
+		context := "You are Maestro for this professional workspace. Read AGENTS.md and load the maestro-operator skill. Owner mode: " + paths.Mode + ". Owner brain: " + paths.BrainRoot + ". Resolve accounts/.active beneath that brain. Owner scope: " + paths.OwnerScopeRoot + ". Continue from explicit checkpoints; do not infer missing state. caseOS requires the caseos-connect skill and a current consented, allowlisted connection. Hooks are configured; this adapter invocation does not prove native qualification."
 		if event == "SessionStart" {
 			diagnostic, _ := dailyRecovery(root)
 			if diagnostic != "" {
@@ -116,7 +140,7 @@ func Run(args []string, in io.Reader, out io.Writer) error {
 		if err != nil {
 			return errors.New("invalid lifecycle metadata")
 		}
-		dataRoot := filepath.Join(root, "brain/.maestro")
+		dataRoot := paths.MetadataRoot
 		physical, err := resolveProspective(dataRoot)
 		if err != nil {
 			return errors.New("unsafe receipt root")

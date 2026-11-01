@@ -5,6 +5,9 @@ description: Mandatory pre-delivery quality gate for any output going to a clien
 
 # Skill: client-delivery-gate
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) before starting. It controls how findings are
 presented (compact vs. verbose), but never changes the three-lens structure, verdict
 categories, or the 🔴 SEGURAR hard-stop invariant.

@@ -45,3 +45,19 @@ _Avoid_: arquivo presente no pacote
 
 **Pacote**:
 Unidade versionada de conteúdo governado distribuída sem o estado privado do participante.
+
+**Brain do dono**:
+Acervo pessoal e operacional do dono, compartilhado pelos seus clientes admitidos.
+_Avoid_: pasta do produto, brain do workspace
+
+**Brain do workspace**:
+Acervo local de um projeto ou caso explicitamente escolhido.
+_Avoid_: acervo pessoal global
+
+**Brain vivo**:
+Estado autoral atual consumido pelo runtime, incluindo mudanças e exclusões posteriores a uma importação.
+_Avoid_: fotografia histórica da origem
+
+**Linhagem**:
+Evidência histórica que vincula transações e origens sem conceder nova autoridade de escrita.
+_Avoid_: permissão atual

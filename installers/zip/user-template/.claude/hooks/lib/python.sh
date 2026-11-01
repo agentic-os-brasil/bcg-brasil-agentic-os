@@ -30,7 +30,7 @@
 # deliberately not JSON: this is the file that says where the JSON parser is,
 # so needing the parser to read it would be circular — and the circularity
 # would only surface on the machines that depend on it.
-MAESTRO_PY_RECORD="${MAESTRO_PY_RECORD:-${CLAUDE_PROJECT_DIR:-.}/brain/.maestro-python}"
+MAESTRO_PY_RECORD=""
 
 # Set by maestro_python: the executable, and an optional first argument.
 MAESTRO_PY_CMD="${MAESTRO_PY_CMD:-}"
@@ -41,6 +41,13 @@ _maestro_py_is_three() {
 }
 
 maestro_python() {
+  if ! declare -F maestro_bind_home >/dev/null; then
+    . "$(dirname "${BASH_SOURCE[0]}")/maestro-runtime.sh" || return 1
+  fi
+  if [ "${MAESTRO_BOUND_PRODUCT:-}" != "${PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-.}}" ]; then
+    maestro_bind_home "${PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-.}}" || return 1
+  fi
+  MAESTRO_PY_RECORD="$MAESTRO_BRAIN_ROOT/.maestro-python"
   if [ -n "$MAESTRO_PY_CMD" ]; then
     printf '%s' "$MAESTRO_PY_CMD${MAESTRO_PY_ARG:+ $MAESTRO_PY_ARG}"
     return 0
@@ -99,12 +106,10 @@ maestro_python() {
 }
 
 maestro_py() {
-  if [ -z "$MAESTRO_PY_CMD" ]; then
-    maestro_python >/dev/null 2>&1 || return 127
-  fi
+  maestro_python >/dev/null 2>&1 || return 127
   if [ -n "$MAESTRO_PY_ARG" ]; then
-    "$MAESTRO_PY_CMD" "$MAESTRO_PY_ARG" "$@"
+    PYTHONDONTWRITEBYTECODE=1 "$MAESTRO_PY_CMD" "$MAESTRO_PY_ARG" "$@"
   else
-    "$MAESTRO_PY_CMD" "$@"
+    PYTHONDONTWRITEBYTECODE=1 "$MAESTRO_PY_CMD" "$@"
   fi
 }

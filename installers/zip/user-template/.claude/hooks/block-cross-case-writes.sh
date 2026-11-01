@@ -5,6 +5,7 @@
 set -u
 ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)}"
 . "$(dirname "${BASH_SOURCE[0]}")/lib/maestro-runtime.sh" || exit 2
+maestro_bind_home "$ROOT" || exit 2
 RESULT=$(maestro_runtime "$ROOT" codex-hook PreToolUse --root "$ROOT") || {
   printf 'Cross-case write blocked: verified runtime unavailable. Resolve the managed installation before retrying.\n' >&2
   exit 2

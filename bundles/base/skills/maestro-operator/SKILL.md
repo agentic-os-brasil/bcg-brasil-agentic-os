@@ -5,6 +5,9 @@ description: Método operacional do Maestro, carregado no início de cada sessã
 
 # Maestro Operator
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 ## Daily continuity checkpoint (before the final response)
 
 For material work or an interruption, write one selected agent-authored checkpoint

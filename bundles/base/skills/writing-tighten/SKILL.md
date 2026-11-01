@@ -5,6 +5,9 @@ description: Aperta um texto já escrito — corta preâmbulo, nominalização, 
 
 # Apertar a Escrita
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Um texto já existe e está mais longo do que precisa. O trabalho aqui é cortar o
 que não carrega significado, **sem tocar no que ele afirma** — e mostrar o corte,
 em vez de devolver um texto novo e pedir confiança.

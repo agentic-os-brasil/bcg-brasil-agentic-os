@@ -5,6 +5,9 @@ description: Recompila o índice navegável do brain — índice por escopo, bac
 
 # Brain index
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Compila a camada de navegação do brain a partir do frontmatter de cada página.
 Tudo que ele produz é **derivado e descartável**: apagar e recompilar não perde nada.
 Nenhuma página de índice é autoridade — ela aponta, e a página apontada aponta a fonte.
@@ -34,13 +37,13 @@ Não rode a cada mensagem.
 ## Como rodar
 
 ```
-python3 bundles/base/tools/brain-index.py
+python3 "<admitted product_root>/bundles/base/tools/brain-index.py" --product-root "<admitted product_root>"
 ```
 
 Para inspecionar sem publicar — útil antes de aceitar uma mudança grande:
 
 ```
-python3 bundles/base/tools/brain-index.py --check
+python3 "<admitted product_root>/bundles/base/tools/brain-index.py" --product-root "<admitted product_root>" --check
 ```
 
 ## O que ele produz
