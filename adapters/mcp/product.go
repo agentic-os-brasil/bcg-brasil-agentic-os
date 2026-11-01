@@ -104,13 +104,14 @@ func (b *Bound) Server() *mcp.Server {
 	readonly := &mcp.ToolAnnotations{ReadOnlyHint: true}
 	empty := map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
 	s.AddTool(&mcp.Tool{Name: "maestro_context", Description: "Read binding metadata and available operations; no content export.", InputSchema: empty, Annotations: readonly}, b.handle("context", empty))
-	query := map[string]any{"type": "object", "oneOf": []any{
+	query := map[string]any{"type": "object", "oneOf": append([]any{
 		variant("execution.list", map[string]any{"offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 128}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 32}}),
 		variant("execution.next", map[string]any{"item_id": strSchema(96)}, "item_id"),
 		variant("execution.contract", map[string]any{"item_id": strSchema(96)}, "item_id"),
-	}}
-	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read paged execution metadata or the canonical bounded continuation.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
-	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Mutate bound execution with revision and attempt checks. Only artifact snapshot criteria are admitted.", InputSchema: mutationSchema()}, b.handle("apply", mutationSchema()))
+	}, ownerQueries()...)}
+	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read owner metadata/interview questions or paged execution and bounded continuation. Private profile text is available only in trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
+	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Propose owner answers; changes require trusted client review. Mutate execution with revision/attempt checks and artifact snapshot criteria.", InputSchema: applySchema()}, b.handle("apply", applySchema()))
+	b.registerMethods(s)
 	return s
 }
 
@@ -126,6 +127,11 @@ type input struct {
 	CriterionID      string   `json:"criterion_id"`
 	Offset           int      `json:"offset"`
 	Limit            int      `json:"limit"`
+	Track            string   `json:"track"`
+	ProposalID       string   `json:"proposal_id"`
+	Facet            string   `json:"facet"`
+	Evidence         string   `json:"evidence"`
+	ProposedBody     string   `json:"proposed_body"`
 }
 
 func result(value any, err error) *mcp.CallToolResult {
@@ -157,7 +163,7 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		panic(err)
 	}
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		if len(req.Params.Arguments) > 16<<10 {
+		if len(req.Params.Arguments) > 128<<10 {
 			return result(nil, errors.New("input_size")), nil
 		}
 		var raw any
@@ -179,8 +185,14 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		if d.Decode(new(any)) != io.EOF {
 			return result(nil, errors.New("trailing_input")), nil
 		}
+		if len(req.Params.Arguments) > 16<<10 && in.Operation != "owner.propose" {
+			return result(nil, errors.New("input_size")), nil
+		}
 		if kind == "context" {
 			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "next_max_bytes": 2048}, nil), nil
+		}
+		if strings.HasPrefix(in.Operation, "owner.") {
+			return b.handleOwner(ctx, req, in), nil
 		}
 		if kind == "query" {
 			if in.Operation == "execution.contract" {

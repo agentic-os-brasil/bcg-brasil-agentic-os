@@ -18,7 +18,13 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "maestro: operation unavailable; inspect the selected binding before retrying")
+		if len(os.Args) > 1 && (os.Args[1] == "owner-apply" || os.Args[1] == "owner-confirm-onboarding") {
+			fmt.Fprintln(os.Stderr, "maestro: owner confirmation refused; inspect the selected binding, read the current full owner-review or owner-onboarding-review, then retry with its exact --review-digest and --confirm")
+		} else if len(os.Args) > 1 && os.Args[1] == "owner-track" {
+			fmt.Fprintln(os.Stderr, "maestro: owner track selection refused; inspect the selected binding, then use --track quick|complete with explicit --confirm")
+		} else {
+			fmt.Fprintln(os.Stderr, "maestro: operation unavailable; inspect the selected binding before retrying")
+		}
 		os.Exit(1)
 	}
 }
@@ -29,12 +35,29 @@ func run() error {
 	flags := flag.NewFlagSet("maestro-mcp", flag.ContinueOnError)
 	var o product.Options
 	var destination, server, version string
+	var proposalID, reviewDigest, track string
+	var confirmed bool
 	flags.StringVar(&destination, "destination", "", "new packet destination")
 	flags.StringVar(&server, "server", "", "compiled native server binary")
 	flags.StringVar(&version, "version", "", "packet semantic version")
 	flags.StringVar(&o.ProductRoot, "product-root", "", "existing installed product directory")
 	flags.StringVar(&o.UserHome, "user-home", "", "existing owner directory")
 	flags.StringVar(&o.WorkspacePath, "workspace", "", "explicit selected workspace directory")
+	switch os.Args[1] {
+	case "owner-review", "owner-apply":
+		flags.StringVar(&proposalID, "proposal-id", "", "exact owner proposal ID")
+	}
+	switch os.Args[1] {
+	case "owner-apply", "owner-confirm-onboarding":
+		flags.StringVar(&reviewDigest, "review-digest", "", "exact SHA-256 digest from the full local review")
+	}
+	switch os.Args[1] {
+	case "owner-apply", "owner-confirm-onboarding", "owner-track":
+		flags.BoolVar(&confirmed, "confirm", false, "local operator confirms the reviewed operation")
+	}
+	if os.Args[1] == "owner-track" {
+		flags.StringVar(&track, "track", "", "quick or complete")
+	}
 	if err := flags.Parse(os.Args[2:]); err != nil {
 		return err
 	}
@@ -73,10 +96,38 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		if _, err := product.Open(o); err != nil {
+		bound, err := product.Open(o)
+		if err != nil {
+			return err
+		}
+		if _, err := bound.InitializeOwner(); err != nil {
 			return err
 		}
 		return json.NewEncoder(os.Stdout).Encode(map[string]string{"state": "ready", "workspace_id": w.WorkspaceID})
+	case "owner-review", "owner-apply", "owner-onboarding-review", "owner-confirm-onboarding", "owner-track":
+		bound, err := product.Open(o)
+		if err != nil {
+			return err
+		}
+		var value any
+		switch os.Args[1] {
+		case "owner-review":
+			value, err = bound.OwnerReview(proposalID)
+		case "owner-apply":
+			value, err = bound.ApplyOwnerReview(proposalID, reviewDigest, confirmed)
+		case "owner-onboarding-review":
+			value, err = bound.OwnerOnboardingReview()
+		case "owner-confirm-onboarding":
+			value, err = bound.ConfirmOwnerOnboarding(reviewDigest, confirmed)
+		case "owner-track":
+			value, err = bound.SelectOwnerTrack(track, confirmed)
+		}
+		if err != nil {
+			return err
+		}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(value)
 	case "serve":
 		bound, err := product.Open(o)
 		if err != nil {

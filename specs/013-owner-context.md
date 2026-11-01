@@ -9,6 +9,13 @@ the `bcgos owner *` commands described below no longer exist; the standalone
 interview is delivered through the `/maestro-onboarding` skill. The facet
 contract, the consent boundaries and the ten-facet index remain canonical.
 
+The product MCP now exposes canonical owner review/confirmation through
+[Spec060](060-product-owner-memory.md) and the
+[product MCP operator guide](../docs/product-mcp-owner.md). That new surface
+uses `ownerctx`'s digest-bound `review_required` state; historical `bcgos`
+commands below remain retired. For product behavior, Spec060 takes precedence
+over this document's historical CLI availability statements.
+
 ## Objective
 
 Give a future Session Start a stable, human-correctable source for the owner's
@@ -158,9 +165,9 @@ in the conversation, and `/maestro-onboarding` owns that boundary.
 
 A fourth state, `review_required`, and its SHA-256 `review_digest` belonged to
 `bcgos owner onboarding confirm --digest <review_digest> --confirm`. That
-command no longer exists and nothing in the shipped product produces or reads
-that state, so it is recorded here as history rather than as contract. Do not
-implement against it. (The `review_required` reported by `owner expand status`
+command no longer exists. Its CLI availability statement is historical;
+Spec060's product adapter now consumes the canonical state through the new
+reviewed owner interfaces. (The `review_required` reported by `owner expand status`
 is a different mechanism — one open SELF expansion draft — and is unaffected.)
 The runtime suggests the next unanswered question, then waits; if the owner
 answers a different known onboarding facet, it records that answer and keeps
