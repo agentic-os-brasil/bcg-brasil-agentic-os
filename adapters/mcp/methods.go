@@ -117,6 +117,7 @@ func PackagedMethods() (MethodPackage, error) {
 }
 
 func (b *Bound) registerMethods(s *mcp.Server) {
+	b.registerAgents(s)
 	methods, err := PackagedMethods()
 	if err != nil {
 		panic("invalid immutable Maestro method package")

@@ -384,7 +384,11 @@ func TestClaudeInstallOwnsCompleteLifecycleWithBlockingStop(t *testing.T) {
 		t.Fatal(err)
 	}
 	entries, err := os.ReadDir(filepath.Join(workspace, ".claude", "agents"))
-	if err != nil || len(entries) != 5 {
+	var names []string
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	if err != nil || strings.Join(names, ",") != strings.Join(expectedClaudeAgentFiles, ",") {
 		t.Fatalf("managed native agents = %v, %v", entries, err)
 	}
 	config, err := read(path)
@@ -525,7 +529,7 @@ func TestClaudeInstallRollsBackProjectedAgentsWhenSettingsWriteFails(t *testing.
 	if err != nil || string(settings) != string(original) {
 		t.Fatalf("settings after rollback = %s, %v", settings, err)
 	}
-	for _, name := range managedClaudeAgentFiles {
+	for _, name := range expectedClaudeAgentFiles {
 		if _, err := os.Stat(filepath.Join(workspace, ".claude", "agents", name)); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("managed agent %s survived rollback: %v", name, err)
 		}
@@ -535,6 +539,22 @@ func TestClaudeInstallRollsBackProjectedAgentsWhenSettingsWriteFails(t *testing.
 func TestClaudeUninstallRollsBackHooksAndAgentsWhenProjectionRemovalFails(t *testing.T) {
 	workspace := t.TempDir()
 	if _, err := Install("claude", workspace, "/opt/maestro/bcgos"); err != nil {
+		t.Fatal(err)
+	}
+	gammaPath := filepath.Join(workspace, ".claude", "agents", "gamma-guardian.md")
+	gammaBefore, err := os.ReadFile(gammaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(gammaPath, 0640); err != nil {
+		t.Fatal(err)
+	}
+	gammaInfoBefore, err := os.Stat(gammaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	neighbor := filepath.Join(workspace, ".claude", "agents", "personal-agent.md")
+	if err := os.WriteFile(neighbor, []byte("user-owned neighbor\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	priorUninstall := uninstallClaudeAgents
@@ -554,6 +574,24 @@ func TestClaudeUninstallRollsBackHooksAndAgentsWhenProjectionRemovalFails(t *tes
 	if err != nil || status.State != "installed" {
 		t.Fatalf("status after rollback = %#v, %v", status, err)
 	}
+	gammaAfter, err := os.ReadFile(gammaPath)
+	if err != nil || string(gammaAfter) != string(gammaBefore) {
+		t.Fatalf("Gamma last-good bytes were lost: %v", err)
+	}
+	info, err := os.Stat(gammaPath)
+	if err != nil || info.Mode().Perm() != gammaInfoBefore.Mode().Perm() {
+		t.Fatalf("Gamma last-good mode was lost: %v", err)
+	}
+	userBody, err := os.ReadFile(neighbor)
+	if err != nil || string(userBody) != "user-owned neighbor\n" {
+		t.Fatalf("user-owned neighbor changed: %v", err)
+	}
+}
+
+// Independent six-specialist oracle; transaction code consumes Project instead.
+var expectedClaudeAgentFiles = []string{
+	"case-agent.md", "client-account-agent.md", "darwin.md",
+	"gamma-guardian.md", "pa-expert.md", "yoda.md",
 }
 
 func TestStateSnapshotRestoresClaudeAgentsAfterDownstreamFailure(t *testing.T) {
@@ -571,7 +609,7 @@ func TestStateSnapshotRestoresClaudeAgentsAfterDownstreamFailure(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(workspace, ".claude", "settings.local.json")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("settings survived downstream rollback: %v", err)
 	}
-	for _, name := range managedClaudeAgentFiles {
+	for _, name := range expectedClaudeAgentFiles {
 		if _, err := os.Stat(filepath.Join(workspace, ".claude", "agents", name)); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("managed agent %s survived downstream rollback: %v", name, err)
 		}
