@@ -141,10 +141,7 @@ func publishOwnerFile(path string, body []byte, exclusive bool) error {
 		return closeErr
 	}
 	if exclusive {
-		err = unix.Linkat(int(dir.Fd()), name, int(dir.Fd()), filepath.Base(path), 0)
-		if err == nil {
-			err = unix.Unlinkat(int(dir.Fd()), name, 0)
-		}
+		err = scheduler.RenamePrivateFileExclusive(dir, name, filepath.Base(path))
 	} else {
 		err = unix.Renameat(int(dir.Fd()), name, int(dir.Fd()), filepath.Base(path))
 	}
