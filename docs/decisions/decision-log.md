@@ -1270,3 +1270,36 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Sensitive profile review goes only to the trusted client/operator, not ordinary model tool output. Clients without elicitation require a local fallback and separate native qualification. Correction/deletion/retention can temporarily invalidate unrelated generated summaries in the same workspace; this trades recomputation for a smaller complete no-resurrection rule. Source completion does not grant native, provider, signing or publication acceptance.
 - Refs: specs/060-product-owner-memory.md; specs/006-memory-persistence.md; docs/plans/2026-11-01-product-owner-memory.md; internal/ownerctx; internal/memory; adapters/mcp
 - Supersedes: none
+
+## WATL - Keep document knowledge in its registered workspace
+
+- Date: 2026-11-01
+- Status: accepted
+- Owner: Maestro
+- Context: The canonical atlas operation engine resolves owner-global knowledge, while a product document can contain client-scoped material. Ingestion needs a complete local conversion, review and readback journey without promoting client facts or duplicating the engine.
+- Decision: Extend atlasops with registered workspace binding and scoped controls/pointers while preserving owner behavior. Revalidate reads/effects and serialize canonical page revision comparison with writes. Use verified local Docling by default, immutable scoped artifacts and exact trusted review before knowledge mutation; keep permitted fallback and runtime provisioning explicit.
+- Consequences: Workspace content and authority cannot be replayed into owner or another workspace. Missing or tampered runtime/dependency/model inputs remain unavailable. Engineering signing/tests do not grant production authority; providers, native qualification, organization signing, channel publication and pilot remain separate gates.
+- Refs: specs/061-product-local-content.md; specs/010-local-ingestion-runtime.md; specs/031-markitdown-ingestion-adapter.md; docs/plans/2026-11-01-product-local-content.md; internal/atlasops; internal/ingest
+- Supersedes: none
+
+## AJRC - Recover knowledge writes from metadata-only prepared evidence
+
+- Date: 2026-11-01
+- Status: accepted
+- Owner: Maestro
+- Context: The atlas engine writes a page before its operation receipt, allowing an interrupted append to be repeated. The complete document-to-query contract requires retry to preserve authored work without duplicating the approved change.
+- Decision: Reuse the existing operation journal and cross-process corpus lock. Before a page effect, persist a prepared schema-v2 record binding scope, exact request and before/after page digests, with metadata-only result fields. Explicit retry compares the current page under the same lock: finalize an already materialized after-state, apply only a matching before-state, or preserve a different state as conflict. Completed receipts retain compatible v1 representation. Ordinary reads never repair pending work, and page text never acts as operation authority.
+- Consequences: Recovery needs no second database, persisted draft body or generic transaction framework. Older readers refuse a prepared v2 record until a compatible explicit operation recovers it; completed owner receipts remain compatible. Unknown or newer page state preserves both work and evidence rather than overwriting or appending blindly.
+- Refs: specs/061-product-local-content.md; docs/plans/2026-11-01-product-local-content.md; internal/atlasops
+- Supersedes: none
+
+## DIPK - Authenticate local converter inputs through the existing release authority
+
+- Date: 2026-11-01
+- Status: accepted
+- Owner: Maestro
+- Context: The product needs a real local Docling route, but an editable pack manifest or on-demand environment receipt cannot authenticate its executable dependencies. The existing release envelope authenticates archives, while installed Python trees and the MCP binary's authority seed are not yet connected to it.
+- Decision: Reuse the existing signed release manifest, detached artifact signature and independently pinned authority registry. Permit concrete platform targets for runtime_pack while preserving existing any/any packs. Derive a complete installed-file inventory from the authenticated archive and verify all packaged executable inputs before conversion. Bind the MCP authority-registry digest at build time; absent or changed authority is unavailable. Build packs offline from exact locked inputs, with no acquisition or provisioning during ordinary reads/conversion. The first real fixture capability is DOCX through the official pinned Docling API with an explicit empty model inventory; broader format/model coverage remains separately evidenced under Spec010.
+- Consequences: This avoids a second signature, key registry or updater. It requires inventory and platform selection, isolated bounded execution, an actual seeded MCP build path and real offline fixture acceptance. Engineering authorities prove integration only, never production trust. Production organization keys, portable installation and native platform qualification remain distinct requirements; DOCX evidence does not close PDF/OCR or the full format matrix.
+- Refs: DOCL; PYUV; UVIN; specs/010-local-ingestion-runtime.md; specs/031-markitdown-ingestion-adapter.md; specs/061-product-local-content.md; internal/releaseverify; internal/releasecontract; internal/ingest
+- Supersedes: none

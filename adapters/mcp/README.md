@@ -1,10 +1,10 @@
 # Maestro product MCP — execution, owner onboarding and methods
 
-This module exposes one admitted workspace ledger through the official Go MCP SDK.
-`maestro_context` returns binding metadata, `maestro_query` pages execution metadata
-reads a 2048-byte canonical continuation, or discovers bounded artifact criterion IDs and relative paths with execution.contract, and `maestro_apply` accepts seven
-closed execution variants. Owner status/interview/review metadata and reviewed
-track/proposal/apply/onboarding operations use the same admitted binding. See
+This module exposes one locally admitted workspace and canonical owner state
+through the official Go MCP SDK. `maestro_context` returns binding metadata;
+`maestro_query` provides bounded domain reads and continuation; `maestro_apply`
+accepts closed canonical effects with the required trusted review. Execution,
+owner onboarding, memory and workspace knowledge use the same admitted binding. See
 the [owner journey and local fallback guide](../../docs/product-mcp-owner.md)
 for exact operations. Roots and workspace identity are selected locally.
 
@@ -12,6 +12,12 @@ Reviewed memory adds capture, paged discovery/search/readback, bounded context,
 daily/weekly consolidation and revision-aware correction/deletion/retention.
 Read the [memory journey and local fallback guide](../../docs/product-mcp-memory.md).
 Explicit `init` prepares its fixed authority; queries/startup never bootstrap it.
+
+Local document conversion adds immutable scoped artifacts, bounded UTF-8 readback
+and reviewed workspace knowledge creation/append through the canonical atlas
+engine. Read the [content journey and local fallback guide](../../docs/product-mcp-content.md).
+The initial authenticated runtime capability is Darwin-arm64 DOCX; unseeded or
+unsupported runtime inputs remain unavailable without blocking unrelated work.
 
 Build from this directory with `go build -o /absolute/local/path/maestro-mcp ./cmd/maestro-mcp`.
 The installed product directory and owner directory must already exist. Choose a
