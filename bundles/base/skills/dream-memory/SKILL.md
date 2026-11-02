@@ -1,9 +1,78 @@
 ---
 name: dream-memory
-description: Run or inspect professional memory consolidation through the BCG Brasil Agentic OS memory engine. Use for session or daily closure, weekly deep dreaming, memory status, lifetime promotion explanations, missed-cycle catch-up, or requests such as "consolide a memória", "fecha o dia", "fecha a semana" and "dreaming".
+description: Inspect or consolidate reviewed professional memory, or manage its recurring upkeep. Use for daily closure, weekly dreaming, memory status, lifetime promotion questions, missed cycles, or requests such as "consolide a memória", "fecha o dia" and "fecha a semana".
 ---
 
 # Dream Memory
+
+## Select the installed route
+
+Use the admitted MCP product route first: read `maestro_context` and inspect the
+current `maestro_query` / `maestro_apply` schemas. Product operations derive the
+owner and workspace binding; model arguments cannot choose filesystem roots or
+supply approval. A missing tool, rejected binding or failed call stays
+unavailable and keeps the requested operation pending. It never selects legacy.
+
+Use the legacy section only after the installed runtime is positively identified
+as the ZIP distribution by its installation metadata and verified managed helper.
+A product conversation stops after its product workflow below. Recipe selection
+and diagnostic findings grant no shell, repair, installation, provider access,
+native scheduling or new enrollment authority.
+
+## MCP product memory
+
+Resolve [interaction-profile](../interaction-profile/SKILL.md) for presentation.
+Keep the admitted workspace and the user's selected text as the scope.
+
+1. For remembered context or missed-cycle questions, use `maestro_query` with
+   `memory.list`, `memory.search`, `memory.read` or `memory.context`. Discover
+   capture IDs before reading or correcting them; preserve pagination and current
+   capture / visibility revisions. `maintenance.status` reports job state and
+   qualification, separately from memory contents.
+2. Capture only text the user explicitly selects through `maestro_apply`
+   `memory.capture` with `text`. The trusted review presents that exact text.
+   Correction, deletion and retention use `memory.correct`, `memory.delete` and
+   `memory.retention` with their current revisions and exact trusted review.
+   Product memory does not use raw daily journals, direct Read/Write/Edit,
+   automatic SessionStart dreaming or request-marker deletion.
+3. For an explicit daily or weekly closure, use `maestro_apply` with
+   `{"operation":"memory.consolidate","cycle":"daily","date":"YYYY-MM-DD"}`
+   or `cycle: "weekly"`, selecting the intended date. Daily synthesis writes L1
+   from eligible attested captures. Weekly deterministic synthesis writes L2/L3;
+   an eligible lifetime candidate needs canonical generation evidence and trusted
+   review of its exact text. Missing or declined lifetime review retains ordinary
+   L2/L3 and reports `lifetime_status: confirmation_unavailable` or
+   `confirmation_declined`. Report those layers separately from lifetime status.
+4. For recurring upkeep, follow the reviewed
+   [maintenance workflow](../maestro-runtime-checkup/SKILL.md). The relevant jobs
+   are `memory-light-dream`, `memory-deep-dream`, `memory-checkpoint` and
+   `memory-retention-check`. Qualification executes once; enrollment is separate.
+   Bootstrap checkpoint qualification with a real reviewed capture and qualified
+   light dream. A retention diagnostic never deletes captures. Deep-dream job
+   enrollment authorizes its L2/L3 schedule, never future lifetime text.
+5. Read back bounded `memory.context` and the resulting metadata. For deep dream
+   or retention, `maintenance.report` with the exact `job_id` exposes the domain
+   result. Status is not proof that a new synthesis or background wake occurred.
+   Report the requested period, activated layers and any actual limitation.
+
+If capture/correct/delete/retention review is unavailable, the explicit local
+operator uses the exact request JSON on stdin:
+
+~~~text
+maestro-mcp memory-review --product-root <product> --user-home <owner> --workspace <workspace>
+maestro-mcp memory-apply --product-root <product> --user-home <owner> --workspace <workspace> --review-digest <exact-review-digest> --confirm
+~~~
+
+The operator reviews the private text, then repeats the same binding and stdin
+with the exact review digest and explicit confirmation. These four mutation
+fallbacks do not implement `memory.consolidate`; do not invent a local
+consolidation command or treat an operator flag as a model approval argument.
+
+## Legacy ZIP only — explicit runtime scope
+
+Everything below applies only to the positively identified legacy ZIP runtime.
+It is not an MCP recovery path. Use its verified installed helpers and existing
+legacy authority; product operations above never fall through to these steps.
 
 Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
 

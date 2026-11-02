@@ -358,6 +358,14 @@ mergeability or pilot readiness.
 
 ### Automatic maintenance, with honest boundaries
 
+The MCP product now binds eight deterministic jobs to the canonical maintenance
+service: light/deep memory consolidation, checkpoint, retention diagnosis, installed
+skills indexing and runtime health/capability/drift diagnosis. For status, exact
+qualification, separate enrollment, due execution and pause/resume/revoke, follow
+the [product maintenance workflow](docs/product-mcp-maintenance.md). It includes
+the local operator fallback when trusted client confirmation is unavailable.
+Foreground execution, native wake behavior and release qualification are separate.
+
 The maintenance plane shows whether prebuilt jobs are actually executable.
 Platform-neutral job contracts are declared in `adapters/` as disabled
 reference artifacts; a qualified Canary enrollment activates them without

@@ -17,6 +17,10 @@ on:
       - 'internal/atlasops/**'
       - 'internal/ingest/**'
       - 'internal/scheduler/**'
+      - 'internal/maintenance/**'
+      - 'internal/maintenancecatalog/**'
+      - 'internal/runtimecap/**'
+      - 'internal/skillsindex/**'
       - 'internal/releasecontract/**'
       - 'internal/releaseverify/**'
       - 'internal/dev/releasepack/**'
@@ -43,6 +47,10 @@ on:
       - 'internal/atlasops/**'
       - 'internal/ingest/**'
       - 'internal/scheduler/**'
+      - 'internal/maintenance/**'
+      - 'internal/maintenancecatalog/**'
+      - 'internal/runtimecap/**'
+      - 'internal/skillsindex/**'
       - 'internal/releasecontract/**'
       - 'internal/releaseverify/**'
       - 'internal/dev/releasepack/**'
@@ -105,6 +113,9 @@ jobs:
       - name: Canonical workspace knowledge and verified ingestion contracts
         if: runner.os != 'Windows'
         run: go test ./internal/atlasops ./internal/ingest/... ./internal/releasecontract ./internal/releaseverify ./internal/scheduler -timeout=300s
+      - name: Canonical maintenance and deterministic diagnosis contracts
+        if: runner.os != 'Windows'
+        run: go test ./internal/maintenance ./internal/runtimecap ./internal/skillsindex -timeout=300s
       # Windows must preserve ownership refusals; this job is not native admission.
       # Its elevated runner cannot qualify ordinary-user workspace initialization.
       - name: Product protocol, bootstrap refusal and package contracts
