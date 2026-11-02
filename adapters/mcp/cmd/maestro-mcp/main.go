@@ -16,6 +16,9 @@ import (
 	"path/filepath"
 )
 
+// AuthorityRegistrySHA256 is linker-bound by the release builder; empty is unavailable.
+var AuthorityRegistrySHA256 string
+
 func main() {
 	if err := run(); err != nil {
 		if len(os.Args) > 1 && (os.Args[1] == "owner-apply" || os.Args[1] == "owner-confirm-onboarding") {
@@ -61,6 +64,7 @@ func run() error {
 	if err := flags.Parse(os.Args[2:]); err != nil {
 		return err
 	}
+	seedDoclingAuthority(&o)
 	if flags.NArg() != 0 {
 		return errors.New("unexpected_arguments")
 	}

@@ -20,6 +20,8 @@ import (
 type Options struct {
 	ProductRoot, UserHome, WorkspacePath string
 	LookupEnv                            func(string) (string, bool)
+	// These constructor inputs come only from the native binary seed, never tool arguments.
+	AuthorityRegistryPath, AuthorityRegistrySHA256, CLIVersion string
 }
 type Bound struct {
 	options           Options

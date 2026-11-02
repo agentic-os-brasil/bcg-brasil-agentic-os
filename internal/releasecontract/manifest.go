@@ -419,7 +419,12 @@ func validateArtifactPlatform(artifact Artifact) error {
 	concreteOS := artifact.OS == "windows" || artifact.OS == "darwin" || artifact.OS == "linux"
 	concreteArch := artifact.Arch == "amd64" || artifact.Arch == "arm64"
 	switch artifact.Kind {
-	case "bundle", "runtime_pack":
+	case "runtime_pack":
+		if (artifact.OS == "any" && artifact.Arch == "any") || (concreteOS && concreteArch) {
+			return nil
+		}
+		return errors.New("runtime_pack requires a concrete platform or legacy any/any")
+	case "bundle":
 		if artifact.OS != "any" || artifact.Arch != "any" {
 			return fmt.Errorf("%s artifact must use os=any and arch=any", artifact.Kind)
 		}

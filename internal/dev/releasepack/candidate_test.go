@@ -167,3 +167,35 @@ func TestBuildNativeBinaryValidatesTargetAndOutputName(t *testing.T) {
 		t.Fatalf("BuildNativeBinary(unsupported) error = %v", err)
 	}
 }
+
+func TestBuildCandidateCarriesConcreteDoclingAndLegacyPack(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "bundles/base/runtime/capabilities.json", "{}\n")
+	writeFile(t, root, "bundles/base/distribution.json", `{"schema_version":1,"files":[{"source":"bundles/base/runtime/capabilities.json","path":"runtime/capabilities.json"}]}`)
+	doclingPack := filepath.Join(root, "docling.tar.gz")
+	legacyPack := filepath.Join(root, "legacy.tar.gz")
+	if err := os.WriteFile(doclingPack, []byte("packaging fixture; not converter acceptance"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacyPack, []byte("legacy fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	output := filepath.Join(t.TempDir(), "candidate")
+	manifest, err := BuildCandidate(context.Background(), CandidateOptions{Root: root, Output: output, Version: "0.1.0", Channel: "canary", DoclingPack: doclingPack, MarkItDownPack: legacyPack})
+	if err != nil {
+		t.Fatal(err)
+	}
+	concrete, legacy := false, false
+	for _, a := range manifest.Artifacts {
+		if a.Kind == "runtime_pack" {
+			concrete = concrete || (a.OS == "darwin" && a.Arch == "arm64")
+			legacy = legacy || (a.OS == "any" && a.Arch == "any")
+		}
+	}
+	if !concrete || !legacy {
+		t.Fatalf("missing pack platform: %+v", manifest.Artifacts)
+	}
+	if err := VerifyCandidate(output); err != nil {
+		t.Fatal(err)
+	}
+}
