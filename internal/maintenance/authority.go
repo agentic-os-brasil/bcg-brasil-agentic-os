@@ -30,6 +30,7 @@ type ExecutionAuthority struct {
 	attended       bool
 	preauthorized  bool
 	ready          bool
+	productBound   bool
 }
 
 func NewExecutionAuthority(catalog Catalog, occurrences []OccurrenceAuthorization, activatedJobs []string, attended bool) (ExecutionAuthority, error) {
@@ -130,7 +131,7 @@ func (authority ExecutionAuthority) Authorize(command Command, now time.Time) (s
 		return scheduler.Occurrence{}, errors.New("maintenance command is outside the qualified catalog trigger")
 	}
 	locallyQualified := authority.localQualified[job.ID] != ""
-	if (job.Availability != Available && !locallyQualified) || (!job.DefaultEnabled && !authority.activated[job.ID]) {
+	if !authority.productBound && ((job.Availability != Available && !locallyQualified) || (!job.DefaultEnabled && !authority.activated[job.ID])) {
 		return scheduler.Occurrence{}, errors.New("maintenance command job is unavailable or disabled")
 	}
 	if job.Unattended == "never" && !authority.attended {
