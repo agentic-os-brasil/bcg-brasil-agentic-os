@@ -109,3 +109,14 @@ func ReplacePrivateFile(path string, body []byte) error {
 	}
 	return file.Close()
 }
+
+// OpenRegularFile opens an existing regular file through held no-follow ancestor
+// descriptors. It neither changes permissions nor grants private ownership;
+// callers own the handle and must enforce scope, size and link-count policy.
+func OpenRegularFile(path string) (*os.File, error) {
+	return secureOpenFile(path, os.O_RDONLY, 0)
+}
+
+// OpenDirectory transfers an existing no-follow directory handle to the caller.
+// It is read-only, never creates entries or changes permissions; the caller closes it.
+func OpenDirectory(path string) (*os.File, error) { return openDirectoryFile(path) }
