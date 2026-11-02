@@ -47,7 +47,7 @@ func memoryMutations() []any {
 }
 func productApplySchema() map[string]any {
 	s := applySchema()
-	s["oneOf"] = append(s["oneOf"].([]any), memoryMutations()...)
+	s["oneOf"] = append(s["oneOf"].([]any), append(memoryMutations(), contentMutations()...)...)
 	return s
 }
 func (b *Bound) memoryEngine() (*memory.Engine, basememory.RuntimeConfig, error) {

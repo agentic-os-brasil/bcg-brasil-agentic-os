@@ -136,3 +136,20 @@ func knownReader(reader Reader) bool {
 	}
 	return false
 }
+
+// ReviewPage returns one complete bounded page only for an attended owner review.
+// Ordinary collection keeps its aggregate budget; reads never recover operations.
+func (engine *Engine) ReviewPage(request CollectRequest) (PageProjection, error) {
+	if request.Reader != ReaderOwnerSession || strings.TrimSpace(request.Purpose) == "" || len(request.Pages) != 1 {
+		return PageProjection{}, errors.New("full page review requires an owner, purpose and one named page")
+	}
+	relative, err := engine.resolve(request.Pages[0])
+	if err != nil {
+		return PageProjection{}, err
+	}
+	body, err := engine.read(relative)
+	if err != nil {
+		return PageProjection{}, err
+	}
+	return PageProjection{Page: relative, Revision: digest(body), Pointer: engine.pointer(relative), Content: body}, nil
+}

@@ -13,12 +13,15 @@ import (
 	"fmt"
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -93,6 +96,19 @@ func BuildPlugin(options Options) error {
 	if err = os.WriteFile(filepath.Join(o.Destination, "skills/resume/SKILL.md"), []byte(resume), 0600); err != nil {
 		return err
 	}
+	registry, err := packagedAuthority(o)
+	if err != nil {
+		return err
+	}
+	if len(registry) > 0 {
+		directory := filepath.Join(o.Destination, "managed", "trust")
+		if err = os.MkdirAll(directory, 0700); err != nil {
+			return err
+		}
+		if err = os.WriteFile(filepath.Join(directory, "release-authority-registry.json"), registry, 0600); err != nil {
+			return err
+		}
+	}
 	return writeMethods(o)
 }
 
@@ -104,6 +120,7 @@ Read maestro_context for admitted binding metadata, then inspect the current mae
 For owner onboarding or refinement, query owner.status and owner.interview for the selected quick or complete track. Use owner.track, owner.propose, owner.apply and owner.confirm_onboarding as applicable. owner.review and owner.onboarding_review return metadata; complete private text is presented through trusted review before application or final confirmation. Model assertions and metadata never count as approval.
 Capture only text the user explicitly selects for memory, using memory.capture and exact trusted review; never auto-capture conversations. Discover IDs and visibility through memory.list or memory.search, then use memory.read or memory.context for eligible bounded pages. Use memory.correct or memory.delete with the current capture revision; memory.retention requires an explicit cutoff and current visibility revision. memory.consolidate runs local deterministic daily or weekly synthesis for an explicit date. Lifetime promotion requires canonical generation evidence and trusted review of the exact candidate.
 If trusted host review is unavailable, ask the local operator to use owner-review/owner-apply or owner-onboarding-review/owner-confirm-onboarding; local owner-track requires explicit --confirm. For memory, use memory-review followed by memory-apply with the same JSON request on stdin, its exact --review-digest and explicit --confirm. These are operator fallbacks, not permission for the model to run arbitrary commands or supply approval.
+For local documents, query content.status, use content.convert with a workspace-relative source_path, then content.read for bounded markdown/document slices. Review knowledge.create or knowledge.append against the exact artifact, page, text and expected_page_revision; use knowledge.collect for named page readback. When trusted review is unavailable, the local operator uses knowledge-review then knowledge-apply with the same JSON stdin, exact --review-digest and explicit --confirm. Conversion never installs a runtime or writes knowledge automatically.
 For execution, query execution.list for metadata and execution.next with the chosen item ID for bounded continuation. Create only after the owner requests work: objective, next_step and workspace-relative artifact paths define the immutable artifact snapshot contract. Read execution.contract for the bounded criterion IDs and relative paths used to collect evidence.
 Apply execution changes with the current expected_revision. Start creates an attempt; checkpoint, pause, evidence and complete require that attempt_id. Save a concise checkpoint before pause. On revision_conflict or attempt_conflict, read current continuation and reconcile. Collect artifact evidence after writing the requested result; complete revalidates it. Changed artifacts require new evidence.
 Scoped memory deletion and retention use their reviewed operations. Arbitrary file deletion, full export, arbitrary commands, model execution and external sends remain ungranted. Keep owner confirmation and host permissions effective. Plugin methods are recipes; unavailable domains remain unavailable, and native agent scheduling and Desktop Skills installation remain unqualified.
@@ -297,6 +314,13 @@ func BuildExtension(options Options) error {
 	if writeErr == nil {
 		writeErr = addEntry(archive, path, 0700, binary)
 	}
+	if writeErr == nil {
+		registry, err := packagedAuthority(o)
+		writeErr = err
+		if writeErr == nil && len(registry) > 0 {
+			writeErr = addEntry(archive, "managed/trust/release-authority-registry.json", 0600, bytes.NewReader(registry))
+		}
+	}
 	return errors.Join(writeErr, archive.Close(), artifact.Close())
 }
 func addEntry(archive *zip.Writer, name string, mode os.FileMode, input io.Reader) error {
@@ -325,4 +349,27 @@ func copyBinary(source, destination string) error {
 	}
 	_, copyErr := io.Copy(out, in)
 	return errors.Join(copyErr, out.Close())
+}
+
+// Packaging carries only the independently pinned public registry, never runtime or workspace state.
+func packagedAuthority(o Options) ([]byte, error) {
+	if o.Binding.AuthorityRegistrySHA256 == "" {
+		return nil, nil
+	}
+	if _, err := releaseverify.LoadPinnedAuthorityRegistry(o.Binding.AuthorityRegistryPath, o.Binding.AuthorityRegistrySHA256, time.Now); err != nil {
+		return nil, err
+	}
+	f, err := scheduler.OpenRegularFile(o.Binding.AuthorityRegistryPath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	body, err := io.ReadAll(io.LimitReader(f, (1<<20)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > 1<<20 || fmt.Sprintf("%x", sha256.Sum256(body)) != o.Binding.AuthorityRegistrySHA256 {
+		return nil, errors.New("public authority changed")
+	}
+	return body, nil
 }

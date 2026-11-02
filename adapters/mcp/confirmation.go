@@ -35,12 +35,17 @@ func (b *Bound) confirm(ctx context.Context, req *mcp.CallToolRequest, question 
 	if caps.Form == nil && caps.URL != nil {
 		return errConfirmationUnavailable
 	}
+	maximum := 1 << 20
+	// A full 256KiB page plus its proposed replacement can expand sixfold in JSON.
+	if _, ok := review.(KnowledgeReview); ok {
+		maximum = 4 << 20
+	}
 	envelope, err := json.MarshalIndent(review, "", "  ")
-	if err != nil || len(envelope) > 1<<20 {
+	if err != nil || len(envelope) > maximum {
 		return errConfirmationUnavailable
 	}
 	body, err := json.MarshalIndent(presentation, "", "  ")
-	if err != nil || len(body) > 1<<20 {
+	if err != nil || len(body) > maximum {
 		return errConfirmationUnavailable
 	}
 	params := &mcp.ElicitParams{
