@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspacepolicy"
 	"io"
 	"os"
 	"path/filepath"
@@ -416,87 +417,8 @@ func GuardTool(agentType, toolName string, raw json.RawMessage, cwd, workspace s
 	if !allowed[toolName] {
 		return "Case Agent may use only workspace-local file tools and cannot execute shell commands or delegate", true
 	}
-	workspaceReal, err := filepath.EvalSymlinks(filepath.Clean(workspace))
-	if err != nil {
-		return "authorized Maestro workspace could not be resolved", true
-	}
-	workspaceReal, err = filepath.Abs(workspaceReal)
-	if err != nil || strings.TrimSpace(cwd) == "" || !filepath.IsAbs(cwd) {
-		return "Case Agent working directory is outside the authorized Maestro workspace", true
-	}
-	cwdReal, err := filepath.EvalSymlinks(filepath.Clean(cwd))
-	if err != nil {
-		return "Case Agent working directory could not be resolved inside the authorized Maestro workspace", true
-	}
-	cwdReal, err = filepath.Abs(cwdReal)
-	if err != nil || !within(workspaceReal, cwdReal) {
-		return "Case Agent working directory is outside the authorized Maestro workspace", true
-	}
-	var input map[string]any
-	if len(raw) == 0 || json.Unmarshal(raw, &input) != nil {
-		return "Case Agent tool input could not be verified against the workspace boundary", true
-	}
-	var pathValues []string
-	for _, key := range []string{"file_path", "path", "notebook_path"} {
-		if value, ok := input[key].(string); ok && strings.TrimSpace(value) != "" {
-			pathValues = append(pathValues, value)
-		}
-	}
-	if len(pathValues) == 0 {
-		if toolName == "Glob" || toolName == "Grep" {
-			return "", true
-		}
-		return "Case Agent file operation is missing an explicit workspace-local path", true
-	}
-	for _, pathValue := range pathValues {
-		target := pathValue
-		if !filepath.IsAbs(target) {
-			target = filepath.Join(cwdReal, target)
-		}
-		target, err = resolveTarget(target)
-		if err != nil || !within(workspaceReal, target) {
-			return "Case Agent path crosses the authorized Maestro workspace boundary", true
-		}
+	if err := workspacepolicy.Tool(workspace, cwd, toolName, raw); err != nil {
+		return "Case Agent path or pattern is outside the admitted workspace policy", true
 	}
 	return "", true
-}
-
-func within(root, target string) bool {
-	rootAbs, err := filepath.Abs(filepath.Clean(root))
-	if err != nil {
-		return false
-	}
-	targetAbs, err := filepath.Abs(filepath.Clean(target))
-	if err != nil {
-		return false
-	}
-	relative, err := filepath.Rel(rootAbs, targetAbs)
-	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
-}
-
-func resolveTarget(target string) (string, error) {
-	target, err := filepath.Abs(filepath.Clean(target))
-	if err != nil {
-		return "", err
-	}
-	candidate := target
-	var suffix []string
-	for {
-		resolved, err := filepath.EvalSymlinks(candidate)
-		if err == nil {
-			for index := len(suffix) - 1; index >= 0; index-- {
-				resolved = filepath.Join(resolved, suffix[index])
-			}
-			return filepath.Abs(filepath.Clean(resolved))
-		}
-		if !errors.Is(err, os.ErrNotExist) {
-			return "", err
-		}
-		parent := filepath.Dir(candidate)
-		if parent == candidate {
-			return "", err
-		}
-		suffix = append(suffix, filepath.Base(candidate))
-		candidate = parent
-	}
 }

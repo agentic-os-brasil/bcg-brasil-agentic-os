@@ -23,6 +23,19 @@ var AuthorityRegistrySHA256 string
 
 func main() {
 	if err := run(); err != nil {
+		if len(os.Args) > 1 && os.Args[1] == "hook" {
+			event := ""
+			for i, arg := range os.Args {
+				if value, ok := strings.CutPrefix(arg, "--event="); ok {
+					event = value
+				}
+				if arg == "--event" && i+1 < len(os.Args) {
+					event = os.Args[i+1]
+				}
+			}
+			fmt.Fprintln(os.Stderr, "maestro: hook unavailable; inspect admitted state before retrying")
+			os.Exit(product.HookExitCode(event))
+		}
 		if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "knowledge-") {
 			fmt.Fprintln(os.Stderr, "maestro: knowledge operation refused; read knowledge-review from JSON stdin, then use knowledge-apply with the same request, exact --review-digest and explicit --confirm")
 		} else if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "memory-") {
@@ -42,8 +55,12 @@ func run() error {
 		return errors.New("command_required")
 	}
 	flags := flag.NewFlagSet("maestro-mcp", flag.ContinueOnError)
+	if os.Args[1] == "hook" {
+		flags.SetOutput(io.Discard)
+	}
 	var o product.Options
 	var destination, server, version string
+	var hookEvent string
 	var proposalID, reviewDigest, track string
 	var confirmed bool
 	flags.StringVar(&destination, "destination", "", "new packet destination")
@@ -52,6 +69,9 @@ func run() error {
 	flags.StringVar(&o.ProductRoot, "product-root", "", "existing installed product directory")
 	flags.StringVar(&o.UserHome, "user-home", "", "existing owner directory")
 	flags.StringVar(&o.WorkspacePath, "workspace", "", "explicit selected workspace directory")
+	if os.Args[1] == "hook" {
+		flags.StringVar(&hookEvent, "event", "", "native hook event")
+	}
 	switch os.Args[1] {
 	case "owner-review", "owner-apply":
 		flags.StringVar(&proposalID, "proposal-id", "", "exact owner proposal ID")
@@ -75,6 +95,12 @@ func run() error {
 		return errors.New("unexpected_arguments")
 	}
 	switch os.Args[1] {
+	case "hook":
+		bound, err := product.Open(o)
+		if err != nil {
+			return err
+		}
+		return bound.HandleClaudeHook(hookEvent, os.Stdin, os.Stdout)
 	case "plugin":
 		return packaging.BuildPlugin(packaging.Options{Destination: destination, Server: server, Version: version, Binding: o})
 	case "mcpb":
