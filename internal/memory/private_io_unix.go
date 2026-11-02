@@ -171,10 +171,7 @@ func memoryPublish(path string, body []byte, immutable bool) error {
 		return closeErr
 	}
 	if immutable {
-		err = unix.Linkat(int(d.Fd()), name, int(d.Fd()), filepath.Base(path), 0)
-		if err == nil {
-			err = unix.Unlinkat(int(d.Fd()), name, 0)
-		}
+		err = scheduler.RenamePrivateFileExclusive(d, name, filepath.Base(path))
 	} else {
 		err = unix.Renameat(int(d.Fd()), name, int(d.Fd()), filepath.Base(path))
 	}
