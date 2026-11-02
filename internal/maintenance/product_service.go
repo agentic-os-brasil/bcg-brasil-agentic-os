@@ -32,6 +32,8 @@ type ServiceOptions struct {
 	LookupEnv                            func(string) (string, bool)
 	Catalog                              Catalog
 	Adapter                              string
+	// Now is an optional trusted constructor clock, never tool/CLI input.
+	Now func() time.Time `json:"-"`
 }
 
 type Service struct {
@@ -154,13 +156,20 @@ func NewService(options ServiceOptions) (*Service, error) {
 		return nil, err
 	}
 	options.Catalog = ownedCatalog
-	s := &Service{options: options, now: time.Now}
+	now := options.Now
+	if now == nil {
+		now = time.Now
+	}
+	s := &Service{options: options, now: now}
 	if err := s.validate(); err != nil {
 		return nil, err
 	}
 	s.scheduler = scheduler.Store{Root: filepath.Join(s.home, "state", "scheduler")}
 	s.receipts = Store{Root: filepath.Join(s.home, "state", "maintenance")}
 	s.engine, _, err = NewProductMemoryEngine(s.home)
+	if err == nil {
+		s.engine.Now = now
+	}
 	return s, err
 }
 
@@ -486,7 +495,7 @@ func (p *productExecution) guard(publish func() error) error {
 func (s *Service) worker(p *productExecution) Worker {
 	return Worker{Catalog: s.options.Catalog, Scheduler: s.scheduler, Receipts: s.receipts, Jobs: []scheduler.Job{{ID: p.jobID, Cadence: scheduler.Interval, IntervalHours: 3, MaxCatchUp: 1}}, Handlers: map[string]any{
 		MemoryLightDreamJobID: MemoryLightDreamHandler{Engine: s.engine, ExpectedSourceFingerprint: p.source}, MemoryCheckpointJobID: MemoryCheckpointHandler{Scheduler: s.scheduler, Store: ContinuityCheckpointStore{Root: s.receipts.Root}, ExpectedSourceFingerprint: p.source},
-	}, Deadline: 2 * time.Minute, product: p}
+	}, Deadline: 2 * time.Minute, Now: s.now, product: p}
 }
 func (s *Service) execute(ctx context.Context, p *productExecution, occ scheduler.Occurrence, now time.Time) (Receipt, error) {
 	if err := p.guard(func() error { return nil }); err != nil {
