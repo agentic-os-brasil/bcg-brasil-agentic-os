@@ -252,6 +252,11 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 		return worker.unavailableReceipt(request.WorkspaceID, occurrence, now, ReasonCatalogUnavailable)
 	}
 	trigger := triggerForOccurrence(worker.Jobs, occurrence)
+	// Product service already plans cadence and binds the actual foreground wake.
+	// Calendar cadence is not a replacement trigger for that exact authority.
+	if worker.product != nil {
+		trigger = request.Trigger
+	}
 	command := Command{SchemaVersion: CommandSchemaVersion, CommandID: "wake-" + digestPrefix(occurrence.JobID+occurrence.EventID+occurrence.ScheduledFor.UTC().Format(time.RFC3339Nano)+now.UTC().Format(time.RFC3339Nano)), JobID: occurrence.JobID, WorkspaceID: request.WorkspaceID, Trigger: trigger, EventID: occurrence.EventID, ScheduledFor: occurrence.ScheduledFor, RequestedAt: now, Deadline: now.Add(worker.Deadline), ProposalOnly: IsProposalOnlyJob(occurrence.JobID)}
 	if err := command.Validate(now); err != nil {
 		return worker.unavailableReceipt(request.WorkspaceID, occurrence, now, ReasonOccurrenceRejected)

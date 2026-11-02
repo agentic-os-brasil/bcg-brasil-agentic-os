@@ -19,6 +19,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
@@ -31,6 +32,7 @@ type ServiceOptions struct {
 	ProductRoot, UserHome, WorkspacePath string
 	LookupEnv                            func(string) (string, bool)
 	Catalog                              Catalog
+	CLIVersion                           string
 	Adapter                              string
 	// Now is an optional trusted constructor clock, never tool/CLI input.
 	Now func() time.Time `json:"-"`
@@ -42,6 +44,7 @@ type Service struct {
 	scheduler                                     scheduler.Store
 	receipts                                      Store
 	engine                                        *memory.Engine
+	weekly                                        *memory.Engine
 	now                                           func() time.Time
 }
 
@@ -56,6 +59,9 @@ type ProductSchedule struct {
 	Timezone      string            `json:"timezone"`
 	Cadence       scheduler.Cadence `json:"cadence"`
 	IntervalHours int               `json:"interval_hours"`
+	Weekday       time.Weekday      `json:"weekday,omitempty"`
+	LocalHour     int               `json:"local_hour,omitempty"`
+	LocalMinute   int               `json:"local_minute,omitempty"`
 	MaxCatchUp    int               `json:"max_catch_up"`
 }
 
@@ -170,6 +176,13 @@ func NewService(options ServiceOptions) (*Service, error) {
 	if err == nil {
 		s.engine.Now = now
 	}
+	if err != nil {
+		return nil, err
+	}
+	s.weekly, err = NewProductWeeklyMemoryEngine(s.home)
+	if err == nil {
+		s.weekly.Now = now
+	}
 	return s, err
 }
 
@@ -245,13 +258,13 @@ func productDigest(value any) string {
 	return hex.EncodeToString(sum[:])
 }
 func productJob(jobID string) bool {
-	return jobID == MemoryLightDreamJobID || jobID == MemoryCheckpointJobID
+	return jobID == MemoryLightDreamJobID || jobID == MemoryCheckpointJobID || jobID == MemoryDeepDreamJobID || jobID == "skills-index-refresh" || diagnosticJob(jobID)
 }
 func (s *Service) configuration(jobID string) string {
 	job, _ := findCatalogJob(s.options.Catalog, jobID)
 	policy, _ := basememory.Policy()
 	cfg, _ := basememory.Runtime()
-	return productDigest([]any{"product-maintenance-v1", job, policy, cfg, memory.DeterministicL1SynthesizerID})
+	return productDigest([]any{"product-maintenance-v1", job, policy, cfg, memory.DeterministicL1SynthesizerID, memory.DeterministicWeeklySynthesizerID, s.options.CLIVersion})
 }
 func (s *Service) controlPath(jobID string) string {
 	return filepath.Join(s.receipts.Root, "workspaces", s.workspaceID, "product-control", jobID, "current.json")
@@ -275,7 +288,7 @@ func (s *Service) loadControl(jobID string) (productControl, error) {
 		return c, ErrProductConflict
 	}
 	for _, write := range c.Writes {
-		if !validWrites[write] {
+		if !validWrite(write) {
 			return c, ErrProductConflict
 		}
 	}
@@ -283,7 +296,9 @@ func (s *Service) loadControl(jobID string) (productControl, error) {
 		return c, ErrProductConflict
 	}
 	if c.State == "active" || c.State == "paused" {
-		if len(c.Writes) == 0 || c.Boundary.IsZero() || c.Schedule.Cadence != scheduler.Interval || c.Schedule.IntervalHours != 3 || c.Schedule.MaxCatchUp != 1 {
+		expectedSchedule := scheduleFor(c.JobID)
+		expectedSchedule.Timezone = c.Schedule.Timezone
+		if len(c.Writes) == 0 || c.Boundary.IsZero() || c.Schedule != expectedSchedule {
 			return c, ErrProductConflict
 		}
 		if _, err := time.LoadLocation(c.Schedule.Timezone); err != nil {
@@ -368,7 +383,8 @@ func (s *Service) Review(op Operation) (ProductReview, error) {
 		if _, err := time.LoadLocation(op.Timezone); err != nil || op.Timezone == "" {
 			return ProductReview{}, errors.New("exact enrollment timezone required")
 		}
-		schedule = ProductSchedule{Timezone: op.Timezone, Cadence: scheduler.Interval, IntervalHours: 3, MaxCatchUp: 1}
+		schedule = scheduleFor(op.JobID)
+		schedule.Timezone = op.Timezone
 	} else if op.Timezone != "" {
 		return ProductReview{}, errors.New("timezone belongs only to enrollment review")
 	}
@@ -386,13 +402,7 @@ func (s *Service) Review(op Operation) (ProductReview, error) {
 		r.QualificationID = c.Qualification.ID
 	}
 	if op.Kind == "qualify" || op.Kind == "enroll" {
-		if op.JobID == MemoryLightDreamJobID {
-			r.SourceState, err = s.engine.DailyInputIdentity(s.workspaceID, s.now())
-		} else {
-			var sources []scheduler.Receipt
-			sources, err = s.scheduler.Receipts(s.workspaceID)
-			r.SourceState = productDigest(sources)
-		}
+		r.SourceState, err = s.sourceState(op.JobID)
 		if err != nil {
 			return ProductReview{}, err
 		}
@@ -493,10 +503,21 @@ func (p *productExecution) guard(publish func() error) error {
 	})
 }
 func (s *Service) worker(p *productExecution) Worker {
-	return Worker{Catalog: s.options.Catalog, Scheduler: s.scheduler, Receipts: s.receipts, Jobs: []scheduler.Job{{ID: p.jobID, Cadence: scheduler.Interval, IntervalHours: 3, MaxCatchUp: 1}}, Handlers: map[string]any{
-		MemoryLightDreamJobID: MemoryLightDreamHandler{Engine: s.engine, ExpectedSourceFingerprint: p.source}, MemoryCheckpointJobID: MemoryCheckpointHandler{Scheduler: s.scheduler, Store: ContinuityCheckpointStore{Root: s.receipts.Root}, ExpectedSourceFingerprint: p.source},
-	}, Deadline: 2 * time.Minute, Now: s.now, product: p}
+	schedule := scheduleFor(p.jobID)
+	weekly := *s.weekly
+	weekly.Now = s.now
+	handlers := map[string]any{
+		MemoryLightDreamJobID:  MemoryLightDreamHandler{Engine: s.engine, ExpectedSourceFingerprint: p.source},
+		MemoryCheckpointJobID:  MemoryCheckpointHandler{Scheduler: s.scheduler, Store: ContinuityCheckpointStore{Root: s.receipts.Root}, ExpectedSourceFingerprint: p.source},
+		MemoryDeepDreamJobID:   MemoryDeepDreamHandler{Engine: &weekly, ExpectedSourceFingerprint: p.source},
+		"skills-index-refresh": productIndexHandler{service: s, expected: p.source},
+	}
+	for _, job := range []string{"memory-retention-check", "runtime-health-check", "capability-recheck", "runtime-drift-check"} {
+		handlers[job] = productDiagnosticHandler{service: s, expected: p.source, job: job}
+	}
+	return Worker{Catalog: s.options.Catalog, Scheduler: s.scheduler, Receipts: s.receipts, Jobs: []scheduler.Job{{ID: p.jobID, Cadence: schedule.Cadence, Weekday: schedule.Weekday, LocalHour: schedule.LocalHour, LocalMinute: schedule.LocalMinute, IntervalHours: schedule.IntervalHours, MaxCatchUp: schedule.MaxCatchUp}}, Handlers: handlers, Deadline: 2 * time.Minute, Now: s.now, product: p}
 }
+
 func (s *Service) execute(ctx context.Context, p *productExecution, occ scheduler.Occurrence, now time.Time) (Receipt, error) {
 	if err := p.guard(func() error { return nil }); err != nil {
 		return Receipt{}, err
@@ -560,7 +581,7 @@ func (s *Service) RunDue(ctx context.Context) (WakeReport, error) {
 		if err != nil {
 			return report, err
 		}
-		due, err := scheduler.PlanDue([]scheduler.Job{{ID: job.ID, Cadence: c.Schedule.Cadence, IntervalHours: c.Schedule.IntervalHours, MaxCatchUp: c.Schedule.MaxCatchUp}}, c.Boundary, filtered, now.In(location))
+		due, err := scheduler.PlanDue([]scheduler.Job{{ID: job.ID, Cadence: c.Schedule.Cadence, Weekday: c.Schedule.Weekday, LocalHour: c.Schedule.LocalHour, LocalMinute: c.Schedule.LocalMinute, IntervalHours: c.Schedule.IntervalHours, MaxCatchUp: c.Schedule.MaxCatchUp}}, c.Boundary, filtered, now.In(location))
 		if err != nil {
 			return report, err
 		}
@@ -676,8 +697,33 @@ func (s *Service) domainEvidence(jobID string, at time.Time) (string, string, er
 		path = filepath.Join(root, "versions", pointer.Artifact)
 		relative, _ := filepath.Rel(s.receipts.Root, path)
 		ref = "maintenance/" + filepath.ToSlash(relative)
+	case MemoryDeepDreamJobID:
+		var err error
+		path, err = s.weekly.WeeklyCommitEvidence(s.workspaceID, weeklyPeriod(at), "")
+		if err != nil {
+			return "", "", err
+		}
+		relative, _ := filepath.Rel(s.engine.Root, path)
+		ref = "memory/" + filepath.ToSlash(relative)
+	case "skills-index-refresh":
+		index, err := skillsindex.LoadRuntimeIndex(s.indexRoot(), "")
+		if err != nil {
+			return "", "", err
+		}
+		path = index.MetadataPath
+		relative, _ := filepath.Rel(s.home, path)
+		ref = filepath.ToSlash(relative)
 	default:
-		return "", "", scheduler.ErrCapabilityUnavailable
+		if !diagnosticJob(jobID) {
+			return "", "", scheduler.ErrCapabilityUnavailable
+		}
+		_, p, err := (DiagnosticStore{Root: s.receipts.Root}).Load(s.workspaceID, jobID, "")
+		if err != nil {
+			return "", "", err
+		}
+		path = p
+		relative, _ := filepath.Rel(s.receipts.Root, path)
+		ref = "maintenance/" + filepath.ToSlash(relative)
 	}
 	body, err := scheduler.ReadPrivateFile(path, 2<<20)
 	if err != nil {
@@ -712,6 +758,38 @@ func (s *Service) verifyQualification(q *ProductQualification) error {
 			return ErrQualificationRequired
 		}
 		path = filepath.Join(s.engine.Root, strings.TrimPrefix(q.Artifact, "memory/"))
+	} else if q.JobID == MemoryDeepDreamJobID {
+		prefix = "memory/workspaces/" + s.workspaceID + "/commits/"
+		if !strings.HasPrefix(q.Artifact, prefix) {
+			return ErrQualificationRequired
+		}
+		var err error
+		path, err = s.weekly.WeeklyCommitEvidence(s.workspaceID, weeklyPeriod(q.RequestedAt), strings.TrimPrefix(q.Artifact, prefix))
+		if err != nil {
+			return ErrQualificationRequired
+		}
+	} else if q.JobID == "skills-index-refresh" {
+		prefix = "brain/runtime/workspaces/" + s.workspaceID + "/skills-index/generations/"
+		if !strings.HasPrefix(q.Artifact, prefix) || !strings.HasSuffix(q.Artifact, "/metadata.json") {
+			return ErrQualificationRequired
+		}
+		generation := strings.TrimSuffix(strings.TrimPrefix(q.Artifact, prefix), "/metadata.json")
+		index, err := skillsindex.LoadRuntimeIndex(s.indexRoot(), generation)
+		if err != nil || index.Metadata.Source.WorkspaceID != s.workspaceID {
+			return ErrQualificationRequired
+		}
+		path = index.MetadataPath
+	} else if diagnosticJob(q.JobID) {
+		prefix = "maintenance/workspaces/" + s.workspaceID + "/diagnostics/" + q.JobID + "/versions/"
+		if !strings.HasPrefix(q.Artifact, prefix) || !strings.HasSuffix(q.Artifact, ".json") {
+			return ErrQualificationRequired
+		}
+		generation := strings.TrimSuffix(strings.TrimPrefix(q.Artifact, prefix), ".json")
+		report, p, err := (DiagnosticStore{Root: s.receipts.Root}).Load(s.workspaceID, q.JobID, generation)
+		if err != nil || !report.ObservedAt.Equal(q.RequestedAt) {
+			return ErrQualificationRequired
+		}
+		path = p
 	} else {
 		prefix = "maintenance/workspaces/" + s.workspaceID + "/memory-checkpoints/versions/"
 		if !strings.HasPrefix(q.Artifact, prefix) {
@@ -732,7 +810,7 @@ func (s *Service) verifyQualification(q *ProductQualification) error {
 		if decodeProduct(body, &artifact) != nil || artifact.WorkspaceID != s.workspaceID || artifact.Layer != "L1" || artifact.Period != q.RequestedAt.UTC().Format("2006-01-02") || len(artifact.Sources) == 0 || artifact.Content == "" || artifact.SynthesizerID != memory.DeterministicL1SynthesizerID {
 			return ErrQualificationRequired
 		}
-	} else {
+	} else if q.JobID == MemoryCheckpointJobID {
 		var cp MemoryCheckpoint
 		if decodeProduct(body, &cp) != nil || validateMemoryCheckpoint(cp) != nil || cp.WorkspaceID != s.workspaceID {
 			return ErrQualificationRequired
@@ -757,4 +835,55 @@ func (s *Service) verifyQualification(q *ProductQualification) error {
 		return ErrQualificationRequired
 	}
 	return nil
+}
+
+// NewProductWeeklyMemoryEngine preserves exact lifetime review in the existing
+// attended memory.consolidate path. Job enrollment grants only L2/L3 work.
+func NewProductWeeklyMemoryEngine(home string) (*memory.Engine, error) {
+	engine, cfg, err := NewProductMemoryEngine(home)
+	if err != nil {
+		return nil, err
+	}
+	daily := engine.Synthesizer.(memory.DeterministicL1Synthesizer)
+	engine.Synthesizer = memory.DeterministicWeeklySynthesizer{Daily: daily, MaxRunes: engine.Budgets, MaxInputBytes: cfg.L1MaxInputBytes}
+	engine.SynthesizerID = memory.DeterministicWeeklySynthesizerID
+	engine.EligibilityPolicyID = "deterministic-two-l3-generations+exact-owner-review-v1"
+	engine.Eligibility = memory.EligibilityFunc(func(ctx context.Context, candidate memory.Artifact) (bool, string, error) {
+		eligible, reason, err := (memory.DeterministicLifetimeEligibility{MinL3Generations: 2}).Evaluate(ctx, candidate)
+		if err != nil || !eligible {
+			return false, reason, err
+		}
+		return false, "trusted exact-candidate confirmation unavailable; L2/L3 retained without lifetime promotion", nil
+	})
+	return engine, nil
+}
+func scheduleFor(job string) ProductSchedule {
+	if job == MemoryDeepDreamJobID {
+		return ProductSchedule{Cadence: scheduler.Weekly, Weekday: time.Sunday, MaxCatchUp: 1}
+	}
+	if job == MemoryLightDreamJobID || job == MemoryCheckpointJobID {
+		return ProductSchedule{Cadence: scheduler.Interval, IntervalHours: 3, MaxCatchUp: 1}
+	}
+	return ProductSchedule{Cadence: scheduler.Daily, MaxCatchUp: 1}
+}
+func (s *Service) sourceState(job string) (string, error) {
+	switch job {
+	case MemoryLightDreamJobID:
+		return s.engine.DailyInputIdentity(s.workspaceID, s.now())
+	case MemoryDeepDreamJobID:
+		return s.weekly.WeeklyInputIdentity(s.workspaceID, s.now())
+	case MemoryCheckpointJobID:
+		sources, err := s.scheduler.Receipts(s.workspaceID)
+		return productDigest(sources), err
+	case "skills-index-refresh":
+		source, err := s.indexSource()
+		return productDigest(source), err
+	default:
+		source, err := s.diagnosticSource(job)
+		return source.SourceSHA256, err
+	}
+}
+func weeklyPeriod(at time.Time) string {
+	year, week := at.UTC().ISOWeek()
+	return fmt.Sprintf("%04d-W%02d", year, week)
 }

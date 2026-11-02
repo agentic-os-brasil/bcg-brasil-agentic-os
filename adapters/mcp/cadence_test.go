@@ -27,7 +27,7 @@ func cadenceCall(t *testing.T, cs *mcp.ClientSession, op string, fields map[stri
 		args[k] = v
 	}
 	tool := "maestro_apply"
-	if op == "status" {
+	if op == "status" || op == "report" {
 		tool = "maestro_query"
 	}
 	out, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: tool, Arguments: args})

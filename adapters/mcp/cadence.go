@@ -20,7 +20,7 @@ import (
 )
 
 func maintenanceQueries() []any {
-	return []any{variant("maintenance.status", map[string]any{})}
+	return []any{variant("maintenance.status", map[string]any{}), variant("maintenance.report", map[string]any{"job_id": map[string]any{"type": "string", "enum": []string{maintenance.MemoryDeepDreamJobID, "memory-retention-check", "skills-index-refresh", "runtime-health-check", "capability-recheck", "runtime-drift-check"}}}, "job_id")}
 }
 
 func maintenanceTransitions() []any {
@@ -65,7 +65,7 @@ func (b *Bound) maintenanceService() (*maintenance.Service, error) {
 	return maintenance.NewService(maintenance.ServiceOptions{
 		ProductRoot: b.options.ProductRoot, UserHome: b.options.UserHome,
 		WorkspacePath: b.options.WorkspacePath, LookupEnv: b.options.LookupEnv,
-		Catalog: catalog, Adapter: "local", Now: b.maintenanceClock,
+		Catalog: catalog, Adapter: "local", Now: b.maintenanceClock, CLIVersion: b.options.CLIVersion,
 	})
 }
 
@@ -286,6 +286,14 @@ func maintenanceResult(value any, err error) *mcp.CallToolResult {
 func (b *Bound) handleMaintenance(ctx context.Context, req *mcp.CallToolRequest, in input) *mcp.CallToolResult {
 	if in.Operation == "maintenance.status" {
 		value, err := b.MaintenanceStatus()
+		return maintenanceResult(value, err)
+	}
+	if in.Operation == "maintenance.report" {
+		service, err := b.maintenanceService()
+		if err != nil {
+			return maintenanceResult(nil, err)
+		}
+		value, err := service.Report(in.JobID)
 		return maintenanceResult(value, err)
 	}
 	if in.Operation == "maintenance.run" {
