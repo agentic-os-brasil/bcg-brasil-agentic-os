@@ -571,6 +571,40 @@ func TestContentRealJourneys(t *testing.T) {
 			}
 			expectedText = largeMutation.Text
 			contentCall(t, restarted, "maestro_apply", map[string]any{"operation": largeMutation.Operation, "artifact_id": id, "page": largeMutation.Page, "section": largeMutation.Section, "text": largeMutation.Text, "expected_page_revision": largeMutation.ExpectedPageRevision}, false)
+			// A stale append may expose a full proposal only to the private operator.
+			largePath := filepath.Join(f.options.WorkspacePath, "brain", "knowledge/large.md")
+			largeBefore := readContentFile(t, largePath)
+			largeMutation.Text = "Stale large-page draft"
+			expectedText = largeMutation.Text
+			staleLargeReview, err := bound.KnowledgeReview(largeMutation)
+			if err != nil || staleLargeReview.Current == nil || staleLargeReview.Current.Content != string(largeBefore) {
+				t.Fatal("stale large-page private review unavailable", err)
+			}
+			publicConflict := contentCall(t, restarted, "maestro_apply", map[string]any{"operation": largeMutation.Operation, "artifact_id": id, "page": largeMutation.Page, "section": largeMutation.Section, "text": largeMutation.Text, "expected_page_revision": largeMutation.ExpectedPageRevision}, false)
+			if publicConflict["state"] != "proposed" || publicConflict["revision"] != staleLargeReview.Current.Revision || publicConflict["reason"] == "" || publicConflict["operation_id"] == "" || publicConflict["operation"] != "append-entry" || publicConflict["page"] != largeMutation.Page || publicConflict["provenance"] == nil {
+				t.Fatal("stale large-page conflict metadata missing")
+			}
+			publicBody, err := json.Marshal(publicConflict)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, exposed := publicConflict["proposal"]; exposed || bytes.Contains(publicBody, []byte("Large reviewed page")) || bytes.Contains(publicBody, []byte(largeMutation.Text)) {
+				t.Fatal("MCP conflict exposed private large-page proposal")
+			}
+			// Use a distinct intent so the canonical receipt replay cannot hide a proposal.
+			largeMutation.Text = "Private operator stale draft"
+			privateReview, err := bound.KnowledgeReview(largeMutation)
+			if err != nil {
+				t.Fatal(err)
+			}
+			privateConflict, err := bound.ApplyKnowledgeReview(largeMutation, privateReview.ReviewDigest, true)
+			if err != nil || privateConflict.State != "proposed" || len(privateConflict.Proposal) <= 128<<10 || !strings.Contains(privateConflict.Proposal, string(largeBefore)) || !strings.Contains(privateConflict.Proposal, largeMutation.Text) {
+				t.Fatal("private operator canonical proposal unavailable", err)
+			}
+			if !bytes.Equal(largeBefore, readContentFile(t, largePath)) {
+				t.Fatal("stale large-page append changed canonical page")
+			}
+			t.Log("MCP stale large-page conflict preserves metadata without proposal; private operator retains full canonical proposal; page unchanged")
 			collectedLarge := contentCall(t, restarted, "maestro_query", map[string]any{"operation": "knowledge.collect", "purpose": "Verify ordinary budget remains bounded", "pages": []string{"knowledge/large.md"}}, false)
 			if len(collectedLarge["omissions"].([]any)) != 1 {
 				t.Fatal("ordinary collection budget widened")

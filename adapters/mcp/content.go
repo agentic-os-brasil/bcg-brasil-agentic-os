@@ -347,7 +347,11 @@ func (b *Bound) handleContent(ctx context.Context, req *mcp.CallToolRequest, in 
 				err = b.confirm(ctx, req, "Authorize this exact workspace knowledge change?", review, knowledgePresentation(review))
 			}
 			if err == nil {
-				value, err = b.applyKnowledgeReview(ctx, mutation, review.ReviewDigest, true)
+				var applied atlasops.Result
+				applied, err = b.applyKnowledgeReview(ctx, mutation, review.ReviewDigest, true)
+				// Full-page conflict proposals belong only to private operator review.
+				applied.Proposal = ""
+				value = applied
 			}
 		default:
 			err = errors.New("invalid_operation")
