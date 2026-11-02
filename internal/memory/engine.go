@@ -94,19 +94,20 @@ func (function EligibilityFunc) Evaluate(ctx context.Context, artifact Artifact)
 type Engine struct {
 	ExpectedDailyFingerprint string
 	// PublicationGuard fences the visible commit; the activation lock is already held.
-	PublicationGuard    func(func() error) error
-	Root                string
-	Policy              Policy
-	Budgets             map[string]int
-	Freshness           map[string]time.Duration
-	Synthesizer         Synthesizer
-	SynthesizerID       string
-	Eligibility         Eligibility
-	EligibilityPolicyID string
-	Now                 func() time.Time
-	FaultPoint          func(string) error
-	MaxSourceBytes      int
-	contextReadPoint    func(string) error
+	PublicationGuard          func(func() error) error
+	ExpectedWeeklyFingerprint string
+	Root                      string
+	Policy                    Policy
+	Budgets                   map[string]int
+	Freshness                 map[string]time.Duration
+	Synthesizer               Synthesizer
+	SynthesizerID             string
+	Eligibility               Eligibility
+	EligibilityPolicyID       string
+	Now                       func() time.Time
+	FaultPoint                func(string) error
+	MaxSourceBytes            int
+	contextReadPoint          func(string) error
 }
 
 type DreamResult struct {
@@ -297,6 +298,15 @@ func (engine *Engine) DreamWeekly(ctx context.Context, workspaceID string, anyDa
 		return DreamResult{}, err
 	}
 	defer release()
+	if engine.ExpectedWeeklyFingerprint != "" {
+		actual, err := engine.WeeklyInputIdentity(workspaceID, anyDay)
+		if err != nil {
+			return DreamResult{}, err
+		}
+		if actual != engine.ExpectedWeeklyFingerprint {
+			return DreamResult{}, ErrCaptureConflict
+		}
+	}
 	var l1Sources []SourceDocument
 	for offset := 0; offset < 7; offset++ {
 		date := monday.AddDate(0, 0, offset).Format("2006-01-02")

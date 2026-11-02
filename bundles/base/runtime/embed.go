@@ -5,7 +5,7 @@ import (
 	_ "embed"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/hookpolicy"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
+	maintenance "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenancecatalog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimecap"
 )
 
