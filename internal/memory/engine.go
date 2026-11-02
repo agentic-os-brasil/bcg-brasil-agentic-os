@@ -1,7 +1,6 @@
 package memory
 
 import (
-	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -22,6 +21,8 @@ var workspaceIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 var ErrDreamInProgress = errors.New("memory dreaming cycle already in progress")
 
 type Capture struct {
+	ID            string    `json:"id,omitempty"`
+	Revision      uint64    `json:"revision,omitempty"`
 	SchemaVersion int       `json:"schema_version,omitempty"`
 	WorkspaceID   string    `json:"workspace_id"`
 	RecordedAt    time.Time `json:"recorded_at"`
@@ -52,16 +53,19 @@ type PromotionRecord struct {
 }
 
 type Artifact struct {
-	SchemaVersion     int              `json:"schema_version"`
-	WorkspaceID       string           `json:"workspace_id"`
-	Layer             string           `json:"layer"`
-	Period            string           `json:"period"`
-	GeneratedAt       time.Time        `json:"generated_at"`
-	SourceFingerprint string           `json:"source_fingerprint"`
-	Sources           []SourceRef      `json:"sources"`
-	SynthesizerID     string           `json:"synthesizer_id"`
-	Content           string           `json:"content"`
-	Promotion         *PromotionRecord `json:"promotion,omitempty"`
+	l3Generations      int
+	l3EvidenceDigest   [sha256.Size]byte
+	VisibilityRevision uint64           `json:"visibility_revision,omitempty"`
+	SchemaVersion      int              `json:"schema_version"`
+	WorkspaceID        string           `json:"workspace_id"`
+	Layer              string           `json:"layer"`
+	Period             string           `json:"period"`
+	GeneratedAt        time.Time        `json:"generated_at"`
+	SourceFingerprint  string           `json:"source_fingerprint"`
+	Sources            []SourceRef      `json:"sources"`
+	SynthesizerID      string           `json:"synthesizer_id"`
+	Content            string           `json:"content"`
+	Promotion          *PromotionRecord `json:"promotion,omitempty"`
 }
 
 type SynthesisRequest struct {
@@ -163,6 +167,9 @@ func (engine *Engine) currentPath(workspaceID, layer, name string) string {
 }
 
 func (engine *Engine) Capture(capture Capture) (string, error) {
+	if capture.ID != "" || capture.Revision != 0 {
+		return "", errors.New("journal captures cannot supply owned identity or revision")
+	}
 	if err := engine.validateCore(); err != nil {
 		return "", err
 	}
@@ -186,18 +193,33 @@ func (engine *Engine) Capture(capture Capture) (string, error) {
 		directory = "attested-captures"
 	}
 	path := engine.currentPath(capture.WorkspaceID, "l1", filepath.Join(directory, capture.RecordedAt.UTC().Format("2006-01-02")+".jsonl"))
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := memoryMkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return "", err
 	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	release, err := engine.acquireCycleLock(capture.WorkspaceID, "activation")
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
+	defer release()
 	encoded, err := json.Marshal(capture)
 	if err != nil {
 		return "", err
 	}
+	existing, err := memoryReadFile(path, 1<<20)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+	if len(existing)+len(encoded)+1 > 1<<20 {
+		return "", ErrCaptureCapacity
+	}
+	if _, err := engine.publishCaptureVisibility(capture.WorkspaceID, journalCaptureID(capture)); err != nil {
+		return "", err
+	}
+	file, err := memoryOpen(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
 	if _, err := file.Write(append(encoded, '\n')); err != nil {
 		return "", err
 	}
@@ -226,9 +248,36 @@ func (engine *Engine) dreamDaily(ctx context.Context, workspaceID string, day ti
 	}
 	defer release()
 	capturePath := engine.currentPath(workspaceID, "l1", filepath.Join(captureDirectory, period+".jsonl"))
-	sources, err := engine.readSources(workspaceID, []string{capturePath})
+	paths := []string{capturePath}
+	if captureDirectory == "attested-captures" {
+		if _, err := memoryReadFile(capturePath, 1<<20); errors.Is(err, os.ErrNotExist) {
+			paths = nil
+		} else if err != nil {
+			return DreamResult{}, err
+		}
+		captures, err := engine.ownedCaptures(workspaceID)
+		if err != nil {
+			return DreamResult{}, err
+		}
+		for _, capture := range captures {
+			if capture.RecordedAt.UTC().Format("2006-01-02") == period {
+				paths = append(paths, engine.ownedPath(workspaceID, capture.ID))
+			}
+		}
+	}
+	sources, err := engine.readSources(workspaceID, paths)
 	if err != nil {
 		return DreamResult{}, err
+	}
+	if len(sources) == 0 {
+		barrier, err := engine.readVisibility(workspaceID)
+		if err != nil {
+			return DreamResult{}, err
+		}
+		if barrier.Revision > 0 {
+			return DreamResult{Cycle: "daily", Period: period, Skipped: true}, nil
+		}
+		return DreamResult{}, errors.New("daily dream requires at least one live capture")
 	}
 	fingerprint := engine.sourceFingerprint("daily", sources)
 	if existing, _, err := engine.readArtifactByKey(workspaceID, "L1/"+period); err == nil && engine.validateArtifact(existing) == nil && existing.WorkspaceID == workspaceID && existing.Layer == "L1" && existing.Period == period && existing.SourceFingerprint == fingerprint && existing.SynthesizerID == engine.SynthesizerID {
@@ -317,6 +366,11 @@ func (engine *Engine) DreamWeekly(ctx context.Context, workspaceID string, anyDa
 	if err := engine.validateArtifactCandidate(lifetime); err != nil {
 		return DreamResult{}, fmt.Errorf("validate lifetime candidate: %w", err)
 	}
+	lifetime.l3Generations, err = engine.l3GenerationCount(workspaceID, l3)
+	if err != nil {
+		return DreamResult{}, fmt.Errorf("verify L3 generation evidence: %w", err)
+	}
+	lifetime.l3EvidenceDigest = sha256.Sum256(artifactSource(lifetime).Content)
 	eligible, reason, err := engine.Eligibility.Evaluate(ctx, lifetime)
 	if err != nil {
 		return DreamResult{}, fmt.Errorf("evaluate lifetime eligibility: %w", err)
@@ -341,11 +395,11 @@ func (engine *Engine) DreamWeekly(ctx context.Context, workspaceID string, anyDa
 
 func (engine *Engine) acquireCycleLock(workspaceID, name string) (func(), error) {
 	locksRoot := filepath.Join(engine.workspaceRoot(workspaceID), ".locks")
-	if err := os.MkdirAll(locksRoot, 0o700); err != nil {
+	if err := memoryMkdirAll(locksRoot, 0o700); err != nil {
 		return nil, err
 	}
 	lockPath := filepath.Join(locksRoot, name+".lock")
-	if err := os.Mkdir(lockPath, 0o700); err != nil {
+	if err := memoryMkdir(lockPath, 0o700); err != nil {
 		if errors.Is(err, os.ErrExist) {
 			return nil, fmt.Errorf("%w: %s", ErrDreamInProgress, name)
 		}
@@ -353,10 +407,10 @@ func (engine *Engine) acquireCycleLock(workspaceID, name string) (func(), error)
 	}
 	metadata := map[string]any{"cycle": name, "started_at": engine.Now().UTC(), "pid": os.Getpid()}
 	if err := writeJSONFile(filepath.Join(lockPath, "owner.json"), metadata); err != nil {
-		_ = os.RemoveAll(lockPath)
+		_ = memoryRemoveAll(lockPath)
 		return nil, err
 	}
-	return func() { _ = os.RemoveAll(lockPath) }, nil
+	return func() { _ = memoryRemoveAll(lockPath) }, nil
 }
 
 func (engine *Engine) validateRuntime(workspaceID string, weekly bool) error {
@@ -386,6 +440,10 @@ func startOfISOWeek(value time.Time) time.Time {
 }
 
 func (engine *Engine) readSources(workspaceID string, paths []string) ([]SourceDocument, error) {
+	barrier, err := engine.readVisibility(workspaceID)
+	if err != nil {
+		return nil, err
+	}
 	sort.Strings(paths)
 	root := engine.workspaceRoot(workspaceID)
 	sources := make([]SourceDocument, 0, len(paths))
@@ -395,22 +453,13 @@ func (engine *Engine) readSources(workspaceID string, paths []string) ([]SourceD
 	}
 	total := 0
 	for _, path := range paths {
-		file, err := os.Open(path)
-		if err != nil {
-			return nil, err
-		}
 		remaining := maximum - total
 		if remaining <= 0 {
-			_ = file.Close()
 			return nil, errors.New("memory dream sources exceed the configured byte limit")
 		}
-		content, readErr := io.ReadAll(io.LimitReader(file, int64(remaining+1)))
-		closeErr := file.Close()
-		if readErr != nil {
-			return nil, readErr
-		}
-		if closeErr != nil {
-			return nil, closeErr
+		content, err := memoryReadFile(path, int64(remaining))
+		if err != nil {
+			return nil, err
 		}
 		if len(content) > remaining {
 			return nil, errors.New("memory dream sources exceed the configured byte limit")
@@ -420,7 +469,39 @@ func (engine *Engine) readSources(workspaceID string, paths []string) ([]SourceD
 		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 			return nil, fmt.Errorf("source outside workspace memory root: %s", path)
 		}
+		if filepath.Dir(filepath.ToSlash(relative)) == "l1/owned-captures" {
+			var c Capture
+			if err := decodeMemoryJSON(content, &c); err != nil {
+				return nil, err
+			}
+			if c.WorkspaceID != workspaceID {
+				return nil, errors.New("capture workspace mismatch")
+			}
+			if err := (CaptureAttestor{Root: engine.Root}).Verify(c); err != nil {
+				return nil, err
+			}
+			if c.Revision <= barrier.Denied[c.ID] {
+				continue
+			}
+		}
+		if directory := filepath.Dir(filepath.ToSlash(relative)); directory == "l1/captures" || directory == "l1/attested-captures" {
+			visible, _, err := engine.filterJournal(workspaceID, content, directory == "l1/attested-captures", barrier)
+			if err != nil {
+				return nil, err
+			}
+			content = visible
+			if len(content) == 0 {
+				continue
+			}
+		}
 		sources = append(sources, SourceDocument{ID: filepath.ToSlash(relative), Content: content})
+	}
+	after, err := engine.readVisibility(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if after.Revision != barrier.Revision {
+		return nil, ErrCaptureConflict
 	}
 	return sources, nil
 }
@@ -456,16 +537,18 @@ func artifactSource(artifact Artifact) SourceDocument {
 }
 
 func (engine *Engine) newArtifact(workspaceID, layer, period, fingerprint string, sources []SourceDocument, content string) Artifact {
+	barrier, _ := engine.readVisibility(workspaceID)
 	return Artifact{
-		SchemaVersion:     1,
-		WorkspaceID:       workspaceID,
-		Layer:             layer,
-		Period:            period,
-		GeneratedAt:       engine.Now().UTC(),
-		SourceFingerprint: fingerprint,
-		Sources:           sourceRefs(sources),
-		SynthesizerID:     engine.SynthesizerID,
-		Content:           strings.TrimSpace(content),
+		VisibilityRevision: barrier.Generation,
+		SchemaVersion:      1,
+		WorkspaceID:        workspaceID,
+		Layer:              layer,
+		Period:             period,
+		GeneratedAt:        engine.Now().UTC(),
+		SourceFingerprint:  fingerprint,
+		Sources:            sourceRefs(sources),
+		SynthesizerID:      engine.SynthesizerID,
+		Content:            strings.TrimSpace(content),
 	}
 }
 
@@ -536,37 +619,28 @@ func isHex(value string) bool {
 }
 
 func writeJSONFile(path string, value any) error {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	body, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
 	}
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(value); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return err
-	}
-	return file.Close()
+	return memoryPublish(path, append(body, '\n'), true)
 }
 
 func (engine *Engine) readArtifact(path string) (Artifact, error) {
-	file, err := os.Open(path)
+	body, err := memoryReadFile(path, 1<<20)
 	if err != nil {
 		return Artifact{}, err
 	}
-	defer file.Close()
-	decoder := json.NewDecoder(bufio.NewReader(file))
-	decoder.DisallowUnknownFields()
 	var artifact Artifact
-	if err := decoder.Decode(&artifact); err != nil {
+	if err := decodeMemoryJSON(body, &artifact); err != nil {
 		return Artifact{}, err
 	}
-	if err := ensureJSONEOF(decoder); err != nil {
+	barrier, err := engine.readVisibility(artifact.WorkspaceID)
+	if err != nil {
 		return Artifact{}, err
+	}
+	if artifact.VisibilityRevision != barrier.Generation {
+		return Artifact{}, os.ErrNotExist
 	}
 	return artifact, nil
 }
@@ -623,6 +697,13 @@ func (engine *Engine) AssembleContext(workspaceID string) (ContextBundle, error)
 		content, truncated := truncateRunes(artifact.Content, engine.Budgets[layer])
 		relative, _ := filepath.Rel(engine.workspaceRoot(workspaceID), path)
 		bundle.Sections = append(bundle.Sections, ContextSection{Layer: layer, Content: content, DrillDown: filepath.ToSlash(relative), Truncated: truncated})
+	}
+	barrier, err := engine.readVisibility(workspaceID)
+	if err != nil {
+		return ContextBundle{}, err
+	}
+	if manifest.VisibilityRevision != barrier.Generation {
+		return ContextBundle{}, ErrCaptureConflict
 	}
 	return bundle, nil
 }

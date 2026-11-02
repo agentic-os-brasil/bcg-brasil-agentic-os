@@ -7,6 +7,7 @@
   "required": ["schema_version", "workspace_id", "layer", "period", "generated_at", "source_fingerprint", "sources", "synthesizer_id", "content"],
   "properties": {
     "schema_version": {"const": 1},
+    "visibility_revision": {"type": "integer", "minimum": 0},
     "workspace_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"},
     "layer": {"enum": ["L1", "L2", "L3", "lifetime"]},
     "period": {"type": "string", "minLength": 1},
