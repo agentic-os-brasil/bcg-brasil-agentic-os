@@ -8,8 +8,44 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 )
+
+func TestBuildBundleNormalizesExecutableModes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not expose POSIX executable permissions")
+	}
+	for _, test := range []struct {
+		name string
+		mode os.FileMode
+		want int64
+	}{
+		{"data", 0o666, 0o644},
+		{"owner executable", 0o700, 0o755},
+		{"group executable", 0o610, 0o755},
+		{"other executable", 0o601, 0o755},
+		{"privileged executable", os.ModeSetuid | os.ModeSetgid | os.ModeSticky | 0o777, 0o755},
+		{"privileged data", os.ModeSetuid | os.ModeSetgid | os.ModeSticky | 0o666, 0o644},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			const source = "bundles/base/runtime/helper"
+			writeFile(t, root, source, "nonempty fixture\n")
+			if err := os.Chmod(filepath.Join(root, source), test.mode); err != nil {
+				t.Fatal(err)
+			}
+			var archive bytes.Buffer
+			if err := BuildBundle(root, Allowlist{SchemaVersion: 1, Files: []BundleFile{{Source: source, Path: "runtime/helper"}}}, &archive); err != nil {
+				t.Fatal(err)
+			}
+			_, modes := archiveEntries(t, archive.Bytes())
+			if len(modes) != 1 || modes[0] != test.want {
+				t.Fatalf("archive modes = %o, want [%o]", modes, test.want)
+			}
+		})
+	}
+}
 
 func TestBuildBundleIsDeterministicAndOrdered(t *testing.T) {
 	root := t.TempDir()
@@ -46,12 +82,17 @@ func TestBuildBundleRejectsUnsafeSources(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "dev/secret.txt", "no\n")
 	writeFile(t, root, "bundles/base/ok.txt", "ok\n")
+	if err := os.MkdirAll(filepath.Join(root, "bundles/base/directory"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Symlink(filepath.Join(root, "bundles/base/ok.txt"), filepath.Join(root, "bundles/base/link.txt")); err != nil {
 		t.Skipf("creating a symbolic link is unavailable here: %v", err)
 	}
 	tests := map[string]Allowlist{
 		"development path": {SchemaVersion: 1, Files: []BundleFile{{Source: "dev/secret.txt", Path: "secret.txt"}}},
 		"target traversal": {SchemaVersion: 1, Files: []BundleFile{{Source: "bundles/base/ok.txt", Path: "../ok.txt"}}},
+		"source traversal": {SchemaVersion: 1, Files: []BundleFile{{Source: "bundles/base/../base/ok.txt", Path: "ok.txt"}}},
+		"directory":        {SchemaVersion: 1, Files: []BundleFile{{Source: "bundles/base/directory", Path: "directory"}}},
 		"symlink":          {SchemaVersion: 1, Files: []BundleFile{{Source: "bundles/base/link.txt", Path: "link.txt"}}},
 		"duplicate target": {SchemaVersion: 1, Files: []BundleFile{
 			{Source: "bundles/base/ok.txt", Path: "same.txt"},
