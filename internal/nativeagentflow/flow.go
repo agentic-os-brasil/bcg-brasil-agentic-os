@@ -22,20 +22,28 @@ import (
 const maximumStateBytes = 8 << 10
 
 type State struct {
-	SchemaVersion     int    `json:"schema_version"`
-	WorkspaceID       string `json:"workspace_id"`
-	SessionDigest     string `json:"session_digest"`
-	ActiveAgentID     string `json:"active_agent_id,omitempty"`
-	ActiveAgentType   string `json:"active_agent_type,omitempty"`
-	AccountRoute      bool   `json:"account_route"`
-	AccountFramed     bool   `json:"account_framed"`
-	CaseCompleted     bool   `json:"case_completed"`
-	AccountValidated  bool   `json:"account_validated"`
-	SystemHealthRoute bool   `json:"system_health_route"`
-	TransitionCount   int    `json:"transition_count"`
-	LastEvent         string `json:"last_event,omitempty"`
-	LastAgentID       string `json:"last_agent_id,omitempty"`
-	LastAgentType     string `json:"last_agent_type,omitempty"`
+	Profile     string   `json:"profile,omitempty"`
+	Revision    uint64   `json:"revision,omitempty"`
+	TurnDigest  string   `json:"turn_digest,omitempty"`
+	PendingTool string   `json:"pending_tool,omitempty"`
+	PendingType string   `json:"pending_type,omitempty"`
+	Finalized   bool     `json:"finalized,omitempty"`
+	Seen        []string `json:"seen,omitempty"`
+
+	SchemaVersion          int    `json:"schema_version"`
+	WorkspaceID            string `json:"workspace_id"`
+	SessionDigest          string `json:"session_digest"`
+	ActiveAgentID          string `json:"active_agent_id,omitempty"`
+	ActiveAgentType        string `json:"active_agent_type,omitempty"`
+	AccountRoute           bool   `json:"account_route"`
+	AccountFramingObserved bool   `json:"account_framing_observed"`
+	CaseStopObserved       bool   `json:"case_stop_observed"`
+	AccountReturnObserved  bool   `json:"account_return_observed"`
+	SystemHealthRoute      bool   `json:"system_health_route"`
+	TransitionCount        int    `json:"transition_count"`
+	LastEvent              string `json:"last_event,omitempty"`
+	LastAgentID            string `json:"last_agent_id,omitempty"`
+	LastAgentType          string `json:"last_agent_type,omitempty"`
 }
 
 type Store struct {
@@ -59,7 +67,7 @@ func (store Store) BeginTurn(sessionID string) error {
 		if state.ActiveAgentID != "" {
 			return errors.New("cannot begin a new Maestro turn while a managed specialist is active")
 		}
-		if state.TransitionCount == 0 && !state.AccountRoute && !state.AccountFramed && !state.CaseCompleted && !state.AccountValidated && !state.SystemHealthRoute {
+		if state.TransitionCount == 0 && !state.AccountRoute && !state.AccountFramingObserved && !state.CaseStopObserved && !state.AccountReturnObserved && !state.SystemHealthRoute {
 			return nil
 		}
 		*state = store.empty(sessionID)
@@ -69,62 +77,66 @@ func (store Store) BeginTurn(sessionID string) error {
 
 func (store Store) Start(sessionID, agentID, agentType string) error {
 	return store.update(sessionID, func(state *State) error {
-		if state.ActiveAgentID != "" {
-			if state.ActiveAgentID == agentID && state.ActiveAgentType == agentType && state.LastEvent == "start" {
-				return nil
-			}
-			return fmt.Errorf("Maestro allows one managed specialist at a time; %s is still active", state.ActiveAgentType)
-		}
-		if state.TransitionCount >= 32 {
-			return errors.New("managed specialist transition limit reached for this turn")
-		}
-		switch agentType {
-		case "pa-expert":
-			if state.SystemHealthRoute {
-				return errors.New("PA Expert cannot join a Darwin system-health route")
-			}
-		case "darwin":
-			if state.AccountRoute || state.CaseCompleted || state.AccountFramed {
-				return errors.New("Darwin system-health work cannot be mixed with client execution in the same turn")
-			}
-			state.SystemHealthRoute = true
-		case "client-account-agent":
-			if state.SystemHealthRoute {
-				return errors.New("Client Account Agent cannot join a Darwin system-health route")
-			}
-			if !state.AccountRoute {
-				if state.CaseCompleted {
-					return errors.New("Client Account Agent must be selected before Case Agent on the strategic route")
-				}
-				state.AccountRoute = true
-			} else if !state.AccountFramed || !state.CaseCompleted || state.AccountValidated {
-				return errors.New("Client Account Agent may return only after Case Agent completes the selected strategic route")
-			}
-		case "case-agent":
-			if state.SystemHealthRoute {
-				return errors.New("Case Agent cannot join a Darwin system-health route")
-			}
-			if state.CaseCompleted {
-				return errors.New("Case Agent already completed this turn")
-			}
-			if state.AccountRoute && !state.AccountFramed {
-				return errors.New("Case Agent must wait for Client Account Agent framing on the selected strategic route")
-			}
-		case "yoda":
-			if state.SystemHealthRoute || !state.CaseCompleted || (state.AccountRoute && !state.AccountValidated) {
-				return errors.New("Yoda may refine only after the selected Case route and any required Client Account validation complete")
-			}
-		default:
-			return fmt.Errorf("agent type %q is not managed by Maestro", agentType)
-		}
-		state.ActiveAgentID = agentID
-		state.ActiveAgentType = agentType
-		state.LastEvent = "start"
-		state.LastAgentID = agentID
-		state.LastAgentType = agentType
-		state.TransitionCount++
-		return nil
+		return startState(state, agentID, agentType)
 	})
+}
+
+func startState(state *State, agentID, agentType string) error {
+	if state.ActiveAgentID != "" {
+		if state.ActiveAgentID == agentID && state.ActiveAgentType == agentType && state.LastEvent == "start" {
+			return nil
+		}
+		return fmt.Errorf("Maestro allows one managed specialist at a time; %s is still active", state.ActiveAgentType)
+	}
+	if state.TransitionCount >= 32 {
+		return errors.New("managed specialist transition limit reached for this turn")
+	}
+	switch agentType {
+	case "pa-expert":
+		if state.SystemHealthRoute {
+			return errors.New("PA Expert cannot join a Darwin system-health route")
+		}
+	case "darwin":
+		if state.AccountRoute || state.CaseStopObserved || state.AccountFramingObserved {
+			return errors.New("Darwin system-health work cannot be mixed with client execution in the same turn")
+		}
+		state.SystemHealthRoute = true
+	case "client-account-agent":
+		if state.SystemHealthRoute {
+			return errors.New("Client Account Agent cannot join a Darwin system-health route")
+		}
+		if !state.AccountRoute {
+			if state.CaseStopObserved {
+				return errors.New("Client Account Agent must be selected before Case Agent on the strategic route")
+			}
+			state.AccountRoute = true
+		} else if !state.AccountFramingObserved || !state.CaseStopObserved || state.AccountReturnObserved {
+			return errors.New("Client Account Agent may return only after Case Agent stops the selected strategic route")
+		}
+	case "case-agent":
+		if state.SystemHealthRoute {
+			return errors.New("Case Agent cannot join a Darwin system-health route")
+		}
+		if state.CaseStopObserved {
+			return errors.New("Case Agent already stopped in this turn")
+		}
+		if state.AccountRoute && !state.AccountFramingObserved {
+			return errors.New("Case Agent must wait for Client Account Agent framing on the selected strategic route")
+		}
+	case "yoda", "gamma-guardian":
+		if state.SystemHealthRoute || !state.CaseStopObserved || (state.AccountRoute && !state.AccountReturnObserved) {
+			return errors.New("Yoda may refine only after the selected Case route and any required Client Account return stops")
+		}
+	default:
+		return fmt.Errorf("agent type %q is not managed by Maestro", agentType)
+	}
+	state.ActiveAgentID = agentID
+	state.ActiveAgentType = agentType
+	state.LastEvent = "start"
+	state.LastAgentID = agentID
+	state.LastAgentType = agentType
+	state.TransitionCount++
+	return nil
 }
 
 func (store Store) Stop(sessionID, agentID, agentType string) error {
@@ -137,13 +149,13 @@ func (store Store) Stop(sessionID, agentID, agentType string) error {
 		}
 		switch agentType {
 		case "client-account-agent":
-			if !state.AccountFramed {
-				state.AccountFramed = true
+			if !state.AccountFramingObserved {
+				state.AccountFramingObserved = true
 			} else {
-				state.AccountValidated = true
+				state.AccountReturnObserved = true
 			}
 		case "case-agent":
-			state.CaseCompleted = true
+			state.CaseStopObserved = true
 		}
 		state.ActiveAgentID = ""
 		state.ActiveAgentType = ""
@@ -166,11 +178,11 @@ func (store Store) Finalize(sessionID string) (bool, string, error) {
 	if state.ActiveAgentID != "" {
 		return false, "Maestro cannot finish while " + state.ActiveAgentType + " is still active", nil
 	}
-	if state.AccountRoute && !state.CaseCompleted {
-		return false, "Maestro selected the strategic route; call Case Agent after Client Account Agent framing before finishing", nil
+	if state.AccountRoute && !state.CaseStopObserved {
+		return false, "Maestro selected the strategic route; call Case Agent after Client Account Agent framing before closing the observed route", nil
 	}
-	if state.AccountRoute && !state.AccountValidated {
-		return false, "Maestro selected the strategic route; return the Case result to Client Account Agent for stakeholder validation before finishing", nil
+	if state.AccountRoute && !state.AccountReturnObserved {
+		return false, "Maestro selected the strategic route; return the Case result to Client Account Agent for stakeholder validation before closing the observed route", nil
 	}
 	return true, "", nil
 }
