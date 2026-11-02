@@ -26,14 +26,6 @@ var (
 	excludeLocalConfig    = ensureLocalConfigExcluded
 )
 
-var managedClaudeAgentFiles = []string{
-	"client-account-agent.md",
-	"case-agent.md",
-	"yoda.md",
-	"darwin.md",
-	"pa-expert.md",
-}
-
 type Status struct {
 	Runtime string `json:"runtime"`
 	Path    string `json:"path"`
@@ -83,10 +75,14 @@ func CaptureState(runtimeName, workspace string) (StateSnapshot, error) {
 	}
 	directories := []string{filepath.Dir(configPath)}
 	if runtimeName == "claude" {
+		projections, err := claudeagents.Project("")
+		if err != nil {
+			return StateSnapshot{}, err
+		}
 		agentsRoot := filepath.Join(workspace, ".claude", "agents")
 		directories = append(directories, agentsRoot)
-		for _, name := range managedClaudeAgentFiles {
-			paths = append(paths, filepath.Join(agentsRoot, name))
+		for _, projection := range projections {
+			paths = append(paths, filepath.Join(workspace, ".claude", filepath.FromSlash(projection.Path)))
 		}
 	}
 	snapshot := StateSnapshot{}
