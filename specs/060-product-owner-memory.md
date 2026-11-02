@@ -89,9 +89,20 @@ Expose stable capture identity, bounded paged discovery/search and revision-awar
 lifecycle results. Search must observe the same visibility as context and readback;
 it cannot recover removed text from an independent stale index. Correction,
 deletion and retention validate the selected workspace, current revision and
-reviewed operation before effects. A correction retains truthful provenance;
+reviewed operation before effects. New-capture approval binds the reviewed
+visibility in the opaque input seal; compare it under the canonical activation
+lock before publication so concurrent reuse cannot create two records. No model
+argument supplies that fence. A correction retains truthful provenance;
 deletion and retention revoke visibility before physical cleanup. Return bounded
 metadata, never keys or whole capture files.
+
+For bulk retention, the complete reviewed action is the explicit cutoff against
+the current visibility snapshot. Show cutoff, workspace, affected count and date
+range; bind a deterministic fingerprint of sorted affected IDs, revisions and
+source digests with the exact visibility revision. Recompute before applying
+the canonical visibility CAS. Individual bodies remain separately inspectable;
+do not copy all bodies into a giant form or truncate the approved action. Single
+correction/deletion retains the exact private per-record review.
 
 Revocation must cover source selection, historical latest-manifest fallback,
 artifact reads, context assembly and derived self-carry. A barrier is not complete
@@ -100,6 +111,22 @@ is intentional after deleting the final source. Fresh consolidation may publish
 only descendants of surviving sources under the current visibility revision.
 Interrupted changes are recoverable or safely unavailable without exposing the
 previous forbidden content. Concurrent stale writers cannot erase a later change.
+
+Lifetime eligibility counts actual canonical L3 transitions from verified
+committed ancestry in the current visibility generation. A captured literal,
+quoted heading or generated text marker cannot supply generation evidence.
+Missing or unverifiable ancestry never grants promotion. Keep that in-process
+evidence separate from user text and preserve valid persisted artifact bytes
+and readback; no second adapter-specific eligibility gate is permitted.
+
+Bound visibility metadata with an atomic checkpoint rather than an unbounded
+transition history. A required-checkpoint sentinel prevents fallback after lost
+or corrupted authority. The current capacity is 4096 lifetime capture identities,
+including permanent denial tombstones. Reserve removal capacity: new captures
+may return typed nonretryable capacity exhaustion, while existing captures stay
+readable, correctable and removable through deletion/retention. Cleanup never
+reclaims denial identities silently, raises limits or restores revoked content.
+Preflight serialized record/journal limits before publishing a replacement.
 
 Reuse existing private filesystem and activation/locking primitives. Do not add
 a generic transaction framework or a second ledger. Unsupported ownership or
