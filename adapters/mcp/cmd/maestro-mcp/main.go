@@ -10,6 +10,7 @@ import (
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -74,12 +75,24 @@ func run() error {
 		}
 		return json.NewEncoder(os.Stdout).Encode(identity)
 	}
+	if os.Args[1] == "client-capabilities" {
+		if len(os.Args) != 2 {
+			return errors.New("unexpected_arguments")
+		}
+		return json.NewEncoder(os.Stdout).Encode(installer.StableClientCapabilities("server", Version, AuthorityRegistrySHA256))
+	}
 	flags := flag.NewFlagSet("maestro-mcp", flag.ContinueOnError)
 	if os.Args[1] == "hook" {
 		flags.SetOutput(io.Discard)
 	}
 	var o product.Options
 	var destination, server, version string
+	var carrierProfile, carrierID, carrierVersion string
+	if os.Args[1] == "plugin" || os.Args[1] == "mcpb" {
+		flags.StringVar(&carrierProfile, "carrier-profile", "", "explicit stable packet profile")
+		flags.StringVar(&carrierID, "carrier-id", "", "fixed opaque stable carrier ID")
+		flags.StringVar(&carrierVersion, "carrier-version", "", "fixed stable carrier version")
+	}
 	var hookEvent string
 	var nativeExecutable, nativeScratch, nativeChallenge, nativeNonce, nativeFault, scopeDirectory, scopeOutside string
 	var nativeBudget float64
@@ -135,6 +148,10 @@ func run() error {
 	if flags.NArg() != 0 {
 		return errors.New("unexpected_arguments")
 	}
+	var carrier *packaging.StableCarrier
+	if carrierProfile != "" || carrierID != "" || carrierVersion != "" {
+		carrier = &packaging.StableCarrier{Profile: carrierProfile, Protocol: installer.StableClientProtocol, ID: carrierID, Version: carrierVersion}
+	}
 	switch os.Args[1] {
 	case "native-review", "native-qualify-and-build":
 		request := packaging.NativeOptions{Packet: packaging.Options{Destination: destination, Server: server, Version: version, Binding: o}, Executable: nativeExecutable, ScratchRoot: nativeScratch, ChallengeDirectory: nativeChallenge, MaxBudgetUSD: nativeBudget}
@@ -169,9 +186,9 @@ func run() error {
 		}
 		return bound.HandleClaudeHook(hookEvent, os.Stdin, os.Stdout)
 	case "plugin":
-		return packaging.BuildPlugin(packaging.Options{Destination: destination, Server: server, Version: version, Binding: o})
+		return packaging.BuildPlugin(packaging.Options{Destination: destination, Server: server, Version: version, Binding: o, Carrier: carrier})
 	case "mcpb":
-		return packaging.BuildExtension(packaging.Options{Destination: destination, Server: server, Version: version, Binding: o})
+		return packaging.BuildExtension(packaging.Options{Destination: destination, Server: server, Version: version, Binding: o, Carrier: carrier})
 	case "inspect":
 		h, err := datahome.Resolve(datahome.Options{ProductRoot: o.ProductRoot, UserHome: o.UserHome})
 		diagnostic := h.Diagnostic

@@ -12,6 +12,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeagents"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"io"
@@ -28,7 +29,9 @@ type Options struct {
 	Destination, Server, Version string
 	Binding                      product.Options
 	NativeHost                   *NativeHost
+	Carrier                      *StableCarrier
 	serverBody                   []byte
+	stableIdentity               releasecontract.ServerIdentity
 	target                       Target
 }
 
@@ -64,7 +67,11 @@ func prepare(o Options) (Options, string, error) {
 	if err != nil {
 		return o, "", err
 	}
-	state, stateErr := installtx.ReadStateForManagedRoot(filepath.Join(o.Binding.UserHome, ".maestro-install"), o.Binding.ProductRoot)
+	reader := installtx.ReadStateForManagedRoot
+	if o.Carrier != nil {
+		reader = installtx.ReadSourceState
+	}
+	state, stateErr := reader(filepath.Join(o.Binding.UserHome, ".maestro-install"), o.Binding.ProductRoot)
 	if stateErr == nil && state.SchemaVersion == 4 {
 		if digest(o.serverBody) != state.Server.SHA256 || o.Version != state.Release {
 			return o, "", errors.New("packet executable differs from active signed release")
@@ -74,9 +81,17 @@ func prepare(o Options) (Options, string, error) {
 	} else if stateErr != nil && !errors.Is(stateErr, os.ErrNotExist) {
 		return o, "", stateErr
 	}
+	if o.Carrier != nil {
+		if err = prepareStable(&o); err != nil {
+			return o, "", err
+		}
+	}
 	return o, o.target.Platform(), err
 }
 func args(o Options) []string {
+	if o.Carrier != nil {
+		return []string{"stable-launch", "--product-root", o.Binding.ProductRoot, "--user-home", o.Binding.UserHome, "--workspace", o.Binding.WorkspacePath, "--carrier-id", o.Carrier.ID}
+	}
 	command := "serve"
 	if o.Binding.InstalledManifestSHA256 != "" {
 		command = "launch"
@@ -342,8 +357,13 @@ func BuildExtension(options Options) error {
 		return errors.New("Desktop extension requires macOS Mach-O or Windows PE executable")
 	}
 	path := "server/" + binaryName(platform)
+	manifestName, manifestVersion := "maestro-product", o.Version
+	if o.Carrier != nil {
+		manifestName = "maestro-connector-" + o.Carrier.ID
+		manifestVersion = o.Carrier.Version
+	}
 	manifest, err := json.MarshalIndent(map[string]any{
-		"manifest_version": "0.3", "name": "maestro-product", "version": o.Version,
+		"manifest_version": "0.3", "name": manifestName, "version": manifestVersion,
 		"description":   "Local participant Maestro execution workflow",
 		"author":        map[string]string{"name": "Agentic OS Brasil"},
 		"server":        map[string]any{"type": "binary", "entry_point": path, "mcp_config": map[string]any{"command": launchCommand(o, "${__dirname}/"+path), "args": args(o)}},

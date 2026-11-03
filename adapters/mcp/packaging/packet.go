@@ -262,19 +262,34 @@ type packetResource struct {
 	Bytes  int    `json:"bytes"`
 }
 type packetInventory struct {
-	SchemaVersion     int              `json:"schema_version"`
-	Mode              string           `json:"mode"`
-	Target            Target           `json:"target"`
-	Native            NativeCapability `json:"native"`
-	Files             []packetFile     `json:"files"`
-	Resources         []packetResource `json:"embedded_resources"`
-	References        []assetReference `json:"references"`
-	CanonicalAgentIDs []string         `json:"canonical_agent_ids"`
-	ExecutionBoundary string           `json:"execution_boundary"`
+	SchemaVersion                 int              `json:"schema_version"`
+	Profile                       string           `json:"profile,omitempty"`
+	Protocol                      string           `json:"protocol,omitempty"`
+	CarrierID                     string           `json:"carrier_id,omitempty"`
+	CarrierVersion                string           `json:"carrier_version,omitempty"`
+	BootstrapServerSHA256         string           `json:"bootstrap_server_sha256,omitempty"`
+	BootstrapEmbeddedInputsSHA256 string           `json:"bootstrap_embedded_inputs_sha256,omitempty"`
+	Mode                          string           `json:"mode"`
+	Target                        Target           `json:"target"`
+	Native                        NativeCapability `json:"native"`
+	Files                         []packetFile     `json:"files"`
+	Resources                     []packetResource `json:"embedded_resources"`
+	References                    []assetReference `json:"references"`
+	CanonicalAgentIDs             []string         `json:"canonical_agent_ids"`
+	ExecutionBoundary             string           `json:"execution_boundary"`
 }
 
 func inventory(o Options, c NativeCapability) (packetInventory, error) {
 	p := packetInventory{SchemaVersion: 1, Mode: "mcp_only", Target: o.target, Native: c, ExecutionBoundary: "Methods and helper resources are inert instructions; only implemented admitted MCP operations and qualified native profile execute. Legacy ZIP commands and absent external assets remain unavailable."}
+	if o.Carrier != nil {
+		p.SchemaVersion = 2
+		p.Profile = o.Carrier.Profile
+		p.Protocol = o.Carrier.Protocol
+		p.CarrierID = o.Carrier.ID
+		p.CarrierVersion = o.Carrier.Version
+		p.BootstrapServerSHA256 = digest(o.serverBody)
+		p.BootstrapEmbeddedInputsSHA256 = o.stableIdentity.EmbeddedInputsSHA256
+	}
 	if c.State == "qualified" {
 		p.Mode = "native"
 	}
@@ -316,6 +331,11 @@ func inventory(o Options, c NativeCapability) (packetInventory, error) {
 		p.Resources = append(p.Resources, packetResource{"maestro://agents/" + name, digest(body), len(body)})
 	}
 	sort.Slice(p.Resources, func(i, j int) bool { return p.Resources[i].URI < p.Resources[j].URI })
+	if o.Carrier != nil {
+		if err := compareStableIdentity(p, o.stableIdentity); err != nil {
+			return p, err
+		}
+	}
 	p.References = methodAssetReferences(methods, agents)
 	return p, nil
 }
@@ -374,6 +394,9 @@ func extensionInventory(o Options, manifest []byte, path string) ([]byte, error)
 	}
 	if len(registry) > 0 {
 		p.Files = append(p.Files, packetFile{"managed/trust/release-authority-registry.json", digest(registry), 0600})
+	}
+	if o.Carrier != nil {
+		sort.Slice(p.Files, func(i, j int) bool { return p.Files[i].Path < p.Files[j].Path })
 	}
 	body, err := json.MarshalIndent(p, "", "  ")
 	return append(body, '\n'), err
