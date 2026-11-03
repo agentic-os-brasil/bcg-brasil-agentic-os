@@ -11,6 +11,7 @@ import (
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeagents"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"io"
@@ -60,10 +61,43 @@ func prepare(o Options) (Options, string, error) {
 		return o, "", errors.New("regular native server required")
 	}
 	o.serverBody, o.target, err = readNativeBinary(o.Server)
+	if err != nil {
+		return o, "", err
+	}
+	state, stateErr := installtx.ReadStateForManagedRoot(filepath.Join(o.Binding.UserHome, ".maestro-install"), o.Binding.ProductRoot)
+	if stateErr == nil && state.SchemaVersion == 4 {
+		if digest(o.serverBody) != state.Server.SHA256 || o.Version != state.Release {
+			return o, "", errors.New("packet executable differs from active signed release")
+		}
+		o.Binding.InstalledManifestSHA256 = state.Binding.ManifestSHA256
+		o.Binding.InstalledClientInputsSHA256 = state.Binding.ClientInputsSHA256
+	} else if stateErr != nil && !errors.Is(stateErr, os.ErrNotExist) {
+		return o, "", stateErr
+	}
 	return o, o.target.Platform(), err
 }
 func args(o Options) []string {
-	return []string{"serve", "--product-root", o.Binding.ProductRoot, "--user-home", o.Binding.UserHome, "--workspace", o.Binding.WorkspacePath}
+	command := "serve"
+	if o.Binding.InstalledManifestSHA256 != "" {
+		command = "launch"
+	}
+	return append([]string{command, "--product-root", o.Binding.ProductRoot, "--user-home", o.Binding.UserHome, "--workspace", o.Binding.WorkspacePath}, installedArgs(o.Binding)...)
+}
+func installedArgs(binding product.Options) []string {
+	if binding.InstalledManifestSHA256 == "" && binding.InstalledClientInputsSHA256 == "" {
+		return nil
+	}
+	return []string{"--installed-manifest", binding.InstalledManifestSHA256, "--installed-client-inputs", binding.InstalledClientInputsSHA256}
+}
+func launchCommand(o Options, fallback string) string {
+	if o.Binding.InstalledManifestSHA256 == "" {
+		return fallback
+	}
+	name := "maestro-install"
+	if o.target.OS == "windows" {
+		name += ".exe"
+	}
+	return filepath.Join(o.Binding.ProductRoot, name)
 }
 func BuildPlugin(options Options) error {
 	o, platform, err := prepare(options)
@@ -96,7 +130,7 @@ func buildPluginWithHooks(o Options, platform string, capability NativeCapabilit
 	}
 	for path, value := range map[string]any{
 		".claude-plugin/plugin.json": map[string]any{"name": "maestro-product", "version": o.Version, "description": "Local participant execution workflow", "author": map[string]string{"name": "Agentic OS Brasil"}},
-		".mcp.json":                  map[string]any{"mcpServers": map[string]any{"maestro": map[string]any{"type": "stdio", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/" + name, "args": args(o)}}},
+		".mcp.json":                  map[string]any{"mcpServers": map[string]any{"maestro": map[string]any{"type": "stdio", "command": launchCommand(o, "${CLAUDE_PLUGIN_ROOT}/scripts/"+name), "args": args(o)}}},
 	} {
 		body, _ := json.MarshalIndent(value, "", "  ")
 		if err = os.WriteFile(filepath.Join(o.Destination, path), body, 0600); err != nil {
@@ -312,7 +346,7 @@ func BuildExtension(options Options) error {
 		"manifest_version": "0.3", "name": "maestro-product", "version": o.Version,
 		"description":   "Local participant Maestro execution workflow",
 		"author":        map[string]string{"name": "Agentic OS Brasil"},
-		"server":        map[string]any{"type": "binary", "entry_point": path, "mcp_config": map[string]any{"command": "${__dirname}/" + path, "args": args(o)}},
+		"server":        map[string]any{"type": "binary", "entry_point": path, "mcp_config": map[string]any{"command": launchCommand(o, "${__dirname}/"+path), "args": args(o)}},
 		"compatibility": map[string]any{"platforms": []string{platform}},
 	}, "", "  ")
 	if err != nil {

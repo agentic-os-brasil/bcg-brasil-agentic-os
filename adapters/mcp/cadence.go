@@ -21,7 +21,7 @@ import (
 )
 
 func maintenanceQueries() []any {
-	return []any{variant("maintenance.status", map[string]any{}), variant("maintenance.report", map[string]any{"job_id": map[string]any{"type": "string", "enum": []string{maintenance.MemoryDeepDreamJobID, "memory-retention-check", "skills-index-refresh", "runtime-health-check", "capability-recheck", "runtime-drift-check", maintenance.WikiIncrementalJobID, maintenance.WikiReconcileJobID, maintenance.WikiIntegrityJobID}}}, "job_id")}
+	return []any{variant("maintenance.status", map[string]any{}), variant("maintenance.report", map[string]any{"job_id": map[string]any{"type": "string", "enum": []string{maintenance.UpdateCheckJobID, maintenance.MemoryDeepDreamJobID, "memory-retention-check", "skills-index-refresh", "runtime-health-check", "capability-recheck", "runtime-drift-check", maintenance.WikiIncrementalJobID, maintenance.WikiReconcileJobID, maintenance.WikiIntegrityJobID}}}, "job_id")}
 }
 
 func maintenanceTransitions() []any {
@@ -66,7 +66,7 @@ func (b *Bound) maintenanceService() (*maintenance.Service, error) {
 	return maintenance.NewService(maintenance.ServiceOptions{
 		ProductRoot: b.options.ProductRoot, UserHome: b.options.UserHome,
 		WorkspacePath: b.options.WorkspacePath, LookupEnv: b.options.LookupEnv,
-		Catalog: catalog, Adapter: "local", Now: b.maintenanceClock, CLIVersion: b.options.CLIVersion,
+		Catalog: catalog, Adapter: "local", Now: b.maintenanceClock, CLIVersion: b.options.CLIVersion, InstalledGuard: b.guardPublication, AuthorityRegistryPath: b.options.AuthorityRegistryPath, AuthorityRegistrySHA256: b.options.AuthorityRegistrySHA256,
 	})
 }
 
@@ -241,7 +241,7 @@ func (b *Bound) RunMaintenance(ctx context.Context) (any, error) {
 }
 
 func maintenancePresentation(review maintenance.ProductReview) any {
-	return map[string]any{
+	presentation := map[string]any{
 		"operation": "maintenance." + review.Operation.Kind, "job_id": review.Operation.JobID,
 		"workspace_id": review.WorkspaceID, "expected_revision": review.Operation.ExpectedRevision,
 		"schedule": review.Schedule, "writes": review.Writes,
@@ -249,6 +249,11 @@ func maintenancePresentation(review maintenance.ProductReview) any {
 		"configuration": review.Configuration, "source_state": review.SourceState,
 		"scope": "This exact job and workspace only. Qualification executes once; enrollment authorizes only this schedule and write set. Native scheduling remains separate.",
 	}
+	if review.Operation.JobID == maintenance.UpdateCheckJobID {
+		presentation["signed_source_review"] = review.SourceReview
+		presentation["scope"] = "One attended exact signed-source observation, private candidate staging and bounded diagnosis. No recurring enrollment, release activation, native health or rollout authority. Authenticated higher recalls persist even when expired or payload-incomplete."
+	}
+	return presentation
 }
 
 func maintenanceResult(value any, err error) *mcp.CallToolResult {

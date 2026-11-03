@@ -44,6 +44,14 @@ owner-local file and does not grant filesystem access.
    never calls `maintenance.qualify`, enrolls, runs due work or repairs as part
    of diagnosis. The [maintenance workflow](../maestro-runtime-checkup/SKILL.md)
    describes those separately requested, reviewed actions and operator fallback.
+   For signed-source concerns, inspect an existing `update-check` report only.
+   A blocked qualified launch needs the independently admitted installer's
+   `source-review` recovery path. Doctor does not refresh custody, create a plan,
+   repair, activate or roll back. Expiry, recall and packet currency remain
+   separate from native health and local file presence.
+   Keep a historical update report/qualification tied to its original plan and
+   receipt. `current_pending` is separate verified metadata; it grants no
+   activation. A repeated unchanged check does not establish fresh qualification.
 4. Report one plain-language verdict, the observed finding and one useful next
    action. A qualified detector proves its bounded execution and readback; a
    missing/unavailable native finding stays missing/unavailable. An active job

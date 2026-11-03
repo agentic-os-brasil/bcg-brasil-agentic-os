@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:release-generation:v1",
+  "title": "Maestro signed synced-source generation",
+  "description": "Structural contract only. The owning verifier admits at most 64 KiB of exact generation JSON and authenticates those bytes through the admitted authority registry. Go validation also enforces UTC timestamp ordering, a positive lifetime of at most 30 days, key validity, uint64 sequence bounds and source/release bindings. Freshness is evaluated after confirmed monotonic custody observation; authentic expired metadata can still carry recalls. JSON Schema alone does not express the raw-byte budget or cross-field temporal/cryptographic checks.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "product", "protocol", "issuer", "source", "sequence",
+    "published_at", "expires_at", "release", "manifest_sha256",
+    "client_inputs_sha256", "recalls", "minimum_reader_contract"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "product": {"const": "maestro"},
+    "protocol": {"const": "maestro-synced-generation-v1"},
+    "issuer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "key_id"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "key_id": {"$ref": "#/$defs/identifier"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "channel", "os", "arch"],
+      "properties": {
+        "source_id": {"$ref": "#/$defs/identifier"},
+        "channel": {"enum": ["stable", "beta", "canary"]},
+        "os": {"enum": ["windows", "darwin", "linux"]},
+        "arch": {"enum": ["amd64", "arm64"]}
+      }
+    },
+    "sequence": {"type": "integer", "minimum": 1},
+    "published_at": {"$ref": "#/$defs/utcTime"},
+    "expires_at": {"$ref": "#/$defs/utcTime"},
+    "release": {"$ref": "#/$defs/version"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "client_inputs_sha256": {"$ref": "#/$defs/sha256"},
+    "recalls": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["release", "manifest_sha256"],
+        "properties": {
+          "release": {"$ref": "#/$defs/version"},
+          "manifest_sha256": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    },
+    "minimum_reader_contract": {"const": "maestro-synced-source-v1"}
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "utcTime": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    }
+  }
+}

@@ -17,6 +17,7 @@ import (
 // canonical transaction normalizes these fields into its existing executable
 // operations in memory; modern wire never contains historical CLI metadata.
 type ExecutableIdentity struct {
+	ExecutionContract    string `json:"execution_contract,omitempty"`
 	Version              string `json:"version"`
 	Protocol             string `json:"protocol"`
 	CompatibleBundle     string `json:"compatible_bundle"`
@@ -42,7 +43,7 @@ func serverForManifest(m releasecontract.Manifest, a releasecontract.Artifact) E
 	if !m.Modern() {
 		return ExecutableIdentity{}
 	}
-	return ExecutableIdentity{Version: m.Server.Version, Protocol: m.Server.Protocol, CompatibleBundle: m.Server.CompatibleBundle, CompatibleServer: m.Bundle.CompatibleServer, EmbeddedInputsSHA256: m.Server.EmbeddedInputsSHA256, ArtifactName: a.Name, SHA256: a.SHA256, Size: a.Size}
+	return ExecutableIdentity{ExecutionContract: m.Server.ExecutionContract, Version: m.Server.Version, Protocol: m.Server.Protocol, CompatibleBundle: m.Server.CompatibleBundle, CompatibleServer: m.Bundle.CompatibleServer, EmbeddedInputsSHA256: m.Server.EmbeddedInputsSHA256, ArtifactName: a.Name, SHA256: a.SHA256, Size: a.Size}
 }
 func profileForManifest(m releasecontract.Manifest) string {
 	if m.Modern() {
@@ -55,6 +56,15 @@ func schemaForProfile(profile string, legacy int) int {
 		return 3
 	}
 	return legacy
+}
+
+// Only the historical transaction variants may perform their schema1 migration.
+// Source-aware rejection/readback must leave unsupported owner state untouched.
+func readTransitionState(dataRoot, managedRoot string, sourceAware bool) (State, error) {
+	if sourceAware {
+		return ReadSourceState(dataRoot, managedRoot)
+	}
+	return ReadStateForManagedRoot(dataRoot, managedRoot)
 }
 func executableForProfile(osName, profile string) string {
 	if profile == releasecontract.ModernProfile {
@@ -99,6 +109,15 @@ func marshalVariant(value any, profile string) ([]byte, error) {
 		if v, ok := fields["source_cli_backup"]; ok {
 			fields["source_server_backup"] = v
 			delete(fields, "source_cli_backup")
+		}
+	}
+	if raw, ok := fields["release_binding"]; ok && (bytes.Equal(raw, []byte(`{}`)) || bytes.Equal(raw, []byte(`{"manifest_sha256":"","client_inputs_sha256":"","manifest_json":"","manifest_signature":"","bundle_sha256":"","bundle_size":0,"bundle_archive":""}`))) {
+		delete(fields, "release_binding")
+	}
+	if raw, ok := fields["source_binding"]; ok {
+		var b SourceBinding
+		if json.Unmarshal(raw, &b) == nil && b == (SourceBinding{}) {
+			delete(fields, "source_binding")
 		}
 	}
 	return json.Marshal(fields)
@@ -212,20 +231,31 @@ func (v *ActivationReceipt) UnmarshalJSON(body []byte) error {
 }
 
 func checkModernServer(path, managedRoot string, server ExecutableIdentity) error {
-	if err := verifyRegularFile(path, server.Size, server.SHA256); err != nil {
-		return err
-	}
-	identity, err := releasecontract.ReadServerIdentity(path)
+	identity, err := checkCandidateServer(path, server)
 	if err != nil {
 		return err
 	}
 	if _, err := releaseverify.LoadPinnedAuthorityRegistry(filepath.Join(managedRoot, "trust", "release-authority-registry.json"), identity.AuthorityRegistrySHA256, time.Now); err != nil {
 		return err
 	}
-	if identity.Version != server.Version || identity.Protocol != server.Protocol || identity.CompatibleBundle != server.CompatibleBundle || identity.EmbeddedInputsSHA256 != server.EmbeddedInputsSHA256 {
-		return errors.New("activated server identity does not match authenticated release/independent seed")
-	}
 	return verifyRegularFile(path, server.Size, server.SHA256)
+}
+
+func checkCandidateServer(path string, server ExecutableIdentity) (releasecontract.ServerIdentity, error) {
+	if err := verifyRegularFile(path, server.Size, server.SHA256); err != nil {
+		return releasecontract.ServerIdentity{}, err
+	}
+	identity, err := releasecontract.ReadServerIdentity(path)
+	if err != nil {
+		return releasecontract.ServerIdentity{}, err
+	}
+	if identity.ExecutionContract != server.ExecutionContract || identity.Version != server.Version || identity.Protocol != server.Protocol || identity.CompatibleBundle != server.CompatibleBundle || identity.EmbeddedInputsSHA256 != server.EmbeddedInputsSHA256 {
+		return releasecontract.ServerIdentity{}, errors.New("actual server source-aware identity does not match authenticated release")
+	}
+	if err := verifyRegularFile(path, server.Size, server.SHA256); err != nil {
+		return releasecontract.ServerIdentity{}, err
+	}
+	return identity, nil
 }
 
 // CheckActivatedServer runs the same built-in protocol used by activation.
@@ -244,7 +274,7 @@ func verifyModernPlan(plan ActivationPlan) error {
 	} else if plan.UserHome != "" {
 		return errors.New("legacy plan cannot carry modern home selection")
 	}
-	if !validModernIdentity(plan.Profile, plan.Server) || plan.SchemaVersion != schemaForProfile(plan.Profile, 2) {
+	if !validModernIdentity(plan.Profile, plan.Server) || plan.SchemaVersion != stateSchema(plan.Profile, plan.Binding) {
 		return errors.New("invalid activation profile/schema")
 	}
 	if plan.Profile != "" && (plan.CLIVersion != plan.Server.Version || plan.CLISHA256 != plan.Server.SHA256 || plan.CLISize != plan.Server.Size || plan.CLIArtifactName != plan.Server.ArtifactName) {

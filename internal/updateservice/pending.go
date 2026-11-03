@@ -36,7 +36,7 @@ func StagePending(dataRoot string, current installtx.State, result CheckResult, 
 	if current.ManagedRoot == "" || result.Plan.ID == "" || result.Verified.Directory == "" {
 		return Pending{}, errors.New("installed state and checked update are required")
 	}
-	if result.Plan.SchemaVersion != 2 ||
+	if (result.Plan.SchemaVersion != 2 && result.Plan.SchemaVersion != 3) ||
 		result.Plan.FromRelease != current.Release ||
 		result.Plan.FromChannel != current.Channel ||
 		result.Plan.FromCLIVersion != current.CLIVersion ||
@@ -49,7 +49,7 @@ func StagePending(dataRoot string, current installtx.State, result CheckResult, 
 	if !within(filepath.Join(absoluteDataRoot, "updates"), result.Verified.Directory) {
 		return Pending{}, errors.New("verified release directory is outside owner-data update staging")
 	}
-	activationPlanPath, err := installtx.Prepare(result.Verified, installtx.PrepareOptions{
+	prepareOptions := installtx.PrepareOptions{
 		Transition:         "update",
 		ConfirmationPlanID: result.Plan.ID,
 		FromRelease:        result.Plan.FromRelease,
@@ -60,12 +60,18 @@ func StagePending(dataRoot string, current installtx.State, result CheckResult, 
 		TargetArch:         result.Plan.TargetArch,
 		ManagedRoot:        current.ManagedRoot,
 		DataRoot:           absoluteDataRoot,
-	})
+	}
+	if result.Plan.SchemaVersion == 3 {
+		prepareOptions.UserHome = filepath.Dir(absoluteDataRoot)
+		prepareOptions.Source = result.Plan.Source
+		prepareOptions.SourceStateSHA256 = result.Plan.FromStateSHA256
+	}
+	activationPlanPath, err := installtx.Prepare(result.Verified, prepareOptions)
 	if err != nil {
 		return Pending{}, err
 	}
 	pending := Pending{
-		SchemaVersion: 1, Plan: result.Plan,
+		SchemaVersion: map[bool]int{true: 2, false: 1}[result.Plan.SchemaVersion == 3], Plan: result.Plan,
 		VerifiedDirectory:  filepath.Clean(result.Verified.Directory),
 		ActivationPlanPath: filepath.Clean(activationPlanPath),
 		CreatedAt:          now.UTC(),
@@ -151,7 +157,11 @@ func validatePendingEvidence(
 	if err := updateplan.Validate(pending.Plan); err != nil {
 		return Pending{}, releaseverify.VerifiedRelease{}, installtx.State{}, installtx.PrepareOptions{}, err
 	}
-	current, err := installtx.ReadStateForManagedRoot(dataRoot, managedRoot)
+	readCurrent := installtx.ReadStateForManagedRoot
+	if pending.SchemaVersion == 2 {
+		readCurrent = installtx.ReadSourceState
+	}
+	current, err := readCurrent(dataRoot, managedRoot)
 	if err != nil {
 		return Pending{}, releaseverify.VerifiedRelease{}, installtx.State{}, installtx.PrepareOptions{}, err
 	}
@@ -179,6 +189,14 @@ func validatePendingEvidence(
 		ManagedRoot:        current.ManagedRoot,
 		DataRoot:           dataRoot,
 	}
+	if pending.SchemaVersion == 2 {
+		options.UserHome = filepath.Dir(dataRoot)
+		options.Source = pending.Plan.Source
+		options.SourceStateSHA256 = pending.Plan.FromStateSHA256
+		if err := validateSyncedPending(current, pending, registry); err != nil {
+			return Pending{}, releaseverify.VerifiedRelease{}, installtx.State{}, installtx.PrepareOptions{}, err
+		}
+	}
 	if _, err := installtx.ValidatePrepared(
 		pending.ActivationPlanPath,
 		verified,
@@ -199,7 +217,7 @@ func validatePendingSourcePlan(
 		current, verified.Manifest, pending.Plan.TargetOS, pending.Plan.TargetArch,
 		updateplan.SourceBinding{
 			Provider: pending.Plan.Provider, ProviderReleaseID: pending.Plan.ProviderReleaseID,
-			ManifestSHA256: verified.ManifestSHA256,
+			ManifestSHA256: verified.ManifestSHA256, Modern: modernSource(pending.Plan),
 		},
 	)
 	if err != nil {
@@ -247,6 +265,11 @@ func ReconcilePending(
 		ManagedRoot:        managedRoot,
 		DataRoot:           dataRoot,
 	}
+	if pending.SchemaVersion == 2 {
+		options.UserHome = filepath.Dir(dataRoot)
+		options.Source = pending.Plan.Source
+		options.SourceStateSHA256 = pending.Plan.FromStateSHA256
+	}
 	if _, err := installtx.ValidatePrepared(pending.ActivationPlanPath, verified, options); err != nil {
 		return Pending{}, false, fmt.Errorf("validate reconciled activation: %w", err)
 	}
@@ -291,8 +314,7 @@ func RemovePending(dataRoot, planID string) error {
 }
 
 func validatePending(dataRoot string, pending Pending) error {
-	if pending.SchemaVersion != 1 ||
-		pending.Plan.SchemaVersion != 2 ||
+	if !((pending.SchemaVersion == 1 && pending.Plan.SchemaVersion == 2) || (pending.SchemaVersion == 2 && pending.Plan.SchemaVersion == 3)) ||
 		!pendingPlanIDPattern.MatchString(pending.Plan.ID) ||
 		pending.Plan.State != "available" ||
 		!pending.Plan.ConfirmationRequired ||

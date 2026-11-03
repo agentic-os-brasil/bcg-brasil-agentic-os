@@ -30,6 +30,9 @@ func (b *Bound) registerAgents(s *mcp.Server) {
 			MIMEType:    mime, Size: int64(len(body)),
 			Meta: mcp.Meta{"sha256": fmt.Sprintf("%x", sha256.Sum256(body))},
 		}, func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+			if err := b.validate(); err != nil {
+				return nil, errors.New("agent_resource_unavailable")
+			}
 			if req.Params.URI != uri {
 				return nil, errors.New("agent_resource_unavailable")
 			}

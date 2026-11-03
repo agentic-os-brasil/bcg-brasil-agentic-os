@@ -17,35 +17,42 @@ import (
 )
 
 type Plan struct {
-	SchemaVersion               int    `json:"schema_version"`
-	ID                          string `json:"id"`
-	State                       string `json:"state"`
-	FromRelease                 string `json:"from_release"`
-	FromChannel                 string `json:"from_channel"`
-	FromCLIVersion              string `json:"from_cli_version"`
-	FromBundleVersion           string `json:"from_bundle_version"`
-	ToRelease                   string `json:"to_release"`
-	Channel                     string `json:"channel"`
-	CLIVersion                  string `json:"cli_version"`
-	BundleVersion               string `json:"bundle_version"`
-	CLIArtifact                 string `json:"cli_artifact"`
-	BundleArtifact              string `json:"bundle_artifact"`
-	TargetOS                    string `json:"target_os"`
-	TargetArch                  string `json:"target_arch"`
-	Provider                    string `json:"provider"`
-	ProviderReleaseID           int64  `json:"provider_release_id"`
-	ManifestSHA256              string `json:"manifest_sha256"`
-	RoleMigrationID             string `json:"role_migration_id,omitempty"`
-	CatalogSHA256               string `json:"catalog_sha256,omitempty"`
-	PolicySHA256                string `json:"policy_sha256,omitempty"`
-	WorkspaceMigrationRequired  bool   `json:"workspace_migration_required"`
-	WorkspaceMigrationVersion   int    `json:"workspace_migration_version"`
-	WorkspaceMigrationState     string `json:"workspace_migration_state"`
-	WorkspaceMigrationExecution string `json:"workspace_migration_execution"`
-	ConfirmationRequired        bool   `json:"confirmation_required"`
+	Profile                     string                       `json:"profile,omitempty"`
+	Server                      installtx.ExecutableIdentity `json:"server,omitempty"`
+	Source                      installtx.SourceBinding      `json:"source_binding,omitempty"`
+	FromStateSHA256             string                       `json:"from_state_sha256,omitempty"`
+	ClientInputsSHA256          string                       `json:"client_inputs_sha256,omitempty"`
+	InstallerVersion            string                       `json:"installer_version,omitempty"`
+	SchemaVersion               int                          `json:"schema_version"`
+	ID                          string                       `json:"id"`
+	State                       string                       `json:"state"`
+	FromRelease                 string                       `json:"from_release"`
+	FromChannel                 string                       `json:"from_channel"`
+	FromCLIVersion              string                       `json:"from_cli_version"`
+	FromBundleVersion           string                       `json:"from_bundle_version"`
+	ToRelease                   string                       `json:"to_release"`
+	Channel                     string                       `json:"channel"`
+	CLIVersion                  string                       `json:"cli_version"`
+	BundleVersion               string                       `json:"bundle_version"`
+	CLIArtifact                 string                       `json:"cli_artifact"`
+	BundleArtifact              string                       `json:"bundle_artifact"`
+	TargetOS                    string                       `json:"target_os"`
+	TargetArch                  string                       `json:"target_arch"`
+	Provider                    string                       `json:"provider"`
+	ProviderReleaseID           int64                        `json:"provider_release_id"`
+	ManifestSHA256              string                       `json:"manifest_sha256"`
+	RoleMigrationID             string                       `json:"role_migration_id,omitempty"`
+	CatalogSHA256               string                       `json:"catalog_sha256,omitempty"`
+	PolicySHA256                string                       `json:"policy_sha256,omitempty"`
+	WorkspaceMigrationRequired  bool                         `json:"workspace_migration_required"`
+	WorkspaceMigrationVersion   int                          `json:"workspace_migration_version"`
+	WorkspaceMigrationState     string                       `json:"workspace_migration_state"`
+	WorkspaceMigrationExecution string                       `json:"workspace_migration_execution"`
+	ConfirmationRequired        bool                         `json:"confirmation_required"`
 }
 
 type SourceBinding struct {
+	Modern            *installtx.SourceBinding
 	Provider          string
 	ProviderReleaseID int64
 	ManifestSHA256    string
@@ -58,7 +65,7 @@ func Build(
 	source SourceBinding,
 ) (Plan, error) {
 	if current.Profile != "" || manifest.Modern() {
-		return Plan{}, errors.New("modern standard update unavailable until signed source and pending-state recomputation are implemented")
+		return buildModern(current, manifest, targetOS, targetArch, source)
 	}
 	if source.Provider != "github" ||
 		source.ProviderReleaseID <= 0 ||
@@ -136,6 +143,12 @@ func Build(
 }
 
 func Validate(plan Plan) error {
+	if plan.Profile != "" || plan.SchemaVersion == 3 {
+		return validateModern(plan)
+	}
+	if plan.Server != (installtx.ExecutableIdentity{}) || plan.Source != (installtx.SourceBinding{}) || plan.FromStateSHA256 != "" || plan.ClientInputsSHA256 != "" || plan.InstallerVersion != "" {
+		return errors.New("legacy plan cannot carry source-aware fields")
+	}
 	if plan.SchemaVersion != 2 ||
 		plan.State != "available" ||
 		!plan.ConfirmationRequired ||

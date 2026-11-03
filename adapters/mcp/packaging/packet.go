@@ -164,7 +164,7 @@ func bindingFingerprint(o product.Options) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	body, err := json.Marshal([]any{o.ProductRoot, o.UserHome, o.WorkspacePath, h.Home, w.WorkspaceID, o.AuthorityRegistryPath, o.AuthorityRegistrySHA256})
+	body, err := json.Marshal([]any{o.ProductRoot, o.UserHome, o.WorkspacePath, h.Home, w.WorkspaceID, o.AuthorityRegistryPath, o.AuthorityRegistrySHA256, o.InstalledManifestSHA256, o.InstalledClientInputsSHA256})
 	if err != nil {
 		return "", err
 	}
@@ -172,7 +172,7 @@ func bindingFingerprint(o product.Options) (string, error) {
 }
 
 func hookArguments(o Options, event string) []string {
-	return []string{"hook", "--event", event, "--product-root", o.Binding.ProductRoot, "--user-home", o.Binding.UserHome, "--workspace", o.Binding.WorkspacePath}
+	return append([]string{"hook", "--event", event, "--product-root", o.Binding.ProductRoot, "--user-home", o.Binding.UserHome, "--workspace", o.Binding.WorkspacePath}, installedArgs(o.Binding)...)
 }
 func nativeProfileFiles(o Options) (map[string][]byte, error) {
 	files := map[string][]byte{}

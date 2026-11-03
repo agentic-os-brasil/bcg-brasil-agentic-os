@@ -265,6 +265,20 @@ func Prepare(options Options) (Plan, releaseverify.VerifiedRelease, error) {
 	if err != nil {
 		return Plan{}, releaseverify.VerifiedRelease{}, err
 	}
+	if verified.Manifest.Modern() && verified.Manifest.Server.ExecutionContract != "" {
+		for _, artifact := range verified.Manifest.Artifacts {
+			if artifact.Kind == "mcp_server" && artifact.OS == options.TargetOS && artifact.Arch == options.TargetArch {
+				identity, err := releasecontract.ReadServerIdentity(filepath.Join(verified.Directory, artifact.Name))
+				if err != nil {
+					return Plan{}, releaseverify.VerifiedRelease{}, err
+				}
+				server := verified.Manifest.Server
+				if identity.ExecutionContract != server.ExecutionContract || identity.ExecutionContract != releasecontract.SyncedSourceContract || identity.Version != server.Version || identity.Protocol != server.Protocol || identity.EmbeddedInputsSHA256 != server.EmbeddedInputsSHA256 || identity.CompatibleBundle != server.CompatibleBundle || identity.AuthorityRegistrySHA256 != registryDigest {
+					return Plan{}, releaseverify.VerifiedRelease{}, errors.New("actual signed server lacks the exact source-aware execution contract")
+				}
+			}
+		}
+	}
 	bootstrapperDigest, err := fileSHA256(options.Bootstrapper)
 	if err != nil {
 		return Plan{}, releaseverify.VerifiedRelease{}, err
@@ -312,7 +326,7 @@ func Prepare(options Options) (Plan, releaseverify.VerifiedRelease, error) {
 		plan.Profile = verified.Manifest.Delivery.Profile
 		for _, a := range verified.Manifest.Artifacts {
 			if a.Kind == "mcp_server" && a.OS == options.TargetOS && a.Arch == options.TargetArch {
-				plan.Server = &installtx.ExecutableIdentity{Version: verified.Manifest.Server.Version, Protocol: verified.Manifest.Server.Protocol, CompatibleBundle: verified.Manifest.Server.CompatibleBundle, CompatibleServer: verified.Manifest.Bundle.CompatibleServer, EmbeddedInputsSHA256: verified.Manifest.Server.EmbeddedInputsSHA256, ArtifactName: a.Name, SHA256: a.SHA256, Size: a.Size}
+				plan.Server = &installtx.ExecutableIdentity{ExecutionContract: verified.Manifest.Server.ExecutionContract, Version: verified.Manifest.Server.Version, Protocol: verified.Manifest.Server.Protocol, CompatibleBundle: verified.Manifest.Server.CompatibleBundle, CompatibleServer: verified.Manifest.Bundle.CompatibleServer, EmbeddedInputsSHA256: verified.Manifest.Server.EmbeddedInputsSHA256, ArtifactName: a.Name, SHA256: a.SHA256, Size: a.Size}
 			}
 		}
 		plan.ServerVersion = verified.Manifest.Server.Version

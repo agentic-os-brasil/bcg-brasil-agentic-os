@@ -38,11 +38,14 @@ on:
       - 'internal/updateservice/**'
       - 'dev/release/**'
       - 'internal/releaseverify/**'
+      - 'internal/releaseprovider/**'
       - 'internal/dev/releasepack/**'
       - 'cmd/maestro-docling-pack/**'
       - 'schemas/memory-artifact.schema.json'
       - 'schemas/memory-commit.schema.json'
       - 'schemas/release-manifest-v2.schema.json'
+      - 'schemas/release-generation.schema.json'
+      - 'schemas/maintenance-jobs.schema.json'
       - 'bundles/**'
       - 'LICENSE.md'
       - '.github/workflows/product-mcp.yml'
@@ -84,11 +87,14 @@ on:
       - 'internal/updateservice/**'
       - 'dev/release/**'
       - 'internal/releaseverify/**'
+      - 'internal/releaseprovider/**'
       - 'internal/dev/releasepack/**'
       - 'cmd/maestro-docling-pack/**'
       - 'schemas/memory-artifact.schema.json'
       - 'schemas/memory-commit.schema.json'
       - 'schemas/release-manifest-v2.schema.json'
+      - 'schemas/release-generation.schema.json'
+      - 'schemas/maintenance-jobs.schema.json'
       - 'bundles/**'
       - 'LICENSE.md'
       - '.github/workflows/product-mcp.yml'
@@ -160,7 +166,7 @@ jobs:
         working-directory: adapters/mcp
         # The actual first-install tracer runs separately on an admitted native
         # runner. Elevated Windows CI cannot qualify ordinary-user installation.
-        run: go test ./... -skip '^(TestModernFactoryFirstInstallAndRestart|TestDirectInnerInstallRequiresProductionAuthority)$' -timeout=900s
+        run: go test ./... -skip '^(TestModernFactoryFirstInstallAndRestart|TestDirectInnerInstallRequiresProductionAuthority|TestModernSyncedSourceLifecycle|TestSyncedPublicationInterleavingAndReadOnlyReviews)$' -timeout=900s
       - name: Product module static checks
         working-directory: adapters/mcp
         run: go vet ./...
@@ -214,6 +220,70 @@ jobs:
           passed = {e.get("Test") for e in events if e.get("Action") == "pass"}
           required = {"TestModernFactoryFirstInstallAndRestart", "TestDirectInnerInstallRequiresProductionAuthority"}
           assert required <= passed, "modern actual-process evidence missing: " + repr(required - passed)
+          PYCODE
+
+  modern-synced-update:
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      MAESTRO_SYNCED_UPDATE_BASELINE: ${{ runner.temp }}/maestro-synced-update-baseline
+      MAESTRO_SYNCED_TEST_ROOT: ${{ runner.temp }}/maestro-synced-update
+      MAESTRO_SYNCED_R1_TEST_ROOT: ${{ runner.temp }}/maestro-synced-publication
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: adapters/mcp/go.mod
+      - name: Materialize the exact pre-source-aware public implementation
+        shell: bash
+        run: |
+          git fetch --no-tags origin 8c1ede63fef4b3a5a17d2d4471e4dc5b4f8c37fe
+          mkdir "$MAESTRO_SYNCED_UPDATE_BASELINE"
+          git archive --format=tar 8c1ede63fef4b3a5a17d2d4471e4dc5b4f8c37fe -o "$RUNNER_TEMP/maestro-synced-update-baseline.tar"
+          tar -xf "$RUNNER_TEMP/maestro-synced-update-baseline.tar" -C "$MAESTRO_SYNCED_UPDATE_BASELINE"
+      - name: Signed source, private transport and protected custody contracts
+        run: go test ./internal/releasecontract ./internal/releaseverify ./internal/releaseprovider ./internal/dev/releasepack ./internal/installtx ./internal/updateplan ./internal/updateservice ./internal/installer -run '^(TestSignedGeneration|TestVerifyGeneration|TestGeneration|TestSourceAwareServerIdentity|TestWriteStateCannotDowngradeProtectedSourceCustody|TestSyncedMetadataExactByteAdmissionBudget|TestSourceCustodyWorstAdmittedExactByteEnvelopesRoundTrip)' -count=1 -timeout=180s
+      # Real factory/installer/MCP processes and the preserved old public owner.
+      # Positive native admission uses controlled in-process engineering trust;
+      # the actual default unsigned installer must still refuse independently.
+      - name: Actual signed update, continuation, recovery and compatible rollback
+        working-directory: adapters/mcp
+        shell: bash
+        run: |
+          evidence="$RUNNER_TEMP/maestro-modern-synced-update.jsonl"
+          if ! go test ./setup -run '^TestModernSyncedSourceLifecycle$' -count=1 -json -timeout=900s > "$evidence"; then
+            cat "$evidence"
+            exit 1
+          fi
+          cat "$evidence"
+          python3 - "$evidence" <<'PYCODE'
+          import json, pathlib, sys
+          events = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+          family = "TestModernSyncedSourceLifecycle"
+          assert any(e.get("Action") == "pass" and e.get("Test") == family for e in events), "actual signed lifecycle missing or skipped"
+          skipped = [e.get("Test") for e in events if e.get("Action") == "skip" and (e.get("Test") == family or e.get("Test", "").startswith(family + "/"))]
+          assert not skipped, "actual signed lifecycle has skipped proof: " + repr(skipped)
+          PYCODE
+
+      # Test-only process synchronization preserves the real product identity,
+      # source guards and canonical activation; it adds no production pause flag.
+      - name: Source-aware publication interleaving and read-only legacy refusal
+        working-directory: adapters/mcp
+        shell: bash
+        run: |
+          evidence="$RUNNER_TEMP/maestro-synced-publication.jsonl"
+          if ! go test ./setup -run '^TestSyncedPublicationInterleavingAndReadOnlyReviews$' -count=1 -json -timeout=480s > "$evidence"; then
+            cat "$evidence"
+            exit 1
+          fi
+          cat "$evidence"
+          python3 - "$evidence" <<'PYCODE'
+          import json, pathlib, sys
+          events = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+          family = "TestSyncedPublicationInterleavingAndReadOnlyReviews"
+          assert any(e.get("Action") == "pass" and e.get("Test") == family for e in events), "actual publication/read-only proof missing or skipped"
+          skipped = [e.get("Test") for e in events if e.get("Action") == "skip" and (e.get("Test") == family or e.get("Test", "").startswith(family + "/"))]
+          assert not skipped, "actual publication/read-only proof has skipped cases: " + repr(skipped)
           PYCODE
 
   wiki-maintenance-contracts:
