@@ -48,10 +48,30 @@ installer recovery path; never select another home or execute a synced file.
    Rollback preserves source sequence, known recalls, expiry policy and reader
    floor. Existing schema3 cannot enroll without genuine signed current proof
    and an actual compatible executable; unavailable migration stays no-write.
-6. Regenerate current Code/Desktop packets through canonical packaging after a
-   release change, then restart the client. Cached packets cannot acquire another
-   release's authority. A metadata-only refresh preserves unchanged active client
-   inputs. Expired/recalled source or a changed running executable requires the
+6. Use the installed participant-local Manage Maestro launcher for explicitly
+   requested client setup, update or recovery. Its first console run collects the
+   admitted workspace, local packet destinations and selected Code scope, creates
+   the opaque carrier ID, and presents exact source/materialization reviews.
+   It grants no model shell, arbitrary path selection or confirmation authority.
+   The ordinary release-bound packets retain their exact pins. Stable-local-v1
+   packets use a separate current materialization record: activation or compatible
+   rollback requires checked regeneration from the actual authenticated current
+   server. Between phases, report activation-applied/client-materialization-pending.
+   A metadata-only refresh preserves unchanged active client inputs and needs no
+   regeneration. Read current materialization separately from Code registration,
+   loaded sessions and functional evidence. Code registration uses normal scoped
+   plugin operations with JSON readback and preserves disabled state. Never
+   uninstall/reinstall as an update shortcut, edit native profiles, or infer loading
+   from an exit acknowledgement. Desktop still needs its normal manual extension
+   prompts. An exact compatible stable bundle may be reused after checked current
+   regeneration; external-launcher support remains pending native qualification.
+   A changed carrier/native configuration requires the manual updated-MCPB flow.
+   Opening a file, operator installation confirmation, connection and functional
+   operation are separate evidence. Restart/reload/reconnect is separately needed.
+   Explicit clients-reconcile uses its exact review to verify actual packets and
+   host readback, reclaiming only an installation lock with a verified dead owner;
+   startup/status never recover it. Unknown ownership preserves files and refuses.
+   Expired/recalled source or a changed running executable requires the
    independent recovery route; local file presence does not establish freshness.
    Exhausted recall custody stays denied after newer metadata or rollback; source
    diagnosis remains usable, while clearing that denial needs a separate supported

@@ -131,3 +131,9 @@ refusal. Preserve the existing state for diagnosis instead of using the legacy
 updater, copying over an active server or clearing recall/custody state. Client
 registration/recovery, ordinary-user Windows and actual Code/Desktop acceptance
 retain their separate delivery gates.
+
+After admitted installation, use the [participant client-management console](product-clients.md)
+for explicit source enrollment, current packet materialization, supported Code
+registration, Desktop handoff and exact interrupted-work reconciliation. It
+collects ordinary local choices and generates the carrier ID; participants do
+not need to hand-write request JSON. Native loading remains separately verified.

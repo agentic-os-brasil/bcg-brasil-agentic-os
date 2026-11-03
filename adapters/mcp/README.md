@@ -15,7 +15,10 @@ evidence does not establish native signing, client registration/loading or the
 complete modern update lifecycle. The [signed-source guide](../../docs/product-synced-source.md)
 records the generation publisher, synced-folder layout and monotonic local
 custody contract. Delivery evidence tracks source review, hosted CI, actual
-client admission, signing and publication independently.
+client admission, signing and publication independently. The
+[participant client console](../../docs/product-clients.md) composes exact
+materialization, scoped Code registration, Desktop handoff and recovery; stable
+connector reuse remains subject to actual native compatibility qualification.
 
 Reviewed memory adds capture, paged discovery/search/readback, bounded context,
 daily/weekly consolidation and revision-aware correction/deletion/retention.
@@ -33,7 +36,8 @@ Qualified maintenance adds exact-job qualification, separate recurring enrollmen
 foreground due execution, bounded reports and revision-aware pause/resume/revoke.
 Read the [maintenance workflow and operator fallback](../../docs/product-mcp-maintenance.md)
 when inspecting availability, authorizing a job or recovering a refused transition.
-Eleven deterministic bindings execute through one canonical service; the remaining
+Twelve source bindings, including attended update-check, execute through one
+canonical service; the remaining
 catalog jobs and native background scheduling retain their separate gates.
 
 Local document conversion adds immutable scoped artifacts, bounded UTF-8 readback
