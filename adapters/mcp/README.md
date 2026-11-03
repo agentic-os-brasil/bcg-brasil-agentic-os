@@ -19,6 +19,12 @@ engine. Read the [content journey and local fallback guide](../../docs/product-m
 The initial authenticated runtime capability is Darwin-arm64 DOCX; unseeded or
 unsupported runtime inputs remain unavailable without blocking unrelated work.
 
+Read the [native plugin operator guide](../../docs/product-native-plugin.md) for
+explicit native-review and native-qualify-and-build commands, actual target
+binding, data/cost review and complete packet inventories. Plain packaging
+remains no-probe and MCP-only without actual host admission; MCPB carries the
+shared server/resources without Code agents/hooks or Desktop skill installation.
+
 Build from this directory with `go build -o /absolute/local/path/maestro-mcp ./cmd/maestro-mcp`.
 The installed product directory and owner directory must already exist. Choose a
 new workspace path outside the product and private state. Run the binary explicitly:

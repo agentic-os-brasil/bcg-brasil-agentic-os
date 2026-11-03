@@ -1303,3 +1303,26 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: This avoids a second signature, key registry or updater. It requires inventory and platform selection, isolated bounded execution, an actual seeded MCP build path and real offline fixture acceptance. Engineering authorities prove integration only, never production trust. Production organization keys, portable installation and native platform qualification remain distinct requirements; DOCX evidence does not close PDF/OCR or the full format matrix.
 - Refs: DOCL; PYUV; UVIN; specs/010-local-ingestion-runtime.md; specs/031-markitdown-ingestion-adapter.md; specs/061-product-local-content.md; internal/releaseverify; internal/releasecontract; internal/ingest
 - Supersedes: none
+
+
+## NPHK - Bound native plugin profile with explicit host admission
+
+- Date: 2026-11-02
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The product packet has methods but no production native-specialist guard caller, while old adapter routes reference a removed CLI. Shared prompt files cannot establish supported host behavior or review custody.
+- Decision: Reuse one canonical agent projection and the existing admitted MCP executable for the Code hook adapter. The product profile uses bounded sequential maestro_planner; native_advisory remains separate. Project six specialists with Gamma limited to tool-free packet analysis and Maestro retained as session hub. Native agents/hooks require a concrete admitted host/profile and Code >=2.1.295 direct exec-form fail-closed enforcement; unknown, unsupported or unqualified hosts receive functional MCP-only packets. SessionStart remains read-only and native stop events never certify artifacts, verdicts or execution completion.
+- Consequences: The factory must implement real native registration/qualification and complete payload closure before activation. Compiled command or fixture results do not qualify a host. Existing workspace ownership, native permissions and canonical source policies remain effective; signing, Windows/device/runtime and pilot evidence stay separate.
+- Refs: specs/063-product-native-plugin.md, docs/plans/2026-11-02-product-native-plugin.md, docs/proposals/004-plugin-mcp-distribution/specs/spec-B-plugin-packaging.md
+- Supersedes: none
+
+## NOBS - Keep native local observation separate from managed device authority
+
+- Date: 2026-11-03
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The native producer can bind supported local source files and observe actual hook enforcement, while the host protocol does not expose a complete remote or OS-delivered managed-policy closure. Inventing an absence signal would fabricate evidence, and an unconditional unknown-policy refusal would make the concrete local producer unusable.
+- Decision: Qualify only the completely bound supported local instruction/settings closure and actual guard/failure behavior observed on the selected host. Include an explicit digest-bound UNATTESTED remote/OS-managed-policy fact and startup/context disclosure in the full review. Bind known local managed inputs or refuse unsupported cases before effects. Keep normal permissions and profile unchanged; confirmation accepts the disclosed experiment but creates no enterprise-policy evidence or rollout authority.
+- Consequences: Existing explicit local auto-memory disablement is not proof of complete managed-policy behavior. Unknown external policy is never promoted to verified absence; known unsupported local sources still withhold native generation. Actual native observation, fixture evidence, enterprise device-policy acceptance and production signing/rollout remain separate. No alternate profile, caller approval flag, new network inspection or automatic copied-packet revocation follows from this contract.
+- Refs: NPHK; specs/063-product-native-plugin.md; docs/product-native-plugin.md; docs/plans/2026-11-02-product-native-plugin.md
+- Supersedes: none
