@@ -30,7 +30,7 @@
 | Registro de Feedback | Registra o feedback recebido e aplica aos objetivos de desenvolvimento | `skills/feedback-capture/SKILL.md` |
 | Buscar Trabalho Anterior | Recupera um deck ou material anterior pedido explicitamente | `skills/find-prior-work/SKILL.md` |
 | Avaliação FoDAIS | Conduz a entrevista estruturada de CDC para BCG X FoDAIS/Sr. FoDAIS | `skills/fodais-performance-review/SKILL.md` |
-| Ingestão de Conteúdo | Extrai documentos profissionais localmente e com segurança | `skills/ingest-content/SKILL.md` |
+| Ingestão de Conteúdo | Converte formatos locais verificados em conhecimento revisado | `skills/ingest-content/SKILL.md` |
 | Perfil de Interação | Aplica a preferência de comunicação e de detalhe do owner no Maestro | `skills/interaction-profile/SKILL.md` |
 | Investigar | Encontra a causa raiz de um resultado errado ou inesperado | `skills/investigate/SKILL.md` |
 | Aprender com os Logs | Lê conversas anteriores com o Claude para propor rascunhos ou atualizações ao perfil do dono, sempre com confirmação individual | `skills/learn-from-logs/SKILL.md` |
