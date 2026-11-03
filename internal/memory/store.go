@@ -42,6 +42,9 @@ func (engine *Engine) activate(workspaceID string, artifacts []Artifact) error {
 	if err := validateWorkspaceID(workspaceID); err != nil {
 		return err
 	}
+	if _, err := engine.preparePrivateWikiCohort(workspaceID); err != nil {
+		return err
+	}
 	barrier, err := engine.readVisibility(workspaceID)
 	if err != nil {
 		return err
@@ -142,6 +145,9 @@ func (engine *Engine) activate(workspaceID string, artifacts []Artifact) error {
 		}
 		if after.Generation != barrier.Generation {
 			return ErrCaptureConflict
+		}
+		if err := engine.publishPrivateWikiCommitIntent(workspaceID, commitName, manifest); err != nil {
+			return err
 		}
 		return memoryRename(pending, filepath.Join(commitsRoot, commitName))
 	}
@@ -262,39 +268,44 @@ func (engine *Engine) readArtifactByKey(workspaceID, key string) (Artifact, stri
 }
 
 func (engine *Engine) readArtifactFromManifest(workspaceID string, manifest CommitManifest, key string) (Artifact, string, error) {
+	artifact, path, _, err := engine.readArtifactFromManifestPayload(workspaceID, manifest, key)
+	return artifact, path, err
+}
+
+func (engine *Engine) readArtifactFromManifestPayload(workspaceID string, manifest CommitManifest, key string) (Artifact, string, []byte, error) {
 	if manifest.WorkspaceID != workspaceID {
-		return Artifact{}, "", errors.New("manifest workspace mismatch")
+		return Artifact{}, "", nil, errors.New("manifest workspace mismatch")
 	}
 	barrier, err := engine.readVisibility(workspaceID)
 	if err != nil {
-		return Artifact{}, "", err
+		return Artifact{}, "", nil, err
 	}
 	if manifest.VisibilityRevision != barrier.Generation {
-		return Artifact{}, "", os.ErrNotExist
+		return Artifact{}, "", nil, os.ErrNotExist
 	}
 	relative, ok := manifest.Artifacts[key]
 	if !ok {
-		return Artifact{}, "", os.ErrNotExist
+		return Artifact{}, "", nil, os.ErrNotExist
 	}
 	clean := filepath.Clean(filepath.FromSlash(relative))
 	if filepath.IsAbs(clean) || !strings.HasPrefix(filepath.ToSlash(clean), "versions/") {
-		return Artifact{}, "", errors.New("artifact path escapes memory versions")
+		return Artifact{}, "", nil, errors.New("artifact path escapes memory versions")
 	}
 	path := filepath.Join(engine.workspaceRoot(workspaceID), filepath.FromSlash(relative))
-	artifact, err := engine.readArtifact(path)
+	artifact, body, err := engine.readArtifactPayload(path)
 	if err == nil {
 		if artifact.WorkspaceID != workspaceID || artifactKey(artifact) != key || artifact.VisibilityRevision != manifest.VisibilityRevision {
-			return Artifact{}, "", errors.New("artifact does not match selected manifest")
+			return Artifact{}, "", nil, errors.New("artifact does not match selected manifest")
 		}
 		after, e := engine.readVisibility(workspaceID)
 		if e != nil {
-			return Artifact{}, "", e
+			return Artifact{}, "", nil, e
 		}
 		if after.Generation != manifest.VisibilityRevision {
-			return Artifact{}, "", os.ErrNotExist
+			return Artifact{}, "", nil, os.ErrNotExist
 		}
 	}
-	return artifact, path, err
+	return artifact, path, body, err
 }
 
 func emptyVisibleManifest(workspaceID string, revision uint64) CommitManifest {
