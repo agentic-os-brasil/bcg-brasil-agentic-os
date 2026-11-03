@@ -39,6 +39,10 @@ orders the complete implementation and records external qualification gates.
 For home/locator conflicts while preparing that work, use the read-only
 [data-home diagnostic](docs/development/data-home-inspection.md).
 
+The [native plugin operator guide](docs/product-native-plugin.md) covers exact-host
+review and qualification, MCP-only fallback and packet contents. Controlled
+process tests remain separate from actual native-client and release acceptance.
+
 The Tech Core now includes the complete pinned
 [Pocock engineering method set](docs/onboarding/pocock-methods.md), with native
 discovery, method resources and integrity-aware installation. Package and native

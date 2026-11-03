@@ -159,8 +159,8 @@ func TestCompleteMethodPackets(t *testing.T) {
 	}
 	for _, id := range []string{"yoda", "client-delivery-gate"} {
 		method, err := os.ReadFile(filepath.Join(opts.Destination, "skills", id, "SKILL.md"))
-		if err != nil || !bytes.Contains(method, []byte("subagent_type: \"yoda\"")) || bytes.Contains(method, []byte("subagent_type: \"maestro-product:yoda\"")) {
-			t.Errorf("native Agent identity changed during Skill projection: %s", id)
+		if err != nil || !bytes.Contains(method, []byte("subagent_type: \"maestro-product:yoda\"")) || bytes.Contains(method, []byte("subagent_type: \"yoda\"")) {
+			t.Errorf("native Agent invocation lacks exact plugin namespace: %s", id)
 		}
 	}
 	grill, err := os.ReadFile(filepath.Join(opts.Destination, "skills/pocock-grill-with-docs/SKILL.md"))
@@ -205,8 +205,8 @@ func TestCompleteMethodPackets(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer archive.Close()
-	if len(archive.File) != 2 {
-		t.Fatalf("MCPB must contain only manifest/server: %d", len(archive.File))
+	if len(archive.File) != 3 {
+		t.Fatalf("MCPB must contain manifest/server/typed inventory: %d", len(archive.File))
 	}
 	for _, f := range archive.File {
 		r, err := f.Open()
@@ -228,6 +228,11 @@ func TestCompleteMethodPackets(t *testing.T) {
 			}
 			if json.Unmarshal(content, &manifest) != nil || !reflect.DeepEqual(manifest.Server.Config.Args, wantArgs) {
 				t.Fatal("MCPB binding changed")
+			}
+		} else if f.Name == "maestro-packet.json" {
+			var inventory map[string]any
+			if json.Unmarshal(content, &inventory) != nil || inventory["mode"] != "mcp_only" {
+				t.Fatal("MCPB inventory must preserve MCP-only boundary")
 			}
 		} else {
 			binary, err := os.ReadFile(server)
