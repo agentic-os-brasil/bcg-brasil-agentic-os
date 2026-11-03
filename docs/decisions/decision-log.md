@@ -1326,3 +1326,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The index lives under home/brain/runtime/workspaces/<workspace-id>/skills-index and preserves factory generated assets. Domain/control/lease publication guards apply to every report. Native capability, health, installed-source authority and diagnostic execution remain distinct evidence. Deep-dream enrollment never grants future lifetime-text approval; the existing exact per-candidate owner review remains authoritative.
 - Refs: specs/012-skills-index.md, specs/062-product-maintenance-service.md, docs/plans/2026-11-02-product-maintenance-service.md
 - Supersedes: none
+
+## PWKC - Compile source-owned private memory navigation under local authority
+
+- Date: 2026-11-03
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Governed workspace memory and denial barriers now exist, while the private wiki compiler, durable source events and complete derived publication do not. The current product admits a private local home and registered workspace, without establishing enterprise tenant or person identity.
+- Decision: Approve one deterministic, model-free private workspace-memory compiler using a separately recognized private-memory-local-v1 profile and explicit local-home-workspace authority. Select only eligible rollups from the newest valid canonical commit; bind opaque keyed references to the actual admitted scope, exact source versions and denial Generation. Keep the pure compiler separate while memory owns snapshot, outbox, confined publication/readback and retirement under its fixed .private-wiki subtree. Publish commit intents before source visibility and cumulative denial events in the same checkpoint as their barrier. Use the declared strict checkpoint cohort, exact-parent graph publication and established memory/control/lease order.
+- Consequences: Source/output budgets and unknown security metadata fail closed. Any changed committed source or denial hides the entire old view; raw capture append alone does not. Denial retires derived historical bodies and failed cleanup remains unavailable and visibly incomplete. Legacy source recovery is labelled reconciliation; old strict writers refuse the protected new checkpoint. No enterprise identity, raw-capture synthesis, external model/provider, cross-owner composition or authored/owner-global source is implied. Three actual maintenance bindings and bounded product readback complete this delivery; native/platform/release evidence stays separate.
+- Refs: specs/008-wiki-update-okf.md; docs/plans/2026-11-03-private-memory-wiki.md; internal/memory; internal/privatewiki; WIKI; OKFW; ATLS; https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/782c937447bc1a822cb5330142c37fb629a59adb/okf/SPEC.md
+- Supersedes: none
