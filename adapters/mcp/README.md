@@ -13,11 +13,24 @@ daily/weekly consolidation and revision-aware correction/deletion/retention.
 Read the [memory journey and local fallback guide](../../docs/product-mcp-memory.md).
 Explicit `init` prepares its fixed authority; queries/startup never bootstrap it.
 
+Qualified maintenance adds exact-job qualification, separate recurring enrollment,
+foreground due execution, bounded reports and revision-aware pause/resume/revoke.
+Read the [maintenance workflow and operator fallback](../../docs/product-mcp-maintenance.md)
+when inspecting availability, authorizing a job or recovering a refused transition.
+Eight deterministic bindings execute through one canonical service; the remaining
+catalog jobs and native background scheduling retain their separate gates.
+
 Local document conversion adds immutable scoped artifacts, bounded UTF-8 readback
 and reviewed workspace knowledge creation/append through the canonical atlas
 engine. Read the [content journey and local fallback guide](../../docs/product-mcp-content.md).
 The initial authenticated runtime capability is Darwin-arm64 DOCX; unseeded or
 unsupported runtime inputs remain unavailable without blocking unrelated work.
+
+Read the [native plugin operator guide](../../docs/product-native-plugin.md) for
+explicit native-review and native-qualify-and-build commands, actual target
+binding, data/cost review and complete packet inventories. Plain packaging
+remains no-probe and MCP-only without actual host admission; MCPB carries the
+shared server/resources without Code agents/hooks or Desktop skill installation.
 
 Build from this directory with `go build -o /absolute/local/path/maestro-mcp ./cmd/maestro-mcp`.
 The installed product directory and owner directory must already exist. Choose a

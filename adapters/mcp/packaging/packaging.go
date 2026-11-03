@@ -5,13 +5,11 @@ import (
 	"archive/zip"
 	"bytes"
 	"crypto/sha256"
-	"debug/elf"
-	"debug/macho"
-	"debug/pe"
 	"encoding/json"
 	"errors"
 	"fmt"
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeagents"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
@@ -28,6 +26,9 @@ import (
 type Options struct {
 	Destination, Server, Version string
 	Binding                      product.Options
+	NativeHost                   *NativeHost
+	serverBody                   []byte
+	target                       Target
 }
 
 func prepare(o Options) (Options, string, error) {
@@ -58,8 +59,8 @@ func prepare(o Options) (Options, string, error) {
 	if err != nil || !info.Mode().IsRegular() {
 		return o, "", errors.New("regular native server required")
 	}
-	platform, err := binaryPlatform(o.Server)
-	return o, platform, err
+	o.serverBody, o.target, err = readNativeBinary(o.Server)
+	return o, o.target.Platform(), err
 }
 func args(o Options) []string {
 	return []string{"serve", "--product-root", o.Binding.ProductRoot, "--user-home", o.Binding.UserHome, "--workspace", o.Binding.WorkspacePath}
@@ -69,6 +70,18 @@ func BuildPlugin(options Options) error {
 	if err != nil {
 		return err
 	}
+	capability := nativeCapability(o)
+	return buildPlugin(o, platform, capability)
+}
+
+func buildPlugin(o Options, platform string, capability NativeCapability) error {
+	return buildPluginWithHooks(o, platform, capability, nil)
+}
+
+// Qualification changes only its candidate hook config. Inventory is computed
+// after the exact final candidate bytes, never before a post-build mutation.
+func buildPluginWithHooks(o Options, platform string, capability NativeCapability, hookOverride []byte) error {
+	var err error
 	if err = os.Mkdir(o.Destination, 0700); err != nil {
 		return err
 	}
@@ -78,7 +91,7 @@ func BuildPlugin(options Options) error {
 		}
 	}
 	name := binaryName(platform)
-	if err = copyBinary(o.Server, filepath.Join(o.Destination, "scripts", name)); err != nil {
+	if err = writePacketFile(o.Destination, "scripts/"+name, o.serverBody, 0700); err != nil {
 		return err
 	}
 	for path, value := range map[string]any{
@@ -109,7 +122,27 @@ func BuildPlugin(options Options) error {
 			return err
 		}
 	}
-	return writeMethods(o)
+	if err = writeMethods(o); err != nil {
+		return err
+	}
+	if err = writeCanonicalAgents(o.Destination); err != nil {
+		return err
+	}
+	if capability.State == "qualified" || capability.State == "qualification_candidate" {
+		files, err := nativeProfileFiles(o)
+		if err != nil {
+			return err
+		}
+		if hookOverride != nil {
+			files["hooks/hooks.json"] = hookOverride
+		}
+		for path, body := range files {
+			if err := writePacketFile(o.Destination, path, body, 0600); err != nil {
+				return err
+			}
+		}
+	}
+	return writePluginInventory(o, capability)
 }
 
 const operator = `---
@@ -132,25 +165,6 @@ description: Resume paused Maestro execution in another session or client.
 Read maestro_context, list executions and ask which item only when ambiguous. Read execution.next for the selected item. If paused, call execution.resume with the current expected_revision, then read execution.next again. Read execution.contract to discover every criterion ID and workspace-relative path. Continue using the returned new attempt_id and contract metadata; preserve the prior checkpoint and owner scope. A stale writer must reread and reconcile.
 `
 
-// Header validation identifies the declared platform; it does not attest code
-// signing, native host execution, Desktop acceptance or Windows qualification.
-func binaryPlatform(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	if m, err := macho.NewFile(f); err == nil && m.Type == macho.TypeExec && (m.Cpu == macho.CpuArm64 || m.Cpu == macho.CpuAmd64) {
-		return "darwin", nil
-	}
-	if p, err := pe.NewFile(f); err == nil && (p.Machine == pe.IMAGE_FILE_MACHINE_AMD64 || p.Machine == pe.IMAGE_FILE_MACHINE_ARM64) && p.Characteristics&0x0002 != 0 && p.Characteristics&0x2000 == 0 {
-		return "win32", nil
-	}
-	if e, err := elf.NewFile(f); err == nil && e.Class == elf.ELFCLASS64 && (e.Machine == elf.EM_X86_64 || e.Machine == elf.EM_AARCH64) && (e.Type == elf.ET_EXEC || e.Type == elf.ET_DYN) {
-		return "linux", nil
-	}
-	return "", errors.New("server must be a supported 64-bit native executable (Mach-O, PE or ELF)")
-}
 func binaryName(platform string) string {
 	if platform == "win32" {
 		return "maestro-mcp.exe"
@@ -176,6 +190,10 @@ func writeMethods(o Options) error {
 			target := filepath.Join(o.Destination, filepath.FromSlash(path))
 			if strings.HasSuffix(relative, ".md") {
 				body = namespaceMethodReferences(body, "maestro-product", reference)
+				body, err = claudeagents.ProjectAgentInvocations(body, claudeagents.PluginNamespace)
+				if err != nil {
+					return err
+				}
 			}
 			if relative == "SKILL.md" {
 				end := bytes.Index(body[4:], []byte("\n---\n"))
@@ -300,11 +318,6 @@ func BuildExtension(options Options) error {
 	if err != nil {
 		return err
 	}
-	binary, err := os.Open(o.Server)
-	if err != nil {
-		return err
-	}
-	defer binary.Close()
 	artifact, err := os.OpenFile(o.Destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return fmt.Errorf("destination must be new; nothing overwritten: %w", err)
@@ -312,13 +325,20 @@ func BuildExtension(options Options) error {
 	archive := zip.NewWriter(artifact)
 	writeErr := addEntry(archive, "manifest.json", 0600, bytes.NewReader(append(manifest, '\n')))
 	if writeErr == nil {
-		writeErr = addEntry(archive, path, 0700, binary)
+		writeErr = addEntry(archive, path, 0700, bytes.NewReader(o.serverBody))
 	}
 	if writeErr == nil {
 		registry, err := packagedAuthority(o)
 		writeErr = err
 		if writeErr == nil && len(registry) > 0 {
 			writeErr = addEntry(archive, "managed/trust/release-authority-registry.json", 0600, bytes.NewReader(registry))
+		}
+	}
+	if writeErr == nil {
+		inventory, err := extensionInventory(o, manifest, path)
+		writeErr = err
+		if err == nil {
+			writeErr = addEntry(archive, "maestro-packet.json", 0600, bytes.NewReader(inventory))
 		}
 	}
 	return errors.Join(writeErr, archive.Close(), artifact.Close())
@@ -336,19 +356,6 @@ func addEntry(archive *zip.Writer, name string, mode os.FileMode, input io.Reade
 func contains(parent, child string) bool {
 	relative, err := filepath.Rel(parent, child)
 	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
-}
-func copyBinary(source, destination string) error {
-	in, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	out, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0700)
-	if err != nil {
-		return err
-	}
-	_, copyErr := io.Copy(out, in)
-	return errors.Join(copyErr, out.Close())
 }
 
 // Packaging carries only the independently pinned public registry, never runtime or workspace state.

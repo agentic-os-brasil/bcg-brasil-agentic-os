@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -51,9 +52,9 @@ func TestCompleteMethodPackets(t *testing.T) {
 	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: ws, DataRoot: filepath.Join(h.Home, "state")}); err != nil {
 		t.Fatal(err)
 	}
-	server, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
+	server := filepath.Join(base, "maestro-mcp")
+	if output, err := exec.Command("go", "build", "-o", server, "../cmd/maestro-mcp").CombinedOutput(); err != nil {
+		t.Fatalf("rebuild product server: %s: %v", output, err)
 	}
 	opts := packaging.Options{Destination: filepath.Join(base, "plugin"), Server: server, Version: "0.2.0", Binding: product.Options{ProductRoot: prod, UserHome: home, WorkspacePath: ws, LookupEnv: lookup}}
 	if err := packaging.BuildPlugin(opts); err != nil {
@@ -137,6 +138,26 @@ func TestCompleteMethodPackets(t *testing.T) {
 				if !bytes.Contains(installed, []byte("../../METHODS.md")) {
 					t.Fatalf("method authority pointer missing: %s", id)
 				}
+				switch id {
+				case "dream-memory", "maestro-runtime-checkup", "maestro-environment-setup", "maestro-doctor":
+					// Compare the complete recipe against the embedded source, removing
+					// only the separately checked authority paragraph and invocation
+					// namespace/sigil. A valid hash of stale/truncated text is insufficient.
+					projected := installed[end:]
+					authorityEnd := bytes.Index(projected, []byte("\n\n"))
+					if authorityEnd < 0 {
+						t.Fatalf("method authority paragraph incomplete: %s", id)
+					}
+					projected = projected[authorityEnd+1:]
+					projected = bytes.ReplaceAll(projected, []byte("maestro-product:"), nil)
+					expected := append([]byte(nil), canonical[end:]...)
+					for _, methodID := range want {
+						expected = bytes.ReplaceAll(expected, []byte("$"+methodID), []byte("/"+methodID))
+					}
+					if !bytes.Equal(projected, expected) {
+						t.Fatalf("complete maintenance recipe differs from canonical bytes: %s", id)
+					}
+				}
 			}
 		}
 	}
@@ -159,8 +180,8 @@ func TestCompleteMethodPackets(t *testing.T) {
 	}
 	for _, id := range []string{"yoda", "client-delivery-gate"} {
 		method, err := os.ReadFile(filepath.Join(opts.Destination, "skills", id, "SKILL.md"))
-		if err != nil || !bytes.Contains(method, []byte("subagent_type: \"yoda\"")) || bytes.Contains(method, []byte("subagent_type: \"maestro-product:yoda\"")) {
-			t.Errorf("native Agent identity changed during Skill projection: %s", id)
+		if err != nil || !bytes.Contains(method, []byte("subagent_type: \"maestro-product:yoda\"")) || bytes.Contains(method, []byte("subagent_type: \"yoda\"")) {
+			t.Errorf("native Agent invocation lacks exact plugin namespace: %s", id)
 		}
 	}
 	grill, err := os.ReadFile(filepath.Join(opts.Destination, "skills/pocock-grill-with-docs/SKILL.md"))
@@ -193,6 +214,18 @@ func TestCompleteMethodPackets(t *testing.T) {
 	if !reflect.DeepEqual(pluginConfig.Servers["maestro"].Args, wantArgs) {
 		t.Fatal("plugin binding changed")
 	}
+	serverBytes, err := os.ReadFile(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverName := "maestro-mcp"
+	if runtime.GOOS == "windows" {
+		serverName += ".exe"
+	}
+	pluginServer, err := os.ReadFile(filepath.Join(opts.Destination, "scripts", serverName))
+	if err != nil || !bytes.Equal(serverBytes, pluginServer) {
+		t.Fatal("Code plugin server differs from selected shared executable")
+	}
 	if runtime.GOOS != "darwin" {
 		return
 	}
@@ -205,8 +238,8 @@ func TestCompleteMethodPackets(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer archive.Close()
-	if len(archive.File) != 2 {
-		t.Fatalf("MCPB must contain only manifest/server: %d", len(archive.File))
+	if len(archive.File) != 3 {
+		t.Fatalf("MCPB must contain manifest/server/typed inventory: %d", len(archive.File))
 	}
 	for _, f := range archive.File {
 		r, err := f.Open()
@@ -228,6 +261,11 @@ func TestCompleteMethodPackets(t *testing.T) {
 			}
 			if json.Unmarshal(content, &manifest) != nil || !reflect.DeepEqual(manifest.Server.Config.Args, wantArgs) {
 				t.Fatal("MCPB binding changed")
+			}
+		} else if f.Name == "maestro-packet.json" {
+			var inventory map[string]any
+			if json.Unmarshal(content, &inventory) != nil || inventory["mode"] != "mcp_only" {
+				t.Fatal("MCPB inventory must preserve MCP-only boundary")
 			}
 		} else {
 			binary, err := os.ReadFile(server)

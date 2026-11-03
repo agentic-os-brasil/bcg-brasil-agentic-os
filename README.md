@@ -39,6 +39,10 @@ orders the complete implementation and records external qualification gates.
 For home/locator conflicts while preparing that work, use the read-only
 [data-home diagnostic](docs/development/data-home-inspection.md).
 
+The [native plugin operator guide](docs/product-native-plugin.md) covers exact-host
+review and qualification, MCP-only fallback and packet contents. Controlled
+process tests remain separate from actual native-client and release acceptance.
+
 The Tech Core now includes the complete pinned
 [Pocock engineering method set](docs/onboarding/pocock-methods.md), with native
 discovery, method resources and integrity-aware installation. Package and native
@@ -357,6 +361,14 @@ gate is `go run ./dev/harness validate`; the complete repository gate is
 mergeability or pilot readiness.
 
 ### Automatic maintenance, with honest boundaries
+
+The MCP product now binds eight deterministic jobs to the canonical maintenance
+service: light/deep memory consolidation, checkpoint, retention diagnosis, installed
+skills indexing and runtime health/capability/drift diagnosis. For status, exact
+qualification, separate enrollment, due execution and pause/resume/revoke, follow
+the [product maintenance workflow](docs/product-mcp-maintenance.md). It includes
+the local operator fallback when trusted client confirmation is unavailable.
+Foreground execution, native wake behavior and release qualification are separate.
 
 The maintenance plane shows whether prebuilt jobs are actually executable.
 Platform-neutral job contracts are declared in `adapters/` as disabled

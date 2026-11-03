@@ -36,7 +36,9 @@ func main() {
 			fmt.Fprintln(os.Stderr, "maestro: hook unavailable; inspect admitted state before retrying")
 			os.Exit(product.HookExitCode(event))
 		}
-		if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "knowledge-") {
+		if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "maintenance-") {
+			fmt.Fprintln(os.Stderr, "maestro: maintenance operation refused; inspect maintenance-status, review JSON stdin with maintenance-review, then maintenance-apply with the same request, exact --review-digest and explicit --confirm")
+		} else if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "knowledge-") {
 			fmt.Fprintln(os.Stderr, "maestro: knowledge operation refused; read knowledge-review from JSON stdin, then use knowledge-apply with the same request, exact --review-digest and explicit --confirm")
 		} else if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "memory-") {
 			fmt.Fprintln(os.Stderr, "maestro: memory operation refused; read the current private memory-review from JSON stdin, then retry memory-apply with the same request, its --review-digest and explicit --confirm")
@@ -61,6 +63,8 @@ func run() error {
 	var o product.Options
 	var destination, server, version string
 	var hookEvent string
+	var nativeExecutable, nativeScratch, nativeChallenge, nativeNonce, nativeFault, scopeDirectory, scopeOutside string
+	var nativeBudget float64
 	var proposalID, reviewDigest, track string
 	var confirmed bool
 	flags.StringVar(&destination, "destination", "", "new packet destination")
@@ -72,16 +76,32 @@ func run() error {
 	if os.Args[1] == "hook" {
 		flags.StringVar(&hookEvent, "event", "", "native hook event")
 	}
+	if os.Args[1] == "native-review" || os.Args[1] == "native-qualify-and-build" {
+		flags.StringVar(&nativeExecutable, "native-executable", "", "explicit installed Code executable")
+		flags.StringVar(&nativeScratch, "native-scratch-root", "", "existing private owner scratch directory")
+		flags.StringVar(&nativeChallenge, "native-challenge-directory", "", "new exact synthetic challenge directory inside the selected workspace")
+		flags.Float64Var(&nativeBudget, "max-budget-usd", 0, "reviewed estimated per-call limit, greater than zero and at most one USD")
+	}
+	if os.Args[1] == "native-startup-check" || os.Args[1] == "native-qualification-hook" {
+		flags.StringVar(&nativeNonce, "nonce", "", "qualification startup nonce")
+	}
+	if os.Args[1] == "native-scope-guard" {
+		flags.StringVar(&scopeDirectory, "challenge-directory", "", "exact qualification control directory")
+		flags.StringVar(&scopeOutside, "outside-probe-path", "", "exact reviewed public outside read")
+	}
+	if os.Args[1] == "native-fault" {
+		flags.StringVar(&nativeFault, "fault", "", "fixed qualification fault")
+	}
 	switch os.Args[1] {
 	case "owner-review", "owner-apply":
 		flags.StringVar(&proposalID, "proposal-id", "", "exact owner proposal ID")
 	}
 	switch os.Args[1] {
-	case "owner-apply", "owner-confirm-onboarding", "memory-apply", "knowledge-apply":
+	case "owner-apply", "owner-confirm-onboarding", "memory-apply", "knowledge-apply", "native-qualify-and-build", "maintenance-apply":
 		flags.StringVar(&reviewDigest, "review-digest", "", "exact SHA-256 digest from the full local review")
 	}
 	switch os.Args[1] {
-	case "owner-apply", "owner-confirm-onboarding", "owner-track", "memory-apply", "knowledge-apply":
+	case "owner-apply", "owner-confirm-onboarding", "owner-track", "memory-apply", "knowledge-apply", "native-qualify-and-build", "maintenance-apply":
 		flags.BoolVar(&confirmed, "confirm", false, "local operator confirms the reviewed operation")
 	}
 	if os.Args[1] == "owner-track" {
@@ -95,6 +115,32 @@ func run() error {
 		return errors.New("unexpected_arguments")
 	}
 	switch os.Args[1] {
+	case "native-review", "native-qualify-and-build":
+		request := packaging.NativeOptions{Packet: packaging.Options{Destination: destination, Server: server, Version: version, Binding: o}, Executable: nativeExecutable, ScratchRoot: nativeScratch, ChallengeDirectory: nativeChallenge, MaxBudgetUSD: nativeBudget}
+		var value any
+		var err error
+		if os.Args[1] == "native-review" {
+			value, err = packaging.ReviewNative(context.Background(), request)
+		} else {
+			value, err = packaging.QualifyAndBuildNative(context.Background(), request, reviewDigest, confirmed)
+		}
+		if err != nil {
+			if partial, ok := value.(packaging.NativeResult); ok && partial.ScratchDirectory != "" {
+				_ = json.NewEncoder(os.Stdout).Encode(partial)
+			}
+			return err
+		}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(value)
+	case "native-qualification-hook":
+		return packaging.QualificationHook(o, nativeNonce, os.Stdin, os.Stdout)
+	case "native-scope-guard":
+		return packaging.QualificationScopeGuard(o, scopeDirectory, scopeOutside, os.Stdin, os.Stdout)
+	case "native-startup-check":
+		return packaging.CheckNativeStartup(o, nativeNonce, os.Stdin, os.Stdout)
+	case "native-fault":
+		return packaging.NativeFault(context.Background(), nativeFault)
 	case "hook":
 		bound, err := product.Open(o)
 		if err != nil {
@@ -210,6 +256,37 @@ func run() error {
 			value, err = bound.MemoryReview(request)
 		} else {
 			value, err = bound.ApplyMemoryReview(request, reviewDigest, confirmed)
+		}
+		if err != nil {
+			return err
+		}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(value)
+	case "maintenance-review", "maintenance-apply", "maintenance-status", "maintenance-run":
+		bound, err := product.Open(o)
+		if err != nil {
+			return err
+		}
+		var value any
+		if os.Args[1] == "maintenance-status" {
+			value, err = bound.MaintenanceStatus()
+		} else if os.Args[1] == "maintenance-run" {
+			value, err = bound.RunMaintenance(context.Background())
+		} else {
+			body, readErr := io.ReadAll(io.LimitReader(os.Stdin, (16<<10)+1))
+			if readErr != nil || len(body) > 16<<10 {
+				return errors.New("maintenance_input_size")
+			}
+			request, decodeErr := product.DecodeMaintenanceMutation(body)
+			if decodeErr != nil {
+				return decodeErr
+			}
+			if os.Args[1] == "maintenance-review" {
+				value, err = bound.MaintenanceReview(request)
+			} else {
+				value, err = bound.ApplyMaintenanceReview(context.Background(), request, reviewDigest, confirmed)
+			}
 		}
 		if err != nil {
 			return err

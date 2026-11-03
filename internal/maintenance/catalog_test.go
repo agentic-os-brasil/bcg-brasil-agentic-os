@@ -49,7 +49,7 @@ func TestCatalogRequiresUniversalMaintenancePlane(t *testing.T) {
 		t.Fatalf("memory light dream capability truth drifted: %#v", light)
 	}
 	deep, found := findJob(catalog.Jobs, MemoryDeepDreamJobID)
-	if !found || deep.Trigger != "weekly_or_presence" || deep.Executor != "model_adapter" || deep.Availability != Unavailable {
+	if !found || deep.Trigger != "weekly_or_presence" || deep.Executor != "deterministic" || deep.Availability != Unavailable {
 		t.Fatalf("memory deep dream contract drifted: %#v", deep)
 	}
 }

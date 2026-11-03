@@ -39,6 +39,39 @@ func TestContinuityCheckpointCrashPreservesLastKnownGood(t *testing.T) {
 	}
 }
 
+func TestContinuityCheckpointPreparedFirstPublisherCannotReplaceCreatedParent(t *testing.T) {
+	now := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
+	store := ContinuityCheckpointStore{Root: t.TempDir()}
+	olderSources := []scheduler.Receipt{{JobID: "memory-light-dream", ScheduledFor: now.Add(-time.Hour), AttemptedAt: now, State: scheduler.Succeeded}}
+	newerSources := append(append([]scheduler.Receipt{}, olderSources...), scheduler.Receipt{JobID: "memory-light-dream", ScheduledFor: now, AttemptedAt: now.Add(time.Minute), State: scheduler.Succeeded})
+	var newer MemoryCheckpoint
+	older := store
+	older.FaultPoint = func(point string) error {
+		if point != "after_version" {
+			return nil
+		}
+		var changed bool
+		var err error
+		newer, changed, err = store.CommitSchedulerReceipts("maestro-system", newerSources, now.Add(time.Minute))
+		if err == nil && !changed {
+			t.Fatal("first committed checkpoint was reported unchanged")
+		}
+		return err
+	}
+	guarded := false
+	older.PublicationGuard = func(publish func() error) error {
+		guarded = true
+		return publish()
+	}
+	if _, changed, err := older.CommitSchedulerReceipts("maestro-system", olderSources, now); !errors.Is(err, ErrCheckpointConflict) || changed {
+		t.Fatalf("prepared first candidate crossed newly created parent: changed=%v err=%v", changed, err)
+	}
+	current, err := store.Load("maestro-system")
+	if err != nil || current != newer || !guarded || current.Revision != 1 || current.PreviousCheckpointSHA256 != "" {
+		t.Fatalf("first committed checkpoint changed: current=%+v newer=%+v guarded=%v err=%v", current, newer, guarded, err)
+	}
+}
+
 func TestContinuityCheckpointRejectsSymlinkedWorkspacePath(t *testing.T) {
 	if os.PathSeparator == '\\' {
 		t.Skip("symlink setup is host-dependent on Windows")

@@ -62,3 +62,26 @@ method-selection hint, never tool, data, delegation or publication authority.
 Private skills and organization-specific bundles remain unavailable until
 their separate ownership and authorization contracts exist. Adapter output
 does not promote native capability without qualifying runtime evidence.
+
+## Product runtime refresh — construction contract
+
+The product maintenance refresh derives the exact installed, policy-checked
+catalog and runtime-relative pointers through canonical projection integrity
+readers. It never enumerates arbitrary ProductRoot children as trusted skills.
+Its compact views preserve this spec's content limits and invocation policy.
+
+The external owner cache is scoped by workspace under
+`home/brain/runtime/workspaces/<workspace-id>/skills-index`. Immutable generations
+contain catalog.json, INDEX.md and typed projection/hash metadata; one atomic
+current pointer selects a complete verified pair. A canonical reader verifies
+both views and their source identity before use. Missing or conflicting source
+projection refuses refresh qualification. Managed source assets and factory
+generated catalogs remain unchanged. Spec062 owns reviewed qualification,
+enrollment, revocation and guarded publication. This extension is under
+construction and does not establish native runtime qualification.
+
+Runtime generation evidence includes genuine executing compiler implementation
+and configuration provenance. A changed build/configuration can produce a new
+verified generation over unchanged installed inputs; a same-build clock change
+cannot. Intact older evidence remains distinguishable from current qualified
+evidence and never inherits missing provenance from the present caller.

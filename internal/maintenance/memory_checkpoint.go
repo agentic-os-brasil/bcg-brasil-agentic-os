@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"time"
 
@@ -22,6 +21,8 @@ const (
 	MemoryCheckpointSchemaVersion = 1
 	CheckpointSchedulerProvenance = "scheduler_receipts_v1"
 )
+
+var ErrCheckpointConflict = errors.New("memory checkpoint parent changed")
 
 // MemoryCheckpoint is a body-free continuity watermark. It can prove that a
 // bounded set of already-durable local scheduler metadata was checkpointed;
@@ -55,8 +56,9 @@ type checkpointSource struct {
 }
 
 type ContinuityCheckpointStore struct {
-	Root       string
-	FaultPoint func(string) error
+	Root             string
+	FaultPoint       func(string) error
+	PublicationGuard func(func() error) error
 }
 
 func (store ContinuityCheckpointStore) CommitSchedulerReceipts(workspaceID string, receipts []scheduler.Receipt, now time.Time) (MemoryCheckpoint, bool, error) {
@@ -117,11 +119,13 @@ func (store ContinuityCheckpointStore) CommitSchedulerReceipts(workspaceID strin
 	if err != nil {
 		return MemoryCheckpoint{}, false, err
 	}
-	root, err := ensurePrivateTree(store.Root, "workspaces", workspaceID, "memory-checkpoints")
+	root := filepath.Join(store.Root, "workspaces", workspaceID, "memory-checkpoints")
+	err = scheduler.EnsurePrivateDirectory(root)
 	if err != nil {
 		return MemoryCheckpoint{}, false, err
 	}
-	versions, err := ensurePrivateTree(root, "versions")
+	versions := filepath.Join(root, "versions")
+	err = scheduler.EnsurePrivateDirectory(versions)
 	if err != nil {
 		return MemoryCheckpoint{}, false, err
 	}
@@ -138,7 +142,32 @@ func (store ContinuityCheckpointStore) CommitSchedulerReceipts(workspaceID strin
 		}
 	}
 	pointer := checkpointPointer{SchemaVersion: MemoryCheckpointSchemaVersion, WorkspaceID: workspaceID, Revision: checkpoint.Revision, Artifact: artifact, CheckpointSHA256: digest}
-	if err := writeCheckpointAtomic(filepath.Join(root, "current.json"), pointer); err != nil {
+	publish := func() error {
+		// Distinct occurrences (including direct/Canary callers) share this
+		// pointer. Keep parent comparison and replacement under one short lock,
+		// inside any external control/lease guard and after private preparation.
+		return scheduler.WithPrivateLock(filepath.Join(root, "publication.guard"), func() error {
+			parent, err := store.Load(workspaceID)
+			parentDigest := ""
+			if err == nil {
+				parentDigest, err = checkpointDigest(parent)
+			} else if errors.Is(err, os.ErrNotExist) {
+				err = nil
+			}
+			if err != nil {
+				return err
+			}
+			if parentDigest != checkpoint.PreviousCheckpointSHA256 {
+				return ErrCheckpointConflict
+			}
+			return writeCheckpointAtomic(filepath.Join(root, "current.json"), pointer)
+		})
+	}
+	if store.PublicationGuard != nil {
+		unguarded := publish
+		publish = func() error { return store.PublicationGuard(unguarded) }
+	}
+	if err := publish(); err != nil {
 		return MemoryCheckpoint{}, false, err
 	}
 	if err := syncCheckpointDirectory(root); err != nil {
@@ -151,7 +180,8 @@ func (store ContinuityCheckpointStore) Load(workspaceID string) (MemoryCheckpoin
 	if !commandIDPattern.MatchString(workspaceID) {
 		return MemoryCheckpoint{}, errors.New("invalid memory checkpoint workspace")
 	}
-	root, err := ensurePrivateTree(store.Root, "workspaces", workspaceID, "memory-checkpoints")
+	root := filepath.Join(store.Root, "workspaces", workspaceID, "memory-checkpoints")
+	err := scheduler.ValidatePrivateDirectory(root)
 	if err != nil {
 		return MemoryCheckpoint{}, err
 	}
@@ -180,11 +210,12 @@ func (store ContinuityCheckpointStore) Load(workspaceID string) (MemoryCheckpoin
 }
 
 type MemoryCheckpointHandler struct {
-	Scheduler scheduler.Store
-	Store     ContinuityCheckpointStore
+	Scheduler                 scheduler.Store
+	Store                     ContinuityCheckpointStore
+	ExpectedSourceFingerprint string
 }
 
-func (handler MemoryCheckpointHandler) ExecuteAuthorized(_ context.Context, command Command, grant ExecutionGrant) (HandlerResult, error) {
+func (handler MemoryCheckpointHandler) ExecuteAuthorized(ctx context.Context, command Command, grant ExecutionGrant) (HandlerResult, error) {
 	if err := ValidateExecutionGrant(grant, command); err != nil {
 		return HandlerResult{}, err
 	}
@@ -195,7 +226,12 @@ func (handler MemoryCheckpointHandler) ExecuteAuthorized(_ context.Context, comm
 	if err != nil {
 		return HandlerResult{}, err
 	}
-	_, changed, err := handler.Store.CommitSchedulerReceipts(command.WorkspaceID, receipts, command.RequestedAt)
+	if handler.ExpectedSourceFingerprint != "" && handler.ExpectedSourceFingerprint != productDigest(receipts) {
+		return HandlerResult{}, ErrProductConflict
+	}
+	store := handler.Store
+	store.PublicationGuard = func(publish func() error) error { return publishWithGrant(ctx, grant, command, publish) }
+	_, changed, err := store.CommitSchedulerReceipts(command.WorkspaceID, receipts, command.RequestedAt)
 	if err != nil {
 		return HandlerResult{}, err
 	}
@@ -228,86 +264,23 @@ func checkpointDigest(checkpoint MemoryCheckpoint) (string, error) {
 }
 
 func writeCheckpointImmutable(path string, value any) error {
-	body, err := json.MarshalIndent(value, "", "  ")
+	body, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	body = append(body, '\n')
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		return err
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = file.Close()
-			_ = os.Remove(path)
-		}
-	}()
-	if _, err := file.Write(body); err != nil {
-		return err
-	}
-	if err := file.Sync(); err != nil {
-		return err
-	}
-	if err := file.Close(); err != nil {
-		return err
-	}
-	committed = true
-	return nil
+	return scheduler.WriteNewPrivateFile(path, append(body, '\n'))
 }
 
 func writeCheckpointAtomic(path string, value any) error {
-	directory := filepath.Dir(path)
-	file, err := os.CreateTemp(directory, ".checkpoint-pointer-")
+	body, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	temporary := file.Name()
-	defer os.Remove(temporary)
-	if err := file.Chmod(0o600); err != nil {
-		_ = file.Close()
-		return err
-	}
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(value); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if err := file.Close(); err != nil {
-		return err
-	}
-	return os.Rename(temporary, path)
+	return scheduler.WritePrivateFileAtomic(path, append(body, '\n'))
 }
 
 func readCheckpointJSON(path string, target any) error {
-	before, err := os.Lstat(path)
-	if err != nil {
-		return err
-	}
-	// Unix mode bits are not an authority on Windows: Go synthesises FileMode
-	// from the read-only attribute, so a file written 0600 reports 0666 there.
-	// See internal/actionconfirmation/store.go (loadOrCreateKey) for the same
-	// guard and the fuller rationale.
-	permissive := runtime.GOOS != "windows" && before.Mode().Perm() != 0o600
-	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() || permissive {
-		return errors.New("memory checkpoint state must be a private regular file")
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	opened, err := file.Stat()
-	if err != nil || !os.SameFile(before, opened) {
-		return errors.New("memory checkpoint state changed during secure open")
-	}
-	body, err := io.ReadAll(io.LimitReader(file, 64*1024))
+	body, err := scheduler.ReadPrivateFile(path, 64<<10)
 	if err != nil {
 		return err
 	}

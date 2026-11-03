@@ -1,4 +1,4 @@
 interface:
   display_name: "Consolidação de Memória"
-  short_description: "Consolida a memória profissional diária e semanal"
-  default_prompt: "Use $dream-memory para rodar ou inspecionar com segurança o ciclo de consolidação de memória adequado."
+  short_description: "Inspeciona memória revisada e consolida ciclos locais"
+  default_prompt: "Use $dream-memory para inspecionar ou consolidar a memória revisada e avaliar a manutenção recorrente."
