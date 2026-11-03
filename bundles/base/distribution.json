@@ -2,6 +2,14 @@
   "schema_version": 1,
   "files": [
     {
+      "source": "LICENSE.md",
+      "path": "LICENSE.md"
+    },
+    {
+      "source": "bundles/base/agents/activation-policy.json",
+      "path": "agents/activation-policy.json"
+    },
+    {
       "source": "bundles/base/agents/case-agent/AGENT.md",
       "path": "agents/case-agent/AGENT.md"
     },
@@ -18,12 +26,36 @@
       "path": "agents/darwin/AGENT.md"
     },
     {
+      "source": "bundles/base/agents/gamma-guardian/AGENT.md",
+      "path": "agents/gamma-guardian/AGENT.md"
+    },
+    {
       "source": "bundles/base/agents/maestro/AGENT.md",
       "path": "agents/maestro/AGENT.md"
     },
     {
+      "source": "bundles/base/agents/pa-expert-registry.json",
+      "path": "agents/pa-expert-registry.json"
+    },
+    {
       "source": "bundles/base/agents/pa-expert/AGENT.md",
       "path": "agents/pa-expert/AGENT.md"
+    },
+    {
+      "source": "bundles/base/agents/templates/case_agent/AGENT.md",
+      "path": "agents/templates/case_agent/AGENT.md"
+    },
+    {
+      "source": "bundles/base/agents/templates/client_account_agent/AGENT.md",
+      "path": "agents/templates/client_account_agent/AGENT.md"
+    },
+    {
+      "source": "bundles/base/agents/templates/pa_expert/AGENT.md",
+      "path": "agents/templates/pa_expert/AGENT.md"
+    },
+    {
+      "source": "bundles/base/agents/templates/quality_guardian/AGENT.md",
+      "path": "agents/templates/quality_guardian/AGENT.md"
     },
     {
       "source": "bundles/base/agents/yoda/AGENT.md",
@@ -750,6 +782,10 @@
       "path": "schemas/release-authority-registry.schema.json"
     },
     {
+      "source": "schemas/release-manifest-v2.schema.json",
+      "path": "schemas/release-manifest-v2.schema.json"
+    },
+    {
       "source": "schemas/release-manifest.schema.json",
       "path": "schemas/release-manifest.schema.json"
     },
@@ -1056,6 +1092,10 @@
     {
       "source": "bundles/base/skills/interaction-profile/agents/openai.yaml",
       "path": "skills/interaction-profile/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/interaction-profile/resources/owner-paths.md",
+      "path": "skills/interaction-profile/resources/owner-paths.md"
     },
     {
       "source": "bundles/base/skills/investigate/SKILL.md",

@@ -57,6 +57,9 @@ func Build(
 	targetOS, targetArch string,
 	source SourceBinding,
 ) (Plan, error) {
+	if current.Profile != "" || manifest.Modern() {
+		return Plan{}, errors.New("modern standard update unavailable until signed source and pending-state recomputation are implemented")
+	}
 	if source.Provider != "github" ||
 		source.ProviderReleaseID <= 0 ||
 		len(source.ManifestSHA256) != 64 ||

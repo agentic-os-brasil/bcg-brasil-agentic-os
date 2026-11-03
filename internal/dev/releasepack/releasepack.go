@@ -101,6 +101,10 @@ func BuildBundle(root string, allowlist Allowlist, output io.Writer) error {
 		// Preserve only the allowlisted source's executable distinction. Other
 		// permission and privilege bits are not part of the managed payload.
 		mode := int64(0o644)
+		if entry.Source == "LICENSE.md" && info.Mode().Perm()&0o111 != 0 {
+			file.Close()
+			return closeArchive(tarWriter, gzipWriter, errors.New("root license must be nonexecutable"))
+		}
 		if info.Mode().Perm()&0o111 != 0 {
 			mode = 0o755
 		}
@@ -166,7 +170,7 @@ func validateAllowlist(allowlist Allowlist) error {
 		if !safeRelative(entry.Source) || !safeRelative(entry.Path) {
 			return fmt.Errorf("unsafe distribution path %q -> %q", entry.Source, entry.Path)
 		}
-		if !strings.HasPrefix(entry.Source, "bundles/base/") && !strings.HasPrefix(entry.Source, "bundles/tech-core/") && !strings.HasPrefix(entry.Source, "schemas/") {
+		if entry.Source != "LICENSE.md" && !strings.HasPrefix(entry.Source, "bundles/base/") && !strings.HasPrefix(entry.Source, "bundles/tech-core/") && !strings.HasPrefix(entry.Source, "schemas/") {
 			return fmt.Errorf("distribution source is outside approved roots: %s", entry.Source)
 		}
 		if strings.HasSuffix(entry.Source, ".go") || entry.Source == "bundles/base/.gitkeep" {

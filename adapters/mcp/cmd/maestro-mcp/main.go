@@ -20,6 +20,8 @@ import (
 
 // AuthorityRegistrySHA256 is linker-bound by the release builder; empty is unavailable.
 var AuthorityRegistrySHA256 string
+var Version string
+var CompatibleBundle string
 
 func main() {
 	if err := run(); err != nil {
@@ -55,6 +57,16 @@ func main() {
 func run() error {
 	if len(os.Args) < 2 {
 		return errors.New("command_required")
+	}
+	if os.Args[1] == "identity" {
+		if len(os.Args) != 2 {
+			return errors.New("unexpected_arguments")
+		}
+		identity, err := product.Identity(Version, CompatibleBundle, AuthorityRegistrySHA256)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(identity)
 	}
 	flags := flag.NewFlagSet("maestro-mcp", flag.ContinueOnError)
 	if os.Args[1] == "hook" {
