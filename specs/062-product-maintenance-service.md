@@ -40,6 +40,12 @@ source-free checkpoint or successful no-op cannot produce qualification.
 Changes to the bound implementation or configuration invalidate qualification.
 Engineering evidence never promotes the shipped global catalog or native state.
 
+Index and retention evidence must bind the actual executing implementation and
+configuration, so an update can be requalified with otherwise unchanged genuine
+inputs. Historical intact evidence may be verified as old and unqualified;
+never synthesize current provenance or require deleting a valid prior result.
+Clock-only, timestamp-only and nonce-only changes cannot qualify a no-op.
+
 After qualification, trusted owner review binds the exact job, timezone,
 cadence, write set, qualification and expected enrollment revision. Decline
 creates no enrollment. Each job has its own monotonic revision, no-backfill
@@ -48,6 +54,12 @@ Every dispatch requires the exact active revision, including default-enabled
 jobs. Pause preserves pending work, resume allows at most the existing bounded
 catch-up, and reenrollment cannot invent work before its new boundary.
 Status and review perform no directory/key creation, repair or qualification.
+
+Existing control records supply their own required stored schema/workspace/job
+binding; caller defaults apply only to absent-file initialization. Read mutable
+control authority through a held descriptor that verifies owner, private mode,
+regular bounded contents and a single link. Unsafe aliases or damaged records
+refuse without repairing bytes, permissions or directory entries.
 
 ## Effects and revocation
 

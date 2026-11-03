@@ -36,14 +36,16 @@ type RuntimeDiagnosis struct {
 	InstallationCoverage string                        `json:"installation_coverage"`
 }
 type DiagnosticReport struct {
-	SchemaVersion int                    `json:"schema_version"`
-	WorkspaceID   string                 `json:"workspace_id"`
-	JobID         string                 `json:"job_id"`
-	SourceSHA256  string                 `json:"source_sha256"`
-	ObservedAt    time.Time              `json:"observed_at"`
-	Finding       string                 `json:"finding"`
-	Runtime       *RuntimeDiagnosis      `json:"runtime,omitempty"`
-	Retention     *memory.RetentionState `json:"retention,omitempty"`
+	Implementation string                 `json:"implementation,omitempty"`
+	Configuration  string                 `json:"configuration,omitempty"`
+	SchemaVersion  int                    `json:"schema_version"`
+	WorkspaceID    string                 `json:"workspace_id"`
+	JobID          string                 `json:"job_id"`
+	SourceSHA256   string                 `json:"source_sha256"`
+	ObservedAt     time.Time              `json:"observed_at"`
+	Finding        string                 `json:"finding"`
+	Runtime        *RuntimeDiagnosis      `json:"runtime,omitempty"`
+	Retention      *memory.RetentionState `json:"retention,omitempty"`
 }
 
 func boundedSource(path string) ([]byte, error) {
@@ -165,7 +167,7 @@ func (s *Service) indexSource() (skillsindex.RuntimeIndexSource, error) {
 	if err != nil {
 		return skillsindex.RuntimeIndexSource{}, err
 	}
-	source := skillsindex.RuntimeIndexSource{WorkspaceID: s.workspaceID, Runtime: selected.Runtime, ProjectionSHA256: observation.SHA256, Catalog: catalog}
+	source := skillsindex.RuntimeIndexSource{WorkspaceID: s.workspaceID, Runtime: selected.Runtime, ProjectionSHA256: observation.SHA256, Catalog: catalog, Implementation: s.build, Configuration: s.configuration("skills-index-refresh")}
 	for _, skill := range installed {
 		source.Pointers = append(source.Pointers, skillsindex.RuntimePointer{ID: skill.ID, Pointer: skill.Pointer})
 	}
@@ -180,14 +182,13 @@ func (s *Service) indexSource() (skillsindex.RuntimeIndexSource, error) {
 	return source, nil
 }
 func (s *Service) diagnosticSource(job string) (DiagnosticReport, error) {
-	report := DiagnosticReport{SchemaVersion: 1, WorkspaceID: s.workspaceID, JobID: job}
+	report := DiagnosticReport{SchemaVersion: 1, WorkspaceID: s.workspaceID, JobID: job, Implementation: s.build, Configuration: s.configuration(job)}
 	if job == "memory-retention-check" {
 		snapshot, err := s.engine.RetentionSnapshot(s.workspaceID)
 		if err != nil {
 			return report, err
 		}
 		report.Retention = &snapshot
-		report.SourceSHA256 = productDigest(snapshot)
 		report.Finding = "sources_preserved"
 	} else {
 		snapshot, err := s.runtimeDiagnosis()
@@ -195,7 +196,6 @@ func (s *Service) diagnosticSource(job string) (DiagnosticReport, error) {
 			return report, err
 		}
 		report.Runtime = &snapshot
-		report.SourceSHA256 = productDigest(snapshot)
 		report.Finding = "unavailable"
 		if job == "runtime-drift-check" {
 			report.Finding = "incomplete"
@@ -207,18 +207,39 @@ func (s *Service) diagnosticSource(job string) (DiagnosticReport, error) {
 			}
 		}
 	}
+	report.SourceSHA256 = report.sourceDigest()
 	return report, nil
 }
+
+// Old intact reports can be read before requalification without inventing current
+// provenance. New reports bind actual inputs to the executing implementation.
+func (r DiagnosticReport) sourceDigest() string {
+	var input any = r.Runtime
+	if r.JobID == "memory-retention-check" {
+		input = r.Retention
+	}
+	if r.Implementation == "" && r.Configuration == "" {
+		return productDigest(input)
+	}
+	return productDigest([]any{input, r.Implementation, r.Configuration})
+}
+
 func (r DiagnosticReport) validate() error {
 	if r.SchemaVersion != 1 || !commandIDPattern.MatchString(r.WorkspaceID) || !diagnosticJob(r.JobID) || !digestPattern.MatchString(r.SourceSHA256) || r.ObservedAt.IsZero() {
 		return errors.New("invalid diagnostic report identity")
 	}
+	if (r.Implementation != "" || r.Configuration != "") && (!digestPattern.MatchString(r.Implementation) || !digestPattern.MatchString(r.Configuration)) {
+		return errors.New("invalid diagnostic execution provenance")
+	}
+	if r.SourceSHA256 != r.sourceDigest() {
+		return errors.New("diagnostic source digest mismatch")
+	}
 	if r.JobID == "memory-retention-check" {
-		if r.Retention == nil || r.Runtime != nil || r.Retention.WorkspaceID != r.WorkspaceID || !r.Retention.PreserveSources || r.Retention.LiveCaptures+r.Retention.DeniedCaptures+r.Retention.ActiveArtifacts < 1 || productDigest(r.Retention) != r.SourceSHA256 {
+		if r.Retention == nil || r.Runtime != nil || r.Retention.WorkspaceID != r.WorkspaceID || !r.Retention.PreserveSources || r.Retention.LiveCaptures+r.Retention.DeniedCaptures+r.Retention.ActiveArtifacts < 1 {
 			return errors.New("retention diagnosis lacks actual canonical state")
 		}
 	} else {
-		if r.Runtime == nil || r.Retention != nil || r.Runtime.NativeObservation != "not_observed" || productDigest(r.Runtime) != r.SourceSHA256 || r.Runtime.CapabilityManifest.Validate() != nil {
+		if r.Runtime == nil || r.Retention != nil || r.Runtime.NativeObservation != "not_observed" || r.Runtime.CapabilityManifest.Validate() != nil {
 			return errors.New("invalid runtime diagnosis")
 		}
 		observed := 0
@@ -283,6 +304,9 @@ func (s DiagnosticStore) Load(workspace, job, generation string) (DiagnosticRepo
 	return report, path, nil
 }
 func (s DiagnosticStore) Publish(report DiagnosticReport, guard func(func() error) error) (bool, error) {
+	if !digestPattern.MatchString(report.Implementation) || !digestPattern.MatchString(report.Configuration) {
+		return false, errors.New("diagnostic execution provenance required")
+	}
 	if err := report.validate(); err != nil {
 		return false, err
 	}
@@ -343,7 +367,7 @@ func (h productDiagnosticHandler) ExecuteAuthorized(ctx context.Context, command
 		if err != nil {
 			return HandlerResult{}, err
 		}
-		if snapshot != nil && productDigest(snapshot) != report.SourceSHA256 {
+		if snapshot != nil && productDigest(snapshot) != productDigest(report.Retention) {
 			return HandlerResult{}, ErrProductConflict
 		}
 		if h.expected != "" && h.expected != report.SourceSHA256 {
