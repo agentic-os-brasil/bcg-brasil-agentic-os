@@ -24,3 +24,10 @@ func (directory *secureDirectory) publishReplacement(source, target string) erro
 	}
 	return unix.Fsync(directory.fd)
 }
+
+func (directory *secureDirectory) removePrivateReplacement(name string) error {
+	if err := directory.removeFile(name); err != nil {
+		return err
+	}
+	return unix.Fsync(directory.fd)
+}

@@ -16,7 +16,8 @@ Ordinary startup, status and review do not bootstrap or repair private state.
 
 Call `maestro_query` with `{"operation":"maintenance.status"}`. The response
 lists job IDs, revision, state, schedule, write set and qualification metadata.
-The closed catalog has eighteen jobs; this product binding executes these eleven:
+The closed catalog has eighteen jobs; this binding implements these fifteen,
+with attended-only jobs explicitly separated from recurring enrollment:
 
 | Job | Cadence after separate enrollment | Actual result or prerequisite |
 | --- | --- | --- |
@@ -31,6 +32,10 @@ The closed catalog has eighteen jobs; this product binding executes these eleven
 | `wiki-incremental-sync` | Eligible durable source/denial event | Actual private-wiki compilation through the existing Worker; no calendar occurrence |
 | `wiki-reconcile` | Weekly, Sunday, under its presence contract | Actual source/graph reconciliation through the owning compiler |
 | `wiki-integrity-check` | Daily | Complete current graph inspection and durable body-free diagnosis; no repair |
+| `update-check` | Attended only; never recurring | Authenticated source-custody observation, bounded candidate plan and diagnosis; never activation |
+| `darwin-housekeeping-daily` | Daily after separate opt-in | Finite actual local diagnosis and exact-parent refresh of the closed derived-health cache |
+| `darwin-deep-weekly` | Weekly after separate opt-in | Bounded operational assessment/proposal and allowlisted cache repair; no authored-document rewrite |
+| `darwin-structural-evolution-proposal` | Attended monthly only; never recurring | Immutable bounded structural proposal/assessment; no application of structural changes |
 
 All schedules have bounded catch-up of at most one occurrence. Enrollment sets
 a per-job no-backfill boundary. Memory consolidation needs eligible reviewed
@@ -38,8 +43,42 @@ captures and ancestry; an empty source or a successful no-op cannot qualify it.
 Skills indexing needs verified installed assets, not an arbitrary product
 directory. A diagnostic can qualify its real execution while its finding is
 missing or unavailable. That qualification does not qualify the reported native
-capability. The remaining seven catalog entries retain explicit unavailable
-reasons until their complete execution journeys exist.
+capability. The remaining three entries (two capture/observation jobs and Yoda)
+retain explicit unavailable reasons until their complete execution journeys exist.
+
+### Darwin diagnosis, repair and proposals
+
+The first daily qualification explicitly reviews initialization of a missing
+`darwin-local-health-v1` cache. Status/report and ordinary recurring execution
+cannot create that first cache. Its source is actual admitted workspace,
+configuration, process/projection/capability observations and bounded external
+scheduler receipts. Missing or unavailable coverage remains a finding, never a
+synthetic healthy result. Legacy readiness does not establish modern readiness;
+native coverage remains unobserved until separately qualified.
+
+Later currentness compares genuine upstream provenance with that cache. Review
+shows exact parent and source before an allowlisted refresh; publication reads
+back exact bytes. The jobs exclude their own reports/cache/receipts and timing
+from external change detection. An unchanged assessment cannot create a new
+qualification merely because another day or occurrence exists.
+
+Daily and weekly qualification are separate from enrollment. Monthly work
+accepts only attended qualification/proposals and refuses recurring enrollment.
+The weekly registered-state-document check remains unavailable until an admitted
+registration source is bound; directory names alone are insufficient. Reports
+contain counts, coverage, cache state and relative immutable proposal references,
+without private bodies or absolute owner roots. A proposal is a proposal; it
+does not mean code, policy, releases or routes were changed.
+
+Interrupted repair preserves exact before/after evidence. Compensation restores
+the actual prior bytes or absence; a failed compensation remains recovery-required.
+Preserve that state for explicit reconciliation, rather than deleting the cache
+or copying an older receipt over it. See the [Darwin lifecycle contract](../specs/037-darwin-lifecycle-cadence.md).
+
+Attended `update-check` may preserve authentic newer source denial even when its
+release is expired or payload-incomplete. This is a custody observation, not
+update eligibility or activation. A blocked server uses the independently
+admitted installer's [signed-source recovery route](product-synced-source.md).
 
 ## Review, qualify and enroll
 
@@ -85,7 +124,8 @@ Corrupt or recovery-required evidence remains blocked for diagnosis. See the
 reads and correction/deletion behavior. A wake-up or a process exit
 alone is not proof of a committed domain result.
 
-For deep dream and the five diagnostic/index jobs, call `maestro_query` with
+For deep dream, diagnostic/index, Wiki, update-check and the three Darwin jobs,
+call `maestro_query` with
 `{"operation":"maintenance.report","job_id":"skills-index-refresh"}`,
 substituting the supported job ID. Reports expose bounded findings, coverage,
 counts, capability IDs and relative references. They do not return private
