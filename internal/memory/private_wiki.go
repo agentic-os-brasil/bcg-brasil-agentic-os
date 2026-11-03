@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/privatewiki"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
@@ -91,29 +91,11 @@ func (engine *Engine) privateWikiScope(workspace string) ([]byte, string, string
 }
 
 func privateWikiImplementation() (string, error) {
-	name, err := os.Executable()
+	identity, err := processidentity.Current()
 	if err != nil {
-		return "", ErrPrivateWikiUnavailable
+		return "", errors.Join(ErrPrivateWikiUnavailable, err)
 	}
-	f, err := os.Open(name)
-	if err != nil {
-		return "", ErrPrivateWikiUnavailable
-	}
-	defer f.Close()
-	before, err := f.Stat()
-	if err != nil || !before.Mode().IsRegular() || before.Size() < 1 || before.Size() > 1<<30 {
-		return "", ErrPrivateWikiUnavailable
-	}
-	h := sha256.New()
-	n, err := io.Copy(h, io.LimitReader(f, (1<<30)+1))
-	if err != nil || n != before.Size() {
-		return "", ErrPrivateWikiUnavailable
-	}
-	after, err := f.Stat()
-	if err != nil || after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime()) {
-		return "", ErrPrivateWikiUnavailable
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
+	return identity.SHA256, nil
 }
 
 func (engine *Engine) privateWikiSnapshot(workspace string) (privateWikiSnapshot, error) {
@@ -185,6 +167,9 @@ func (engine *Engine) privateWikiGuard(ctx context.Context, publish func() error
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if _, err := processidentity.Current(); err != nil {
+			return err
+		}
 		return publish()
 	}
 	if engine.PublicationGuard != nil {
@@ -197,6 +182,9 @@ func (engine *Engine) privateWikiGuard(ctx context.Context, publish func() error
 // expectedParent is empty only for a genuinely absent current pointer.
 func (engine *Engine) CompilePrivateWiki(ctx context.Context, workspace, expectedParent string) (PrivateWikiResult, error) {
 	if err := ctx.Err(); err != nil {
+		return PrivateWikiResult{}, err
+	}
+	if _, err := processidentity.Current(); err != nil {
 		return PrivateWikiResult{}, err
 	}
 	if _, _, _, err := engine.privateWikiScope(workspace); err != nil {

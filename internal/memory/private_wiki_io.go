@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/privatewiki"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
@@ -252,6 +253,9 @@ func (engine *Engine) publishPrivateWiki(ctx context.Context, workspace string, 
 		return err
 	}
 	if err = ctx.Err(); err != nil {
+		return err
+	}
+	if _, err = processidentity.Current(); err != nil {
 		return err
 	}
 	return memoryPublish(filepath.Join(root, "current.json"), append(intentBody, '\n'), false)
