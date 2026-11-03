@@ -1,12 +1,10 @@
 package docling
 
 import (
-	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -48,19 +46,35 @@ func (r *Runtime) Convert(ctx context.Context, source ingest.Request, workspaceI
 	if err != nil {
 		return fail(ingest.StatusBlocked, "source_not_admitted")
 	}
-	if strings.ToLower(filepath.Ext(source.SourcePath)) != ".docx" {
+	extension := strings.ToLower(filepath.Ext(source.SourcePath))
+	if !canonical.AllowedExts[extension] {
 		return fail(ingest.StatusUnavailable, "format_unsupported")
 	}
 	body, opened, err := readFile(source.SourcePath, source.Policy.MaxInputBytes)
 	if err != nil || !os.SameFile(info, opened) || !r.boundWorkspace(source.WorkspacePath, workspaceID) {
 		return fail(ingest.StatusBlocked, "source_changed_or_unsafe")
 	}
-	if err := validateDOCX(body, source.Policy.MaxOutputBytes); err != nil {
-		return fail(ingest.StatusBlocked, "docx_expansion_invalid")
+	if err := validateFormat(body, extension, source.Policy.MaxOutputBytes); err != nil {
+		reason := "source_format_invalid"
+		if extension == ".docx" {
+			reason = "docx_expansion_invalid"
+		}
+		return fail(ingest.StatusBlocked, reason)
 	}
+	var candidate struct {
+		SchemaName string `json:"schema_name"`
+	}
+	if extension == ".json" {
+		_ = json.Unmarshal(body, &candidate)
+	}
+	route, err := ingest.SelectFormat(extension, candidate.SchemaName == "DoclingDocument")
+	if err != nil {
+		return fail(ingest.StatusUnavailable, "format_unsupported")
+	}
+	result.Result.Route, result.Result.Parser, result.Result.FallbackReason = route.Route, route.Parser, route.FallbackReason
 	result.Result.SourceName = filepath.Base(original)
 	result.Result.SourceSHA256 = digest(body)
-	result.Result.Format = "docx"
+	result.Result.Format = strings.TrimPrefix(extension, ".")
 	pack, reason := r.verify(ctx)
 	if reason != "" {
 		return fail(ingest.StatusUnavailable, reason)
@@ -83,36 +97,58 @@ func (r *Runtime) Convert(ctx context.Context, source ingest.Request, workspaceI
 			return fail(ingest.StatusUnavailable, "execution_storage_unavailable")
 		}
 	}
-	request, _ := json.Marshal(struct {
-		Source      []byte `json:"source"`
-		MaxInput    int64  `json:"max_input"`
-		MaxOutput   int64  `json:"max_output"`
-		MaxExpanded int64  `json:"max_expanded"`
-	}{body, source.Policy.MaxInputBytes, source.Policy.MaxOutputBytes, source.Policy.MaxOutputBytes})
 	deadline, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	command := exec.CommandContext(deadline, "/usr/bin/sandbox-exec", "-p", "(version 1)(allow default)(deny network*)", filepath.Join(snapshot, "python/bin/python3.12"), "-I", "-S", "-B", filepath.Join(snapshot, "bridge.py"))
-	command.Dir = work
-	command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + filepath.Join(work, "home"), "TMPDIR=" + filepath.Join(work, "tmp"), "XDG_CACHE_HOME=" + filepath.Join(work, "cache"), "XDG_CONFIG_HOME=" + filepath.Join(work, "config"), "XDG_DATA_HOME=" + filepath.Join(work, "data"), "HF_HOME=" + filepath.Join(work, "models"), "HF_HUB_OFFLINE=1", "TRANSFORMERS_OFFLINE=1", "DOCLING_ARTIFACTS_PATH=" + filepath.Join(work, "models"), "OMP_NUM_THREADS=1", "OPENBLAS_NUM_THREADS=1", "VECLIB_MAXIMUM_THREADS=1", "LANG=en_US.UTF-8"}
-	command.Stdin = bytes.NewReader(request)
-	stdout := boundedOutput{maximum: 2*source.Policy.MaxOutputBytes + 4096, cancel: cancel}
-	stderr := boundedOutput{maximum: 64 << 10, cancel: cancel}
-	command.Stdout = &stdout
-	command.Stderr = &stderr
-	command.WaitDelay = time.Second
-	if err := command.Run(); err != nil {
+	run := func(phase string) (bridgeResponse, error) {
+		var response bridgeResponse
+		request, _ := json.Marshal(bridgeRequest{body, source.Policy.MaxInputBytes, source.Policy.MaxOutputBytes, source.Policy.MaxOutputBytes, extension, route, phase})
+		command := exec.CommandContext(deadline, "/usr/bin/sandbox-exec", "-p", "(version 1)(allow default)(deny network*)", filepath.Join(snapshot, "python/bin/python3.12"), "-I", "-S", "-B", filepath.Join(snapshot, "bridge.py"))
+		command.Dir = work
+		command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + filepath.Join(work, "home"), "TMPDIR=" + filepath.Join(work, "tmp"), "XDG_CACHE_HOME=" + filepath.Join(work, "cache"), "XDG_CONFIG_HOME=" + filepath.Join(work, "config"), "XDG_DATA_HOME=" + filepath.Join(work, "data"), "HF_HOME=" + filepath.Join(work, "models"), "HF_HUB_OFFLINE=1", "TRANSFORMERS_OFFLINE=1", "DOCLING_ARTIFACTS_PATH=" + filepath.Join(work, "models"), "OMP_NUM_THREADS=1", "OPENBLAS_NUM_THREADS=1", "VECLIB_MAXIMUM_THREADS=1", "LANG=en_US.UTF-8"}
+		command.Stdin = bytes.NewReader(request)
+		stdout := boundedOutput{maximum: 2*source.Policy.MaxOutputBytes + 4096, cancel: cancel}
+		stderr := boundedOutput{maximum: 64 << 10, cancel: cancel}
+		command.Stdout, command.Stderr = &stdout, &stderr
+		command.WaitDelay = time.Second
+		if err := command.Run(); err != nil {
+			return response, err
+		}
+		if err := decode(stdout.Bytes(), &response); err != nil {
+			return response, errBridgeOutput
+		}
+		return response, nil
+	}
+	if extension == ".json" && candidate.SchemaName == "DoclingDocument" {
+		// The header is only a candidate. The authenticated schema validator checks the
+		// actual document shape; core then selects the approved route from that
+		// fact. Ordinary JSON never loses literal handling due to a schema claim.
+		classification, err := run("classify_json")
+		if err != nil {
+			if errors.Is(err, errBridgeOutput) {
+				return fail(ingest.StatusDegraded, "converter_classification_invalid")
+			}
+			return fail(ingest.StatusUnavailable, "offline_conversion_failed")
+		}
+		if classification.DoclingExport == nil || !classification.NetworkDenied || classification.Refusal != "" || len(classification.Markdown) != 0 || len(classification.Document) != 0 || classification.Route != (ingest.FormatRoute{}) || len(classification.Warnings) != 0 {
+			return fail(ingest.StatusDegraded, "converter_classification_invalid")
+		}
+		route, _ = ingest.SelectFormat(extension, *classification.DoclingExport)
+		result.Result.Route, result.Result.Parser, result.Result.FallbackReason = route.Route, route.Parser, route.FallbackReason
+	}
+	response, err := run("convert")
+	if err != nil {
+		if errors.Is(err, errBridgeOutput) {
+			return fail(ingest.StatusDegraded, "converter_output_invalid")
+		}
 		return fail(ingest.StatusUnavailable, "offline_conversion_failed")
 	}
-	var response struct {
-		Markdown      []byte `json:"markdown"`
-		Document      []byte `json:"document"`
-		NetworkDenied bool   `json:"network_denied"`
-		Refusal       string `json:"refusal,omitempty"`
-	}
-	if decode(stdout.Bytes(), &response) == nil && response.Refusal == "output_limit" && len(response.Markdown) == 0 && len(response.Document) == 0 {
+	if response.Refusal == "output_limit" && len(response.Markdown) == 0 && len(response.Document) == 0 {
 		return fail(ingest.StatusDegraded, "output_limit")
 	}
-	if decode(stdout.Bytes(), &response) != nil || response.Refusal != "" || !response.NetworkDenied || !utf8.Valid(response.Markdown) || !utf8.Valid(response.Document) || !json.Valid(response.Document) || int64(len(response.Markdown)+len(response.Document)) > source.Policy.MaxOutputBytes {
+	if response.Refusal == "source_format_invalid" && len(response.Markdown) == 0 && len(response.Document) == 0 {
+		return fail(ingest.StatusBlocked, "source_format_invalid")
+	}
+	if response.DoclingExport != nil || response.Refusal != "" || response.Route != route || !response.NetworkDenied || !utf8.Valid(response.Markdown) || !utf8.Valid(response.Document) || !json.Valid(response.Document) || int64(len(response.Markdown)+len(response.Document)) > source.Policy.MaxOutputBytes {
 		return fail(ingest.StatusDegraded, "converter_output_invalid")
 	}
 	var document struct {
@@ -123,20 +159,81 @@ func (r *Runtime) Convert(ctx context.Context, source ingest.Request, workspaceI
 	if json.Unmarshal(response.Document, &document) != nil || document.SchemaName != "DoclingDocument" {
 		return fail(ingest.StatusDegraded, "converter_document_invalid")
 	}
-	if strings.TrimSpace(string(response.Markdown)) == "" || (len(document.Texts) == 0 && len(document.Tables) == 0) {
+	hasContent := len(document.Texts) > 0 || len(document.Tables) > 0
+	if extension == ".xls" || extension == ".xlsx" {
+		// Sheet names are context, not cell content. An empty workbook or
+		// absent formula caches must not publish an apparently usable artifact.
+		hasContent = spreadsheetHasContent(document.Tables)
+	}
+	if strings.TrimSpace(string(response.Markdown)) == "" || !hasContent {
 		return fail(ingest.StatusPartial, "converter_content_empty")
 	}
 	if !r.boundWorkspace(source.WorkspacePath, workspaceID) {
 		return fail(ingest.StatusBlocked, "workspace_changed")
 	}
 	result.Result.Status = ingest.StatusUsable
-	result.Result.Fidelity = ingest.FidelityStructured
+	result.Result.Fidelity = route.Fidelity
+	if route.FallbackReason != "" {
+		result.Result.Warnings = []string{route.FallbackReason}
+	}
+	for _, warning := range response.Warnings {
+		switch warning {
+		case "xls_cached_values_only", "xlsx_cached_values_only":
+			result.Result.Warnings = append(result.Result.Warnings, warning)
+		default:
+			return fail(ingest.StatusDegraded, "converter_output_invalid")
+		}
+	}
 	result.Result.OutputBytes = int64(len(response.Markdown) + len(response.Document))
 	result.Markdown = response.Markdown
 	result.Document = response.Document
 	result.Provenance = Provenance{PackSHA256: pack.sha, ManifestSHA256: pack.manifestSHA, MarkdownSHA256: digest(response.Markdown), DocumentSHA256: digest(response.Document), LockSHA256: LockSHA256, Python: PythonVersion, Docling: DoclingVersion, NetworkDenied: true}
 	return result, nil
 }
+
+func spreadsheetHasContent(tables []json.RawMessage) bool {
+	for _, raw := range tables {
+		var table struct {
+			Data struct {
+				Cells []struct {
+					Text string `json:"text"`
+				} `json:"table_cells"`
+			} `json:"data"`
+		}
+		if json.Unmarshal(raw, &table) != nil {
+			return false
+		}
+		for _, cell := range table.Data.Cells {
+			if strings.TrimSpace(cell.Text) != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+type bridgeRequest struct {
+	Source      []byte             `json:"source"`
+	MaxInput    int64              `json:"max_input"`
+	MaxOutput   int64              `json:"max_output"`
+	MaxExpanded int64              `json:"max_expanded"`
+	Format      string             `json:"format"`
+	Route       ingest.FormatRoute `json:"selected_route"`
+	Phase       string             `json:"phase"`
+}
+
+var errBridgeOutput = errors.New("converter_output_invalid")
+
+type bridgeResponse struct {
+	Markdown      []byte             `json:"markdown"`
+	Document      []byte             `json:"document"`
+	NetworkDenied bool               `json:"network_denied"`
+	Refusal       string             `json:"refusal,omitempty"`
+	Route         ingest.FormatRoute `json:"selected_route"`
+	Warnings      []string           `json:"warnings,omitempty"`
+	DoclingExport *bool              `json:"docling_export,omitempty"`
+}
+
 func (r *Runtime) boundWorkspace(name, id string) bool {
 	if id == "" {
 		return false
@@ -147,44 +244,6 @@ func (r *Runtime) boundWorkspace(name, id string) bool {
 	}
 	state, err := workspace.Inspect(name, r.options.DataRoot)
 	return err == nil && state.WorkspaceID == id && state.MetadataStatus == "valid" && state.State == "ready"
-}
-func validateDOCX(body []byte, maximum int64) error {
-	archive, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
-	if err != nil {
-		return err
-	}
-	if len(archive.File) > 4096 {
-		return errors.New("zip_members")
-	}
-	seen := map[string]bool{}
-	var total uint64
-	for _, file := range archive.File {
-		name := strings.TrimSuffix(file.Name, "/")
-		if !relativeName(name) || seen[strings.ToLower(name)] || file.Mode()&os.ModeSymlink != 0 {
-			return errors.New("zip_alias")
-		}
-		seen[strings.ToLower(name)] = true
-		if file.FileInfo().IsDir() {
-			continue
-		}
-		if file.UncompressedSize64 > uint64(maximum) || total > uint64(maximum)-file.UncompressedSize64 {
-			return errors.New("zip_expansion")
-		}
-		total += file.UncompressedSize64
-		reader, err := file.Open()
-		if err != nil {
-			return err
-		}
-		count, copyErr := io.Copy(io.Discard, io.LimitReader(reader, int64(file.UncompressedSize64)+1))
-		closeErr := reader.Close()
-		if copyErr != nil || closeErr != nil || uint64(count) != file.UncompressedSize64 {
-			return errors.New("zip_member_invalid")
-		}
-	}
-	if !seen["[content_types].xml"] || !seen["word/document.xml"] {
-		return errors.New("docx_missing_parts")
-	}
-	return nil
 }
 
 type boundedOutput struct {

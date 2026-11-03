@@ -1,4 +1,4 @@
-// Package docling runs the authenticated, offline DOCX runtime. It does not
+// Package docling runs the authenticated, offline policy-format runtime. It does not
 // acquire dependencies or persist document artifacts.
 package docling
 
