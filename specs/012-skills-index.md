@@ -79,3 +79,9 @@ projection refuses refresh qualification. Managed source assets and factory
 generated catalogs remain unchanged. Spec062 owns reviewed qualification,
 enrollment, revocation and guarded publication. This extension is under
 construction and does not establish native runtime qualification.
+
+Runtime generation evidence includes genuine executing compiler implementation
+and configuration provenance. A changed build/configuration can produce a new
+verified generation over unchanged installed inputs; a same-build clock change
+cannot. Intact older evidence remains distinguishable from current qualified
+evidence and never inherits missing provenance from the present caller.

@@ -270,10 +270,10 @@ func (s *Service) controlPath(jobID string) string {
 	return filepath.Join(s.receipts.Root, "workspaces", s.workspaceID, "product-control", jobID, "current.json")
 }
 func (s *Service) loadControl(jobID string) (productControl, error) {
-	c := productControl{SchemaVersion: 1, WorkspaceID: s.workspaceID, Binding: s.binding, JobID: jobID, State: "inactive"}
-	body, err := scheduler.ReadPrivateFile(s.controlPath(jobID), 64<<10)
+	var c productControl
+	body, err := scheduler.ReadPrivateStateFile(s.controlPath(jobID), 64<<10)
 	if errors.Is(err, os.ErrNotExist) {
-		return c, nil
+		return productControl{SchemaVersion: 1, WorkspaceID: s.workspaceID, Binding: s.binding, JobID: jobID, State: "inactive"}, nil
 	}
 	if err != nil {
 		return c, err
@@ -775,7 +775,7 @@ func (s *Service) verifyQualification(q *ProductQualification) error {
 		}
 		generation := strings.TrimSuffix(strings.TrimPrefix(q.Artifact, prefix), "/metadata.json")
 		index, err := skillsindex.LoadRuntimeIndex(s.indexRoot(), generation)
-		if err != nil || index.Metadata.Source.WorkspaceID != s.workspaceID {
+		if err != nil || index.Metadata.Source.WorkspaceID != s.workspaceID || index.Metadata.Source.Implementation != s.build || index.Metadata.Source.Configuration != s.configuration(q.JobID) {
 			return ErrQualificationRequired
 		}
 		path = index.MetadataPath
@@ -786,7 +786,7 @@ func (s *Service) verifyQualification(q *ProductQualification) error {
 		}
 		generation := strings.TrimSuffix(strings.TrimPrefix(q.Artifact, prefix), ".json")
 		report, p, err := (DiagnosticStore{Root: s.receipts.Root}).Load(s.workspaceID, q.JobID, generation)
-		if err != nil || !report.ObservedAt.Equal(q.RequestedAt) {
+		if err != nil || !report.ObservedAt.Equal(q.RequestedAt) || report.Implementation != s.build || report.Configuration != s.configuration(q.JobID) {
 			return ErrQualificationRequired
 		}
 		path = p

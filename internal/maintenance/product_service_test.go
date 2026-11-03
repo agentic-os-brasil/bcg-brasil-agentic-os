@@ -3,6 +3,7 @@ package maintenance
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
@@ -617,5 +618,98 @@ func TestProductCheckpointPreparedPublisherCannotReplaceNewerParent(t *testing.T
 	replay, changed, err := store.CommitSchedulerReceipts(s.workspaceID, ab, now.Add(time.Second))
 	if err != nil || changed || replay != newer {
 		t.Fatalf("same-source replay invented new checkpoint: %+v %v %v", replay, changed, err)
+	}
+}
+
+// Stored authority must survive neither missing identities nor filesystem aliases.
+func TestProductControlRejectsMissingStoredIdentity(t *testing.T) {
+	s := productFixture(t)
+	productCapture(t, s, "Canonical source for stored authority validation.")
+	productApply(t, s, "qualify", MemoryLightDreamJobID, "")
+	active := productApply(t, s, "enroll", MemoryLightDreamJobID, "UTC")
+	path := s.controlPath(MemoryLightDreamJobID)
+	valid, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Status(); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"schema_version", "workspace_id", "binding", "job_id"} {
+		for _, null := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/null=%t", field, null), func(t *testing.T) {
+				var stored map[string]json.RawMessage
+				if err := json.Unmarshal(valid, &stored); err != nil {
+					t.Fatal(err)
+				}
+				if null {
+					stored[field] = json.RawMessage("null")
+				} else {
+					delete(stored, field)
+				}
+				damaged, err := json.Marshal(stored)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, damaged, 0600); err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if err := os.WriteFile(path, valid, 0600); err != nil {
+						t.Fatal(err)
+					}
+				}()
+				assertProductControlRefused(t, s, active.Revision)
+			})
+		}
+	}
+	if status, err := s.jobStatus(MemoryLightDreamJobID); err != nil || status.State != "active" || status.QualificationState != "qualified" {
+		t.Fatalf("valid stored authority lost: %+v %v", status, err)
+	}
+}
+
+func TestProductControlRejectsHardLinkAuthority(t *testing.T) {
+	s := productFixture(t)
+	productCapture(t, s, "Canonical source for alias authority validation.")
+	productApply(t, s, "qualify", MemoryLightDreamJobID, "")
+	active := productApply(t, s, "enroll", MemoryLightDreamJobID, "UTC")
+	path := s.controlPath(MemoryLightDreamJobID)
+	aliasRoot := t.TempDir()
+	alias := filepath.Join(aliasRoot, "aliased-control.json")
+	if err := os.Link(path, alias); err != nil {
+		t.Fatal(err)
+	}
+	before := productSnapshot(t, aliasRoot)
+	assertProductControlRefused(t, s, active.Revision)
+	if !reflect.DeepEqual(before, productSnapshot(t, aliasRoot)) {
+		t.Fatal("alias bytes/mode/entries changed")
+	}
+	if err := os.Remove(alias); err != nil {
+		t.Fatal(err)
+	}
+	if status, err := s.jobStatus(MemoryLightDreamJobID); err != nil || status.State != "active" || status.QualificationState != "qualified" {
+		t.Fatalf("valid single-link control lost: %+v %v", status, err)
+	}
+}
+
+func assertProductControlRefused(t *testing.T, s *Service, revision uint64) {
+	t.Helper()
+	before := productSnapshot(t, s.home)
+	if _, err := s.Status(); err == nil {
+		t.Error("damaged/aliased control admitted by status")
+	}
+	if _, err := s.Review(Operation{Kind: "pause", JobID: MemoryLightDreamJobID, ExpectedRevision: revision}); err == nil {
+		t.Error("damaged/aliased control admitted by review")
+	}
+	if _, err := s.RunDue(context.Background()); err == nil {
+		t.Error("damaged/aliased control admitted by due dispatch")
+	}
+	published := false
+	p := &productExecution{service: s, jobID: MemoryLightDreamJobID, revision: revision}
+	if err := p.guard(func() error { published = true; return nil }); err == nil || published {
+		t.Error("damaged/aliased control admitted by publication guard")
+	}
+	if !reflect.DeepEqual(before, productSnapshot(t, s.home)) {
+		t.Error("refusal changed bytes/mode/directory entries")
 	}
 }

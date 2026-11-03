@@ -20,6 +20,8 @@ type RuntimePointer struct {
 	Pointer string `json:"pointer"`
 }
 type RuntimeIndexSource struct {
+	Implementation   string           `json:"implementation,omitempty"`
+	Configuration    string           `json:"configuration,omitempty"`
 	WorkspaceID      string           `json:"workspace_id"`
 	Runtime          string           `json:"runtime"`
 	ProjectionSHA256 string           `json:"projection_sha256"`
@@ -47,6 +49,11 @@ func validIndexHash(s string) bool {
 func renderRuntimeIndex(source RuntimeIndexSource) ([]byte, []byte, error) {
 	if source.WorkspaceID == "" || (source.Runtime != "claude" && source.Runtime != "codex") || !validIndexHash(source.ProjectionSHA256) {
 		return nil, nil, errors.New("invalid installed index identity")
+	}
+	// Historical generations without provenance remain readable as old evidence.
+	// New publication requires both digests; current qualification checks them.
+	if (source.Implementation != "" || source.Configuration != "") && (!validIndexHash(source.Implementation) || !validIndexHash(source.Configuration)) {
+		return nil, nil, errors.New("invalid index compiler provenance")
 	}
 	if err := source.Catalog.Validate(); err != nil {
 		return nil, nil, err
@@ -82,6 +89,9 @@ func renderRuntimeIndex(source RuntimeIndexSource) ([]byte, []byte, error) {
 func PublishRuntimeIndex(root string, source RuntimeIndexSource, guard func(func() error) error) (RuntimeIndex, bool, error) {
 	var out RuntimeIndex
 	changed := false
+	if !validIndexHash(source.Implementation) || !validIndexHash(source.Configuration) {
+		return out, false, errors.New("index compiler provenance required")
+	}
 	if guard == nil {
 		return out, false, errors.New("index publication guard required")
 	}

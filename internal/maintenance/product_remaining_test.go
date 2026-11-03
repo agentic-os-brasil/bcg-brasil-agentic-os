@@ -406,3 +406,171 @@ func TestProductRuntimeMalformedSelectionAndEmptyWeeklyRefused(t *testing.T) {
 		t.Fatal("source-free weekly job qualified")
 	}
 }
+
+func TestProductProvenanceHistoricalReadbackAndRecovery(t *testing.T) {
+	for _, job := range []string{"skills-index-refresh", "memory-retention-check"} {
+		t.Run(job, func(t *testing.T) {
+			s := productFixture(t)
+			productCapture(t, s, "Unchanged canonical input for provenance recovery.")
+			if _, err := runtimeprojection.Install("codex", s.options.WorkspacePath); err != nil {
+				t.Fatal(err)
+			}
+			qualified := productApply(t, s, "qualify", job, "")
+			var legacyPath, domainRoot string
+			if job == "skills-index-refresh" {
+				index, err := skillsindex.LoadRuntimeIndex(s.indexRoot(), "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				legacy := index.Metadata
+				legacy.Source.Implementation, legacy.Source.Configuration = "", ""
+				body, err := json.Marshal(legacy)
+				if err != nil {
+					t.Fatal(err)
+				}
+				generation := rawDigest(body)
+				dir := filepath.Join(s.indexRoot(), "generations", generation)
+				if err := scheduler.EnsurePrivateDirectory(dir); err != nil {
+					t.Fatal(err)
+				}
+				for _, name := range []string{"catalog.json", "INDEX.md"} {
+					pair, err := os.ReadFile(filepath.Join(filepath.Dir(index.MetadataPath), name))
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := scheduler.WritePrivateFileAtomic(filepath.Join(dir, name), pair); err != nil {
+						t.Fatal(err)
+					}
+				}
+				legacyPath = filepath.Join(dir, "metadata.json")
+				if err := scheduler.WritePrivateFileAtomic(legacyPath, body); err != nil {
+					t.Fatal(err)
+				}
+				pointer, _ := json.Marshal(map[string]string{"generation": generation})
+				if err := scheduler.WritePrivateFileAtomic(filepath.Join(s.indexRoot(), "current.json"), pointer); err != nil {
+					t.Fatal(err)
+				}
+				read, err := skillsindex.LoadRuntimeIndex(s.indexRoot(), "")
+				if err != nil || read.Metadata.Source.Implementation != "" || read.Metadata.Source.Configuration != "" {
+					t.Fatalf("historical provenance synthesized or intact readback failed: %+v %v", read, err)
+				}
+				called := false
+				if _, _, err := skillsindex.PublishRuntimeIndex(s.indexRoot(), read.Metadata.Source, func(func() error) error { called = true; return nil }); err == nil || called {
+					t.Fatal("new publication admitted missing provenance")
+				}
+				domainRoot = s.indexRoot()
+			} else {
+				store := DiagnosticStore{Root: s.receipts.Root}
+				legacy, _, err := store.Load(s.workspaceID, job, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				legacy.Implementation, legacy.Configuration = "", ""
+				legacy.SourceSHA256 = productDigest(legacy.Retention)
+				body, err := json.Marshal(legacy)
+				if err != nil {
+					t.Fatal(err)
+				}
+				generation := rawDigest(body)
+				domainRoot = store.root(s.workspaceID, job)
+				legacyPath = filepath.Join(domainRoot, "versions", generation+".json")
+				if err := scheduler.WritePrivateFileAtomic(legacyPath, body); err != nil {
+					t.Fatal(err)
+				}
+				pointer, _ := json.Marshal(map[string]string{"generation": generation})
+				if err := scheduler.WritePrivateFileAtomic(filepath.Join(domainRoot, "current.json"), pointer); err != nil {
+					t.Fatal(err)
+				}
+				read, _, err := store.Load(s.workspaceID, job, "")
+				if err != nil || read.Implementation != "" || read.Configuration != "" {
+					t.Fatalf("historical provenance synthesized or intact readback failed: %+v %v", read, err)
+				}
+				called := false
+				if _, err := store.Publish(read, func(func() error) error { called = true; return nil }); err == nil || called {
+					t.Fatal("new publication admitted missing provenance")
+				}
+			}
+			before, ref, err := s.domainEvidence(job, s.now())
+			if err != nil || before == "" {
+				t.Fatalf("intact historical pre-run evidence blocked: %v", err)
+			}
+			// Even an otherwise current qualification cannot present a provenance-free
+			// historical artifact as current execution evidence.
+			oldQ := *qualified.Qualification
+			oldQ.Artifact, oldQ.ArtifactSHA256 = ref, before
+			oldQ.ID = ""
+			oldQ.ID = productDigest(oldQ)
+			if err := s.verifyQualification(&oldQ); err == nil {
+				t.Fatal("historical artifact qualified as current execution")
+			}
+			review, err := s.Review(Operation{Kind: "qualify", JobID: job, ExpectedRevision: qualified.Revision})
+			if err != nil {
+				t.Fatal(err)
+			}
+			q, err := s.Apply(context.Background(), review, func(context.Context, ProductReview) error {
+				later := s.now().Add(time.Second)
+				s.now = func() time.Time { return later }
+				return nil
+			})
+			if err != nil || q.QualificationState != "qualified" {
+				t.Fatalf("historical recovery/clock-only review: %+v %v", q, err)
+			}
+			if err := s.verifyQualification(q.Qualification); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(legacyPath); err != nil {
+				t.Fatal("old immutable evidence removed", err)
+			}
+			// A real configuration change is also provenance, not a nonce or clock.
+			s.options.CLIVersion = "changed-trusted-configuration"
+			// A distinct attempt needs a distinct scheduler occurrence; configuration,
+			// not this clock advance, is the changed execution evidence.
+			configuredAt := s.now().Add(time.Second)
+			s.now = func() time.Time { return configuredAt }
+			status, err := s.jobStatus(job)
+			if err != nil || status.QualificationState != "stale" {
+				t.Fatalf("changed configuration did not stale qualification: %+v %v", status, err)
+			}
+			q = productApply(t, s, "qualify", job, "")
+			review, err = s.Review(Operation{Kind: "qualify", JobID: job, ExpectedRevision: q.Revision})
+			if err != nil {
+				t.Fatal(err)
+			}
+			beforeNoOp := productSnapshot(t, domainRoot)
+			later := s.now().Add(time.Second)
+			s.now = func() time.Time { return later }
+			if _, err := s.Apply(context.Background(), review, approveProduct); !errors.Is(err, ErrQualificationRequired) {
+				t.Fatalf("same-input clock-only retry qualified: %v", err)
+			}
+			if !reflect.DeepEqual(beforeNoOp, productSnapshot(t, domainRoot)) {
+				t.Fatal("no-op changed durable domain output")
+			}
+			_, currentRef, err := s.domainEvidence(job, s.now())
+			if err != nil {
+				t.Fatal(err)
+			}
+			currentPath := filepath.Join(s.home, currentRef)
+			if job != "skills-index-refresh" {
+				currentPath = filepath.Join(s.receipts.Root, strings.TrimPrefix(currentRef, "maintenance/"))
+			}
+			if err := os.WriteFile(currentPath, []byte("{}"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			tampered := productSnapshot(t, domainRoot)
+			control, err := s.loadControl(job)
+			if err != nil {
+				t.Fatal(err)
+			}
+			review, err = s.Review(Operation{Kind: "qualify", JobID: job, ExpectedRevision: control.Revision})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.Apply(context.Background(), review, approveProduct); err == nil {
+				t.Fatal("tampered previous evidence silently replaced")
+			}
+			if !reflect.DeepEqual(tampered, productSnapshot(t, domainRoot)) {
+				t.Fatal("failed recovery repaired tampered evidence")
+			}
+		})
+	}
+}

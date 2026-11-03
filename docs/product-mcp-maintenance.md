@@ -104,6 +104,12 @@ State and qualification answer different questions: `inactive`, `active`,
 `stale` describe execution evidence. A changed build or configuration makes
 old qualification stale. Never repair that state by copying old control files.
 
+After a build/configuration update, explicitly requalify index and retention
+against their unchanged genuine inputs, then inspect the new revision before
+enrollment or resume. Their durable evidence records the executing implementation/configuration;
+there is no need to alter installed assets, inject captures or delete valid
+generations to recover qualification. Repeated same-build no-ops still refuse.
+
 ## Local operator when client confirmation is unavailable
 
 Use the existing local executable with the same three binding flags:
