@@ -8,6 +8,12 @@ owner onboarding, memory and workspace knowledge use the same admitted binding. 
 the [owner journey and local fallback guide](../../docs/product-mcp-owner.md)
 for exact operations. Roots and workspace identity are selected locally.
 
+The modern signed factory and explicit reviewed first install are described in
+the [installation guide](../../docs/product-install.md). They materialize complete
+participant-local packets after genuine admission. Their engineering source
+evidence does not establish native signing, client registration/loading or the
+still-pending modern update lifecycle.
+
 Reviewed memory adds capture, paged discovery/search/readback, bounded context,
 daily/weekly consolidation and revision-aware correction/deletion/retention.
 Read the [memory journey and local fallback guide](../../docs/product-mcp-memory.md).
@@ -61,7 +67,8 @@ The shared source has no participant state. The builders do not install or chang
 host profiles, authentication, model settings or credentials.
 
 The Code plugin includes all 92 canonical methods and two operator/resume aliases.
-MCP exposes 92 prompts and 247 immutable method/policy/provenance/license resources.
+MCP exposes 92 prompts and 261 immutable resources: 247 method/policy/provenance/
+license resources and fourteen agent assets.
 Method availability is distinct from functional/native parity; check the adapter
 policy and actual operations before use. The Desktop MCPB contains a native executable and
 manifest; it does not install Skills. The recipes preserve host authority and owner

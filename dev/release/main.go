@@ -32,6 +32,8 @@ func main() {
 		icons(root, os.Args[2:])
 	case "seeded-binaries":
 		seededBinaries(root, os.Args[2:])
+	case "modern-candidate":
+		modernCandidate(root, os.Args[2:])
 	case "candidate":
 		candidate(root, os.Args[2:])
 	case "provenance":
@@ -405,4 +407,27 @@ func usage() {
 func fatal(err error) {
 	fmt.Fprintln(os.Stderr, "error:", err)
 	os.Exit(1)
+}
+
+func modernCandidate(root string, args []string) {
+	flags := flag.NewFlagSet("modern-candidate", flag.ExitOnError)
+	version := flags.String("version", "", "actual server and bundle version")
+	installer := flags.String("installer-version", "", "independent stable installer version")
+	channel := flags.String("channel", "canary", "release channel")
+	registry := flags.String("authority-registry", "", "independent approved public registry")
+	output := flags.String("output", "", "new factory output")
+	platform := flags.String("os", "", "actual runner OS")
+	arch := flags.String("arch", "", "actual runner architecture")
+	pack := flags.String("docling-pack", "", "optional separately qualified offline pack")
+	_ = flags.Parse(args)
+	if flags.NArg() != 0 || *registry == "" || *output == "" {
+		fatal(fmt.Errorf("modern factory requires exact registry/output and no positional arguments"))
+	}
+	result, err := releasepack.BuildModernCandidate(context.Background(), releasepack.ModernOptions{Root: root, Output: absoluteFromRoot(root, *output), Version: *version, InstallerVersion: *installer, Channel: *channel, AuthorityRegistry: absoluteFromRoot(root, *registry), Target: releasepack.Target{OS: *platform, Arch: *arch}, DoclingPack: optionalAbsoluteFromRoot(root, *pack)})
+	if err != nil {
+		fatal(err)
+	}
+	if err = json.NewEncoder(os.Stdout).Encode(result); err != nil {
+		fatal(err)
+	}
 }

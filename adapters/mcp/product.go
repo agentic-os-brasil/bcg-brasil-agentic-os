@@ -104,7 +104,11 @@ func mutationSchema() map[string]any {
 	return map[string]any{"type": "object", "oneOf": variants}
 }
 func (b *Bound) Server() *mcp.Server {
-	s := mcp.NewServer(&mcp.Implementation{Name: "maestro-product", Version: "0.1.0"}, nil)
+	version := b.options.CLIVersion
+	if version == "" {
+		version = "unavailable"
+	}
+	s := mcp.NewServer(&mcp.Implementation{Name: "maestro-product", Version: version}, nil)
 	readonly := &mcp.ToolAnnotations{ReadOnlyHint: true}
 	empty := map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
 	s.AddTool(&mcp.Tool{Name: "maestro_context", Description: "Read admitted binding metadata and memory capability hints; inspect maestro_query and maestro_apply schemas for operations. No content export.", InputSchema: empty, Annotations: readonly}, b.handle("context", empty))

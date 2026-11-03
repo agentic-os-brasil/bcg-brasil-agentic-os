@@ -197,7 +197,7 @@ func TestContentRealJourneys(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(binary), 0700); err != nil {
 		t.Fatal(err)
 	}
-	build := exec.Command("go", "build", "-mod=readonly", "-ldflags", "-X main.AuthorityRegistrySHA256="+seed, "-o", binary, "./cmd/maestro-mcp")
+	build := exec.Command("go", "build", "-mod=readonly", "-ldflags", "-X main.AuthorityRegistrySHA256="+seed+" -X main.Version=0.1.0 -X 'main.CompatibleBundle=>=0.1.0 <0.2.0'", "-o", binary, "./cmd/maestro-mcp")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("current seeded build: %s %v", out, err)
 	}

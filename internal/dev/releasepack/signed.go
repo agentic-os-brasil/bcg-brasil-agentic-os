@@ -96,7 +96,7 @@ func SignCandidate(options SignCandidateOptions) (releasecontract.Manifest, erro
 	defer os.RemoveAll(staging)
 	for _, artifact := range manifest.Artifacts {
 		mode := os.FileMode(0o644)
-		if artifact.Kind == "cli" {
+		if artifact.Kind == "cli" || artifact.Kind == "mcp_server" {
 			mode = 0o755
 		}
 		body, err := copySignedInput(

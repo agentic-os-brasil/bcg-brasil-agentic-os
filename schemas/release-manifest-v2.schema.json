@@ -1,0 +1,349 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:release-manifest:v2",
+  "title": "Maestro modern MCP release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "product",
+    "release",
+    "channel",
+    "issuer",
+    "bundle",
+    "artifacts",
+    "migrations",
+    "release_notes",
+    "server",
+    "delivery"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "product": {
+      "const": "maestro"
+    },
+    "release": {
+      "$ref": "#/$defs/version"
+    },
+    "channel": {
+      "enum": [
+        "stable",
+        "beta",
+        "canary"
+      ]
+    },
+    "issuer": {
+      "$ref": "#/$defs/issuer"
+    },
+    "bundle": {
+      "$ref": "#/$defs/bundle"
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "$ref": "#/$defs/artifact"
+      }
+    },
+    "migrations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/migration"
+      }
+    },
+    "release_notes": {
+      "$ref": "#/$defs/releaseNotes"
+    },
+    "server": {
+      "$ref": "#/$defs/server"
+    },
+    "delivery": {
+      "$ref": "#/$defs/delivery"
+    }
+  },
+  "$defs": {
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "range": {
+      "type": "string",
+      "pattern": "^>=(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*) <(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "fileReference": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^/\\\\\\s]+$"
+    },
+    "issuer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "key_id"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "key_id": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
+    },
+    "cli": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "compatible_bundle"
+      ],
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "compatible_bundle": {
+          "$ref": "#/$defs/range"
+        }
+      }
+    },
+    "bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "compatible_server"
+      ],
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "compatible_server": {
+          "$ref": "#/$defs/range"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "os",
+        "arch",
+        "name",
+        "size",
+        "sha256",
+        "signature_ref"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "mcp_server",
+            "bundle",
+            "runtime_pack"
+          ]
+        },
+        "os": {
+          "enum": [
+            "windows",
+            "darwin",
+            "linux",
+            "any"
+          ]
+        },
+        "arch": {
+          "enum": [
+            "amd64",
+            "arm64",
+            "any"
+          ]
+        },
+        "name": {
+          "$ref": "#/$defs/fileReference"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "signature_ref": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/fileReference"
+            },
+            {
+              "type": "string",
+              "pattern": "\\.sig$"
+            }
+          ]
+        },
+        "adapter": {
+          "const": "docling"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "runtime_pack"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "adapter"
+            ],
+            "properties": {
+              "os": {
+                "enum": [
+                  "darwin",
+                  "windows",
+                  "linux"
+                ]
+              },
+              "arch": {
+                "enum": [
+                  "amd64",
+                  "arm64"
+                ]
+              }
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "adapter"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "component",
+        "from",
+        "to",
+        "required"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "component": {
+          "enum": [
+            "mcp_server",
+            "bundle"
+          ]
+        },
+        "from": {
+          "$ref": "#/$defs/range"
+        },
+        "to": {
+          "$ref": "#/$defs/version"
+        },
+        "required": {
+          "const": true
+        },
+        "from_role": {
+          "$ref": "#/$defs/identifier"
+        },
+        "to_role": {
+          "$ref": "#/$defs/identifier"
+        },
+        "alias_expires_after": {
+          "$ref": "#/$defs/version"
+        },
+        "bundle_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "catalog_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "policy_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "releaseNotes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "sha256"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/fileReference"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "compatible_bundle",
+        "protocol",
+        "embedded_inputs_sha256"
+      ],
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "compatible_bundle": {
+          "$ref": "#/$defs/range"
+        },
+        "protocol": {
+          "const": "maestro-mcp-identity-v1"
+        },
+        "embedded_inputs_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "installer_version",
+        "installer_protocol",
+        "client_inputs_sha256"
+      ],
+      "properties": {
+        "profile": {
+          "const": "mcp-local-v1"
+        },
+        "installer_version": {
+          "$ref": "#/$defs/version"
+        },
+        "installer_protocol": {
+          "const": "maestro-install-seed-v1"
+        },
+        "client_inputs_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

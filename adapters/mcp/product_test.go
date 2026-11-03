@@ -236,8 +236,18 @@ func runWorkflow(t *testing.T, stdio bool) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if len(archive.File) != 2 {
-					t.Fatal("MCPB must contain only manifest and executable")
+				expected := map[string]bool{"manifest.json": true, "server/maestro-mcp": true, "maestro-packet.json": true}
+				if len(archive.File) != len(expected) {
+					t.Fatal("unseeded MCPB must contain exact manifest, executable and public inventory")
+				}
+				for _, file := range archive.File {
+					if !expected[file.Name] {
+						t.Fatalf("unexpected or duplicate MCPB entry %s", file.Name)
+					}
+					delete(expected, file.Name)
+				}
+				if len(expected) != 0 {
+					t.Fatal("MCPB public closure incomplete")
 				}
 				archive.Close()
 			}
