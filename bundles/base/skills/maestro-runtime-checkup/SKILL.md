@@ -1,6 +1,6 @@
 ---
 name: maestro-runtime-checkup
-description: Inspect Maestro runtime and maintenance status, qualify a named job or manage its reviewed enrollment. Use for missing runtime evidence, due work, pause/resume/revoke, or questions about readiness; repair and native scheduling remain separate operations.
+description: Inspect Maestro runtime and maintenance status, qualify a named job or manage its reviewed enrollment. Use for runtime evidence, bounded Darwin health repair/proposals, attended signed-source checks, due work, pause/resume/revoke or readiness; native scheduling remains separate.
 ---
 
 # Maestro Runtime Checkup
@@ -48,14 +48,19 @@ no transition; reread current status before reconciling a conflict.
 Use only the implemented jobs: `memory-light-dream`, `memory-checkpoint`,
 `memory-deep-dream`, `memory-retention-check`, `skills-index-refresh`,
 `runtime-health-check`, `capability-recheck`, `runtime-drift-check`,
-`wiki-incremental-sync`, `wiki-reconcile` and `wiki-integrity-check`. Other
+`wiki-incremental-sync`, `wiki-reconcile`, `wiki-integrity-check`,
+`darwin-housekeeping-daily`, `darwin-deep-weekly`,
+`darwin-structural-evolution-proposal` and `update-check`. Other
 catalog entries retain their unavailable reasons. The catalog does not activate
 jobs. Enrollment requires current qualification; changed build/configuration
 requires fresh qualification. Use the owner's timezone; resolve an ambiguous
 choice before enrollment. The service selects cadence, not a model-supplied
 schedule: light dream/checkpoint every three hours, deep dream and wiki reconcile
-weekly on Sunday, wiki incremental only for an eligible committed-source event,
-and the remaining implemented jobs daily, each with bounded catch-up. Incremental
+weekly on Sunday, Darwin deep review weekly on Sunday, wiki incremental only
+for an eligible committed-source event, and retention/index/runtime diagnosis
+and Darwin housekeeping daily. Recurring jobs retain bounded catch-up. Darwin
+monthly proposals and update checks are attended-only and cannot enroll.
+Incremental
 sync never invents a calendar occurrence. Reconcile qualification requires an
 actual current-build compilation; a verified no-op can run normally but cannot
 mint qualification. Integrity checks the entire current graph without repair.
@@ -66,12 +71,55 @@ interpreter or access a model/provider. Deep-dream enrollment approves L2/L3
 work, never future lifetime candidate text; the exact candidate review remains
 in [dream-memory](../dream-memory/SKILL.md).
 
+### Darwin local health and proposals
+
+For requested Darwin work, inspect its exact job and existing report first.
+`darwin-housekeeping-daily` derives a bounded body-free health cache from actual
+workspace/configuration/projection/capability checks and non-Darwin scheduler
+evidence. Missing cache is absent. Its first creation requires the owner's exact
+attended qualification review; status/report and recurring work cannot initialize
+it. A stale cache means verified external provenance changed. Requested
+qualification can refresh only that derived cache after reviewing its exact
+parent and source. It never repairs client files, source code, policy or releases.
+
+`darwin-deep-weekly` may perform the same bounded reversible cache refresh and
+publishes an immutable assessment/proposal. These daily/weekly qualifications
+leave enrollment inactive. Offer separate enrollment only for the requested
+qualified job, owner timezone and exact diagnosis/cache/assessment write set.
+`darwin-structural-evolution-proposal` emits an attended bounded assessment only;
+never enroll it or treat a proposal as structural approval/application.
+
+Report actual findings and coverage. A current cache means its verified inputs
+agree; capabilities may still be unavailable. Native observation remains
+`not_observed`, and unbound registered-document coverage remains unavailable.
+Preserve `proposal_emitted`, `reviewed_no_change`, partial and recovery-required
+outcomes. Unchanged or restarted replay preserves actual evidence and does not
+qualify a job merely because another time/occurrence was observed. Recovery
+refusal remains pending for exact attended repair; do not delete cache/control
+files, reset authority or relabel partial effects as success.
+
+### Attended signed-source check
+
+`update-check` qualifies only an explicitly reviewed one-shot observation of the
+installed owner's enrolled signed source. Its declared effects are source custody,
+bounded candidate staging/plan and local diagnosis. It never enrolls recurring
+work or activates a release. Show authenticated source/candidate diagnosis and
+unavailable eligibility separately. Retain historical report/plan provenance;
+only a separately canonically verified `current_pending` projection identifies
+a current unconfirmed plan. Clock-only replay preserves genuine qualification
+or remains unqualified. If the MCP source launch is unavailable, use the existing
+independent installer recovery route; never reset SourceControl/Previous or
+substitute a root/key/executable to make the check pass.
+
 ### Read the result accurately
 
 `maintenance.report` supports `memory-deep-dream`, `memory-retention-check`,
 `skills-index-refresh`, `runtime-health-check`, `capability-recheck` and
 `runtime-drift-check`, `wiki-incremental-sync`, `wiki-reconcile` and
-`wiki-integrity-check`. Wiki reports contain source/graph identities and counts,
+`wiki-integrity-check`, all three named Darwin jobs and `update-check`.
+Darwin reports contain bounded cache/source/effect/proposal identities, counts
+and coverage; signed-source reports contain bounded historical diagnosis and
+separate verified current-pending metadata. Wiki reports contain source/graph identities and counts,
 never private concept or capture bodies. A historical report does not establish
 current graph readability. Inspect `wiki.status` for the current view; reads and
 status do not compile, enroll or recover anything. Light dream/checkpoint qualification metadata and domain

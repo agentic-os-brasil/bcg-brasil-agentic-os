@@ -31,6 +31,7 @@ var ErrQualificationRequired = errors.New("current actual maintenance qualificat
 // ServiceOptions is a native constructor boundary, never a tool schema.
 // Catalog must come from bundles/base/runtime.Maintenance (which imports this package).
 type ServiceOptions struct {
+	DarwinFactory                                  func(DarwinScope) (DarwinBinding, error) `json:"-"`
 	ProductRoot, UserHome, WorkspacePath           string
 	LookupEnv                                      func(string) (string, bool)
 	Catalog                                        Catalog
@@ -45,6 +46,7 @@ type ServiceOptions struct {
 }
 
 type Service struct {
+	darwin                                        DarwinBinding
 	options                                       ServiceOptions
 	home, workspaceID, binding, executable, build string
 	scheduler                                     scheduler.Store
@@ -75,6 +77,7 @@ type ProductSchedule struct {
 // ProductReview contains metadata only. Its private binding rejects edited or
 // serialized reviews; trusted confirmation is still required for every Apply.
 type ProductReview struct {
+	DarwinReview    *DarwinReviewProjection     `json:"darwin_review,omitempty"`
 	Operation       Operation                   `json:"operation"`
 	WorkspaceID     string                      `json:"workspace_id"`
 	Schedule        ProductSchedule             `json:"schedule"`
@@ -192,6 +195,9 @@ func NewService(options ServiceOptions) (*Service, error) {
 	if err == nil {
 		s.weekly.Now = now
 	}
+	if err == nil {
+		s.darwin, err = s.newDarwinBinding()
+	}
 	return s, err
 }
 
@@ -246,7 +252,7 @@ func productDigest(value any) string {
 	return hex.EncodeToString(sum[:])
 }
 func productJob(jobID string) bool {
-	return jobID == MemoryLightDreamJobID || jobID == MemoryCheckpointJobID || jobID == MemoryDeepDreamJobID || jobID == "skills-index-refresh" || diagnosticJob(jobID)
+	return DarwinJob(jobID) || jobID == MemoryLightDreamJobID || jobID == MemoryCheckpointJobID || jobID == MemoryDeepDreamJobID || jobID == "skills-index-refresh" || diagnosticJob(jobID)
 }
 func (s *Service) configuration(jobID string) string {
 	job, _ := findCatalogJob(s.options.Catalog, jobID)
@@ -331,7 +337,7 @@ func (s *Service) Status() (ProductStatus, error) {
 		if len(c.Writes) > 0 {
 			item.Writes = append([]string(nil), c.Writes...)
 		}
-		if !productJob(job.ID) {
+		if !productJob(job.ID) || DarwinJob(job.ID) && s.darwin == nil {
 			item.Reason = "production_binding_unavailable"
 		} else if c.Qualification != nil {
 			if err := s.verifyQualification(c.Qualification); err == nil {
@@ -352,6 +358,14 @@ func (s *Service) Review(op Operation) (ProductReview, error) {
 	}
 	if !productJob(op.JobID) {
 		return ProductReview{}, scheduler.ErrCapabilityUnavailable
+	}
+	if DarwinJob(op.JobID) {
+		if _, err := s.darwinSource(op.JobID); err != nil {
+			return ProductReview{}, err
+		}
+		if op.JobID == DarwinMonthlyJobID && op.Kind != "qualify" {
+			return ProductReview{}, errors.New("Darwin monthly proposal is attended-only")
+		}
 	}
 	if op.Kind != "qualify" && op.Kind != "enroll" && op.Kind != "pause" && op.Kind != "resume" && op.Kind != "revoke" {
 		return ProductReview{}, errors.New("unknown maintenance operation")
@@ -393,7 +407,24 @@ func (s *Service) Review(op Operation) (ProductReview, error) {
 		r.QualificationID = c.Qualification.ID
 	}
 	if op.Kind == "qualify" || op.Kind == "enroll" {
-		r.SourceState, err = s.sourceState(op.JobID)
+		if DarwinJob(op.JobID) {
+			source, e := s.darwinSource(op.JobID)
+			if e != nil {
+				return ProductReview{}, e
+			}
+			effect := "assess"
+			if op.Kind == "qualify" && op.JobID != DarwinMonthlyJobID {
+				if source.CacheState == "absent" {
+					effect = "initialize"
+				} else if source.CacheState == "stale" {
+					effect = "refresh"
+				}
+			}
+			r.SourceState = productDigest(source)
+			r.DarwinReview = &DarwinReviewProjection{CacheState: source.CacheState, Parent: source.Parent, ExternalSHA256: source.ExternalSHA256, Effect: effect}
+		} else {
+			r.SourceState, err = s.sourceState(op.JobID)
+		}
 		if err != nil {
 			return ProductReview{}, err
 		}
@@ -433,6 +464,9 @@ func (s *Service) Apply(ctx context.Context, r ProductReview, confirm func(conte
 		return ProductJobStatus{}, ErrProductConflict
 	}
 	if r.Operation.Kind == "qualify" {
+		if DarwinJob(r.Operation.JobID) {
+			return s.qualifyDarwin(ctx, r)
+		}
 		return s.qualify(ctx, r)
 	}
 	err = s.withControl(r.Operation.JobID, func() error {
@@ -481,11 +515,12 @@ func (s *Service) jobStatus(id string) (ProductJobStatus, error) {
 // Existing memory activation lock → control guard → occurrence lease guard →
 // visible publication. Control transitions never acquire memory or lease locks.
 type productExecution struct {
-	service  *Service
-	jobID    string
-	revision uint64
-	oneShot  string
-	source   string
+	darwinSource *DarwinSource
+	service      *Service
+	jobID        string
+	revision     uint64
+	oneShot      string
+	source       string
 }
 
 func (p *productExecution) guard(publish func() error) error {
@@ -499,6 +534,12 @@ func (p *productExecution) guard(publish func() error) error {
 		}
 		if c.Revision != p.revision || p.oneShot != "" && c.OneShot != p.oneShot || p.oneShot == "" && c.State != "active" {
 			return ErrProductConflict
+		}
+		if p.darwinSource != nil {
+			current, err := p.service.darwinSource(p.jobID)
+			if err != nil || productDigest(current) != productDigest(*p.darwinSource) {
+				return ErrProductConflict
+			}
 		}
 		if (wikiJob(p.jobID) || p.jobID == UpdateCheckJobID) && p.source != "" {
 			current, err := p.service.sourceState(p.jobID)
@@ -532,6 +573,9 @@ func (s *Service) worker(p *productExecution) Worker {
 		handlers[job] = productWikiHandler{service: s, expected: p.source, job: job}
 	}
 	handlers[UpdateCheckJobID] = productUpdateHandler{service: s, expected: p.source, execution: p}
+	if DarwinJob(p.jobID) && s.darwin != nil && p.darwinSource != nil {
+		handlers[p.jobID] = s.darwin.Handler(p.jobID, p.darwinSource, p.oneShot != "")
+	}
 	return Worker{Catalog: s.options.Catalog, Scheduler: s.scheduler, Receipts: s.receipts, Jobs: []scheduler.Job{{ID: p.jobID, Cadence: schedule.Cadence, Weekday: schedule.Weekday, LocalHour: schedule.LocalHour, LocalMinute: schedule.LocalMinute, IntervalHours: schedule.IntervalHours, MaxCatchUp: schedule.MaxCatchUp}}, Handlers: handlers, Deadline: 2 * time.Minute, Now: s.now, product: p}
 }
 
@@ -541,6 +585,9 @@ func (s *Service) execute(ctx context.Context, p *productExecution, occ schedule
 	}
 	authority := ExecutionAuthority{catalog: s.options.Catalog, occurrences: map[string]OccurrenceAuthorization{}, activated: map[string]bool{p.jobID: true}, attended: p.oneShot != "", preauthorized: p.oneShot == "", ready: true, productBound: true}
 	trigger := TriggerPresence
+	if p.jobID == DarwinMonthlyJobID {
+		trigger = TriggerMonthly
+	}
 	if occ.EventID != "" {
 		trigger = TriggerEvent
 	}
@@ -552,7 +599,7 @@ func (s *Service) execute(ctx context.Context, p *productExecution, occ schedule
 	if err != nil {
 		return rejectedTerminalReceipt(receipt), err
 	}
-	if receipt.State == ReceiptSucceeded || receipt.State == ReceiptReviewedNoChange {
+	if receipt.State == ReceiptSucceeded || receipt.State == ReceiptReviewedNoChange || receipt.State == ReceiptProposalEmitted {
 		if occ.EventID != "" {
 			if err := s.receipts.VerifyEventReceipt(receipt); err != nil {
 				return rejectedTerminalReceipt(receipt), err
@@ -642,6 +689,13 @@ func (s *Service) RunDue(ctx context.Context) (WakeReport, error) {
 		for _, occ := range due {
 			report.Due = append(report.Due, occ)
 			p := &productExecution{service: s, jobID: job.ID, revision: c.Revision}
+			if DarwinJob(job.ID) {
+				source, e := s.darwinSource(job.ID)
+				if e != nil {
+					return report, e
+				}
+				p.darwinSource = &source
+			}
 			if wikiJob(job.ID) {
 				p.source, err = s.sourceState(job.ID)
 				if err != nil {
@@ -821,6 +875,9 @@ func (s *Service) domainEvidence(jobID string, at time.Time) (string, string, er
 }
 
 func (s *Service) verifyQualification(q *ProductQualification) error {
+	if q != nil && DarwinJob(q.JobID) {
+		return s.verifyDarwinQualification(q)
+	}
 	if q == nil {
 		return ErrQualificationRequired
 	}
@@ -951,6 +1008,9 @@ func NewProductWeeklyMemoryEngine(home string) (*memory.Engine, error) {
 	return engine, nil
 }
 func scheduleFor(job string) ProductSchedule {
+	if job == DarwinWeeklyJobID {
+		return ProductSchedule{Cadence: scheduler.Weekly, Weekday: time.Sunday, MaxCatchUp: 1}
+	}
 	if job == WikiIncrementalJobID {
 		return ProductSchedule{EventOnly: true, MaxCatchUp: 1}
 	}
@@ -963,6 +1023,10 @@ func scheduleFor(job string) ProductSchedule {
 	return ProductSchedule{Cadence: scheduler.Daily, MaxCatchUp: 1}
 }
 func (s *Service) sourceState(job string) (string, error) {
+	if DarwinJob(job) {
+		source, err := s.darwinSource(job)
+		return productDigest(source), err
+	}
 	if job == UpdateCheckJobID {
 		review, err := s.updateReview()
 		return review.Digest, err

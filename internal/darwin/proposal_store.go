@@ -23,17 +23,27 @@ var ErrProposalReplayConflict = errors.New("Darwin proposal artifact conflicts w
 // content ProposalDigest may change if a fresh assessment would have changed,
 // so retries must recover this exact artifact instead of rebuilding it.
 type AssessmentProposalArtifact struct {
-	SchemaVersion    int        `json:"schema_version"`
-	RecordType       string     `json:"record_type"`
-	AgentID          string     `json:"agent_id"`
-	JobID            string     `json:"job_id"`
-	OccurrenceDigest string     `json:"occurrence_digest"`
-	ArtifactID       string     `json:"artifact_id"`
-	WindowID         string     `json:"window_id"`
-	ProposalDigest   string     `json:"proposal_digest"`
-	Assessment       Assessment `json:"assessment"`
-	ScheduledFor     time.Time  `json:"scheduled_for"`
-	RecordedAt       time.Time  `json:"recorded_at"`
+	Product          *ProductAssessmentProvenance `json:"product,omitempty"`
+	SchemaVersion    int                          `json:"schema_version"`
+	RecordType       string                       `json:"record_type"`
+	AgentID          string                       `json:"agent_id"`
+	JobID            string                       `json:"job_id"`
+	OccurrenceDigest string                       `json:"occurrence_digest"`
+	ArtifactID       string                       `json:"artifact_id"`
+	WindowID         string                       `json:"window_id"`
+	ProposalDigest   string                       `json:"proposal_digest"`
+	Assessment       Assessment                   `json:"assessment"`
+	ScheduledFor     time.Time                    `json:"scheduled_for"`
+	RecordedAt       time.Time                    `json:"recorded_at"`
+}
+
+// ProductAssessmentProvenance preserves historical Canary artifact decoding
+// while binding new product assessments to actual admitted observations.
+type ProductAssessmentProvenance struct {
+	WorkspaceID    string `json:"workspace_id"`
+	Implementation string `json:"implementation"`
+	Configuration  string `json:"configuration"`
+	ExternalSHA256 string `json:"external_sha256"`
 }
 
 type ProposalStore struct{ Root string }
@@ -53,6 +63,11 @@ func (store ProposalStore) ValidateReceipt(receipt maintenance.Receipt) error {
 }
 
 func (artifact AssessmentProposalArtifact) Validate() error {
+	if p := artifact.Product; p != nil {
+		if !idPattern.MatchString(p.WorkspaceID) || !validEvolutionSHA(p.Implementation) || !validEvolutionSHA(p.Configuration) || !validEvolutionSHA(p.ExternalSHA256) {
+			return errors.New("invalid product assessment provenance")
+		}
+	}
 	if artifact.SchemaVersion != proposalArtifactSchemaVersion || artifact.RecordType != "assessment" || artifact.AgentID != AgentID || (artifact.JobID != "darwin-deep-weekly" && artifact.JobID != "darwin-structural-evolution-proposal") || !validEvolutionSHA(artifact.OccurrenceDigest) || !validEvolutionSHA(artifact.ArtifactID) || !validEvolutionSHA(artifact.ProposalDigest) || artifact.ArtifactID != assessmentArtifactID(artifact.JobID, artifact.OccurrenceDigest) || artifact.ScheduledFor.IsZero() || artifact.RecordedAt.IsZero() || !artifact.RecordedAt.Equal(artifact.ScheduledFor.UTC()) {
 		return errors.New("Darwin proposal artifact header is invalid")
 	}

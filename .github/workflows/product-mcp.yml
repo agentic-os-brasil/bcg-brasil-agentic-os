@@ -27,6 +27,7 @@ on:
       - 'internal/atlasops/**'
       - 'internal/ingest/**'
       - 'internal/scheduler/**'
+      - 'internal/darwin/**'
       - 'internal/maintenance/**'
       - 'internal/maintenancecatalog/**'
       - 'internal/runtimecap/**'
@@ -76,6 +77,7 @@ on:
       - 'internal/atlasops/**'
       - 'internal/ingest/**'
       - 'internal/scheduler/**'
+      - 'internal/darwin/**'
       - 'internal/maintenance/**'
       - 'internal/maintenancecatalog/**'
       - 'internal/runtimecap/**'
@@ -166,7 +168,7 @@ jobs:
         working-directory: adapters/mcp
         # The actual first-install tracer runs separately on an admitted native
         # runner. Elevated Windows CI cannot qualify ordinary-user installation.
-        run: go test ./... -skip '^(TestModernFactoryFirstInstallAndRestart|TestDirectInnerInstallRequiresProductionAuthority|TestModernSyncedSourceLifecycle|TestSyncedPublicationInterleavingAndReadOnlyReviews)$' -timeout=900s
+        run: go test ./... -skip '^(TestModernFactoryFirstInstallAndRestart|TestDirectInnerInstallRequiresProductionAuthority|TestModernSyncedSourceLifecycle|TestSyncedPublicationInterleavingAndReadOnlyReviews|TestProductDarwinSDKAndShippingStdioLifecycle)$' -timeout=900s
       - name: Product module static checks
         working-directory: adapters/mcp
         run: go vet ./...
@@ -284,6 +286,39 @@ jobs:
           assert any(e.get("Action") == "pass" and e.get("Test") == family for e in events), "actual publication/read-only proof missing or skipped"
           skipped = [e.get("Test") for e in events if e.get("Action") == "skip" and (e.get("Test") == family or e.get("Test", "").startswith(family + "/"))]
           assert not skipped, "actual publication/read-only proof has skipped cases: " + repr(skipped)
+          PYCODE
+
+  darwin-product-contracts:
+    runs-on: macos-15
+    timeout-minutes: 15
+    env:
+      MAESTRO_DARWIN_TEST_ROOT: ${{ runner.temp }}/maestro-darwin-product
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: adapters/mcp/go.mod
+      - name: Darwin product diagnosis repair and owning refusal contracts
+        run: go test ./internal/darwin -count=1 -timeout=240s
+      # The native-neutral source proof uses a real rebuilt stdio server.
+      # It does not qualify Code/Desktop loading or native scheduler wake.
+      - name: Exact Darwin SDK and rebuilt shipping stdio lifecycle
+        working-directory: adapters/mcp
+        shell: bash
+        run: |
+          evidence="$RUNNER_TEMP/maestro-darwin-product.jsonl"
+          if ! go test . -run '^TestProductDarwinSDKAndShippingStdioLifecycle$' -count=1 -json -timeout=480s > "$evidence"; then
+            cat "$evidence"
+            exit 1
+          fi
+          cat "$evidence"
+          python3 - "$evidence" <<'PYCODE'
+          import json, pathlib, sys
+          events = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+          family = "TestProductDarwinSDKAndShippingStdioLifecycle"
+          assert any(e.get("Action") == "pass" and e.get("Test") == family for e in events), "actual Darwin lifecycle missing or skipped"
+          skipped = [e.get("Test") for e in events if e.get("Action") == "skip" and (e.get("Test") == family or e.get("Test", "").startswith(family + "/"))]
+          assert not skipped, "actual Darwin lifecycle skipped proof: " + repr(skipped)
           PYCODE
 
   wiki-maintenance-contracts:
