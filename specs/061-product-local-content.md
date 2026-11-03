@@ -193,3 +193,30 @@ restarted readback through SDK and the rebuilt production stdio server.
 PDF/OCR and images require a separate full native/model closure. PPTX is a
 separate model-free extension needing its own parser inputs, explicit policy
 admission and real fixture; none is included in this completion claim.
+
+### Verified public coverage and complete product proof
+
+The product status may mark a per-format route available only after the owning
+Runtime.Status verification succeeds. Public intended route/parser/fidelity
+descriptors may be listed beforehand, explicitly unavailable with the verifier
+reason; they assert no installed capability. That existing verifier
+binds the exact current embedded bridge, lock, full 51-input list, parser notices,
+model-free profile and complete authenticated installed inventory. A library
+version, DefaultPolicy entry, valid old signature or engineering archive hash
+cannot substitute for that profile. Missing/tampered/unknown/old profiles leave
+every route unavailable. Status runs no conversion, fetch, provisioning or repair.
+
+JSON coverage describes literal generic JSON as the default and validated
+Docling-export import as a conditional alternative. Only the actual conversion
+and immutable artifact result establish which parser, fidelity and fallback
+occurred; intended coverage cannot make an empty/partial source usable.
+
+Complete PFMT acceptance includes actual conversions for all eleven extensions
+through SDK and the rebuilt production stdio server, bounded public document/
+Markdown reads with independent expected content, exact trusted reviewed named
+page creation/append, restart/readback and idempotent retry. Preserve private
+review custody, current revision/source/scope checks and metadata-only conflicts.
+Reuse immutable source/runtime evidence without injecting precomputed output as
+proof of a new public conversion. Installed recipes and compiler metadata change
+only after their backend exists. Native clients and broader platforms remain
+separate evidence.

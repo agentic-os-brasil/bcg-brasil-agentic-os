@@ -48,8 +48,55 @@ func TestContentUnseededStatus(t *testing.T) {
 	if got["state"] != "unavailable" {
 		t.Fatalf("unseeded runtime: %v", got)
 	}
+	assertPolicyCoverage(t, got, "unavailable", "authority_unavailable")
 	contentCall(t, cs, "maestro_apply", map[string]any{"operation": "content.convert", "source_path": "../outside.docx"}, false)
 	contentCall(t, cs, "maestro_query", map[string]any{"operation": "content.status", "authority": "model"}, true)
+}
+
+func assertPolicyCoverage(t *testing.T, got map[string]any, state, reason string) {
+	t.Helper()
+	want := map[string][]string{
+		".csv":  {"docling_local", "docling.csv", "structured", ""},
+		".docx": {"docling_local", "docling.docx", "structured", ""},
+		".epub": {"docling_local", "docling.epub", "structured", ""},
+		".htm":  {"docling_local", "docling.html", "structured", ""},
+		".html": {"docling_local", "docling.html", "structured", ""},
+		".json": {"maestro_literal_v1", "maestro.literal_utf8.v1", "textual", "native_generic_literal_unsupported"},
+		".md":   {"docling_local", "docling.markdown", "structured", ""},
+		".txt":  {"maestro_literal_v1", "maestro.literal_utf8.v1", "textual", "native_generic_literal_unsupported"},
+		".xls":  {"maestro_biff_v1", "xlrd.biff", "textual", "native_xls_requires_unmanaged_office"},
+		".xlsx": {"docling_local", "docling.xlsx", "structured", ""},
+		".xml":  {"maestro_literal_v1", "maestro.literal_utf8.v1", "textual", "native_generic_literal_unsupported"},
+	}
+	formats, ok := got["formats"].([]any)
+	if !ok || len(formats) != len(want) {
+		t.Fatalf("public installed format coverage missing: %v", got)
+	}
+	previous := ""
+	for _, entry := range formats {
+		format := entry.(map[string]any)
+		ext := format["extension"].(string)
+		expected, exists := want[ext]
+		if !exists || ext <= previous || format["state"] != state || reason != "" && format["reason"] != reason {
+			t.Fatalf("format availability: %v", format)
+		}
+		previous = ext
+		for i, field := range []string{"route", "parser", "fidelity", "fallback_reason"} {
+			if expected[i] != "" && format[field] != expected[i] || expected[i] == "" && format[field] != nil {
+				t.Fatalf("%s %s: %v", ext, field, format)
+			}
+		}
+		if ext == ".json" {
+			alternatives, ok := format["alternatives"].([]any)
+			if !ok || len(alternatives) != 1 {
+				t.Fatal("validated Docling JSON alternative missing", format)
+			}
+			alternative := alternatives[0].(map[string]any)
+			if alternative["condition"] != "validated_docling_document" || alternative["route"] != "docling_local" || alternative["parser"] != "docling.json" || alternative["fidelity"] != "structured" {
+				t.Fatal("JSON export misrepresented", alternative)
+			}
+		}
+	}
 }
 
 func copyContentFixture(t *testing.T, source, target string) {

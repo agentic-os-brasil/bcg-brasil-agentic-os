@@ -16,8 +16,14 @@ Explicit `init` prepares its fixed authority; queries/startup never bootstrap it
 Local document conversion adds immutable scoped artifacts, bounded UTF-8 readback
 and reviewed workspace knowledge creation/append through the canonical atlas
 engine. Read the [content journey and local fallback guide](../../docs/product-mcp-content.md).
-The initial authenticated runtime capability is Darwin-arm64 DOCX; unseeded or
-unsupported runtime inputs remain unavailable without blocking unrelated work.
+The reviewed Darwin-arm64 converter profile covers eleven existing policy
+extensions without models. Per-format status and the complete PFMT SDK/rebuilt-stdio
+reviewed-knowledge/restart matrix passed local engineering tests: 24 positive
+journeys and all 31 required case IDs. Final source reviews and native-client
+acceptance remain separate. Only the exact authenticated current runtime
+profile can supply coverage. Unseeded, older or unsupported inputs remain
+unavailable without blocking unrelated work; actual source results retain their
+route/parser/fidelity. Other platforms and PDF/OCR/image/PPTX profiles are separate.
 
 Build from this directory with `go build -o /absolute/local/path/maestro-mcp ./cmd/maestro-mcp`.
 The installed product directory and owner directory must already exist. Choose a

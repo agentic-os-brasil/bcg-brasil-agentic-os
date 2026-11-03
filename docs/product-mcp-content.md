@@ -3,9 +3,13 @@
 Code and Desktop share the admitted workspace's canonical knowledge engine.
 A local document becomes a private conversion artifact; an exact human review
 permits a knowledge change. The original document stays in its workspace and
-managed product assets remain read-only. This engineering guide describes the
-E4 delivery; source tests, native qualification and a signed team release are
-separate evidence.
+managed product assets remain read-only. This engineering guide covers the
+retained E4 DOCX journey and the PFMT policy-format extension. The owning
+eleven-format converter is reviewed and integrated. Per-format status and the
+complete SDK/rebuilt-stdio knowledge/restart matrix passed in local synthetic
+engineering tests: 24 positive journeys and all 31 required case IDs. Independent
+Task2/front reviews, native qualification and a signed team release are separate
+evidence.
 
 ## Prepare and inspect
 
@@ -15,12 +19,29 @@ then reuse the same binding for `serve` and operator commands. The
 creates the registered workspace and its brain; ordinary queries and conversion
 never initialize, migrate or provision a runtime.
 
-Query `content.status` before conversion. The first authenticated capability is
-**DOCX on Darwin arm64**, using a pinned Docling pack with no model inventory.
-Missing trust or an absent/changed pack reports unavailable. Other formats
-and platforms are explicitly refused until qualified. A third-party library's
-supported formats do not establish product qualification. Runtime provisioning requires its own release/installation proof; querying or
-converting never downloads dependencies.
+Query `content.status` before conversion. The reviewed PFMT converter profile is
+**Darwin arm64 with no model inventory**. Its eleven existing policy extensions
+have actual authenticated offline content oracles and public SDK/rebuilt-stdio
+reviewed-knowledge/restart evidence. Verified profile identity governs coverage; a format
+allowlist, library version or old ready pack cannot establish a newly supported
+route. Missing trust or an absent/changed/unrecognized pack remains unavailable.
+Runtime provisioning has its own release/installation proof; querying and
+conversion never download dependencies.
+
+| Source | Intended fidelity in the authenticated PFMT profile |
+| --- | --- |
+| DOCX, CSV, HTML/HTM, Markdown, EPUB, XLSX | Native structured conversion with actual table/order/content oracles and rendering/resource/model features disabled. |
+| BIFF XLS | Deterministic textual cell/sheet mapping, preserving declared date, cached-value and empty-cell semantics. No formula evaluation. |
+| TXT, ordinary JSON, generic XML | Validated original UTF-8 represented as literal code content with textual fidelity. Markup/whitespace is not silently reinterpreted. |
+| Validated Docling-export JSON | Structured import only after the runtime validates the actual export; a claimed schema name is insufficient. |
+
+Actual conversion and artifact results report the route/parser/fidelity and
+fallback reason for that source. They take precedence over intended coverage.
+XLSX admission binds its finite supported content-type/relationship graph and
+workbook-wide cell/range/geometry budgets; unsupported layouts refuse before
+authentication. See [Spec061](../specs/061-product-local-content.md) for that
+profile. PDF/OCR, images, PPTX and other platforms remain separately admitted
+and qualified work; they are not part of this eleven-extension completion.
 
 ## Convert, read and write
 
@@ -29,7 +50,7 @@ workspace identity, commands and release authority come from the local binding.
 
 | Tool / operation | Input and result |
 | --- | --- |
-| `maestro_query` / `content.status` | Metadata-only runtime availability and reason. |
+| `maestro_query` / `content.status` | Metadata-only verified runtime/profile availability and intended per-format descriptors. Before verification every descriptor remains unavailable with the verifier reason. |
 | `maestro_apply` / `content.convert` | `source_path`, a canonical path relative to the selected workspace. Returns a scoped artifact and provenance after usable conversion. |
 | `maestro_query` / `content.read` | `artifact_id`, `format` (`markdown` or `document`), and optional `offset` / `max_bytes` (4–16,384). Returns a UTF-8-safe slice of at most 16,384 bytes. |
 | `maestro_apply` / `knowledge.create` | `artifact_id`, `page` and exact `text`; requests trusted review of a new page. |
@@ -118,3 +139,29 @@ builds an ephemeral engineering fixture from exact official inputs. It cannot
 establish corporate signing, portable installation, broader format/model support,
 Windows admission, actual native loading, SharePoint publication or team pilot
 acceptance.
+
+## PFMT engineering acceptance
+
+`TestContentPolicyRealJourneys` performs actual conversion through SDK and the
+rebuilt Code packet executable for all eleven extensions and validated-export
+JSON. It reads document/Markdown through bounded public slices, requires exact
+trusted host-form review, creates/appends distinct named pages, restarts and
+checks revision/provenance and idempotent retry. It does not install precomputed
+output as a new conversion artifact. The recorded local run passed 24 positive
+journeys: SDK 871.78 seconds, production stdio 702.31 seconds, package 1576.371
+seconds. These are measured engineering durations, not a performance promise.
+
+The same run checks private review/scope/stale-source and concurrent-page
+refusals, actual empty-content refusal and parser tampering. The actual MCPB
+executable reads verified coverage, recipe/policy/license/provenance resources,
+bounded artifacts and a restarted named page. It does not establish native
+Code/Desktop loading or host form qualification.
+
+The retained current fixture supplies MAESTRO_DOCLING_RETAINED_ROOT and its
+exact linker-bound MAESTRO_DOCLING_RETAINED_SEED. Run the focused matrix from
+the MCP module with an adequate runner window; individual product deadlines
+and network denial remain unchanged. Optional MAESTRO_POLICY_PUBLIC_ROOT must
+name a new private proof directory. An unseeded skip is not conversion evidence.
+The product CI workflow acquires the exact 51 official inputs and requires all
+31 actual PASS IDs; missing/skipped cases fail that acceptance step. Hosted CI
+has not been run by this local construction record.
