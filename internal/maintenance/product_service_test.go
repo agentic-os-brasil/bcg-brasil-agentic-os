@@ -483,9 +483,12 @@ func TestProductReplayReportsPartialReceiptEvidence(t *testing.T) {
 	if err := s.withControl(c.JobID, func() error { return s.saveControl(c) }); err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.execute(context.Background(), p, scheduler.Occurrence{JobID: MemoryLightDreamJobID, ScheduledFor: q.ScheduledFor}, q.RequestedAt.Add(time.Second))
+	returned, err := s.execute(context.Background(), p, scheduler.Occurrence{JobID: MemoryLightDreamJobID, ScheduledFor: q.ScheduledFor}, q.RequestedAt.Add(time.Second))
 	if err == nil {
 		t.Fatal("partial durable evidence became replay success")
+	}
+	if returned.State == ReceiptSucceeded || returned.State == ReceiptReviewedNoChange {
+		t.Fatal("partial durable evidence was presented as a successful receipt")
 	}
 	if s.verifyQualification(q) == nil {
 		t.Fatal("missing scheduler evidence retained qualification")

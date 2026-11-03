@@ -19,11 +19,18 @@ daily/weekly consolidation and revision-aware correction/deletion/retention.
 Read the [memory journey and local fallback guide](../../docs/product-mcp-memory.md).
 Explicit `init` prepares its fixed authority; queries/startup never bootstrap it.
 
+The private wiki compiles eligible committed rollups into confined concepts,
+indexes and backlinks. Three maintenance bindings and closed selected-workspace
+product queries have focused SDK and restarted production-stdio evidence under
+the [private wiki guide](../../docs/product-mcp-wiki.md).
+Source/denial changes hide the entire stale view. Queries do not compile, enroll
+or repair; native-client and final source acceptance remain separate evidence.
+
 Qualified maintenance adds exact-job qualification, separate recurring enrollment,
 foreground due execution, bounded reports and revision-aware pause/resume/revoke.
 Read the [maintenance workflow and operator fallback](../../docs/product-mcp-maintenance.md)
 when inspecting availability, authorizing a job or recovering a refused transition.
-Eight deterministic bindings execute through one canonical service; the remaining
+Eleven deterministic bindings execute through one canonical service; the remaining
 catalog jobs and native background scheduling retain their separate gates.
 
 Local document conversion adds immutable scoped artifacts, bounded UTF-8 readback

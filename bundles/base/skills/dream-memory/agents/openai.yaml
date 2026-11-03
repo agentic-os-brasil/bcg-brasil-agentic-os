@@ -1,4 +1,4 @@
 interface:
   display_name: "Consolidação de Memória"
-  short_description: "Inspeciona memória revisada e consolida ciclos locais"
-  default_prompt: "Use $dream-memory para inspecionar ou consolidar a memória revisada e avaliar a manutenção recorrente."
+  short_description: "Consolida memória revisada e navega sua wiki privada"
+  default_prompt: "Use $dream-memory para consolidar a memória revisada, navegar conceitos e fontes da wiki privada ou avaliar sua manutenção."

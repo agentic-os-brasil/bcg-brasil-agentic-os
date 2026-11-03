@@ -10,6 +10,7 @@ import (
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"io"
@@ -55,6 +56,9 @@ func main() {
 	}
 }
 func run() error {
+	if _, err := processidentity.Current(); err != nil {
+		return err
+	}
 	if len(os.Args) < 2 {
 		return errors.New("command_required")
 	}

@@ -36,6 +36,7 @@ type RuntimeDiagnosis struct {
 	InstallationCoverage string                        `json:"installation_coverage"`
 }
 type DiagnosticReport struct {
+	Wiki           *WikiDiagnostic        `json:"wiki,omitempty"`
 	Implementation string                 `json:"implementation,omitempty"`
 	Configuration  string                 `json:"configuration,omitempty"`
 	SchemaVersion  int                    `json:"schema_version"`
@@ -218,6 +219,9 @@ func (r DiagnosticReport) sourceDigest() string {
 	if r.JobID == "memory-retention-check" {
 		input = r.Retention
 	}
+	if wikiJob(r.JobID) {
+		input = r.Wiki
+	}
 	if r.Implementation == "" && r.Configuration == "" {
 		return productDigest(input)
 	}
@@ -234,7 +238,11 @@ func (r DiagnosticReport) validate() error {
 	if r.SourceSHA256 != r.sourceDigest() {
 		return errors.New("diagnostic source digest mismatch")
 	}
-	if r.JobID == "memory-retention-check" {
+	if wikiJob(r.JobID) {
+		if r.Wiki == nil || r.Runtime != nil || r.Retention != nil || r.Finding != "private_graph_verified" || r.Wiki.validate(r.Implementation) != nil {
+			return errors.New("wiki diagnosis lacks actual graph evidence")
+		}
+	} else if r.JobID == "memory-retention-check" {
 		if r.Retention == nil || r.Runtime != nil || r.Retention.WorkspaceID != r.WorkspaceID || !r.Retention.PreserveSources || r.Retention.LiveCaptures+r.Retention.DeniedCaptures+r.Retention.ActiveArtifacts < 1 {
 			return errors.New("retention diagnosis lacks actual canonical state")
 		}
@@ -260,7 +268,7 @@ func (r DiagnosticReport) validate() error {
 	return nil
 }
 func diagnosticJob(id string) bool {
-	return id == "memory-retention-check" || id == "runtime-health-check" || id == "capability-recheck" || id == "runtime-drift-check"
+	return wikiJob(id) || id == "memory-retention-check" || id == "runtime-health-check" || id == "capability-recheck" || id == "runtime-drift-check"
 }
 
 type DiagnosticStore struct{ Root string }
