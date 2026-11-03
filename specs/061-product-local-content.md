@@ -127,3 +127,69 @@ pack qualification, corporate signing, publication and pilot are separate claims
 Primary converter references: [Docling API](https://docling-project.github.io/docling/reference/document_converter/),
 [offline/runtime options](https://docling-project.github.io/docling/reference/pipeline_options/),
 [official offline FAQ](https://github.com/docling-project/docling/blob/main/docs/faq/index.md).
+
+## Model-free policy matrix — PFMT construction contract
+
+Complete the existing DefaultPolicy extensions: csv, docx, epub, html, htm,
+json, md, txt, xls, xlsx and xml. This contract adds no input extension and
+changes no source, output, workspace, network or plugin budget. The first actual
+runtime proof is Darwin-arm64; other platforms remain separately qualified.
+
+Use explicit SimplePipeline/native backend options for the supported structured
+formats, with browser/chart rendering, local/remote resource fetching and model
+enrichment disabled. Parser dependencies belong to the complete signed input
+inventory; an installed ambient parser is never an availability signal.
+
+For unsupported generic text formats, core policy may select the PFMT-approved
+deterministic route inside that same authenticated runtime. TXT remains literal
+text rather than Markdown. Ordinary JSON objects, arrays and scalars preserve
+their original validated UTF-8 text; only a genuinely validated DoclingDocument
+export uses the native Docling JSON backend. Generic XML preserves literal
+markup, attributes and mixed-content order after bounded validation; reject
+DTD/entities/external resolution. Do not infer JATS, USPTO, XBRL or another
+domain schema. Use actual DoclingDocument APIs, not an invented JSON envelope.
+Report textual fidelity, actual route/parser and fallback reason explicitly.
+
+XLS uses the approved pinned BIFF reader and deterministic sheet/cell mapping.
+Declare number, date, empty-cell and cached-formula semantics. Formula evaluation,
+macros, ambient LibreOffice and chart/image conversion are unavailable. XLSX
+retains its explicit native backend with chart rendering disabled. Missing
+parser inputs or an incompatible pack refuse conversion before execution.
+
+XLSX preflight must refuse a source before runtime authentication when its
+declared ranges exceed the pinned backend's workbook-wide budgets: 100,000
+additional merged cells or 10,000 additional hyperlink cells, charging each
+rectangle's area minus its anchor across every sheet. Native clipping or a
+warning cannot count as complete conversion. Validate actual explicit and
+bounded inferred coordinates even when the optional dimension is absent or
+understated. Bound cell records, distinct potential value/range positions and
+the sum of connected-component bounding-rectangle areas to 1,000,000 each per
+workbook; derive geometry sparsely without allocating its rectangular interior.
+Preserve separately connected sparse tables. Unsupported or ambiguous row/cell
+structure refuses through the existing blocked/source_format_invalid contract.
+
+Bind those checks to the actual supported OPC selection graph. Admit one explicit
+XLSX workbook override at /xl/workbook.xml, its actual relationship IDs and unique
+existing canonical worksheet targets under xl/worksheets/ with explicit worksheet
+types. Canonical relative and absolute targets are supported. Refuse alternate
+workbook selection, target aliases, repeated resolved sheet occurrences, missing
+selected parts and ambiguous selection/range namespaces before authentication.
+The supported profile is finite; arbitrary valid OPC layouts are not promised.
+
+Return truthful route, parser, fidelity and degraded/unavailable coverage through
+the existing artifact contract. Format names, static allowlists and successful
+imports alone establish no conversion evidence. Ordinary convert/status never
+downloads or installs a runtime, parser or model. MIDO remains separately opted in.
+
+Real offline fixtures must verify DOCX table order; CSV quoting/newlines/leading
+zeros; HTML/HTM text/table and unfetched local/remote bait; Markdown structure
+and literal code; EPUB spine order; XLSX sheets/merged spans/declared formula
+behavior; exact literal TXT/JSON/XML representation; and BIFF XLS cell/date/cache
+semantics. Both structured output and Markdown need independent content oracles.
+Keep invalid input, parser tamper, output budgets, scope/rebinding and no-fetch
+refusals. Prove conversion, bounded read, exact reviewed named-page write and
+restarted readback through SDK and the rebuilt production stdio server.
+
+PDF/OCR and images require a separate full native/model closure. PPTX is a
+separate model-free extension needing its own parser inputs, explicit policy
+admission and real fixture; none is included in this completion claim.

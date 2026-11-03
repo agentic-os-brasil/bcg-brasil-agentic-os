@@ -22,7 +22,7 @@ import (
 const (
 	PythonVersion        = "3.12.16+20261026"
 	DoclingVersion       = "2.145.0"
-	LockSHA256           = "3e4b945d7fcc4eada5cc78ef76013a26cbf2cfb19b8dd37dcbce3b0edb3ac382"
+	LockSHA256           = "f69da0e247c73dc20870d51030344e1cbba9f5520b722c79a336b9d8b044639b"
 	PythonArchive        = "cpython-3.12.16+20261026-aarch64-apple-darwin-install_only.tar.gz"
 	PythonArchiveSHA256  = "fbf4afef53c2a6b72bb741bc06d5671a9dfaf87bd84e5aa73ac9b3d0d589f14e"
 	maximumArchiveBytes  = 256 << 20
@@ -38,6 +38,9 @@ var rawLock []byte
 
 //go:embed runtime/bridge.py
 var bridge []byte
+
+//go:embed runtime/parser-licenses.json
+var parserLicenses []byte
 
 type Input struct {
 	Name     string `json:"name"`
@@ -90,7 +93,7 @@ func Assemble(inputDirectory, destination string) (Assembly, error) {
 	if err := decode(lockedInputs, &inputs); err != nil {
 		return result, err
 	}
-	if len(inputs) != 45 || digest(rawLock) != LockSHA256 {
+	if len(inputs) != 51 || digest(rawLock) != LockSHA256 {
 		return result, errors.New("embedded_lock_invalid")
 	}
 	python, _, err := readFile(filepath.Join(inputDirectory, PythonArchive), maximumArchiveBytes)
@@ -127,10 +130,16 @@ func Assemble(inputDirectory, destination string) (Assembly, error) {
 			if !relativeName(file.Name) || !file.Mode().IsRegular() || file.UncompressedSize64 > maximumExpandedBytes {
 				return result, errors.New("unsafe_wheel_member")
 			}
-			if strings.Contains(file.Name, ".data/") {
-				return result, fmt.Errorf("wheel relocation unsupported: %s", inputs[i].Name)
-			}
 			name := "site-packages/" + file.Name
+			relocatedScript := false
+			if strings.Contains(file.Name, ".data/") {
+				// Retain the exact authenticated xlrd CLI as inert inventory. It
+				// is outside PATH and never used by the closed BIFF route.
+				if inputs[i].Name != "xlrd" || inputs[i].Version != "2.0.2" || file.Name != "xlrd-2.0.2.data/scripts/runxlrd.py" {
+					return result, fmt.Errorf("wheel relocation unsupported: %s", inputs[i].Name)
+				}
+				name, relocatedScript = "wheel-scripts/xlrd/runxlrd.py", true
+			}
 			if _, exists := entries[name]; exists {
 				return result, errors.New("wheel_collision")
 			}
@@ -150,7 +159,7 @@ func Assemble(inputDirectory, destination string) (Assembly, error) {
 				return result, errors.New("wheel_expansion")
 			}
 			mode := int64(0444)
-			if file.Mode().Perm()&0111 != 0 {
+			if file.Mode().Perm()&0111 != 0 && !relocatedScript {
 				mode = 0555
 			}
 			entries[name] = entry{data, mode}
@@ -162,6 +171,7 @@ func Assemble(inputDirectory, destination string) (Assembly, error) {
 	entries["bridge.py"] = entry{bridge, 0444}
 	entries["pylock.toml"] = entry{rawLock, 0444}
 	entries["inputs.json"] = entry{lockedInputs, 0444}
+	entries["parser-licenses.json"] = entry{parserLicenses, 0444}
 	manifest := packManifest{SchemaVersion: 1, Adapter: "docling", Version: DoclingVersion, OS: "darwin", Arch: "arm64", CompatibleCLI: ">=0.1.0 <0.2.0", Python: PythonVersion, PythonArchiveSHA256: PythonArchiveSHA256, LockSHA256: LockSHA256, Models: []string{}, Inputs: inputs, Files: []inventoryFile{}}
 	names := entryNames(entries)
 	for _, name := range names {
