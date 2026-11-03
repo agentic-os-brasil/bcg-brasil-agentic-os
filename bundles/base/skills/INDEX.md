@@ -22,7 +22,7 @@
 | Registro de Método | Documenta um método próprio ou uma preferência de trabalho | `skills/craft-update/SKILL.md` |
 | Ensaio de Deck | Ensaia o deck contra as perguntas que a sala vai fazer | `skills/deck-drill/SKILL.md` |
 | Review de Deck | Revisa o texto dos slides em busca de riscos de storyline e de evidência | `skills/deck-review/SKILL.md` |
-| Consolidação de Memória | Inspeciona memória revisada e consolida ciclos locais | `skills/dream-memory/SKILL.md` |
+| Consolidação de Memória | Consolida memória revisada e navega sua wiki privada | `skills/dream-memory/SKILL.md` |
 | Fechar o Dia | Fecha o dia e deixa um ponto de partida para amanhã | `skills/eod/SKILL.md` |
 | Modelo financeiro em Excel | Constrói ou reestrutura um modelo em Excel que precisa amarrar e ir a comitê, com origem única por número e aba Overview obrigatória | `skills/excel-financial-model/SKILL.md` |
 | Execution Continuity | Registrar tarefas e entregas, preparar versão, criar checkpoints e retomar trabalho entre sessões | `skills/execution-continuity/SKILL.md` |

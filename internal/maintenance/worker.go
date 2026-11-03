@@ -390,12 +390,21 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 		if releaseErr := worker.releaseLease(lease); releaseErr != nil {
 			return worker.recordReleaseRecovery(request, occurrence, base, releaseErr)
 		}
-		return base, err
+		return rejectedTerminalReceipt(base), err
 	}
 	if err := worker.releaseLease(lease); err != nil {
 		return worker.recordReleaseRecovery(request, occurrence, base, err)
 	}
 	return base, executeErr
+}
+
+// A candidate handler result is not a successful receipt when terminal
+// publication or its durable readback fails. Keep recovery/timeout states.
+func rejectedTerminalReceipt(receipt Receipt) Receipt {
+	if receipt.State == ReceiptSucceeded || receipt.State == ReceiptReviewedNoChange || receipt.State == ReceiptProposalEmitted {
+		receipt.State, receipt.ReasonCode = ReceiptFailed, ReasonHandlerFailure
+	}
+	return receipt
 }
 
 // boundLateHandler prevents an uncooperative handler from creating an
@@ -494,7 +503,7 @@ func (worker Worker) publishOccurrence(workspaceID string, occurrence scheduler.
 		})
 	}
 	if worker.product != nil {
-		return worker.product.guard(publish)
+		return worker.product.publishTerminal(publish)
 	}
 	return publish()
 }

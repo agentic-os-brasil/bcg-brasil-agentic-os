@@ -379,3 +379,43 @@ Report provenance mismatch separately and require genuine current-build/config
 compilation for current job qualification. This does not relax local authority,
 exact source/denial, profile, policy, checkpoint cohort or graph integrity checks;
 unsupported security contracts still refuse.
+
+### Product inspection, event execution and queries
+
+Memory may expose one bounded body-free maintenance inspection projection over
+its existing source/event/cohort/graph readers. It reports recognized source
+readiness, actual eligible durable event identity/time, denial/retirement state,
+admissible parent, keyed graph evidence/counts and actual producer/current-build
+flags. Valid historical source without a graph is distinct from partial protected
+authority. Inspection creates no key, directory, lock, event, repair or grant,
+and exports no private body, raw manifest, source filename or plain content hash.
+Pending retirement stays unavailable for reads and qualification. The existing
+owning compiler may retry physical retirement under its normal live grant;
+inspection cannot authorize publication or success before cleanup completes.
+
+The incremental job is event-only. Product maintenance derives its occurrence
+from that actual event and reuses the existing Worker, grants, lease and terminal
+fences; it cannot fall back to calendar/presence or invent an event on a read.
+An explicit protected event-only schedule field must make old strict readers
+refuse that record. Read back a typed durable event execution receipt through
+the existing maintenance evidence owner; never fabricate a calendar receipt or
+add another queue. Reconciliation recovers valid historical missing events.
+
+Current sync/reconcile qualification requires genuine current-build/configuration
+compilation and complete owning graph validation. Verified no-change is valid
+normal execution but cannot mint qualification. Integrity performs an actual
+complete check over a genuinely current graph and persists only body-free
+diagnostics; it never compiles or repairs. Source drift, pause/revoke and lease
+loss must block pointer, diagnostic and terminal success publication.
+Qualification retains body-free evidence of that genuine historical successful
+run under the same build/configuration and live control epoch. Later ordinary
+source events do not themselves erase qualification or require the historical
+graph to remain readable. Every new execution reviews its current source/event
+and independently validates its actual result before success; old qualification
+cannot substitute for that proof or reopen a stale/denied view.
+
+The selected-workspace product query has only wiki.status, wiki.read and
+wiki.source variants. Read/source require exact generation, registered reference,
+finite offset and 4–4,096-byte UTF-8 pages. Derive scope from admitted binding;
+accept no workspace/root/provider/identity/approval argument. Status/startup
+remain read-only. Fixed metadata failure codes disclose no private error body.

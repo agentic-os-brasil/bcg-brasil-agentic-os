@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -39,6 +40,9 @@ func Open(o Options) (*Bound, error) {
 	return b, nil
 }
 func (b *Bound) validate() error {
+	if _, err := processidentity.Current(); err != nil {
+		return err
+	}
 	h, err := resolveBinding(b.options)
 	if err != nil || !h.Writable {
 		return errors.New("home_unavailable")
@@ -112,7 +116,7 @@ func (b *Bound) Server() *mcp.Server {
 		variant("execution.list", map[string]any{"offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 128}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 32}}),
 		variant("execution.next", map[string]any{"item_id": strSchema(96)}, "item_id"),
 		variant("execution.contract", map[string]any{"item_id": strSchema(96)}, "item_id"),
-	}, append(append(append(ownerQueries(), memoryQueries()...), contentQueries()...), maintenanceQueries()...)...)}
+	}, append(append(append(append(ownerQueries(), memoryQueries()...), contentQueries()...), maintenanceQueries()...), wikiQueries()...)...)}
 	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read owner metadata/questions, execution continuation, eligible memory, converted content, workspace knowledge or maintenance status through bounded metadata/pages. Private owner/legacy text requires trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
 	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Convert documents, apply reviewed knowledge/owner/memory changes, qualify and enroll exact maintenance jobs, or run active due work. Maintenance lifecycle changes require trusted exact review; execution uses revision/attempt and artifact checks.", InputSchema: productApplySchema()}, b.handle("apply", productApplySchema()))
 	b.registerMethods(s)
@@ -120,6 +124,8 @@ func (b *Bound) Server() *mcp.Server {
 }
 
 type input struct {
+	Generation                 string   `json:"generation"`
+	Reference                  string   `json:"reference"`
 	JobID                      string   `json:"job_id"`
 	Timezone                   string   `json:"timezone"`
 	SourcePath                 string   `json:"source_path"`
@@ -160,6 +166,8 @@ func result(value any, err error) *mcp.CallToolResult {
 	if err != nil {
 		code := "execution_rejected"
 		switch {
+		case errors.Is(err, processidentity.ErrChanged):
+			code = "restart_required"
 		case errors.Is(err, execution.ErrRevisionConflict):
 			code = "revision_conflict"
 		case errors.Is(err, execution.ErrAttemptConflict):
@@ -218,6 +226,9 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		}
 		if strings.HasPrefix(in.Operation, "maintenance.") {
 			return b.handleMaintenance(ctx, req, in), nil
+		}
+		if strings.HasPrefix(in.Operation, "wiki.") {
+			return b.handleWiki(in), nil
 		}
 		if strings.HasPrefix(in.Operation, "content.") || strings.HasPrefix(in.Operation, "knowledge.") {
 			return b.handleContent(ctx, req, in), nil

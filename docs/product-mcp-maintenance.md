@@ -16,7 +16,7 @@ Ordinary startup, status and review do not bootstrap or repair private state.
 
 Call `maestro_query` with `{"operation":"maintenance.status"}`. The response
 lists job IDs, revision, state, schedule, write set and qualification metadata.
-The closed catalog has eighteen jobs; this product binding executes these eight:
+The closed catalog has eighteen jobs; this product binding executes these eleven:
 
 | Job | Cadence after separate enrollment | Actual result or prerequisite |
 | --- | --- | --- |
@@ -28,6 +28,9 @@ The closed catalog has eighteen jobs; this product binding executes these eight:
 | `runtime-health-check` | Daily | Durable report of actual available and missing runtime observations |
 | `capability-recheck` | Daily | Durable capability diagnosis; missing native evidence remains unavailable |
 | `runtime-drift-check` | Daily | Durable comparison with actual admitted projection and installed state |
+| `wiki-incremental-sync` | Eligible durable source/denial event | Actual private-wiki compilation through the existing Worker; no calendar occurrence |
+| `wiki-reconcile` | Weekly, Sunday, under its presence contract | Actual source/graph reconciliation through the owning compiler |
+| `wiki-integrity-check` | Daily | Complete current graph inspection and durable body-free diagnosis; no repair |
 
 All schedules have bounded catch-up of at most one occurrence. Enrollment sets
 a per-job no-backfill boundary. Memory consolidation needs eligible reviewed
@@ -35,7 +38,7 @@ captures and ancestry; an empty source or a successful no-op cannot qualify it.
 Skills indexing needs verified installed assets, not an arbitrary product
 directory. A diagnostic can qualify its real execution while its finding is
 missing or unavailable. That qualification does not qualify the reported native
-capability. The remaining ten catalog entries retain explicit unavailable
+capability. The remaining seven catalog entries retain explicit unavailable
 reasons until their complete execution journeys exist.
 
 ## Review, qualify and enroll
@@ -72,7 +75,14 @@ Call `maestro_apply` with `{"operation":"maintenance.run"}` to execute active
 due jobs in the foreground. It has no job selector and performs no implicit
 qualification, enrollment, dependency installation or model/provider call.
 `no_due_work` is a valid result; repeated calls do not invent new occurrences.
-The response contains bounded due/receipt metadata. A wake-up or a process exit
+The response contains bounded due/receipt metadata. Incremental wiki execution
+closes the exact eligible durable event through the same Worker without minting
+a calendar receipt. Repeating it does not create a second event or successful
+occurrence. A current graph alone is not completion: an unclosed event can retry
+through the same Worker and finish with verified no-change terminal evidence.
+Corrupt or recovery-required evidence remains blocked for diagnosis. See the
+[private wiki guide](product-mcp-wiki.md) for generation-bound
+reads and correction/deletion behavior. A wake-up or a process exit
 alone is not proof of a committed domain result.
 
 For deep dream and the five diagnostic/index jobs, call `maestro_query` with
@@ -149,7 +159,16 @@ Preserve corrupt state, denial records, occurrence leases and timeout fences
 for operator diagnosis. Do not delete markers, change clocks, clear locks,
 copy older pointers back, silently repair dependencies or install OS tasks.
 Publication preserves the last valid result when admission changes; a domain
-commit followed by receipt failure remains partial evidence.
+commit followed by receipt failure remains partial evidence. A terminal-publication
+failure must report failure or recovery-required state even when the domain effect
+already committed; a candidate receipt in memory is not durable success.
+
+The service pins its running executable at startup. A detected replacement
+permanently invalidates that process, including a fresh service created by a later
+tool call. Restart with the intended installed build before reviewing or qualifying
+again. Restoring the old path does not restore the old process's authority. This is
+managed-file identity validation, with the stated immutable-file and startup-path
+assumptions, rather than kernel-loaded-memory attestation.
 
 Focused local tests cover service execution, actual SDK and rebuilt stdio,
 restart/replay and revocation. The foreground adapter reports `local`, even

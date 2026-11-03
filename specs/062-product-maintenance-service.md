@@ -160,3 +160,18 @@ exact per-candidate owner review; without that trusted review retain L2/L3 and
 report lifetime confirmation unavailable. The existing attended memory
 consolidation path remains available; do not create a second approval authority
 or effectful MRTR retry mechanism merely to qualify the recurring job.
+
+### Running implementation provenance
+
+Qualification and derived producer identity bind the process-start executable
+identity before product effects, not a fresh read of its pathname on each
+request. A long-lived process cannot adopt bytes atomically installed over its
+path and label old code as that new implementation. The shared owning identity
+must require restart/refuse affected qualification, effects and publication
+after replacement, including a fresh per-call Service object. Validate at the
+publication/terminal boundaries as well as operation entry.
+
+This is a bounded process-start file identity contract, not kernel in-memory
+attestation. Preserve actual stored producer provenance and compatible sealed
+read semantics; unavailable/changed current identity cannot manufacture a
+current-build flag, repair source authority or relabel a graph.
