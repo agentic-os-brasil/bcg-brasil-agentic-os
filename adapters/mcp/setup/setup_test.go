@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -30,6 +31,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/updateservice"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -239,7 +241,7 @@ func TestModernFactoryFirstInstallAndRestart(t *testing.T) {
 	}
 	state, err := installtx.ReadStateForManagedRoot(review.Installation.DataRoot, request.ManagedRoot)
 	must(t, err)
-	if state.SchemaVersion != 3 || state.Profile != "mcp-local-v1" || state.Server.Version != "0.1.42" {
+	if state.SchemaVersion != 4 || state.Profile != "mcp-local-v1" || state.Server.Version != "0.1.42" {
 		t.Fatalf("modern durable state: %+v", state)
 	}
 	assertChangedInstalledServerRefused(t, ctx, root, request, config, review, result, state)
@@ -257,7 +259,7 @@ func TestModernFactoryFirstInstallAndRestart(t *testing.T) {
 	if len(plans) != 1 {
 		t.Fatalf("unexpected canonical transactions: %v", plans)
 	}
-	for path, wantVersion := range map[string]int{plans[0]: 3, filepath.Join(filepath.Dir(plans[0]), "activation-receipt.json"): 2} {
+	for path, wantVersion := range map[string]int{plans[0]: 4, filepath.Join(filepath.Dir(plans[0]), "activation-receipt.json"): 3} {
 		var wire map[string]any
 		raw := read(t, path)
 		must(t, json.Unmarshal(raw, &wire))
@@ -277,6 +279,20 @@ func TestModernFactoryFirstInstallAndRestart(t *testing.T) {
 	must(t, err)
 	trustedRelease, err := releaseverify.VerifyDirectory(release, authority)
 	must(t, err)
+	// Newly built source-aware carriers become qualified only after an exact
+	// attended source enrollment. The independent installer remains available.
+	now := time.Now().UTC().Truncate(time.Second)
+	generation := releasecontract.Generation{SchemaVersion: 1, Product: "maestro", Protocol: releasecontract.GenerationProtocol, Issuer: manifest.Issuer, Source: releasecontract.SourceTuple{SourceID: "modern-first-install", Channel: manifest.Channel, OS: runtime.GOOS, Arch: runtime.GOARCH}, Sequence: 1, PublishedAt: now.Add(-time.Minute).Format(time.RFC3339), ExpiresAt: now.Add(7 * 24 * time.Hour).Format(time.RFC3339), Release: manifest.Release, ManifestSHA256: trustedRelease.ManifestSHA256, ClientInputsSHA256: manifest.Delivery.ClientInputsSHA256, Recalls: []releasecontract.ReleaseRecall{}, MinimumReaderContract: releasecontract.SyncedSourceContract}
+	syncRoot := filepath.Join(root, "synced-source")
+	_, err = releasepack.PublishGeneration(releasepack.PublishGenerationOptions{Root: syncRoot, ReleaseDirectory: release, Registry: registryPath, Generation: generation, PrivateKey: private})
+	must(t, err)
+	sourceOptions := updateservice.SyncedOptions{UserHome: user, ManagedRoot: request.ManagedRoot, DataRoot: review.Installation.DataRoot, SourceRoot: syncRoot, ExpectedSource: generation.Source, Registry: authority}
+	sourceReview, err := updateservice.ReviewSynced(sourceOptions)
+	must(t, err)
+	_, err = updateservice.CheckSynced(sourceOptions, sourceReview.Digest)
+	if !errors.Is(err, updateservice.ErrCurrent) {
+		t.Fatalf("source enrollment: %v", err)
+	}
 	trap := installtx.PrepareOptions{UserHome: trapUser, Transition: "install", ManagedRoot: filepath.Join(root, "checker-trap-managed"), DataRoot: filepath.Join(trapUser, ".maestro-install"), TargetOS: runtime.GOOS, TargetArch: runtime.GOARCH}
 	trapPlan, err := installtx.Prepare(trustedRelease, trap)
 	must(t, err)
@@ -335,6 +351,18 @@ func TestModernFactoryFirstInstallAndRestart(t *testing.T) {
 				must(t, os.WriteFile(registryLocation, append(append([]byte(nil), originalRegistry...), byte(10)), 0600))
 			} else {
 				must(t, os.Rename(registryLocation, registryLocation+".held"))
+			}
+			if filepath.Base(filepath.Dir(binary)) == "bin" {
+				probe := exec.CommandContext(ctx, binary, "serve", "--product-root", request.ManagedRoot, "--user-home", request.UserHome, "--workspace", request.Workspace)
+				if output, e := probe.CombinedOutput(); e == nil {
+					t.Fatalf("qualified installed startup accepted %s: %s", kind, output)
+				}
+				if kind == "absent" {
+					must(t, os.Rename(registryLocation+".held", registryLocation))
+				} else {
+					must(t, os.WriteFile(registryLocation, originalRegistry, 0600))
+				}
+				continue
 			}
 			refused := connect(t, ctx, binary, request)
 			status := call(t, ctx, refused, "maestro_query", map[string]any{"operation": "content.status"}, false)

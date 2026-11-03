@@ -115,6 +115,9 @@ func Parse(reader io.Reader) (Manifest, error) {
 	if err := validateWireFields(body, manifest.SchemaVersion); err != nil {
 		return Manifest{}, err
 	}
+	if manifest.Modern() && manifest.Server.ExecutionContract == SyncedSourceContract && len(body) > MaximumSyncedMetadataBytes {
+		return Manifest{}, fmt.Errorf("source-aware signed manifest exceeds %d exact bytes", MaximumSyncedMetadataBytes)
+	}
 	if err := manifest.Validate(); err != nil {
 		return Manifest{}, err
 	}

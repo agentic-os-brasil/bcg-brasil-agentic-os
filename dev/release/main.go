@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/releasepack"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/releasereadiness"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installerbundle"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 )
 
 func main() {
@@ -40,6 +42,8 @@ func main() {
 		provenance(root, os.Args[2:])
 	case "sign":
 		sign(root, os.Args[2:])
+	case "publish-generation":
+		publishGeneration(root, os.Args[2:])
 	case "verify":
 		verify(root, os.Args[2:])
 	case "verify-signed":
@@ -54,6 +58,42 @@ func main() {
 		portableMacOS(root, os.Args[2:])
 	default:
 		usage()
+	}
+}
+
+func publishGeneration(root string, args []string) {
+	flags := flag.NewFlagSet("publish-generation", flag.ExitOnError)
+	source := flags.String("source-directory", "", "explicit synthetic or operator-owned synced folder")
+	release := flags.String("release-directory", "", "complete exact signed release directory")
+	registry := flags.String("authority-registry", "", "independently approved authority registry")
+	generationFile := flags.String("generation", "", "closed generation JSON with explicit published_at and expires_at (TTL <=30 days)")
+	_ = flags.Parse(args)
+	if *source == "" || *release == "" || *registry == "" || *generationFile == "" || flags.NArg() != 0 {
+		fatal(fmt.Errorf("usage: go run ./dev/release publish-generation --source-directory DIR --release-directory DIR --authority-registry FILE --generation FILE < base64-seed"))
+	}
+	f, err := os.Open(absoluteFromRoot(root, *generationFile))
+	if err != nil {
+		fatal(err)
+	}
+	body, err := io.ReadAll(io.LimitReader(f, (1<<20)+1))
+	f.Close()
+	if err != nil {
+		fatal(err)
+	}
+	generation, err := releasecontract.ParseGeneration(body)
+	if err != nil {
+		fatal(err)
+	}
+	key, err := releasepack.ParseSigningSeed(os.Stdin)
+	if err != nil {
+		fatal(err)
+	}
+	result, err := releasepack.PublishGeneration(releasepack.PublishGenerationOptions{Root: absoluteFromRoot(root, *source), ReleaseDirectory: absoluteFromRoot(root, *release), Registry: absoluteFromRoot(root, *registry), Generation: generation, PrivateKey: key})
+	if err != nil {
+		fatal(err)
+	}
+	if err = json.NewEncoder(os.Stdout).Encode(map[string]any{"sequence": result.Generation.Sequence, "generation_sha256": result.SHA256, "release": result.Generation.Release}); err != nil {
+		fatal(err)
 	}
 }
 
@@ -399,7 +439,7 @@ func optionalAbsoluteFromRoot(root, value string) string {
 func usage() {
 	fmt.Fprintln(
 		os.Stderr,
-		"usage: go run ./dev/release <binary|icons|seeded-binaries|candidate|provenance|sign|verify|verify-signed|readiness|self-contained|portable-windows|portable-macos> [options]",
+		"usage: go run ./dev/release <binary|icons|seeded-binaries|modern-candidate|candidate|provenance|sign|publish-generation|verify|verify-signed|readiness|self-contained|portable-windows|portable-macos> [options]",
 	)
 	os.Exit(2)
 }

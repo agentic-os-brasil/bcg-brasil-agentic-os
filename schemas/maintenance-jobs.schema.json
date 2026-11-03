@@ -47,13 +47,25 @@
           "uniqueItems": true,
           "oneOf": [
             {"const": ["none"]},
-            {"items": {"enum": ["memory_l1", "memory_rollups", "memory_checkpoint", "wiki_private", "runtime_index", "owner_observation", "local_diagnostics"]}}
+            {"items": {"enum": ["memory_l1", "memory_rollups", "memory_checkpoint", "wiki_private", "runtime_index", "owner_observation", "local_diagnostics", "source_custody", "candidate_plan"]}}
           ]
         },
         "success_boundary": {"type": "string", "minLength": 1, "maxLength": 512},
         "qualification_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
       },
       "allOf": [
+        {
+          "if": {"properties": {"id": {"const": "update-check"}}},
+          "then": {
+            "properties": {
+              "category": {"const": "update"},
+              "executor": {"const": "local_adapter"},
+              "scope": {"const": "owner"},
+              "unattended": {"const": "never"},
+              "writes": {"const": ["source_custody", "candidate_plan", "local_diagnostics"]}
+            }
+          }
+        },
         {
           "if": {"properties": {"availability": {"const": "available"}}},
           "then": {

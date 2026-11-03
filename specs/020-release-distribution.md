@@ -313,3 +313,224 @@ registration/pilot remain separate evidence. Modern standard update stays
 unavailable until its owning signed-source/pending/recompute path is implemented.
 The cohesive delivery also requires signed synced generations/update/rollback/
 recall and registration/recovery tasks; a schema-only PR does not complete it.
+
+## Signed synchronized generations and qualified update (MPDU)
+
+Accepted engineering construction contract. It extends MPDI through the
+existing owners; it does not assert production policy or runtime qualification.
+
+### 1. One authority and one signed generation representation
+
+Add the closed `maestro-synced-generation-v1` record to releasecontract and its
+exact-byte verifier to releaseverify, sharing the admitted registry's current
+issuer/key/algorithm/validity rules. Authenticate before semantic parsing. The
+record contains product/protocol, issuer/key, source ID/channel/exact target,
+positive monotonic sequence, canonical published/expiry times, release version,
+exact manifest/client-input digests, finite release-specific recalls and minimum
+source-aware reader contract. No participant path or replacement registry belongs
+in signed publisher bytes.
+
+Publish immutable generation/release metadata and signatures first. The final
+current pointer is the same signed generation bytes, promoted last. Require the
+immutable generation record to match that pointer. Identical retry may return
+unchanged; sequence equivocation and overwriting an immutable release refuse.
+A later generation may reference the same unchanged release digest to refresh
+expiry or add recalls. It cannot redefine that version's artifact identity.
+
+### 2. Explicit local source enrollment and private snapshots
+
+Trusted operator review selects one source ID/channel/target and local hydrated
+folder locator for the real installation. The path supplies transport, not trust.
+Later metadata cannot silently rebind that tuple or its independently pinned
+registry. No SharePoint destination, endpoint or account is guessed.
+
+Read bounded ordinary no-follow/unaliasable source files and copy the exact
+manifest-authorized release set into private install-state staging. Verify the
+complete snapshot through the canonical directory verifier; execute no synced
+file. Review reads metadata/manifests within finite in-memory bounds and grants
+no admission or custody write. Confirmation precedes persistent source effects.
+Candidate copying and its private bounded destinations must be declared effects.
+
+Before metadata qualifies for source review/custody, enforce an exact raw-body
+limit of 64 KiB for this generation protocol and for manifests declaring the new
+source-aware execution contract. Signed whitespace counts toward that bound;
+never normalize or reserialize signed inputs to fit. Historical manifest variants
+retain their existing limits. Prove that the largest supported current/Previous
+manifest bindings, exact source body and finite recall custody serialize with
+headroom under the existing 1 MiB install-state limit. An oversized authentic
+envelope is unsupported input before acceptance, not accepted denial silently
+discarded by a later state-write failure.
+
+### 3. Monotonic custody belongs to installtx, outside Previous
+
+Extend the existing installation-state owner with source-aware schema4. Its
+current source control retains the enrolled tuple, highest accepted sequence and
+body digest, signed metadata/expiry, cumulative known recalls, minimum floor and
+last trusted observation time. Current/Previous release snapshots retain their
+own signed manifest/client-input/server/bundle bindings. Source history is never
+inside a restorable Previous snapshot. Keep one transaction/serialization owner;
+no independent ledger service, queue or trust key is introduced.
+
+Once the exact authenticated metadata observation is confirmed, its high-water
+and recall effects persist even if the candidate payload is incomplete. Missing
+payload returns unavailable and cannot activate; it cannot conceal an accepted
+recall. Same-sequence/different-body and lower-sequence replay refuse. Bounds
+overflow refuses rather than dropping recalls or history. A no-change observation
+is distinguishable from a fresh cryptographic check/report.
+
+If confirmed authentic higher metadata would overflow the finite cumulative
+recall list, preserve the bounded existing list and persist the higher signed
+body/sequence together with sticky `recall_capacity_exhausted` in this same
+SourceControl owner. Refuse launch, candidate use and rollback with that stronger
+denial; do not leave the older fresh generation launchable. All supported state
+writers, compensation and recovery preserve the marker. A later fresh/higher
+generation, restart or older replay cannot clear it. Independent admitted
+installer metadata diagnosis remains available; resuming payload use would
+require a separate explicit supported repair/migration contract. There is no
+implicit reset, second ledger or unbounded recall retention.
+
+Authentication, tuple/shape validation and confirmed observation precede freshness
+admission. A newer authentically signed generation whose expiry is already past
+still advances the accepted high-water and cumulative recalls after that
+confirmation. It supplies no launch freshness or activation authority. Persist the
+observation before rejecting temporal readiness; replay of an older still-
+unexpired generation cannot undo it. Include an expired higher-sequence record
+recalling the current release in the existing expiry/replay proof.
+
+Every new supported state writer, compensation, reconcile and rollback preserves
+or monotonically advances current source custody under existing serialization.
+Strict old public installation/activation/reconcile/rollback paths must refuse
+protected source-aware state. Prove those actual paths. The old exported blind
+WriteState helper and arbitrary filesystem writes are not retroactively fenced;
+do not claim they are. New qualified launchers require the source-aware state and
+floor and refuse missing/downgraded/inconsistent authority instead of reinitializing.
+
+### 4. Existing check, stage, confirmation and activation chain
+
+Use typed modern update-plan schema3, pending schema2 and source-aware transaction/
+receipt variants, preserving historical variants. The plan binds exact current
+installation, source tuple/sequence/body, target, manifest/client inputs, compatible
+installer, actual server/bundle and prepared bytes. Stage/confirm/prelaunch/apply
+and crash reconciliation reload signed source truth and current private custody;
+they never trust an approval boolean. Changed source, expiry, recall, state or
+prepared bytes requires fresh review or explicit recovery. Repeat critical checks
+under the existing activation serialization boundary.
+
+The independently admitted installer gains the real update/reconcile/rollback
+entrypoints. No successful process exit or cached receipt substitutes for actual
+installed server/bundle readback. Report already-applied-but-blocked outcomes
+honestly if source recall changes after payload commit. Owner/workspace bodies
+remain outside managed activation/rollback effects.
+
+### 5. Source-aware rollback and existing-state migration
+
+Rollback is a separately reviewed operation that restores only an authenticated,
+nonrecalled previous release supporting the current source contract/floor. Verify
+its actual executable and bundle, preserving current high-water, recalls and
+enrollment. Do not restore source history or permit a standard downgrade to become
+an implicit floor reset.
+
+The full tracer starts with newly built source-aware N and N+1. New qualified
+first installation records the original signed manifest/client-input identity.
+Schema3 has no such complete identity: migration/enrollment must authenticate the
+actual current signed release and exact installed binding, and require compatible
+source-aware execution. If that proof is unavailable, return an explicit
+upgrade/migration-unavailable state without writes. Never infer it from version
+or one executable hash, or bypass the first-install profile mismatch fence.
+
+### 6. Qualified launcher, carriers and running new servers
+
+The actual read-only ServerIdentity protocol must expose the explicit maestro-
+synced-source-v1 execution contract in a strict new identity variant. The
+authenticated server component binds the same contract, and candidate admission,
+activation, qualified launch and rollback compare it with the real verified
+executable. Version, schema or a manifest declaration alone cannot supply that
+capability. Preserve historical identity variants explicitly. The negative uses
+the real Task1 server with valid signature and compatible version but no execution
+contract; it must refuse without inventing a healthy capability callback. Positive
+proof exercises actual custody/launch/request guards in the new real server.
+
+New participant carriers use the independently admitted launch owner. It reads
+private source/current installation, enforces the accepted source freshness,
+known recall and minimum floor, authenticates the exact executable before running
+and starts only the admitted installed server. No model-selected binary, registry
+or installation root is accepted. Cached N packets must refuse after installation
+or authenticated client-input identity changes until canonical regeneration.
+Task2 owns these necessary packet launch bindings; Task3 owns real host
+registration. Carrier currency binds the active installed release and immutable
+client inputs; a metadata-only observation updates source control without
+automatically changing that release identity.
+
+New running servers revalidate their actual installation/source binding at request
+admission and existing long-running publication guards. A failure reports restart/
+refresh/recovery required; it does not relabel copied packet bytes as current.
+Existing startup executable pinning remains in force. This protects the qualified
+new execution path, not arbitrary user-controlled Task1 copies or already-running
+old binaries. No remote kill, DRM or kernel attestation is claimed.
+
+Trusted installer diagnosis/source-refresh/upgrade commands remain available when
+the product server is expired, recalled or unavailable. Startup/status stays
+read-only; it never automatically refreshes custody or activates an update. A
+recovery instruction must be usable without launching the blocked server.
+
+For source diagnosis/refresh, use the independently admitted installer's exact
+pinned public authority when the active MCP cannot supply its identity, including
+missing or corrupt active bytes. Reauthenticate the signed stored/current source
+and its installation bindings; never infer a healthy MCP or accept a caller's
+replacement registry. A source-blocked authentic payload must still support the
+guarded upgrade path. Replacing a missing/corrupt active payload is a distinct
+repair variant: Task2 does not bypass the canonical verified-backup requirement
+or claim rollback to absent/untrusted prior bytes. Until an explicit reviewed
+repair variant exists, return precise payload-repair-unavailable diagnosis and
+preserve payload/owner state rather than quarantine or reinstall automatically.
+
+### 7. Finite expiry, offline and clock policy
+
+Publisher expiration is required explicitly: positive TTL, at most 30 days for this
+supported engineering contract, never beyond an admitted key's validity. Synthetic
+pilot examples use 7 days; neither is asserted as an organization-approved SLA.
+Production authority must deliberately issue its chosen supported expiry.
+
+An admitted cached generation permits qualified offline launch only until its
+signed expiry and while not known recalled/incompatible. An expired record cannot
+grant freshness. Explicit trusted source checking may recover freshness through
+new authenticated metadata; local presence alone cannot. Recall becomes effective
+through accepted authenticated observation, with the declared offline-expiry
+boundary; there is no globally instantaneous SharePoint freshness claim.
+
+Use the trusted process wall clock, with no model/CLI/environment clock override.
+Reject backwards movement below the last persisted accepted observation and
+implausibly future publication (bounded five-minute skew). Do not claim protection
+against owner-controlled clock tampering beyond that contract. Test-clock seams
+remain trusted in-process composition only.
+
+### 8. Real attended update-check and focused complete proof
+
+The existing `update-check` job remains unattended-never and cannot enroll as
+recurring work. Declare its real source-custody and bounded local-diagnosis/plan
+writes explicitly in the catalog and trusted review. Its exact captured signed
+source input and private current state must be revalidated before effects. A
+decline or stale review grants no new authority. It does not activate an update.
+CLI/host forms use the existing exact review/confirmation conventions.
+
+Unchanged source/candidate replay cannot mint qualification through observation
+time or a timestamp-derived pending-plan ID. Keep exact plan/state binding for
+activation, while diagnostic semantic identity excludes that derived PlanID.
+Reviewed-no-change clears the job's own one-shot under live authority and
+preserves its existing genuine qualification/receipt, or remains unqualified if
+none exists. Preserve the stored plan's actual provenance; separately verify a
+bounded actionable current-pending projection through the canonical read-only
+confirmation path. A stale stored plan is historical/unavailable, not relabelled
+as the current plan or newly healthy execution.
+
+Implement one cohesive real-binary N→N+1 check/stage/confirm/activate/restart and
+compatible rollback tracer using synthetic signed local generations and existing
+canonical owners. Prove actual executable/resource/bundle and unchanged owner
+data. Include partial sync and pointer pairs, aliases, wrong tuple/target,
+equivocation/replay, expiry/recalls, pending drift, crash reconciliation, retained
+source history/floor, genuine old public workflow refusal, stale carriers and
+running new-server refusal. Keep native-positive fixtures labelled engineering;
+actual client/device/signing/pilot remain external gates. No full unrelated suite.
+
+Root owns canonical docs/decision/schema/CI and Git. Source production starts only
+after this contract is accepted and the combined modern/Wiki baseline is saved.

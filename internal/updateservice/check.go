@@ -43,8 +43,10 @@ type CheckOptions struct {
 }
 
 type CheckResult struct {
-	Plan     updateplan.Plan
-	Verified releaseverify.VerifiedRelease
+	Current    installtx.State
+	Generation releaseverify.VerifiedGeneration
+	Plan       updateplan.Plan
+	Verified   releaseverify.VerifiedRelease
 }
 
 func Check(ctx context.Context, options CheckOptions) (CheckResult, error) {

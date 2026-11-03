@@ -92,7 +92,11 @@ func ActivateSeeded(ctx context.Context, o SeededActivationOptions) (installtx.S
 	if err := installtx.Activate(plan, verified, installtx.ActivateOptions{PrepareOptions: options}); err != nil {
 		return installtx.State{}, err
 	}
-	state, err := installtx.ReadStateForManagedRoot(p.DataRoot, p.ManagedRoot)
+	readCurrent := installtx.ReadStateForManagedRoot
+	if verified.Manifest.Server.ExecutionContract == releasecontract.SyncedSourceContract {
+		readCurrent = installtx.ReadSourceState
+	}
+	state, err := readCurrent(p.DataRoot, p.ManagedRoot)
 	if err != nil {
 		return installtx.State{}, err
 	}

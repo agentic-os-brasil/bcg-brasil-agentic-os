@@ -131,6 +131,9 @@ func (b *Bound) registerMethods(s *mcp.Server) {
 			mime = "application/json"
 		}
 		s.AddResource(&mcp.Resource{URI: uri, Name: name, Description: "Immutable packaged Maestro method content; no owner data or execution authority.", MIMEType: mime, Size: int64(len(body)), Meta: mcp.Meta{"sha256": fmt.Sprintf("%x", sha256.Sum256(body))}}, func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+			if err := b.validate(); err != nil {
+				return nil, errors.New("method_resource_unavailable")
+			}
 			if req.Params.URI != uri {
 				return nil, errors.New("method_resource_unavailable")
 			}
@@ -149,6 +152,9 @@ func (b *Bound) registerMethods(s *mcp.Server) {
 			addResource(resource.URI, method.ID+"/"+resource.Path, method.Files[resource.Path])
 		}
 		s.AddPrompt(&mcp.Prompt{Name: method.ID, Title: method.DisplayName, Description: method.Trigger, Meta: mcp.Meta{"user_invoked_only": method.UserInvokedOnly, "mode": "methods_not_authority", "bundle": method.Bundle}}, func(_ context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			if err := b.validate(); err != nil {
+				return nil, errors.New("method_prompt_unavailable")
+			}
 			if len(req.Params.Arguments) != 0 {
 				return nil, errors.New("method_prompt_arguments_refused")
 			}

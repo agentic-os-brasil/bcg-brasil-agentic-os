@@ -1,9 +1,73 @@
 ---
 name: maestro-setup-update
-description: Guia conversacional para instalar, atualizar ou reparar o Maestro a partir do ZIP distribuído pelo time BCG Brasil AI. Use sempre que o pedido envolver install, primeira instalação, update, atualização, upgrade, reparo, recuperação, "voltar versão" ou rollback do Maestro.
+description: Guide an explicitly requested Maestro installation, signed-source check, reviewed update, recovery or rollback. Select the admitted MCP product or positively identified legacy ZIP route before acting.
 ---
 
 # Maestro Setup and Update
+
+## Select the installed route
+
+For the admitted MCP product, use the workflow below and stop before the legacy
+ZIP sections. Read `maestro_context` and the current three core tool schemas.
+The method supplies procedure only: it grants no shell, path selection, source
+enrollment, activation, trust replacement or approval authority. Startup and
+doctor stay read-only. A blocked MCP uses the independently admitted local
+installer recovery path; never select another home or execute a synced file.
+
+## MCP product: signed local source and exact review
+
+1. Query `maintenance.status` and an existing `maintenance.report` for
+   `update-check` when available. Reports describe a bounded check, not current
+   native health or an activated release. Ordinary model arguments cannot select
+   the source directory, signing registry, binary or private installation roots.
+2. For an explicitly requested check of the already enrolled source, request
+   `maintenance.qualify` with `job_id: update-check` and its current revision.
+   The trusted form must show the exact signed generation, installation, source,
+   recalls and source-custody/candidate-plan/diagnosis effects. A decline or stale
+   form grants nothing. This is attended-only and cannot enroll recurring work.
+3. Read the bounded `maintenance.report`. `current_signed_release` is an
+   authenticated current check; `candidate_staged_activation_unconfirmed` means
+   private candidate bytes and a canonical plan exist. Neither activates code.
+   `reviewed_no_change` retains an existing qualification and never creates one
+   from observation-time plan-ID churn. `historical_update_check` preserves the
+   report's original plan; a separate `current_pending: verified_unconfirmed`
+   readback identifies the current reauthenticated plan without approving it.
+   Keep unavailable/partial checks explicit: accepted high-water and recalls can
+   persist even when the payload is missing or the signed metadata is expired.
+4. Source enrollment and installation mutation use the independently admitted
+   local installer through its exact operator review. The operator reviews
+   `source-review`, then confirms `source-check` or `stage` with that digest.
+   First enrollment requires the selected hydrated local folder and exact
+   source/channel/platform tuple; later checks use the enrolled fixed binding.
+   `update-review` shows the exact pending plan. `update` requires that plan ID
+   and explicit confirmation, followed by actual installed executable/bundle
+   readback. A method or model assertion never supplies the confirmation.
+5. Recovery uses the same installer: `reconcile` names the exact pending plan;
+   rollback has its own `rollback-review` and separately confirmed `rollback`.
+   Only a compatible authenticated nonrecalled previous release can return.
+   Rollback preserves source sequence, known recalls, expiry policy and reader
+   floor. Existing schema3 cannot enroll without genuine signed current proof
+   and an actual compatible executable; unavailable migration stays no-write.
+6. Regenerate current Code/Desktop packets through canonical packaging after a
+   release change, then restart the client. Cached packets cannot acquire another
+   release's authority. A metadata-only refresh preserves unchanged active client
+   inputs. Expired/recalled source or a changed running executable requires the
+   independent recovery route; local file presence does not establish freshness.
+   Exhausted recall custody stays denied after newer metadata or rollback; source
+   diagnosis remains usable, while clearing that denial needs a separate supported
+   repair. A missing/corrupt active executable permits independent source refresh
+   but payload replacement remains `payload_repair_unavailable`, preserving it.
+
+Present a plain-language outcome and one concrete next action. Host installation,
+native qualification, production signing and team publication remain separate
+evidence. The operator guide supplies exact local command syntax; a recipe does
+not authorize the model to run those commands or invent a distribution location.
+
+## Legacy ZIP only
+
+Continue below only after actual installation metadata positively identifies the
+legacy ZIP runtime. The legacy procedure never repairs an MCP product by copying
+a ZIP or its owner data over the managed installation.
 
 Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
 
