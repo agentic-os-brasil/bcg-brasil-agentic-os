@@ -70,6 +70,7 @@ type handlerOutcome struct {
 // derives due work; only a qualified handler, occurrence lease and terminal
 // receipt can make scheduler work complete.
 type Worker struct {
+	product   *productExecution
 	Catalog   Catalog
 	Scheduler scheduler.Store
 	Receipts  Store
@@ -251,6 +252,11 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 		return worker.unavailableReceipt(request.WorkspaceID, occurrence, now, ReasonCatalogUnavailable)
 	}
 	trigger := triggerForOccurrence(worker.Jobs, occurrence)
+	// Product service already plans cadence and binds the actual foreground wake.
+	// Calendar cadence is not a replacement trigger for that exact authority.
+	if worker.product != nil {
+		trigger = request.Trigger
+	}
 	command := Command{SchemaVersion: CommandSchemaVersion, CommandID: "wake-" + digestPrefix(occurrence.JobID+occurrence.EventID+occurrence.ScheduledFor.UTC().Format(time.RFC3339Nano)+now.UTC().Format(time.RFC3339Nano)), JobID: occurrence.JobID, WorkspaceID: request.WorkspaceID, Trigger: trigger, EventID: occurrence.EventID, ScheduledFor: occurrence.ScheduledFor, RequestedAt: now, Deadline: now.Add(worker.Deadline), ProposalOnly: IsProposalOnlyJob(occurrence.JobID)}
 	if err := command.Validate(now); err != nil {
 		return worker.unavailableReceipt(request.WorkspaceID, occurrence, now, ReasonOccurrenceRejected)
@@ -266,7 +272,7 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 	}
 	handler, handlerFound := worker.Handlers[occurrence.JobID]
 	execute, executable := handlerExecutor(handler)
-	if !handlerFound || !executable || (worker.LocalQualification[occurrence.JobID] == "" && job.Availability != Available) {
+	if !handlerFound || !executable || (worker.product == nil && worker.LocalQualification[occurrence.JobID] == "" && job.Availability != Available) {
 		receipt, err := worker.unavailableReceipt(request.WorkspaceID, occurrence, now, ReasonCatalogUnavailable)
 		if occurrence.EventID == "" {
 			if appendErr := worker.Scheduler.AppendReceipt(request.WorkspaceID, scheduler.Receipt{JobID: occurrence.JobID, ScheduledFor: occurrence.ScheduledFor, AttemptedAt: now, State: scheduler.Unavailable, Error: "qualified local handler is not enrolled"}); appendErr != nil && err == nil {
@@ -319,6 +325,18 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 			return worker.recordReleaseRecovery(request, occurrence, base, releaseErr)
 		}
 		return base, grantErr
+	}
+	if worker.product != nil {
+		bounded := grant.(executionGrant)
+		bounded.publication = func(publish func() error) error {
+			return worker.product.guard(func() error {
+				if err := workerCtx.Err(); err != nil {
+					return err
+				}
+				return worker.Scheduler.WithCurrentLease(lease, worker.product.service.now(), publish)
+			})
+		}
+		grant = bounded
 	}
 	go func() {
 		result, handlerErr := execute(workerCtx, command, grant)
@@ -456,19 +474,29 @@ func (worker Worker) recoveryReceipt(base Receipt, now time.Time) Receipt {
 }
 
 func (worker Worker) publishOccurrence(workspaceID string, occurrence scheduler.Occurrence, now time.Time, lease scheduler.Lease, receipt Receipt) error {
-	return worker.Scheduler.WithCurrentLease(lease, now, func() error {
-		if err := worker.Receipts.AppendReceipt(receipt); err != nil {
-			return err
-		}
-		state := scheduler.Failed
-		if receipt.State == ReceiptSucceeded || receipt.State == ReceiptReviewedNoChange || receipt.State == ReceiptProposalEmitted {
-			state = scheduler.Succeeded
-		}
-		if occurrence.EventID != "" {
-			return nil
-		}
-		return worker.Scheduler.AppendReceipt(workspaceID, scheduler.Receipt{JobID: occurrence.JobID, ScheduledFor: occurrence.ScheduledFor, AttemptedAt: now.UTC(), State: state, Error: schedulerError(receipt)})
-	})
+	leaseNow := now
+	if worker.product != nil {
+		leaseNow = worker.product.service.now()
+	}
+	publish := func() error {
+		return worker.Scheduler.WithCurrentLease(lease, leaseNow, func() error {
+			if err := worker.Receipts.AppendReceipt(receipt); err != nil {
+				return err
+			}
+			state := scheduler.Failed
+			if receipt.State == ReceiptSucceeded || receipt.State == ReceiptReviewedNoChange || receipt.State == ReceiptProposalEmitted {
+				state = scheduler.Succeeded
+			}
+			if occurrence.EventID != "" {
+				return nil
+			}
+			return worker.Scheduler.AppendReceipt(workspaceID, scheduler.Receipt{JobID: occurrence.JobID, ScheduledFor: occurrence.ScheduledFor, AttemptedAt: now.UTC(), State: state, Error: schedulerError(receipt)})
+		})
+	}
+	if worker.product != nil {
+		return worker.product.guard(publish)
+	}
+	return publish()
 }
 
 func (worker Worker) unavailableReceipt(workspaceID string, occurrence scheduler.Occurrence, now time.Time, reason ReasonCode) (Receipt, error) {

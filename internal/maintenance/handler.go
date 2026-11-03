@@ -23,6 +23,7 @@ type executionGrant struct {
 	workspaceID      string
 	deadline         time.Time
 	nonce            [16]byte
+	publication      func(func() error) error
 }
 
 func newExecutionGrant(command Command) (ExecutionGrant, error) {
@@ -45,6 +46,9 @@ func (grant executionGrant) validate(command Command) error {
 	}
 	if grant.commandID != command.CommandID || grant.occurrenceDigest != command.OccurrenceDigest() || grant.workspaceID != command.WorkspaceID || !grant.deadline.Equal(command.Deadline.UTC()) {
 		return errors.New("maintenance execution grant does not bind the command")
+	}
+	if grant.publication != nil {
+		return grant.publication(func() error { return nil })
 	}
 	return nil
 }
@@ -80,4 +84,22 @@ func handlerExecutor(handler any) (handlerExecuteFunc, bool) {
 // worker-issued grant before any side effect.
 type Handler interface {
 	ExecuteAuthorized(context.Context, Command, ExecutionGrant) (HandlerResult, error)
+}
+
+func publishWithGrant(ctx context.Context, grant ExecutionGrant, command Command, publish func() error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := ValidateExecutionGrant(grant, command); err != nil {
+		return err
+	}
+	if bounded, ok := grant.(executionGrant); ok && bounded.publication != nil {
+		return bounded.publication(func() error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			return publish()
+		})
+	}
+	return publish()
 }

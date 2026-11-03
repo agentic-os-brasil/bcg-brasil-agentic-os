@@ -1326,3 +1326,25 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Existing explicit local auto-memory disablement is not proof of complete managed-policy behavior. Unknown external policy is never promoted to verified absence; known unsupported local sources still withhold native generation. Actual native observation, fixture evidence, enterprise device-policy acceptance and production signing/rollout remain separate. No alternate profile, caller approval flag, new network inspection or automatic copied-packet revocation follows from this contract.
 - Refs: NPHK; specs/063-product-native-plugin.md; docs/product-native-plugin.md; docs/plans/2026-11-02-product-native-plugin.md
 - Supersedes: none
+
+## JREV - Separate measured job qualification from revisioned activation
+
+- Date: 2026-11-02
+- Status: accepted
+- Owner: Maestro
+- Context: Existing Canary activation accepts a constant job digest, status lookup can create directories, and occurrence fencing protects terminal receipts after handlers may already have committed domain state. Product MCP needs actual per-job execution evidence and revocation that also fences visible effects.
+- Decision: Reuse the canonical maintenance Worker, scheduler and domain stores behind one admitted product service. Produce local qualification only from an attended exact one-shot execution with verified durable domain result and receipt, bound to current implementation/configuration and workspace/job/platform. Recurring enrollment is a separate exact owner-reviewed revision-CAS transition with per-job no-backfill boundary. Require its live active revision for all product dispatches, including default-enabled jobs, and couple current-revision/lease checks to visible domain publication and terminal success. Keep status read-only and preserve legacy Canary compatibility without treating its declaration hash as product qualification.
+- Consequences: Product ownership needs narrow canonical publication seams and cross-process lock-order tests; installation alone never enables recurring work. Changed builds/configuration require fresh local qualification. Denial during synthesis blocks active publication but may leave private unreferenced staging. Engineering qualification is scoped evidence, not native-client, platform-signing or production availability promotion. Weekly deterministic rollups retain exact owner review for lifetime candidates.
+- Refs: specs/062-product-maintenance-service.md; specs/006-memory-persistence.md; specs/009-scheduler-catch-up.md; specs/036-maintenance-plane.md; specs/060-product-owner-memory.md; docs/plans/2026-11-02-product-maintenance-service.md; internal/maintenance; internal/scheduler; internal/memory
+- Supersedes: none
+
+## RCIX - Verified external runtime index and diagnostic execution
+
+- Date: 2026-11-02
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Product maintenance must use actual projection and readiness readers, but runtime embedding depends on maintenance catalog types. Existing index writes replace two managed files non-atomically, and configured readiness cannot establish observed native health.
+- Decision: Isolate declarative maintenancecatalog below runtime embedding with compatible maintenance aliases/parser. Derive runtime selection and index inputs from admitted projection metadata and integrity-checked RoutingInputs/Inspect. Publish the external per-workspace skills index as immutable catalog/Markdown/typed-metadata generations selected by one atomic pointer. Closed diagnostic collectors may qualify actual bounded report execution while findings remain missing or unavailable; qualification requires nonempty genuine observations and immutable readback, never model booleans, fake healthy builders or timestamp-only output. CLI version forwards only trusted caller identity and unknown remains unknown.
+- Consequences: The index lives under home/brain/runtime/workspaces/<workspace-id>/skills-index and preserves factory generated assets. Domain/control/lease publication guards apply to every report. Native capability, health, installed-source authority and diagnostic execution remain distinct evidence. Deep-dream enrollment never grants future lifetime-text approval; the existing exact per-candidate owner review remains authoritative.
+- Refs: specs/012-skills-index.md, specs/062-product-maintenance-service.md, docs/plans/2026-11-02-product-maintenance-service.md
+- Supersedes: none

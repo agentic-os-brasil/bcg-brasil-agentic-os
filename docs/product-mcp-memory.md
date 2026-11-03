@@ -90,6 +90,13 @@ stale state or missing confirmation refuses. Never paste full private review
 output into ordinary model chat. Local review commands do not turn an unsupported
 native host into qualified evidence.
 
+This fallback supports capture, correction, deletion and retention. Use the MCP
+`memory.consolidate` operation for daily/weekly consolidation; generic local
+`memory-review`/`memory-apply` do not implement consolidation. Weekly execution
+may retain L2/L3 when exact lifetime confirmation is unavailable or declined.
+For qualified recurring jobs and their distinct intent review, read the
+[maintenance workflow](product-mcp-maintenance.md).
+
 ## Capacity and recovery
 
 The canonical limit is4096 lifetime capture identities, including permanent
