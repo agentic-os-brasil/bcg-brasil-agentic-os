@@ -170,7 +170,16 @@ try {
         $powershell = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
         $arguments += @('-Kit', "`"$nativeKit`"", '-KitTestScript', "`"$nativeKitTest`"", '-SdkWitness', "`"$nativeSdk`"")
     }
-    $process = Start-Process -FilePath $powershell -ArgumentList $arguments -Credential $credential -LoadUserProfile -WorkingDirectory $OutputRoot -RedirectStandardOutput $stdout -RedirectStandardError $stderr -Wait -PassThru
+    $hadModulePath = Test-Path Env:PSModulePath
+    $priorModulePath = $env:PSModulePath
+    try {
+        # Stock Windows PowerShell must resolve its own modules, not inherited PowerShell7 modules.
+        if ($withKit) { Remove-Item Env:PSModulePath -ErrorAction SilentlyContinue }
+        $process = Start-Process -FilePath $powershell -ArgumentList $arguments -Credential $credential -LoadUserProfile -WorkingDirectory $OutputRoot -RedirectStandardOutput $stdout -RedirectStandardError $stderr -Wait -PassThru
+    } finally {
+        if ($hadModulePath) { $env:PSModulePath = $priorModulePath }
+        else { Remove-Item Env:PSModulePath -ErrorAction SilentlyContinue }
+    }
     if ($withKit) {
         foreach ($path in @($stdout, $stderr)) {
             if ((Get-Item -LiteralPath $path).Length -gt 2097152) { throw 'Native proof output exceeded its bounded synthetic log contract.' }
