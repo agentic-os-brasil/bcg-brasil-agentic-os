@@ -1,3 +1,5 @@
+//go:build ignore
+
 // Run from adapters/mcp with the existing SDK module; this is not shipped to participants.
 package main
 
