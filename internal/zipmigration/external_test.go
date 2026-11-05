@@ -153,7 +153,8 @@ func TestExternalOwnerControlsPreserveAuthoredNeighbors(t *testing.T) {
 			controls := []string{"owner/registry.json", "owner/interview/confirmations.json", "owner/interview/drafts/review.json", "owner/refinement/proposals/pending.json", "owner/refinement/audits/prepared.json", "owner/refinement/reversions/prior.json", "owner/refinement/versions/voice/prior.before.md", "owner/observations/observations.jsonl"}
 			for i, name := range controls {
 				if spelling == "portable-case" {
-					name = "owner/" + strings.ToUpper(strings.TrimPrefix(name, "owner/"))
+					directory, base := filepath.Split(name)
+					name = directory + strings.ToUpper(base)
 					controls[i] = name
 				}
 				externalPut(t, o.SourceRoot, "brain/"+name, "historical machine state\n")

@@ -46,6 +46,57 @@ func TestStatusReportsEmptyAndCommittedWorkspace(t *testing.T) {
 	}
 }
 
+func TestStatusUsesTemporaryAliasAndRefusesApplicationAlias(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix temporary-directory alias; Windows ownership has separate contracts")
+	}
+	base := t.TempDir()
+	physical, temporary := filepath.Join(base, "physical"), filepath.Join(base, "temporary")
+	if err := os.Mkdir(physical, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(physical, temporary); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", temporary)
+	root := filepath.Join(temporary, "memory")
+	if err := Bootstrap(root, "case-a"); err != nil {
+		t.Fatal(err)
+	}
+	engine := &Engine{Root: root}
+	status, err := engine.Status("case-a")
+	if err != nil || status.State != "empty" || status.ActivationLocked {
+		t.Fatalf("temporary alias status=%#v err=%v", status, err)
+	}
+	lock := filepath.Join(physical, "memory", "workspaces", "case-a", ".locks", "activation.lock")
+	if err := os.Mkdir(lock, 0700); err != nil {
+		t.Fatal(err)
+	}
+	status, err = engine.Status("case-a")
+	if err != nil || !status.ActivationLocked {
+		t.Fatalf("temporary alias lost active lock: status=%#v err=%v", status, err)
+	}
+	external := filepath.Join(base, "external")
+	if err := os.Mkdir(external, 0700); err != nil {
+		t.Fatal(err)
+	}
+	canary := filepath.Join(external, "keep.txt")
+	if err := os.WriteFile(canary, []byte("preserve external state"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(external, filepath.Join(physical, "application-alias")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&Engine{Root: filepath.Join(temporary, "application-alias")}).Status("case-a"); err == nil {
+		t.Fatal("status followed an application-controlled ancestor alias")
+	}
+	entries, err := os.ReadDir(external)
+	body, readErr := os.ReadFile(canary)
+	if err != nil || readErr != nil || len(entries) != 1 || entries[0].Name() != "keep.txt" || string(body) != "preserve external state" {
+		t.Fatalf("status changed external target: entries=%v err=%v read=%v body=%q", entries, err, readErr, body)
+	}
+}
+
 func TestBootstrapMaterializesAnEmptyWorkspaceMemoryRoot(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "memory")
 	if err := Bootstrap(root, "case-a"); err != nil {

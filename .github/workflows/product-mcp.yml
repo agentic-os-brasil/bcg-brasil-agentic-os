@@ -27,7 +27,7 @@ on:
       - 'LICENSE.md'
       - '.github/workflows/product-mcp.yml'
   push:
-    branches: [main]
+    branches: [main, 'codex/integration/**']
     paths:
       - 'adapters/mcp/**'
       - 'internal/execution/**'
@@ -65,6 +65,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
+      - name: Select physical macOS temporary directory
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          physical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          printf 'TMPDIR=%s\n' "$physical_temp" >> "$GITHUB_ENV"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -126,12 +132,24 @@ jobs:
 
   authenticated-docling:
     runs-on: macos-15
-    timeout-minutes: 30
-    env:
-      MAESTRO_DOCLING_TEST_INPUTS: ${{ runner.temp }}/maestro-raw-inputs
-      MAESTRO_DOCLING_TEST_ROOT: ${{ runner.temp }}/maestro-engineering-runtime
-      MAESTRO_DOCLING_RETAINED_ROOT: ${{ runner.temp }}/maestro-engineering-runtime
+    timeout-minutes: 60
     steps:
+      - name: Select physical macOS temporary directory
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          physical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          printf 'TMPDIR=%s\n' "$physical_temp" >> "$GITHUB_ENV"
+      - name: Bind fixture paths to the assigned runner
+        shell: bash
+        env:
+          MAESTRO_DOCLING_TEST_INPUTS: ${{ runner.temp }}/maestro-raw-inputs
+          MAESTRO_DOCLING_TEST_ROOT: ${{ runner.temp }}/maestro-engineering-runtime
+          MAESTRO_DOCLING_RETAINED_ROOT: ${{ runner.temp }}/maestro-engineering-runtime
+        run: |
+          printf '%s\n' "MAESTRO_DOCLING_TEST_INPUTS=$MAESTRO_DOCLING_TEST_INPUTS" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_DOCLING_TEST_ROOT=$MAESTRO_DOCLING_TEST_ROOT" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_DOCLING_RETAINED_ROOT=$MAESTRO_DOCLING_RETAINED_ROOT" >> "$GITHUB_ENV"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -159,7 +177,7 @@ jobs:
           tag = constant("PythonVersion").split("+")[1]
           assert re.fullmatch(r"[0-9]{8}", tag)
           inputs = json.loads(pathlib.Path("internal/ingest/docling/runtime/inputs.json").read_text())
-          assert len(inputs) == 45 and len({x["filename"] for x in inputs}) == 45
+          assert len(inputs) == 51 and len({x["filename"] for x in inputs}) == 51
           assert sum(x["size"] for x in inputs) <= 512 << 20
           for item in inputs:
               parsed = urllib.parse.urlsplit(item["url"])
@@ -224,4 +242,28 @@ jobs:
           passed = {e.get("Test") for e in events if e.get("Action") == "pass"}
           required = {"TestContentRealJourneys/sdk", "TestContentRealJourneys/compiled_stdio"}
           assert required <= passed, "real SDK/stdio content acceptance did not run: " + repr(required - passed)
+          PYCODE
+      - name: Prove policy formats through reviewed knowledge and restarted packets
+        working-directory: adapters/mcp
+        shell: bash
+        env:
+          MAESTRO_POLICY_PUBLIC_ROOT: ${{ runner.temp }}/maestro-policy-public
+        run: |
+          evidence="$RUNNER_TEMP/maestro-policy-content-tests.jsonl"
+          if ! go test . -run '^TestContentPolicyRealJourneys$' -count=1 -json -timeout=45m > "$evidence"; then
+            cat "$evidence"
+            exit 1
+          fi
+          cat "$evidence"
+          python3 - "$evidence" <<'PYCODE'
+          import json, pathlib, sys
+          events = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+          passed = {e.get("Test") for e in events if e.get("Action") == "pass"}
+          prefix = "TestContentPolicyRealJourneys"
+          cases = ("csv", "docx", "epub", "htm", "html", "json", "md", "txt", "xls", "xlsx", "xml",
+                   "validated_export", "controls", "partial", "parser_tamper")
+          required = {prefix + "/" + transport + "/" + case
+                      for transport in ("sdk", "compiled_stdio") for case in cases}
+          required.add(prefix + "/compiled_stdio/mcpb_readback")
+          assert required <= passed, "policy SDK/stdio acceptance did not run: " + repr(sorted(required - passed))
           PYCODE
