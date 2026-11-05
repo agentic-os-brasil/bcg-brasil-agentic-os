@@ -76,7 +76,11 @@ func TestDailyRecoveryDreamAckAndBound(t *testing.T) {
 }
 
 func TestDailyValidationAndLongScopeBudget(t *testing.T) {
-	root := t.TempDir()
+	// Exercise JSON-escaped path bytes even when this test runs on Unix.
+	root := filepath.Join(t.TempDir(), `workspace\escaped`)
+	if err := os.MkdirAll(root, 0700); err != nil {
+		t.Fatal(err)
+	}
 	scopeID := strings.Repeat("a", 64) + "/" + strings.Repeat("b", 64)
 	dailyPut(t, filepath.Join(root, "brain/accounts/.active"), scopeID)
 	parts := strings.Split(scopeID, "/")
@@ -95,7 +99,16 @@ func TestDailyValidationAndLongScopeBudget(t *testing.T) {
 		t.Fatal(len(got))
 	}
 	base := checkpoint(t, root, "owner", "bad", "", "work")
-	for _, body := range []string{base + " {}", strings.Replace(base, root, root+"-wrong", 1), strings.Replace(base, "agent-authored", "attested", 1), string([]byte{0xff})} {
+	var wrongWorkspace dailyCheckpoint
+	if err := json.Unmarshal([]byte(base), &wrongWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	wrongWorkspace.Workspace = root + "-wrong"
+	wrongBody, err := json.Marshal(wrongWorkspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, body := range []string{base + " {}", string(wrongBody), strings.Replace(base, "agent-authored", "attested", 1), string([]byte{0xff})} {
 		dailyPut(t, filepath.Join(root, "brain/.maestro/daily-pending/bad.json"), body)
 		if got := dailyRun(t, root, "daily-stop"); !strings.Contains(got, `"failed":1`) {
 			t.Fatal(got)
