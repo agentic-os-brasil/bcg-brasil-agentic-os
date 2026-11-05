@@ -2,6 +2,7 @@ package setup
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -68,7 +69,7 @@ func CurrentClientMaterializer(o installer.ClientOptions) installer.ClientMateri
 		} else if e != nil {
 			return installer.ClientMaterialization{}, e
 		}
-		if err = inspectMarketplace(stage, o.Request.CarrierID, identity, s.Server.SHA256); err != nil {
+		if err = inspectMarketplace(stage, o, identity, s.Server.SHA256); err != nil {
 			return installer.ClientMaterialization{}, err
 		}
 		if _, e := os.Lstat(desktopStage); errors.Is(e, os.ErrNotExist) {
@@ -167,6 +168,17 @@ func writeMarketplaceAndLauncher(root string, o installer.ClientOptions) error {
 	if err := scheduler.WriteNewPrivateFile(filepath.Join(root, ".claude-plugin", "marketplace.json"), append(body, '\n')); err != nil {
 		return err
 	}
+	name, body := managementLauncher(o)
+	path := filepath.Join(root, name)
+	if err := scheduler.WriteNewPrivateFile(path, body); err != nil {
+		return err
+	}
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	return os.Chmod(path, 0700)
+}
+func managementLauncher(o installer.ClientOptions) (string, []byte) {
 	args := []string{o.Self, "manage", "--product-root", o.ManagedRoot, "--user-home", o.UserHome, "--workspace", o.Request.Workspace, "--carrier-id", o.Request.CarrierID}
 	args = append(args, "--client-code-root", o.Request.CodeRoot, "--client-desktop-path", o.Request.DesktopPath, "--client-code-executable", o.Request.CodeExecutable, "--client-scope", o.Request.CodeScope)
 	if runtime.GOOS == "windows" {
@@ -174,19 +186,15 @@ func writeMarketplaceAndLauncher(root string, o installer.ClientOptions) error {
 		for _, s := range args {
 			q = append(q, "'"+strings.ReplaceAll(s, "'", "''")+"'")
 		}
-		return scheduler.WriteNewPrivateFile(filepath.Join(root, "Manage Maestro.ps1"), []byte("& "+strings.Join(q, " ")+"\nif ($LASTEXITCODE) { exit $LASTEXITCODE }\n"))
+		return "Manage Maestro.ps1", []byte("& " + strings.Join(q, " ") + "\nif ($LASTEXITCODE) { exit $LASTEXITCODE }\n")
 	}
 	var q []string
 	for _, s := range args {
 		q = append(q, "'"+strings.ReplaceAll(s, "'", "'\"'\"'")+"'")
 	}
-	path := filepath.Join(root, "Manage Maestro.command")
-	if err := scheduler.WriteNewPrivateFile(path, []byte("#!/bin/sh\nexec "+strings.Join(q, " ")+"\n")); err != nil {
-		return err
-	}
-	return os.Chmod(path, 0700)
+	return "Manage Maestro.command", []byte("#!/bin/sh\nexec " + strings.Join(q, " ") + "\n")
 }
-func inspectMarketplace(root, id string, identity releasecontract.ServerIdentity, serverSHA string) error {
+func inspectMarketplace(root string, o installer.ClientOptions, identity releasecontract.ServerIdentity, serverSHA string) error {
 	if _, e := installer.ClientTreeDigest(root); e != nil {
 		return e
 	}
@@ -205,7 +213,7 @@ func inspectMarketplace(root, id string, identity releasecontract.ServerIdentity
 	if e = releasecontract.DecodeStrictJSON(body, &marketplace); e != nil {
 		return e
 	}
-	if marketplace.Name != "maestro-local-"+id || len(marketplace.Plugins) != 1 || marketplace.Plugins[0].Name != "maestro-product" || marketplace.Plugins[0].Source != "./plugins/maestro-product" {
+	if marketplace.Name != "maestro-local-"+o.Request.CarrierID || len(marketplace.Plugins) != 1 || marketplace.Plugins[0].Name != "maestro-product" || marketplace.Plugins[0].Source != "./plugins/maestro-product" {
 		return errors.New("foreign local marketplace; files preserved")
 	}
 	entries, e := os.ReadDir(root)
@@ -219,7 +227,59 @@ func inspectMarketplace(root, id string, identity releasecontract.ServerIdentity
 			return errors.New("unexpected local marketplace content; preserved")
 		}
 	}
-	return packaging.InspectStablePlugin(filepath.Join(root, "plugins", "maestro-product"), stableCarrier(id), identity, serverSHA)
+	plugin := filepath.Join(root, "plugins", "maestro-product")
+	if e = packaging.InspectStablePlugin(plugin, stableCarrier(o.Request.CarrierID), identity, serverSHA); e != nil {
+		return e
+	}
+	body, e = scheduler.ReadPrivateFile(filepath.Join(plugin, ".mcp.json"), 64<<10)
+	if e != nil {
+		return e
+	}
+	var config struct {
+		Servers map[string]struct {
+			Type    string   `json:"type"`
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"mcpServers"`
+	}
+	if e = releasecontract.DecodeStrictJSON(body, &config); e != nil {
+		return e
+	}
+	server, found := config.Servers["maestro"]
+	if len(config.Servers) != 1 || !found || server.Type != "stdio" {
+		return errors.New("Code candidate server differs; preserved")
+	}
+	if e = checkClientLaunchBinding(server.Command, server.Args, o, runtime.GOOS); e != nil {
+		return e
+	}
+	name, expected := managementLauncher(o)
+	file, e := scheduler.OpenRegularFile(filepath.Join(root, name))
+	if e != nil {
+		return e
+	}
+	defer file.Close()
+	info, e := file.Stat()
+	if e != nil {
+		return e
+	}
+	mode := os.FileMode(0700)
+	if runtime.GOOS == "windows" {
+		mode = 0600
+	}
+	if e = validateClientPrivateFile(info, mode); e != nil {
+		return e
+	}
+	if info.Size() > 64<<10 {
+		return errors.New("Code management launcher size bound")
+	}
+	body, e = io.ReadAll(io.LimitReader(file, (64<<10)+1))
+	if e != nil {
+		return e
+	}
+	if !bytes.Equal(body, expected) {
+		return errors.New("Code management launcher differs from reviewed binding; preserved")
+	}
+	return nil
 }
 func inspectOwnedCode(root string, o installer.ClientOptions, old *installer.ClientRecord) error {
 	if old != nil {
@@ -230,6 +290,9 @@ func inspectOwnedCode(root string, o installer.ClientOptions, old *installer.Cli
 		if e == nil && root == old.Materialization.CodeRoot+".previous-"+o.Request.CarrierID && digest == old.Materialization.CodeBackupTreeSHA256 {
 			return nil
 		}
+	}
+	if root != o.Request.CodeRoot {
+		return errors.New("unknown or changed Code backup; preserved")
 	}
 	name := "maestro-mcp"
 	if runtime.GOOS == "windows" {
@@ -253,7 +316,7 @@ func inspectOwnedCode(root string, o installer.ClientOptions, old *installer.Cli
 	if e != nil {
 		return e
 	}
-	return inspectMarketplace(root, o.Request.CarrierID, identity, hash)
+	return inspectMarketplace(root, o, identity, hash)
 }
 func swapOwnedCode(stage string, o installer.ClientOptions, old *installer.ClientRecord) error {
 	destination := o.Request.CodeRoot
@@ -302,7 +365,7 @@ func inspectDesktopBackup(o installer.ClientOptions, old *installer.ClientRecord
 	if info.Size() <= 0 || info.Size() > 128<<20 {
 		return "", errors.New("Desktop backup size bound")
 	}
-	if err = validateDesktopBackupFile(info); err != nil {
+	if err = validateClientPrivateFile(info, 0600); err != nil {
 		return "", err
 	}
 	h := sha256.New()
@@ -380,17 +443,20 @@ func inspectDesktopCandidateBinding(path string, o installer.ClientOptions, targ
 	if err = releasecontract.DecodeStrictJSON(manifest.Server.Configuration, &config); err != nil {
 		return err
 	}
+	return checkClientLaunchBinding(config.Command, config.Args, o, targetOS)
+}
+func checkClientLaunchBinding(command string, args []string, o installer.ClientOptions, targetOS string) error {
 	launcher := "maestro-install"
 	if targetOS == "windows" {
 		launcher += ".exe"
 	}
 	expected := []string{"stable-launch", "--product-root", o.ManagedRoot, "--user-home", o.UserHome, "--workspace", o.Request.Workspace, "--carrier-id", o.Request.CarrierID}
-	if config.Command != filepath.Join(o.ManagedRoot, launcher) || len(config.Args) != len(expected) {
-		return errors.New("Desktop candidate launch binding differs; preserved")
+	if command != filepath.Join(o.ManagedRoot, launcher) || len(args) != len(expected) {
+		return errors.New("client candidate launch binding differs; preserved")
 	}
 	for i, arg := range expected {
-		if config.Args[i] != arg {
-			return errors.New("Desktop candidate launch binding differs; preserved")
+		if args[i] != arg {
+			return errors.New("client candidate launch binding differs; preserved")
 		}
 	}
 	return nil

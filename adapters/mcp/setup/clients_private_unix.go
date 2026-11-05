@@ -8,12 +8,11 @@ import (
 	"syscall"
 )
 
-// The backup is a large private packet, not small scheduler state. Inspect the
-// same held descriptor used for its bounded digest before admitting deletion.
-func validateDesktopBackupFile(info os.FileInfo) error {
+// Check the same held descriptor used for bounded reading or backup deletion.
+func validateClientPrivateFile(info os.FileInfo, mode os.FileMode) error {
 	s, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || s.Uid != uint32(os.Geteuid()) || s.Nlink != 1 || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 {
-		return errors.New("Desktop backup requires private single-link owned file")
+	if !ok || s.Uid != uint32(os.Geteuid()) || s.Nlink != 1 || !info.Mode().IsRegular() || info.Mode().Perm() != mode {
+		return errors.New("client file requires exact-mode single-link owned regular file")
 	}
 	return nil
 }
