@@ -3,6 +3,7 @@ package harness
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -170,5 +171,47 @@ func writeActionFixture(t *testing.T, root, relativePath, body string) {
 	}
 	if err := os.WriteFile(path, []byte(strings.TrimPrefix(body, "\n")), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestReadersCheckRecognizesShippedHookAndRejectsUnknownConfig(t *testing.T) {
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("Python 3 is unavailable; reader-check behavior is not qualified")
+	}
+	root, err := FindRoot(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := t.TempDir()
+	for _, relative := range []string{
+		"bundles/base/tools/readers-check.py",
+		"bundles/base/agents/activation-policy.json",
+		"installers/zip/user-template/.claude/hooks/announce-agent-dispatch.sh",
+	} {
+		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		target := filepath.Join(fixture, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(target, body, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	checker := filepath.Join(fixture, "bundles", "base", "tools", "readers-check.py")
+	output, err := exec.Command(python, checker, "--count").CombinedOutput()
+	if err != nil || strings.TrimSpace(string(output)) != "0" {
+		t.Fatalf("shipped activation-policy consumer was missed: %v\n%s", err, output)
+	}
+	if err := os.WriteFile(filepath.Join(fixture, "bundles", "base", "unread.json"), []byte(`{}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	output, err = exec.Command(python, checker, "--count").CombinedOutput()
+	exit, ok := err.(*exec.ExitError)
+	if !ok || exit.ExitCode() != 1 || strings.TrimSpace(string(output)) != "1" {
+		t.Fatalf("unknown config must remain an orphan: %v\n%s", err, output)
 	}
 }
