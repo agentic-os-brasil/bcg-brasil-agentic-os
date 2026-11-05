@@ -4,6 +4,7 @@ package product_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,9 +44,18 @@ func TestWindowsOwnerReviewPilot(t *testing.T) {
 			connect := func() *mcp.ClientSession {
 				client := mcp.NewClient(&mcp.Implementation{Name: "windows-owner-native-proof", Version: "1"}, &mcp.ClientOptions{ElicitationHandler: func(_ context.Context, r *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
 					reviews++
-					if reviewing != "" && !strings.Contains(r.Params.Message, reviewing) {
-						t.Error("trusted native host did not receive exact complete proposed text")
-						return &mcp.ElicitResult{Action: "decline"}, nil
+					if reviewing != "" {
+						index := strings.Index(r.Params.Message, "{")
+						var view map[string]any
+						if index < 0 || json.Unmarshal([]byte(r.Params.Message[index:]), &view) != nil {
+							t.Error("trusted native host received malformed private review")
+							return &mcp.ElicitResult{Action: "decline"}, nil
+						}
+						body, ok := view["Texto proposto"].(string)
+						if !ok || body != reviewing {
+							t.Error("trusted native host did not receive exact complete proposed text")
+							return &mcp.ElicitResult{Action: "decline"}, nil
+						}
 					}
 					if intervene != "" {
 						if e := scheduler.WritePrivateFileAtomic(filepath.Join(home, ".maestro", "brain", "owner", "self", "personal-context.md"), []byte(intervene)); e != nil {

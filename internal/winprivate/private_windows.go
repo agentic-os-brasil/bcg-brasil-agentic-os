@@ -602,19 +602,19 @@ func Remove(path string, recursive bool) error {
 	return e
 }
 
-func renameHandle(source *os.File, destination *Directory, target string, replace bool) error {
+func renameHandle(source *os.File, destination *Directory, target string, replace bool) (renamed bool, err error) {
 	if err := Leaf(target); err != nil {
-		return err
+		return false, err
 	}
 	if err := Validate(destination.Handle(), true); err != nil {
-		return err
+		return false, err
 	}
 	st, err := source.Stat()
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err = Validate(windows.Handle(source.Fd()), st.IsDir()); err != nil {
-		return err
+		return false, err
 	}
 	if replace {
 		old, e := destination.OpenFile(target, os.O_RDONLY)
@@ -622,12 +622,12 @@ func renameHandle(source *os.File, destination *Directory, target string, replac
 			e = old.Close()
 		}
 		if e != nil && !errors.Is(e, os.ErrNotExist) {
-			return e
+			return false, e
 		}
 	}
 	names, err := windows.UTF16FromString(target)
 	if err != nil {
-		return err
+		return false, err
 	}
 	names = names[:len(names)-1]
 	type renameInfo struct {
@@ -652,14 +652,18 @@ func renameHandle(source *os.File, destination *Directory, target string, replac
 		err = s.Errno()
 	}
 	if err != nil {
-		return err
+		return false, err
 	}
+	renamed = true
+	// The native namespace transition is now visible. Every later error must
+	// preserve this complete object for the domain recovery protocol.
+
 	if !st.IsDir() {
 		if err = source.Sync(); err != nil {
-			return err
+			return renamed, err
 		}
 	}
-	return destination.Sync()
+	return renamed, destination.Sync()
 }
 
 // Publish stages, flushes and publishes one complete private file in a held
@@ -686,19 +690,10 @@ func (d *Directory) Publish(name string, body []byte, exclusive bool) error {
 	if err = f.Sync(); err != nil {
 		return err
 	}
-	if err = renameHandle(f, d, name, !exclusive); err != nil {
-		// Publication may already be visible if the subsequent native flush failed.
-		// Preserve that exact complete file; domain recovery owns the partial result.
-		current, e := d.OpenFile(name, os.O_RDONLY)
-		if e == nil {
-			a, _ := f.Stat()
-			b, _ := current.Stat()
-			published = a != nil && b != nil && os.SameFile(a, b)
-			_ = current.Close()
-		}
+	published, err = renameHandle(f, d, name, !exclusive)
+	if err != nil {
 		return err
 	}
-	published = true
 	return f.Close()
 }
 func Publish(path string, body []byte, exclusive bool) error {
@@ -722,7 +717,7 @@ func (d *Directory) Rename(source string, target *Directory, name string, replac
 	}
 	f := os.NewFile(uintptr(h), filepath.Join(d.File.Name(), source))
 	defer f.Close()
-	if err = renameHandle(f, target, name, replace); err != nil {
+	if _, err = renameHandle(f, target, name, replace); err != nil {
 		return err
 	}
 	return d.Sync()

@@ -334,6 +334,51 @@ func TestWindowsPrivateStatePilot(t *testing.T) {
 			t.Fatal("exact compensation did not restore absence", e)
 		}
 	})
+	t.Run("native_sharing_refusal_preserves_old_bytes_and_retry", func(t *testing.T) {
+		root := windowsPrivateRoot(t)
+		path := filepath.Join(root, "state")
+		if e := scheduler.PublishNewPrivateFile(path, []byte("old complete bytes")); e != nil {
+			t.Fatal(e)
+		}
+		pointer, e := windows.UTF16PtrFromString(path)
+		if e != nil {
+			t.Fatal(e)
+		}
+		// A real native reader deliberately withholds DELETE sharing. This forces
+		// the actual kernel rename to refuse, independently of application guards.
+		held, e := windows.CreateFile(pointer, windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil, windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL, 0)
+		if e != nil {
+			t.Fatal(e)
+		}
+		d, e := winprivate.Open(root, false)
+		if e != nil {
+			windows.CloseHandle(held)
+			t.Fatal(e)
+		}
+		defer d.Close()
+		publishErr := d.Publish("state", []byte("new complete bytes"), false)
+		if e = windows.CloseHandle(held); e != nil {
+			t.Fatal(e)
+		}
+		if publishErr == nil {
+			t.Fatal("native reader without DELETE sharing did not refuse publication")
+		}
+		b, e := scheduler.ReadPrivateFile(path, 128)
+		if e != nil || string(b) != "old complete bytes" {
+			t.Fatal("failed native publication lost the old complete file", e)
+		}
+		entries, e := os.ReadDir(root)
+		if e != nil || len(entries) != 1 {
+			t.Fatal("refused native publication leaked a stage", e)
+		}
+		if e = d.Publish("state", []byte("new complete bytes"), false); e != nil {
+			t.Fatal("native publication could not retry after sharing release", e)
+		}
+		b, e = scheduler.ReadPrivateFile(path, 128)
+		if e != nil || string(b) != "new complete bytes" {
+			t.Fatal("native retry lost complete readback", e)
+		}
+	})
 	t.Run("native_lock_contention_preserves_one_writer", func(t *testing.T) {
 		root := windowsPrivateRoot(t)
 		path := filepath.Join(root, "transition.lock")
@@ -355,5 +400,5 @@ func TestWindowsPrivateStatePilot(t *testing.T) {
 			t.Fatal("native lock was not released", e)
 		}
 	})
-	t.Log("native_private_state exercised_cases=" + strings.Join([]string{"owner_acl", "unowned_read", "world_null_unknown_acl", "foreign_owner", "hardlink", "nonregular", "offline", "junction", "held_ancestor", "no_clobber", "cas", "absence", "contention"}, ","))
+	t.Log("native_private_state exercised_cases=" + strings.Join([]string{"owner_acl", "unowned_read", "world_null_unknown_acl", "foreign_owner", "hardlink", "nonregular", "offline", "junction", "held_ancestor", "no_clobber", "cas", "absence", "native_sharing_refusal_retry", "contention"}, ","))
 }
