@@ -19,6 +19,7 @@ import (
 var workspaceIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 
 var ErrDreamInProgress = errors.New("memory dreaming cycle already in progress")
+var ErrNoLiveCaptures = errors.New("daily dream requires at least one live capture")
 
 type Capture struct {
 	ID            string    `json:"id,omitempty"`
@@ -277,7 +278,7 @@ func (engine *Engine) dreamDaily(ctx context.Context, workspaceID string, day ti
 		if barrier.Revision > 0 {
 			return DreamResult{Cycle: "daily", Period: period, Skipped: true}, nil
 		}
-		return DreamResult{}, errors.New("daily dream requires at least one live capture")
+		return DreamResult{}, ErrNoLiveCaptures
 	}
 	fingerprint := engine.sourceFingerprint("daily", sources)
 	if existing, _, err := engine.readArtifactByKey(workspaceID, "L1/"+period); err == nil && engine.validateArtifact(existing) == nil && existing.WorkspaceID == workspaceID && existing.Layer == "L1" && existing.Period == period && existing.SourceFingerprint == fingerprint && existing.SynthesizerID == engine.SynthesizerID {
