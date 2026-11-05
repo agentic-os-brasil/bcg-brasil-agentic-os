@@ -15,7 +15,7 @@ status: stable
 x-maestro-profile-version: "1"
 x-maestro-stable-id: managed/install-update
 x-maestro-scope: managed
-x-maestro-source-fingerprint: 469d86c2e5ded2775bff1d6da8aebd7e3cb080ef9a1142e729650deff375b13a
+x-maestro-source-fingerprint: 0565fb673a428f5afcdb8bf7b2bbb4f4196021bcc3b225fe0c58374a5b2592fb
 x-maestro-freshness: fresh
 x-maestro-status: active
 x-maestro-generator-version: maestro-managed-wiki/0.2
