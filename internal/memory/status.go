@@ -67,7 +67,10 @@ func (engine *Engine) Status(workspaceID string) (StatusReport, error) {
 	if report.CaptureFiles > 0 {
 		report.State = "captured"
 	}
-	lockPath := filepath.Join(engine.workspaceRoot(workspaceID), ".locks", "activation.lock")
+	lockPath, err := scheduler.CanonicalPrivatePath(filepath.Join(engine.workspaceRoot(workspaceID), ".locks", "activation.lock"))
+	if err != nil {
+		return StatusReport{}, err
+	}
 	if err := scheduler.ValidateDirectory(lockPath); err == nil {
 		report.ActivationLocked = true
 	} else if !errors.Is(err, os.ErrNotExist) {
