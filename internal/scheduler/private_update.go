@@ -88,7 +88,7 @@ func updatePrivateFileGuarded(path string, maximum int64, guard func(func() erro
 	if err := validateSecureLeaf(name); err != nil {
 		return err
 	}
-	lock, err := directory.openFile(name+".lock", os.O_RDWR|os.O_CREATE, 0600)
+	lock, err := directory.openLock(name + ".lock")
 	if err != nil {
 		return err
 	}

@@ -7,7 +7,6 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/privatelock"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
 	"golang.org/x/sys/windows"
-	"os"
 	"path/filepath"
 	"time"
 )
@@ -30,7 +29,7 @@ func acquireOwnerTransition(path string) (func() error, error) {
 		return nil, e
 	}
 	defer d.Close()
-	f, e := d.OpenFile(filepath.Base(path), os.O_CREATE|os.O_RDWR)
+	f, e := d.OpenLock(filepath.Base(path))
 	if e != nil {
 		return nil, e
 	}

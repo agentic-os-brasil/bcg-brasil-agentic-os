@@ -129,6 +129,10 @@ func descriptor() (*windows.SECURITY_DESCRIPTOR, error) {
 }
 
 func ntOpen(parent windows.Handle, name string, access, disposition, options uint32) (windows.Handle, error) {
+	return ntOpenShared(parent, name, access, disposition, options, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE)
+}
+
+func ntOpenShared(parent windows.Handle, name string, access, disposition, options, sharing uint32) (windows.Handle, error) {
 	n, err := windows.NewNTUnicodeString(name)
 	if err != nil {
 		return windows.InvalidHandle, err
@@ -144,7 +148,7 @@ func ntOpen(parent windows.Handle, name string, access, disposition, options uin
 	var h windows.Handle
 	var iosb windows.IO_STATUS_BLOCK
 	var allocation int64
-	err = windows.NtCreateFile(&h, access, &oa, &iosb, &allocation, 0, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, disposition, options, 0, 0)
+	err = windows.NtCreateFile(&h, access, &oa, &iosb, &allocation, 0, sharing, disposition, options, 0, 0)
 	runtime.KeepAlive(oa.SecurityDescriptor)
 	if err != nil {
 		if status, ok := err.(windows.NTStatus); ok {
@@ -358,6 +362,28 @@ func (d *Directory) Child(name string, create, exclusive bool) (*Directory, erro
 		}
 	}
 	return child, nil
+}
+
+// OpenLock retains a persistent lock's filename while its handle is live.
+// Lock contenders share read/write access but neither request nor share DELETE;
+// otherwise a replacement name could point a second writer at a different lock.
+func (d *Directory) OpenLock(name string) (*os.File, error) {
+	if err := Leaf(name); err != nil {
+		return nil, err
+	}
+	if err := Validate(d.Handle(), true); err != nil {
+		return nil, err
+	}
+	access := uint32(windows.FILE_GENERIC_READ | windows.FILE_GENERIC_WRITE | windows.READ_CONTROL | windows.SYNCHRONIZE)
+	h, err := ntOpenShared(d.Handle(), name, access, windows.FILE_OPEN_IF, fileOptions|windows.FILE_WRITE_THROUGH, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE)
+	if err != nil {
+		return nil, err
+	}
+	if err = Validate(h, false); err != nil {
+		windows.CloseHandle(h)
+		return nil, err
+	}
+	return os.NewFile(uintptr(h), filepath.Join(d.File.Name(), name)), nil
 }
 
 func (d *Directory) OpenFile(name string, flags int) (*os.File, error) {
