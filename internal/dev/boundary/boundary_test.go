@@ -33,6 +33,26 @@ func TestValidateRejectsContributorBootstrapLeak(t *testing.T) {
 	}
 }
 
+func TestValidateSeparatesAdapterGoTestsFromDistributedSource(t *testing.T) {
+	for _, test := range []struct {
+		path   string
+		reject bool
+	}{
+		{"adapters/mcp/setup/setup_test.go", false},
+		{"adapters/mcp/setup/setup.go", true},
+		{"bundles/base/setup_test.go", true},
+		{"adapters/mcp/setup/setup_test.go.md", true},
+	} {
+		t.Run(test.path, func(t *testing.T) {
+			root := t.TempDir()
+			writeFile(t, root, test.path, "package fixture\nimport _ \"example.com/internal/dev/releasepack\"\n")
+			if err := Validate(root); (err != nil) != test.reject {
+				t.Fatalf("Validate() error = %v, reject = %v", err, test.reject)
+			}
+		})
+	}
+}
+
 func writeFile(t *testing.T, root, relative, content string) {
 	t.Helper()
 	path := filepath.Join(root, relative)
