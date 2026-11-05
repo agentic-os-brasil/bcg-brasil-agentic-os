@@ -1,0 +1,96 @@
+name: Windows exact-artifact pilot kit
+
+on:
+  push:
+    branches: [codex/integration/maestro-windows-pilot-kit]
+  pull_request:
+    paths:
+      - '.github/workflows/windows-pilot-kit.yml'
+      - 'acceptance/windows-core-pilot.ps1'
+      - 'dev/pilot/**'
+      - 'adapters/mcp/**'
+      - 'internal/**'
+      - 'bundles/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'LICENSE.md'
+
+permissions:
+  contents: read
+
+jobs:
+  exact-artifact-ordinary-user:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version-file: adapters/mcp/go.mod
+      - name: Produce generic Windows x64 kit with stock PowerShell5.1
+        shell: powershell
+        run: |
+          $developer = Join-Path $env:RUNNER_TEMP 'Developer'
+          New-Item -ItemType Directory -Path $developer -Force | Out-Null
+          ./dev/pilot/build-windows-kit.ps1 -Output (Join-Path $developer 'MaestroWindowsPilot')
+      - name: Compile witnesses from the same source without rebuilding the shipping server
+        working-directory: adapters/mcp
+        shell: powershell
+        run: |
+          $build = Join-Path $env:RUNNER_TEMP 'Developer/windows-pilot-kit-build'
+          New-Item -ItemType Directory -Path $build | Out-Null
+          go test -c -o (Join-Path $build 'windows-core.test.exe') .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go build -trimpath -o (Join-Path $build 'maestro-pilot-sdk-witness.exe') ../../dev/pilot/smoke.go
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Qualify the exact produced PE and ZIP under an actual ordinary account
+        shell: pwsh
+        run: |
+          $developer = Join-Path $env:RUNNER_TEMP 'Developer'
+          $kit = Join-Path $developer 'MaestroWindowsPilot'
+          $build = Join-Path $developer 'windows-pilot-kit-build'
+          ./acceptance/windows-core-pilot.ps1 `
+            -TestBinary (Join-Path $build 'windows-core.test.exe') `
+            -Server (Join-Path $kit 'bin/maestro-mcp-windows-amd64.exe') `
+            -OutputRoot (Join-Path $developer 'windows-pilot-kit-proof') `
+            -Kit $kit `
+            -KitTestScript (Join-Path $env:GITHUB_WORKSPACE 'dev/pilot/test-windows-kit.ps1') `
+            -MethodFixture (Join-Path $env:GITHUB_WORKSPACE 'adapters/mcp/packaging/testdata/method-ids.txt') `
+            -SdkWitness (Join-Path $build 'maestro-pilot-sdk-witness.exe')
+      - name: Stage only bounded synthetic evidence
+        if: always()
+        shell: pwsh
+        run: |
+          $developer = Join-Path $env:RUNNER_TEMP 'Developer'
+          $proof = Join-Path $developer 'windows-pilot-kit-proof'
+          $public = Join-Path $developer 'windows-pilot-kit-evidence'
+          New-Item -ItemType Directory -Path $public -Force | Out-Null
+          foreach ($name in @('native-test.stdout.log', 'native-test.stderr.log', 'native-core-proof.json', 'native-kit-proof.json', 'native-kit-sdk-proof.json', 'native-kit-qualification.json')) {
+            $path = Join-Path $proof $name
+            if (Test-Path -LiteralPath $path) {
+              $entry = Get-Item -LiteralPath $path -Force
+              if ($entry.PSIsContainer -or ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $entry.Length -gt 2097152) {
+                throw 'Evidence is not a bounded ordinary synthetic proof file; it will not be uploaded.'
+              }
+              Copy-Item -LiteralPath $path -Destination (Join-Path $public $name)
+            }
+          }
+      - name: Keep only the qualified generic ZIP and checksum
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-pilot-generic-kit
+          path: |
+            ${{ runner.temp }}/Developer/MaestroWindowsPilot.zip
+            ${{ runner.temp }}/Developer/MaestroWindowsPilot.zip.sha256
+          if-no-files-found: error
+          retention-days: 7
+      - name: Keep bounded proof and actual refusal logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-pilot-kit-native-proof
+          path: |
+            ${{ runner.temp }}/Developer/windows-pilot-kit-evidence/*.log
+            ${{ runner.temp }}/Developer/windows-pilot-kit-evidence/*.json
+          if-no-files-found: warn
+          retention-days: 7
