@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"time"
 
@@ -104,7 +105,11 @@ func main() {
 		panic("capture did not use exact reviewed source")
 	}
 	must(first.Close())
-	packetBinary := filepath.Join(*root, "exports", "code-marketplace", "plugins", "maestro-product", "scripts", "maestro-mcp")
+	packetName := "maestro-mcp"
+	if runtime.GOOS == "windows" {
+		packetName += ".exe"
+	}
+	packetBinary := filepath.Join(*root, "exports", "code-marketplace", "plugins", "maestro-product", "scripts", packetName)
 	firstBytes, err := os.ReadFile(*binary)
 	must(err)
 	packetBytes, err := os.ReadFile(packetBinary)
