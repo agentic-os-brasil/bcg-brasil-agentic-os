@@ -309,7 +309,10 @@ func (store Store) Receipts(workspaceID string) ([]Receipt, error) {
 	if err := validateStoreInput(store.Root, workspaceID); err != nil {
 		return nil, err
 	}
-	root, err := ensurePrivateTree(store.Root, "workspaces", workspaceID, "receipts")
+	root, err := lookupPrivateTree(store.Root, "workspaces", workspaceID, "receipts")
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}

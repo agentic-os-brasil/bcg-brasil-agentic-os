@@ -13,10 +13,16 @@ on:
       - 'internal/workspace/**'
       - 'internal/ownerctx/**'
       - 'internal/memory/**'
+      - 'internal/privatewiki/**'
+      - 'internal/processidentity/**'
       - 'internal/atlas/**'
       - 'internal/atlasops/**'
       - 'internal/ingest/**'
       - 'internal/scheduler/**'
+      - 'internal/maintenance/**'
+      - 'internal/maintenancecatalog/**'
+      - 'internal/runtimecap/**'
+      - 'internal/skillsindex/**'
       - 'internal/releasecontract/**'
       - 'internal/releaseverify/**'
       - 'internal/dev/releasepack/**'
@@ -27,7 +33,7 @@ on:
       - 'LICENSE.md'
       - '.github/workflows/product-mcp.yml'
   push:
-    branches: [main]
+    branches: [main, 'codex/integration/**']
     paths:
       - 'adapters/mcp/**'
       - 'internal/execution/**'
@@ -39,10 +45,16 @@ on:
       - 'internal/workspace/**'
       - 'internal/ownerctx/**'
       - 'internal/memory/**'
+      - 'internal/privatewiki/**'
+      - 'internal/processidentity/**'
       - 'internal/atlas/**'
       - 'internal/atlasops/**'
       - 'internal/ingest/**'
       - 'internal/scheduler/**'
+      - 'internal/maintenance/**'
+      - 'internal/maintenancecatalog/**'
+      - 'internal/runtimecap/**'
+      - 'internal/skillsindex/**'
       - 'internal/releasecontract/**'
       - 'internal/releaseverify/**'
       - 'internal/dev/releasepack/**'
@@ -63,8 +75,14 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
+      - name: Select physical macOS temporary directory
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          physical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          printf 'TMPDIR=%s\n' "$physical_temp" >> "$GITHUB_ENV"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -98,18 +116,23 @@ jobs:
           $stagedBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           "GOCACHE=$freshCache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Canonical ledger, HOME, owner and memory contracts
-        run: go test ./internal/execution ./internal/datahome ./internal/ownerctx ./internal/memory -timeout=300s
+        run: go test ./internal/execution ./internal/datahome ./internal/ownerctx ./internal/memory ./internal/privatewiki ./internal/processidentity -timeout=300s
       - name: Canonical workspace initialization contracts on admitted Unix runners
         if: runner.os != 'Windows'
         run: go test ./internal/workspace -timeout=180s
       - name: Canonical workspace knowledge and verified ingestion contracts
         if: runner.os != 'Windows'
         run: go test ./internal/atlasops ./internal/ingest/... ./internal/releasecontract ./internal/releaseverify ./internal/scheduler -timeout=300s
+      - name: Canonical maintenance and deterministic diagnosis contracts
+        if: runner.os != 'Windows'
+        # Run expensive wiki families in their dedicated job; preserve every other
+        # owning and legacy/recovery contract here without duplicate selection.
+        run: go test ./internal/maintenance ./internal/runtimecap ./internal/skillsindex -skip '^TestProductWiki' -timeout=300s
       # Windows must preserve ownership refusals; this job is not native admission.
       # Its elevated runner cannot qualify ordinary-user workspace initialization.
       - name: Product protocol, bootstrap refusal and package contracts
         working-directory: adapters/mcp
-        run: go test ./... -timeout=600s
+        run: go test ./... -timeout=900s
       - name: Product module static checks
         working-directory: adapters/mcp
         run: go vet ./...
@@ -124,14 +147,78 @@ jobs:
             exit 1
           fi
 
+  wiki-maintenance-contracts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Select physical macOS temporary directory
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          physical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          printf 'TMPDIR=%s\n' "$physical_temp" >> "$GITHUB_ENV"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: adapters/mcp/go.mod
+      - name: Finite wiki maintenance families and exact terminal recovery
+        shell: bash
+        run: |
+          python3 - <<'PYCODE'
+          import json, os, pathlib, re, subprocess
+          package = "./internal/maintenance"
+          listed = subprocess.check_output(["go", "test", package, "-list", "^TestProductWiki"], text=True)
+          names = [line for line in listed.splitlines() if re.fullmatch(r"TestProductWiki[A-Za-z0-9_]+", line)]
+          required = {
+              "TestProductWikiStaleReviewAndClockOnlyNoopCannotQualify",
+              "TestProductWikiCadenceEnrollmentAndReplay",
+              "TestProductWikiLiveFencesBeforePointer",
+              "TestProductWikiTerminalFencesAfterActualEffect",
+              "TestProductWikiDiagnosticPointerHonorsDeniedPublication",
+              "TestProductWikiEventOnlyControlAndReceiptRefuseTampering",
+              "TestProductWikiEventRecoveryAfterPartialEffect",
+              "TestProductWikiEventClosureAfterReconcile",
+              "TestProductWikiEventClosureRetainsRecoveryEvidence",
+          }
+          assert required <= set(names) and len(names) == len(set(names)), "wiki family selection is incomplete"
+          # Prior slowest original family:89.90s. The expanded exact-event
+          # evidence/recovery family measured115.09s, so receives240s; other
+          # families receive180s. Failed360s combined runs are not reused as PASS.
+          for name in names:
+              evidence = pathlib.Path(os.environ["RUNNER_TEMP"]) / (name + ".jsonl")
+              deadline = "240s" if name == "TestProductWikiEventClosureAfterReconcile" else "180s"
+              with evidence.open("w") as output:
+                  result = subprocess.run(["go", "test", package, "-run", "^" + name + "$", "-count=1", "-json", "-timeout=" + deadline], stdout=output)
+              print(evidence.read_text(), flush=True)
+              assert result.returncode == 0, "wiki family failed: " + name
+              events = [json.loads(line) for line in evidence.read_text().splitlines()]
+              assert any(e.get("Action") == "pass" and e.get("Test") == name for e in events), "wiki family skipped or missing: " + name
+          PYCODE
+
   authenticated-docling:
     runs-on: macos-15
     timeout-minutes: 30
-    env:
-      MAESTRO_DOCLING_TEST_INPUTS: ${{ runner.temp }}/maestro-raw-inputs
-      MAESTRO_DOCLING_TEST_ROOT: ${{ runner.temp }}/maestro-engineering-runtime
-      MAESTRO_DOCLING_RETAINED_ROOT: ${{ runner.temp }}/maestro-engineering-runtime
     steps:
+      - name: Select physical macOS temporary directory
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          physical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          printf 'TMPDIR=%s\n' "$physical_temp" >> "$GITHUB_ENV"
+      - name: Bind fixture paths to the assigned runner
+        shell: bash
+        env:
+          MAESTRO_DOCLING_TEST_INPUTS: ${{ runner.temp }}/maestro-raw-inputs
+          MAESTRO_DOCLING_TEST_ROOT: ${{ runner.temp }}/maestro-engineering-runtime
+          MAESTRO_DOCLING_RETAINED_ROOT: ${{ runner.temp }}/maestro-engineering-runtime
+        run: |
+          printf '%s\n' "MAESTRO_DOCLING_TEST_INPUTS=$MAESTRO_DOCLING_TEST_INPUTS" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_DOCLING_TEST_ROOT=$MAESTRO_DOCLING_TEST_ROOT" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_DOCLING_RETAINED_ROOT=$MAESTRO_DOCLING_RETAINED_ROOT" >> "$GITHUB_ENV"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:

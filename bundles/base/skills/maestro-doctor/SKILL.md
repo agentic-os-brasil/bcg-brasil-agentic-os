@@ -1,9 +1,65 @@
 ---
 name: maestro-doctor
-description: Runs a plain-language health check of the user's Maestro install. Verifies core files, workspace layout, hook wiring and current version. Use whenever the user asks "está tudo OK?", "checar instalação", "diagnosticar Maestro" or similar.
+description: Diagnose the admitted Maestro installation and existing maintenance reports without mutation. Use for health questions, missing capabilities, installation checks or "está tudo OK?"; report observed evidence and a supported next action.
 ---
 
 # Maestro Doctor
+
+## Select the installed route
+
+Use the admitted MCP product route first: read `maestro_context` and inspect the
+current `maestro_query` / `maestro_apply` schemas. Product operations derive the
+owner and workspace binding; model arguments cannot choose filesystem roots or
+supply approval. A missing tool, rejected binding or failed call stays
+unavailable and keeps the requested operation pending. It never selects legacy.
+
+Use the legacy section only after the installed runtime is positively identified
+as the ZIP distribution by its installation metadata and verified managed helper.
+A product conversation stops after its product workflow below. Recipe selection
+and diagnostic findings grant no shell, repair, installation, provider access,
+native scheduling or new enrollment authority.
+
+## MCP product diagnosis — read-only
+
+Resolve [interaction-profile](../interaction-profile/SKILL.md) for presentation.
+Inspect only the admitted product surfaces; a public method resource is not an
+owner-local file and does not grant filesystem access.
+
+1. Read `maestro_context` and report a missing/conflicting binding without
+   initialization, migration or repair. Continue checks that have an admitted
+   independent surface; preserve the exact limitation where evidence ends.
+2. Query `owner.status`, `content.status` when document support is relevant, and
+   `maintenance.status`. Keep absent optional support separate from the health
+   of ordinary work. Do not infer installed Code hooks from a Desktop session.
+3. Inspect existing `maintenance.report` for a requested supported diagnostic
+   job: `runtime-health-check`, `capability-recheck`, `runtime-drift-check` or
+   `memory-retention-check`. Index/deep-dream reports are also available when
+   relevant. For a private wiki concern, read `wiki.status` and the existing
+   `wiki-integrity-check` report; incremental/reconcile reports expose bounded
+   build metadata when relevant. Keep current graph status separate from a
+   historical report. `retirement_pending`, stale or missing views remain
+   unavailable; diagnosis never reconstructs them from raw captures or files.
+   `restart_required` means the running executable changed and requires restart
+   before further product operations. A missing report means no verified result is available; doctor
+   never calls `maintenance.qualify`, enrolls, runs due work or repairs as part
+   of diagnosis. The [maintenance workflow](../maestro-runtime-checkup/SKILL.md)
+   describes those separately requested, reviewed actions and operator fallback.
+4. Report one plain-language verdict, the observed finding and one useful next
+   action. A qualified detector proves its bounded execution and readback; a
+   missing/unavailable native finding stays missing/unavailable. An active job
+   does not prove background wake or successful domain output. Do not manufacture
+   health, infer version/path facts absent from the supported response, or show
+   private paths, raw JSON or receipts unless the owner asks for a technical view.
+
+Keep healthy ordinary work available. Installation, repair, native enrollment,
+interpreter acquisition and provider access require their own supported action;
+a diagnostic result never supplies that authority.
+
+## Legacy ZIP only — explicit runtime scope
+
+Everything below applies only to the positively identified legacy ZIP runtime.
+It is not an MCP recovery path. Use its verified installed helpers and existing
+legacy authority; product operations above never fall through to these steps.
 
 Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
 

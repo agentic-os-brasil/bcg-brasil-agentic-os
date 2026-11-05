@@ -1303,3 +1303,37 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: This avoids a second signature, key registry or updater. It requires inventory and platform selection, isolated bounded execution, an actual seeded MCP build path and real offline fixture acceptance. Engineering authorities prove integration only, never production trust. Production organization keys, portable installation and native platform qualification remain distinct requirements; DOCX evidence does not close PDF/OCR or the full format matrix.
 - Refs: DOCL; PYUV; UVIN; specs/010-local-ingestion-runtime.md; specs/031-markitdown-ingestion-adapter.md; specs/061-product-local-content.md; internal/releaseverify; internal/releasecontract; internal/ingest
 - Supersedes: none
+
+## JREV - Separate measured job qualification from revisioned activation
+
+- Date: 2026-11-02
+- Status: accepted
+- Owner: Maestro
+- Context: Existing Canary activation accepts a constant job digest, status lookup can create directories, and occurrence fencing protects terminal receipts after handlers may already have committed domain state. Product MCP needs actual per-job execution evidence and revocation that also fences visible effects.
+- Decision: Reuse the canonical maintenance Worker, scheduler and domain stores behind one admitted product service. Produce local qualification only from an attended exact one-shot execution with verified durable domain result and receipt, bound to current implementation/configuration and workspace/job/platform. Recurring enrollment is a separate exact owner-reviewed revision-CAS transition with per-job no-backfill boundary. Require its live active revision for all product dispatches, including default-enabled jobs, and couple current-revision/lease checks to visible domain publication and terminal success. Keep status read-only and preserve legacy Canary compatibility without treating its declaration hash as product qualification.
+- Consequences: Product ownership needs narrow canonical publication seams and cross-process lock-order tests; installation alone never enables recurring work. Changed builds/configuration require fresh local qualification. Denial during synthesis blocks active publication but may leave private unreferenced staging. Engineering qualification is scoped evidence, not native-client, platform-signing or production availability promotion. Weekly deterministic rollups retain exact owner review for lifetime candidates.
+- Refs: specs/062-product-maintenance-service.md; specs/006-memory-persistence.md; specs/009-scheduler-catch-up.md; specs/036-maintenance-plane.md; specs/060-product-owner-memory.md; docs/plans/2026-11-02-product-maintenance-service.md; internal/maintenance; internal/scheduler; internal/memory
+- Supersedes: none
+
+
+## RCIX - Verified external runtime index and diagnostic execution
+
+- Date: 2026-11-02
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Product maintenance must use actual projection and readiness readers, but runtime embedding depends on maintenance catalog types. Existing index writes replace two managed files non-atomically, and configured readiness cannot establish observed native health.
+- Decision: Isolate declarative maintenancecatalog below runtime embedding with compatible maintenance aliases/parser. Derive runtime selection and index inputs from admitted projection metadata and integrity-checked RoutingInputs/Inspect. Publish the external per-workspace skills index as immutable catalog/Markdown/typed-metadata generations selected by one atomic pointer. Closed diagnostic collectors may qualify actual bounded report execution while findings remain missing or unavailable; qualification requires nonempty genuine observations and immutable readback, never model booleans, fake healthy builders or timestamp-only output. CLI version forwards only trusted caller identity and unknown remains unknown.
+- Consequences: The index lives under home/brain/runtime/workspaces/<workspace-id>/skills-index and preserves factory generated assets. Domain/control/lease publication guards apply to every report. Native capability, health, installed-source authority and diagnostic execution remain distinct evidence. Deep-dream enrollment never grants future lifetime-text approval; the existing exact per-candidate owner review remains authoritative.
+- Refs: specs/012-skills-index.md, specs/062-product-maintenance-service.md, docs/plans/2026-11-02-product-maintenance-service.md
+- Supersedes: none
+
+## PWKC - Compile source-owned private memory navigation under local authority
+
+- Date: 2026-11-03
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Governed workspace memory and denial barriers now exist, while the private wiki compiler, durable source events and complete derived publication do not. The current product admits a private local home and registered workspace, without establishing enterprise tenant or person identity.
+- Decision: Approve one deterministic, model-free private workspace-memory compiler using a separately recognized private-memory-local-v1 profile and explicit local-home-workspace authority. Select only eligible rollups from the newest valid canonical commit; bind opaque keyed references to the actual admitted scope, exact source versions and denial Generation. Keep the pure compiler separate while memory owns snapshot, outbox, confined publication/readback and retirement under its fixed .private-wiki subtree. Publish commit intents before source visibility and cumulative denial events in the same checkpoint as their barrier. Use the declared strict checkpoint cohort, exact-parent graph publication and established memory/control/lease order.
+- Consequences: Source/output budgets and unknown security metadata fail closed. Any changed committed source or denial hides the entire old view; raw capture append alone does not. Denial retires derived historical bodies and failed cleanup remains unavailable and visibly incomplete. Legacy source recovery is labelled reconciliation; old strict writers refuse the protected new checkpoint. No enterprise identity, raw-capture synthesis, external model/provider, cross-owner composition or authored/owner-global source is implied. Three actual maintenance bindings and bounded product readback complete this delivery; native/platform/release evidence stays separate.
+- Refs: specs/008-wiki-update-okf.md; docs/plans/2026-11-03-private-memory-wiki.md; internal/memory; internal/privatewiki; WIKI; OKFW; ATLS; https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/782c937447bc1a822cb5330142c37fb629a59adb/okf/SPEC.md
+- Supersedes: none

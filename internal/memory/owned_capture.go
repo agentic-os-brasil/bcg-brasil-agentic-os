@@ -68,12 +68,13 @@ type MutationReceipt struct {
 }
 
 type visibilityBarrier struct {
-	SchemaVersion int               `json:"schema_version"`
-	WorkspaceID   string            `json:"workspace_id"`
-	Revision      uint64            `json:"revision"`
-	Generation    uint64            `json:"generation"`
-	Denied        map[string]uint64 `json:"denied"`
-	LegacyThrough uint64            `json:"legacy_through,omitempty"`
+	PrivateWiki   *privateWikiCohortState `json:"private_wiki,omitempty"`
+	SchemaVersion int                     `json:"schema_version"`
+	WorkspaceID   string                  `json:"workspace_id"`
+	Revision      uint64                  `json:"revision"`
+	Generation    uint64                  `json:"generation"`
+	Denied        map[string]uint64       `json:"denied"`
+	LegacyThrough uint64                  `json:"legacy_through,omitempty"`
 }
 
 func (engine *Engine) ownedPreflight(workspaceID string) error {
@@ -558,6 +559,9 @@ func (engine *Engine) purgeGenerated(workspaceID string) error {
 	return nil
 }
 func (engine *Engine) purgeDenied(workspaceID string, b visibilityBarrier) error {
+	if err := engine.retirePrivateWiki(workspaceID); err != nil {
+		return err
+	}
 	if err := engine.purgeGenerated(workspaceID); err != nil {
 		return err
 	}

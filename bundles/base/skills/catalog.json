@@ -130,8 +130,8 @@
     {
       "id": "dream-memory",
       "display_name": "Consolidação de Memória",
-      "trigger": "Consolida a memória profissional diária e semanal",
-      "default_prompt": "Use $dream-memory para rodar ou inspecionar com segurança o ciclo de consolidação de memória adequado.",
+      "trigger": "Consolida memória revisada e navega sua wiki privada",
+      "default_prompt": "Use $dream-memory para consolidar a memória revisada, navegar conceitos e fontes da wiki privada ou avaliar sua manutenção.",
       "relative_path": "skills/dream-memory/SKILL.md"
     },
     {
@@ -221,15 +221,15 @@
     {
       "id": "maestro-doctor",
       "display_name": "Diagnóstico do Maestro",
-      "trigger": "Faz um diagnóstico da instalação do Maestro em linguagem simples",
-      "default_prompt": "Use $maestro-doctor para verificar se minha instalação do Maestro está saudável e me dizer o que fazer com cada problema.",
+      "trigger": "Diagnostica o produto e seus relatórios sem alterar estado",
+      "default_prompt": "Use $maestro-doctor para inspecionar a instalação admitida e os relatórios existentes, com um próximo passo seguro.",
       "relative_path": "skills/maestro-doctor/SKILL.md"
     },
     {
       "id": "maestro-environment-setup",
       "display_name": "Preparar Ambiente Maestro",
-      "trigger": "Prepara workspace, runtime e manutenção local",
-      "default_prompt": "Use $maestro-environment-setup para preparar meu ambiente Maestro e deixar o runtime pronto para trabalhar.",
+      "trigger": "Prepara o uso do produto e as escolhas de manutenção",
+      "default_prompt": "Use $maestro-environment-setup para conferir o ambiente admitido, iniciar o onboarding e escolher a manutenção.",
       "relative_path": "skills/maestro-environment-setup/SKILL.md"
     },
     {
@@ -256,8 +256,8 @@
     {
       "id": "maestro-runtime-checkup",
       "display_name": "Checkup do Maestro",
-      "trigger": "Confere e repara runtime, hooks e Darwin",
-      "default_prompt": "Use $maestro-runtime-checkup para conferir se o Maestro está pronto e reparar o que for seguro.",
+      "trigger": "Inspeciona runtime e gerencia manutenção revisada",
+      "default_prompt": "Use $maestro-runtime-checkup para conferir evidências do runtime e revisar uma ação de manutenção específica.",
       "relative_path": "skills/maestro-runtime-checkup/SKILL.md"
     },
     {

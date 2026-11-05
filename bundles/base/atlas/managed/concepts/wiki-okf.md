@@ -15,7 +15,7 @@ status: stable
 x-maestro-profile-version: "1"
 x-maestro-stable-id: managed/wiki-okf
 x-maestro-scope: managed
-x-maestro-source-fingerprint: 469d86c2e5ded2775bff1d6da8aebd7e3cb080ef9a1142e729650deff375b13a
+x-maestro-source-fingerprint: 8da41730efcf78ceb0f505c0fae2232acc1333a9e5c23ac797f8c9b5f856b6a6
 x-maestro-freshness: fresh
 x-maestro-status: active
 x-maestro-generator-version: maestro-managed-wiki/0.2
@@ -288,3 +288,171 @@ Private bundle implementation follows only after Owner Context, enrollment, user
 - private retention, deletion and crypto-erasure policy;
 - freshness targets and retry/backoff limits per event class;
 - organizational bundle approval and cross-bundle composition after V1.
+
+## Private workspace-memory compiler v1
+
+Decision PWKC authorizes a deterministic, model-free private compiler over one
+admitted workspace's committed memory rollups. This is a separately versioned
+local compilation contract, not approval for an external provider or an
+enterprise tenant. Dreaming remains the rollup producer. Authored atlas pages,
+raw captures, owner-global content, other workspaces and SharePoint sources are
+outside this profile.
+
+### Local authority and portable profile
+
+The new recognized profile is `private-memory-local-v1`, with explicit
+`x-maestro-authority-kind: local-home-workspace`. Bind opaque domain-separated
+home/workspace references to the actual admitted private home and registered
+workspace. Do not manufacture tenant/person identity or promote caller-declared
+history OwnerID. Enterprise and cross-owner composition are unavailable. The
+existing generic/managed profile remains separate; unknown security-bearing
+profile values refuse authorization.
+
+Use OKF v0.2 concepts, standard relative links, reserved indexes/log and
+bundle-relative concept IDs. Pin the normative reference to upstream commit
+`782c937447bc1a822cb5330142c37fb629a59adb`, blob
+`c06e3eede0c910d0ecf12524c34204156f8795ac`. The local profile additionally binds
+source commit, rollup versions, current denial generation, keyed source
+fingerprint, policy/compiler/configuration provenance and the admitted scope.
+Public diagnostics/logs/receipts carry opaque metadata, never private bodies,
+names, source paths or reusable plain hashes of private sources. Read the
+owner-reviewed key at `.attestation/owner-reviewed.key`, already prepared by
+`PrepareOwnedCaptureAuthority`, through memory's `ownedKey` path with
+`create=false` for a narrow domain-separated wiki identity operation. Do not
+require `capture-v2.key`, fall back between keys, export a key or create one on
+reads. This identifies the actual local-owner authority initialized by the
+product, without claiming a skill-route attestation or enterprise principal.
+
+### Source ownership and budgets
+
+`internal/privatewiki` owns pure deterministic compilation and profile/graph
+validation. Memory owns source selection, snapshots, outbox, confined IO,
+publication, readback and retirement. The pure compiler cannot acquire a
+filesystem root, source authority, provider or publication permission.
+
+The fixed private derivative root is:
+
+```text
+<resolved-home>/brain/memory/workspaces/<registered-workspace-id>/.private-wiki/
+```
+
+It has separate staging, immutable versions and an exact-parent current
+pointer. It shares neither a pointer nor a manifest with source memory, authored
+atlas, managed content or another scope. Only explicit owning compilation or
+source mutation may prepare fixed private metadata; status, query and startup
+never initialize, repair, lock or create keys/directories.
+
+Select eligible L1/L2/L3/lifetime artifacts from one newest valid canonical
+commit, using the owning artifact/eligibility reader in canonical order. Cap
+the complete source set at 128 artifacts, 1 MiB each and 8 MiB aggregate. Cap a
+complete generation at 1,024 files and 16 MiB, including frontmatter, indexes,
+backlinks, manifest and log. Overflow refuses without silently dropping sources.
+Bound public page reads and cursors to one exact authorized generation.
+
+### Source events and cohort compatibility
+
+Persist and fsync a narrowly typed commit-intent event before the immutable
+commit rename makes that source visible, under the same owning guard. The event
+references the prospective source commit, scope, policy, actual commit time and
+opaque event ID. An orphan intent grants nothing. Reconciliation always checks
+current source truth before acknowledging an event.
+
+Publish compact cumulative denial-event metadata in the same atomic visibility
+checkpoint bytes as its monotonic denial Generation and permanent denied map.
+Capture-only revision updates preserve that event. A later queue failure cannot
+undo the barrier or reopen an old generation; acknowledgment never deletes a
+denial fence.
+
+The private checkpoint extension has an explicit `private-memory-wiki-v1`
+writer/reader cohort. New readers strictly accept validated historical records
+without the extension and recognized current records; partial/unknown cohort
+metadata refuses. Old strict decoders deliberately refuse eventful checkpoints
+and cannot silently rewrite them without the new fence. The first explicit
+owning mutation/compilation upgrades the checkpoint before derived publication;
+queries never upgrade it. Historical commits/checkpoints without events remain
+source truth. Missed-event recovery is labelled reconciliation with its actual
+recovery time, never invented original durability or historical timestamps.
+
+### Publication, current views and retirement
+
+A watermark pins exact valid commit/artifact versions, denial Generation,
+source policy and admitted scope. Capture Revision alone does not invalidate
+committed rollups. Stage and validate the entire graph, then recheck watermark
+and expected atlas parent under the established order: memory activation/
+visibility lock, live product control, current scheduler lease, derived pointer
+publication. Never request the memory lock while holding a wiki lock in reverse
+order. Actual compiler/configuration provenance participates in generation
+identity; clock/nonce-only retries cannot manufacture execution evidence.
+
+The first profile conservatively hides the entire view whenever the selected
+committed source or denial generation changes. No last-known-good fallback may
+serve a replaced/removed rollup. Readback uses bounded before/after authority
+checks and creates no activation lock. Immutable concepts, indexes, backlinks,
+log and pointer are one graph transaction, with exact-parent CAS and the owning
+held-directory/no-follow/private-owner/single-link/fsync primitives.
+
+After denial, retire the fixed derived staging, all versions, pointer, indexes,
+backlinks and cached bodies. Use bounded held-directory deletion; an alias must
+refuse cleanup without touching outside data. The already committed barrier
+continues to hide every old view if compile, queue or cleanup fails. Report
+incomplete physical retirement honestly, and retry it before any new view can
+be admitted or published. Retain cumulative denial metadata outside retired
+derived bodies. Windows remains unavailable until its held-handle contract is
+qualified.
+
+Incremental sync, full reconciliation and integrity diagnosis must share this
+owning transaction and actual durable evidence. Scheduler receipts cannot
+substitute for a readable current graph. Startup stays read-only. The cohesive
+delivery includes all three real job bindings and bounded product readback;
+source tests do not establish native wake, deployment or pilot acceptance.
+
+### Compatible readers and current-build qualification
+
+Compatible readers may consume a recognized, completely validated and sealed
+current-source graph produced by another executable/configuration. Preserve
+and validate its actual stored provenance; do not synthesize current provenance
+or require byte-for-byte re-rendering by a changed current implementation.
+Report provenance mismatch separately and require genuine current-build/config
+compilation for current job qualification. This does not relax local authority,
+exact source/denial, profile, policy, checkpoint cohort or graph integrity checks;
+unsupported security contracts still refuse.
+
+### Product inspection, event execution and queries
+
+Memory may expose one bounded body-free maintenance inspection projection over
+its existing source/event/cohort/graph readers. It reports recognized source
+readiness, actual eligible durable event identity/time, denial/retirement state,
+admissible parent, keyed graph evidence/counts and actual producer/current-build
+flags. Valid historical source without a graph is distinct from partial protected
+authority. Inspection creates no key, directory, lock, event, repair or grant,
+and exports no private body, raw manifest, source filename or plain content hash.
+Pending retirement stays unavailable for reads and qualification. The existing
+owning compiler may retry physical retirement under its normal live grant;
+inspection cannot authorize publication or success before cleanup completes.
+
+The incremental job is event-only. Product maintenance derives its occurrence
+from that actual event and reuses the existing Worker, grants, lease and terminal
+fences; it cannot fall back to calendar/presence or invent an event on a read.
+An explicit protected event-only schedule field must make old strict readers
+refuse that record. Read back a typed durable event execution receipt through
+the existing maintenance evidence owner; never fabricate a calendar receipt or
+add another queue. Reconciliation recovers valid historical missing events.
+
+Current sync/reconcile qualification requires genuine current-build/configuration
+compilation and complete owning graph validation. Verified no-change is valid
+normal execution but cannot mint qualification. Integrity performs an actual
+complete check over a genuinely current graph and persists only body-free
+diagnostics; it never compiles or repairs. Source drift, pause/revoke and lease
+loss must block pointer, diagnostic and terminal success publication.
+Qualification retains body-free evidence of that genuine historical successful
+run under the same build/configuration and live control epoch. Later ordinary
+source events do not themselves erase qualification or require the historical
+graph to remain readable. Every new execution reviews its current source/event
+and independently validates its actual result before success; old qualification
+cannot substitute for that proof or reopen a stale/denied view.
+
+The selected-workspace product query has only wiki.status, wiki.read and
+wiki.source variants. Read/source require exact generation, registered reference,
+finite offset and 4–4,096-byte UTF-8 pages. Derive scope from admitted binding;
+accept no workspace/root/provider/identity/approval argument. Status/startup
+remain read-only. Fixed metadata failure codes disclose no private error body.
