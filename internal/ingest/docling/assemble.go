@@ -22,7 +22,7 @@ import (
 const (
 	PythonVersion        = "3.12.16+20261026"
 	DoclingVersion       = "2.145.0"
-	LockSHA256           = "3e4b945d7fcc4eada5cc78ef76013a26cbf2cfb19b8dd37dcbce3b0edb3ac382"
+	LockSHA256           = "327366e30a2854c67da4b9ff53c3efd8af058aa4bef97c280cb45518d94cc5de"
 	PythonArchive        = "cpython-3.12.16+20261026-aarch64-apple-darwin-install_only.tar.gz"
 	PythonArchiveSHA256  = "fbf4afef53c2a6b72bb741bc06d5671a9dfaf87bd84e5aa73ac9b3d0d589f14e"
 	maximumArchiveBytes  = 256 << 20
