@@ -71,6 +71,8 @@ try { $id = ([BitConverter]::ToString($hasher.ComputeHash($content))).Replace('-
 $files += '{0}  ./KIT-ID.txt' -f (Get-FileHash -LiteralPath (Join-Path $Output 'KIT-ID.txt') -Algorithm SHA256).Hash.ToLowerInvariant()
 [Array]::Sort($files, [StringComparer]::Ordinal)
 [IO.File]::WriteAllText((Join-Path $Output 'SHA256SUMS'), ($files -join "`n") + "`n", $Utf8)
+# Windows PowerShell targets older .NET Framework defaults; emit portable ZIP separators.
+[AppContext]::SetSwitch('Switch.System.IO.Compression.ZipFile.UseBackslash', $false)
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::CreateFromDirectory($Output, $Output + '.zip', [IO.Compression.CompressionLevel]::Optimal, $true)
 $zipHash = (Get-FileHash -LiteralPath ($Output + '.zip') -Algorithm SHA256).Hash.ToLowerInvariant()
