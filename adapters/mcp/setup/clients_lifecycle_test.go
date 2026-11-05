@@ -363,6 +363,105 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 	if record.Materialization.DesktopSHA256 != desktopSHA || record.Materialization.ServerSHA256 != sum(read(t, filepath.Join(request.ManagedRoot, "bin", "maestro-mcp"))) || record.Materialization.Release != "0.1.43" {
 		t.Fatal("stable Desktop reuse/current binding failed")
 	}
+	for _, name := range []string{"WrongCachedCodeBinding", "ChangedCodeBackup", "MissingCodeManagementLauncher", "AuthenticCachedCodeRecovery"} {
+		t.Run(name, func(t *testing.T) {
+			var nonce [16]byte
+			_, e := rand.Read(nonce[:])
+			must(t, e)
+			carrierID := fmt.Sprintf("%x", nonce[:])
+			selected := installer.ClientOptions{SeededOperationOptions: seed, LookupEnv: c.LookupEnv, Request: installer.ClientRequest{CarrierID: carrierID, Workspace: ws, CodeRoot: filepath.Join(root, name+"-code"), DesktopPath: filepath.Join(root, name+"-desktop.mcpb"), CodeScope: "user"}}
+			apply := func() (installer.ClientRecord, error) {
+				review, err := installer.ReviewClientsSeeded(ctx, selected)
+				must(t, err)
+				return setup.ApplyClients(ctx, selected, review.Digest, true)
+			}
+			original, e := apply()
+			must(t, e)
+			candidate := selected.Request.CodeRoot + ".candidate-" + carrierID
+			backup := selected.Request.CodeRoot + ".previous-" + carrierID
+			recordFile := filepath.Join(seed.DataRoot, "clients", carrierID+".json")
+			if name == "ChangedCodeBackup" {
+				original, e = apply()
+				must(t, e)
+				if original.Materialization.CodeBackupTreeSHA256 == "" {
+					t.Fatal("actual repeated materialization did not record its backup")
+				}
+				must(t, os.WriteFile(filepath.Join(backup, "Manage Maestro.command"), []byte("#!/bin/sh\n# unknown edited backup must survive\nexit 0\n"), 0700))
+			} else {
+				must(t, filepath.WalkDir(selected.Request.CodeRoot, func(path string, d os.DirEntry, err error) error {
+					if err != nil {
+						return err
+					}
+					relative, err := filepath.Rel(selected.Request.CodeRoot, path)
+					if err != nil {
+						return err
+					}
+					destination := filepath.Join(candidate, relative)
+					info, err := d.Info()
+					if err != nil {
+						return err
+					}
+					if d.IsDir() {
+						return os.Mkdir(destination, info.Mode().Perm())
+					}
+					return os.WriteFile(destination, read(t, path), info.Mode().Perm())
+				}))
+				if name == "WrongCachedCodeBinding" {
+					plugin := filepath.Join(candidate, "plugins", "maestro-product")
+					must(t, os.RemoveAll(plugin))
+					server := filepath.Join(seed.ManagedRoot, "bin", "maestro-mcp")
+					current, err := installtx.ReadSourceState(seed.DataRoot, seed.ManagedRoot)
+					must(t, err)
+					args := []string{"plugin", "--destination", plugin, "--server", server, "--version", current.Release, "--product-root", seed.ManagedRoot, "--user-home", user, "--workspace", alternateWorkspace, "--installed-manifest", current.Binding.ManifestSHA256, "--installed-client-inputs", current.Binding.ClientInputsSHA256, "--carrier-profile", installer.StableClientProfile, "--carrier-id", carrierID, "--carrier-version", installer.StableCarrierVersion}
+					command := exec.CommandContext(ctx, server, args...)
+					command.Dir = alternateWorkspace
+					if output, err := command.CombinedOutput(); err != nil {
+						t.Fatalf("actual Current wrong-workspace Code generator: %s %v", output, err)
+					}
+					identity, err := releasecontract.ReadServerIdentity(server)
+					must(t, err)
+					must(t, packaging.InspectStablePlugin(plugin, packaging.StableCarrier{Profile: installer.StableClientProfile, Protocol: installer.StableClientProtocol, ID: carrierID, Version: installer.StableCarrierVersion}, identity, current.Server.SHA256))
+				} else if name == "MissingCodeManagementLauncher" {
+					// Exact reachable state after marketplace publication but before
+					// its required management launcher is written.
+					must(t, os.Remove(filepath.Join(candidate, "Manage Maestro.command")))
+				}
+			}
+			capture := func(path string) map[string]string {
+				if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+					return nil
+				} else {
+					must(t, err)
+				}
+				return snapshot(t, path)
+			}
+			beforeRecord, beforeCode, beforeDesktop := capture(recordFile), capture(selected.Request.CodeRoot), capture(selected.Request.DesktopPath)
+			beforeBackup, beforeCandidate := capture(backup), capture(candidate)
+			actual, applyErr := apply()
+			if name == "AuthenticCachedCodeRecovery" {
+				must(t, applyErr)
+				if actual.Materialization.CodeTreeSHA256 != original.Materialization.CodeTreeSHA256 || !reflect.DeepEqual(beforeCandidate, capture(selected.Request.CodeRoot)) || actual.Materialization.CodeBackupTreeSHA256 != original.Materialization.CodeTreeSHA256 {
+					t.Fatal("authentic complete Code candidate was not recovered exactly")
+				}
+				_, e = installer.PrepareStableLaunch(ctx, selected)
+				must(t, e)
+			} else {
+				preserved := reflect.DeepEqual(beforeRecord, capture(recordFile)) && reflect.DeepEqual(beforeCode, capture(selected.Request.CodeRoot)) && reflect.DeepEqual(beforeDesktop, capture(selected.Request.DesktopPath)) && reflect.DeepEqual(beforeBackup, capture(backup))
+				if beforeCandidate != nil {
+					preserved = preserved && reflect.DeepEqual(beforeCandidate, capture(candidate))
+				}
+				errorText := ""
+				if applyErr != nil {
+					errorText = applyErr.Error()
+				}
+				proof, _ := json.MarshalIndent(map[string]any{"case": name, "carrier_id": carrierID, "actual_current_server_sha256": original.Materialization.ServerSHA256, "recorded_workspace_id": original.Binding.WorkspaceID, "alternate_workspace_id": alternateRegistration.WorkspaceID, "apply_error": errorText, "recorded_tree_after_apply": actual.Materialization.CodeTreeSHA256, "published_and_unknown_bytes_modes_preserved": preserved}, "", "  ")
+				must(t, os.WriteFile(filepath.Join(root, name+"-proof.json"), append(proof, '\n'), 0600))
+				if applyErr == nil || !preserved {
+					t.Fatalf("unsafe Code recovery: error=%v preserved=%v", applyErr, preserved)
+				}
+			}
+		})
+	}
 
 	// Both recovery branches must reject a valid Current packet whose native
 	// argv binds this same carrier to a different registered workspace.

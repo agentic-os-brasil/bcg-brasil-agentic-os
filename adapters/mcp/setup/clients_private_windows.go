@@ -7,6 +7,6 @@ import (
 	"os"
 )
 
-func validateDesktopBackupFile(os.FileInfo) error {
-	return errors.New("Windows private Desktop backup ownership inspection unavailable")
+func validateClientPrivateFile(os.FileInfo, os.FileMode) error {
+	return errors.New("Windows private client file ownership inspection unavailable")
 }
