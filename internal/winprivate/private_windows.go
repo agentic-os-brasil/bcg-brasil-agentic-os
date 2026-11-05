@@ -22,7 +22,9 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-const dirOptions = windows.FILE_DIRECTORY_FILE | windows.FILE_SYNCHRONOUS_IO_NONALERT | windows.FILE_OPEN_NO_RECALL
+// Directory opens use the native directory option set; OPEN_NO_RECALL is a
+// file option. Open reparse objects themselves, then refuse their held attributes.
+const dirOptions = windows.FILE_DIRECTORY_FILE | windows.FILE_SYNCHRONOUS_IO_NONALERT | windows.FILE_OPEN_REPARSE_POINT
 const fileOptions = windows.FILE_NON_DIRECTORY_FILE | windows.FILE_SYNCHRONOUS_IO_NONALERT | windows.FILE_OPEN_NO_RECALL
 const readDirAccess = windows.FILE_GENERIC_READ | windows.FILE_TRAVERSE | windows.READ_CONTROL
 const privateDirAccess = readDirAccess | windows.FILE_GENERIC_WRITE
@@ -138,7 +140,8 @@ func ntOpen(parent windows.Handle, name string, access, disposition, options uin
 	}
 	var h windows.Handle
 	var iosb windows.IO_STATUS_BLOCK
-	err = windows.NtCreateFile(&h, access, &oa, &iosb, nil, 0, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, disposition, options, 0, 0)
+	var allocation int64
+	err = windows.NtCreateFile(&h, access, &oa, &iosb, &allocation, 0, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, disposition, options, 0, 0)
 	runtime.KeepAlive(oa.SecurityDescriptor)
 	if err != nil {
 		if status, ok := err.(windows.NTStatus); ok {
