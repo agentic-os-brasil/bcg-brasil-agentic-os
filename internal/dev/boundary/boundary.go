@@ -43,6 +43,10 @@ func Validate(root string) error {
 			if entry.IsDir() || !textExtensions[filepath.Ext(entry.Name())] {
 				return nil
 			}
+			// Go excludes adapter test sources from the product executable.
+			if relativeRoot == "adapters" && strings.HasSuffix(entry.Name(), "_test.go") {
+				return nil
+			}
 			content, err := os.ReadFile(filePath)
 			if err != nil {
 				return err
