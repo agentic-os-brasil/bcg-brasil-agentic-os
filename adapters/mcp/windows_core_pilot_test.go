@@ -21,6 +21,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/zipmigration"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/zipruntime"
@@ -55,6 +56,25 @@ func TestWindowsCorePilot(t *testing.T) {
 	if !filepath.IsAbs(server) || !filepath.IsAbs(proofRoot) {
 		t.Fatal("driver must supply absolute binary and isolated proof roots")
 	}
+	// The credentialed launcher must supply a temp created by this actual
+	// user, rather than inheriting the elevated runner's inaccessible profile.
+	expectedTemp := filepath.Join(proofRoot, "user-temp")
+	for _, key := range []string{"TEMP", "TMP"} {
+		if !strings.EqualFold(filepath.Clean(os.Getenv(key)), expectedTemp) {
+			t.Fatalf("native environment %s does not select the isolated user temp", key)
+		}
+	}
+	if !strings.EqualFold(filepath.Clean(os.TempDir()), expectedTemp) {
+		t.Fatal("native OS temp lookup differs from the isolated user temp")
+	}
+	temporary, tempErr := winprivate.Open(expectedTemp, false)
+	if tempErr != nil {
+		t.Fatalf("native environment temp lacks actual current-user private custody: %v", tempErr)
+	}
+	if tempErr = temporary.Close(); tempErr != nil {
+		t.Fatal(tempErr)
+	}
+	t.Log("native_windows_environment private_current_user_temp=true")
 	serverBody, err := os.ReadFile(server)
 	if err != nil {
 		t.Fatal(err)
