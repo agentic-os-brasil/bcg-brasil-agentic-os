@@ -194,7 +194,7 @@
       "availability_reason": "Darwin daily handler requires explicit attended Canary enrollment and local qualification evidence",
       "default_enabled": true,
       "unattended": "policy_gated",
-      "writes": ["local_diagnostics"],
+      "writes": ["local_diagnostics", "derived_health_cache"],
       "success_boundary": "a bounded, reversible Darwin health attempt is durably recorded without overlapping the same occurrence"
     },
     {
@@ -207,7 +207,7 @@
       "availability_reason": "Darwin weekly deep-review handler requires explicit local qualification; structural changes remain proposal-only",
       "default_enabled": true,
       "unattended": "policy_gated",
-      "writes": ["local_diagnostics"],
+      "writes": ["local_diagnostics", "derived_health_cache", "bounded_assessment"],
       "success_boundary": "a bounded deep review durably records an allowlisted validated operational repair or a metadata-only structural recommendation; it never applies structural change"
     },
     {
@@ -233,7 +233,7 @@
       "availability_reason": "Darwin's deterministic structural proposal planner exists, but attended runtime activation, qualification and the human review boundary are not installed",
       "default_enabled": false,
       "unattended": "never",
-      "writes": ["local_diagnostics"],
+      "writes": ["local_diagnostics", "bounded_assessment"],
       "success_boundary": "a bounded structural proposal is staged for human review without applying code, policy or release changes"
     }
   ]

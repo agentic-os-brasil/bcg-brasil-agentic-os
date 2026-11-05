@@ -33,8 +33,10 @@ Qualified maintenance adds exact-job qualification, separate recurring enrollmen
 foreground due execution, bounded reports and revision-aware pause/resume/revoke.
 Read the [maintenance workflow and operator fallback](../../docs/product-mcp-maintenance.md)
 when inspecting availability, authorizing a job or recovering a refused transition.
-Eleven deterministic bindings execute through one canonical service; the remaining
-catalog jobs and native background scheduling retain their separate gates.
+Fifteen source bindings include the three closed Darwin diagnosis/cache-repair/
+proposal jobs and attended update-check. Daily/weekly opt-in is separate from
+qualification; monthly proposals and update-check never enroll as recurring
+work. Capture/observation, Yoda and native scheduling retain their separate gates.
 
 Local document conversion adds immutable scoped artifacts, bounded UTF-8 readback
 and reviewed workspace knowledge creation/append through the canonical atlas

@@ -1,9 +1,10 @@
 # Spec 062 - Product maintenance service
 
-Status: eight deterministic source bindings, MCP/operator lifecycle and focused
-local execution reviewed and locally integrated. Installed method/packet closure
-and the final front review are in progress. Native scheduling and release
-qualification are separate. See the [operator workflow](../docs/product-mcp-maintenance.md).
+Status: twelve prior source bindings are independently accepted and locally
+integrated. The three DHRP Darwin bindings are in focused source acceptance,
+including actual SDK/rebuilt-stdio closure and independent review. Source
+acceptance, native scheduling and release qualification remain separate.
+See the [operator workflow](../docs/product-mcp-maintenance.md).
 
 ## Outcome
 
@@ -13,10 +14,11 @@ due work, inspect its domain result, and pause, resume or revoke it. Code,
 Desktop and the local operator use one canonical maintenance service. Existing
 Worker, scheduler leases/receipts and domain stores remain authoritative.
 
-Spec036 owns the eighteen job contracts. This delivery connects checkpoint,
+Spec036 owns the eighteen job contracts. Existing bindings connect checkpoint,
 light/deep dreaming, retention diagnosis, skills indexing, runtime health,
-capability diagnosis and drift diagnosis. Other catalog entries retain explicit
-unavailable reasons until their complete owning journeys are constructed.
+capability/drift diagnosis, three Wiki jobs and attended signed-source checking.
+DHRP adds the three closed Darwin jobs below. Capture/observation and Yoda retain
+explicit unavailable reasons until their complete owning journeys are constructed.
 Catalog presence, a handler declaration and installation grant no activation.
 
 ## Identity and enrollment
@@ -208,3 +210,17 @@ artifact/receipt, or remains unqualified, and clears only its own one-shot under
 the live guard. It cannot mint a new qualification from that clock-only churn.
 Reports retain the stored plan identity as historical when stale; a separate
 bounded current-pending projection requires read-only canonical verification.
+
+### Closed Darwin local-health product binding (DHRP)
+
+Spec037's Product local-health binding defines the complete three-job contract.
+Use one closed constructor binding and the existing Worker/opaque grant chain;
+no second executor or caller-provided healthy collector. Actual finite local
+observations and bounded non-Darwin receipts drive cache provenance, reviewed
+initialization, exact-parent reversible refresh and immutable assessment/report.
+Guard final atomic publication and compensation with existing nesting domain,
+product control, installation, lease. Preserve unavailable native/document
+coverage and truthful proposal/no-change terminal outcomes. Time/occurrence-only
+churn cannot qualify. Daily/weekly opt-in and monthly attended-only proposal
+authority remain distinct. See the Darwin product plan for focused SDK/stdio
+acceptance, narrow owning scheduler extensions and independent front gates.

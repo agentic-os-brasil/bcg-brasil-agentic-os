@@ -47,13 +47,144 @@
           "uniqueItems": true,
           "oneOf": [
             {"const": ["none"]},
-            {"items": {"enum": ["memory_l1", "memory_rollups", "memory_checkpoint", "wiki_private", "runtime_index", "owner_observation", "local_diagnostics", "source_custody", "candidate_plan"]}}
+            {"items": {"enum": ["memory_l1", "memory_rollups", "memory_checkpoint", "wiki_private", "runtime_index", "owner_observation", "local_diagnostics", "source_custody", "candidate_plan", "derived_health_cache", "bounded_assessment"]}}
           ]
         },
         "success_boundary": {"type": "string", "minLength": 1, "maxLength": 512},
         "qualification_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
       },
       "allOf": [
+        {
+          "if": {
+            "properties": {
+              "writes": {
+                "contains": {
+                  "enum": [
+                    "derived_health_cache",
+                    "bounded_assessment"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "id": {
+                "enum": [
+                  "darwin-housekeeping-daily",
+                  "darwin-deep-weekly",
+                  "darwin-structural-evolution-proposal"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "const": "darwin-housekeeping-daily"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "runtime"
+              },
+              "trigger": {
+                "const": "daily_or_presence"
+              },
+              "executor": {
+                "const": "local_adapter"
+              },
+              "scope": {
+                "const": "managed"
+              },
+              "unattended": {
+                "const": "policy_gated"
+              },
+              "writes": {
+                "const": [
+                  "local_diagnostics",
+                  "derived_health_cache"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "const": "darwin-deep-weekly"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "runtime"
+              },
+              "trigger": {
+                "const": "weekly_or_presence"
+              },
+              "executor": {
+                "const": "local_adapter"
+              },
+              "scope": {
+                "const": "managed"
+              },
+              "unattended": {
+                "const": "policy_gated"
+              },
+              "writes": {
+                "const": [
+                  "local_diagnostics",
+                  "derived_health_cache",
+                  "bounded_assessment"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "const": "darwin-structural-evolution-proposal"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "runtime"
+              },
+              "trigger": {
+                "const": "monthly_or_presence"
+              },
+              "executor": {
+                "const": "local_adapter"
+              },
+              "scope": {
+                "const": "managed"
+              },
+              "unattended": {
+                "const": "never"
+              },
+              "writes": {
+                "const": [
+                  "local_diagnostics",
+                  "bounded_assessment"
+                ]
+              },
+              "default_enabled": {
+                "const": false
+              }
+            }
+          }
+        },
         {
           "if": {"properties": {"id": {"const": "update-check"}}},
           "then": {

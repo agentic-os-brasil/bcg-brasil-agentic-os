@@ -27,6 +27,7 @@ on:
       - 'internal/atlasops/**'
       - 'internal/ingest/**'
       - 'internal/scheduler/**'
+      - 'internal/darwin/**'
       - 'internal/maintenance/**'
       - 'internal/maintenancecatalog/**'
       - 'internal/runtimecap/**'
@@ -50,7 +51,7 @@ on:
       - 'LICENSE.md'
       - '.github/workflows/product-mcp.yml'
   push:
-    branches: [main]
+    branches: [main, 'codex/integration/**']
     paths:
       - 'adapters/mcp/**'
       - 'internal/execution/**'
@@ -76,6 +77,7 @@ on:
       - 'internal/atlasops/**'
       - 'internal/ingest/**'
       - 'internal/scheduler/**'
+      - 'internal/darwin/**'
       - 'internal/maintenance/**'
       - 'internal/maintenancecatalog/**'
       - 'internal/runtimecap/**'
@@ -111,6 +113,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
+      - name: Select physical macOS temporary directory
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          physical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          printf 'TMPDIR=%s\n' "$physical_temp" >> "$GITHUB_ENV"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -166,7 +174,7 @@ jobs:
         working-directory: adapters/mcp
         # The actual first-install tracer runs separately on an admitted native
         # runner. Elevated Windows CI cannot qualify ordinary-user installation.
-        run: go test ./... -skip '^(TestModernFactoryFirstInstallAndRestart|TestDirectInnerInstallRequiresProductionAuthority|TestModernSyncedSourceLifecycle|TestSyncedPublicationInterleavingAndReadOnlyReviews)$' -timeout=900s
+        run: go test ./... -skip '^(TestModernFactoryFirstInstallAndRestart|TestDirectInnerInstallRequiresProductionAuthority|TestModernSyncedSourceLifecycle|TestSyncedPublicationInterleavingAndReadOnlyReviews|TestProductDarwinSDKAndShippingStdioLifecycle)$' -timeout=900s
       - name: Product module static checks
         working-directory: adapters/mcp
         run: go vet ./...
@@ -184,11 +192,23 @@ jobs:
   modern-first-install:
     runs-on: macos-15
     timeout-minutes: 20
-    env:
-      MAESTRO_MODERN_BASELINE: ${{ runner.temp }}/maestro-modern-baseline
-      MAESTRO_MODERN_TEST_ROOT: ${{ runner.temp }}/maestro-modern-first-install
-      MAESTRO_MODERN_AUTHORITY_ROOT: ${{ runner.temp }}/maestro-modern-authority
     steps:
+      - name: Select physical macOS temporary directory
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          physical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          printf 'TMPDIR=%s\n' "$physical_temp" >> "$GITHUB_ENV"
+      - name: Bind fixture paths to the assigned runner
+        shell: bash
+        env:
+          MAESTRO_MODERN_BASELINE: ${{ runner.temp }}/maestro-modern-baseline
+          MAESTRO_MODERN_TEST_ROOT: ${{ runner.temp }}/maestro-modern-first-install
+          MAESTRO_MODERN_AUTHORITY_ROOT: ${{ runner.temp }}/maestro-modern-authority
+        run: |
+          printf '%s\n' "MAESTRO_MODERN_BASELINE=$MAESTRO_MODERN_BASELINE" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_MODERN_TEST_ROOT=$MAESTRO_MODERN_TEST_ROOT" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_MODERN_AUTHORITY_ROOT=$MAESTRO_MODERN_AUTHORITY_ROOT" >> "$GITHUB_ENV"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -225,11 +245,23 @@ jobs:
   modern-synced-update:
     runs-on: macos-15
     timeout-minutes: 30
-    env:
-      MAESTRO_SYNCED_UPDATE_BASELINE: ${{ runner.temp }}/maestro-synced-update-baseline
-      MAESTRO_SYNCED_TEST_ROOT: ${{ runner.temp }}/maestro-synced-update
-      MAESTRO_SYNCED_R1_TEST_ROOT: ${{ runner.temp }}/maestro-synced-publication
     steps:
+      - name: Select physical macOS temporary directory
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          physical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          printf 'TMPDIR=%s\n' "$physical_temp" >> "$GITHUB_ENV"
+      - name: Bind fixture paths to the assigned runner
+        shell: bash
+        env:
+          MAESTRO_SYNCED_UPDATE_BASELINE: ${{ runner.temp }}/maestro-synced-update-baseline
+          MAESTRO_SYNCED_TEST_ROOT: ${{ runner.temp }}/maestro-synced-update
+          MAESTRO_SYNCED_R1_TEST_ROOT: ${{ runner.temp }}/maestro-synced-publication
+        run: |
+          printf '%s\n' "MAESTRO_SYNCED_UPDATE_BASELINE=$MAESTRO_SYNCED_UPDATE_BASELINE" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_SYNCED_TEST_ROOT=$MAESTRO_SYNCED_TEST_ROOT" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_SYNCED_R1_TEST_ROOT=$MAESTRO_SYNCED_R1_TEST_ROOT" >> "$GITHUB_ENV"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -286,6 +318,49 @@ jobs:
           assert not skipped, "actual publication/read-only proof has skipped cases: " + repr(skipped)
           PYCODE
 
+  darwin-product-contracts:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Select physical macOS temporary directory
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          physical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          printf 'TMPDIR=%s\n' "$physical_temp" >> "$GITHUB_ENV"
+      - name: Bind fixture paths to the assigned runner
+        shell: bash
+        env:
+          MAESTRO_DARWIN_TEST_ROOT: ${{ runner.temp }}/maestro-darwin-product
+        run: |
+          printf '%s\n' "MAESTRO_DARWIN_TEST_ROOT=$MAESTRO_DARWIN_TEST_ROOT" >> "$GITHUB_ENV"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: adapters/mcp/go.mod
+      - name: Darwin product diagnosis repair and owning refusal contracts
+        run: go test ./internal/darwin -count=1 -timeout=240s
+      # The native-neutral source proof uses a real rebuilt stdio server.
+      # It does not qualify Code/Desktop loading or native scheduler wake.
+      - name: Exact Darwin SDK and rebuilt shipping stdio lifecycle
+        working-directory: adapters/mcp
+        shell: bash
+        run: |
+          evidence="$RUNNER_TEMP/maestro-darwin-product.jsonl"
+          if ! go test . -run '^TestProductDarwinSDKAndShippingStdioLifecycle$' -count=1 -json -timeout=480s > "$evidence"; then
+            cat "$evidence"
+            exit 1
+          fi
+          cat "$evidence"
+          python3 - "$evidence" <<'PYCODE'
+          import json, pathlib, sys
+          events = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+          family = "TestProductDarwinSDKAndShippingStdioLifecycle"
+          assert any(e.get("Action") == "pass" and e.get("Test") == family for e in events), "actual Darwin lifecycle missing or skipped"
+          skipped = [e.get("Test") for e in events if e.get("Action") == "skip" and (e.get("Test") == family or e.get("Test", "").startswith(family + "/"))]
+          assert not skipped, "actual Darwin lifecycle skipped proof: " + repr(skipped)
+          PYCODE
+
   wiki-maintenance-contracts:
     strategy:
       fail-fast: false
@@ -294,6 +369,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
+      - name: Select physical macOS temporary directory
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          physical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          printf 'TMPDIR=%s\n' "$physical_temp" >> "$GITHUB_ENV"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -335,11 +416,23 @@ jobs:
   authenticated-docling:
     runs-on: macos-15
     timeout-minutes: 30
-    env:
-      MAESTRO_DOCLING_TEST_INPUTS: ${{ runner.temp }}/maestro-raw-inputs
-      MAESTRO_DOCLING_TEST_ROOT: ${{ runner.temp }}/maestro-engineering-runtime
-      MAESTRO_DOCLING_RETAINED_ROOT: ${{ runner.temp }}/maestro-engineering-runtime
     steps:
+      - name: Select physical macOS temporary directory
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          physical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          printf 'TMPDIR=%s\n' "$physical_temp" >> "$GITHUB_ENV"
+      - name: Bind fixture paths to the assigned runner
+        shell: bash
+        env:
+          MAESTRO_DOCLING_TEST_INPUTS: ${{ runner.temp }}/maestro-raw-inputs
+          MAESTRO_DOCLING_TEST_ROOT: ${{ runner.temp }}/maestro-engineering-runtime
+          MAESTRO_DOCLING_RETAINED_ROOT: ${{ runner.temp }}/maestro-engineering-runtime
+        run: |
+          printf '%s\n' "MAESTRO_DOCLING_TEST_INPUTS=$MAESTRO_DOCLING_TEST_INPUTS" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_DOCLING_TEST_ROOT=$MAESTRO_DOCLING_TEST_ROOT" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_DOCLING_RETAINED_ROOT=$MAESTRO_DOCLING_RETAINED_ROOT" >> "$GITHUB_ENV"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
