@@ -136,6 +136,7 @@ class LiveQualificationProfileTests(unittest.TestCase):
             archive.write_bytes(b"profile validation must precede extraction")
             trace, receipt = root / "trace.jsonl", root / "receipt.json"
             environment = dict(os.environ, HOME=str(current), USERPROFILE=str(current),
+                               XDG_CACHE_HOME=str(root / "shell-host-cache"),
                                PATH=str(commands) + os.pathsep + os.environ["PATH"],
                                MODEL_MARKER=str(invoked), MAESTRO_HOME=str(root / "outside-owner"))
             environment.pop("CLAUDE_CONFIG_DIR", None)

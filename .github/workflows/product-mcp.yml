@@ -186,11 +186,17 @@ jobs:
   modern-first-install:
     runs-on: macos-15
     timeout-minutes: 20
-    env:
-      MAESTRO_MODERN_BASELINE: ${{ runner.temp }}/maestro-modern-baseline
-      MAESTRO_MODERN_TEST_ROOT: ${{ runner.temp }}/maestro-modern-first-install
-      MAESTRO_MODERN_AUTHORITY_ROOT: ${{ runner.temp }}/maestro-modern-authority
     steps:
+      - name: Bind fixture paths to the assigned runner
+        shell: bash
+        env:
+          MAESTRO_MODERN_BASELINE: ${{ runner.temp }}/maestro-modern-baseline
+          MAESTRO_MODERN_TEST_ROOT: ${{ runner.temp }}/maestro-modern-first-install
+          MAESTRO_MODERN_AUTHORITY_ROOT: ${{ runner.temp }}/maestro-modern-authority
+        run: |
+          printf '%s\n' "MAESTRO_MODERN_BASELINE=$MAESTRO_MODERN_BASELINE" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_MODERN_TEST_ROOT=$MAESTRO_MODERN_TEST_ROOT" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_MODERN_AUTHORITY_ROOT=$MAESTRO_MODERN_AUTHORITY_ROOT" >> "$GITHUB_ENV"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -227,11 +233,17 @@ jobs:
   modern-synced-update:
     runs-on: macos-15
     timeout-minutes: 30
-    env:
-      MAESTRO_SYNCED_UPDATE_BASELINE: ${{ runner.temp }}/maestro-synced-update-baseline
-      MAESTRO_SYNCED_TEST_ROOT: ${{ runner.temp }}/maestro-synced-update
-      MAESTRO_SYNCED_R1_TEST_ROOT: ${{ runner.temp }}/maestro-synced-publication
     steps:
+      - name: Bind fixture paths to the assigned runner
+        shell: bash
+        env:
+          MAESTRO_SYNCED_UPDATE_BASELINE: ${{ runner.temp }}/maestro-synced-update-baseline
+          MAESTRO_SYNCED_TEST_ROOT: ${{ runner.temp }}/maestro-synced-update
+          MAESTRO_SYNCED_R1_TEST_ROOT: ${{ runner.temp }}/maestro-synced-publication
+        run: |
+          printf '%s\n' "MAESTRO_SYNCED_UPDATE_BASELINE=$MAESTRO_SYNCED_UPDATE_BASELINE" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_SYNCED_TEST_ROOT=$MAESTRO_SYNCED_TEST_ROOT" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_SYNCED_R1_TEST_ROOT=$MAESTRO_SYNCED_R1_TEST_ROOT" >> "$GITHUB_ENV"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -291,9 +303,13 @@ jobs:
   darwin-product-contracts:
     runs-on: macos-15
     timeout-minutes: 15
-    env:
-      MAESTRO_DARWIN_TEST_ROOT: ${{ runner.temp }}/maestro-darwin-product
     steps:
+      - name: Bind fixture paths to the assigned runner
+        shell: bash
+        env:
+          MAESTRO_DARWIN_TEST_ROOT: ${{ runner.temp }}/maestro-darwin-product
+        run: |
+          printf '%s\n' "MAESTRO_DARWIN_TEST_ROOT=$MAESTRO_DARWIN_TEST_ROOT" >> "$GITHUB_ENV"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -370,11 +386,17 @@ jobs:
   authenticated-docling:
     runs-on: macos-15
     timeout-minutes: 30
-    env:
-      MAESTRO_DOCLING_TEST_INPUTS: ${{ runner.temp }}/maestro-raw-inputs
-      MAESTRO_DOCLING_TEST_ROOT: ${{ runner.temp }}/maestro-engineering-runtime
-      MAESTRO_DOCLING_RETAINED_ROOT: ${{ runner.temp }}/maestro-engineering-runtime
     steps:
+      - name: Bind fixture paths to the assigned runner
+        shell: bash
+        env:
+          MAESTRO_DOCLING_TEST_INPUTS: ${{ runner.temp }}/maestro-raw-inputs
+          MAESTRO_DOCLING_TEST_ROOT: ${{ runner.temp }}/maestro-engineering-runtime
+          MAESTRO_DOCLING_RETAINED_ROOT: ${{ runner.temp }}/maestro-engineering-runtime
+        run: |
+          printf '%s\n' "MAESTRO_DOCLING_TEST_INPUTS=$MAESTRO_DOCLING_TEST_INPUTS" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_DOCLING_TEST_ROOT=$MAESTRO_DOCLING_TEST_ROOT" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_DOCLING_RETAINED_ROOT=$MAESTRO_DOCLING_RETAINED_ROOT" >> "$GITHUB_ENV"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
