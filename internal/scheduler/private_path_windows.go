@@ -50,6 +50,12 @@ func (d *secureDirectory) close() error {
 	}
 	return d.native.Close()
 }
+func (d *secureDirectory) openLock(name string) (*os.File, error) {
+	if secureLeafStepHook != nil {
+		secureLeafStepHook(filepath.Join(d.path, name))
+	}
+	return d.native.OpenLock(name)
+}
 func (d *secureDirectory) openFile(name string, flags int, _ os.FileMode) (*os.File, error) {
 	if secureLeafStepHook != nil {
 		secureLeafStepHook(filepath.Join(d.path, name))
@@ -86,7 +92,12 @@ func secureOpenFile(path string, flags int, mode os.FileMode) (*os.File, error) 
 	return d.openFile(filepath.Base(path), flags, mode)
 }
 func secureOpenLock(path string) (*os.File, error) {
-	return secureOpenFile(path, os.O_RDWR|os.O_CREATE, 0600)
+	d, err := openSecureDirectory(filepath.Dir(path), false)
+	if err != nil {
+		return nil, err
+	}
+	defer d.close()
+	return d.openLock(filepath.Base(path))
 }
 func secureReadFile(path string) ([]byte, error)       { return winprivate.ReadFile(path, 1<<20) }
 func secureWriteNewFile(path string, b []byte) error   { return winprivate.Publish(path, b, true) }

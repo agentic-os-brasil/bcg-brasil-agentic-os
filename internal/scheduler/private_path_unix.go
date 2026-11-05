@@ -69,6 +69,10 @@ func (directory *secureDirectory) close() error {
 	return err
 }
 
+func (directory *secureDirectory) openLock(name string) (*os.File, error) {
+	return directory.openFile(name, os.O_RDWR|os.O_CREATE, 0o600)
+}
+
 func (directory *secureDirectory) openFile(name string, flags int, perm os.FileMode) (*os.File, error) {
 	if err := validateSecureLeaf(name); err != nil {
 		return nil, err
