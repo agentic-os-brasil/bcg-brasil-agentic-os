@@ -3,17 +3,17 @@
 package scheduler
 
 import (
-	"errors"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
+	"golang.org/x/sys/windows"
 	"os"
 )
 
 func validatePrivateUpdateIdentity(file *os.File) error {
-	return errors.New("private atomic update unavailable on this platform")
+	return winprivate.Validate(windows.Handle(file.Fd()), false)
 }
-func (directory *secureDirectory) publishReplacement(source, target string) error {
-	return errors.New("private atomic update unavailable on this platform")
+func (d *secureDirectory) publishReplacement(source, target string) error {
+	return d.native.Rename(source, d.native, target, true)
 }
-
-func (directory *secureDirectory) removePrivateReplacement(name string) error {
-	return errors.New("private atomic absence restore unavailable on this platform")
+func (d *secureDirectory) removePrivateReplacement(name string) error {
+	return d.native.Remove(name, false)
 }

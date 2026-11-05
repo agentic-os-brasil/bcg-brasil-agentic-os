@@ -35,7 +35,7 @@ try {
     $env:MAESTRO_WINDOWS_CORE_PROOF_ROOT = $OutputRoot
     $stdout = Join-Path $OutputRoot 'native-test.stdout.log'
     $stderr = Join-Path $OutputRoot 'native-test.stderr.log'
-    $process = Start-Process -FilePath $nativeTest -ArgumentList @('-test.run', '^TestWindowsCorePilot$', '-test.v', '-test.timeout=180s') -Credential $credential -LoadUserProfile -WorkingDirectory $OutputRoot -RedirectStandardOutput $stdout -RedirectStandardError $stderr -Wait -PassThru
+    $process = Start-Process -FilePath $nativeTest -ArgumentList @('-test.run', '^TestWindows(Core|DirectoryDurability)Pilot$', '-test.v', '-test.timeout=180s') -Credential $credential -LoadUserProfile -WorkingDirectory $OutputRoot -RedirectStandardOutput $stdout -RedirectStandardError $stderr -Wait -PassThru
     Get-Content -LiteralPath $stdout
     if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr }
     if ($process.ExitCode -ne 0) { throw "Native core test failed with exit $($process.ExitCode); retain the actual log." }

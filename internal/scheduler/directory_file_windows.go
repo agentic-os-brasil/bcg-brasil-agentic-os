@@ -3,20 +3,14 @@
 package scheduler
 
 import (
-	"errors"
-	"golang.org/x/sys/windows"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
 	"os"
 )
 
 func openDirectoryFile(path string) (*os.File, error) {
-	handle, err := walkWindowsDirectory(path, false, nil)
-	if err != nil {
-		return nil, err
+	d, e := winprivate.Inspect(path)
+	if e != nil {
+		return nil, e
 	}
-	file := os.NewFile(uintptr(handle), path)
-	if file == nil {
-		_ = windows.CloseHandle(handle)
-		return nil, errors.New("directory_handle_unavailable")
-	}
-	return file, nil
+	return d.File, nil
 }

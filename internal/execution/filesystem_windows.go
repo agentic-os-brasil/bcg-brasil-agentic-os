@@ -3,51 +3,38 @@
 package execution
 
 import (
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
 	"os"
 	"path/filepath"
 )
 
-// Legacy Store callers retain their Windows contract. Product entry requires
-// OpenConfinedStore, which stays unavailable until handle confinement qualifies.
-var ledgerOpen = os.OpenFile
-var ledgerMkdirAll = os.MkdirAll
-var ledgerMkdir = os.Mkdir
-var ledgerMkdirTemp = os.MkdirTemp
-var ledgerReadDir = os.ReadDir
-var ledgerStatDirectory = os.Stat
-var ledgerRemove = os.Remove
-var ledgerRemoveAll = os.RemoveAll
-
-func OpenConfinedStore(root string) (Store, error) {
-	return Store{}, ErrConfinementUnavailable
+func ledgerOpen(path string, flags int, _ os.FileMode) (*os.File, error) {
+	return winprivate.OpenFile(path, flags)
 }
-
+func openEvidenceFile(path string) (*os.File, error)       { return winprivate.OpenRegular(path) }
+func ledgerMkdirAll(path string, _ os.FileMode) error      { return winprivate.MkdirAll(path) }
+func ledgerMkdir(path string, _ os.FileMode) error         { return winprivate.Mkdir(path) }
+func ledgerMkdirTemp(path, prefix string) (string, error)  { return winprivate.MkdirTemp(path, prefix) }
+func ledgerReadDir(path string) ([]os.DirEntry, error)     { return winprivate.ReadDir(path) }
+func ledgerStatDirectory(path string) (os.FileInfo, error) { return winprivate.StatDirectory(path) }
+func ledgerRemove(path string) error                       { return winprivate.Remove(path, false) }
+func ledgerRemoveAll(path string) error                    { return winprivate.Remove(path, true) }
+func OpenConfinedStore(root string) (Store, error) {
+	if e := validateStoreRoot(root); e != nil {
+		return Store{}, e
+	}
+	d, e := winprivate.Open(root, false)
+	if e != nil {
+		return Store{}, e
+	}
+	defer d.Close()
+	return Store{Root: d.File.Name()}, nil
+}
 func ledgerPublishJSON(path string, body []byte, immutable bool) error {
-	if !immutable {
-		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-			return err
-		}
+	d, e := winprivate.Open(filepath.Dir(path), !immutable)
+	if e != nil {
+		return e
 	}
-	file, err := os.CreateTemp(filepath.Dir(path), ".publish-")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(file.Name())
-	if err = file.Chmod(0600); err == nil {
-		_, err = file.Write(body)
-	}
-	if err == nil {
-		err = file.Sync()
-	}
-	closeErr := file.Close()
-	if err != nil {
-		return err
-	}
-	if closeErr != nil {
-		return closeErr
-	}
-	if immutable {
-		return durablePublishNoClobber(file.Name(), path)
-	}
-	return durableReplace(file.Name(), path)
+	defer d.Close()
+	return d.Publish(filepath.Base(path), body, immutable)
 }
