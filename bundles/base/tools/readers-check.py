@@ -82,7 +82,9 @@ TARGETS = ["bundles/**/*.json"]
 # poucas pastas de distancia. Ferramenta que acusa dois falsos para sempre e
 # ferramenta que se aprende a ignorar, que e exatamente o que o cabecalho deste
 # arquivo existe para combater.
-CODE_READERS = [".claude/hooks/*.sh", "bundles/*/tools/*.py",
+CODE_READERS = [".claude/hooks/*.sh",
+                "installers/zip/user-template/.claude/hooks/*.sh",
+                "bundles/*/tools/*.py",
                 "bundles/*/*/embed.go", "bundles/*/embed.go"]
 
 # Teste NAO conta como leitor, e a razao vale a linha. Primeiro porque ler num
