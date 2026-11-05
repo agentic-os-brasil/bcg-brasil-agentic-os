@@ -3,6 +3,7 @@
 package product_test
 
 import (
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
 	"golang.org/x/sys/windows"
 	"os"
@@ -47,10 +48,35 @@ func TestWindowsDirectoryDurabilityPilot(t *testing.T) {
 	if e != nil {
 		t.Fatalf("native fresh walk: %v", e)
 	}
+	entries, readErr := fresh.ReadDir(1)
+	if readErr != nil || len(entries) != 0 {
+		t.Fatalf("native empty held directory enumeration entries=%d error=%v", len(entries), readErr)
+	}
 	if e = fresh.Close(); e != nil {
 		t.Fatal(e)
 	}
-	t.Log("native_private_fresh_walk held_parent_upgrade=true succeeded=true")
+	t.Log("native_private_fresh_walk readonly_ancestor_preserved=true held_empty_enumeration=true succeeded=true")
+	// This direct domain probe is distinct from shipping init: it isolates
+	// actual fresh-home publication from the CLI's preceding read-only gates.
+	for _, name := range []string{"bootstrap-owner", "bootstrap-product"} {
+		created, createErr := d.Child(name, true, true)
+		if createErr != nil {
+			t.Fatal(createErr)
+		}
+		if closeErr := created.Close(); closeErr != nil {
+			t.Fatal(closeErr)
+		}
+	}
+	bootstrapOptions := datahome.Options{UserHome: filepath.Join(root, "bootstrap-owner"), ProductRoot: filepath.Join(root, "bootstrap-product"), LookupEnv: func(string) (string, bool) { return "", false }}
+	bootstrapped, bootstrapErr := datahome.InitializeFresh(bootstrapOptions)
+	if bootstrapErr != nil || !bootstrapped.Writable || bootstrapped.Origin != "fresh-confirmed" {
+		t.Fatalf("native full datahome bootstrap diagnostic=%s writable=%v origin=%s error=%v", bootstrapped.Diagnostic, bootstrapped.Writable, bootstrapped.Origin, bootstrapErr)
+	}
+	reopened, resolveErr := datahome.Resolve(bootstrapOptions)
+	if resolveErr != nil || !reopened.Writable || reopened.Origin != "fresh-confirmed" {
+		t.Fatalf("native restarted datahome diagnostic=%s writable=%v error=%v", reopened.Diagnostic, reopened.Writable, resolveErr)
+	}
+	t.Log("native_private_fresh_datahome origin_last=true restarted_resolve_writable=true")
 	child, e := d.Child("created", true, true)
 	if e != nil {
 		t.Fatal(e)

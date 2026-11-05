@@ -17,8 +17,13 @@ import (
 	"time"
 	"unsafe"
 
+	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/zipmigration"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/zipruntime"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/sys/windows"
 )
@@ -73,6 +78,19 @@ func TestWindowsCorePilot(t *testing.T) {
 		t.Helper()
 		out, err := exec.CommandContext(ctx, server, append([]string{op}, args...)...).CombinedOutput()
 		if err != nil {
+			// Preserve the public failure. These read-only synthetic diagnostics
+			// identify its phase without changing production error privacy.
+			inspectOut, shippingInspectErr := exec.CommandContext(ctx, server, append([]string{"inspect"}, args...)...).CombinedOutput()
+			t.Logf("native_init_phase shipping_inspect=%s error=%v", inspectOut, shippingInspectErr)
+			_, identityErr := processidentity.Current()
+			envAdmission, envErr := datahome.Resolve(datahome.Options{ProductRoot: productRoot, UserHome: home})
+			t.Logf("native_init_phase test_process_identity_error=%v environment_home_diagnostic=%s selected_by=%s environment_home_error=%v", identityErr, envAdmission.Diagnostic, envAdmission.SelectedBy, envErr)
+			paths := zipruntime.ResolvePaths(productRoot, zipruntime.Options{UserHome: home})
+			legacy := zipmigration.Run(productRoot, zipmigration.Options{Status: true})
+			t.Logf("native_init_phase zip_mode=%s zip_diagnostic=%s migration_state=%s migration_errors=%v", paths.Mode, paths.Diagnostic, legacy.State, legacy.Errors)
+			workspaceErr := workspace.PreflightInitialize(workspace.Options{WorkspacePath: ws, DataRoot: filepath.Join(home, ".maestro", "state")})
+			preflightErr := product.Preflight(product.Options{ProductRoot: productRoot, UserHome: home, WorkspacePath: ws})
+			t.Logf("native_init_phase workspace_preflight_error=%v product_preflight_error=%v", workspaceErr, preflightErr)
 			admission, inspectErr := datahome.Resolve(datahome.Options{ProductRoot: productRoot, UserHome: home, LookupEnv: func(string) (string, bool) { return "", false }})
 			meta, _ := json.Marshal(admission)
 			t.Fatalf("public %s refused: %s %v; read-only admission=%s inspect_error=%v", op, out, err, meta, inspectErr)
