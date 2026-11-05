@@ -155,7 +155,6 @@ func ntOpen(parent windows.Handle, name string, access, disposition, options uin
 	return h, nil
 }
 
-var reopenFile = windows.NewLazySystemDLL("kernel32.dll").NewProc("ReOpenFile")
 var queryVolume = windows.NewLazySystemDLL("ntdll.dll").NewProc("NtQueryVolumeInformationFile")
 
 // Drive letters and FILE_TYPE_DISK also describe mapped network drives. The
@@ -183,20 +182,6 @@ func validateLocalVolume(h windows.Handle) error {
 		return errors.New("private state requires a local disk volume")
 	}
 	return nil
-}
-
-// Reopen the held object with write access; never resolve its diagnostic path.
-func writableDirectory(h windows.Handle) (windows.Handle, error) {
-	result, _, err := reopenFile.Call(uintptr(h), uintptr(privateDirAccess), uintptr(windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE), uintptr(windows.FILE_FLAG_BACKUP_SEMANTICS))
-	next := windows.Handle(result)
-	if next == windows.InvalidHandle {
-		return next, fmt.Errorf("reopen held private parent: %w", err)
-	}
-	if err := Validate(next, true); err != nil {
-		windows.CloseHandle(next)
-		return windows.InvalidHandle, err
-	}
-	return next, nil
 }
 
 func Leaf(name string) error {
@@ -255,30 +240,43 @@ func walk(path string, create, private, fresh bool, step func(string)) (*Directo
 	if err != nil {
 		return nil, err
 	}
+	writable := false
 	for i, name := range names {
+		// Request mutation rights at the original relative open. Ordinary ancestors
+		// may be traversable but not writable; their read-only handles grant no
+		// creation authority. A private parent is never reopened by pathname.
 		access := uint32(readDirAccess)
-		if i == len(names)-1 && private {
+		wantWrite := create || (i == len(names)-1 && private)
+		if wantWrite {
 			access = privateDirAccess
 		}
 		next, e := ntOpen(h, name, access, windows.FILE_OPEN, dirOptions)
+		nextWritable := wantWrite
+		if create && i < len(names)-1 && errors.Is(e, windows.ERROR_ACCESS_DENIED) {
+			next, e = ntOpen(h, name, readDirAccess, windows.FILE_OPEN, dirOptions)
+			nextWritable = false
+		}
 		if create && errors.Is(e, os.ErrNotExist) {
-			writable, reopenErr := writableDirectory(h)
-			if reopenErr != nil {
+			if !writable {
 				windows.CloseHandle(h)
-				return nil, reopenErr
+				return nil, errors.New("private creation requires write access on the held parent")
+			}
+			if err = Validate(h, true); err != nil {
+				windows.CloseHandle(h)
+				return nil, err
 			}
 			disposition := uint32(windows.FILE_OPEN_IF)
 			if fresh {
 				disposition = windows.FILE_CREATE
 			}
-			next, e = ntOpen(writable, name, access, disposition, dirOptions|windows.FILE_WRITE_THROUGH)
+			next, e = ntOpen(h, name, privateDirAccess, disposition, dirOptions|windows.FILE_WRITE_THROUGH)
+			nextWritable = true
 			if e == nil {
 				e = Validate(next, true)
 			}
 			if e == nil {
-				e = windows.FlushFileBuffers(writable)
+				e = windows.FlushFileBuffers(h)
 			}
-			windows.CloseHandle(writable)
 		}
 		if e == nil {
 			e = validateType(next, true, false)
@@ -291,6 +289,7 @@ func walk(path string, create, private, fresh bool, step func(string)) (*Directo
 			return nil, e
 		}
 		h = next
+		writable = nextWritable
 		if step != nil {
 			step(name)
 		}

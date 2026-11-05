@@ -170,7 +170,28 @@ func TestWindowsPrivateStatePilot(t *testing.T) {
 					t.Fatal(e)
 				}
 			case "unknown-effective-ace":
+				// Microsoft documents that OA without either GUID is converted to A.
+				// Inspect the descriptor actually stored by Windows before classifying it.
 				windowsFixtureDACL(t, path, "D:P(A;;FA;;;"+user.String()+")(OA;;GR;;;"+user.String()+")")
+				for _, ace := range windowsNativeFixtureACEs(t, path) {
+					if ace.kind != windows.ACCESS_ALLOWED_ACE_TYPE {
+						t.Fatal("OA without GUID was not normalized to ordinary allow")
+					}
+				}
+				normalized, e := scheduler.ReadPrivateFile(path, 128)
+				if e != nil || string(normalized) != "preserve exact bytes" {
+					t.Fatal("native-normalized owner allow was incorrectly rejected", e)
+				}
+				windowsFixtureDACL(t, path, "D:P(A;;FA;;;"+user.String()+")(OA;;GR;00000000-0000-0000-0000-000000000001;;"+user.String()+")")
+				found := false
+				for _, ace := range windowsNativeFixtureACEs(t, path) {
+					if ace.kind == windowsAllowedObjectACEType && ace.flags&windows.INHERIT_ONLY_ACE == 0 && ace.mask != 0 {
+						found = true
+					}
+				}
+				if !found {
+					t.Fatal("native fixture did not retain a genuine unsupported effective object ACE")
+				}
 			}
 			if _, e := scheduler.ReadPrivateFile(path, 128); e == nil {
 				t.Fatal("unsafe descriptor was accepted for private read")
@@ -275,26 +296,61 @@ func TestWindowsPrivateStatePilot(t *testing.T) {
 		if e := winprivate.Mkdir(directory); e != nil {
 			t.Fatal(e)
 		}
+		original, e := os.Stat(root)
+		if e != nil {
+			t.Fatal(e)
+		}
 		d, e := winprivate.Open(directory, false)
 		if e != nil {
 			t.Fatal(e)
 		}
 		defer d.Close()
-		moved := root + "-moved"
-		if e = os.Rename(root, moved); e != nil {
-			t.Fatal("native ancestor-swap fixture unavailable", e)
-		}
-		windowsJunction(t, root, outside)
-		before := windowsCoreTree(t, outside)
-		if e = d.Publish("state", []byte("held object literal"), true); e != nil {
+		held, e := d.File.Stat()
+		if e != nil {
 			t.Fatal(e)
 		}
-		b, e := os.ReadFile(filepath.Join(moved, "held", "state"))
-		if e != nil || string(b) != "held object literal" {
-			t.Fatal("publication lost its original held directory", e)
+		before := windowsCoreTree(t, outside)
+		moved := root + "-moved"
+		renameErr := os.Rename(root, moved)
+		if renameErr == nil {
+			windowsJunction(t, root, outside)
+			if e = d.Publish("state", []byte("held object literal"), true); e != nil {
+				t.Fatal(e)
+			}
+			t.Log("native_ancestor_custody mode=held_object_after_actual_swap")
+		} else {
+			if !errors.Is(renameErr, windows.ERROR_ACCESS_DENIED) && !errors.Is(renameErr, windows.ERROR_SHARING_VIOLATION) {
+				t.Fatal("unexpected ancestor rename failure", renameErr)
+			}
+			after, e := os.Stat(root)
+			if e != nil || !os.SameFile(original, after) {
+				t.Fatal("denied ancestor rename changed root identity", e)
+			}
+			afterHeld, e := d.File.Stat()
+			if e != nil || !os.SameFile(held, afterHeld) {
+				t.Fatal("denied ancestor rename changed held directory identity", e)
+			}
+			if !reflect.DeepEqual(before, windowsCoreTree(t, outside)) {
+				t.Fatal("denied ancestor rename changed outside bytes")
+			}
+			if e = d.Publish("state", []byte("held object literal"), true); e != nil {
+				t.Fatal(e)
+			}
+			if e = d.Close(); e != nil {
+				t.Fatal(e)
+			}
+			// Positive control: the same ordinary-user rename must work after release.
+			if e = os.Rename(root, moved); e != nil {
+				t.Fatal("ancestor rename still refused after held handle release", e)
+			}
+			t.Log("native_ancestor_custody mode=kernel_denial_while_held identity_unchanged=true rename_after_close=true")
+		}
+		body, e := os.ReadFile(filepath.Join(moved, "held", "state"))
+		if e != nil || string(body) != "held object literal" {
+			t.Fatal("held publication lost complete original bytes", e)
 		}
 		if !reflect.DeepEqual(before, windowsCoreTree(t, outside)) {
-			t.Fatal("held publication wrote through replacement ancestor")
+			t.Fatal("held publication changed outside bytes")
 		}
 	})
 	t.Run("exclusive_cas_and_exact_absence_compensation", func(t *testing.T) {
@@ -401,4 +457,34 @@ func TestWindowsPrivateStatePilot(t *testing.T) {
 		}
 	})
 	t.Log("native_private_state exercised_cases=" + strings.Join([]string{"owner_acl", "unowned_read", "world_null_unknown_acl", "foreign_owner", "hardlink", "nonregular", "offline", "junction", "held_ancestor", "no_clobber", "cas", "absence", "native_sharing_refusal_retry", "contention"}, ","))
+}
+
+const windowsAllowedObjectACEType = 0x05
+
+type windowsFixtureACE struct {
+	kind  uint8
+	flags uint8
+	mask  windows.ACCESS_MASK
+}
+
+func windowsNativeFixtureACEs(t *testing.T, path string) []windowsFixtureACE {
+	t.Helper()
+	sd, e := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
+	if e != nil {
+		t.Fatal(e)
+	}
+	acl, _, e := sd.DACL()
+	if e != nil || acl == nil {
+		t.Fatal("native fixture DACL unavailable", e)
+	}
+	var result []windowsFixtureACE
+	for i := uint16(0); i < acl.AceCount; i++ {
+		var ace *windows.ACCESS_ALLOWED_ACE
+		if e = windows.GetAce(acl, uint32(i), &ace); e != nil || ace == nil {
+			t.Fatal("native fixture ACE unavailable", e)
+		}
+		result = append(result, windowsFixtureACE{kind: ace.Header.AceType, flags: ace.Header.AceFlags, mask: ace.Mask})
+		t.Logf("native_fixture_ace type=%d mask=0x%x flags=0x%x", ace.Header.AceType, ace.Mask, ace.Header.AceFlags)
+	}
+	return result
 }
