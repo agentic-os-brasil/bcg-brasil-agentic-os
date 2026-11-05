@@ -27,7 +27,7 @@ on:
       - 'LICENSE.md'
       - '.github/workflows/product-mcp.yml'
   push:
-    branches: [main]
+    branches: [main, 'codex/integration/**']
     paths:
       - 'adapters/mcp/**'
       - 'internal/execution/**'
