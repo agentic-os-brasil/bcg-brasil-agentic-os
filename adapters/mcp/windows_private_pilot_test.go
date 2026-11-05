@@ -443,7 +443,7 @@ func TestWindowsPrivateStatePilot(t *testing.T) {
 		if e := scheduler.PublishNewPrivateFile(path, originalBody); e != nil {
 			t.Fatal(e)
 		}
-		original, e := os.Stat(path)
+		original, e := windowsNativeFixtureIdentity(path)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -456,6 +456,7 @@ func TestWindowsPrivateStatePilot(t *testing.T) {
 			t.Fatal(e)
 		}
 		var renamed, secondEntered bool
+		var replacementID windowsFixtureFileIdentity
 		var renameErr, secondErr error
 		firstErr := scheduler.WithPrivateLock(path, func() error {
 			// Independent Win32 namespace mutation, not the publication helper
@@ -463,23 +464,24 @@ func TestWindowsPrivateStatePilot(t *testing.T) {
 			renameErr = windows.MoveFileEx(from, to, 0)
 			renamed = renameErr == nil
 			if renamed {
-				actual, statErr := os.Stat(moved)
-				if statErr != nil || !os.SameFile(original, actual) {
+				actual, statErr := windowsNativeFixtureIdentity(moved)
+				if statErr != nil || original != actual {
 					return fmt.Errorf("live renamed lock identity changed: %v", statErr)
 				}
 				if publishErr := scheduler.PublishNewPrivateFile(path, replacementBody); publishErr != nil {
 					return fmt.Errorf("replacement fixture creation: %w", publishErr)
 				}
-				replacement, statErr := os.Stat(path)
-				if statErr != nil || os.SameFile(original, replacement) {
+				replacement, statErr := windowsNativeFixtureIdentity(path)
+				if statErr != nil || original == replacement {
 					return fmt.Errorf("replacement fixture is not a distinct file: %v", statErr)
 				}
+				replacementID = replacement
 			} else {
 				if !errors.Is(renameErr, windows.ERROR_ACCESS_DENIED) && !errors.Is(renameErr, windows.ERROR_SHARING_VIOLATION) && !errors.Is(renameErr, windows.ERROR_LOCK_VIOLATION) {
 					return fmt.Errorf("unexpected native live-lock rename error: %w", renameErr)
 				}
-				actual, statErr := os.Stat(path)
-				if statErr != nil || !os.SameFile(original, actual) {
+				actual, statErr := windowsNativeFixtureIdentity(path)
+				if statErr != nil || original != actual {
 					return fmt.Errorf("refused live-lock rename changed identity: %v", statErr)
 				}
 			}
@@ -507,9 +509,9 @@ func TestWindowsPrivateStatePilot(t *testing.T) {
 				t.Fatal("cannot restore original lock namespace after release", restoreErr)
 			}
 		}
-		actual, statErr := os.Stat(path)
+		actual, statErr := windowsNativeFixtureIdentity(path)
 		body, readErr := os.ReadFile(path)
-		if statErr != nil || !os.SameFile(original, actual) || readErr != nil || !bytes.Equal(body, originalBody) {
+		if statErr != nil || original != actual || readErr != nil || !bytes.Equal(body, originalBody) {
 			t.Fatalf("original lock identity/bytes not preserved: stat=%v read=%v", statErr, readErr)
 		}
 		if e = windows.MoveFileEx(from, to, 0); e != nil {
@@ -518,7 +520,7 @@ func TestWindowsPrivateStatePilot(t *testing.T) {
 		if e = windows.MoveFileEx(to, from, 0); e != nil {
 			t.Fatal("cannot restore positive-control lock namespace", e)
 		}
-		t.Logf("native_live_lock_custody rename_succeeded_while_held=%v native_error=%v second_action_entered=%v second_error=%v original_identity_bytes_preserved=true same_rename_after_release=true", renamed, renameErr, secondEntered, secondErr)
+		t.Logf("native_live_lock_custody rename_succeeded_while_held=%v native_error=%v second_action_entered=%v second_error=%v original_identity_bytes_preserved=true same_rename_after_release=true original_native_id=%+v replacement_native_id=%+v", renamed, renameErr, secondEntered, secondErr, original, replacementID)
 		if firstErr != nil || cleanupObservationErr != nil {
 			t.Fatalf("public lock fixture failed after restoring original namespace: first=%v cleanup_observation=%v", firstErr, cleanupObservationErr)
 		}
@@ -584,4 +586,34 @@ func windowsNativeFixtureACEs(t *testing.T, path string) []windowsFixtureACE {
 		t.Logf("native_fixture_ace type=%d mask=0x%x flags=0x%x", ace.Header.AceType, ace.Mask, ace.Header.AceFlags)
 	}
 	return result
+}
+
+// Capture identity eagerly: os.Stat/SameFile on Windows may lazily reopen
+// the old pathname after a rename. Metadata handles are closed before mutation
+// and request no DELETE access, so this oracle cannot protect the live name.
+type windowsFixtureFileIdentity struct {
+	Volume, IndexHigh, IndexLow uint32
+}
+
+func windowsNativeFixtureIdentity(path string) (windowsFixtureFileIdentity, error) {
+	var identity windowsFixtureFileIdentity
+	pointer, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return identity, err
+	}
+	handle, err := windows.CreateFile(pointer, windows.FILE_READ_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
+	if err != nil {
+		return identity, err
+	}
+	var information windows.ByHandleFileInformation
+	queryErr := windows.GetFileInformationByHandle(handle, &information)
+	closeErr := windows.CloseHandle(handle)
+	if err = errors.Join(queryErr, closeErr); err != nil {
+		return identity, err
+	}
+	if information.FileAttributes&(windows.FILE_ATTRIBUTE_DIRECTORY|windows.FILE_ATTRIBUTE_REPARSE_POINT) != 0 || information.NumberOfLinks != 1 {
+		return identity, errors.New("native identity fixture is not a single-link regular file")
+	}
+	identity = windowsFixtureFileIdentity{Volume: information.VolumeSerialNumber, IndexHigh: information.FileIndexHigh, IndexLow: information.FileIndexLow}
+	return identity, nil
 }
