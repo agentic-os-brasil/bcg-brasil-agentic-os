@@ -20,7 +20,8 @@ HOOKS = Path(__file__).resolve().parents[1] / "installers/zip/user-template/.cla
 
 class HomeBinding(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="maestro-hook-home-")
+        # Keep continuity fixtures within the hook's bounded pointer payload.
+        self.tmp = tempfile.TemporaryDirectory(prefix="hook-")
         self.addCleanup(self.tmp.cleanup)
         self.base = Path(self.tmp.name)
         self.product = self.base / "managed product"
@@ -45,6 +46,7 @@ class HomeBinding(unittest.TestCase):
             }],
         }))
         self.env = dict(os.environ, HOME=str(self.profile), USERPROFILE=str(self.profile),
+                        XDG_CACHE_HOME=str(self.base / "shell-host-cache"),
                         CLAUDE_PROJECT_DIR=str(self.product), CLAUDE_SESSION_ID="fixture")
         self.env.pop("MAESTRO_HOME", None)
         self.env.pop("MAESTRO_PY_RECORD", None)
