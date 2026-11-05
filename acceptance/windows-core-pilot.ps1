@@ -35,12 +35,12 @@ try {
     $env:MAESTRO_WINDOWS_CORE_PROOF_ROOT = $OutputRoot
     $stdout = Join-Path $OutputRoot 'native-test.stdout.log'
     $stderr = Join-Path $OutputRoot 'native-test.stderr.log'
-    $process = Start-Process -FilePath $nativeTest -ArgumentList @('-test.run', '^TestWindows(Core|DirectoryDurability)Pilot$', '-test.v', '-test.timeout=180s') -Credential $credential -LoadUserProfile -WorkingDirectory $OutputRoot -RedirectStandardOutput $stdout -RedirectStandardError $stderr -Wait -PassThru
+    $process = Start-Process -FilePath $nativeTest -ArgumentList @('-test.run', '^TestWindows(Core|DirectoryDurability|PrivateState|OwnerReview)Pilot$', '-test.v', '-test.timeout=600s') -Credential $credential -LoadUserProfile -WorkingDirectory $OutputRoot -RedirectStandardOutput $stdout -RedirectStandardError $stderr -Wait -PassThru
     Get-Content -LiteralPath $stdout
     if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr }
     if ($process.ExitCode -ne 0) { throw "Native core test failed with exit $($process.ExitCode); retain the actual log." }
     $log = Get-Content -LiteralPath $stdout -Raw
-    if ($log -notmatch 'native_windows_token elevated=false admin_member=false' -or $log -notmatch '--- PASS: TestWindowsCorePilot' -or $log -match '--- SKIP:') {
+    if ($log -notmatch 'native_windows_token elevated=false admin_member=false' -or $log -notmatch '--- PASS: TestWindowsCorePilot' -or $log -notmatch '--- PASS: TestWindowsDirectoryDurabilityPilot' -or $log -notmatch '--- PASS: TestWindowsPrivateStatePilot' -or $log -notmatch '--- PASS: TestWindowsOwnerReviewPilot' -or $log -match '--- SKIP:') {
         throw 'The standard-user native proof did not run completely.'
     }
 } finally {

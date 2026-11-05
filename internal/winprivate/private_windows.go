@@ -49,6 +49,9 @@ func Validate(h windows.Handle, directory bool) error {
 	if err := validateType(h, directory, !directory); err != nil {
 		return err
 	}
+	if err := validateLocalVolume(h); err != nil {
+		return err
+	}
 	sd, err := windows.GetSecurityInfo(h, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
 	if err != nil {
 		return fmt.Errorf("inspect held private security descriptor: %w", err)
@@ -153,13 +156,41 @@ func ntOpen(parent windows.Handle, name string, access, disposition, options uin
 }
 
 var reopenFile = windows.NewLazySystemDLL("kernel32.dll").NewProc("ReOpenFile")
+var queryVolume = windows.NewLazySystemDLL("ntdll.dll").NewProc("NtQueryVolumeInformationFile")
+
+// Drive letters and FILE_TYPE_DISK also describe mapped network drives. The
+// held object's kernel volume facts, rather than its spelling, admit locality.
+func validateLocalVolume(h windows.Handle) error {
+	if err := queryVolume.Find(); err != nil {
+		return err
+	}
+	var information struct {
+		DeviceType      uint32
+		Characteristics uint32
+	}
+	var iosb windows.IO_STATUS_BLOCK
+	const fileFsDeviceInformation = 4
+	const fileDeviceDisk = 7
+	const fileRemoteDevice = 0x10
+	status, _, _ := queryVolume.Call(uintptr(h), uintptr(unsafe.Pointer(&iosb)), uintptr(unsafe.Pointer(&information)), unsafe.Sizeof(information), fileFsDeviceInformation)
+	if status != 0 {
+		return fmt.Errorf("inspect held private volume: %w", windows.NTStatus(uint32(status)).Errno())
+	}
+	if iosb.Information != unsafe.Sizeof(information) {
+		return errors.New("held private volume facts are incomplete")
+	}
+	if information.DeviceType != fileDeviceDisk || information.Characteristics&fileRemoteDevice != 0 {
+		return errors.New("private state requires a local disk volume")
+	}
+	return nil
+}
 
 // Reopen the held object with write access; never resolve its diagnostic path.
 func writableDirectory(h windows.Handle) (windows.Handle, error) {
-	result, _, err := reopenFile.Call(uintptr(h), uintptr(privateDirAccess), uintptr(windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE), uintptr(windows.FILE_FLAG_BACKUP_SEMANTICS|windows.FILE_FLAG_OPEN_REPARSE_POINT))
+	result, _, err := reopenFile.Call(uintptr(h), uintptr(privateDirAccess), uintptr(windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE), uintptr(windows.FILE_FLAG_BACKUP_SEMANTICS))
 	next := windows.Handle(result)
 	if next == windows.InvalidHandle {
-		return next, err
+		return next, fmt.Errorf("reopen held private parent: %w", err)
 	}
 	if err := Validate(next, true); err != nil {
 		windows.CloseHandle(next)

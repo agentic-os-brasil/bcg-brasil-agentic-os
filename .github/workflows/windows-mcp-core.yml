@@ -12,6 +12,7 @@ on:
       - 'internal/ownerctx/**'
       - 'internal/maintenance/**'
       - 'internal/scheduler/**'
+      - 'internal/winprivate/**'
       - 'acceptance/windows-core-pilot.ps1'
       - '.github/workflows/windows-mcp-core.yml'
   workflow_dispatch:

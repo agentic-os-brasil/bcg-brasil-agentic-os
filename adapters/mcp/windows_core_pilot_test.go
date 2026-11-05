@@ -18,6 +18,7 @@ import (
 	"unsafe"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/sys/windows"
 )
@@ -136,6 +137,13 @@ func TestWindowsCorePilot(t *testing.T) {
 		t.Fatal("native checkpoint was not retained", next)
 	}
 	captured := call(cs, "maestro_apply", "memory.capture", map[string]any{"text": "WINDOWS_CORE_CAPTURE synthetic approved memory"}, false)
+	survivor := call(cs, "maestro_apply", "memory.capture", map[string]any{"text": "WINDOWS_CORE_SURVIVOR selected surviving memory"}, false)
+	day := time.Now().UTC().Format("2006-01-02")
+	call(cs, "maestro_apply", "memory.consolidate", map[string]any{"cycle": "daily", "date": day}, false)
+	initialContext := call(cs, "maestro_query", "memory.context", nil, false)
+	if !strings.Contains(initialContext["text"].(string), "WINDOWS_CORE_CAPTURE") {
+		t.Fatal("approved memory did not reach canonical consolidated context")
+	}
 	if err = cs.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -152,13 +160,42 @@ func TestWindowsCorePilot(t *testing.T) {
 	}
 	approve.Store(true)
 	corrected := call(cs, "maestro_apply", "memory.correct", map[string]any{"capture_id": captured["id"], "expected_revision": captured["revision"], "text": "WINDOWS_CORE_REPLACEMENT synthetic correction"}, false)
+	call(cs, "maestro_apply", "memory.consolidate", map[string]any{"cycle": "daily", "date": day}, false)
+	correctedContext := call(cs, "maestro_query", "memory.context", nil, false)
+	if strings.Contains(correctedContext["text"].(string), "WINDOWS_CORE_CAPTURE") || !strings.Contains(correctedContext["text"].(string), "WINDOWS_CORE_REPLACEMENT") {
+		t.Fatal("canonical correction retained the removed text or lost the replacement")
+	}
 	call(cs, "maestro_apply", "memory.delete", map[string]any{"capture_id": corrected["id"], "expected_revision": corrected["revision"]}, false)
+	// Force the existing canonical historical-manifest fallback through a corrupt
+	// synthetic newest manifest, then rebuild from the surviving reviewed source.
+	commits := windowsCoreCommits(t, home)
+	if err = scheduler.PublishNewPrivateFile(filepath.Join(commits, "99999999T999999.999999999Z-broken.json"), []byte(`{"corrupt":true}`)); err != nil {
+		t.Fatal(err)
+	}
+	afterFallback := call(cs, "maestro_query", "memory.context", nil, false)
+	if strings.Contains(afterFallback["text"].(string), "WINDOWS_CORE_CAPTURE") || strings.Contains(afterFallback["text"].(string), "WINDOWS_CORE_REPLACEMENT") {
+		t.Fatal("historical fallback resurrected removed text")
+	}
+	call(cs, "maestro_apply", "memory.consolidate", map[string]any{"cycle": "daily", "date": day}, false)
+	rebuilt := call(cs, "maestro_query", "memory.context", nil, false)
+	if !strings.Contains(rebuilt["text"].(string), "WINDOWS_CORE_SURVIVOR") || strings.Contains(rebuilt["text"].(string), "WINDOWS_CORE_REPLACEMENT") {
+		t.Fatal("native rebuild lost the surviving source or resurrected the removed source")
+	}
+	call(cs, "maestro_apply", "memory.delete", map[string]any{"capture_id": survivor["id"], "expected_revision": survivor["revision"]}, false)
+	empty := call(cs, "maestro_query", "memory.context", nil, false)
+	if empty["text"] != "" {
+		t.Fatal("deleting final source did not produce valid empty context")
+	}
+	if err = cs.Close(); err != nil {
+		t.Fatal(err)
+	}
+	cs = connect()
 	call(cs, "maestro_query", "memory.read", map[string]any{"capture_id": corrected["id"]}, true)
 	search := call(cs, "maestro_query", "memory.search", map[string]any{"query": "WINDOWS_CORE_CAPTURE"}, false)
 	if search["total"] != float64(0) {
 		t.Fatal("deleted/corrected memory reappeared", search)
 	}
-	proof, _ := json.MarshalIndent(map[string]any{"native": "windows", "elevated": false, "admin_member": false, "server_sha256": hex.EncodeToString(serverHash[:]), "work_id": id, "resumed_revision": resumed["state_revision"], "memory_restart": true, "declined_bytes_unchanged": true, "deleted_not_searchable": true, "review_host": "controlled synthetic SDK elicitation; native client loading remains separate"}, "", "  ")
+	proof, _ := json.MarshalIndent(map[string]any{"native": "windows", "elevated": false, "admin_member": false, "server_sha256": hex.EncodeToString(serverHash[:]), "work_id": id, "resumed_revision": resumed["state_revision"], "memory_restart": true, "declined_bytes_unchanged": true, "deleted_not_searchable": true, "historical_fallback_no_resurrection": true, "surviving_source_rebuild": true, "final_source_empty": true, "review_host": "controlled synthetic SDK elicitation; native client loading remains separate"}, "", "  ")
 	if err = os.WriteFile(filepath.Join(proofRoot, "native-core-proof.json"), append(proof, '\n'), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -190,4 +227,26 @@ func windowsCoreTree(t *testing.T, root string) map[string]string {
 		t.Fatal(err)
 	}
 	return out
+}
+
+func windowsCoreCommits(t *testing.T, home string) string {
+	t.Helper()
+	var found []string
+	root := filepath.Join(home, ".maestro", "brain", "memory")
+	if err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() && d.Name() == "commits" {
+			found = append(found, path)
+			return filepath.SkipDir
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 1 {
+		t.Fatal("synthetic single-workspace commit fixture was not uniquely identified", len(found))
+	}
+	return found[0]
 }

@@ -43,6 +43,14 @@ func TestWindowsDirectoryDurabilityPilot(t *testing.T) {
 		t.Fatalf("NATIVE_DIRECTORY_DURABILITY_UNSUPPORTED: %v", e)
 	}
 	t.Log("native_directory_flush standard_user=true held_private_directory=true succeeded=true")
+	fresh, e := winprivate.Fresh(filepath.Join(root, "fresh-walk"))
+	if e != nil {
+		t.Fatalf("native fresh walk: %v", e)
+	}
+	if e = fresh.Close(); e != nil {
+		t.Fatal(e)
+	}
+	t.Log("native_private_fresh_walk held_parent_upgrade=true succeeded=true")
 	child, e := d.Child("created", true, true)
 	if e != nil {
 		t.Fatal(e)
