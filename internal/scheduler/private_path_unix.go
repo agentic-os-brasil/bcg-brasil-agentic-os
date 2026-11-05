@@ -321,3 +321,9 @@ func unixPathParts(path string) (string, []string, error) {
 	}
 	return string(filepath.Separator), components, nil
 }
+
+// Preserve the Unix private mode validation in the common public seam.
+func validatePrivateDirectoryIdentity(string) error { return nil }
+func openUnownedRegularFile(path string) (*os.File, error) {
+	return secureOpenFile(path, os.O_RDONLY, 0)
+}

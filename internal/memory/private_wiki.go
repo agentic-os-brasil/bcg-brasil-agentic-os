@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -70,6 +71,9 @@ func (engine *Engine) privateWikiRoot(workspace string) string {
 }
 
 func (engine *Engine) privateWikiScope(workspace string) ([]byte, string, string, error) {
+	if runtime.GOOS == "windows" {
+		return nil, "", "", ErrPrivateWikiUnavailable
+	}
 	if engine.ownedPreflight(workspace) != nil {
 		return nil, "", "", ErrPrivateWikiUnavailable
 	}

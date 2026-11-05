@@ -76,9 +76,6 @@ func RestorePrivateFileGuarded(path string, maximum int64, published, previous [
 }
 
 func updatePrivateFileGuarded(path string, maximum int64, guard func(func() error) error, update func([]byte) ([]byte, error), remove bool) error {
-	if guard != nil && runtime.GOOS == "windows" {
-		return errors.New("guarded private update unavailable on this platform")
-	}
 	if maximum < 1 || maximum > 1<<20 {
 		return errors.New("invalid private update limit")
 	}
