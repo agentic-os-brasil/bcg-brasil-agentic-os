@@ -95,7 +95,7 @@ type DarwinBinding interface {
 }
 
 func (s *Service) newDarwinBinding() (DarwinBinding, error) {
-	if s.options.DarwinFactory == nil {
+	if runtime.GOOS == "windows" || s.options.DarwinFactory == nil {
 		return nil, nil
 	}
 	ids := []string{DarwinDailyJobID, DarwinWeeklyJobID, DarwinMonthlyJobID}
