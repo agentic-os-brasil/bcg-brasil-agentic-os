@@ -262,19 +262,25 @@ type packetResource struct {
 	Bytes  int    `json:"bytes"`
 }
 type packetInventory struct {
-	SchemaVersion     int              `json:"schema_version"`
-	Mode              string           `json:"mode"`
-	Target            Target           `json:"target"`
-	Native            NativeCapability `json:"native"`
-	Files             []packetFile     `json:"files"`
-	Resources         []packetResource `json:"embedded_resources"`
-	References        []assetReference `json:"references"`
-	CanonicalAgentIDs []string         `json:"canonical_agent_ids"`
-	ExecutionBoundary string           `json:"execution_boundary"`
+	SchemaVersion     int                  `json:"schema_version"`
+	Mode              string               `json:"mode"`
+	Target            Target               `json:"target"`
+	Native            NativeCapability     `json:"native"`
+	Lifecycle         *LifecycleCapability `json:"lifecycle,omitempty"`
+	Files             []packetFile         `json:"files"`
+	Resources         []packetResource     `json:"embedded_resources"`
+	References        []assetReference     `json:"references"`
+	CanonicalAgentIDs []string             `json:"canonical_agent_ids"`
+	ExecutionBoundary string               `json:"execution_boundary"`
 }
 
 func inventory(o Options, c NativeCapability) (packetInventory, error) {
 	p := packetInventory{SchemaVersion: 1, Mode: "mcp_only", Target: o.target, Native: c, ExecutionBoundary: "Methods and helper resources are inert instructions; only implemented admitted MCP operations and qualified native profile execute. Legacy ZIP commands and absent external assets remain unavailable."}
+	if o.LifecycleContext {
+		p.Mode = "mcp_lifecycle"
+		p.Lifecycle = lifecycleCapability(o)
+		p.ExecutionBoundary = "Configured lifecycle hooks read bounded approved context and record typed observations only. Native guards, agent activation, approval, execution completion and automatic memory maintenance remain unavailable."
+	}
 	if c.State == "qualified" {
 		p.Mode = "native"
 	}

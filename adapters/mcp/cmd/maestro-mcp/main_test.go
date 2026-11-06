@@ -6,12 +6,92 @@ import (
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"testing"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/zipmigration"
 )
+
+func TestProductInitCreatesAndPreservesLifecycleFilesystem(t *testing.T) {
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	productRoot, user, work := filepath.Join(base, "product"), filepath.Join(base, "owner"), filepath.Join(base, "workspace")
+	for _, path := range []string{productRoot, user} {
+		if err := os.Mkdir(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("MAESTRO_HOME", filepath.Join(user, ".maestro"))
+	prior := os.Args
+	t.Cleanup(func() { os.Args = prior })
+	os.Args = []string{"maestro-mcp", "init", "--product-root", productRoot, "--user-home", user, "--workspace", work}
+	if err := run(); err != nil {
+		t.Fatal(err)
+	}
+	home, err := datahome.Resolve(datahome.Options{ProductRoot: productRoot, UserHome: user})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inspection, err := workspace.Inspect(work, filepath.Join(home.Home, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		filepath.Join(work, "brain"), filepath.Join(home.Home, "brain", "owner"),
+		filepath.Join(home.Home, "brain", "memory", "workspaces", inspection.WorkspaceID, "l1", "captures"),
+		filepath.Join(home.Home, "brain", "memory", "workspaces", inspection.WorkspaceID, "commits"),
+		filepath.Join(home.Home, "state"),
+	} {
+		if info, err := os.Stat(path); err != nil || !info.IsDir() {
+			t.Fatalf("explicit preparation did not create canonical directory %s: %v", path, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(work, "brain", "participant-note.md"), []byte("Synthetic authored work must survive repeated preparation.\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := func() map[string]string {
+		t.Helper()
+		files := map[string]string{}
+		if err := filepath.WalkDir(base, func(path string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			relative, err := filepath.Rel(base, path)
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() {
+				files[relative] = info.Mode().String()
+				return nil
+			}
+			body, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			files[relative] = fmt.Sprintf("%s:%x", info.Mode(), sha256.Sum256(body))
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return files
+	}
+	before := snapshot()
+	if err := run(); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, snapshot()) {
+		t.Fatal("repeated explicit preparation changed canonical files, private keys, modes or authored work")
+	}
+}
 
 func TestMigratedHomePublicMCPInit(t *testing.T) {
 	if runtime.GOOS == "windows" {

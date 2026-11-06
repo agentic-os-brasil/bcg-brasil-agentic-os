@@ -54,6 +54,32 @@ function Native-Json([string]$Executable, [string[]]$Arguments) {
     Assert ($LASTEXITCODE -eq 0) 'Actual shipping CLI command failed.'
     return ($output -join "`n") | ConvertFrom-Json
 }
+function Invoke-LifecycleCommand([string]$Command, [string]$Payload) {
+    $start = New-Object Diagnostics.ProcessStartInfo
+    $start.FileName = $shell
+    $start.Arguments = '-NoLogo -NoProfile -NonInteractive -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Command))
+    $start.UseShellExecute = $false
+    $start.WorkingDirectory = Join-Path $root 'workspace'
+    $start.RedirectStandardInput = $true; $start.RedirectStandardOutput = $true; $start.RedirectStandardError = $true
+    $start.StandardOutputEncoding = $Utf8; $start.StandardErrorEncoding = $Utf8
+    $start.EnvironmentVariables['CLAUDE_PLUGIN_ROOT'] = $plugin
+    $savedEncoding = [Console]::InputEncoding
+    try {
+        [Console]::InputEncoding = $Utf8
+        $process = [Diagnostics.Process]::Start($start)
+    } finally { [Console]::InputEncoding = $savedEncoding }
+    try {
+        # Framework has no StandardInputEncoding; preserve exact JSON without a BOM.
+        $bytes = $Utf8.GetBytes($Payload)
+        $process.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
+        $process.StandardInput.BaseStream.Close()
+        $stdout = $process.StandardOutput.ReadToEndAsync(); $stderr = $process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit(10000)) { $process.Kill(); throw 'Compiled lifecycle command timed out.' }
+        Assert ($process.ExitCode -eq 0) ('Compiled lifecycle command failed: ' + $stderr.Result)
+        Assert ($stdout.Result.Length -le 24576 -and $stderr.Result.Length -le 4096) 'Compiled lifecycle output exceeded its bounded contract.'
+        return $stdout.Result
+    } finally { $process.Dispose() }
+}
 
 Run-Setup $root $true
 $binary = Join-Path $root 'product/maestro-mcp.exe'
@@ -64,8 +90,20 @@ $initialized = Get-Content -LiteralPath (Join-Path $root 'diagnostico-init.json'
 Assert ($null -ne $initialized.workspace_id -and $initialized.workspace_id -ne '') 'Actual workspace identity is missing.'
 $plugin = Join-Path $root 'exports/code-marketplace/plugins/maestro-product'
 $packet = Get-Content -LiteralPath (Join-Path $plugin 'maestro-packet.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-Assert ($packet.schema_version -eq 1 -and $packet.mode -eq 'mcp_only') 'Wrong participant packet profile.'
+Assert ($packet.schema_version -eq 1 -and $packet.mode -eq 'mcp_lifecycle') 'Wrong participant packet profile.'
+Assert ($packet.lifecycle.profile -eq 'lifecycle_context' -and $packet.lifecycle.state -eq 'configured' -and $packet.lifecycle.native_execution -eq 'not_observed' -and $packet.lifecycle.enforcement -eq 'unavailable' -and $packet.lifecycle.required_shell -eq 'powershell') 'Lifecycle profile inferred unsupported client execution or enforcement.'
 Assert ($packet.target.os -eq 'windows' -and $packet.target.arch -eq 'amd64' -and $packet.native.state -eq 'unavailable') 'Packet inferred unsupported target/native qualification.'
+$hooks = Get-Content -LiteralPath (Join-Path $plugin 'hooks/hooks.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+Assert (@($hooks.hooks.PSObject.Properties).Count -eq 3) 'Exactly three passive lifecycle events are required.'
+Assert (-not (Test-Path -LiteralPath (Join-Path $plugin 'agents'))) 'Passive profile projected native agents.'
+foreach ($event in @('SessionStart', 'UserPromptSubmit', 'Stop')) {
+    $matchers = @($hooks.hooks.$event)
+    Assert ($matchers.Count -eq 1 -and @($matchers[0].hooks).Count -eq 1) 'Lifecycle event handler is missing or duplicated.'
+    $hook = $matchers[0].hooks[0]
+    Assert ($hook.type -eq 'command' -and $hook.shell -eq 'powershell' -and $hook.timeout -eq 5 -and $hook.command.Contains('lifecycle-hook')) 'Lifecycle hook requires the ordinary native PowerShell command route.'
+    Assert (@($hook.PSObject.Properties.Name) -notcontains 'onFailure' -and @($hook.PSObject.Properties.Name) -notcontains 'args') 'Passive hook claims enforcement or direct exec support.'
+    if ($event -eq 'Stop') { Assert ($hook.async -eq $true) 'Stop receipt must remain asynchronous.' }
+}
 $config = Get-Content -LiteralPath (Join-Path $plugin '.mcp.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 Assert (@($config.mcpServers.PSObject.Properties).Count -eq 1) 'Unexpected additional MCP server.'
 Assert ($config.mcpServers.maestro.command -ceq '${CLAUDE_PLUGIN_ROOT}/scripts/maestro-mcp.exe') 'Plugin uses an unexpected entrypoint.'
@@ -94,6 +132,16 @@ try {
     try { $extensionHash = ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-', '').ToLowerInvariant() } finally { $sha.Dispose(); $stream.Dispose() }
     Assert ($extensionHash -ceq (Hash $binary)) 'Desktop packet changed the shipping server.'
 } finally { $extension.Dispose() }
+$before = Snapshot $root
+foreach ($event in @('SessionStart', 'UserPromptSubmit')) {
+    $payload = @{ hook_event_name=$event; session_id='kit-lifecycle-proof'; cwd=(Join-Path $root 'workspace'); prompt='SYNTHETIC_NOT_CAPTURED' } | ConvertTo-Json -Compress
+    $hookOutput = Invoke-LifecycleCommand $hooks.hooks.$event[0].hooks[0].command $payload
+    $hookContext = $hookOutput | ConvertFrom-Json
+    Assert ($hookContext.hookSpecificOutput.hookEventName -eq $event -and $hookContext.hookSpecificOutput.additionalContext.Contains($initialized.workspace_id)) 'Compiled hook lost the actual prepared workspace.'
+}
+Assert ((Snapshot $root) -ceq $before) 'Read-only lifecycle hooks changed private/workspace state.'
+$stopPayload = @{ hook_event_name='Stop'; session_id='kit-lifecycle-proof'; cwd=(Join-Path $root 'workspace'); stop_hook_active=$false } | ConvertTo-Json -Compress
+$null = Invoke-LifecycleCommand $hooks.hooks.Stop[0].hooks[0].command $stopPayload
 $before = Snapshot $root
 Run-Setup $root $true
 Assert ((Snapshot $root) -ceq $before) 'Repeat preparation changed whole private/workspace/product bytes or ACLs.'
@@ -169,6 +217,7 @@ $result = [ordered]@{
     passed=$true; mode='ordinary_unversioned_developer_rehearsal'; actual_standard_user=$true
     shipping_server_sha256=(Hash $binary); workspace_id=$initialized.workspace_id
     fresh_setup=$true; local_plugin_mcpb_exact_binding=$true; complete_repeat_snapshot_unchanged=$true
+    compiled_lifecycle_commands=$true; lifecycle_readonly_context=$true; native_lifecycle_client='not_run'
     foreign_partial_unsafeACL_HOME_UNC_reparse_tamper_refused=$true; changed_managed_content_preserved=$true
     generic_zip_exact_payloads=9; native_Code_Desktop='not_run'; host_confirmation='not_exercised_by_preparation'
     private_proof_root=$proof; commands=$commands.ToArray()

@@ -58,9 +58,20 @@ inspection = run([str(root / "product/maestro-mcp"), "inspect", "--product-root"
 assert json.loads(inspection.stdout)["writable"] is True
 plugin = root / "exports/code-marketplace/plugins/maestro-product"
 packet = json.loads((plugin / "maestro-packet.json").read_text())
-assert packet["schema_version"] == 1 and packet["mode"] == "mcp_only"
+assert packet["schema_version"] == 1 and packet["mode"] == "mcp_lifecycle"
+assert packet["lifecycle"] == {"profile": "lifecycle_context", "state": "configured", "native_execution": "not_observed", "enforcement": "unavailable"}
 assert packet["target"] == {"os": "darwin", "arch": "arm64"}
 assert packet["native"]["state"] == "unavailable" and packet["native"]["evidence_class"] == "not_observed"
+hooks = json.loads((plugin / "hooks/hooks.json").read_text())["hooks"]
+assert set(hooks) == {"SessionStart", "UserPromptSubmit", "Stop"}
+assert not (plugin / "agents").exists()
+for event, matchers in hooks.items():
+    assert len(matchers) == 1 and len(matchers[0]["hooks"]) == 1
+    hook = matchers[0]["hooks"][0]
+    assert hook["type"] == "command" and hook["timeout"] == 5
+    assert "lifecycle-hook" in hook["command"] and "onFailure" not in hook and "args" not in hook
+    if event == "Stop":
+        assert hook["async"] is True
 declared = {item["path"] for item in packet["files"]}
 actual = {str(path.relative_to(plugin)) for path in plugin.rglob("*") if path.is_file()}
 assert actual == declared | {"maestro-packet.json"}
@@ -89,6 +100,20 @@ with zipfile.ZipFile(root / "exports/maestro-pilot.mcpb") as extension:
     assert manifest["server"]["mcp_config"] == {"command": "${__dirname}/server/maestro-mcp", "args": args}
     assert manifest["version"] == "0.0.0" and manifest["compatibility"]["platforms"] == ["darwin"]
     assert hashlib.sha256(extension.read("server/maestro-mcp")).hexdigest() == server_sha
+before = snapshot(root)
+hook_env = dict(env, CLAUDE_PLUGIN_ROOT=str(plugin))
+for event in ["SessionStart", "UserPromptSubmit"]:
+    payload = {"hook_event_name": event, "session_id": "kit-lifecycle-proof", "cwd": str(root / "workspace"), "prompt": "SYNTHETIC_NOT_CAPTURED"}
+    result = subprocess.run(["/bin/sh", "-c", hooks[event][0]["hooks"][0]["command"]], cwd=root / "workspace",
+                            env=hook_env, input=json.dumps(payload), text=True, capture_output=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    context = json.loads(result.stdout)["hookSpecificOutput"]
+    assert context["hookEventName"] == event and json.loads((root / "diagnostico-init.json").read_text())["workspace_id"] in context["additionalContext"]
+assert snapshot(root) == before, "read-only lifecycle hooks changed private/workspace state"
+result = subprocess.run(["/bin/sh", "-c", hooks["Stop"][0]["hooks"][0]["command"]], cwd=root / "workspace", env=hook_env,
+                        input=json.dumps({"hook_event_name": "Stop", "session_id": "kit-lifecycle-proof", "cwd": str(root / "workspace"), "stop_hook_active": False}),
+                        text=True, capture_output=True, timeout=10)
+assert result.returncode == 0, result.stderr
 before = snapshot(root)
 run(["/bin/bash", str(setup), str(root)])
 assert snapshot(root) == before, "repeat setup changed existing private or workspace state"
@@ -134,6 +159,7 @@ with zipfile.ZipFile(str(kit) + ".zip") as archive:
     assert not any(part in {"user", "workspace", "exports"} for name in actual for part in Path(name).parts)
 
 result = {"passed": True, "fresh_setup": True, "repeat_setup_full_snapshot_preserved": True,
+          "compiled_lifecycle_commands": True, "lifecycle_readonly_context": True, "native_lifecycle_client": "not_run",
           "foreign_root_preserved": True, "inherited_HOME_refused_before_write": True,
           "alias_refused": True, "tampered_kit_refused_before_write": True,
           "zip_exact_inventory_and_bytes": True, "private_state_or_bound_packet_in_zip": False,
