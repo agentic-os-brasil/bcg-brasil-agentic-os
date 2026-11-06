@@ -227,6 +227,33 @@ func Inspect(path string) (*Directory, error) { return walk(path, false, false, 
 // Open admits a private directory, creating missing components with private ACLs.
 func Open(path string, create bool) (*Directory, error) { return walk(path, create, true, false, nil) }
 
+// OpenPinned admits an existing private directory and retains its namespace
+// entry for the caller's transition. Existing Open/Inspect callers keep their
+// original sharing behavior; this finite variant never requests or shares DELETE.
+func OpenPinned(path string) (*Directory, error) {
+	if _, _, err := parts(path); err != nil {
+		return nil, err
+	}
+	name := filepath.Base(path)
+	if err := Leaf(name); err != nil {
+		return nil, err
+	}
+	parent, err := Inspect(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	defer parent.Close()
+	h, err := ntOpenShared(parent.Handle(), name, privateDirAccess, windows.FILE_OPEN, dirOptions, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE)
+	if err != nil {
+		return nil, err
+	}
+	if err = Validate(h, true); err != nil {
+		windows.CloseHandle(h)
+		return nil, err
+	}
+	return &Directory{File: os.NewFile(uintptr(h), path)}, nil
+}
+
 // Fresh refuses a concurrent winner when a missing bootstrap component is created.
 func Fresh(path string) (*Directory, error) { return walk(path, true, true, true, nil) }
 

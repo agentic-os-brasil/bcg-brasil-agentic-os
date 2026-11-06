@@ -3,24 +3,41 @@
 package atlasops
 
 import (
-	"errors"
+	"os"
+	"path/filepath"
 
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
 )
 
-// Preserve the existing owner constructor and behavior; new workspace effects
-// require a separately qualified native ownership/confinement publisher.
+// The held publisher, eager binding snapshots and directory/lock custody were
+// qualified under an actual ordinary account before composition with workspace
+// effects (native run 42246115162, source 8558e693). The actual owner provider
+// must still be available; every effect independently pins and validates its
+// exact registered roots, ACLs, leaf and corpus lock.
 func workspaceMutationAvailable() error {
-	return errors.New("workspace atlas mutation is unavailable on Windows pending native confinement qualification")
+	_, err := winprivate.CurrentUser()
+	return err
 }
 
+// Retain the admitted parent through complete native publication and cleanup.
 func publishAtlasFile(path string, body []byte, exclusive, _ bool) error {
-	if exclusive {
-		return scheduler.WriteNewPrivateFile(path, body)
+	d, err := winprivate.OpenPinned(filepath.Dir(path))
+	if err != nil {
+		return err
 	}
-	return scheduler.ReplacePrivateFile(path, body)
+	defer d.Close()
+	return d.Publish(filepath.Base(path), body, exclusive)
 }
-
 func readAtlasFile(path string, maximum int64, _ bool) ([]byte, error) {
-	return scheduler.ReadPrivateFile(path, maximum)
+	d, err := winprivate.OpenPinned(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	defer d.Close()
+	file, err := d.OpenFile(filepath.Base(path), os.O_RDONLY)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return winprivate.Read(file, maximum)
 }
