@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"sort"
 	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -37,7 +36,7 @@ func (b *Bound) handleMethods(in input) *mcp.CallToolResult {
 			return methodQueryFailure("method_page_invalid")
 		}
 		end := min(in.Offset+limit, len(methods.Methods))
-		return result(map[string]any{"items": methods.Methods[in.Offset:end], "total": len(methods.Methods), "next_offset": end, "has_more": end < len(methods.Methods), "shared_resources": sharedMethodResources(methods), "mode": "methods_not_authority"}, nil)
+		return result(map[string]any{"items": methods.Methods[in.Offset:end], "total": len(methods.Methods), "next_offset": end, "has_more": end < len(methods.Methods), "shared_resources": methods.sharedResources(), "mode": "methods_not_authority"}, nil)
 	case "methods.plan":
 		for _, method := range methods.Methods {
 			if method.ID != in.MethodID {
@@ -56,19 +55,15 @@ func (b *Bound) handleMethods(in input) *mcp.CallToolResult {
 				}
 				dependencies = append(dependencies, map[string]any{"id": dependency.ID, "kind": dependency.Kind, "required": dependency.Required, "state": "unavailable", "reason": "dependency_not_attested_by_method_selection", "next_action": methodDependencyAction(dependency)})
 			}
-			return result(map[string]any{"method_id": method.ID, "instruction_uri": "maestro://methods/" + method.ID + "/SKILL.md", "user_invoked_only": method.UserInvokedOnly, "selection": "explicit_method_id", "state": state, "execution_state": "not_executed", "operations": operations, "effects": requirements.Effects, "output_kinds": requirements.OutputKinds, "dependencies": dependencies, "mode": "methods_not_authority", "next_action": "Read the method instructions. Confirm actual inputs and named dependencies before an authorized effect; the plan neither executes nor grants approval."}, nil)
+			return result(map[string]any{"method_id": method.ID, "instruction_uri": "maestro://methods/" + method.ID + "/SKILL.md", "user_invoked_only": method.UserInvokedOnly, "selection": "explicit_method_id", "state": state, "execution_state": "not_executed", "operations": operations, "effects": requirements.Effects, "conditional_effects": requirements.ConditionalEffects, "output_kinds": requirements.OutputKinds, "dependencies": dependencies, "mode": "methods_not_authority", "next_action": "Read the method instructions. Confirm actual inputs and named dependencies before an authorized effect; the plan neither executes nor grants approval."}, nil)
 		}
 		return methodQueryFailure("method_unavailable")
 	case "methods.read":
 		// Exact embedded identities never become paths or URI-resolution inputs.
 		var body []byte
-		for name, content := range methods.Assets {
-			uri := "maestro://methods/" + name
-			if name == "methods-index.json" {
-				uri = "maestro://methods/catalog.json"
-			}
-			if uri == in.ResourceURI {
-				body = content
+		for _, resource := range methods.sharedResources() {
+			if resource.URI == in.ResourceURI {
+				body = methods.Assets[resource.Path]
 			}
 		}
 		for _, method := range methods.Methods {
@@ -95,19 +90,6 @@ func (b *Bound) handleMethods(in input) *mcp.CallToolResult {
 		return result(map[string]any{"resource_uri": in.ResourceURI, "text": string(body[in.Offset:end]), "sha256": fmt.Sprintf("%x", sha256.Sum256(body)), "total_bytes": len(body), "offset": in.Offset, "next_offset": end, "has_more": end < len(body), "mode": "methods_not_authority"}, nil)
 	}
 	return result(nil, errors.New("invalid_method_operation"))
-}
-
-func sharedMethodResources(methods MethodPackage) []MethodResource {
-	resources := make([]MethodResource, 0, len(methods.Assets))
-	for name, body := range methods.Assets {
-		uri := "maestro://methods/" + name
-		if name == "methods-index.json" {
-			uri = "maestro://methods/catalog.json"
-		}
-		resources = append(resources, MethodResource{Path: name, URI: uri, SHA256: fmt.Sprintf("%x", sha256.Sum256(body)), Bytes: len(body)})
-	}
-	sort.Slice(resources, func(i, j int) bool { return resources[i].URI < resources[j].URI })
-	return resources
 }
 
 func methodDependencyAction(dependency MethodDependency) string {

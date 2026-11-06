@@ -148,12 +148,8 @@ func (b *Bound) registerMethods(s *mcp.Server) {
 			return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{URI: uri, MIMEType: mime, Text: string(body)}}}, nil
 		})
 	}
-	for name, body := range methods.Assets {
-		uri := "maestro://methods/" + name
-		if name == "methods-index.json" {
-			uri = "maestro://methods/catalog.json"
-		}
-		addResource(uri, name, body)
+	for _, resource := range methods.sharedResources() {
+		addResource(resource.URI, resource.Path, methods.Assets[resource.Path])
 	}
 	for _, method := range methods.Methods {
 		for _, resource := range method.Resources {
@@ -179,4 +175,17 @@ func (b *Bound) registerMethods(s *mcp.Server) {
 			}}, nil
 		})
 	}
+}
+
+func (methods MethodPackage) sharedResources() []MethodResource {
+	resources := make([]MethodResource, 0, len(methods.Assets))
+	for name, body := range methods.Assets {
+		uri := "maestro://methods/" + name
+		if name == "methods-index.json" {
+			uri = "maestro://methods/catalog.json"
+		}
+		resources = append(resources, MethodResource{Path: name, URI: uri, SHA256: fmt.Sprintf("%x", sha256.Sum256(body)), Bytes: len(body)})
+	}
+	sort.Slice(resources, func(i, j int) bool { return resources[i].URI < resources[j].URI })
+	return resources
 }

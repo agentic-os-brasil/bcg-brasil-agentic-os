@@ -806,7 +806,60 @@
     },
     {
       "method_ids": [
-        "pocock-improve-codebase-architecture",
+        "pocock-improve-codebase-architecture"
+      ],
+      "required_operations": [],
+      "effects": [
+        "read",
+        "host_execution",
+        "write_host"
+      ],
+      "conditional_effects": [
+        {
+          "effect": "write_workspace",
+          "condition": "After the user selects a candidate, create or update glossary/domain terms as decisions crystallize.",
+          "dependency": "host.repository_write"
+        }
+      ],
+      "output_kinds": [
+        "reviewable_text",
+        "host_artifact"
+      ],
+      "dependencies": [
+        {
+          "id": "host.repository_read",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "host.subagents",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "host.artifact_write",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "host.open_local_artifact",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "host.repository_write",
+          "kind": "host",
+          "required": false
+        },
+        {
+          "id": "host.commands",
+          "kind": "host",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method_ids": [
         "pocock-retro"
       ],
       "required_operations": [],

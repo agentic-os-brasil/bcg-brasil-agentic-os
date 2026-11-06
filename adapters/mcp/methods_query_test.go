@@ -372,6 +372,13 @@ func TestMethodContractsRejectInvalidDeclarations(t *testing.T) {
 		"duplicate method": func(d *product.MethodContracts) {
 			d.Groups[0].MethodIDs = append(d.Groups[0].MethodIDs, d.Groups[0].MethodIDs[0])
 		},
+		"missing conditional capability": func(d *product.MethodContracts) {
+			d.Groups[0].ConditionalEffects = []product.MethodConditionalEffect{{Effect: "write_workspace", Condition: "After user selection", Dependency: "host.missing"}}
+		},
+		"empty conditional gate": func(d *product.MethodContracts) {
+			d.Groups[0].Dependencies = []product.MethodDependency{{ID: "host.repository_write", Kind: "host", Required: false}}
+			d.Groups[0].ConditionalEffects = []product.MethodConditionalEffect{{Effect: "write_workspace", Dependency: "host.repository_write"}}
+		},
 		"unknown method":        func(d *product.MethodContracts) { d.Groups[0].MethodIDs[0] = "invented-method" },
 		"nonexistent operation": func(d *product.MethodContracts) { d.Groups[0].RequiredOperations = []string{"execution.invented"} },
 		"unknown effect":        func(d *product.MethodContracts) { d.Groups[0].Effects = []string{"execute_anything"} },
@@ -481,5 +488,82 @@ func TestMethodQueryPacketRestartContinuation(t *testing.T) {
 	}
 	if !reflect.DeepEqual(before[filepath.Join("plugin", "scripts", binaryName)], treeSnapshot(t, f.root)[filepath.Join("plugin", "scripts", binaryName)]) {
 		t.Fatal("packet binary changed during continuation")
+	}
+}
+
+func TestMethodQueryArchitectureRecipeRequirementsSDK(t *testing.T) {
+	f := newMethodQueryFixture(t)
+	client := f.connect(t, "")
+	before := treeSnapshot(t, f.root)
+	var plan struct {
+		State       string   `json:"state"`
+		Execution   string   `json:"execution_state"`
+		Effects     []string `json:"effects"`
+		Outputs     []string `json:"output_kinds"`
+		Conditional []struct {
+			Effect     string `json:"effect"`
+			Condition  string `json:"condition"`
+			Dependency string `json:"dependency"`
+		} `json:"conditional_effects"`
+		Dependencies []struct {
+			ID       string `json:"id"`
+			Required bool   `json:"required"`
+			State    string `json:"state"`
+			Action   string `json:"next_action"`
+		} `json:"dependencies"`
+	}
+	methodQueryDecode(t, client, "maestro_query", map[string]any{"operation": "methods.plan", "method_id": "pocock-improve-codebase-architecture"}, &plan)
+	if plan.State != "requirements_unavailable" || plan.Execution != "not_executed" {
+		t.Fatalf("architecture selection claimed execution or admission: %+v", plan)
+	}
+	has := func(values []string, want string) bool {
+		for _, v := range values {
+			if v == want {
+				return true
+			}
+		}
+		return false
+	}
+	for _, effect := range []string{"read", "host_execution", "write_host"} {
+		if !has(plan.Effects, effect) {
+			t.Fatalf("canonical architecture recipe omitted effect %s", effect)
+		}
+	}
+	if !has(plan.Outputs, "host_artifact") {
+		t.Fatal("canonical saved HTML report is absent from outputs")
+	}
+	if has(plan.Effects, "write_workspace") {
+		t.Fatal("follow-on glossary edits are not unconditional")
+	}
+	for _, id := range []string{"host.repository_read", "host.subagents", "host.artifact_write", "host.open_local_artifact"} {
+		found := false
+		for _, dep := range plan.Dependencies {
+			if dep.ID == id {
+				found = true
+				if !dep.Required || dep.State != "unavailable" || dep.Action == "" {
+					t.Fatalf("mandatory architecture capability incorrectly declared: %+v", dep)
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("canonical architecture recipe omitted dependency %s", id)
+		}
+	}
+	found := false
+	for _, effect := range plan.Conditional {
+		if effect.Effect == "write_workspace" && effect.Dependency == "host.repository_write" && strings.Contains(effect.Condition, "user selects") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("conditional glossary/domain edits have no declared condition and capability")
+	}
+	for _, dep := range plan.Dependencies {
+		if dep.ID == "host.repository_write" && dep.Required {
+			t.Fatal("conditional repository write was made mandatory")
+		}
+	}
+	if !reflect.DeepEqual(before, treeSnapshot(t, f.root)) {
+		t.Fatal("architecture requirements executed host effects")
 	}
 }

@@ -22,7 +22,7 @@ entry points, not extra canonical methods.
   catalog/license and every nested method resource use the same whitelist.
 - `methods.plan`: exact canonical `method_id`, with its invocation restriction,
   required implemented operations, declared effects/output kinds and named
-  domain/host/connector/provider dependencies. No lexical selection or execution.
+  domain/host/connector/provider dependencies. Conditional follow-on effects name their condition and optional capability separately from unconditional effects. No lexical selection or execution.
 
 Unknown IDs, namespace aliases, URI traversal/encoding, private references and
 invalid pages refuse. Resource reads never resolve a URI into a filesystem path.

@@ -24,11 +24,19 @@ type MethodDependency struct {
 	Required bool   `json:"required"`
 }
 
+// MethodConditionalEffect describes an optional follow-on effect and its gate.
+type MethodConditionalEffect struct {
+	Effect     string `json:"effect"`
+	Condition  string `json:"condition"`
+	Dependency string `json:"dependency"`
+}
+
 type MethodRequirements struct {
-	RequiredOperations []string           `json:"required_operations"`
-	Effects            []string           `json:"effects"`
-	OutputKinds        []string           `json:"output_kinds"`
-	Dependencies       []MethodDependency `json:"dependencies"`
+	RequiredOperations []string                  `json:"required_operations"`
+	Effects            []string                  `json:"effects"`
+	ConditionalEffects []MethodConditionalEffect `json:"conditional_effects,omitempty"`
+	OutputKinds        []string                  `json:"output_kinds"`
+	Dependencies       []MethodDependency        `json:"dependencies"`
 }
 
 type MethodContractGroup struct {
@@ -92,13 +100,13 @@ func (declaration MethodContracts) Validate() error {
 		return invalid
 	}
 	operations := methodOperationNames()
-	effects := map[string]bool{"none": true, "read": true, "write_owner": true, "write_workspace": true, "maintenance": true, "installation": true, "host_execution": true, "external_write": true}
-	outputs := map[string]bool{"reviewable_text": true, "execution_checkpoint": true, "owner_revision": true, "owner_page": true, "configuration": true, "case_artifact": true, "knowledge_page": true, "workspace_artifact": true, "memory_generation": true, "navigation_page": true, "diagnostic_report": true, "external_record": true}
+	effects := map[string]bool{"none": true, "read": true, "write_owner": true, "write_workspace": true, "maintenance": true, "installation": true, "host_execution": true, "external_write": true, "write_host": true}
+	outputs := map[string]bool{"reviewable_text": true, "execution_checkpoint": true, "owner_revision": true, "owner_page": true, "configuration": true, "case_artifact": true, "knowledge_page": true, "workspace_artifact": true, "memory_generation": true, "navigation_page": true, "diagnostic_report": true, "external_record": true, "host_artifact": true}
 	kinds := map[string]bool{"domain": true, "host": true, "connector": true, "provider": true, "runtime": true}
 	identifier := regexp.MustCompile(`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`)
 	seen := map[string]bool{}
 	for _, group := range declaration.Groups {
-		if len(group.MethodIDs) == 0 || len(group.Effects) == 0 || len(group.OutputKinds) == 0 || len(group.Dependencies) > 16 {
+		if len(group.MethodIDs) == 0 || len(group.Effects) == 0 || len(group.OutputKinds) == 0 || len(group.Dependencies) > 16 || len(group.ConditionalEffects) > 16 {
 			return invalid
 		}
 		for _, id := range group.MethodIDs {
@@ -125,6 +133,23 @@ func (declaration MethodContracts) Validate() error {
 				return invalid
 			}
 			dependencies[dependency.ID] = true
+		}
+		conditional := map[string]bool{}
+		for _, effect := range group.ConditionalEffects {
+			if !effects[effect.Effect] || effect.Effect == "none" || strings.TrimSpace(effect.Condition) == "" || len(effect.Condition) > 512 || !dependencies[effect.Dependency] || conditional[effect.Effect] {
+				return invalid
+			}
+			for _, dependency := range group.Dependencies {
+				if dependency.ID == effect.Dependency && dependency.Required {
+					return invalid
+				}
+			}
+			for _, unconditional := range group.Effects {
+				if unconditional == effect.Effect {
+					return invalid
+				}
+			}
+			conditional[effect.Effect] = true
 		}
 	}
 	if len(seen) != len(want) {
