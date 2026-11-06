@@ -7,6 +7,7 @@ param(
     [string]$KitTestScript,
     [string]$MethodFixture,
     [string]$SdkWitness,
+    [string]$AtlasTestBinary,
     [switch]$AuthoredBrain
 )
 $ErrorActionPreference = 'Stop'
@@ -16,6 +17,12 @@ if ($kitInputCount -ne 0 -and $kitInputCount -ne $kitInputs.Count) {
     throw 'Kit, KitTestScript, MethodFixture and SdkWitness must be supplied together.'
 }
 $withKit = $kitInputCount -eq $kitInputs.Count
+if ($AtlasTestBinary -and -not (Test-Path -LiteralPath $AtlasTestBinary -PathType Leaf)) {
+    throw 'The focused atlas publication witness is missing.'
+}
+if ($AuthoredBrain -and -not $AtlasTestBinary) {
+    throw 'Public authored-brain qualification also requires the publication and journal witnesses.'
+}
 if ($withKit) {
     if (Test-Path -LiteralPath $OutputRoot) { throw 'Use a new qualification output; previous proof is preserved.' }
     foreach ($inputPath in @($Kit, ($Kit + '.zip'), ($Kit + '.zip.sha256'), $KitTestScript, $MethodFixture, $SdkWitness)) {
@@ -53,6 +60,10 @@ try {
     $nativeServer = Join-Path $payload 'maestro-mcp.exe'
     Copy-Item -LiteralPath $TestBinary -Destination $nativeTest
     Copy-Item -LiteralPath $Server -Destination $nativeServer
+    if ($AtlasTestBinary) {
+        $nativeAtlasTest = Join-Path $payload 'windows-atlas.test.exe'
+        Copy-Item -LiteralPath $AtlasTestBinary -Destination $nativeAtlasTest
+    }
     if ($withKit) {
         $nativeKit = Join-Path $payload ([IO.Path]::GetFileName($Kit))
         Copy-Item -LiteralPath $Kit -Destination $nativeKit -Recurse
@@ -90,7 +101,7 @@ try {
     # owner is the standard user; never grant that user access to runner data.
     $launcher = Join-Path $payload 'native-user-launcher.ps1'
     @'
-param([string]$TestBinary, [string]$ProofRoot, [string]$Kit, [string]$KitTestScript, [string]$SdkWitness, [switch]$AuthoredBrain)
+param([string]$TestBinary, [string]$ProofRoot, [string]$Kit, [string]$KitTestScript, [string]$SdkWitness, [string]$AtlasTestBinary, [switch]$AuthoredBrain)
 $ErrorActionPreference = 'Stop'
 try {
     $temporary = Join-Path $ProofRoot 'user-temp'
@@ -110,6 +121,23 @@ try {
         $coreLog -match '--- SKIP:') { throw 'Core did not attest the actual ordinary account and private temp without skips.' }
     foreach ($family in $families) {
         if ($coreLog -notmatch ('(?m)^--- PASS: TestWindows' + $family + 'Pilot ')) { throw 'Every requested native family must pass before qualification.' }
+    }
+    if ($AtlasTestBinary) {
+        $atlasFamilies = @('Publication')
+        if ($AuthoredBrain) { $atlasFamilies += 'Journal' }
+        $atlasPattern = '^TestWindowsAtlas(' + ($atlasFamilies -join '|') + ')Kernel$'
+        $atlasOutput = @(& $AtlasTestBinary '-test.run' $atlasPattern '-test.v' '-test.timeout=600s')
+        $atlasExit = $LASTEXITCODE
+        $atlasOutput | Write-Output
+        $atlasLog = $atlasOutput -join "`n"
+        if ($atlasExit -ne 0 -or $atlasLog -match '--- SKIP:') {
+            throw 'The actual ordinary-account atlas publication kernel did not pass completely.'
+        }
+        foreach ($family in $atlasFamilies) {
+            if ($atlasLog -notmatch ('(?m)^--- PASS: TestWindowsAtlas' + $family + 'Kernel ')) {
+                throw 'Every requested atlas kernel must actually pass under the ordinary account.'
+            }
+        }
     }
     if ($Kit) {
         if ($PSVersionTable.PSEdition -ne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) {
@@ -170,6 +198,7 @@ try {
 '@ | Set-Content -LiteralPath $launcher -Encoding utf8
     $powershell = Join-Path $PSHOME 'pwsh.exe'
     $arguments = @('-NoLogo', '-NoProfile', '-NonInteractive', '-File', "`"$launcher`"", '-TestBinary', "`"$nativeTest`"", '-ProofRoot', "`"$OutputRoot`"")
+    if ($AtlasTestBinary) { $arguments += @('-AtlasTestBinary', "`"$nativeAtlasTest`"") }
     if ($AuthoredBrain) { $arguments += '-AuthoredBrain' }
     if ($withKit) {
         $powershell = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
@@ -185,7 +214,7 @@ try {
         if ($hadModulePath) { $env:PSModulePath = $priorModulePath }
         else { Remove-Item Env:PSModulePath -ErrorAction SilentlyContinue }
     }
-    if ($withKit -or $AuthoredBrain) {
+    if ($withKit -or $AuthoredBrain -or $AtlasTestBinary) {
         foreach ($path in @($stdout, $stderr)) {
             if ((Get-Item -LiteralPath $path).Length -gt 2097152) { throw 'Native proof output exceeded its bounded synthetic log contract.' }
         }
@@ -199,6 +228,12 @@ try {
     }
     if ($AuthoredBrain -and $log -notmatch '(?m)^--- PASS: TestWindowsAuthoredBrainPilot ') {
         throw 'The authored-brain native family did not pass under the ordinary account.'
+    }
+    if ($AtlasTestBinary -and $log -notmatch '(?m)^--- PASS: TestWindowsAtlasPublicationKernel ') {
+        throw 'The atlas publication kernel did not pass under the ordinary account.'
+    }
+    if ($AuthoredBrain -and $log -notmatch '(?m)^--- PASS: TestWindowsAtlasJournalKernel ') {
+        throw 'The atlas journal kernel did not pass under the ordinary account.'
     }
     if ($withKit) {
         foreach ($proofName in @('native-core-proof.json', 'native-kit-proof.json', 'native-kit-sdk-proof.json', 'native-kit-qualification.json')) {

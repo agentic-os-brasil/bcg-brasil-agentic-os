@@ -154,6 +154,10 @@ type input struct {
 	Format                     string   `json:"format"`
 	Page                       string   `json:"page"`
 	Section                    string   `json:"section"`
+	Field                      string   `json:"field"`
+	Value                      string   `json:"value"`
+	Target                     string   `json:"target"`
+	Label                      string   `json:"label"`
 	ExpectedPageRevision       string   `json:"expected_page_revision"`
 	Purpose                    string   `json:"purpose"`
 	Pages                      []string `json:"pages"`
@@ -242,10 +246,10 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		if d.Decode(new(any)) != io.EOF {
 			return result(nil, errors.New("trailing_input")), nil
 		}
-		if len(req.Params.Arguments) > 128<<10 && in.Operation != "knowledge.create" && in.Operation != "brain.create" {
+		if len(req.Params.Arguments) > 128<<10 && in.Operation != "knowledge.create" && in.Operation != "brain.create" && in.Operation != "brain.update" {
 			return result(nil, errors.New("input_size")), nil
 		}
-		if len(req.Params.Arguments) > 16<<10 && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" && in.Operation != "knowledge.create" && in.Operation != "knowledge.append" && in.Operation != "brain.create" {
+		if len(req.Params.Arguments) > 16<<10 && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" && in.Operation != "knowledge.create" && in.Operation != "knowledge.append" && in.Operation != "brain.append" && in.Operation != "brain.create" && in.Operation != "brain.update" {
 			return result(nil, errors.New("input_size")), nil
 		}
 		if kind == "context" {

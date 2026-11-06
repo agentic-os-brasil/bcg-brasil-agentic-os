@@ -22,7 +22,21 @@ func brainQueries() []any {
 	return []any{variant("brain.status", map[string]any{}), variant("brain.templates", map[string]any{}), variant("brain.read", fields, "page", "purpose")}
 }
 func brainMutations() []any {
-	return []any{variant("brain.prepare", map[string]any{}), variant("brain.create", map[string]any{"page": strSchema(256), "text": strSchema(256 << 10)}, "page", "text"), variant("brain.append", map[string]any{"page": strSchema(256), "section": strSchema(256), "text": strSchema(8 << 10), "expected_page_revision": strSchema(64)}, "page", "section", "text", "expected_page_revision")}
+	edits := func(extra map[string]any) map[string]any {
+		fields := map[string]any{"page": strSchema(256), "expected_page_revision": strSchema(64)}
+		for key, value := range extra {
+			fields[key] = value
+		}
+		return fields
+	}
+	return []any{
+		variant("brain.prepare", map[string]any{}),
+		variant("brain.create", map[string]any{"page": strSchema(256), "text": strSchema(256 << 10)}, "page", "text"),
+		variant("brain.append", edits(map[string]any{"section": strSchema(256), "text": strSchema(8 << 10)}), "page", "expected_page_revision", "section", "text"),
+		variant("brain.update", edits(map[string]any{"text": strSchema(256 << 10)}), "page", "expected_page_revision", "text"),
+		variant("brain.set_field", edits(map[string]any{"field": strSchema(256), "value": strSchema(4096)}), "page", "expected_page_revision", "field", "value"),
+		variant("brain.link", edits(map[string]any{"section": strSchema(256), "target": strSchema(256), "label": strSchema(512)}), "page", "expected_page_revision", "section", "target", "label"),
+	}
 }
 
 type BrainMutation struct {
@@ -31,17 +45,23 @@ type BrainMutation struct {
 	Text             string
 	Section          string
 	ExpectedRevision string
+	Field            string
+	Value            string
+	Target           string
+	Label            string
 }
 type brainPreparedPage struct {
 	Page    string
 	Text    string
 	Current *atlasops.PageProjection
+	Replay  bool
 }
 type BrainReview struct {
 	WorkspaceID string
 	Scope       string
 	Mutation    BrainMutation
 	Pages       []brainPreparedPage
+	Target      *atlasops.PageProjection
 	Provenance  atlasops.Provenance
 	Digest      string
 }
@@ -79,7 +99,7 @@ func (b *Bound) brainReview(in BrainMutation) (BrainReview, error) {
 	if err != nil {
 		return review, err
 	}
-	if in.Operation != "brain.create" && in.Operation != "brain.prepare" && in.Operation != "brain.append" {
+	if !map[string]bool{"brain.create": true, "brain.prepare": true, "brain.append": true, "brain.update": true, "brain.set_field": true, "brain.link": true}[in.Operation] {
 		return review, errors.New("authored_operation_invalid")
 	}
 	pages := []atlas.AuthoredPage{{Page: in.Page, Text: in.Text}}
@@ -90,36 +110,73 @@ func (b *Bound) brainReview(in BrainMutation) (BrainReview, error) {
 		pages = atlas.WorkspacePages(b.workspaceID, time.Now())
 	}
 	review = BrainReview{WorkspaceID: b.workspaceID, Scope: b.home, Mutation: in}
+	intent, _ := json.Marshal([]any{review.Scope, review.WorkspaceID, in, pages})
+	id := contentDigest(intent)
+	review.Provenance = atlasops.Provenance{Origin: atlasops.OriginAttended, SessionID: "brain-" + id, IdempotencyKey: id, Ritual: "authored-brain"}
 	for _, page := range pages {
 		if err := b.brainPage(page.Page); err != nil {
 			return BrainReview{}, err
 		}
-		current, err := b.authoredPage(engine, page.Page, "Review exact authored page creation")
+		current, err := b.authoredPage(engine, page.Page, "Review exact authored workspace change")
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return BrainReview{}, err
 		}
-		if in.Operation == "brain.append" {
-			if current == nil || in.ExpectedRevision == "" || current.Revision != in.ExpectedRevision {
+		replay := false
+		switch in.Operation {
+		case "brain.prepare", "brain.create":
+			if _, err := atlas.ValidateAuthoredPage(page.Page, b.workspaceID, page.Text); err != nil {
+				return BrainReview{}, err
+			}
+		default:
+			if current == nil || !validContentDigest(in.ExpectedRevision) {
 				return BrainReview{}, errOwnerReviewChanged
 			}
-			page.Text, err = atlasops.PreviewAppend(current.Content, in.Section, in.Text)
+			// Keep the revision fence. Only the owning read-only inspection of
+			// this exact request may recognize an already applied receipt.
+			if current.Revision != in.ExpectedRevision {
+				replay, err = brainExactReplay(engine, review, page.Page)
+				if err != nil {
+					return BrainReview{}, err
+				}
+				if !replay {
+					return BrainReview{}, errOwnerReviewChanged
+				}
+			}
+			if replay {
+				page.Text = current.Content
+			} else {
+				switch in.Operation {
+				case "brain.update":
+					if _, err = atlas.ValidateAuthoredPage(page.Page, b.workspaceID, page.Text); err != nil {
+						return BrainReview{}, err
+					}
+				case "brain.append":
+					page.Text, err = atlasops.PreviewAppend(current.Content, in.Section, in.Text)
+				case "brain.set_field":
+					page.Text, _, err = atlasops.PreviewField(current.Content, in.Field, in.Value)
+				case "brain.link":
+					review.Target, err = b.authoredPage(engine, in.Target, "Review the exact authored reference target")
+					if err == nil {
+						page.Text, _, err = atlasops.PreviewLink(current.Content, in.Page, in.Section, in.Target, in.Label)
+					}
+				}
+			}
 			if err != nil {
 				return BrainReview{}, err
 			}
-		} else if _, err := atlas.ValidateAuthoredPage(page.Page, b.workspaceID, page.Text); err != nil {
-			return BrainReview{}, err
+			if len(page.Text) > 256<<10 {
+				return BrainReview{}, errors.New("authored_body_invalid")
+			}
 		}
-		review.Pages = append(review.Pages, brainPreparedPage{Page: page.Page, Text: page.Text, Current: current})
+
+		review.Pages = append(review.Pages, brainPreparedPage{Page: page.Page, Text: page.Text, Current: current, Replay: replay})
 	}
-	intent, _ := json.Marshal([]any{review.Scope, review.WorkspaceID, in, pages})
-	id := contentDigest(intent)
-	review.Provenance = atlasops.Provenance{Origin: atlasops.OriginAttended, SessionID: "brain-" + id, IdempotencyKey: id, Ritual: "authored-brain"}
 	body, _ := json.Marshal(review)
 	review.Digest = contentDigest(body)
 	return review, nil
 }
 func brainPresentation(review BrainReview) any {
-	return map[string]any{"operation": review.Mutation.Operation, "workspace_id": review.WorkspaceID, "pages": review.Pages, "scope": "Exact authored workspace pages only. Existing pages are preserved. This is not memory capture or background enrollment."}
+	return map[string]any{"operation": review.Mutation.Operation, "workspace_id": review.WorkspaceID, "pages": review.Pages, "target": review.Target, "expected_page_revision": review.Mutation.ExpectedRevision, "scope": "Exact authored workspace pages only. Creation preserves existing files; edits use the displayed current page and expected revision. This does not authorize memory capture or background enrollment."}
 }
 func (b *Bound) applyBrainReview(ctx context.Context, in BrainMutation, digest string) (any, error) {
 	review, err := b.brainReview(in)
@@ -141,16 +198,26 @@ func (b *Bound) applyBrainReview(ctx context.Context, in BrainMutation, digest s
 		if err = b.brainPage(page.Page); err != nil {
 			return nil, err
 		}
-		provenance := review.Provenance
-		provenance.IdempotencyKey = contentDigest([]byte(provenance.IdempotencyKey + "\x00" + page.Page))
+		provenance := brainPageProvenance(review, page.Page)
 		var result atlasops.Result
-		if in.Operation == "brain.append" {
+		switch in.Operation {
+		case "brain.append":
 			result, err = engine.AppendEntry(atlasops.AppendEntryRequest{Page: page.Page, Section: in.Section, Entry: in.Text, ExpectedRevision: in.ExpectedRevision, Provenance: provenance})
-		} else {
+		case "brain.update":
+			result, err = engine.UpdatePage(atlasops.UpdatePageRequest{Page: page.Page, Body: in.Text, ExpectedRevision: in.ExpectedRevision, Provenance: provenance})
+		case "brain.set_field":
+			result, err = engine.SetField(atlasops.SetFieldRequest{Page: page.Page, Field: in.Field, Value: in.Value, ExpectedRevision: in.ExpectedRevision, Provenance: provenance})
+		case "brain.link":
+			result, err = engine.Link(atlasops.LinkRequest{Page: page.Page, Section: in.Section, Target: in.Target, Label: in.Label, ExpectedRevision: in.ExpectedRevision, Provenance: provenance})
+		default:
 			result, err = engine.CreatePage(atlasops.CreatePageRequest{Page: page.Page, Body: page.Text, Provenance: provenance})
 		}
+
 		if err != nil {
 			return nil, err
+		}
+		if result.State == atlasops.StateProposed {
+			return nil, errOwnerReviewChanged
 		}
 		out = append(out, result)
 	}
@@ -203,8 +270,8 @@ func (b *Bound) handleBrain(ctx context.Context, req *mcp.CallToolRequest, in in
 					value = metadata
 				}
 			}
-		case "brain.prepare", "brain.create", "brain.append":
-			mutation := BrainMutation{Operation: in.Operation, Page: in.Page, Text: in.Text, Section: in.Section, ExpectedRevision: in.ExpectedPageRevision}
+		case "brain.prepare", "brain.create", "brain.append", "brain.update", "brain.set_field", "brain.link":
+			mutation := BrainMutation{Operation: in.Operation, Page: in.Page, Text: in.Text, Section: in.Section, ExpectedRevision: in.ExpectedPageRevision, Field: in.Field, Value: in.Value, Target: in.Target, Label: in.Label}
 			var review BrainReview
 			review, err = b.brainReview(mutation)
 			if err == nil {
@@ -241,4 +308,24 @@ func (b *Bound) handleBrain(ctx context.Context, req *mcp.CallToolRequest, in in
 	out := result(map[string]any{"code": code, "retryable": false}, nil)
 	out.IsError = true
 	return out
+}
+
+func brainPageProvenance(review BrainReview, page string) atlasops.Provenance {
+	provenance := review.Provenance
+	provenance.IdempotencyKey = contentDigest([]byte(provenance.IdempotencyKey + "\x00" + page))
+	return provenance
+}
+func brainExactReplay(engine *atlasops.Engine, review BrainReview, page string) (bool, error) {
+	in, provenance := review.Mutation, brainPageProvenance(review, page)
+	switch in.Operation {
+	case "brain.append":
+		return engine.ReviewAppendReplay(atlasops.AppendEntryRequest{Page: page, Section: in.Section, Entry: in.Text, ExpectedRevision: in.ExpectedRevision, Provenance: provenance})
+	case "brain.update":
+		return engine.ReviewUpdateReplay(atlasops.UpdatePageRequest{Page: page, Body: in.Text, ExpectedRevision: in.ExpectedRevision, Provenance: provenance})
+	case "brain.set_field":
+		return engine.ReviewFieldReplay(atlasops.SetFieldRequest{Page: page, Field: in.Field, Value: in.Value, ExpectedRevision: in.ExpectedRevision, Provenance: provenance})
+	case "brain.link":
+		return engine.ReviewLinkReplay(atlasops.LinkRequest{Page: page, Section: in.Section, Target: in.Target, Label: in.Label, ExpectedRevision: in.ExpectedRevision, Provenance: provenance})
+	}
+	return false, nil
 }

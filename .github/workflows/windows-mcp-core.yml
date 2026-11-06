@@ -41,10 +41,16 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           go test -c -o (Join-Path $build 'windows-core.test.exe') .
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Compile focused atlas publication witness
+        shell: pwsh
+        run: |
+          $build = Join-Path $env:RUNNER_TEMP 'windows-core-build'
+          go test -c -o (Join-Path $build 'windows-atlas.test.exe') ./internal/atlasops
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Actual standard-user core journey
         shell: pwsh
         run: |
-          ./acceptance/windows-core-pilot.ps1 -TestBinary (Join-Path $env:RUNNER_TEMP 'windows-core-build/windows-core.test.exe') -Server (Join-Path $env:RUNNER_TEMP 'windows-core-build/maestro-mcp.exe') -OutputRoot (Join-Path $env:RUNNER_TEMP 'windows-core-proof') -AuthoredBrain
+          ./acceptance/windows-core-pilot.ps1 -TestBinary (Join-Path $env:RUNNER_TEMP 'windows-core-build/windows-core.test.exe') -Server (Join-Path $env:RUNNER_TEMP 'windows-core-build/maestro-mcp.exe') -OutputRoot (Join-Path $env:RUNNER_TEMP 'windows-core-proof') -AtlasTestBinary (Join-Path $env:RUNNER_TEMP 'windows-core-build/windows-atlas.test.exe')
       - name: Keep native proof and actual refusal logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

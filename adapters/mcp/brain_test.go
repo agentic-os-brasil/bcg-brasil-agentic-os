@@ -2,9 +2,14 @@ package product_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -19,7 +24,29 @@ func brainCall(t *testing.T, cs *mcp.ClientSession, operation string, fields map
 	for key, value := range fields {
 		args[key] = value
 	}
-	return contentCall(t, cs, tool, args, fail)
+	out, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: tool, Arguments: args})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Content) != 1 {
+		t.Fatalf("%s: unexpected content count %d", operation, len(out.Content))
+	}
+	text, ok := out.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("%s: expected text result", operation)
+	}
+	if out.IsError != fail {
+		bounded := text.Text
+		if len(bounded) > 1024 {
+			bounded = bounded[:1024]
+		}
+		t.Fatalf("brain.%s: is_error=%v result=%q", operation, out.IsError, bounded)
+	}
+	var value map[string]any
+	if err = json.Unmarshal([]byte(text.Text), &value); err != nil {
+		t.Fatal(err)
+	}
+	return value
 }
 
 func authoredBrief(workspace, page, title string) string {
@@ -133,4 +160,114 @@ func TestAuthoredBrainEditsAndLinksOneReviewedBrief(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAuthoredBrainExactAppendRetryConverges(t *testing.T) {
+	for _, stdio := range []bool{false, true} {
+		t.Run(fmt.Sprint(stdio), func(t *testing.T) {
+			f := newOwnerFixture(t, stdio)
+			cs := f.connect(t, func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+				return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"approved": true}}, nil
+			})
+			workspace := contentCall(t, cs, "maestro_context", map[string]any{}, false)["workspace_id"].(string)
+			const page = "projects/retry.md"
+			created := brainCall(t, cs, "create", map[string]any{"page": page, "text": authoredBrief(workspace, page, "Retry brief")}, false)
+			args := map[string]any{"page": page, "section": "## Decisions", "text": "- One exact reviewed effect.", "expected_page_revision": created["revision"]}
+			first := brainCall(t, cs, "append", args, false)
+			if err := cs.Close(); err != nil {
+				t.Fatal(err)
+			}
+			cs = f.connect(t, func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+				return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"approved": true}}, nil
+			})
+			retried := brainCall(t, cs, "append", args, false)
+			if retried["state"] != "unchanged" || retried["revision"] != first["revision"] {
+				t.Fatal("exact retry did not converge to canonical receipt", retried)
+			}
+			read := brainCall(t, cs, "read", map[string]any{"page": page, "purpose": "Verify exact retry has one effect"}, false)
+			if strings.Count(read["text"].(string), "One exact reviewed effect.") != 1 {
+				t.Fatal("retry duplicated authored entry", read)
+			}
+		})
+	}
+}
+
+func TestAuthoredBrainReadOnlyRefusalsAndPreservedLegacy(t *testing.T) {
+	f := newOwnerFixture(t, false)
+	cs := f.connect(t, func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{Action: "decline"}, nil
+	})
+	beforeHome, beforeWorkspace := contentTree(t, f.options.UserHome, false), contentTree(t, f.options.WorkspacePath, false)
+	brainCall(t, cs, "status", nil, false)
+	brainCall(t, cs, "templates", nil, false)
+	brainCall(t, cs, "read", map[string]any{"page": "absent.md", "purpose": "Check a named absent page"}, true)
+	brainCall(t, cs, "prepare", nil, true)
+	if !reflect.DeepEqual(beforeHome, contentTree(t, f.options.UserHome, false)) || !reflect.DeepEqual(beforeWorkspace, contentTree(t, f.options.WorkspacePath, false)) {
+		t.Fatal("read-only or declined preparation changed state")
+	}
+	workspace := contentCall(t, cs, "maestro_context", map[string]any{}, false)["workspace_id"].(string)
+	body := authoredBrief(workspace, "projects/invalid.md", "Invalid")
+	for _, page := range []string{"../outside.md", "/absolute.md", "owner/self/record.md", "memory/private.md", ".atlasops/receipt.md", "projects\\alias.md"} {
+		brainCall(t, cs, "create", map[string]any{"page": page, "text": body}, true)
+	}
+	brainCall(t, cs, "create", map[string]any{"page": "projects/invalid.md", "text": body, "approved": true}, true)
+	brainCall(t, cs, "create", map[string]any{"page": "projects/invalid.md", "text": strings.Replace(body, "workspace/"+workspace, "workspace/foreign", 1)}, true)
+	if !reflect.DeepEqual(beforeWorkspace, contentTree(t, f.options.WorkspacePath, false)) {
+		t.Fatal("invalid authored inputs changed workspace")
+	}
+	legacy := filepath.Join(f.options.WorkspacePath, "brain", "projects", "template-project.md")
+	putContentFile(t, legacy, []byte("# Hand-edited legacy template\n\n## Decisions\n"))
+	cs = f.connect(t, func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"approved": true}}, nil
+	})
+	first := brainCall(t, cs, "read", map[string]any{"page": "projects/template-project.md", "purpose": "Inspect a hand-edited legacy template"}, false)
+	if len(first["diagnostics"].([]any)) == 0 {
+		t.Fatal("legacy metadata was silently claimed valid", first)
+	}
+	brainCall(t, cs, "prepare", nil, false)
+	brainCall(t, cs, "prepare", nil, false)
+	if string(readContentFile(t, legacy)) != "# Hand-edited legacy template\n\n## Decisions\n" {
+		t.Fatal("preparation overwrote a legacy template")
+	}
+	brainCall(t, cs, "append", map[string]any{"page": "projects/template-project.md", "section": "## Decisions", "text": "- Preserve original prose.", "expected_page_revision": first["revision"]}, false)
+	after := brainCall(t, cs, "read", map[string]any{"page": "projects/template-project.md", "purpose": "Use preserved legacy prose"}, false)
+	if !strings.HasPrefix(after["text"].(string), "# Hand-edited legacy template\n") || len(after["diagnostics"].([]any)) == 0 {
+		t.Fatal("append silently migrated a legacy page", after)
+	}
+}
+
+func TestAuthoredBrainChangedReviewAndUTF8ReadBounds(t *testing.T) {
+	f := newOwnerFixture(t, false)
+	var intervene func() error
+	cs := f.connect(t, func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		if intervene != nil {
+			if err := intervene(); err != nil {
+				return nil, err
+			}
+			intervene = nil
+		}
+		return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"approved": true}}, nil
+	})
+	workspace := contentCall(t, cs, "maestro_context", map[string]any{}, false)["workspace_id"].(string)
+	const page = "projects/utf8.md"
+	body := authoredBrief(workspace, page, "Unicode brief") + strings.Repeat("colaboração 漢字 🎷\n", 900)
+	created := brainCall(t, cs, "create", map[string]any{"page": page, "text": body}, false)
+	first := brainCall(t, cs, "read", map[string]any{"page": page, "purpose": "Read a bounded UTF-8 source page", "max_bytes": 4096}, false)
+	text := first["text"].(string)
+	if len(text) > 4096 || !utf8.ValidString(text) || !strings.HasPrefix(body, text) {
+		t.Fatal("read exceeded UTF-8 page bound", len(text))
+	}
+	continued := brainCall(t, cs, "read", map[string]any{"page": page, "purpose": "Continue the named UTF-8 page", "offset": len(text), "max_bytes": 4096}, false)
+	if !utf8.ValidString(continued["text"].(string)) || !strings.HasPrefix(body[len(text):], continued["text"].(string)) {
+		t.Fatal("page continuation split or lost UTF-8")
+	}
+	later := strings.Replace(body, "## Decisions", "## Decisions\n- Preserve newer reviewed work.", 1)
+	intervene = func() error {
+		return os.WriteFile(filepath.Join(f.options.WorkspacePath, "brain", filepath.FromSlash(page)), []byte(later), 0600)
+	}
+	brainCall(t, cs, "update", map[string]any{"page": page, "text": authoredBrief(workspace, page, "Unicode brief"), "expected_page_revision": created["revision"]}, true)
+	if string(readContentFile(t, filepath.Join(f.options.WorkspacePath, "brain", filepath.FromSlash(page)))) != later {
+		t.Fatal("changed review overwrote newer bytes")
+	}
+	brainCall(t, cs, "create", map[string]any{"page": "projects/oversize.md", "text": authoredBrief(workspace, "projects/oversize.md", "Oversize") + strings.Repeat("x", 256<<10)}, true)
 }

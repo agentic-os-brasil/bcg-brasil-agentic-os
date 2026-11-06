@@ -43,7 +43,7 @@ func OpenWorkspace(options atlas.Options) (*Engine, error) {
 		return nil, err
 	}
 	for _, path := range []string{dataRoot, workspacePath, engine.root} {
-		info, err := os.Lstat(path)
+		info, err := boundAtlasDirectory(path)
 		if err != nil {
 			return nil, err
 		}
@@ -62,7 +62,7 @@ func (engine *Engine) validateBinding() error {
 			return err
 		}
 		if len(engine.boundDirectories) != 0 {
-			info, err := os.Lstat(path)
+			info, err := boundAtlasDirectory(path)
 			if err != nil || !os.SameFile(engine.boundDirectories[index], info) {
 				return errors.New("workspace atlas directory binding changed")
 			}
