@@ -26,6 +26,10 @@ var CompatibleBundle string
 
 func main() {
 	if err := run(); err != nil {
+		if len(os.Args) > 1 && os.Args[1] == "lifecycle-hook" {
+			fmt.Fprintln(os.Stderr, "maestro: lifecycle context unavailable; inspect the selected binding and explicit preparation")
+			os.Exit(1)
+		}
 		if len(os.Args) > 1 && os.Args[1] == "hook" {
 			event := ""
 			for i, arg := range os.Args {
@@ -75,7 +79,7 @@ func run() error {
 		return json.NewEncoder(os.Stdout).Encode(identity)
 	}
 	flags := flag.NewFlagSet("maestro-mcp", flag.ContinueOnError)
-	if os.Args[1] == "hook" {
+	if os.Args[1] == "hook" || os.Args[1] == "lifecycle-hook" {
 		flags.SetOutput(io.Discard)
 	}
 	var o product.Options
@@ -85,6 +89,10 @@ func run() error {
 	var nativeBudget float64
 	var proposalID, reviewDigest, track string
 	var confirmed bool
+	var lifecycleContext bool
+	if os.Args[1] == "plugin" {
+		flags.BoolVar(&lifecycleContext, "lifecycle-context", false, "include non-enforcing session context and observation hooks")
+	}
 	flags.StringVar(&destination, "destination", "", "new packet destination")
 	flags.StringVar(&server, "server", "", "compiled native server binary")
 	flags.StringVar(&version, "version", "", "packet semantic version")
@@ -93,7 +101,7 @@ func run() error {
 	flags.StringVar(&o.WorkspacePath, "workspace", "", "explicit selected workspace directory")
 	flags.StringVar(&o.InstalledManifestSHA256, "installed-manifest", "", "fixed carrier signed release manifest digest")
 	flags.StringVar(&o.InstalledClientInputsSHA256, "installed-client-inputs", "", "fixed carrier immutable client input digest")
-	if os.Args[1] == "hook" {
+	if os.Args[1] == "hook" || os.Args[1] == "lifecycle-hook" {
 		flags.StringVar(&hookEvent, "event", "", "native hook event")
 	}
 	if os.Args[1] == "native-review" || os.Args[1] == "native-qualify-and-build" {
@@ -162,14 +170,17 @@ func run() error {
 		return packaging.CheckNativeStartup(o, nativeNonce, os.Stdin, os.Stdout)
 	case "native-fault":
 		return packaging.NativeFault(context.Background(), nativeFault)
-	case "hook":
+	case "hook", "lifecycle-hook":
 		bound, err := product.Open(o)
 		if err != nil {
 			return err
 		}
+		if os.Args[1] == "lifecycle-hook" {
+			return bound.HandleClaudeLifecycleHook(hookEvent, os.Stdin, os.Stdout)
+		}
 		return bound.HandleClaudeHook(hookEvent, os.Stdin, os.Stdout)
 	case "plugin":
-		return packaging.BuildPlugin(packaging.Options{Destination: destination, Server: server, Version: version, Binding: o})
+		return packaging.BuildPlugin(packaging.Options{Destination: destination, Server: server, Version: version, Binding: o, LifecycleContext: lifecycleContext})
 	case "mcpb":
 		return packaging.BuildExtension(packaging.Options{Destination: destination, Server: server, Version: version, Binding: o})
 	case "inspect":

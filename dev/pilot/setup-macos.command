@@ -54,7 +54,7 @@ BIN="$ROOT/product/maestro-mcp"
 "$BIN" inspect --product-root "$ROOT/product" --user-home "$ROOT/user" --workspace "$ROOT/workspace"
 printf '# Exemplo do piloto\n\nEste arquivo é sintético. O objetivo é testar continuidade entre Code e Desktop.\n' > "$ROOT/workspace/EXEMPLO.md"
 mkdir -p "$ROOT/exports/code-marketplace/plugins" "$ROOT/exports/code-marketplace/.claude-plugin"
-"$BIN" plugin --product-root "$ROOT/product" --user-home "$ROOT/user" --workspace "$ROOT/workspace" --server "$BIN" --destination "$ROOT/exports/code-marketplace/plugins/maestro-product" --version 0.0.0
+"$BIN" plugin --lifecycle-context --product-root "$ROOT/product" --user-home "$ROOT/user" --workspace "$ROOT/workspace" --server "$BIN" --destination "$ROOT/exports/code-marketplace/plugins/maestro-product" --version 0.0.0
 printf '%s\n' '{"name":"maestro-pilot-20261105","owner":{"name":"Maestro"},"plugins":[{"name":"maestro-product","source":"./plugins/maestro-product"}]}' > "$ROOT/exports/code-marketplace/.claude-plugin/marketplace.json"
 "$BIN" mcpb --product-root "$ROOT/product" --user-home "$ROOT/user" --workspace "$ROOT/workspace" --server "$BIN" --destination "$ROOT/exports/maestro-pilot.mcpb" --version 0.0.0
 inventory > "$ROOT/kit-files.sha256"
@@ -64,6 +64,7 @@ inventory > "$ROOT/kit-files.sha256"
   printf '2. Cadastre o marketplace local:\n   claude plugin marketplace add %q\n' "$ROOT/exports/code-marketplace"
   printf '3. Instale o plugin do ensaio:\n   claude plugin install maestro-product@maestro-pilot-20261105 --scope user\n'
   printf '4. Abra uma nova sessão do Code na pasta acima. Confira maestro_context antes de escrever.\n\n'
+  printf 'O plugin inclui hooks de contexto: SessionStart lê memória gerada aprovada; UserPromptSubmit atualiza metadados; Stop registra uma observação limitada. Eles não ativam guardas, agentes, captura automática ou manutenção recorrente. A execução real depende do cliente e deve ser registrada separadamente.\n\n'
   printf '5. No Desktop, abra este arquivo e confirme a extensão local pelo fluxo normal do aplicativo:\n   %s\n\n' "$ROOT/exports/maestro-pilot.mcpb"
   printf 'Dados reais da criação; compare este workspace_id com maestro_context nos dois clientes:\n'
   cat "$ROOT/diagnostico-init.json"

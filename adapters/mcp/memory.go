@@ -369,64 +369,85 @@ func boundedMemoryText(text string, maximum int) string {
 	}
 	return text[:end]
 }
-func (b *Bound) memoryContext(e *memory.Engine, cfg basememory.RuntimeConfig, offset, maximum int) (any, error) {
+
+type memoryContextSnapshot struct {
+	Text               string
+	Layers             []string
+	Sections           []memory.ContextSection
+	Diagnostics        []string
+	VisibilityRevision uint64
+}
+
+// readMemoryContext shares eligibility, visibility and budget checks between
+// explicit queries and read-only lifecycle delivery.
+func (b *Bound) readMemoryContext(e *memory.Engine, cfg basememory.RuntimeConfig) (memoryContextSnapshot, error) {
 	page, err := e.ListCaptures(b.workspaceID, 0, 100)
 	if err != nil {
-		return nil, err
+		return memoryContextSnapshot{}, err
 	}
 	visibility := page.VisibilityRevision
-	for start := 0; ; {
+	for {
 		if page.VisibilityRevision != visibility {
-			return nil, memory.ErrCaptureConflict
+			return memoryContextSnapshot{}, memory.ErrCaptureConflict
 		}
 		for _, c := range page.Captures {
 			if !c.Eligible {
-				return nil, errMemoryIneligible
+				return memoryContextSnapshot{}, errMemoryIneligible
 			}
 		}
 		if page.NextOffset < 0 {
 			break
 		}
-		start = page.NextOffset
-		page, err = e.ListCaptures(b.workspaceID, start, 100)
+		page, err = e.ListCaptures(b.workspaceID, page.NextOffset, 100)
 		if err != nil {
-			return nil, err
+			return memoryContextSnapshot{}, err
 		}
 	}
 	bundle, err := e.AssembleContext(b.workspaceID)
 	if err != nil {
-		return nil, err
+		return memoryContextSnapshot{}, err
 	}
-	text := ""
-	layers := []string{}
+	value := memoryContextSnapshot{Diagnostics: bundle.Diagnostics, VisibilityRevision: visibility, Layers: []string{}}
 	if page.Total > 0 {
 		for _, section := range bundle.Sections {
-			block := "# " + section.Layer + "\n" + boundedMemoryText(section.Content, cfg.ContextBudgets()[section.Layer]) + "\n"
-			if len(text)+len(block) > cfg.SessionContextTotalMaxBytes {
-				bundle.Diagnostics = append(bundle.Diagnostics, section.Layer+": envelope budget; skipped")
+			bounded := boundedMemoryText(section.Content, cfg.ContextBudgets()[section.Layer])
+			block := "# " + section.Layer + "\n" + bounded + "\n"
+			if len(value.Text)+len(block) > cfg.SessionContextTotalMaxBytes {
+				value.Diagnostics = append(value.Diagnostics, section.Layer+": envelope budget; skipped")
 				continue
 			}
-			text += block
-			layers = append(layers, section.Layer)
+			section.Truncated = section.Truncated || len(bounded) < len(section.Content)
+			section.Content = bounded
+			value.Text += block
+			value.Layers = append(value.Layers, section.Layer)
+			value.Sections = append(value.Sections, section)
 		}
 	}
-	value, err := pageText(text, offset, maximum)
-	if err != nil {
-		return nil, err
-	}
-	value["layers"] = layers
-	value["diagnostics"] = bundle.Diagnostics
 	after, err := e.VisibilityRevision(b.workspaceID)
 	if err != nil {
-		return nil, err
+		return memoryContextSnapshot{}, err
 	}
 	if after != visibility {
-		return nil, memory.ErrCaptureConflict
+		return memoryContextSnapshot{}, memory.ErrCaptureConflict
 	}
-	value["visibility_revision"] = visibility
 	if err = b.validate(); err != nil {
+		return memoryContextSnapshot{}, err
+	}
+	return value, nil
+}
+
+func (b *Bound) memoryContext(e *memory.Engine, cfg basememory.RuntimeConfig, offset, maximum int) (any, error) {
+	snapshot, err := b.readMemoryContext(e, cfg)
+	if err != nil {
 		return nil, err
 	}
+	value, err := pageText(snapshot.Text, offset, maximum)
+	if err != nil {
+		return nil, err
+	}
+	value["layers"] = snapshot.Layers
+	value["diagnostics"] = snapshot.Diagnostics
+	value["visibility_revision"] = snapshot.VisibilityRevision
 	return value, nil
 }
 func (b *Bound) handleMemory(ctx context.Context, req *mcp.CallToolRequest, in input) *mcp.CallToolResult {
