@@ -166,7 +166,7 @@ try {
     Write-NewText (Join-Path $Root 'workspace/EXEMPLO.md') "# Exemplo do piloto`n`nEste arquivo e sintetico; teste a continuidade entre Code e Desktop.`n"
     $marketplace = Join-Path $Root 'exports/code-marketplace'
     foreach ($name in @('exports/code-marketplace', 'exports/code-marketplace/plugins', 'exports/code-marketplace/.claude-plugin')) { New-PrivateDirectory (Join-Path $Root $name) }
-    Write-Output (Invoke-Maestro (@('plugin') + $binding + @('--server', $Binary, '--destination', (Join-Path $marketplace 'plugins/maestro-product'), '--version', '0.0.0')))
+    Write-Output (Invoke-Maestro (@('plugin', '--lifecycle-context') + $binding + @('--server', $Binary, '--destination', (Join-Path $marketplace 'plugins/maestro-product'), '--version', '0.0.0')))
     Write-NewText (Join-Path $marketplace '.claude-plugin/marketplace.json') '{"name":"maestro-pilot-20261105","owner":{"name":"Maestro"},"plugins":[{"name":"maestro-product","source":"./plugins/maestro-product"}]}'
     Write-Output (Invoke-Maestro (@('mcpb') + $binding + @('--server', $Binary, '--destination', (Join-Path $Root 'exports/maestro-pilot.mcpb'), '--version', '0.0.0')))
     Write-NewText (Join-Path $Root 'kit-files.sha256') (Get-ManagedInventory $Root)
@@ -182,6 +182,8 @@ No PowerShell comum, abra o workspace e registre o plugin:
   cd '$workspaceQuoted'
   claude plugin marketplace add '$marketplaceQuoted'
   claude plugin install maestro-product@maestro-pilot-20261105 --scope user
+
+O plugin inclui hooks de contexto SessionStart, UserPromptSubmit e Stop. Eles exigem que o Claude Code suporte hooks command com shell powershell; nao dependem de Git Bash ou WSL. Configuracao gerada nao comprova execucao no cliente. Guardas, agentes, captura automatica e manutencao recorrente permanecem indisponiveis.
 
 Abra uma nova sessao do Code nessa pasta. No Desktop, importe pelo fluxo normal:
   $(Join-Path $Root 'exports/maestro-pilot.mcpb')

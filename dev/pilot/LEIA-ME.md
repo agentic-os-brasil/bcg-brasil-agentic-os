@@ -21,8 +21,11 @@ Os pacotes são gerados **no seu computador** porque contêm seus caminhos absol
 ## Funcionalidades e limites
 
 - O MCP oferece o ciclo de trabalho, estado/contexto e as operações de memória sujeitas à confirmação que o cliente suporta.
+- O plugin do Claude Code inclui três hooks de contexto: `SessionStart` lê memória gerada e aprovada; `UserPromptSubmit` fornece metadados de contexto; `Stop` registra uma observação limitada. A preparação cria as pastas e arquivos necessários; os hooks não inicializam nem reparam o estado durante uma sessão.
 - Code e Desktop devem apontar para o mesmo workspace e a mesma HOME do ensaio.
-- Docling sem runtime admitido, agentes/hooks nativos sem qualificação, Yoda/modelo e o ciclo de instalação/atualização assinada permanecem indisponíveis.
+- Esses hooks são configurados sem afirmar execução observada no cliente. Eles não fornecem proteção antes de ferramentas, agentes nativos, aprovação ou conclusão de trabalho; o perfil completo continua exigindo qualificação separada. A extensão Desktop mantém o MCP sem hooks do Code.
+- A memória nova aparece no início de uma sessão somente depois de captura revisada e consolidação explícita. Não há captura de conversas, dreaming, indexação ou manutenção recorrente automática pelos hooks.
+- Docling sem runtime admitido, agentes/guardas nativos sem qualificação, Yoda/modelo e o ciclo de instalação/atualização assinada permanecem indisponíveis.
 - A presença de uma receita ou ferramenta na lista não comprova que todas as suas dependências estão disponíveis.
 - Este kit usa somente material sintético. Não migra seu Maestro existente nem importa arquivos de cliente.
 

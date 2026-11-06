@@ -28,11 +28,15 @@ type Options struct {
 	Destination, Server, Version string
 	Binding                      product.Options
 	NativeHost                   *NativeHost
+	LifecycleContext             bool
 	serverBody                   []byte
 	target                       Target
 }
 
 func prepare(o Options) (Options, string, error) {
+	if o.LifecycleContext && o.NativeHost != nil {
+		return o, "", errors.New("lifecycle context and native enforcement profiles are mutually exclusive")
+	}
 	if _, err := product.Open(o.Binding); err != nil {
 		return o, "", err
 	}
@@ -116,6 +120,9 @@ func buildPlugin(o Options, platform string, capability NativeCapability) error 
 // after the exact final candidate bytes, never before a post-build mutation.
 func buildPluginWithHooks(o Options, platform string, capability NativeCapability, hookOverride []byte) error {
 	var err error
+	if o.LifecycleContext && (capability.State != "unavailable" || hookOverride != nil) {
+		return errors.New("lifecycle context and native enforcement profiles are mutually exclusive")
+	}
 	if err = os.Mkdir(o.Destination, 0700); err != nil {
 		return err
 	}
@@ -169,6 +176,17 @@ func buildPluginWithHooks(o Options, platform string, capability NativeCapabilit
 		}
 		if hookOverride != nil {
 			files["hooks/hooks.json"] = hookOverride
+		}
+		for path, body := range files {
+			if err := writePacketFile(o.Destination, path, body, 0600); err != nil {
+				return err
+			}
+		}
+	}
+	if o.LifecycleContext {
+		files, err := lifecycleProfileFiles(o)
+		if err != nil {
+			return err
 		}
 		for path, body := range files {
 			if err := writePacketFile(o.Destination, path, body, 0600); err != nil {
@@ -328,6 +346,9 @@ func namespaceMethodReferences(body []byte, namespace string, reference *regexp.
 
 // BuildExtension writes only a manifest and selected executable to a new MCPB.
 func BuildExtension(options Options) error {
+	if options.LifecycleContext {
+		return errors.New("lifecycle context hooks are a Code-only packet profile")
+	}
 	if filepath.Ext(options.Destination) != ".mcpb" {
 		return errors.New("destination must be a new .mcpb file")
 	}

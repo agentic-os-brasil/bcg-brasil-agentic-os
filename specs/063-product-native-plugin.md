@@ -17,6 +17,48 @@ Native_advisory is a different profile and remains unavailable until separately
 implemented and qualified. Native events cannot grant extra delegation depth,
 filesystem authority, completion or review custody.
 
+## Explicit non-enforcing lifecycle context
+
+Decision PHLC adds an explicitly selected `mcp_lifecycle` Code packet mode.
+It carries the ordinary MCP server and methods plus exactly SessionStart,
+UserPromptSubmit and Stop command hooks. Its separate lifecycle capability
+reports configured delivery, native execution not observed and enforcement
+unavailable. It projects no native specialists, pre-tool guard or approval and
+completion authority. Plain `mcp_only` packets still contain no hooks; the full
+`maestro_planner` profile retains its original exact-host qualification gate.
+The modes are mutually exclusive. MCPB remains the shared server/resources
+carrier without Code hooks or a claim of Desktop Skills installation.
+
+These hooks call the same admitted executable with explicit bound product,
+owner and workspace paths. Preserve normal host permissions, source/process
+validation, bounded event input and private-body-free diagnostics. Use only
+documented command-hook configuration. A configured passive command does not
+claim fail-closed enforcement on an unsupported or unobserved host.
+
+SessionStart reads the existing admitted workspace and eligible generated
+memory through the visibility-checked reader shared with `memory.context`.
+Preserve canonical layer order, per-layer budgets, an independent 8-KiB memory
+ceiling and the 16-KiB total context ceiling. Frame memory as historical data,
+never instruction or authorization. Empty, invalid, corrected, deleted or
+changed views produce bounded omission diagnostics rather than raw-history
+fallback. The full native adapter may reuse this same read-only projection.
+UserPromptSubmit emits metadata only and does not enter native agent-flow
+admission. Stop respects recursion and records only a confined typed lifecycle
+observation; it cannot invoke the enforcing unresolved-route Stop path.
+
+Filesystem creation belongs to explicit setup through the existing datahome,
+workspace, owner and memory initialization owners. Repeat preparation preserves
+existing content and keys. Startup, prompt and stop never initialize or repair
+missing state, capture transcripts, run a worker, compile a wiki, dream, enroll
+jobs or change an execution checkpoint. Authored workspace `brain/`, private
+owner memory and binding/execution metadata retain their separate roots.
+
+Acceptance separates generated configuration and real compiled-command tests
+from a real client's context delivery and Stop observation. Record the actual
+host version, selected plugin/binding and private synthetic receipts. Passive
+client delivery is not full native qualification, Windows device acceptance,
+automatic second-brain maintenance or production release approval.
+
 ## Canonical identities and projection
 
 Maestro remains the main-session hub. Project the six canonical specialists:
@@ -45,7 +87,8 @@ each invocation; cwd, ClientInfo and model flags are not binding authority.
 Reuse canonical claudeadapter, claudeagents, sessionhook, lifecycle and
 nativeagentflow rather than translating Claude through the ZIP Codex adapter.
 
-SessionStart is wholly read-only, bounded and metadata-only. UserPromptSubmit
+SessionStart is wholly read-only and bounded; approved generated memory follows
+the PHLC projection above without acquiring instruction authority. UserPromptSubmit
 may update admitted flow metadata but never stores prompt/transcript text or
 silently captures memory. Validate event-specific required fields against the
 actual host protocol and bound raw input. Discard private bodies from receipts,

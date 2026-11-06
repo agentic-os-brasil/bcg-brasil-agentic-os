@@ -24,6 +24,7 @@ SOURCE_COMMIT="$(git -C "$SOURCE" rev-parse HEAD)"
   printf 'darwin_arm64_evidence=ordinary_cli_and_official_sdk_stdio\ndarwin_amd64_evidence=cross_build_and_native_format_only\n'
   printf 'native_client_loading=not-yet-observed\nwindows_fresh_admission=unavailable\n'
   printf 'signed_install_update=unavailable\ndocling_unseeded=unavailable\nnative_agents_hooks=unavailable\n'
+  printf 'code_plugin_profile=mcp_lifecycle\nlifecycle_context_hooks=configured\nlifecycle_enforcement=unavailable\n'
 } > "$OUT/ARTIFACT.txt"
 CONTENT_ID="$(cd "$OUT"; LC_ALL=C find -s . -type f ! -name KIT-ID.txt ! -name SHA256SUMS -exec shasum -a 256 '{}' \; | shasum -a 256 | cut -d ' ' -f 1)"
 printf 'maestro-developer-rehearsal-20261105-%s\n' "$CONTENT_ID" > "$OUT/KIT-ID.txt"

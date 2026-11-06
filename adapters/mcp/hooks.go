@@ -10,9 +10,6 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeagents"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/nativeagentflow"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionctx"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionhook"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspacepolicy"
 )
 
@@ -63,12 +60,7 @@ func (b *Bound) HandleClaudeHook(event string, in io.Reader, out io.Writer) erro
 	}
 	deny := func() error { return emit(claudeadapter.FailClosedDenial()) }
 	context := func(diagnostic string) error {
-		inspection, err := workspace.Inspect(b.options.WorkspacePath, dataRoot)
-		if err != nil {
-			return errors.New("hook_context_unavailable")
-		}
-		packet := sessionctx.BuildProduct(inspection)
-		value, err := sessionhook.BuildClaudeEvent(packet, event)
+		value, err := b.claudeLifecycleContext(event)
 		if err != nil {
 			return errors.New("hook_context_unavailable")
 		}

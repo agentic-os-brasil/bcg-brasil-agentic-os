@@ -4,7 +4,7 @@ Use somente o workspace sintético criado pela preparação. A execução destes
 
 ## 1. Conferir o vínculo no Code
 
-> Use somente o conector Maestro deste ensaio. Chame `maestro_context` e mostre o `workspace_id` e o estado disponível. Confirme que o workspace é a pasta `MaestroPilot/workspace`. Se houver ambiguidade entre conectores, pare antes de escrever.
+> Use somente o conector Maestro deste ensaio. Chame `maestro_context` e mostre o `workspace_id` e o estado disponível. Compare o identificador e o caminho exato do workspace com `COMECE-AQUI.txt`. Se houver ambiguidade entre conectores ou divergência nesse vínculo, pare antes de escrever.
 
 Esperado: contexto do workspace local; a versão de servidor pode aparecer como `unavailable`, conforme o modo de desenvolvimento. Compare o `workspace_id` com o resultado real de criação em `COMECE-AQUI.txt` ou `diagnostico-init.json`. Divergência impede o teste de escrita.
 

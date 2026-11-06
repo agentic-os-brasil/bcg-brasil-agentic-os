@@ -20,7 +20,11 @@ A preparação recusa `MAESTRO_HOME` já definido, unidades remotas/removíveis,
 
 Reabrir o mesmo preparador verifica os arquivos gerenciados e lê o diagnóstico, preservando o estado privado e o workspace. O ensaio não migra seu Maestro anterior nem importa documentos reais. Use somente `EXEMPLO.md` e os textos sintéticos do roteiro.
 
-Docling sem runtime admitido, agentes/hooks nativos sem qualificação, Yoda/modelo, wiki privada Windows e instalação/atualização assinada permanecem indisponíveis. A presença de receitas não comprova que suas dependências executam. Testes do SDK, arquivo MCPB e registro do plugin não substituem o carregamento real dos clientes.
+O plugin do Claude Code inclui hooks de contexto `SessionStart`, `UserPromptSubmit` e `Stop`. Eles usam o suporte do próprio Code a hooks `command` com `shell: powershell`, que seleciona PowerShell instalado ou o Windows PowerShell5.1; não requerem WSL ou Git Bash. A execução depende de uma versão do cliente que suporte esse formato e ainda deve ser observada no computador participante. O manifesto declara configuração, não qualificação nativa.
+
+A preparação explícita cria o estado necessário. Os hooks validam e usam esse vínculo: o início lê memória gerada e aprovada, cada prompt fornece metadados e o fim registra uma observação limitada. Eles não inicializam/reparam estado ausente, capturam conversas, consolidam memória, compilam wiki ou executam manutenção recorrente. Para consumir memória nova em uma sessão, primeiro faça a captura revisada e a consolidação explícita.
+
+Docling sem runtime admitido, agentes/guardas nativos sem qualificação, Yoda/modelo, wiki privada Windows e instalação/atualização assinada permanecem indisponíveis. Esses hooks não concedem aprovação nem conclusão de trabalho. A extensão Desktop mantém o MCP sem hooks do Code. A presença de receitas não comprova que suas dependências executam. Testes do SDK, arquivo MCPB e registro do plugin não substituem o carregamento real dos clientes.
 
 ## Trocar de kit ou remover
 

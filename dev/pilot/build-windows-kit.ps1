@@ -57,6 +57,9 @@ windows_amd64_evidence=requires_exact_artifact_standard_user_preparation_and_sdk
 signed_install_update=unavailable
 docling_unseeded=unavailable
 native_agents_hooks=unavailable
+code_plugin_profile=mcp_lifecycle
+lifecycle_context_hooks=configured
+lifecycle_enforcement=unavailable
 "@
 [IO.File]::WriteAllText((Join-Path $Output 'ARTIFACT.txt'), $metadata + "`n", $Utf8)
 $files = @(Get-ChildItem -LiteralPath $Output -File -Recurse | ForEach-Object {
