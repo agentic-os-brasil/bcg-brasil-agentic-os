@@ -104,3 +104,18 @@ the surrounding legacy source; a full replacement requires valid metadata.
 This authored-page route does not recompile the authored navigation index,
 create private memory, activate daily/weekly rituals or attest an external
 SharePoint publication. Those remain independently owned product capabilities.
+
+
+## Shared knowledge and effect-time scope
+
+Named `knowledge.collect` reads and converted-knowledge destination reviews use
+the same workspace path admission owner as authored pages. Legacy converted
+Markdown stays usable without the authored eight-field contract. Converted
+sources are admitted before conversion/artifact disclosure and revalidated at
+the serialized knowledge effect; an artifact is not destination authority.
+
+The private review binds a link target's revision into its canonical request.
+Source and target admission, existence and reviewed target content are checked
+after acquiring the corpus lock, before receipt replay/finalization, and again
+before publication. A waited-for lock or old receipt cannot renew lost target
+authority. These checks do not serialize arbitrary external case-marker writers.

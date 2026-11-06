@@ -19,6 +19,13 @@ func (engine *Engine) ReviewFieldReplay(request SetFieldRequest) (bool, error) {
 	return engine.reviewExactReplay("set-field", request.Page, request.ExpectedRevision, request, request.Provenance)
 }
 func (engine *Engine) ReviewLinkReplay(request LinkRequest) (bool, error) {
+	target, err := engine.resolve(request.Target)
+	if err != nil {
+		return false, err
+	}
+	if err = engine.validateLinkTarget(target, request.ExpectedTargetRevision); err != nil {
+		return false, err
+	}
 	return engine.reviewExactReplay("link", request.Page, request.ExpectedRevision, request, request.Provenance)
 }
 

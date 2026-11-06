@@ -117,3 +117,26 @@ repair, broad access-denied retry or alternate storage root is allowed.
 Authored indexing/search, move/retire, background cadence and private memory wiki
 remain separate owning functions. This interface never manufactures their
 activation or provenance.
+
+
+## Review correction — shared workspace admission
+
+The same workspace path admission owner governs authored pages, named converted
+knowledge collection/review/destinations, and converted-document source admission.
+A conversion artifact grants no destination or current case authority. This path
+policy is independent of authored frontmatter; valid legacy converted pages stay
+readable and editable without a metadata migration. Original owner-corpus and
+unscoped kernel constructors retain their intentional compatibility.
+
+The bound MCP constructor installs an owning atlasops workspace policy. Named
+reads apply it before disclosure; mutations recheck it after the corpus lock is
+acquired and again at the effect. Content-derived effects also revalidate their
+current source selection under that boundary. No MCP argument supplies policy,
+actor, replay authority or an admission callback.
+
+A link binds the privately reviewed target revision into its canonical request.
+Both endpoints and the target projection are checked under the corpus lock
+before replay/finalization, unchanged receipts or publication. Exact replay never
+renews lost endpoint authority. Arbitrary direct marker writers are not thereby
+serialized; these are explicit admission checks at the actual owning boundaries,
+not a claim of an atomic cross-domain marker transaction.

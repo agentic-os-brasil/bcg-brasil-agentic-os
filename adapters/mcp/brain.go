@@ -5,13 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlasops"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspacepolicy"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -85,30 +83,8 @@ func incompleteBrainPreparation(review BrainReview, completed []atlasops.Result,
 	return failure
 }
 
-func (b *Bound) brainPage(page string) error {
-	if artifactPath(page) != nil || !strings.HasSuffix(page, ".md") {
-		return errors.New("authored_page_invalid")
-	}
-	parts := strings.Split(page, "/")
-	// Reserved scope namespaces have one spelling on case-sensitive and
-	// case-insensitive filesystems. Classification must not escape through a
-	// capitalized directory alias before the existing case policy is applied.
-	if strings.EqualFold(parts[0], "accounts") && parts[0] != "accounts" {
-		return errors.New("authored_namespace_invalid")
-	}
-	if parts[0] == "accounts" && len(parts) > 2 && strings.EqualFold(parts[2], "cases") && parts[2] != "cases" {
-		return errors.New("authored_namespace_invalid")
-	}
-	if strings.EqualFold(parts[0], "owner") || strings.EqualFold(parts[0], "memory") || len(parts) > 1 && strings.EqualFold(parts[0], "atlas") && strings.EqualFold(parts[1], "owner") {
-		return errors.New("authored_page_unavailable")
-	}
-	if !workspacepolicy.CasePathAllowed(b.options.WorkspacePath, filepath.Join(b.options.WorkspacePath, "brain", filepath.FromSlash(page))) {
-		return errors.New("authored_case_unavailable")
-	}
-	return nil
-}
 func (b *Bound) authoredPage(engine *atlasops.Engine, page, purpose string) (*atlasops.PageProjection, error) {
-	if err := b.brainPage(page); err != nil {
+	if err := b.workspacePage(page); err != nil {
 		return nil, err
 	}
 	view, err := engine.ReviewPage(atlasops.CollectRequest{Purpose: purpose, Reader: atlasops.ReaderOwnerSession, Pages: []string{page}})
@@ -149,7 +125,7 @@ func (b *Bound) brainReview(in BrainMutation) (BrainReview, error) {
 		}
 	}
 	for _, page := range pages {
-		if err := b.brainPage(page.Page); err != nil {
+		if err := b.workspacePage(page.Page); err != nil {
 			return BrainReview{}, err
 		}
 		current, err := b.authoredPage(engine, page.Page, "Review exact authored workspace change")
@@ -218,9 +194,17 @@ func (b *Bound) applyBrainReview(ctx context.Context, in BrainMutation, digest s
 	if digest == "" || digest != review.Digest {
 		return nil, errOwnerReviewChanged
 	}
-	engine, err := b.knowledgeEngine()
+	engine, err := b.workspaceEngine(func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return b.validate()
+	})
 	if err != nil {
 		return nil, err
+	}
+	if b.observeWorkspaceTransition != nil {
+		b.observeWorkspaceTransition("reviewed", in.Page)
 	}
 	out := []atlasops.Result{}
 	failed := func(next int, cause error) (any, error) {
@@ -233,7 +217,7 @@ func (b *Bound) applyBrainReview(ctx context.Context, in BrainMutation, digest s
 		if err = ctx.Err(); err != nil {
 			return failed(index, err)
 		}
-		if err = b.brainPage(page.Page); err != nil {
+		if err = b.workspacePage(page.Page); err != nil {
 			return failed(index, err)
 		}
 		provenance := brainPageProvenance(review, page.Page)
@@ -246,7 +230,7 @@ func (b *Bound) applyBrainReview(ctx context.Context, in BrainMutation, digest s
 		case "brain.set_field":
 			result, err = engine.SetField(atlasops.SetFieldRequest{Page: page.Page, Field: in.Field, Value: in.Value, ExpectedRevision: in.ExpectedRevision, Provenance: provenance})
 		case "brain.link":
-			result, err = engine.Link(atlasops.LinkRequest{Page: page.Page, Section: in.Section, Target: in.Target, Label: in.Label, ExpectedRevision: in.ExpectedRevision, Provenance: provenance})
+			result, err = engine.Link(atlasops.LinkRequest{Page: page.Page, Section: in.Section, Target: in.Target, Label: in.Label, ExpectedRevision: in.ExpectedRevision, ExpectedTargetRevision: review.Target.Revision, Provenance: provenance})
 		default:
 			result, err = engine.CreatePage(atlasops.CreatePageRequest{Page: page.Page, Body: page.Text, Provenance: provenance})
 		}
@@ -362,7 +346,7 @@ func (b *Bound) handleBrain(ctx context.Context, req *mcp.CallToolRequest, in in
 		code = "confirmation_unavailable"
 	case errors.Is(err, errConfirmationDeclined):
 		code = "confirmation_declined"
-	case errors.Is(err, errOwnerReviewChanged):
+	case errors.Is(err, errOwnerReviewChanged), errors.Is(err, atlasops.ErrReviewedTargetChanged):
 		code = "revision_conflict"
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		code = "cancelled"
@@ -387,7 +371,7 @@ func brainExactReplay(engine *atlasops.Engine, review BrainReview, page string) 
 	case "brain.set_field":
 		return engine.ReviewFieldReplay(atlasops.SetFieldRequest{Page: page, Field: in.Field, Value: in.Value, ExpectedRevision: in.ExpectedRevision, Provenance: provenance})
 	case "brain.link":
-		return engine.ReviewLinkReplay(atlasops.LinkRequest{Page: page, Section: in.Section, Target: in.Target, Label: in.Label, ExpectedRevision: in.ExpectedRevision, Provenance: provenance})
+		return engine.ReviewLinkReplay(atlasops.LinkRequest{Page: page, Section: in.Section, Target: in.Target, Label: in.Label, ExpectedRevision: in.ExpectedRevision, ExpectedTargetRevision: review.Target.Revision, Provenance: provenance})
 	}
 	return false, nil
 }

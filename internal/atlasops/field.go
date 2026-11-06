@@ -29,8 +29,13 @@ type LinkRequest struct {
 	Target           string
 	Label            string
 	ExpectedRevision string
-	Provenance       Provenance
+	// Bound by the host's private review, not supplied through MCP arguments.
+	// Empty preserves intentional historical owner-corpus link semantics.
+	ExpectedTargetRevision string `json:",omitempty"`
+	Provenance             Provenance
 }
+
+var ErrReviewedTargetChanged = errors.New("atlas reviewed link target changed")
 
 const maximumFieldBytes = 4 << 10
 
@@ -128,12 +133,21 @@ func (engine *Engine) Link(request LinkRequest) (Result, error) {
 		return Result{}, err
 	}
 
+	validateEndpoints := func() error {
+		if err := engine.authorize(request.Provenance, "link", relative); err != nil {
+			return err
+		}
+		return engine.validateLinkTarget(target, request.ExpectedTargetRevision)
+	}
+	if err := validateEndpoints(); err != nil {
+		return Result{}, err
+	}
 	operationID := engine.operationID("link", relative, request.Provenance.IdempotencyKey)
 	requestDigest, err := digestRequest(request)
 	if err != nil {
 		return Result{}, err
 	}
-	if recorded, found, err := engine.recordedResult(operationID, requestDigest); err != nil {
+	if recorded, found, err := engine.recordedResultChecked(operationID, requestDigest, validateEndpoints); err != nil {
 		return Result{}, err
 	} else if found {
 		return recorded, nil
@@ -161,7 +175,28 @@ func (engine *Engine) Link(request LinkRequest) (Result, error) {
 		expectedRevision: request.ExpectedRevision,
 		provenance:       request.Provenance,
 		requestDigest:    requestDigest,
+		validateEffect:   validateEndpoints,
 	})
+}
+
+func (engine *Engine) validateLinkTarget(target, expected string) error {
+	if err := engine.admitWorkspacePage(target); err != nil {
+		return err
+	}
+	if expected == "" {
+		return nil
+	}
+	if !validDigest(expected) {
+		return ErrReviewedTargetChanged
+	}
+	current, err := engine.read(target)
+	if err != nil {
+		return ErrReviewedTargetChanged
+	}
+	if digest(current) != expected {
+		return ErrReviewedTargetChanged
+	}
+	return nil
 }
 
 // PreviewField shares the writer's exact declared-field edit with attended
@@ -259,6 +294,7 @@ type commitRequest struct {
 	expectedRevision string
 	provenance       Provenance
 	requestDigest    string
+	validateEffect   func() error
 }
 
 func (engine *Engine) commitEdit(request commitRequest) (Result, error) {
@@ -271,6 +307,14 @@ func (engine *Engine) commitEdit(request commitRequest) (Result, error) {
 		Provenance:  request.provenance,
 	}
 
+	if err := engine.authorize(request.provenance, request.operation, request.page); err != nil {
+		return Result{}, err
+	}
+	if request.validateEffect != nil {
+		if err := request.validateEffect(); err != nil {
+			return Result{}, err
+		}
+	}
 	if expected := strings.TrimSpace(request.expectedRevision); expected != "" && expected != revision {
 		result.State = StateProposed
 		result.Revision = revision
@@ -305,6 +349,11 @@ func (engine *Engine) commitEdit(request commitRequest) (Result, error) {
 	}
 	if err := engine.authorize(request.provenance, request.operation, request.page); err != nil {
 		return Result{}, err
+	}
+	if request.validateEffect != nil {
+		if err := request.validateEffect(); err != nil {
+			return Result{}, err
+		}
 	}
 	if err := publishAtlasFile(engine.pagePath(request.page), []byte(request.updated), false, engine.workspace != nil); err != nil {
 		return Result{}, err

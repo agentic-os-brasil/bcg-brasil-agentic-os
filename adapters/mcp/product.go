@@ -36,6 +36,8 @@ type Bound struct {
 	// Deterministic test interruption after an actual prepared page effect.
 	// This has no runtime configuration or MCP argument.
 	afterBrainPrepareEffect func() error
+	// Content-free test observation only; no runtime configuration or authority.
+	observeWorkspaceTransition func(stage, page string)
 }
 
 func Open(o Options) (*Bound, error) {

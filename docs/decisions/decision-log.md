@@ -1414,3 +1414,20 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: This is bounded professional Markdown authoring, not arbitrary filesystem RPC, owner-global promotion, memory capture, indexing or background activation. Windows publication must use actual held native directory/lock custody and receive ordinary-user evidence; a permissive capability flip is insufficient. Source, public SDK/compiled acceptance, package and actual client delivery remain distinct. Existing owner/knowledge journal compatibility and user edits are preserved.
 - Refs: specs/064-product-authored-brain.md; specs/014-human-atlas-bootstrap.md; specs/061-product-local-content.md; WATL; AJRC; https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/461; https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/460
 - Supersedes: none
+
+
+### BRPG review correction — shared workspace boundary
+
+Date: 2026-11-06. Status: accepted for issue #461 correction before integration.
+
+Independent review of frozen `0e42a0d2` found a reachable sibling
+`knowledge.collect` case/private-scope bypass and a link-target authority gap while
+waiting for the corpus lock. Public SDK and compiled RED reproduced the former.
+Move path admission into one workspace policy bound to the atlasops instance,
+reuse it for converted sources/destinations without imposing authored metadata,
+and recheck both reviewed link endpoints under effect/replay custody. Bind the
+reviewed target revision as private canonical request data. Preserve the early
+source revision fence, explicit review, nil-policy owner compatibility and the
+existing prepared journal. Tests use synthetic, held-lock schedules and no
+runtime/model authority switches. This refines BRPG; it creates no arbitrary
+filesystem surface or stronger marker-transaction claim.

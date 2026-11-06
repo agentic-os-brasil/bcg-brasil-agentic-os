@@ -113,6 +113,7 @@ type Engine struct {
 	now              func() time.Time
 	workspace        *workspaceScope
 	boundDirectories []os.FileInfo
+	workspacePolicy  WorkspacePolicy
 	// afterPageEffect permits deterministic interruption tests without an
 	// exposed runtime option or model-controlled failure switch.
 	afterPageEffect func() error
@@ -140,6 +141,14 @@ func Open(dataRoot string, now func() time.Time) (*Engine, error) {
 // not revocation. Attended writes carry the owner's own request and need no
 // further authority.
 func (engine *Engine) authorize(provenance Provenance, operation, page string) error {
+	if err := engine.admitWorkspacePage(page); err != nil {
+		return err
+	}
+	if engine.workspacePolicy.BeforeMutation != nil {
+		if err := engine.workspacePolicy.BeforeMutation(); err != nil {
+			return err
+		}
+	}
 	if provenance.Origin != OriginGrant {
 		return nil
 	}
@@ -389,6 +398,9 @@ func (engine *Engine) resolve(page string) (string, error) {
 	if err := engine.validateBinding(); err != nil {
 		return "", err
 	}
+	if err := engine.admitWorkspacePage(page); err != nil {
+		return "", err
+	}
 	trimmed := strings.TrimSpace(page)
 	if trimmed == "" {
 		return "", errors.New("owner atlas page is required")
@@ -418,8 +430,14 @@ func (engine *Engine) read(relative string) (string, error) {
 	if err := engine.validateBinding(); err != nil {
 		return "", err
 	}
+	if err := engine.admitWorkspacePage(relative); err != nil {
+		return "", err
+	}
 	body, err := readAtlasFile(engine.pagePath(relative), maximumPageBytes, engine.workspace != nil)
 	if err != nil {
+		return "", err
+	}
+	if err = engine.admitWorkspacePage(relative); err != nil {
 		return "", err
 	}
 	return string(body), nil
@@ -432,6 +450,12 @@ func (engine *Engine) operationID(operation, page, key string) string {
 // recordedResult replays a completed operation instead of repeating it, so a
 // retry of the same idempotency key converges rather than duplicating.
 func (engine *Engine) recordedResult(operationID, requestDigest string) (Result, bool, error) {
+	return engine.recordedResultChecked(operationID, requestDigest, nil)
+}
+
+// A checked replay never finalizes or returns a receipt before the caller's
+// owning, locked endpoint authority has been revalidated.
+func (engine *Engine) recordedResultChecked(operationID, requestDigest string, validate func() error) (Result, bool, error) {
 	if err := engine.validateBinding(); err != nil {
 		return Result{}, false, err
 	}
@@ -480,6 +504,11 @@ func (engine *Engine) recordedResult(operationID, requestDigest string) (Result,
 		}
 		switch currentRevision {
 		case entry.Prepared.AfterRevision:
+			if validate != nil {
+				if err := validate(); err != nil {
+					return Result{}, false, err
+				}
+			}
 			if err := engine.record(entry.Result, requestDigest); err != nil {
 				return Result{}, false, err
 			}
@@ -493,6 +522,11 @@ func (engine *Engine) recordedResult(operationID, requestDigest string) (Result,
 		}
 	} else if entry.Prepared != nil {
 		return Result{}, false, errors.New("atlas completed journal contains pending state")
+	}
+	if validate != nil {
+		if err := validate(); err != nil {
+			return Result{}, false, err
+		}
 	}
 	replayed := entry.Result
 	if replayed.State == StateWritten {

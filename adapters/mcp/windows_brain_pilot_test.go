@@ -181,9 +181,19 @@ func TestWindowsAuthoredBrainPilot(t *testing.T) {
 	if err = scheduler.WritePrivateFileAtomic(foreign, []byte(foreignBody)); err != nil {
 		t.Fatal(err)
 	}
+	const legacy = "accounts/a/cases/selected/legacy-converted.md"
+	legacyText := "# Native legacy converted knowledge\n\nExisting prose remains usable without authored frontmatter.\n"
+	if err = scheduler.WritePrivateFileAtomic(filepath.Join(workspacePath, "brain", filepath.FromSlash(legacy)), []byte(legacyText)); err != nil {
+		t.Fatal(err)
+	}
+	collected := scopedKnowledgeCollect(t, cs, legacy, false)
+	if pages := collected["pages"].([]any); len(pages) != 1 || pages[0].(map[string]any)["content"] != legacyText {
+		t.Fatal("native selected legacy knowledge lost compatibility", collected)
+	}
 	beforeForeignReviews := reviews.Load()
 	for _, alias := range []string{"accounts/a/cases/foreign/notes.md", "Accounts/a/cases/foreign/notes.md", "accounts/a/Cases/foreign/notes.md", "ACCOUNTS/A/CASES/foreign/notes.md"} {
 		brainCall(t, cs, "read", map[string]any{"page": alias, "purpose": "Refuse native foreign-case aliases"}, true)
+		scopedKnowledgeCollect(t, cs, alias, true)
 		brainCall(t, cs, "link", map[string]any{"page": selected, "section": "## Related", "target": alias, "label": "Foreign case", "expected_page_revision": selectedResult["revision"]}, true)
 	}
 	if reviews.Load() != beforeForeignReviews {
@@ -195,7 +205,7 @@ func TestWindowsAuthoredBrainPilot(t *testing.T) {
 	if !reflect.DeepEqual(managed, windowsCoreTree(t, product)) {
 		t.Fatal("authored native journey changed managed product")
 	}
-	t.Log("native_authored_brain shipping_server=true attended_create=true restarted_read=true update=true set_field=true link=true exact_replay_all_edits=true stale_preserves_newer=true declined_prepare_readonly=true hardlink_refused=true selected_case_available=true foreign_case_aliases_refused=true crlf_preserved=true")
+	t.Log("native_authored_brain shipping_server=true attended_create=true restarted_read=true update=true set_field=true link=true exact_replay_all_edits=true stale_preserves_newer=true declined_prepare_readonly=true hardlink_refused=true selected_case_available=true foreign_case_aliases_refused=true legacy_knowledge_allowed=true knowledge_scope_refused=true crlf_preserved=true")
 
 	t.Run("eager_registered_brain_identity", func(t *testing.T) {
 		local := windowsPrivateRoot(t)
