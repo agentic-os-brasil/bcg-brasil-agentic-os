@@ -8,7 +8,8 @@ param(
     [string]$MethodFixture,
     [string]$SdkWitness,
     [string]$AtlasTestBinary,
-    [switch]$AuthoredBrain
+    [switch]$AuthoredBrain,
+    [switch]$PrivateWiki
 )
 $ErrorActionPreference = 'Stop'
 $kitInputs = @($Kit, $KitTestScript, $MethodFixture, $SdkWitness)
@@ -22,6 +23,9 @@ if ($AtlasTestBinary -and -not (Test-Path -LiteralPath $AtlasTestBinary -PathTyp
 }
 if ($AuthoredBrain -and -not $AtlasTestBinary) {
     throw 'Public authored-brain qualification also requires the publication and journal witnesses.'
+}
+if ($PrivateWiki -and -not $AuthoredBrain) {
+    throw 'Private wiki qualification also requires the held-publication authored-brain profile.'
 }
 if ($withKit) {
     if (Test-Path -LiteralPath $OutputRoot) { throw 'Use a new qualification output; previous proof is preserved.' }
@@ -101,7 +105,7 @@ try {
     # owner is the standard user; never grant that user access to runner data.
     $launcher = Join-Path $payload 'native-user-launcher.ps1'
     @'
-param([string]$TestBinary, [string]$ProofRoot, [string]$Kit, [string]$KitTestScript, [string]$SdkWitness, [string]$AtlasTestBinary, [switch]$AuthoredBrain)
+param([string]$TestBinary, [string]$ProofRoot, [string]$Kit, [string]$KitTestScript, [string]$SdkWitness, [string]$AtlasTestBinary, [switch]$AuthoredBrain, [switch]$PrivateWiki)
 $ErrorActionPreference = 'Stop'
 try {
     $temporary = Join-Path $ProofRoot 'user-temp'
@@ -110,6 +114,7 @@ try {
     $env:TMP = $temporary
     $families = @('Core', 'DirectoryDurability', 'PrivateState', 'OwnerReview')
     if ($AuthoredBrain) { $families += 'AuthoredBrain' }
+    if ($PrivateWiki) { $families += 'PrivateWiki' }
     $pattern = '^TestWindows(' + ($families -join '|') + ')Pilot$'
     $coreOutput = @(& $TestBinary '-test.run' $pattern '-test.v' '-test.timeout=600s')
     $coreExit = $LASTEXITCODE
@@ -200,6 +205,7 @@ try {
     $arguments = @('-NoLogo', '-NoProfile', '-NonInteractive', '-File', "`"$launcher`"", '-TestBinary', "`"$nativeTest`"", '-ProofRoot', "`"$OutputRoot`"")
     if ($AtlasTestBinary) { $arguments += @('-AtlasTestBinary', "`"$nativeAtlasTest`"") }
     if ($AuthoredBrain) { $arguments += '-AuthoredBrain' }
+    if ($PrivateWiki) { $arguments += '-PrivateWiki' }
     if ($withKit) {
         $powershell = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
         $arguments += @('-Kit', "`"$nativeKit`"", '-KitTestScript', "`"$nativeKitTest`"", '-SdkWitness', "`"$nativeSdk`"")
@@ -228,6 +234,9 @@ try {
     }
     if ($AuthoredBrain -and $log -notmatch '(?m)^--- PASS: TestWindowsAuthoredBrainPilot ') {
         throw 'The authored-brain native family did not pass under the ordinary account.'
+    }
+    if ($PrivateWiki -and $log -notmatch '(?m)^--- PASS: TestWindowsPrivateWikiPilot ') {
+        throw 'The private wiki native family did not pass under the ordinary account.'
     }
     if ($AtlasTestBinary -and $log -notmatch '(?m)^--- PASS: TestWindowsAtlasPublicationKernel ') {
         throw 'The atlas publication kernel did not pass under the ordinary account.'
