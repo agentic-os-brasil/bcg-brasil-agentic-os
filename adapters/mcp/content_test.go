@@ -9,13 +9,13 @@ import (
 	"fmt"
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -52,52 +52,6 @@ func TestContentUnseededStatus(t *testing.T) {
 	contentCall(t, cs, "maestro_query", map[string]any{"operation": "content.status", "authority": "model"}, true)
 }
 
-func copyContentFixture(t *testing.T, source, target string) {
-	t.Helper()
-	var dirs []string
-	err := filepath.WalkDir(source, func(path string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(source, path)
-		if err != nil {
-			return err
-		}
-		dest := filepath.Join(target, rel)
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			dirs = append(dirs, path)
-			return os.MkdirAll(dest, 0700)
-		}
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("fixture must contain only regular inputs: %s", path)
-		}
-		body, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		if err = os.WriteFile(dest, body, 0600); err != nil {
-			return err
-		}
-		return os.Chmod(dest, info.Mode().Perm())
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i := len(dirs) - 1; i >= 0; i-- {
-		rel, _ := filepath.Rel(source, dirs[i])
-		info, err := os.Stat(dirs[i])
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err = os.Chmod(filepath.Join(target, rel), info.Mode().Perm()); err != nil {
-			t.Fatal(err)
-		}
-	}
-}
 func putContentFile(t *testing.T, path string, body []byte) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -155,11 +109,59 @@ func contentTree(t *testing.T, root string, readonly bool) map[string]string {
 	})
 	return out
 }
+
+// Retain only bounded startup bytes, and report fixed CLI diagnostics rather than
+// arbitrary stderr that could contain private environment or workspace data.
+type contentStartupStderr struct {
+	body []byte
+}
+
+func (s *contentStartupStderr) Write(p []byte) (int, error) {
+	n := len(p)
+	if remaining := 4096 - len(s.body); remaining > 0 {
+		s.body = append(s.body, p[:min(remaining, len(p))]...)
+	}
+	return n, nil
+}
+
+func (s *contentStartupStderr) diagnostic() string {
+	const recovery = "maestro: signed source recovery required; use the independently admitted local maestro-install source-review/source-check route before restarting"
+	if strings.TrimSpace(string(s.body)) == recovery {
+		return recovery
+	}
+	return fmt.Sprintf("<redacted %d retained bytes sha256=%x>", len(s.body), sha256.Sum256(s.body))
+}
+
+type contentCommandTransport struct {
+	*mcp.CommandTransport
+	connection mcp.Connection
+}
+
+func (t *contentCommandTransport) Connect(ctx context.Context) (mcp.Connection, error) {
+	connection, err := t.CommandTransport.Connect(ctx)
+	t.connection = connection
+	return connection, err
+}
+
 func connectContent(t *testing.T, f ownerFixture, options *mcp.ClientOptions, protocol string) *mcp.ClientSession {
 	t.Helper()
+	cs, err := openContent(t, f, options, protocol)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cs
+}
+
+func openContent(t *testing.T, f ownerFixture, options *mcp.ClientOptions, protocol string) (*mcp.ClientSession, error) {
+	t.Helper()
 	var transport mcp.Transport
+	var command *contentCommandTransport
+	var stderr contentStartupStderr
 	if f.binary != "" {
-		transport = &mcp.CommandTransport{Command: exec.Command(f.binary, "serve", "--product-root", f.options.ProductRoot, "--user-home", f.options.UserHome, "--workspace", f.options.WorkspacePath), TerminateDuration: time.Second}
+		cmd := exec.Command(f.binary, "serve", "--product-root", f.options.ProductRoot, "--user-home", f.options.UserHome, "--workspace", f.options.WorkspacePath)
+		cmd.Stderr = &stderr
+		command = &contentCommandTransport{CommandTransport: &mcp.CommandTransport{Command: cmd, TerminateDuration: time.Second}}
+		transport = command
 	} else {
 		bound, err := product.Open(f.options)
 		if err != nil {
@@ -173,12 +175,28 @@ func connectContent(t *testing.T, f ownerFixture, options *mcp.ClientOptions, pr
 		}
 		t.Cleanup(func() { server.Close() })
 	}
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "content-engineering-test", Version: "1"}, options).Connect(context.Background(), transport, &mcp.ClientSessionOptions{ProtocolVersion: protocol})
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "content-engineering-test", Version: "1"}, options).Connect(ctx, transport, &mcp.ClientSessionOptions{ProtocolVersion: protocol})
 	if err != nil {
-		t.Fatal(err)
+		if command != nil {
+			if command.connection != nil {
+				// Close is idempotent and awaits the SDK-owned child Wait.
+				_ = command.connection.Close()
+			}
+			exit := "unavailable"
+			if command.Command.Process == nil {
+				exit = "not_started"
+			}
+			if state := command.Command.ProcessState; state != nil {
+				exit = fmt.Sprint(state.ExitCode())
+			}
+			return nil, fmt.Errorf("MCP initialize: %w; startup exit=%s stderr=%s", err, exit, stderr.diagnostic())
+		}
+		return nil, err
 	}
 	t.Cleanup(func() { cs.Close() })
-	return cs
+	return cs, nil
 }
 func TestContentRealJourneys(t *testing.T) {
 	retained, seed := os.Getenv("MAESTRO_DOCLING_RETAINED_ROOT"), os.Getenv("MAESTRO_DOCLING_RETAINED_SEED")
@@ -188,70 +206,23 @@ func TestContentRealJourneys(t *testing.T) {
 	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
 		t.Fatal("retained real Docling fixture requires darwin/arm64")
 	}
-	authority := readContentFile(t, filepath.Join(retained, "authority.json"))
-	if fmt.Sprintf("%x", sha256.Sum256(authority)) != seed {
-		t.Fatal("independent authority seed mismatch")
-	}
-	base := physicalTempDir(t)
-	binary := filepath.Join(base, "server", "maestro-mcp")
-	if err := os.MkdirAll(filepath.Dir(binary), 0700); err != nil {
-		t.Fatal(err)
-	}
-	build := exec.Command("go", "build", "-mod=readonly", "-ldflags", "-X main.AuthorityRegistrySHA256="+seed+" -X main.Version=0.1.0 -X 'main.CompatibleBundle=>=0.1.0 <0.2.0'", "-o", binary, "./cmd/maestro-mcp")
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("current seeded build: %s %v", out, err)
-	}
-	putContentFile(t, filepath.Join(base, "managed/trust/release-authority-registry.json"), authority)
-	t.Logf("current seeded binary sha256=%x", sha256.Sum256(readContentFile(t, binary)))
+	pack, packSHA := retainedContentPack(t, retained, seed)
+	release := newQualifiedContentRelease(t, pack)
 	for _, mode := range []string{"sdk", "compiled_stdio"} {
 		t.Run(mode, func(t *testing.T) {
-			f := newOwnerFixture(t, false)
+			f := release.install(t)
+			release.enroll(t, f)
+			managedBefore := contentManagedTree(t, f.options.ProductRoot)
 			data := filepath.Join(filepath.Dir(f.root), "state")
-			sourceBase := filepath.Join(retained, "state/ingestion/docling")
-			targetBase := filepath.Join(data, "ingestion/docling")
-			manifestBody := readContentFile(t, filepath.Join(sourceBase, "release-manifest.json"))
-			var manifest releasecontract.Manifest
-			if err := json.Unmarshal(manifestBody, &manifest); err != nil {
-				t.Fatal(err)
-			}
-			for _, name := range []string{"release-manifest.json", "release-manifest.json.sig"} {
-				putContentFile(t, filepath.Join(targetBase, name), readContentFile(t, filepath.Join(sourceBase, name)))
-			}
-			var packSHA string
-			for _, artifact := range manifest.Artifacts {
-				if artifact.Kind == "runtime_pack" && artifact.OS == runtime.GOOS && artifact.Arch == runtime.GOARCH {
-					packSHA = artifact.SHA256
-					for _, name := range []string{artifact.Name, artifact.SignatureRef} {
-						putContentFile(t, filepath.Join(targetBase, name), readContentFile(t, filepath.Join(sourceBase, name)))
-					}
-					copyContentFixture(t, filepath.Join(sourceBase, "installed", packSHA), filepath.Join(targetBase, "installed", packSHA))
-				}
-			}
-			if packSHA == "" {
-				t.Fatal("fixture has no concrete runtime")
-			}
-			t.Cleanup(func() {
-				_ = filepath.WalkDir(targetBase, func(name string, item os.DirEntry, err error) error {
-					if err == nil && item.IsDir() {
-						_ = os.Chmod(name, 0700)
-					}
-					return err
-				})
-			})
 			source := readContentFile(t, filepath.Join(retained, "workspace/sample.docx"))
 			putContentFile(t, filepath.Join(f.options.WorkspacePath, "sample.docx"), source)
-			f.options.AuthorityRegistryPath = filepath.Join(base, "managed/trust/release-authority-registry.json")
-			f.options.AuthorityRegistrySHA256 = seed
-			f.options.CLIVersion = "0.1.0"
+			binary := f.binary
 			var packetRoot string
 			if mode == "compiled_stdio" {
-				packetRoot = filepath.Join(filepath.Dir(f.root), "..", "..", "content-plugin")
-				packetRoot = filepath.Clean(packetRoot)
-				packet := packaging.Options{Destination: packetRoot, Server: binary, Version: "0.1.0", Binding: f.options}
-				if err := packaging.BuildPlugin(packet); err != nil {
-					t.Fatal(err)
-				}
-				f.binary = filepath.Join(packetRoot, "scripts/maestro-mcp")
+				packetRoot = filepath.Join(filepath.Dir(f.options.ProductRoot), "code")
+				f.binary = filepath.Join(packetRoot, "scripts", filepath.Base(binary))
+			} else {
+				f.binary = ""
 			}
 			var before map[string]string
 			if packetRoot != "" {
@@ -512,7 +483,7 @@ func TestContentRealJourneys(t *testing.T) {
 				cli("knowledge-apply", []string{"--review-digest", operatorReview.ReviewDigest}, payload, true)
 				cli("knowledge-apply", []string{"--review-digest", strings.Repeat("0", 64), "--confirm"}, payload, true)
 				cli("knowledge-apply", []string{"--review-digest", operatorReview.ReviewDigest, "--confirm"}, payload, false)
-				packet := packaging.Options{Destination: filepath.Join(filepath.Dir(packetRoot), "content.mcpb"), Server: binary, Version: "0.1.0", Binding: f.options}
+				packet := packaging.Options{Destination: filepath.Join(filepath.Dir(packetRoot), "content.mcpb"), Server: binary, Version: contentFixtureVersion, Binding: f.options}
 				if err := packaging.BuildExtension(packet); err != nil {
 					t.Fatal(err)
 				}
@@ -630,8 +601,8 @@ func TestContentRealJourneys(t *testing.T) {
 			if !bytes.Equal(source, readContentFile(t, filepath.Join(f.options.WorkspacePath, "sample.docx"))) {
 				t.Fatal("source changed")
 			}
-			if entries, err := os.ReadDir(f.options.ProductRoot); err != nil || len(entries) != 0 {
-				t.Fatal("managed product was written")
+			if !reflect.DeepEqual(managedBefore, contentManagedTree(t, f.options.ProductRoot)) {
+				t.Fatal("managed product entries, bytes or modes changed")
 			}
 			t.Logf("reviewed knowledge and immutable artifact readback passed; pack=%s; protocol=%s", packSHA, restarted.InitializeResult().ProtocolVersion)
 		})
