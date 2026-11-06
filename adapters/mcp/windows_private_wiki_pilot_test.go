@@ -48,7 +48,7 @@ func TestWindowsPrivateWikiPilot(t *testing.T) {
 			managed := windowsCoreTree(t, f.options.ProductRoot)
 			cs := f.connect(t, cadenceApprove)
 			const marker = "WINDOWS_PRIVATE_WIKI reviewed synthetic navigation and source"
-			memoryCall(t, cs, "memory.capture", map[string]any{"text": marker}, false)
+			capture := memoryCall(t, cs, "memory.capture", map[string]any{"text": marker}, false)
 			day := time.Now().UTC().Format("2006-01-02")
 			memoryCall(t, cs, "memory.consolidate", map[string]any{"cycle": "daily", "date": day}, false)
 			current := memoryCall(t, cs, "memory.context", nil, false)
@@ -91,6 +91,11 @@ func TestWindowsPrivateWikiPilot(t *testing.T) {
 				t.Fatal("private graph modified managed product")
 			}
 			t.Log("native_private_wiki reviewed_capture=true committed_rollup=true owning_compilation=true same_graph_after_restart=true concept=true backlinks=true source_drilldown=true managed_preserved=true transport=" + transport)
+			workspaceID := contentCall(t, cs, "maestro_context", map[string]any{}, false)["workspace_id"].(string)
+			if err = cs.Close(); err != nil {
+				t.Fatal(err)
+			}
+			windowsPrivateWikiCustody(t, f, workspaceID, generation, link[1], marker, capture)
 		})
 	}
 }

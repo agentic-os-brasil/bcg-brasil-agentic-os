@@ -30,8 +30,11 @@ const readDirAccess = windows.FILE_GENERIC_READ | windows.FILE_TRAVERSE | window
 const privateDirAccess = readDirAccess | windows.FILE_GENERIC_WRITE
 const unsafeAttributes = windows.FILE_ATTRIBUTE_REPARSE_POINT | windows.FILE_ATTRIBUTE_OFFLINE | 0x00040000 | 0x00400000
 
-// Directory owns one no-follow native directory handle. Close releases it.
-type Directory struct{ File *os.File }
+// Directory owns its no-follow native handles. Close releases all custody.
+type Directory struct {
+	File      *os.File
+	ancestors []windows.Handle
+}
 
 func CurrentUser() (*windows.SID, error) {
 	u, err := windows.GetCurrentProcessToken().GetTokenUser()
@@ -222,10 +225,12 @@ func parts(path string) (string, []string, error) {
 
 // Inspect traverses existing directories without granting private ownership.
 // It is for ordinary ancestors and explicitly unowned read-only source APIs.
-func Inspect(path string) (*Directory, error) { return walk(path, false, false, false, nil) }
+func Inspect(path string) (*Directory, error) { return walk(path, false, false, false, nil, false) }
 
 // Open admits a private directory, creating missing components with private ACLs.
-func Open(path string, create bool) (*Directory, error) { return walk(path, create, true, false, nil) }
+func Open(path string, create bool) (*Directory, error) {
+	return walk(path, create, true, false, nil, false)
+}
 
 // OpenPinned admits an existing private directory and retains its namespace
 // entry for the caller's transition. Existing Open/Inspect callers keep their
@@ -254,23 +259,44 @@ func OpenPinned(path string) (*Directory, error) {
 	return &Directory{File: os.NewFile(uintptr(h), path)}, nil
 }
 
+// OpenPinnedTree retains every traversed namespace entry through the private
+// leaf. Ordinary ancestors grant traversal only, never private ownership.
+func OpenPinnedTree(path string) (*Directory, error) {
+	return walk(path, false, true, false, nil, true)
+}
+
 // Fresh refuses a concurrent winner when a missing bootstrap component is created.
-func Fresh(path string) (*Directory, error) { return walk(path, true, true, true, nil) }
+func Fresh(path string) (*Directory, error) { return walk(path, true, true, true, nil, false) }
 
 // OpenSteps preserves the scheduler's existing adversarial path-walk seam.
 func OpenSteps(path string, create bool, step func(string)) (*Directory, error) {
-	return walk(path, create, true, false, step)
+	return walk(path, create, true, false, step, false)
 }
 
-func walk(path string, create, private, fresh bool, step func(string)) (*Directory, error) {
+func walk(path string, create, private, fresh bool, step func(string), pinned bool) (*Directory, error) {
 	volume, names, err := parts(path)
 	if err != nil {
 		return nil, err
 	}
-	h, err := ntOpen(0, "\\??\\"+volume, readDirAccess, windows.FILE_OPEN, dirOptions)
+	open := ntOpen
+	if pinned {
+		open = func(parent windows.Handle, name string, access, disposition, options uint32) (windows.Handle, error) {
+			return ntOpenShared(parent, name, access, disposition, options, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE)
+		}
+	}
+	h, err := open(0, "\\??\\"+volume, readDirAccess, windows.FILE_OPEN, dirOptions)
 	if err != nil {
 		return nil, err
 	}
+	var ancestors []windows.Handle
+	accepted := false
+	defer func() {
+		if !accepted {
+			for _, handle := range ancestors {
+				_ = windows.CloseHandle(handle)
+			}
+		}
+	}()
 	writable := false
 	for i, name := range names {
 		// Request mutation rights at the original relative open. Ordinary ancestors
@@ -281,10 +307,10 @@ func walk(path string, create, private, fresh bool, step func(string)) (*Directo
 		if wantWrite {
 			access = privateDirAccess
 		}
-		next, e := ntOpen(h, name, access, windows.FILE_OPEN, dirOptions)
+		next, e := open(h, name, access, windows.FILE_OPEN, dirOptions)
 		nextWritable := wantWrite
 		if create && i < len(names)-1 && errors.Is(e, windows.ERROR_ACCESS_DENIED) {
-			next, e = ntOpen(h, name, readDirAccess, windows.FILE_OPEN, dirOptions)
+			next, e = open(h, name, readDirAccess, windows.FILE_OPEN, dirOptions)
 			nextWritable = false
 		}
 		if create && errors.Is(e, os.ErrNotExist) {
@@ -300,7 +326,7 @@ func walk(path string, create, private, fresh bool, step func(string)) (*Directo
 			if fresh {
 				disposition = windows.FILE_CREATE
 			}
-			next, e = ntOpen(h, name, privateDirAccess, disposition, dirOptions|windows.FILE_WRITE_THROUGH)
+			next, e = open(h, name, privateDirAccess, disposition, dirOptions|windows.FILE_WRITE_THROUGH)
 			nextWritable = true
 			if e == nil {
 				e = Validate(next, true)
@@ -312,7 +338,11 @@ func walk(path string, create, private, fresh bool, step func(string)) (*Directo
 		if e == nil {
 			e = validateType(next, true, false)
 		}
-		windows.CloseHandle(h)
+		if pinned && e == nil {
+			ancestors = append(ancestors, h)
+		} else {
+			windows.CloseHandle(h)
+		}
 		if e != nil {
 			if next != windows.InvalidHandle {
 				windows.CloseHandle(next)
@@ -331,14 +361,23 @@ func walk(path string, create, private, fresh bool, step func(string)) (*Directo
 			return nil, err
 		}
 	}
-	return &Directory{File: os.NewFile(uintptr(h), path)}, nil
+	accepted = true
+	return &Directory{File: os.NewFile(uintptr(h), path), ancestors: ancestors}, nil
 }
 
 func (d *Directory) Close() error {
 	if d == nil || d.File == nil {
 		return nil
 	}
-	return d.File.Close()
+	if len(d.ancestors) == 0 {
+		return d.File.Close()
+	}
+	err := d.File.Close()
+	for i := len(d.ancestors) - 1; i >= 0; i-- {
+		err = errors.Join(err, windows.CloseHandle(d.ancestors[i]))
+	}
+	d.ancestors = nil
+	return err
 }
 func (d *Directory) Handle() windows.Handle { return windows.Handle(d.File.Fd()) }
 func (d *Directory) Sync() error {
@@ -599,13 +638,27 @@ func markDelete(h windows.Handle) error {
 	return e
 }
 func (d *Directory) Remove(name string, recursive bool) error {
+	return d.remove(name, recursive, false)
+}
+
+// RemovePinned withholds DELETE sharing from each child until that exact held
+// object is retired, preventing relocation during recursive cleanup.
+func (d *Directory) RemovePinned(name string, recursive bool) error {
+	return d.remove(name, recursive, true)
+}
+
+func (d *Directory) remove(name string, recursive, pinned bool) error {
 	if err := Leaf(name); err != nil {
 		return err
 	}
 	if err := Validate(d.Handle(), true); err != nil {
 		return err
 	}
-	h, err := ntOpen(d.Handle(), name, windows.DELETE|windows.FILE_GENERIC_READ|windows.FILE_GENERIC_WRITE|windows.READ_CONTROL, windows.FILE_OPEN, windows.FILE_SYNCHRONOUS_IO_NONALERT|windows.FILE_OPEN_NO_RECALL)
+	sharing := uint32(windows.FILE_SHARE_READ | windows.FILE_SHARE_WRITE | windows.FILE_SHARE_DELETE)
+	if pinned {
+		sharing = windows.FILE_SHARE_READ | windows.FILE_SHARE_WRITE
+	}
+	h, err := ntOpenShared(d.Handle(), name, windows.DELETE|windows.FILE_GENERIC_READ|windows.FILE_GENERIC_WRITE|windows.READ_CONTROL, windows.FILE_OPEN, windows.FILE_SYNCHRONOUS_IO_NONALERT|windows.FILE_OPEN_NO_RECALL, sharing)
 	if err != nil {
 		return err
 	}
@@ -625,7 +678,7 @@ func (d *Directory) Remove(name string, recursive bool) error {
 			return e
 		}
 		for _, entry := range entries {
-			if e = child.Remove(entry.Name(), true); e != nil {
+			if e = child.remove(entry.Name(), true, pinned); e != nil {
 				return e
 			}
 		}
@@ -637,6 +690,23 @@ func (d *Directory) Remove(name string, recursive bool) error {
 		return err
 	}
 	return d.Sync()
+}
+
+// RemovePinned keeps the whole parent namespace stable until cleanup completes.
+func RemovePinned(path string, recursive bool) error {
+	d, err := OpenPinnedTree(filepath.Dir(path))
+	if errors.Is(err, os.ErrNotExist) && recursive {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	err = d.RemovePinned(filepath.Base(path), recursive)
+	if errors.Is(err, os.ErrNotExist) && recursive {
+		return nil
+	}
+	return err
 }
 func Remove(path string, recursive bool) error {
 	d, e := Open(filepath.Dir(path), false)
