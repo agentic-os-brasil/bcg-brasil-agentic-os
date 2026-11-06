@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -211,6 +212,7 @@ func TestContentRealJourneys(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			f := release.install(t)
 			release.enroll(t, f)
+			managedBefore := contentManagedTree(t, f.options.ProductRoot)
 			data := filepath.Join(filepath.Dir(f.root), "state")
 			source := readContentFile(t, filepath.Join(retained, "workspace/sample.docx"))
 			putContentFile(t, filepath.Join(f.options.WorkspacePath, "sample.docx"), source)
@@ -599,8 +601,8 @@ func TestContentRealJourneys(t *testing.T) {
 			if !bytes.Equal(source, readContentFile(t, filepath.Join(f.options.WorkspacePath, "sample.docx"))) {
 				t.Fatal("source changed")
 			}
-			if entries, err := os.ReadDir(f.options.ProductRoot); err != nil || len(entries) != 0 {
-				t.Fatal("managed product was written")
+			if !reflect.DeepEqual(managedBefore, contentManagedTree(t, f.options.ProductRoot)) {
+				t.Fatal("managed product entries, bytes or modes changed")
 			}
 			t.Logf("reviewed knowledge and immutable artifact readback passed; pack=%s; protocol=%s", packSHA, restarted.InitializeResult().ProtocolVersion)
 		})

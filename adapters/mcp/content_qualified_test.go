@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -43,6 +44,46 @@ func contentFileSHA(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return fmt.Sprintf("%x", hash.Sum(nil))
+}
+
+type contentManagedEntry struct {
+	Mode os.FileMode
+	Body string
+}
+
+// Keep directories and exact file bytes/modes, including the managed root itself.
+func contentManagedTree(t *testing.T, root string) map[string]contentManagedEntry {
+	t.Helper()
+	tree := map[string]contentManagedEntry{}
+	if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && !info.Mode().IsRegular() {
+			return errors.New("managed snapshot requires only directories and regular files")
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		item := contentManagedEntry{Mode: info.Mode()}
+		if !info.IsDir() {
+			body, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			item.Body = string(body)
+		}
+		tree[rel] = item
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return tree
 }
 
 func contentFixtureRoot(t *testing.T) string {
@@ -247,6 +288,10 @@ func TestContentCompiledQualifiedStartup(t *testing.T) {
 		}
 	}
 	release.enroll(t, f)
+	managedBefore := contentManagedTree(t, f.options.ProductRoot)
+	if len(managedBefore) < 2 {
+		t.Fatal("qualified managed installation is empty")
+	}
 	t.Logf("engineering signed server version=%s registry_pin=%s installed_sha256=%s; exact signed source enrolled", contentFixtureVersion, release.registrySHA, contentFileSHA(t, f.binary))
 	packet := filepath.Join(filepath.Dir(f.options.ProductRoot), "code", "scripts", filepath.Base(f.binary))
 	if contentFileSHA(t, packet) != contentFileSHA(t, f.binary) {
@@ -264,6 +309,36 @@ func TestContentCompiledQualifiedStartup(t *testing.T) {
 			session.Close()
 		}
 		t.Logf("qualified content.status startup/restart passed carrier=%s", []string{"sdk", "installed", "code_packet"}[i])
+	}
+	if !reflect.DeepEqual(managedBefore, contentManagedTree(t, f.options.ProductRoot)) {
+		t.Fatal("qualified startup/restart changed managed entries, bytes or modes")
+	}
+	t.Logf("genuine nonempty managed installation preserved all %d relative entries, exact file bytes and modes", len(managedBefore))
+}
+
+func TestContentManagedTreeDetectsMutation(t *testing.T) {
+	for _, kind := range []string{"byte", "mode", "entry"} {
+		t.Run(kind, func(t *testing.T) {
+			root := physicalTempDir(t)
+			path := filepath.Join(root, "installed-input")
+			putContentFile(t, path, []byte("original managed bytes"))
+			before := contentManagedTree(t, root)
+			var err error
+			switch kind {
+			case "byte":
+				err = os.WriteFile(path, []byte("Original managed bytes"), 0600)
+			case "mode":
+				err = os.Chmod(path, 0400)
+			case "entry":
+				err = os.Mkdir(filepath.Join(root, "unexpected-empty-directory"), 0700)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if reflect.DeepEqual(before, contentManagedTree(t, root)) {
+				t.Fatalf("managed snapshot accepted changed %s", kind)
+			}
+		})
 	}
 }
 
