@@ -62,6 +62,14 @@ Capture approval, daily/weekly consolidation and maintenance enrollment retain
 their existing explicit operations and review. Lifecycle hooks make committed
 context available; they do not provide an unattended second-brain pipeline.
 
+Stop runs asynchronously, so its completion depends on the host process staying
+alive. In an observed Code 2.1.233 one-shot session, startup and prompt hooks
+succeeded but process shutdown interrupted Stop before a receipt was written.
+The same packet completed Stop in a streaming session kept open until its
+receipt appeared. Confirm successful event execution and a new scoped receipt
+before reporting Stop observed; configuration or a model response alone does
+not establish that outcome.
+
 The packet reports configuration separately from actual client execution and
 keeps enforcement unavailable. A real session must independently establish
 context delivery and Stop observation. Such evidence does not qualify the full

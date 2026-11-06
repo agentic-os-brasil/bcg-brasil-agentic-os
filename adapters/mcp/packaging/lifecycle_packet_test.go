@@ -160,7 +160,17 @@ func TestLifecycleContextCannotBeProjectedAsDesktopHooks(t *testing.T) {
 	}
 	plain := nativePacketOptions(t)
 	plain.Destination += ".mcpb"
-	if err := packaging.BuildExtension(plain); err != nil {
+	err := packaging.BuildExtension(plain)
+	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
+		if err == nil || !strings.Contains(err.Error(), "Desktop extension requires macOS Mach-O or Windows PE executable") {
+			t.Fatalf("unsupported Desktop executable was not refused: %v", err)
+		}
+		if _, err := os.Lstat(plain.Destination); !os.IsNotExist(err) {
+			t.Fatal("unsupported Desktop executable created output")
+		}
+		return
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
 	z, err := zip.OpenReader(plain.Destination)
