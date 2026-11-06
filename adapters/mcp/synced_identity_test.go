@@ -1,7 +1,10 @@
 package product_test
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -29,7 +32,25 @@ func TestIdentityAdvertisesSignedSourceExecutionContract(t *testing.T) {
 	if wire.SchemaVersion != 2 || wire.ExecutionContract != "maestro-synced-source-v1" {
 		t.Fatalf("actual identity cannot qualify signed-source execution: schema=%d contract=%q", wire.SchemaVersion, wire.ExecutionContract)
 	}
-	if len(identity.Resources) != 261 {
-		t.Fatalf("immutable resource closure changed: got %d, want 261", len(identity.Resources))
+	if len(identity.Resources) != 262 {
+		t.Fatalf("immutable resource closure changed: got %d, want 262", len(identity.Resources))
+	}
+	// Expected bytes come from the canonical source file, independently of the
+	// identity under test and its embedded-input digest.
+	contracts, err := os.ReadFile("method-contracts.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := 0
+	for _, resource := range identity.Resources {
+		if resource.URI == "maestro://methods/method-contracts.json" {
+			found++
+			if resource.SHA256 != fmt.Sprintf("%x", sha256.Sum256(contracts)) || resource.Bytes != int64(len(contracts)) {
+				t.Fatal("canonical method contracts identity hash/size mismatch")
+			}
+		}
+	}
+	if found != 1 {
+		t.Fatalf("canonical method contracts URI count: got %d, want 1", found)
 	}
 }
