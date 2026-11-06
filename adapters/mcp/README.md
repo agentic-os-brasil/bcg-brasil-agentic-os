@@ -79,7 +79,7 @@ The shared source has no participant state. The builders do not install or chang
 host profiles, authentication, model settings or credentials.
 
 The Code plugin includes all 92 canonical methods and two operator/resume aliases.
-MCP exposes 92 prompts and 261 immutable resources: 247 method/policy/provenance/
+MCP exposes 92 prompts and 262 immutable resources: 248 method/policy/provenance/
 license resources and fourteen agent assets.
 Method availability is distinct from functional/native parity; check the adapter
 policy and actual operations before use. The Desktop MCPB contains a native executable and
