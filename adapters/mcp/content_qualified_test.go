@@ -123,7 +123,7 @@ func retainedContentPack(t *testing.T, retained, seed string) (string, string) {
 		t.Fatal("historical Docling fixture is not the retained v1 release")
 	}
 	for _, artifact := range manifest.Artifacts {
-		if artifact.Kind != "runtime_pack" || artifact.Adapter != "docling" || artifact.OS != runtime.GOOS || artifact.Arch != runtime.GOARCH {
+		if artifact.Kind != "runtime_pack" || artifact.OS != runtime.GOOS || artifact.Arch != runtime.GOARCH {
 			continue
 		}
 		pack := filepath.Join(base, artifact.Name)
