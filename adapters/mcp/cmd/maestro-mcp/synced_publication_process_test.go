@@ -17,6 +17,7 @@ import (
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -63,12 +64,13 @@ func servePublicationTestProcess() error {
 	options.LookupEnv = func(key string) (string, bool) {
 		if key == "MAESTRO_HOME" && barrier != "" && publicationGuardInTestStack() {
 			if _, err := os.Stat(filepath.Join(barrier, "armed")); err == nil {
-				ready, err := os.OpenFile(filepath.Join(barrier, "ready.json"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+				identity, identityErr := processidentity.Current()
+				state, stateErr := installtx.ReadSourceState(filepath.Join(options.UserHome, ".maestro-install"), options.ProductRoot)
+				err := publishPublicationReady(filepath.Join(barrier, "ready.json"), map[string]any{"running_sha256": identity.SHA256, "compiled_version": Version, "current_server_sha256": state.Server.SHA256, "current_release": state.Release, "identity_error": fmt.Sprint(identityErr), "state_error": fmt.Sprint(stateErr), "manifest_pin": options.InstalledManifestSHA256, "client_inputs_pin": options.InstalledClientInputsSHA256})
+				if err != nil && !errors.Is(err, os.ErrExist) {
+					return filepath.Join(barrier, "synchronization-unavailable"), true
+				}
 				if err == nil {
-					identity, identityErr := processidentity.Current()
-					state, stateErr := installtx.ReadSourceState(filepath.Join(options.UserHome, ".maestro-install"), options.ProductRoot)
-					_ = json.NewEncoder(ready).Encode(map[string]any{"running_sha256": identity.SHA256, "compiled_version": Version, "current_server_sha256": state.Server.SHA256, "current_release": state.Release, "identity_error": fmt.Sprint(identityErr), "state_error": fmt.Sprint(stateErr), "manifest_pin": options.InstalledManifestSHA256, "client_inputs_pin": options.InstalledClientInputsSHA256})
-					_ = ready.Close()
 					deadline := time.NewTimer(90 * time.Second)
 					defer deadline.Stop()
 					ticker := time.NewTicker(5 * time.Millisecond)
@@ -114,4 +116,14 @@ func publicationGuardInTestStack() bool {
 			return false
 		}
 	}
+}
+
+// publishPublicationReady is the test-process readiness boundary consumed by
+// the parent; an existing readiness record belongs to its original publisher.
+func publishPublicationReady(path string, snapshot any) error {
+	body, err := json.Marshal(snapshot)
+	if err != nil {
+		return err
+	}
+	return scheduler.PublishNewPrivateFile(path, append(body, '\n'))
 }
