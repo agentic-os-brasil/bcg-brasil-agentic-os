@@ -139,6 +139,11 @@ func (engine *Engine) preparePrivateWikiCohort(workspace string) (visibilityBarr
 // Denial is already durable before cleanup. A failed cleanup keeps the pending
 // generation in source authority and can never make an old view readable.
 func (engine *Engine) retirePrivateWiki(workspace string) error {
+	custody, err := engine.holdPrivateWikiWorkspace(workspace)
+	if err != nil {
+		return ErrPrivateWikiRetirement
+	}
+	defer custody()
 	b, err := engine.preparePrivateWikiCohort(workspace)
 	if err != nil {
 		return err
@@ -149,7 +154,7 @@ func (engine *Engine) retirePrivateWiki(workspace string) error {
 	if engine.fault("wiki_before_retirement") != nil {
 		return ErrPrivateWikiRetirement
 	}
-	if memoryRemoveAll(engine.privateWikiRoot(workspace)) != nil {
+	if privateWikiRetire(engine.privateWikiRoot(workspace)) != nil {
 		return ErrPrivateWikiRetirement
 	}
 	if engine.fault("wiki_after_retirement") != nil {
