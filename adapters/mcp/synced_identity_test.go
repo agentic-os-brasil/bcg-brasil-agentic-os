@@ -32,29 +32,35 @@ func TestIdentityAdvertisesSignedSourceExecutionContract(t *testing.T) {
 	if wire.SchemaVersion != 2 || wire.ExecutionContract != "maestro-synced-source-v1" {
 		t.Fatalf("actual identity cannot qualify signed-source execution: schema=%d contract=%q", wire.SchemaVersion, wire.ExecutionContract)
 	}
-	// Independent canonical file and literal URI: matching a production
-	// catalog to itself cannot prove the new disclosed recipe was retained.
-	canonical, err := os.ReadFile("../../bundles/base/skills/maestro-operator/resources/authored-brain.md")
-	if err != nil {
-		t.Fatal(err)
+	if len(identity.Resources) != 263 {
+		t.Fatalf("immutable resource closure changed: got %d, want 263", len(identity.Resources))
 	}
-	const authoredURI = "maestro://methods/maestro-operator/resources/authored-brain.md"
-	found := 0
 	for index, resource := range identity.Resources {
 		if index > 0 && identity.Resources[index-1].URI >= resource.URI {
 			t.Fatal("identity URI closure is duplicated or unsorted")
 		}
-		if resource.URI == authoredURI {
-			found++
-			if resource.Bytes != int64(len(canonical)) || resource.SHA256 != fmt.Sprintf("%x", sha256.Sum256(canonical)) {
-				t.Fatal("authored recipe identity differs from canonical source URI/hash/size", resource)
+	}
+	// Independent canonical files retain both composition inputs; the catalog
+	// under test cannot serve as its own expected resource oracle.
+	for uri, source := range map[string]string{
+		"maestro://methods/method-contracts.json":                        "method-contracts.json",
+		"maestro://methods/maestro-operator/resources/authored-brain.md": "../../bundles/base/skills/maestro-operator/resources/authored-brain.md",
+	} {
+		canonical, err := os.ReadFile(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := 0
+		for _, resource := range identity.Resources {
+			if resource.URI == uri {
+				found++
+				if resource.SHA256 != fmt.Sprintf("%x", sha256.Sum256(canonical)) || resource.Bytes != int64(len(canonical)) {
+					t.Fatal("canonical resource identity hash/size mismatch", uri)
+				}
 			}
 		}
-	}
-	if found != 1 {
-		t.Fatal("identity must contain exactly one canonical authored recipe", found)
-	}
-	if len(identity.Resources) != 262 {
-		t.Fatalf("immutable resource closure changed: got %d, want 262", len(identity.Resources))
+		if found != 1 {
+			t.Fatal("canonical resource URI must occur exactly once", uri, found)
+		}
 	}
 }

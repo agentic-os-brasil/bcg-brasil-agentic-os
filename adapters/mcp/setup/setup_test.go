@@ -588,9 +588,11 @@ func assertSourceClosure(t *testing.T, source string, identity releasecontract.S
 			t.Fatal("managed canonical agent differs")
 		}
 	}
-	for uri, path := range map[string]string{"maestro://methods/LICENSE.md": "adapters/mcp/packaging/LICENSE.md", "maestro://methods/pocock-upstream.json": "bundles/tech-core/skills/pocock-upstream.json", "maestro://methods/agent-skill-policy.json": "bundles/base/skills/agent-skill-policy.json"} {
-		if resources[uri].SHA256 != sum(read(t, filepath.Join(source, path))) {
-			t.Fatalf("public license/policy/provenance mismatch %s", uri)
+	for uri, path := range map[string]string{"maestro://methods/LICENSE.md": "adapters/mcp/packaging/LICENSE.md", "maestro://methods/pocock-upstream.json": "bundles/tech-core/skills/pocock-upstream.json", "maestro://methods/agent-skill-policy.json": "bundles/base/skills/agent-skill-policy.json", "maestro://methods/method-contracts.json": "adapters/mcp/method-contracts.json"} {
+		body := read(t, filepath.Join(source, path))
+		resource, ok := resources[uri]
+		if !ok || resource.SHA256 != sum(body) || resource.Bytes != int64(len(body)) {
+			t.Fatalf("public license/policy/provenance/contracts hash/size mismatch %s", uri)
 		}
 		expected[uri] = true
 	}

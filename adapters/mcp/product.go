@@ -138,18 +138,28 @@ func (b *Bound) Server() *mcp.Server {
 	readonly := &mcp.ToolAnnotations{ReadOnlyHint: true}
 	empty := map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
 	s.AddTool(&mcp.Tool{Name: "maestro_context", Description: "Read admitted binding metadata and memory capability hints; inspect maestro_query and maestro_apply schemas for operations. No content export.", InputSchema: empty, Annotations: readonly}, b.handle("context", empty))
-	query := map[string]any{"type": "object", "oneOf": append([]any{
-		variant("execution.list", map[string]any{"offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 128}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 32}}),
-		variant("execution.next", map[string]any{"item_id": strSchema(96)}, "item_id"),
-		variant("execution.contract", map[string]any{"item_id": strSchema(96)}, "item_id"),
-	}, append(append(append(append(append(ownerQueries(), memoryQueries()...), contentQueries()...), maintenanceQueries()...), wikiQueries()...), brainQueries()...)...)}
-	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read owner metadata/questions, execution continuation, eligible memory, converted content, workspace knowledge or maintenance status through bounded metadata/pages. Private owner/legacy text requires trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
-	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Convert documents, apply reviewed knowledge/owner/memory changes, qualify and enroll exact maintenance jobs, or run active due work. Maintenance lifecycle changes require trusted exact review; execution uses revision/attempt and artifact checks.", InputSchema: productApplySchema()}, b.handle("apply", productApplySchema()))
+	query := productQuerySchema()
+	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read immutable methods and requirements, owner metadata/questions, execution continuation, eligible memory, converted content, authored workspace pages, workspace knowledge or maintenance status through bounded metadata/pages. Private owner/legacy text requires trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
+	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Convert documents, apply reviewed workspace page/knowledge/owner/memory changes, qualify and enroll exact maintenance jobs, or run active due work. Maintenance lifecycle changes require trusted exact review; execution uses revision/attempt and artifact checks.", InputSchema: productApplySchema()}, b.handle("apply", productApplySchema()))
 	b.registerMethods(s)
 	return s
 }
 
+func productQuerySchema() map[string]any {
+	variants := []any{
+		variant("execution.list", map[string]any{"offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 128}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 32}}),
+		variant("execution.next", map[string]any{"item_id": strSchema(96)}, "item_id"),
+		variant("execution.contract", map[string]any{"item_id": strSchema(96)}, "item_id"),
+	}
+	for _, group := range [][]any{ownerQueries(), memoryQueries(), contentQueries(), maintenanceQueries(), wikiQueries(), brainQueries(), methodsQueries()} {
+		variants = append(variants, group...)
+	}
+	return map[string]any{"type": "object", "oneOf": variants}
+}
+
 type input struct {
+	MethodID                   string   `json:"method_id"`
+	ResourceURI                string   `json:"resource_uri"`
 	Generation                 string   `json:"generation"`
 	Reference                  string   `json:"reference"`
 	JobID                      string   `json:"job_id"`
@@ -258,7 +268,10 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 			return result(nil, errors.New("input_size")), nil
 		}
 		if kind == "context" {
-			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "next_max_bytes": 2048, "memory": map[string]any{"context_operation": "memory.context", "max_page_bytes": 4096, "synthesis": "local_deterministic", "lifetime": "two_l3_generations_and_exact_owner_review"}}, nil), nil
+			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "next_max_bytes": 2048, "memory": map[string]any{"context_operation": "memory.context", "max_page_bytes": 4096, "synthesis": "local_deterministic", "lifetime": "two_l3_generations_and_exact_owner_review"}, "methods": map[string]any{"list_operation": "methods.list", "read_operation": "methods.read", "plan_operation": "methods.plan", "max_page_bytes": 4096, "mode": "methods_not_authority"}}, nil), nil
+		}
+		if strings.HasPrefix(in.Operation, "methods.") {
+			return b.handleMethods(in), nil
 		}
 		if strings.HasPrefix(in.Operation, "brain.") {
 			return b.handleBrain(ctx, req, in), nil
