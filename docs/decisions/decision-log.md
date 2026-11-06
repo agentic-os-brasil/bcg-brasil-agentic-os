@@ -1453,3 +1453,15 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: Namespace replacement and conflicting native handles refuse rather than redirect effects. Retirement cannot pin the graph that it must delete; it holds the workspace parent and recursively retains each DELETE-authorized child until cleanup. Failed cleanup leaves the durable denial barrier and reports incomplete retirement. Unix IO ordering and the pure compiler remain unchanged. Native Windows conformance, final packet/client acceptance and production release qualification remain separate gates.
 - Refs: specs/008-wiki-update-okf.md; docs/product-windows-private-wiki.md; internal/memory/private_wiki_custody_windows.go; internal/winprivate; #468; #460; PWKC; BRPG
 - Supersedes: none
+
+
+## WCAN - Run Windows canonical contracts with real ordinary-user custody
+
+- Date: 2026-11-06
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Elevated hosted test fixtures are owned by a different Windows principal from the process identity accepted by the private-state policy. Their refusal does not qualify ordinary-user behavior, while hard-coded unsupported expectations can hide implemented native contracts.
+- Decision: Reuse the existing standard-account acceptance driver for the unchanged execution, datahome, ownerctx, memory, privatewiki and processidentity test executables. Retain a closed executable/test inventory, hash-bound public source and SDK fixtures, child-created private temporary state, actual token/custody witnesses and per-package outcomes. First retain the unchanged-profile RED, then correct only demonstrated obsolete oracles and the public-schema/private-ledger reader boundary. Private ownership and ledger guards retain their contracts.
+- Consequences: Public test inputs remain read-only to the ordinary account; private state must be created by that account. Existing platform non-applicability and missing actual historical-cohort witnesses are reported separately from failures and cannot be promoted to passing coverage. Native acceptance, canonical package coverage, full product CI and client qualification remain separate evidence.
+- Refs: docs/development/windows-canonical-ci.md; acceptance/windows-core-pilot.ps1; .github/workflows/product-mcp.yml; specs/005-development-harness.md; #470; #460; WPGH; UOWN
+- Supersedes: none

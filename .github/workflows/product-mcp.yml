@@ -49,9 +49,10 @@ on:
       - 'schemas/maintenance-jobs.schema.json'
       - 'bundles/**'
       - 'LICENSE.md'
+      - 'acceptance/windows-core-pilot.ps1'
       - '.github/workflows/product-mcp.yml'
   push:
-    branches: [main, 'codex/integration/**']
+    branches: [main, 'codex/integration/**', 'codex/maestro-windows-canonical']
     paths:
       - 'adapters/mcp/**'
       - 'internal/execution/**'
@@ -99,6 +100,7 @@ on:
       - 'schemas/maintenance-jobs.schema.json'
       - 'bundles/**'
       - 'LICENSE.md'
+      - 'acceptance/windows-core-pilot.ps1'
       - '.github/workflows/product-mcp.yml'
 
 permissions:
@@ -132,7 +134,18 @@ jobs:
           $installedRoot = (go env GOROOT).Trim()
           if ($LASTEXITCODE -ne 0) { throw 'Installed Go SDK lookup failed' }
           if ($env:GOROOT) { throw 'Command evidence requires no caller-supplied GOROOT' }
-          $stagedRoot = Join-Path $env:RUNNER_TEMP 'maestro-go-sdk'
+          $publicRoot = Join-Path $env:SystemDrive ('MaestroCanonical-' + [Guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $publicRoot -ErrorAction Stop | Out-Null
+          $acl = [Security.AccessControl.DirectorySecurity]::new()
+          $acl.SetAccessRuleProtection($true, $false)
+          foreach ($sid in @('S-1-5-18', 'S-1-5-32-544')) {
+            $rule = [Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new($sid), 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+            $acl.AddAccessRule($rule)
+          }
+          $readers = [Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-32-545'), 'ReadAndExecute', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+          $acl.AddAccessRule($readers)
+          Set-Acl -LiteralPath $publicRoot -AclObject $acl
+          $stagedRoot = Join-Path $publicRoot 'sdk'
           $freshCache = Join-Path $env:RUNNER_TEMP 'maestro-go-build'
           New-Item -ItemType Directory -Path $stagedRoot -ErrorAction Stop | Out-Null
           New-Item -ItemType Directory -Path $freshCache -ErrorAction Stop | Out-Null
@@ -151,8 +164,75 @@ jobs:
           }
           $stagedBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           "GOCACHE=$freshCache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-      - name: Canonical ledger, HOME, owner and memory contracts
+          "MAESTRO_CANONICAL_PUBLIC_ROOT=$publicRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Build unchanged Windows canonical witnesses from public source fixtures
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $publicRoot = $env:MAESTRO_CANONICAL_PUBLIC_ROOT
+          $sourceRoot = Join-Path $publicRoot 'source'
+          $binaryRoot = Join-Path $publicRoot 'bin'
+          New-Item -ItemType Directory -Path $sourceRoot, $binaryRoot -ErrorAction Stop | Out-Null
+          $revision = (git rev-parse HEAD).Trim()
+          $archive = Join-Path $env:RUNNER_TEMP 'canonical-source.tar'
+          git archive --format=tar --output=$archive HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Exact committed canonical source archive failed.' }
+          tar -xf $archive -C $sourceRoot
+          if ($LASTEXITCODE -ne 0) { throw 'Public canonical source fixture staging failed.' }
+          $sdkRoot = Join-Path $publicRoot 'sdk'
+          $sdkGo = Join-Path $sdkRoot 'bin/go.exe'
+          $entries = @()
+          Push-Location -LiteralPath $sourceRoot
+          try {
+            foreach ($name in @('execution', 'datahome', 'ownerctx', 'memory', 'privatewiki', 'processidentity')) {
+              $package = './internal/' + $name
+              $binary = Join-Path $binaryRoot ($name + '.test.exe')
+              & $sdkGo test -c $package -o $binary
+              if ($LASTEXITCODE -ne 0) { throw "Canonical witness build failed: $package" }
+              $tests = @(& $binary '-test.list' '^(Test|Example)')
+              if ($LASTEXITCODE -ne 0 -or $tests.Count -eq 0) { throw "Canonical inventory failed: $package" }
+              $entries += [ordered]@{
+                name=$name; package=$package; binary=$binary
+                sha256=(Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant()
+                working_directory=(Join-Path $sourceRoot ('internal/' + $name)); tests=$tests
+              }
+            }
+            Push-Location -LiteralPath (Join-Path $sourceRoot 'adapters/mcp')
+            try {
+              & $sdkGo test -c . -o (Join-Path $binaryRoot 'windows-core.test.exe')
+              if ($LASTEXITCODE -ne 0) { throw 'Existing core witness build failed.' }
+              & $sdkGo build -o (Join-Path $binaryRoot 'maestro-mcp.exe') ./cmd/maestro-mcp
+              if ($LASTEXITCODE -ne 0) { throw 'Existing shipping server build failed.' }
+            } finally { Pop-Location }
+          } finally { Pop-Location }
+          $manifest = [ordered]@{
+            schema_version=1; source_revision=$revision; source_root=$sourceRoot
+            sdk_root=$sdkRoot; sdk_go=$sdkGo
+            sdk_go_sha256=(Get-FileHash -LiteralPath $sdkGo -Algorithm SHA256).Hash.ToLowerInvariant()
+            source_archive_sha256=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+            packages=$entries
+          }
+          $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $publicRoot 'canonical-contract-manifest.json') -Encoding utf8
+      - name: Canonical ledger, HOME, owner and memory contracts on Unix
+        if: runner.os != 'Windows'
         run: go test ./internal/execution ./internal/datahome ./internal/ownerctx ./internal/memory ./internal/privatewiki ./internal/processidentity -timeout=300s
+      - name: Canonical Windows contracts under the existing ordinary-user profile
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $publicRoot = $env:MAESTRO_CANONICAL_PUBLIC_ROOT
+          ./acceptance/windows-core-pilot.ps1 -TestBinary (Join-Path $publicRoot 'bin/windows-core.test.exe') -Server (Join-Path $publicRoot 'bin/maestro-mcp.exe') -OutputRoot (Join-Path $env:RUNNER_TEMP 'canonical-native-proof') -CanonicalManifest (Join-Path $publicRoot 'canonical-contract-manifest.json')
+      - name: Retain exact Windows canonical profile evidence
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-canonical-profile-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/canonical-native-proof/*.log
+            ${{ runner.temp }}/canonical-native-proof/*.json
+            ${{ env.MAESTRO_CANONICAL_PUBLIC_ROOT }}/canonical-contract-manifest.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Canonical workspace initialization contracts on admitted Unix runners
         if: runner.os != 'Windows'
         run: go test ./internal/workspace -timeout=180s

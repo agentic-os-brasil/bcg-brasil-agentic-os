@@ -8,6 +8,7 @@ param(
     [string]$MethodFixture,
     [string]$SdkWitness,
     [string]$AtlasTestBinary,
+    [string]$CanonicalManifest,
     [switch]$AuthoredBrain,
     [switch]$PrivateWiki
 )
@@ -18,6 +19,35 @@ if ($kitInputCount -ne 0 -and $kitInputCount -ne $kitInputs.Count) {
     throw 'Kit, KitTestScript, MethodFixture and SdkWitness must be supplied together.'
 }
 $withKit = $kitInputCount -eq $kitInputs.Count
+$withCanonical = -not [string]::IsNullOrWhiteSpace($CanonicalManifest)
+if ($withCanonical) {
+    $canonical = Get-Content -LiteralPath $CanonicalManifest -Raw -Encoding UTF8 | ConvertFrom-Json
+    $expectedPackages = @('execution', 'datahome', 'ownerctx', 'memory', 'privatewiki', 'processidentity')
+    $actualPackages = @($canonical.packages | ForEach-Object { $_.name })
+    if ($canonical.schema_version -ne 1 -or $actualPackages.Count -ne $expectedPackages.Count -or
+        @((Compare-Object ($expectedPackages | Sort-Object) ($actualPackages | Sort-Object))).Count -ne 0) {
+        throw 'Canonical qualification requires exactly the six owning packages.'
+    }
+    foreach ($path in @($canonical.source_root, $canonical.sdk_root, $canonical.sdk_go)) {
+        if (-not [IO.Path]::IsPathRooted($path) -or -not (Test-Path -LiteralPath $path)) {
+            throw 'Canonical public source and SDK inputs must be existing absolute paths.'
+        }
+    }
+    if ((Get-FileHash -LiteralPath $canonical.sdk_go -Algorithm SHA256).Hash.ToLowerInvariant() -cne $canonical.sdk_go_sha256) {
+        throw 'Canonical pinned SDK hash differs from its manifest.'
+    }
+    foreach ($entry in $canonical.packages) {
+        if ($entry.package -cne ('./internal/' + $entry.name) -or
+            $entry.working_directory -cne (Join-Path $canonical.source_root ('internal/' + $entry.name)) -or
+            @($entry.tests).Count -eq 0 -or @($entry.tests | Sort-Object -Unique).Count -ne @($entry.tests).Count -or
+            @($entry.tests | Where-Object { $_ -cnotmatch '^(Test|Example)[A-Za-z0-9_]*$' }).Count -ne 0) {
+            throw 'Canonical package identity, working directory or closed test inventory is invalid.'
+        }
+        if ((Get-FileHash -LiteralPath $entry.binary -Algorithm SHA256).Hash.ToLowerInvariant() -cne $entry.sha256) {
+            throw 'Canonical test executable differs from its manifest.'
+        }
+    }
+}
 if ($AtlasTestBinary -and -not (Test-Path -LiteralPath $AtlasTestBinary -PathType Leaf)) {
     throw 'The focused atlas publication witness is missing.'
 }
@@ -95,6 +125,18 @@ try {
             throw 'The generic ZIP checksum does not bind the actual archive.'
         }
     }
+    if ($withCanonical) {
+        foreach ($entry in $canonical.packages) {
+            $copied = Join-Path $payload ($entry.name + '.test.exe')
+            Copy-Item -LiteralPath $entry.binary -Destination $copied
+            if ((Get-FileHash -LiteralPath $copied -Algorithm SHA256).Hash.ToLowerInvariant() -cne $entry.sha256) {
+                throw 'Copied canonical test executable differs from its sealed source.'
+            }
+            $entry.binary = $copied
+        }
+        $nativeCanonical = Join-Path $payload 'canonical-contract-manifest.json'
+        $canonical | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $nativeCanonical -Encoding utf8
+    }
     $env:MAESTRO_WINDOWS_CORE_PROOF = '1'
     $env:MAESTRO_WINDOWS_CORE_SERVER = $nativeServer
     $env:MAESTRO_WINDOWS_CORE_PROOF_ROOT = $OutputRoot
@@ -105,7 +147,7 @@ try {
     # owner is the standard user; never grant that user access to runner data.
     $launcher = Join-Path $payload 'native-user-launcher.ps1'
     @'
-param([string]$TestBinary, [string]$ProofRoot, [string]$Kit, [string]$KitTestScript, [string]$SdkWitness, [string]$AtlasTestBinary, [switch]$AuthoredBrain, [switch]$PrivateWiki)
+param([string]$TestBinary, [string]$ProofRoot, [string]$Kit, [string]$KitTestScript, [string]$SdkWitness, [string]$AtlasTestBinary, [switch]$AuthoredBrain, [switch]$PrivateWiki, [string]$CanonicalManifest)
 $ErrorActionPreference = 'Stop'
 try {
     $temporary = Join-Path $ProofRoot 'user-temp'
@@ -143,6 +185,72 @@ try {
                 throw 'Every requested atlas kernel must actually pass under the ordinary account.'
             }
         }
+    }
+    if ($CanonicalManifest) {
+        $manifest = Get-Content -LiteralPath $CanonicalManifest -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($env:GOROOT) { throw 'Canonical evidence refuses caller-supplied GOROOT.' }
+        foreach ($root in @($manifest.source_root, $manifest.sdk_root)) {
+            $probe = Join-Path $root ('ordinary-write-probe-' + [Guid]::NewGuid().ToString('N'))
+            $wrote = $false
+            try { [IO.File]::WriteAllText($probe, 'unexpected-write'); $wrote = $true } catch [UnauthorizedAccessException] { }
+            if ($wrote) { Remove-Item -LiteralPath $probe; throw 'Canonical public input is writable by the ordinary account.' }
+        }
+        if ((Get-FileHash -LiteralPath $manifest.sdk_go -Algorithm SHA256).Hash.ToLowerInvariant() -cne $manifest.sdk_go_sha256) {
+            throw 'Ordinary-account SDK differs from the pinned executable.'
+        }
+        $env:PATH = (Split-Path -Parent $manifest.sdk_go) + ';' + $env:PATH
+        $env:GOCACHE = Join-Path $temporary 'go-build'
+        $env:GOPATH = Join-Path $temporary 'go-path'
+        $env:GOMODCACHE = Join-Path $env:GOPATH 'pkg/mod'
+        $env:GOENV = 'off'
+        $env:GOTOOLCHAIN = 'local'
+        $selectedRoot = (& $manifest.sdk_go env GOROOT).Trim()
+        if ($LASTEXITCODE -ne 0 -or $selectedRoot -cne $manifest.sdk_root) {
+            throw 'Ordinary-account SDK did not retain the compiled public root.'
+        }
+        $results = @()
+        foreach ($entry in $manifest.packages) {
+            if ((Get-FileHash -LiteralPath $entry.binary -Algorithm SHA256).Hash.ToLowerInvariant() -cne $entry.sha256) {
+                throw 'Ordinary-account canonical executable changed.'
+            }
+            $listed = @(& $entry.binary '-test.list' '^(Test|Example)')
+            if ($LASTEXITCODE -ne 0 -or @((Compare-Object ($entry.tests | Sort-Object) ($listed | Sort-Object))).Count -ne 0) {
+                throw 'The actual canonical binary test inventory differs from its closed manifest.'
+            }
+            Push-Location -LiteralPath $entry.working_directory
+            try {
+                $output = @(& $entry.binary '-test.v' '-test.timeout=300s' 2>&1 | ForEach-Object { "$_" })
+                $code = $LASTEXITCODE
+            } finally { Pop-Location }
+            $body = $output -join "`n"
+            if ([Text.Encoding]::UTF8.GetByteCount($body) -gt 2097152) { throw 'Canonical package output exceeds the bounded log contract.' }
+            $packageLog = Join-Path $ProofRoot ('canonical-' + $entry.name + '.log')
+            [IO.File]::WriteAllText($packageLog, $body + "`n", (New-Object Text.UTF8Encoding($false)))
+            $outcomes = @([regex]::Matches($body, '(?m)^--- (PASS|FAIL|SKIP): ((?:Test|Example)[A-Za-z0-9_]*) ') | ForEach-Object {
+                [ordered]@{test=$_.Groups[2].Value; outcome=$_.Groups[1].Value}
+            })
+            $observed = @($outcomes | ForEach-Object { $_.test })
+            $complete = @((Compare-Object ($entry.tests | Sort-Object) ($observed | Sort-Object))).Count -eq 0
+            $skipped = @($outcomes | Where-Object { $_.outcome -eq 'SKIP' } | ForEach-Object { $_.test })
+            $results += [ordered]@{
+                name=$entry.name; package=$entry.package; sha256=$entry.sha256; exit_code=$code
+                expected_tests=@($entry.tests); outcomes=$outcomes; inventory_complete=$complete
+                skipped_tests=$skipped; log=[IO.Path]::GetFileName($packageLog)
+                log_sha256=(Get-FileHash -LiteralPath $packageLog -Algorithm SHA256).Hash.ToLowerInvariant()
+                owner_mismatch_diagnostics=([regex]::Matches($body, 'private object belongs to a different Windows owner')).Count
+            }
+            Write-Output ('canonical_result package=' + $entry.name + ' exit=' + $code + ' inventory_complete=' + $complete + ' skips=' + $skipped.Count)
+        }
+        $qualificationComplete = @($results | Where-Object { $_.exit_code -ne 0 -or -not $_.inventory_complete -or $_.skipped_tests.Count -ne 0 }).Count -eq 0
+        $report = [ordered]@{
+            schema_version=1; source_revision=$manifest.source_revision; actual_standard_user=$true
+            private_current_user_temp=$true; public_source_and_sdk_read_only=$true
+            sdk_go_sha256=$manifest.sdk_go_sha256; sdk_root=$selectedRoot
+            packages=$results; qualification_complete=$qualificationComplete
+            platform_nonapplicability='unclassified_existing_skips_are_not_passing_coverage'
+        }
+        $report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $ProofRoot 'canonical-contract-results.json') -Encoding utf8
+        if (-not $qualificationComplete) { throw 'Canonical contracts remain incomplete; retain all six package logs and classified outcomes.' }
     }
     if ($Kit) {
         if ($PSVersionTable.PSEdition -ne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) {
@@ -206,6 +314,7 @@ try {
     if ($AtlasTestBinary) { $arguments += @('-AtlasTestBinary', "`"$nativeAtlasTest`"") }
     if ($AuthoredBrain) { $arguments += '-AuthoredBrain' }
     if ($PrivateWiki) { $arguments += '-PrivateWiki' }
+    if ($withCanonical) { $arguments += @('-CanonicalManifest', "`"$nativeCanonical`"") }
     if ($withKit) {
         $powershell = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
         $arguments += @('-Kit', "`"$nativeKit`"", '-KitTestScript', "`"$nativeKitTest`"", '-SdkWitness', "`"$nativeSdk`"")
