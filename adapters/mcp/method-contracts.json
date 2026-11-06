@@ -1,0 +1,1114 @@
+{
+  "schema_version": 1,
+  "groups": [
+    {
+      "method_ids": [
+        "account-case-setup",
+        "case-agent-setup",
+        "workspace-agent-setup"
+      ],
+      "required_operations": [],
+      "effects": [
+        "write_workspace"
+      ],
+      "output_kinds": [
+        "case_artifact"
+      ],
+      "dependencies": [
+        {
+          "id": "domain.account_case_scaffold",
+          "kind": "domain",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "agent-identity-setup"
+      ],
+      "required_operations": [],
+      "effects": [
+        "write_owner"
+      ],
+      "output_kinds": [
+        "configuration"
+      ],
+      "dependencies": [
+        {
+          "id": "domain.agent_identity_registration",
+          "kind": "domain",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "bcg-case-kickoff",
+        "bcg-deck",
+        "client-delivery-gate",
+        "data-pipeline-quality",
+        "data-science-evaluation",
+        "decision-log-entry",
+        "deck-drill",
+        "deck-review",
+        "expert-interview-guide",
+        "maestro-knowledge-pill",
+        "meeting-close",
+        "meeting-to-work-items",
+        "pocock-ask-matt",
+        "pocock-codebase-design",
+        "pocock-grill-me",
+        "pocock-grilling",
+        "pocock-wait-what",
+        "qa-gate",
+        "qualitative-analysis",
+        "quantitative-analysis",
+        "reproducible-data-run",
+        "review-explain-change",
+        "slide-summary",
+        "spec-driven-delivery",
+        "test-and-evidence",
+        "wayfinder"
+      ],
+      "required_operations": [],
+      "effects": [
+        "none"
+      ],
+      "output_kinds": [
+        "reviewable_text"
+      ],
+      "dependencies": []
+    },
+    {
+      "method_ids": [
+        "brain-index"
+      ],
+      "required_operations": [
+        "memory.context",
+        "memory.search",
+        "wiki.read",
+        "wiki.source",
+        "wiki.status"
+      ],
+      "effects": [
+        "read"
+      ],
+      "output_kinds": [
+        "navigation_page",
+        "diagnostic_report"
+      ],
+      "dependencies": [
+        {
+          "id": "domain.authored_brain_compiler",
+          "kind": "domain",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "case-canon-ingest",
+        "case-decision-log-entry"
+      ],
+      "required_operations": [],
+      "effects": [
+        "write_workspace"
+      ],
+      "output_kinds": [
+        "case_artifact"
+      ],
+      "dependencies": [
+        {
+          "id": "domain.case_canon",
+          "kind": "domain",
+          "required": true
+        },
+        {
+          "id": "host.trusted_review",
+          "kind": "host",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "case-sharepoint-ingest",
+        "sharepoint-ingest"
+      ],
+      "required_operations": [
+        "content.convert",
+        "content.read",
+        "content.status"
+      ],
+      "effects": [
+        "write_workspace"
+      ],
+      "output_kinds": [
+        "knowledge_page"
+      ],
+      "dependencies": [
+        {
+          "id": "connector.sharepoint_read",
+          "kind": "connector",
+          "required": true
+        },
+        {
+          "id": "domain.sharepoint_enrollment",
+          "kind": "domain",
+          "required": true
+        },
+        {
+          "id": "domain.case_canon",
+          "kind": "domain",
+          "required": true
+        },
+        {
+          "id": "runtime.document_conversion",
+          "kind": "runtime",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "case-sharepoint-map"
+      ],
+      "required_operations": [],
+      "effects": [
+        "write_workspace"
+      ],
+      "output_kinds": [
+        "case_artifact"
+      ],
+      "dependencies": [
+        {
+          "id": "connector.sharepoint_read",
+          "kind": "connector",
+          "required": true
+        },
+        {
+          "id": "domain.account_case_scaffold",
+          "kind": "domain",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "caseos-connect"
+      ],
+      "required_operations": [],
+      "effects": [
+        "read"
+      ],
+      "output_kinds": [
+        "reviewable_text"
+      ],
+      "dependencies": [
+        {
+          "id": "connector.caseos_read",
+          "kind": "connector",
+          "required": true
+        },
+        {
+          "id": "domain.case_binding",
+          "kind": "domain",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "caseos-prepare-enrichment",
+        "caseos-prepare-ingest"
+      ],
+      "required_operations": [],
+      "effects": [
+        "write_workspace"
+      ],
+      "output_kinds": [
+        "reviewable_text",
+        "workspace_artifact"
+      ],
+      "dependencies": [
+        {
+          "id": "domain.case_artifacts",
+          "kind": "domain",
+          "required": true
+        },
+        {
+          "id": "connector.caseos_read",
+          "kind": "connector",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "caseos-tutorial"
+      ],
+      "required_operations": [],
+      "effects": [
+        "none"
+      ],
+      "output_kinds": [
+        "reviewable_text"
+      ],
+      "dependencies": [
+        {
+          "id": "connector.caseos_read",
+          "kind": "connector",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "coverage-diagnose",
+        "investigate"
+      ],
+      "required_operations": [],
+      "effects": [
+        "read"
+      ],
+      "output_kinds": [
+        "diagnostic_report"
+      ],
+      "dependencies": [
+        {
+          "id": "host.repository_read",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "host.command_run",
+          "kind": "host",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "craft-update",
+        "eod",
+        "feedback-capture",
+        "fodais-performance-review",
+        "learnings-bridge",
+        "retro",
+        "start-day",
+        "upward-feedback"
+      ],
+      "required_operations": [],
+      "effects": [
+        "write_owner"
+      ],
+      "output_kinds": [
+        "owner_page"
+      ],
+      "dependencies": [
+        {
+          "id": "domain.owner_atlas",
+          "kind": "domain",
+          "required": true
+        },
+        {
+          "id": "host.trusted_review",
+          "kind": "host",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "dream-memory"
+      ],
+      "required_operations": [
+        "maintenance.enroll",
+        "maintenance.pause",
+        "maintenance.qualify",
+        "maintenance.report",
+        "maintenance.resume",
+        "maintenance.revoke",
+        "maintenance.run",
+        "maintenance.status",
+        "memory.capture",
+        "memory.consolidate",
+        "memory.context",
+        "memory.correct",
+        "memory.delete",
+        "memory.list",
+        "memory.read",
+        "memory.retention",
+        "memory.search",
+        "wiki.read",
+        "wiki.source",
+        "wiki.status"
+      ],
+      "effects": [
+        "write_owner",
+        "maintenance"
+      ],
+      "output_kinds": [
+        "memory_generation",
+        "navigation_page"
+      ],
+      "dependencies": [
+        {
+          "id": "host.trusted_review",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "host.background_wake",
+          "kind": "host",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "excel-financial-model"
+      ],
+      "required_operations": [],
+      "effects": [
+        "write_workspace"
+      ],
+      "output_kinds": [
+        "workspace_artifact"
+      ],
+      "dependencies": [
+        {
+          "id": "host.spreadsheet_authoring",
+          "kind": "host",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "execution-continuity"
+      ],
+      "required_operations": [
+        "execution.checkpoint",
+        "execution.complete",
+        "execution.contract",
+        "execution.create",
+        "execution.evidence",
+        "execution.list",
+        "execution.next",
+        "execution.pause",
+        "execution.resume",
+        "execution.start"
+      ],
+      "effects": [
+        "write_workspace"
+      ],
+      "output_kinds": [
+        "execution_checkpoint"
+      ],
+      "dependencies": []
+    },
+    {
+      "method_ids": [
+        "find-prior-work"
+      ],
+      "required_operations": [],
+      "effects": [
+        "read"
+      ],
+      "output_kinds": [
+        "reviewable_text"
+      ],
+      "dependencies": [
+        {
+          "id": "domain.prior_work_search",
+          "kind": "domain",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "ingest-content"
+      ],
+      "required_operations": [
+        "content.convert",
+        "content.read",
+        "content.status",
+        "knowledge.append",
+        "knowledge.collect",
+        "knowledge.create"
+      ],
+      "effects": [
+        "write_workspace",
+        "write_owner"
+      ],
+      "output_kinds": [
+        "knowledge_page"
+      ],
+      "dependencies": [
+        {
+          "id": "runtime.document_conversion",
+          "kind": "runtime",
+          "required": true
+        },
+        {
+          "id": "domain.owner_knowledge_pages",
+          "kind": "domain",
+          "required": true
+        },
+        {
+          "id": "host.trusted_review",
+          "kind": "host",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "interaction-profile"
+      ],
+      "required_operations": [
+        "owner.status"
+      ],
+      "effects": [
+        "read"
+      ],
+      "output_kinds": [
+        "configuration"
+      ],
+      "dependencies": [
+        {
+          "id": "domain.owner_profile_read",
+          "kind": "domain",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "learn-from-logs"
+      ],
+      "required_operations": [
+        "owner.apply",
+        "owner.propose",
+        "owner.status"
+      ],
+      "effects": [
+        "write_owner"
+      ],
+      "output_kinds": [
+        "owner_revision"
+      ],
+      "dependencies": [
+        {
+          "id": "domain.opt_in_prompt_history",
+          "kind": "domain",
+          "required": true
+        },
+        {
+          "id": "host.trusted_review",
+          "kind": "host",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "maestro-doctor"
+      ],
+      "required_operations": [
+        "content.status",
+        "maintenance.report",
+        "maintenance.status"
+      ],
+      "effects": [
+        "read"
+      ],
+      "output_kinds": [
+        "diagnostic_report"
+      ],
+      "dependencies": []
+    },
+    {
+      "method_ids": [
+        "maestro-environment-setup",
+        "maestro-runtime-checkup"
+      ],
+      "required_operations": [
+        "maintenance.enroll",
+        "maintenance.pause",
+        "maintenance.qualify",
+        "maintenance.report",
+        "maintenance.resume",
+        "maintenance.revoke",
+        "maintenance.run",
+        "maintenance.status"
+      ],
+      "effects": [
+        "maintenance"
+      ],
+      "output_kinds": [
+        "configuration",
+        "diagnostic_report"
+      ],
+      "dependencies": [
+        {
+          "id": "host.trusted_review",
+          "kind": "host",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "maestro-onboarding"
+      ],
+      "required_operations": [
+        "owner.apply",
+        "owner.confirm_onboarding",
+        "owner.interview",
+        "owner.onboarding_review",
+        "owner.propose",
+        "owner.review",
+        "owner.status",
+        "owner.track"
+      ],
+      "effects": [
+        "write_owner"
+      ],
+      "output_kinds": [
+        "owner_revision"
+      ],
+      "dependencies": [
+        {
+          "id": "host.trusted_review",
+          "kind": "host",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "maestro-operator"
+      ],
+      "required_operations": [
+        "execution.checkpoint",
+        "execution.list",
+        "execution.next",
+        "execution.pause",
+        "execution.resume",
+        "maintenance.status"
+      ],
+      "effects": [
+        "write_workspace",
+        "write_owner"
+      ],
+      "output_kinds": [
+        "execution_checkpoint",
+        "owner_page"
+      ],
+      "dependencies": [
+        {
+          "id": "domain.daily_checkpoint_queue",
+          "kind": "domain",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "maestro-setup-update"
+      ],
+      "required_operations": [
+        "maintenance.report",
+        "maintenance.status"
+      ],
+      "effects": [
+        "installation"
+      ],
+      "output_kinds": [
+        "configuration"
+      ],
+      "dependencies": [
+        {
+          "id": "domain.signed_installation_operator",
+          "kind": "domain",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "owner-background"
+      ],
+      "required_operations": [
+        "owner.apply",
+        "owner.propose",
+        "owner.status"
+      ],
+      "effects": [
+        "write_owner"
+      ],
+      "output_kinds": [
+        "owner_page"
+      ],
+      "dependencies": [
+        {
+          "id": "domain.owner_background",
+          "kind": "domain",
+          "required": true
+        },
+        {
+          "id": "host.trusted_review",
+          "kind": "host",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "pocock-code-review"
+      ],
+      "required_operations": [],
+      "effects": [
+        "read"
+      ],
+      "output_kinds": [
+        "reviewable_text"
+      ],
+      "dependencies": [
+        {
+          "id": "host.repository_read",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "host.subagents",
+          "kind": "host",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "pocock-diagnosing-bugs",
+        "pocock-tdd",
+        "unit-test-wave",
+        "xfail-bug-capture"
+      ],
+      "required_operations": [],
+      "effects": [
+        "host_execution"
+      ],
+      "output_kinds": [
+        "workspace_artifact",
+        "diagnostic_report"
+      ],
+      "dependencies": [
+        {
+          "id": "host.repository_read",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "host.repository_write",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "host.command_run",
+          "kind": "host",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "pocock-domain-modeling",
+        "pocock-grill-with-docs",
+        "pocock-to-questionnaire",
+        "pocock-writing-for-agents"
+      ],
+      "required_operations": [],
+      "effects": [
+        "write_workspace"
+      ],
+      "output_kinds": [
+        "workspace_artifact"
+      ],
+      "dependencies": [
+        {
+          "id": "host.repository_write",
+          "kind": "host",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "pocock-handoff"
+      ],
+      "required_operations": [],
+      "effects": [
+        "write_workspace"
+      ],
+      "output_kinds": [
+        "workspace_artifact"
+      ],
+      "dependencies": [
+        {
+          "id": "host.authorized_scratch_write",
+          "kind": "host",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "pocock-implement",
+        "pocock-implement-spec"
+      ],
+      "required_operations": [],
+      "effects": [
+        "host_execution"
+      ],
+      "output_kinds": [
+        "workspace_artifact"
+      ],
+      "dependencies": [
+        {
+          "id": "host.repository_read",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "host.repository_write",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "host.command_run",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "host.subagents",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "connector.issue_tracker_read",
+          "kind": "connector",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "pocock-improve-codebase-architecture"
+      ],
+      "required_operations": [],
+      "effects": [
+        "read",
+        "host_execution",
+        "write_host"
+      ],
+      "conditional_effects": [
+        {
+          "effect": "write_workspace",
+          "condition": "After the user selects a candidate, create or update glossary/domain terms as decisions crystallize.",
+          "dependency": "host.repository_write"
+        }
+      ],
+      "output_kinds": [
+        "reviewable_text",
+        "host_artifact"
+      ],
+      "dependencies": [
+        {
+          "id": "host.repository_read",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "host.subagents",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "host.artifact_write",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "host.open_local_artifact",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "host.repository_write",
+          "kind": "host",
+          "required": false
+        },
+        {
+          "id": "host.commands",
+          "kind": "host",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "pocock-retro"
+      ],
+      "required_operations": [],
+      "effects": [
+        "read"
+      ],
+      "output_kinds": [
+        "reviewable_text"
+      ],
+      "dependencies": [
+        {
+          "id": "host.repository_read",
+          "kind": "host",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "pocock-pr"
+      ],
+      "required_operations": [],
+      "effects": [
+        "none"
+      ],
+      "output_kinds": [
+        "reviewable_text"
+      ],
+      "dependencies": [
+        {
+          "id": "host.repository_read",
+          "kind": "host",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "pocock-prototype",
+        "pocock-wizard"
+      ],
+      "required_operations": [],
+      "effects": [
+        "host_execution"
+      ],
+      "output_kinds": [
+        "workspace_artifact"
+      ],
+      "dependencies": [
+        {
+          "id": "host.repository_write",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "host.command_run",
+          "kind": "host",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "pocock-research"
+      ],
+      "required_operations": [],
+      "effects": [
+        "read"
+      ],
+      "output_kinds": [
+        "reviewable_text"
+      ],
+      "dependencies": [
+        {
+          "id": "host.web_read",
+          "kind": "host",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "pocock-setup-matt-pocock-skills"
+      ],
+      "required_operations": [],
+      "effects": [
+        "write_workspace",
+        "external_write"
+      ],
+      "output_kinds": [
+        "configuration",
+        "external_record"
+      ],
+      "dependencies": [
+        {
+          "id": "host.repository_write",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "connector.issue_tracker_write",
+          "kind": "connector",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "pocock-teach"
+      ],
+      "required_operations": [],
+      "effects": [
+        "write_workspace"
+      ],
+      "output_kinds": [
+        "workspace_artifact"
+      ],
+      "dependencies": [
+        {
+          "id": "domain.learning_workspace",
+          "kind": "domain",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "pocock-to-spec",
+        "pocock-to-tickets",
+        "pocock-triage",
+        "pocock-wayfinder"
+      ],
+      "required_operations": [],
+      "effects": [
+        "external_write"
+      ],
+      "output_kinds": [
+        "external_record"
+      ],
+      "dependencies": [
+        {
+          "id": "connector.issue_tracker_write",
+          "kind": "connector",
+          "required": true
+        },
+        {
+          "id": "host.repository_read",
+          "kind": "host",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "pr-quality-loop"
+      ],
+      "required_operations": [],
+      "effects": [
+        "host_execution",
+        "external_write"
+      ],
+      "output_kinds": [
+        "reviewable_text",
+        "external_record"
+      ],
+      "dependencies": [
+        {
+          "id": "connector.github_write",
+          "kind": "connector",
+          "required": true
+        },
+        {
+          "id": "host.repository_write",
+          "kind": "host",
+          "required": true
+        },
+        {
+          "id": "host.command_run",
+          "kind": "host",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "pr-review"
+      ],
+      "required_operations": [],
+      "effects": [
+        "read"
+      ],
+      "output_kinds": [
+        "reviewable_text"
+      ],
+      "dependencies": [
+        {
+          "id": "connector.github_read",
+          "kind": "connector",
+          "required": true
+        },
+        {
+          "id": "host.repository_read",
+          "kind": "host",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "writing-tighten"
+      ],
+      "required_operations": [],
+      "effects": [
+        "none"
+      ],
+      "output_kinds": [
+        "reviewable_text"
+      ],
+      "dependencies": [
+        {
+          "id": "domain.owner_voice_read",
+          "kind": "domain",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "yoda"
+      ],
+      "required_operations": [],
+      "effects": [
+        "none"
+      ],
+      "output_kinds": [
+        "reviewable_text"
+      ],
+      "dependencies": [
+        {
+          "id": "provider.senior_review_model",
+          "kind": "provider",
+          "required": true
+        },
+        {
+          "id": "domain.review_dispatch",
+          "kind": "domain",
+          "required": true
+        }
+      ]
+    }
+  ]
+}
