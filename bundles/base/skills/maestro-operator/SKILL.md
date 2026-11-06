@@ -5,6 +5,15 @@ description: Método operacional do Maestro, carregado no início de cada sessã
 
 # Maestro Operator
 
+## Authored workspace pages in product MCP
+
+When a product-MCP request creates a workspace page, reads a named brief,
+appends a decision, replaces prose, edits a declared field or links another page,
+follow [authored workspace pages](resources/authored-brain.md) before acting.
+That route uses the admitted Maestro connector and its trusted review. The
+filesystem and runtime-helper instructions below apply to the legacy ZIP host;
+product-MCP work follows the operations actually exposed by its bound server.
+
 Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
 
 
