@@ -137,7 +137,7 @@ func (b *Bound) Server() *mcp.Server {
 		variant("execution.list", map[string]any{"offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 128}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 32}}),
 		variant("execution.next", map[string]any{"item_id": strSchema(96)}, "item_id"),
 		variant("execution.contract", map[string]any{"item_id": strSchema(96)}, "item_id"),
-	}, append(append(append(append(ownerQueries(), memoryQueries()...), contentQueries()...), maintenanceQueries()...), wikiQueries()...)...)}
+	}, append(append(append(append(append(ownerQueries(), memoryQueries()...), contentQueries()...), maintenanceQueries()...), wikiQueries()...), brainQueries()...)...)}
 	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read owner metadata/questions, execution continuation, eligible memory, converted content, workspace knowledge or maintenance status through bounded metadata/pages. Private owner/legacy text requires trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
 	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Convert documents, apply reviewed knowledge/owner/memory changes, qualify and enroll exact maintenance jobs, or run active due work. Maintenance lifecycle changes require trusted exact review; execution uses revision/attempt and artifact checks.", InputSchema: productApplySchema()}, b.handle("apply", productApplySchema()))
 	b.registerMethods(s)
@@ -242,14 +242,17 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		if d.Decode(new(any)) != io.EOF {
 			return result(nil, errors.New("trailing_input")), nil
 		}
-		if len(req.Params.Arguments) > 128<<10 && in.Operation != "knowledge.create" {
+		if len(req.Params.Arguments) > 128<<10 && in.Operation != "knowledge.create" && in.Operation != "brain.create" {
 			return result(nil, errors.New("input_size")), nil
 		}
-		if len(req.Params.Arguments) > 16<<10 && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" && in.Operation != "knowledge.create" && in.Operation != "knowledge.append" {
+		if len(req.Params.Arguments) > 16<<10 && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" && in.Operation != "knowledge.create" && in.Operation != "knowledge.append" && in.Operation != "brain.create" {
 			return result(nil, errors.New("input_size")), nil
 		}
 		if kind == "context" {
 			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "next_max_bytes": 2048, "memory": map[string]any{"context_operation": "memory.context", "max_page_bytes": 4096, "synthesis": "local_deterministic", "lifetime": "two_l3_generations_and_exact_owner_review"}}, nil), nil
+		}
+		if strings.HasPrefix(in.Operation, "brain.") {
+			return b.handleBrain(ctx, req, in), nil
 		}
 		if strings.HasPrefix(in.Operation, "maintenance.") {
 			return b.handleMaintenance(ctx, req, in), nil

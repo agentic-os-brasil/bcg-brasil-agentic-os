@@ -6,7 +6,8 @@ param(
     [string]$Kit,
     [string]$KitTestScript,
     [string]$MethodFixture,
-    [string]$SdkWitness
+    [string]$SdkWitness,
+    [switch]$AuthoredBrain
 )
 $ErrorActionPreference = 'Stop'
 $kitInputs = @($Kit, $KitTestScript, $MethodFixture, $SdkWitness)
@@ -89,14 +90,17 @@ try {
     # owner is the standard user; never grant that user access to runner data.
     $launcher = Join-Path $payload 'native-user-launcher.ps1'
     @'
-param([string]$TestBinary, [string]$ProofRoot, [string]$Kit, [string]$KitTestScript, [string]$SdkWitness)
+param([string]$TestBinary, [string]$ProofRoot, [string]$Kit, [string]$KitTestScript, [string]$SdkWitness, [switch]$AuthoredBrain)
 $ErrorActionPreference = 'Stop'
 try {
     $temporary = Join-Path $ProofRoot 'user-temp'
     New-Item -ItemType Directory -Path $temporary | Out-Null
     $env:TEMP = $temporary
     $env:TMP = $temporary
-    $coreOutput = @(& $TestBinary '-test.run' '^TestWindows(Core|DirectoryDurability|PrivateState|OwnerReview)Pilot$' '-test.v' '-test.timeout=600s')
+    $families = @('Core', 'DirectoryDurability', 'PrivateState', 'OwnerReview')
+    if ($AuthoredBrain) { $families += 'AuthoredBrain' }
+    $pattern = '^TestWindows(' + ($families -join '|') + ')Pilot$'
+    $coreOutput = @(& $TestBinary '-test.run' $pattern '-test.v' '-test.timeout=600s')
     $coreExit = $LASTEXITCODE
     $coreOutput | Write-Output
     if ($coreExit -ne 0) { throw "Native Core failed with exit $coreExit." }
@@ -104,8 +108,8 @@ try {
     if ($coreLog -notmatch 'native_windows_environment private_current_user_temp=true' -or
         $coreLog -notmatch 'native_windows_token elevated=false admin_member=false' -or
         $coreLog -match '--- SKIP:') { throw 'Core did not attest the actual ordinary account and private temp without skips.' }
-    foreach ($family in @('Core', 'DirectoryDurability', 'PrivateState', 'OwnerReview')) {
-        if ($coreLog -notmatch ('(?m)^--- PASS: TestWindows' + $family + 'Pilot ')) { throw 'All four Core families must pass before kit qualification.' }
+    foreach ($family in $families) {
+        if ($coreLog -notmatch ('(?m)^--- PASS: TestWindows' + $family + 'Pilot ')) { throw 'Every requested native family must pass before qualification.' }
     }
     if ($Kit) {
         if ($PSVersionTable.PSEdition -ne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) {
@@ -166,6 +170,7 @@ try {
 '@ | Set-Content -LiteralPath $launcher -Encoding utf8
     $powershell = Join-Path $PSHOME 'pwsh.exe'
     $arguments = @('-NoLogo', '-NoProfile', '-NonInteractive', '-File', "`"$launcher`"", '-TestBinary', "`"$nativeTest`"", '-ProofRoot', "`"$OutputRoot`"")
+    if ($AuthoredBrain) { $arguments += '-AuthoredBrain' }
     if ($withKit) {
         $powershell = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
         $arguments += @('-Kit', "`"$nativeKit`"", '-KitTestScript', "`"$nativeKitTest`"", '-SdkWitness', "`"$nativeSdk`"")
@@ -180,7 +185,7 @@ try {
         if ($hadModulePath) { $env:PSModulePath = $priorModulePath }
         else { Remove-Item Env:PSModulePath -ErrorAction SilentlyContinue }
     }
-    if ($withKit) {
+    if ($withKit -or $AuthoredBrain) {
         foreach ($path in @($stdout, $stderr)) {
             if ((Get-Item -LiteralPath $path).Length -gt 2097152) { throw 'Native proof output exceeded its bounded synthetic log contract.' }
         }
@@ -191,6 +196,9 @@ try {
     $log = Get-Content -LiteralPath $stdout -Raw
     if ($log -notmatch 'native_windows_environment private_current_user_temp=true' -or $log -notmatch 'native_windows_token elevated=false admin_member=false' -or $log -notmatch '--- PASS: TestWindowsCorePilot' -or $log -notmatch '--- PASS: TestWindowsDirectoryDurabilityPilot' -or $log -notmatch '--- PASS: TestWindowsPrivateStatePilot' -or $log -notmatch '--- PASS: TestWindowsOwnerReviewPilot' -or $log -match '--- SKIP:') {
         throw 'The standard-user native proof did not run completely.'
+    }
+    if ($AuthoredBrain -and $log -notmatch '(?m)^--- PASS: TestWindowsAuthoredBrainPilot ') {
+        throw 'The authored-brain native family did not pass under the ordinary account.'
     }
     if ($withKit) {
         foreach ($proofName in @('native-core-proof.json', 'native-kit-proof.json', 'native-kit-sdk-proof.json', 'native-kit-qualification.json')) {

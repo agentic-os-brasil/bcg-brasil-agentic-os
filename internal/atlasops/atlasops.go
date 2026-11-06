@@ -295,7 +295,7 @@ func (engine *Engine) AppendEntry(request AppendEntryRequest) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	updated, err := insertUnderSection(current, section, entry)
+	updated, err := PreviewAppend(current, section, entry)
 	if err != nil {
 		return Result{}, err
 	}
@@ -303,6 +303,17 @@ func (engine *Engine) AppendEntry(request AppendEntryRequest) (Result, error) {
 	return engine.commitEdit(commitRequest{operation: "append-entry", operationID: operationID,
 		page: relative, current: current, updated: updated, changed: true,
 		expectedRevision: request.ExpectedRevision, provenance: request.Provenance, requestDigest: requestDigest})
+}
+
+// PreviewAppend computes the exact section edit without acquiring authority or
+// touching disk. Attended adapters can present the same body the writer uses.
+func PreviewAppend(body, section, entry string) (string, error) {
+	section = strings.TrimRight(section, " \t")
+	entry = strings.TrimRight(entry, "\r\n")
+	if !strings.HasPrefix(section, "#") || strings.ContainsAny(section, "\r\n") || strings.TrimSpace(entry) == "" || len(entry) > maximumEntryBytes {
+		return "", errors.New("atlas append requires one existing heading and a bounded entry")
+	}
+	return insertUnderSection(body, section, entry)
 }
 
 // insertUnderSection places the entry at the end of the named section, leaving

@@ -2,11 +2,13 @@ name: Windows native core MCP
 
 on:
   push:
-    branches: [codex/maestro-windows-core]
+    branches: [codex/maestro-windows-core, codex/maestro-brain-filesystem]
   pull_request:
     paths:
       - 'adapters/mcp/**'
       - 'internal/datahome/**'
+      - 'internal/atlas/**'
+      - 'internal/atlasops/**'
       - 'internal/execution/**'
       - 'internal/memory/**'
       - 'internal/ownerctx/**'
@@ -42,7 +44,7 @@ jobs:
       - name: Actual standard-user core journey
         shell: pwsh
         run: |
-          ./acceptance/windows-core-pilot.ps1 -TestBinary (Join-Path $env:RUNNER_TEMP 'windows-core-build/windows-core.test.exe') -Server (Join-Path $env:RUNNER_TEMP 'windows-core-build/maestro-mcp.exe') -OutputRoot (Join-Path $env:RUNNER_TEMP 'windows-core-proof')
+          ./acceptance/windows-core-pilot.ps1 -TestBinary (Join-Path $env:RUNNER_TEMP 'windows-core-build/windows-core.test.exe') -Server (Join-Path $env:RUNNER_TEMP 'windows-core-build/maestro-mcp.exe') -OutputRoot (Join-Path $env:RUNNER_TEMP 'windows-core-proof') -AuthoredBrain
       - name: Keep native proof and actual refusal logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

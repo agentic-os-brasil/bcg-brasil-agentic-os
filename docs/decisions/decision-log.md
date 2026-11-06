@@ -1403,3 +1403,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: These command hooks are non-enforcing and retain host permissions and source/process validation. Stop records observation only, respects recursion and cannot certify work, capture conversations, dream, index, run maintenance or enroll jobs. Packet configuration, actual client delivery, native enforcement, Windows client execution and release acceptance remain separate evidence. Context delivery is validated by a real synthetic client session; it does not qualify the full native profile or complete the second-brain migration.
 - Refs: NPHK; NOBS; specs/063-product-native-plugin.md; specs/019-nonblocking-hook-execution.md; specs/006-memory-persistence.md; specs/060-product-owner-memory.md
 - Supersedes: none
+
+## BRPG - Author reviewed workspace pages through the canonical atlas engine
+
+- Date: 2026-11-06
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The product can write converted document knowledge, but an ordinary attended brief has no conversion artifact. The existing atlas engine already owns authored pages, scoped provenance, revision fences and interrupted-effect recovery; skills cannot replace that missing product invocation route with direct filesystem authority.
+- Decision: Add closed authored-brain query and reviewed mutation variants to the existing three-tool MCP interface. Derive the registered workspace brain from the product binding and reuse atlasops for page creation, declared-section/field changes, links and whole-page replacement. Prepare only fixed workspace templates explicitly. Bind exact reviewed text and current page revisions with truthful attended provenance, without manufacturing conversion or memory authority. Extend the authored frontmatter scope vocabulary with the exact registered workspace identity and preserve legacy pages with diagnostics.
+- Consequences: This is bounded professional Markdown authoring, not arbitrary filesystem RPC, owner-global promotion, memory capture, indexing or background activation. Windows publication must use actual held native directory/lock custody and receive ordinary-user evidence; a permissive capability flip is insufficient. Source, public SDK/compiled acceptance, package and actual client delivery remain distinct. Existing owner/knowledge journal compatibility and user edits are preserved.
+- Refs: specs/064-product-authored-brain.md; specs/014-human-atlas-bootstrap.md; specs/061-product-local-content.md; WATL; AJRC; https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/461; https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/460
+- Supersedes: none
