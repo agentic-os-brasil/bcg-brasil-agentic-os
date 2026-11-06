@@ -66,14 +66,41 @@ type BrainReview struct {
 	Digest      string
 }
 
+// An incomplete preparation reports only confirmed receipts and unconfirmed
+// fixed-plan pages. Pending does not claim absence: an interrupted canonical
+// publication may already have effects that an explicit retry must reconcile.
+type brainPreparationError struct {
+	Completed []atlasops.Result
+	Pending   []string
+	cause     error
+}
+
+func (failure *brainPreparationError) Error() string { return "brain_prepare_incomplete" }
+func (failure *brainPreparationError) Unwrap() error { return failure.cause }
+func incompleteBrainPreparation(review BrainReview, completed []atlasops.Result, next int, cause error) *brainPreparationError {
+	failure := &brainPreparationError{Completed: append([]atlasops.Result{}, completed...), Pending: []string{}, cause: cause}
+	for _, page := range review.Pages[next:] {
+		failure.Pending = append(failure.Pending, page.Page)
+	}
+	return failure
+}
+
 func (b *Bound) brainPage(page string) error {
 	if artifactPath(page) != nil || !strings.HasSuffix(page, ".md") {
 		return errors.New("authored_page_invalid")
 	}
-	for _, reserved := range []string{"owner/", "memory/", "atlas/owner/"} {
-		if strings.HasPrefix(page, reserved) {
-			return errors.New("authored_page_unavailable")
-		}
+	parts := strings.Split(page, "/")
+	// Reserved scope namespaces have one spelling on case-sensitive and
+	// case-insensitive filesystems. Classification must not escape through a
+	// capitalized directory alias before the existing case policy is applied.
+	if strings.EqualFold(parts[0], "accounts") && parts[0] != "accounts" {
+		return errors.New("authored_namespace_invalid")
+	}
+	if parts[0] == "accounts" && len(parts) > 2 && strings.EqualFold(parts[2], "cases") && parts[2] != "cases" {
+		return errors.New("authored_namespace_invalid")
+	}
+	if strings.EqualFold(parts[0], "owner") || strings.EqualFold(parts[0], "memory") || len(parts) > 1 && strings.EqualFold(parts[0], "atlas") && strings.EqualFold(parts[1], "owner") {
+		return errors.New("authored_page_unavailable")
 	}
 	if !workspacepolicy.CasePathAllowed(b.options.WorkspacePath, filepath.Join(b.options.WorkspacePath, "brain", filepath.FromSlash(page))) {
 		return errors.New("authored_case_unavailable")
@@ -113,6 +140,14 @@ func (b *Bound) brainReview(in BrainMutation) (BrainReview, error) {
 	intent, _ := json.Marshal([]any{review.Scope, review.WorkspaceID, in, pages})
 	id := contentDigest(intent)
 	review.Provenance = atlasops.Provenance{Origin: atlasops.OriginAttended, SessionID: "brain-" + id, IdempotencyKey: id, Ritual: "authored-brain"}
+	// A receipt can establish exact-once effect identity, never renewed target
+	// authority. Both endpoints are re-admitted even for a no-op link replay.
+	if in.Operation == "brain.link" {
+		review.Target, err = b.authoredPage(engine, in.Target, "Review the exact authored reference target")
+		if err != nil {
+			return BrainReview{}, err
+		}
+	}
 	for _, page := range pages {
 		if err := b.brainPage(page.Page); err != nil {
 			return BrainReview{}, err
@@ -155,10 +190,7 @@ func (b *Bound) brainReview(in BrainMutation) (BrainReview, error) {
 				case "brain.set_field":
 					page.Text, _, err = atlasops.PreviewField(current.Content, in.Field, in.Value)
 				case "brain.link":
-					review.Target, err = b.authoredPage(engine, in.Target, "Review the exact authored reference target")
-					if err == nil {
-						page.Text, _, err = atlasops.PreviewLink(current.Content, in.Page, in.Section, in.Target, in.Label)
-					}
+					page.Text, _, err = atlasops.PreviewLink(current.Content, in.Page, in.Section, in.Target, in.Label)
 				}
 			}
 			if err != nil {
@@ -191,12 +223,18 @@ func (b *Bound) applyBrainReview(ctx context.Context, in BrainMutation, digest s
 		return nil, err
 	}
 	out := []atlasops.Result{}
-	for _, page := range review.Pages {
+	failed := func(next int, cause error) (any, error) {
+		if in.Operation == "brain.prepare" {
+			return nil, incompleteBrainPreparation(review, out, next, cause)
+		}
+		return nil, cause
+	}
+	for index, page := range review.Pages {
 		if err = ctx.Err(); err != nil {
-			return nil, err
+			return failed(index, err)
 		}
 		if err = b.brainPage(page.Page); err != nil {
-			return nil, err
+			return failed(index, err)
 		}
 		provenance := brainPageProvenance(review, page.Page)
 		var result atlasops.Result
@@ -214,12 +252,17 @@ func (b *Bound) applyBrainReview(ctx context.Context, in BrainMutation, digest s
 		}
 
 		if err != nil {
-			return nil, err
+			return failed(index, err)
 		}
 		if result.State == atlasops.StateProposed {
-			return nil, errOwnerReviewChanged
+			return failed(index, errOwnerReviewChanged)
 		}
 		out = append(out, result)
+		if in.Operation == "brain.prepare" && result.State == atlasops.StateWritten && b.afterBrainPrepareEffect != nil {
+			if err := b.afterBrainPrepareEffect(); err != nil {
+				return failed(index+1, err)
+			}
+		}
 	}
 	if in.Operation != "brain.prepare" {
 		return out[0], nil
@@ -245,7 +288,7 @@ func (b *Bound) handleBrain(ctx context.Context, req *mcp.CallToolRequest, in in
 					diagnostics[page.Page] = atlas.AuthoredDiagnostics(page.Page, b.workspaceID, current.Content)
 				}
 			}
-			value = map[string]any{"workspace_id": b.workspaceID, "prepared": len(missing) == 0, "missing": missing, "diagnostics": diagnostics}
+			value = map[string]any{"workspace_id": b.workspaceID, "prepared": len(missing) == 0, "mutation_available": atlasops.WorkspaceMutationReady(), "missing": missing, "diagnostics": diagnostics}
 		case "brain.templates":
 			templates := []map[string]any{}
 			for _, page := range atlas.WorkspacePages(b.workspaceID, time.Now()) {
@@ -286,6 +329,13 @@ func (b *Bound) handleBrain(ctx context.Context, req *mcp.CallToolRequest, in in
 	}
 	if err == nil {
 		err = b.validate()
+		if err != nil && in.Operation == "brain.prepare" {
+			if prepared, ok := value.(map[string]any); ok {
+				if completed, ok := prepared["pages"].([]atlasops.Result); ok {
+					err = &brainPreparationError{Completed: completed, Pending: []string{}, cause: err}
+				}
+			}
+		}
 	}
 	if err == nil {
 		return result(value, nil)
@@ -293,6 +343,18 @@ func (b *Bound) handleBrain(ctx context.Context, req *mcp.CallToolRequest, in in
 	var pending *confirmationPending
 	if errors.As(err, &pending) {
 		return pending.result
+	}
+	var incomplete *brainPreparationError
+	if errors.As(err, &incomplete) {
+		preserved := []string{}
+		for _, entry := range incomplete.Completed {
+			if entry.State == atlasops.StateUnchanged {
+				preserved = append(preserved, entry.Page)
+			}
+		}
+		out := result(map[string]any{"code": "brain_prepare_incomplete", "state": "incomplete", "workspace_id": b.workspaceID, "completed": incomplete.Completed, "pending": incomplete.Pending, "preserved_pages": preserved, "retryable": false, "next_action": "Inspect brain.status, then explicitly review a new brain.prepare. Pending pages are unconfirmed and may already exist; do not repair or delete them automatically."}, nil)
+		out.IsError = true
+		return out
 	}
 	code := "brain_rejected"
 	switch {

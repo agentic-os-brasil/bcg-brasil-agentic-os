@@ -308,7 +308,7 @@ func (engine *Engine) AppendEntry(request AppendEntryRequest) (Result, error) {
 // PreviewAppend computes the exact section edit without acquiring authority or
 // touching disk. Attended adapters can present the same body the writer uses.
 func PreviewAppend(body, section, entry string) (string, error) {
-	section = strings.TrimRight(section, " \t")
+	section = strings.TrimRight(section, " \t\r")
 	entry = strings.TrimRight(entry, "\r\n")
 	if !strings.HasPrefix(section, "#") || strings.ContainsAny(section, "\r\n") || strings.TrimSpace(entry) == "" || len(entry) > maximumEntryBytes {
 		return "", errors.New("atlas append requires one existing heading and a bounded entry")
@@ -324,7 +324,7 @@ func insertUnderSection(body, section, entry string) (string, error) {
 	start := -1
 	matches := 0
 	for index, line := range lines {
-		if strings.TrimRight(line, " \t") == section {
+		if strings.TrimRight(line, " \t\r") == section {
 			matches++
 			if start < 0 {
 				start = index
@@ -344,7 +344,7 @@ func insertUnderSection(body, section, entry string) (string, error) {
 	level := len(section) - len(strings.TrimLeft(section, "#"))
 	end := len(lines)
 	for index := start + 1; index < len(lines); index++ {
-		trimmed := strings.TrimRight(lines[index], " \t")
+		trimmed := strings.TrimRight(lines[index], " \t\r")
 		if !strings.HasPrefix(trimmed, "#") {
 			continue
 		}
@@ -359,9 +359,27 @@ func insertUnderSection(body, section, entry string) (string, error) {
 	for insert > start+1 && strings.TrimSpace(lines[insert-1]) == "" {
 		insert--
 	}
-	updated := make([]string, 0, len(lines)+1)
+	// Existing line strings retain their original CR bytes. Only the new entry
+	// adopts the selected heading's line ending; surrounding mixed/LF/CRLF
+	// source remains byte-for-byte unchanged.
+	crlf := strings.HasSuffix(lines[start], "\r")
+	if start == len(lines)-1 && start > 0 {
+		crlf = strings.HasSuffix(lines[start-1], "\r")
+	}
+	entries := strings.Split(strings.ReplaceAll(entry, "\r\n", "\n"), "\n")
+	if crlf {
+		if insert == len(lines) && insert > 0 && !strings.HasSuffix(lines[insert-1], "\r") {
+			lines[insert-1] += "\r"
+		}
+		for index := range entries {
+			if index < len(entries)-1 || insert < len(lines) {
+				entries[index] += "\r"
+			}
+		}
+	}
+	updated := make([]string, 0, len(lines)+len(entries))
 	updated = append(updated, lines[:insert]...)
-	updated = append(updated, entry)
+	updated = append(updated, entries...)
 	updated = append(updated, lines[insert:]...)
 	return strings.Join(updated, "\n"), nil
 }

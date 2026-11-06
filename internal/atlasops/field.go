@@ -177,7 +177,7 @@ func PreviewField(body, field, value string) (string, bool, error) {
 // PreviewLink computes the same relative reference and duplicate handling used
 // by Link. Callers still resolve and authorize both page names independently.
 func PreviewLink(body, page, section, target, label string) (string, bool, error) {
-	section, label = strings.TrimRight(section, " \t"), strings.TrimSpace(label)
+	section, label = strings.TrimRight(section, " \t\r"), strings.TrimSpace(label)
 	if !strings.HasPrefix(section, "#") || strings.ContainsAny(section, "\r\n") || label == "" || strings.ContainsAny(label, "\r\n[]") {
 		return "", false, errors.New("atlas link requires an existing heading and a plain label")
 	}
@@ -215,6 +215,9 @@ func replaceField(body, field, value string) (string, bool, error) {
 	replacement := indent + prefix
 	if value != "" {
 		replacement += " " + value
+	}
+	if strings.HasSuffix(lines[index], "\r") {
+		replacement += "\r"
 	}
 	if lines[index] == replacement {
 		return body, false, nil

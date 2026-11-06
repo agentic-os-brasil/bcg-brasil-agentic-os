@@ -102,3 +102,7 @@ func (engine *Engine) pointer(page string) string {
 	}
 	return "bcgos://atlas/owner/" + page
 }
+
+// WorkspaceMutationReady reports the owning platform gate without touching
+// state. Binding admission and actual mutation checks still run separately.
+func WorkspaceMutationReady() bool { return workspaceMutationAvailable() == nil }

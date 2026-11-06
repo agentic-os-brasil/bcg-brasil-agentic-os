@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -39,9 +40,11 @@ func TestWindowsAuthoredBrainPilot(t *testing.T) {
 	}
 	managed := windowsCoreTree(t, product)
 	approved := true
+	var reviews atomic.Int32
 	var intervene func() error
 	connect := func() *mcp.ClientSession {
 		client := mcp.NewClient(&mcp.Implementation{Name: "windows-authored-brain-proof", Version: "1"}, &mcp.ClientOptions{ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			reviews.Add(1)
 			if intervene != nil {
 				if err := intervene(); err != nil {
 					return nil, err
@@ -63,7 +66,10 @@ func TestWindowsAuthoredBrainPilot(t *testing.T) {
 	cs := connect()
 	id := contentCall(t, cs, "maestro_context", map[string]any{}, false)["workspace_id"].(string)
 	before := windowsCoreTree(t, workspacePath)
-	brainCall(t, cs, "status", nil, false)
+	status := brainCall(t, cs, "status", nil, false)
+	if status["mutation_available"] != true {
+		t.Fatal("qualified native backend was not available", status)
+	}
 	brainCall(t, cs, "templates", nil, false)
 	approved = false
 	brainCall(t, cs, "prepare", nil, true)
@@ -78,7 +84,8 @@ func TestWindowsAuthoredBrainPilot(t *testing.T) {
 	if created["state"] != "written" {
 		t.Fatal("ordinary attended native page was not written", created)
 	}
-	changed := brainCall(t, cs, "append", map[string]any{"page": page, "section": "## Decisions", "text": "- Native reviewed decision.", "expected_page_revision": created["revision"]}, false)
+	appendRequest := map[string]any{"page": page, "section": "## Decisions", "text": "- Native reviewed decision.", "expected_page_revision": created["revision"]}
+	changed := brainCall(t, cs, "append", appendRequest, false)
 	if err := cs.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +94,31 @@ func TestWindowsAuthoredBrainPilot(t *testing.T) {
 	if read["revision"] != changed["revision"] || strings.Count(read["text"].(string), "Native reviewed decision.") != 1 {
 		t.Fatal("native restart lost authored decision", read)
 	}
-	later := strings.Replace(read["text"].(string), "## Related", "- Native newer work.\n\n## Related", 1)
+	exactReplay := func(operation string, args map[string]any, written map[string]any) {
+		replayed := brainCall(t, cs, operation, args, false)
+		if replayed["state"] != "unchanged" || replayed["revision"] != written["revision"] {
+			t.Fatal("exact native operation did not converge through canonical journal", operation, replayed)
+		}
+	}
+	exactReplay("append", appendRequest, changed)
+	updatedBody := strings.Replace(read["text"].(string), "A reviewed synthetic kickoff brief.", "The native project scope has been reviewed.", 1)
+	updateRequest := map[string]any{"page": page, "text": updatedBody, "expected_page_revision": changed["revision"]}
+	updated := brainCall(t, cs, "update", updateRequest, false)
+	exactReplay("update", updateRequest, updated)
+	fieldRequest := map[string]any{"page": page, "field": "Status", "value": "ready for native review", "expected_page_revision": updated["revision"]}
+	field := brainCall(t, cs, "set_field", fieldRequest, false)
+	exactReplay("set_field", fieldRequest, field)
+	const target = "people/native-sponsor.md"
+	brainCall(t, cs, "create", map[string]any{"page": target, "text": authoredBrief(id, target, "Native sponsor")}, false)
+	linkRequest := map[string]any{"page": page, "section": "## Related", "target": target, "label": "Native sponsor", "expected_page_revision": field["revision"]}
+	linked := brainCall(t, cs, "link", linkRequest, false)
+	exactReplay("link", linkRequest, linked)
+	read = brainCall(t, cs, "read", map[string]any{"page": page, "purpose": "Verify the complete native reviewed brief"}, false)
+	finalText := read["text"].(string)
+	if read["revision"] != linked["revision"] || !strings.Contains(finalText, "The native project scope has been reviewed.") || !strings.Contains(finalText, "- **Status:** ready for native review") || !strings.Contains(finalText, "[Native sponsor](../people/native-sponsor.md)") || strings.Count(finalText, "Native reviewed decision.") != 1 {
+		t.Fatal("native edit workflow lost prose, field, reference or exact-once decision", read)
+	}
+	later := strings.Replace(finalText, "## Related", "- Native newer work.\n\n## Related", 1)
 	intervene = func() error {
 		return scheduler.WritePrivateFileAtomic(filepath.Join(workspacePath, "brain", filepath.FromSlash(page)), []byte(later))
 	}
@@ -111,10 +142,60 @@ func TestWindowsAuthoredBrainPilot(t *testing.T) {
 	if err != nil || string(actual) != body {
 		t.Fatal("native alias touched outside bytes", err)
 	}
+	const crlfPage = "projects/native-crlf.md"
+	crlfBody := strings.ReplaceAll(authoredBrief(id, crlfPage, "Native CRLF brief"), "\n", "\r\n")
+	crlfCreated := brainCall(t, cs, "create", map[string]any{"page": crlfPage, "text": crlfBody}, false)
+	crlfAppend := brainCall(t, cs, "append", map[string]any{"page": crlfPage, "section": "## Decisions", "text": "- Preserve native CRLF.", "expected_page_revision": crlfCreated["revision"]}, false)
+	crlfField := brainCall(t, cs, "set_field", map[string]any{"page": crlfPage, "field": "Status", "value": "native CRLF reviewed", "expected_page_revision": crlfAppend["revision"]}, false)
+	crlfLink := brainCall(t, cs, "link", map[string]any{"page": crlfPage, "section": "## Related", "target": target, "label": "Native sponsor", "expected_page_revision": crlfField["revision"]}, false)
+	crlfRead := brainCall(t, cs, "read", map[string]any{"page": crlfPage, "purpose": "Verify actual native Windows CRLF preservation"}, false)
+	crlfExpected := strings.Replace(crlfBody, "## Decisions\r\n", "## Decisions\r\n- Preserve native CRLF.\r\n", 1)
+	crlfExpected = strings.Replace(crlfExpected, "- **Status:** draft\r\n", "- **Status:** native CRLF reviewed\r\n", 1)
+	crlfExpected = strings.Replace(crlfExpected, "## Related\r\n", "## Related\r\n- [Native sponsor](../people/native-sponsor.md)\r\n", 1)
+	if crlfRead["text"] != crlfExpected || crlfRead["revision"] != crlfLink["revision"] {
+		t.Fatal("actual native CRLF edits changed surrounding bytes", crlfRead)
+	}
+
+	// The same canonical namespace owner must protect actual case-insensitive
+	// Windows reads and both endpoints of an authored reference.
+	marker := filepath.Join(workspacePath, "brain", "accounts", ".active")
+	if err = scheduler.EnsurePrivateDirectory(filepath.Dir(marker)); err != nil {
+		t.Fatal(err)
+	}
+	if err = scheduler.WritePrivateFileAtomic(marker, []byte("a/selected\n")); err != nil {
+		t.Fatal(err)
+	}
+	const selected = "accounts/a/cases/selected/notes.md"
+	selectedBody := strings.Replace(authoredBrief(id, selected, "Native selected case"), "scope: workspace/"+id, "scope: account/a/case/selected", 1)
+	selectedBody = strings.Replace(selectedBody, "sensitivity: internal", "sensitivity: client-confidential", 1)
+	selectedResult := brainCall(t, cs, "create", map[string]any{"page": selected, "text": selectedBody}, false)
+	selectedRead := brainCall(t, cs, "read", map[string]any{"page": selected, "purpose": "Continue the actual selected native case"}, false)
+	if selectedRead["text"] != selectedBody {
+		t.Fatal("native current-case source unavailable", selectedRead)
+	}
+	foreign := filepath.Join(workspacePath, "brain", "accounts", "a", "cases", "foreign", "notes.md")
+	if err = scheduler.EnsurePrivateDirectory(filepath.Dir(foreign)); err != nil {
+		t.Fatal(err)
+	}
+	foreignBody := "# Preserve native foreign case bytes\n"
+	if err = scheduler.WritePrivateFileAtomic(foreign, []byte(foreignBody)); err != nil {
+		t.Fatal(err)
+	}
+	beforeForeignReviews := reviews.Load()
+	for _, alias := range []string{"accounts/a/cases/foreign/notes.md", "Accounts/a/cases/foreign/notes.md", "accounts/a/Cases/foreign/notes.md", "ACCOUNTS/A/CASES/foreign/notes.md"} {
+		brainCall(t, cs, "read", map[string]any{"page": alias, "purpose": "Refuse native foreign-case aliases"}, true)
+		brainCall(t, cs, "link", map[string]any{"page": selected, "section": "## Related", "target": alias, "label": "Foreign case", "expected_page_revision": selectedResult["revision"]}, true)
+	}
+	if reviews.Load() != beforeForeignReviews {
+		t.Fatal("native foreign case reached trusted host review")
+	}
+	if actual, err := scheduler.ReadPrivateFile(foreign, 4096); err != nil || string(actual) != foreignBody {
+		t.Fatal("native foreign case bytes changed", err)
+	}
 	if !reflect.DeepEqual(managed, windowsCoreTree(t, product)) {
 		t.Fatal("authored native journey changed managed product")
 	}
-	t.Log("native_authored_brain shipping_server=true attended_create=true restarted_read=true stale_preserves_newer=true declined_prepare_readonly=true hardlink_refused=true")
+	t.Log("native_authored_brain shipping_server=true attended_create=true restarted_read=true update=true set_field=true link=true exact_replay_all_edits=true stale_preserves_newer=true declined_prepare_readonly=true hardlink_refused=true selected_case_available=true foreign_case_aliases_refused=true crlf_preserved=true")
 
 	t.Run("eager_registered_brain_identity", func(t *testing.T) {
 		local := windowsPrivateRoot(t)

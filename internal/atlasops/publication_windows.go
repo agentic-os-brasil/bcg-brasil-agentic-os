@@ -3,22 +3,23 @@
 package atlasops
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
 )
 
-// Preserve the existing owner constructor and behavior; new workspace effects
-// require a separately qualified native ownership/confinement publisher.
+// The held publisher, eager binding snapshots and directory/lock custody were
+// qualified under an actual ordinary account before composition with workspace
+// effects (native run 42246115162, source 8558e693). The actual owner provider
+// must still be available; every effect independently pins and validates its
+// exact registered roots, ACLs, leaf and corpus lock.
 func workspaceMutationAvailable() error {
-	return errors.New("workspace atlas mutation is unavailable on Windows pending native confinement qualification")
+	_, err := winprivate.CurrentUser()
+	return err
 }
 
-// Native read/publication retain the admitted parent through the complete
-// effect and cleanup. The public availability gate above stays closed until the
-// dedicated ordinary-account kernel evidence qualifies this implementation.
+// Retain the admitted parent through complete native publication and cleanup.
 func publishAtlasFile(path string, body []byte, exclusive, _ bool) error {
 	d, err := winprivate.OpenPinned(filepath.Dir(path))
 	if err != nil {

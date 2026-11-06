@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"unicode/utf8"
 
@@ -270,4 +271,109 @@ func TestAuthoredBrainChangedReviewAndUTF8ReadBounds(t *testing.T) {
 		t.Fatal("changed review overwrote newer bytes")
 	}
 	brainCall(t, cs, "create", map[string]any{"page": "projects/oversize.md", "text": authoredBrief(workspace, "projects/oversize.md", "Oversize") + strings.Repeat("x", 256<<10)}, true)
+}
+
+func TestAuthoredBrainForeignCaseAliasesRemainOutsideScope(t *testing.T) {
+	for _, stdio := range []bool{false, true} {
+		t.Run(fmt.Sprint(stdio), func(t *testing.T) {
+			f := newOwnerFixture(t, stdio)
+			var reviews atomic.Int32
+			cs := f.connect(t, func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+				reviews.Add(1)
+				return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"approved": true}}, nil
+			})
+			workspace := contentCall(t, cs, "maestro_context", map[string]any{}, false)["workspace_id"].(string)
+			marker := filepath.Join(f.options.WorkspacePath, "brain", "accounts", ".active")
+			foreign := filepath.Join(f.options.WorkspacePath, "brain", "accounts", "a", "cases", "foreign", "notes.md")
+			putContentFile(t, marker, []byte("a/selected\n"))
+			putContentFile(t, foreign, []byte("# Foreign case must remain outside this conversation\n"))
+			before := string(readContentFile(t, foreign))
+			const source = "accounts/a/cases/selected/notes.md"
+			sourceBody := authoredBrief(workspace, source, "Scope-bound brief")
+			sourceBody = strings.Replace(sourceBody, "scope: workspace/"+workspace, "scope: account/a/case/selected", 1)
+			sourceBody = strings.Replace(sourceBody, "sensitivity: internal", "sensitivity: client-confidential", 1)
+			created := brainCall(t, cs, "create", map[string]any{"page": source, "text": sourceBody}, false)
+			current := brainCall(t, cs, "read", map[string]any{"page": source, "purpose": "Continue the confirmed current case"}, false)
+			if current["text"] != sourceBody || current["revision"] != created["revision"] {
+				t.Fatal("current-case authoring was not available", current)
+			}
+			initialReviews := reviews.Load()
+			for _, page := range []string{"accounts/a/cases/foreign/notes.md", "Accounts/a/cases/foreign/notes.md", "accounts/a/Cases/foreign/notes.md", "ACCOUNTS/A/CASES/foreign/notes.md", "accounts/a/cases/FOREIGN/notes.md"} {
+				brainCall(t, cs, "read", map[string]any{"page": page, "purpose": "Refuse a foreign case including filesystem case aliases"}, true)
+				brainCall(t, cs, "link", map[string]any{"page": source, "section": "## Related", "target": page, "label": "Foreign case", "expected_page_revision": created["revision"]}, true)
+				if reviews.Load() != initialReviews {
+					t.Fatal("foreign case reached host review instead of refusing before disclosure")
+				}
+			}
+			for _, reserved := range []struct{ actual, alias string }{
+				{"owner/private.md", "Owner/private.md"}, {"memory/private.md", "MEMORY/private.md"}, {"atlas/owner/private.md", "Atlas/Owner/private.md"},
+			} {
+				path := filepath.Join(f.options.WorkspacePath, "brain", filepath.FromSlash(reserved.actual))
+				literal := "# Preserve reserved private namespace fixture\n"
+				putContentFile(t, path, []byte(literal))
+				brainCall(t, cs, "read", map[string]any{"page": reserved.alias, "purpose": "Refuse reserved private namespace aliases"}, true)
+				brainCall(t, cs, "create", map[string]any{"page": reserved.alias, "text": authoredBrief(workspace, reserved.alias, "Reserved")}, true)
+				brainCall(t, cs, "link", map[string]any{"page": source, "section": "## Related", "target": reserved.alias, "label": "Reserved", "expected_page_revision": created["revision"]}, true)
+				if reviews.Load() != initialReviews || string(readContentFile(t, path)) != literal {
+					t.Fatal("reserved namespace was disclosed or changed")
+				}
+			}
+			if string(readContentFile(t, foreign)) != before || string(readContentFile(t, filepath.Join(f.options.WorkspacePath, "brain", filepath.FromSlash(source)))) != sourceBody {
+				t.Fatal("scope refusal changed a foreign case or selected source")
+			}
+		})
+	}
+}
+
+func TestAuthoredBrainLinkReplayRevalidatesCurrentCaseTarget(t *testing.T) {
+	for _, stdio := range []bool{false, true} {
+		t.Run(fmt.Sprint(stdio), func(t *testing.T) {
+			f := newOwnerFixture(t, stdio)
+			cs := f.connect(t, func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+				return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"approved": true}}, nil
+			})
+			id := contentCall(t, cs, "maestro_context", map[string]any{}, false)["workspace_id"].(string)
+			marker := filepath.Join(f.options.WorkspacePath, "brain", "accounts", ".active")
+			putContentFile(t, marker, []byte("a/selected\n"))
+			const source, target = "projects/scoped-link.md", "accounts/a/cases/selected/notes.md"
+			created := brainCall(t, cs, "create", map[string]any{"page": source, "text": authoredBrief(id, source, "Scoped reference")}, false)
+			targetBody := strings.Replace(authoredBrief(id, target, "Selected target"), "scope: workspace/"+id, "scope: account/a/case/selected", 1)
+			targetBody = strings.Replace(targetBody, "sensitivity: internal", "sensitivity: client-confidential", 1)
+			brainCall(t, cs, "create", map[string]any{"page": target, "text": targetBody}, false)
+			args := map[string]any{"page": source, "section": "## Related", "target": target, "label": "Selected target", "expected_page_revision": created["revision"]}
+			linked := brainCall(t, cs, "link", args, false)
+			putContentFile(t, marker, []byte("a/other\n"))
+			brainCall(t, cs, "link", args, true)
+			read := brainCall(t, cs, "read", map[string]any{"page": source, "purpose": "Keep the existing reference without renewed target authority"}, false)
+			if read["revision"] != linked["revision"] || strings.Count(read["text"].(string), "[Selected target]") != 1 {
+				t.Fatal("scope change rewrote existing reference", read)
+			}
+		})
+	}
+}
+
+func TestAuthoredBrainCRLFEditsPreserveSurroundingBytes(t *testing.T) {
+	for _, stdio := range []bool{false, true} {
+		t.Run(fmt.Sprint(stdio), func(t *testing.T) {
+			f := newOwnerFixture(t, stdio)
+			cs := f.connect(t, func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+				return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"approved": true}}, nil
+			})
+			id := contentCall(t, cs, "maestro_context", map[string]any{}, false)["workspace_id"].(string)
+			const page, target = "projects/crlf.md", "people/crlf-target.md"
+			body := strings.ReplaceAll(authoredBrief(id, page, "CRLF brief"), "\n", "\r\n")
+			created := brainCall(t, cs, "create", map[string]any{"page": page, "text": body}, false)
+			brainCall(t, cs, "create", map[string]any{"page": target, "text": authoredBrief(id, target, "CRLF target")}, false)
+			appended := brainCall(t, cs, "append", map[string]any{"page": page, "section": "## Decisions", "text": "- Preserve CRLF.\n- Preserve surrounding bytes.", "expected_page_revision": created["revision"]}, false)
+			field := brainCall(t, cs, "set_field", map[string]any{"page": page, "field": "Status", "value": "reviewed", "expected_page_revision": appended["revision"]}, false)
+			linked := brainCall(t, cs, "link", map[string]any{"page": page, "section": "## Related", "target": target, "label": "CRLF target", "expected_page_revision": field["revision"]}, false)
+			read := brainCall(t, cs, "read", map[string]any{"page": page, "purpose": "Continue a Windows-style authored brief without rewriting its line endings"}, false)
+			expected := strings.Replace(body, "## Decisions\r\n", "## Decisions\r\n- Preserve CRLF.\r\n- Preserve surrounding bytes.\r\n", 1)
+			expected = strings.Replace(expected, "- **Status:** draft\r\n", "- **Status:** reviewed\r\n", 1)
+			expected = strings.Replace(expected, "## Related\r\n", "## Related\r\n- [CRLF target](../people/crlf-target.md)\r\n", 1)
+			if read["text"] != expected || read["revision"] != linked["revision"] {
+				t.Fatal("CRLF edit changed surrounding bytes or introduced mixed line endings", read)
+			}
+		})
+	}
 }

@@ -21,12 +21,15 @@ Keep the existing three MCP tools. Add closed variants:
   `brain.update`, `brain.set_field`, `brain.link`.
 
 Every root and workspace identity comes from the admitted product binding.
-Relative Markdown page names are canonical, bounded and reject traversal,
+Relative Markdown page names use canonical reserved namespace spellings (`accounts`,
+`cases`, `owner`, `memory`, `atlas/owner`) on both case-sensitive and
+case-insensitive filesystems. Names are bounded and reject traversal,
 backslashes, absolute/hidden paths and the machine journal. Existing case
 selection policy applies to both selected and linked pages. A read may name one
 page for a declared purpose; it returns revision/pointer, a UTF-8-safe page of at
 most 4096 bytes and the actual authored-page contract diagnostics. It does not
-enumerate or repair the corpus. `status` and `templates` write nothing.
+enumerate or repair the corpus. `status` and `templates` write nothing. Status reports the owning platform
+`mutation_available` gate independently from template readiness.
 
 Reuse `atlasops.OpenWorkspace`, CreatePage, AppendEntry, SetField, Link, named
 collection/review, grant checks, the corpus lock and prepared operation journal.
@@ -42,7 +45,11 @@ set. It never initializes owner-global atlas, reviewed-memory authority or a
 case selection. Existing files, templates and hand edits remain unchanged.
 Review presents the exact plan and missing-page effects. Repetition is
 idempotent. Partial preparation preserves existing and already created state;
-it reports the incomplete outcome without deleting or repairing anything.
+it reports `brain_prepare_incomplete`, with confirmed `completed` receipts,
+`preserved_pages`, and unconfirmed `pending` pages. Pending is not a claim of
+absence: an interrupted publication may already exist. The operation preserves
+all state for a new explicit reviewed preparation and performs no rollback,
+deletion or permission repair.
 
 New pages and replacement bodies require the canonical eight-field authored
 frontmatter: `id`, `title`, `summary`, `type`, `scope`, `status`, `sensitivity`,

@@ -33,6 +33,9 @@ type Bound struct {
 	home, workspaceID string
 	store             execution.Store
 	maintenanceClock  func() time.Time
+	// Deterministic test interruption after an actual prepared page effect.
+	// This has no runtime configuration or MCP argument.
+	afterBrainPrepareEffect func() error
 }
 
 func Open(o Options) (*Bound, error) {
