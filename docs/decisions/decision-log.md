@@ -1431,3 +1431,14 @@ source revision fence, explicit review, nil-policy owner compatibility and the
 existing prepared journal. Tests use synthetic, held-lock schedules and no
 runtime/model authority switches. This refines BRPG; it creates no arbitrary
 filesystem surface or stronger marker-transaction claim.
+
+## WPGH - Retain native Windows namespace custody for private memory graphs
+
+- Date: 2026-11-06
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: PWKC already owns private graph semantics, but Windows currently refuses the private-wiki source scope. Native leaf handles alone do not retain ancestor names across a graph transaction or recursive retirement.
+- Decision: Reuse the canonical winprivate walker and deletion implementation with finite pinned-tree variants. Hold ordinary ancestor handles without DELETE sharing while granting private owner authority only at the admitted leaf. Memory retains its existing source/cohort/visibility/activation/parent transaction and uses platform custody for snapshots, graph reads, publication and denial-first retirement. Preserve existing Open, Inspect, OpenPinned and Remove behavior for all current callers.
+- Consequences: Namespace replacement and conflicting native handles refuse rather than redirect effects. Retirement cannot pin the graph that it must delete; it holds the workspace parent and recursively retains each DELETE-authorized child until cleanup. Failed cleanup leaves the durable denial barrier and reports incomplete retirement. Unix IO ordering and the pure compiler remain unchanged. Native Windows conformance, final packet/client acceptance and production release qualification remain separate gates.
+- Refs: specs/008-wiki-update-okf.md; docs/product-windows-private-wiki.md; internal/memory/private_wiki_custody_windows.go; internal/winprivate; #468; #460; PWKC; BRPG
+- Supersedes: none
