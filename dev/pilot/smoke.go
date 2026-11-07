@@ -33,12 +33,15 @@ func main() {
 	const summary = "MAESTRO_PILOT_2026_11_05"
 	const accepted = "MAESTRO_PILOT_ACCEPTED_2026_11_05: preserve the explicit next step"
 	const declined = "MAESTRO_PILOT_DECLINED_2026_11_05: this must not persist"
+	const authoredMarker = "MAESTRO_PILOT_AUTHORED_2026_11_06"
 	var reviews []string
+	var admittedWorkspace string
 	connect := func(server string, approve bool) *mcp.ClientSession {
 		command := exec.CommandContext(ctx, server, "serve", "--product-root", filepath.Join(*root, "product"), "--user-home", filepath.Join(*root, "user"), "--workspace", filepath.Join(*root, "workspace"))
 		options := &mcp.ClientOptions{ElicitationHandler: func(_ context.Context, request *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
 			reviews = append(reviews, request.Params.Message)
-			if approve && strings.Contains(request.Params.Message, accepted) {
+			knownWikiReview := admittedWorkspace != "" && strings.Contains(request.Params.Message, admittedWorkspace) && strings.Contains(request.Params.Message, "wiki-incremental-sync")
+			if approve && (strings.Contains(request.Params.Message, accepted) || strings.Contains(request.Params.Message, authoredMarker) || knownWikiReview) {
 				return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"approved": true}}, nil
 			}
 			return &mcp.ElicitResult{Action: "decline"}, nil
@@ -81,6 +84,7 @@ func main() {
 	if !ok || workspace == "" {
 		panic("missing workspace identity")
 	}
+	admittedWorkspace = workspace
 	created := call(first, "maestro_apply", map[string]any{"operation": "execution.create", "objective": "Ensaio de continuidade do Maestro", "next_step": "Retomar no Desktop", "artifacts": []string{"EXEMPLO.md"}}, false)
 	id := created["item_id"].(string)
 	mutate := func(session *mcp.ClientSession, operation string, revision any, attempt string, extra map[string]any, wantError bool) map[string]any {
@@ -104,6 +108,52 @@ func main() {
 	if capture["eligible"] != true || len(reviews) != 1 || !strings.Contains(reviews[0], accepted) {
 		panic("capture did not use exact reviewed source")
 	}
+	methods := call(first, "maestro_query", map[string]any{"operation": "methods.list", "limit": 1}, false)
+	if methods["total"] != float64(92) {
+		panic("actual packet cannot discover the canonical method catalog")
+	}
+	const recipeURI = "maestro://methods/maestro-operator/resources/authored-brain.md"
+	recipe, err := os.ReadFile(filepath.Join(*root, "exports/code-marketplace/plugins/maestro-product/skills/maestro-operator/resources/authored-brain.md"))
+	must(err)
+	var retrieved strings.Builder
+	for offset := 0; ; {
+		page := call(first, "maestro_query", map[string]any{"operation": "methods.read", "resource_uri": recipeURI, "offset": offset, "max_bytes": 4096}, false)
+		if page["sha256"] != fmt.Sprintf("%x", sha256.Sum256(recipe)) || page["total_bytes"] != float64(len(recipe)) {
+			panic("immutable authored recipe differs from the distributed packet")
+		}
+		retrieved.WriteString(page["text"].(string))
+		if page["has_more"] == false {
+			break
+		}
+		next := int(page["next_offset"].(float64))
+		if next <= offset {
+			panic("method resource paging did not advance")
+		}
+		offset = next
+	}
+	if retrieved.String() != string(recipe) {
+		panic("canonical method bytes were not completely recovered")
+	}
+	plan := call(first, "maestro_query", map[string]any{"operation": "methods.plan", "method_id": "maestro-operator"}, false)
+	if plan["execution_state"] != "not_executed" {
+		panic("method selection claimed execution")
+	}
+	const authoredPage = "projects/pilot-shared.md"
+	authoredBody := fmt.Sprintf("---\nid: projects/pilot-shared\ntitle: Reviewed pilot page\nsummary: A synthetic page shared by the pilot clients.\ntype: project-brief\nscope: workspace/%s\nstatus: draft\nsensitivity: internal\nupdated: %s\n---\n# Reviewed pilot page\n\n%s\n", workspace, time.Now().UTC().Format("2006-01-02"), authoredMarker)
+	authored := call(first, "maestro_apply", map[string]any{"operation": "brain.create", "page": authoredPage, "text": authoredBody}, false)
+	if authored["state"] != "written" {
+		panic("actual kit did not persist its reviewed authored page")
+	}
+	call(first, "maestro_apply", map[string]any{"operation": "memory.consolidate", "cycle": "daily", "date": time.Now().UTC().Format("2006-01-02")}, false)
+	qualification := call(first, "maestro_apply", map[string]any{"operation": "maintenance.qualify", "job_id": "wiki-incremental-sync", "expected_revision": 0}, false)
+	if qualification["qualification_state"] != "qualified" || qualification["state"] != "inactive" {
+		panic("kit did not qualify private wiki without activating recurring work")
+	}
+	wiki := call(first, "maestro_query", map[string]any{"operation": "wiki.status"}, false)
+	wikiGeneration, ok := wiki["generation"].(string)
+	if !ok || wikiGeneration == "" || wiki["state"] != "current" {
+		panic("actual committed memory did not yield a current private wiki")
+	}
 	must(first.Close())
 	packetName := "maestro-mcp"
 	if runtime.GOOS == "windows" {
@@ -122,6 +172,18 @@ func main() {
 	secondMetadata := call(second, "maestro_context", map[string]any{}, false)
 	if secondMetadata["workspace_id"] != workspace {
 		panic("packet process changed workspace")
+	}
+	pageAfterRestart := call(second, "maestro_query", map[string]any{"operation": "brain.read", "page": authoredPage, "purpose": "Continue the reviewed pilot page in the copied packet server"}, false)
+	if pageAfterRestart["text"] != authoredBody || pageAfterRestart["revision"] != authored["revision"] {
+		panic("packet server lost reviewed authored bytes or revision")
+	}
+	wikiAfterRestart := call(second, "maestro_query", map[string]any{"operation": "wiki.status"}, false)
+	if wikiAfterRestart["generation"] != wikiGeneration || wikiAfterRestart["state"] != "current" {
+		panic("packet server lost the admitted private wiki generation")
+	}
+	wikiIndex := call(second, "maestro_query", map[string]any{"operation": "wiki.read", "generation": wikiGeneration, "reference": "index.md", "max_bytes": 4096}, false)
+	if strings.TrimSpace(wikiIndex["content"].(string)) == "" {
+		panic("packet private wiki index is empty")
 	}
 	list := call(second, "maestro_query", map[string]any{"operation": "execution.list", "limit": 32}, false)
 	var found map[string]any
@@ -164,6 +226,11 @@ func main() {
 		panic("developer binary unexpectedly has qualified modern identity")
 	}
 	proof := map[string]any{"passed": true, "mode": "ordinary_unversioned_developer_rehearsal", "sdk": "official_go_sdk_v1.8.0", "transport": "actual_shipping_stdio_and_packet_server", "server_version": second.InitializeResult().ServerInfo.Version, "workspace_id": workspace, "item_id": id, "paused": paused, "resumed": resumed, "checkpoint_literal": summary, "capture_id": capture["id"], "exact_review_count": len(reviews), "declined_owner_bytes_unchanged": true, "modern_identity_refused": true, "modern_identity_output": string(identityOutput), "native_Code_Desktop": "not_run", "host_review_evidence": "synthetic_official_SDK_form_witness_not_native_human_acceptance"}
+	proof["methods_total"] = methods["total"]
+	proof["canonical_authored_recipe_recovered"] = true
+	proof["authored_page_same_revision_after_packet_restart"] = true
+	proof["private_wiki_generation_after_packet_restart"] = wikiGeneration
+	proof["recurring_work_activated"] = false
 	body, err := json.MarshalIndent(proof, "", "  ")
 	must(err)
 	must(os.WriteFile(*report, append(body, '\n'), 0600))

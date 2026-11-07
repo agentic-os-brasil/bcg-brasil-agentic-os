@@ -57,15 +57,16 @@ mkdir -p "$ROOT/exports/code-marketplace/plugins" "$ROOT/exports/code-marketplac
 "$BIN" plugin --lifecycle-context --product-root "$ROOT/product" --user-home "$ROOT/user" --workspace "$ROOT/workspace" --server "$BIN" --destination "$ROOT/exports/code-marketplace/plugins/maestro-product" --version 0.0.0
 printf '%s\n' '{"name":"maestro-pilot-20261105","owner":{"name":"Maestro"},"plugins":[{"name":"maestro-product","source":"./plugins/maestro-product"}]}' > "$ROOT/exports/code-marketplace/.claude-plugin/marketplace.json"
 "$BIN" mcpb --product-root "$ROOT/product" --user-home "$ROOT/user" --workspace "$ROOT/workspace" --server "$BIN" --destination "$ROOT/exports/maestro-pilot.mcpb" --version 0.0.0
+printf '%s\n' '{"autoMemoryEnabled":false}' > "$ROOT/exports/code-pilot-settings.json"
+printf '#!/bin/bash\nset -euo pipefail\ncd -- %q\nexec claude --plugin-dir %q --setting-sources project,local --settings %q\n' "$ROOT/workspace" "$ROOT/exports/code-marketplace/plugins/maestro-product" "$ROOT/exports/code-pilot-settings.json" > "$ROOT/exports/Abrir Code.command"
+chmod 700 "$ROOT/exports/Abrir Code.command"
 inventory > "$ROOT/kit-files.sha256"
 {
   printf 'MAESTRO — ENSAIO DE DESENVOLVIMENTO\n\nEste servidor não tem identidade de release qualificada: sua versão é unavailable.\n0.0.0 é somente o rótulo dos pacotes. Não há atualização assinada automática.\n\n'
-  printf '1. Abra o Claude Code nesta pasta:\n   cd %q\n' "$ROOT/workspace"
-  printf '2. Cadastre o marketplace local:\n   claude plugin marketplace add %q\n' "$ROOT/exports/code-marketplace"
-  printf '3. Instale o plugin do ensaio:\n   claude plugin install maestro-product@maestro-pilot-20261105 --scope user\n'
-  printf '4. Abra uma nova sessão do Code na pasta acima. Confira maestro_context antes de escrever.\n\n'
+  printf '1. Abra este arquivo para iniciar o Code com o plugin deste ensaio:\n   %s\n' "$ROOT/exports/Abrir Code.command"
+  printf 'O Code precisa estar instalado e autenticado pelo fluxo normal. O launcher carrega o plugin nesta janela, sem cadastrá-lo no seu perfil global. Confira maestro_context antes de escrever.\n\n'
   printf 'O plugin inclui hooks de contexto: SessionStart lê memória gerada aprovada; UserPromptSubmit atualiza metadados; Stop registra uma observação limitada. Eles não ativam guardas, agentes, captura automática ou manutenção recorrente. A execução real depende do cliente e deve ser registrada separadamente.\n\n'
-  printf '5. No Desktop, abra este arquivo e confirme a extensão local pelo fluxo normal do aplicativo:\n   %s\n\n' "$ROOT/exports/maestro-pilot.mcpb"
+  printf '2. No Desktop, abra este arquivo e confirme a extensão local pelo fluxo normal do aplicativo:\n   %s\n\n' "$ROOT/exports/maestro-pilot.mcpb"
   printf 'Dados reais da criação; compare este workspace_id com maestro_context nos dois clientes:\n'
   cat "$ROOT/diagnostico-init.json"
   printf '\nUse o ROTEIRO.md do kit. Os dois clientes devem mostrar esse mesmo workspace_id.\nNão use outro conector Maestro por engano; confira o vínculo antes de confirmar efeitos.\n\n'

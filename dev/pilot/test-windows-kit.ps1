@@ -88,6 +88,39 @@ $inspection = Native-Json $binary (@('inspect') + $binding)
 Assert ($inspection.writable -eq $true) 'Fresh canonical HOME is not writable.'
 $initialized = Get-Content -LiteralPath (Join-Path $root 'diagnostico-init.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 Assert ($null -ne $initialized.workspace_id -and $initialized.workspace_id -ne '') 'Actual workspace identity is missing.'
+$codeEntry = Join-Path $root 'exports/Abrir Code.ps1'
+$codeBytes = [IO.File]::ReadAllBytes($codeEntry)
+Assert ($codeBytes.Length -gt 3 -and $codeBytes[0] -eq 239 -and $codeBytes[1] -eq 187 -and $codeBytes[2] -eq 191) 'Generated Code entry needs UTF8 BOM for stock PowerShell5.1 paths.'
+Assert (Test-Path -LiteralPath (Join-Path $root 'exports/Abrir Code.cmd') -PathType Leaf) 'Code double-click entry is missing.'
+$recorderDirectory = Join-Path $root 'launcher-argument-witness'
+New-Item -ItemType Directory -Path $recorderDirectory | Out-Null
+$recorderSource = @'
+using System;
+using System.Text;
+public class MaestroCodeArgumentWitness {
+    public static int Main(string[] args) {
+        Console.WriteLine(Convert.ToBase64String(Encoding.UTF8.GetBytes(Environment.CurrentDirectory)));
+        foreach (var arg in args) Console.WriteLine(Convert.ToBase64String(Encoding.UTF8.GetBytes(arg)));
+        return 0;
+    }
+}
+'@
+Add-Type -TypeDefinition $recorderSource -OutputAssembly (Join-Path $recorderDirectory 'claude.exe') -OutputType ConsoleApplication
+$launcherLocation = Get-Location
+$launcherPath = $env:PATH
+try {
+    $env:PATH = $recorderDirectory + ';' + $launcherPath
+    Assert ((Get-Command claude).Source -ceq (Join-Path $recorderDirectory 'claude.exe')) 'Native launcher recorder must be selected before running the test.'
+    $encodedArguments = @(& $codeEntry)
+    $observedArguments = @($encodedArguments | ForEach-Object { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_)) })
+    $expectedArguments = @((Join-Path $root 'workspace'), '--plugin-dir', (Join-Path $root 'exports/code-marketplace/plugins/maestro-product'), '--setting-sources', 'project,local', '--settings', (Join-Path $root 'exports/code-pilot-settings.json'))
+    Assert (($observedArguments | ConvertTo-Json -Compress) -ceq ($expectedArguments | ConvertTo-Json -Compress)) 'Native Code launcher changed cwd, Unicode paths, arguments or host permissions.'
+    $settings = Get-Content -LiteralPath (Join-Path $root 'exports/code-pilot-settings.json') -Raw | ConvertFrom-Json
+    Assert ($settings.autoMemoryEnabled -eq $false) 'Pilot settings changed.'
+} finally {
+    Set-Location -LiteralPath $launcherLocation.Path
+    $env:PATH = $launcherPath
+}
 $plugin = Join-Path $root 'exports/code-marketplace/plugins/maestro-product'
 $packet = Get-Content -LiteralPath (Join-Path $plugin 'maestro-packet.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 Assert ($packet.schema_version -eq 1 -and $packet.mode -eq 'mcp_lifecycle') 'Wrong participant packet profile.'
@@ -219,7 +252,7 @@ $result = [ordered]@{
     fresh_setup=$true; local_plugin_mcpb_exact_binding=$true; complete_repeat_snapshot_unchanged=$true
     compiled_lifecycle_commands=$true; lifecycle_readonly_context=$true; native_lifecycle_client='not_run'
     foreign_partial_unsafeACL_HOME_UNC_reparse_tamper_refused=$true; changed_managed_content_preserved=$true
-    generic_zip_exact_payloads=9; native_Code_Desktop='not_run'; host_confirmation='not_exercised_by_preparation'
+    generic_zip_exact_payloads=9; code_launcher_exact_scope_args=$true; launcher_test_client='argument_recorder_only_not_native_Claude'; native_Code_Desktop='not_run'; host_confirmation='not_exercised_by_preparation'
     private_proof_root=$proof; commands=$commands.ToArray()
 }
 if (Test-Path -LiteralPath $Report) { throw 'Report destination already exists; previous evidence is preserved.' }
