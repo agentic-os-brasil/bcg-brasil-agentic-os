@@ -53,6 +53,18 @@ run(["/bin/bash", str(setup), str(root)])
 assert (root / "exports/maestro-pilot.mcpb").is_file()
 assert (root / "exports/code-marketplace/plugins/maestro-product/.mcp.json").is_file()
 assert (root / "COMECE-AQUI.txt").is_file()
+code_entry = root / "exports/Abrir Code.command"
+assert code_entry.is_file(), "setup must provide a local Code entry without global plugin registration"
+run(["/bin/bash", "-n", str(code_entry)])
+command_bin = proof / "launcher-command-witness"
+command_bin.mkdir(mode=0o700)
+recorder = command_bin / "claude"
+recorder.write_text("#!" + sys.executable + "\nimport json, os, sys\nprint(json.dumps({'cwd': os.getcwd(), 'args': sys.argv[1:]}))\n")
+recorder.chmod(0o700)
+launch = run(["/bin/bash", str(code_entry)], child_env={**env, "PATH": str(command_bin) + os.pathsep + env["PATH"]})
+observed = json.loads(launch.stdout)
+assert observed == {"cwd": str(root / "workspace"), "args": ["--plugin-dir", str(root / "exports/code-marketplace/plugins/maestro-product"), "--setting-sources", "project,local", "--settings", str(root / "exports/code-pilot-settings.json")]}
+assert json.loads((root / "exports/code-pilot-settings.json").read_text()) == {"autoMemoryEnabled": False}
 inspection = run([str(root / "product/maestro-mcp"), "inspect", "--product-root", str(root / "product"),
                   "--user-home", str(root / "user"), "--workspace", str(root / "workspace")])
 assert json.loads(inspection.stdout)["writable"] is True
@@ -159,6 +171,7 @@ with zipfile.ZipFile(str(kit) + ".zip") as archive:
     assert not any(part in {"user", "workspace", "exports"} for name in actual for part in Path(name).parts)
 
 result = {"passed": True, "fresh_setup": True, "repeat_setup_full_snapshot_preserved": True,
+          "code_launcher_exact_scope_args": True, "launcher_test_client": "argument_recorder_only_not_native_Claude",
           "compiled_lifecycle_commands": True, "lifecycle_readonly_context": True, "native_lifecycle_client": "not_run",
           "foreign_root_preserved": True, "inherited_HOME_refused_before_write": True,
           "alias_refused": True, "tampered_kit_refused_before_write": True,

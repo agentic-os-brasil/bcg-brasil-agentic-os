@@ -2,7 +2,7 @@ name: Windows exact-artifact pilot kit
 
 on:
   push:
-    branches: [codex/integration/maestro-windows-pilot-kit]
+    branches: [codex/integration/maestro-windows-pilot-kit, codex/integration/maestro-full-pilot-kit]
   pull_request:
     paths:
       - '.github/workflows/windows-pilot-kit.yml'
@@ -43,6 +43,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go build -trimpath -o (Join-Path $build 'maestro-pilot-sdk-witness.exe') ../../dev/pilot/smoke.go
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compile the canonical publication witness for the same kit
+        shell: powershell
+        run: |
+          $build = Join-Path $env:RUNNER_TEMP 'Developer/windows-pilot-kit-build'
+          go test -c -o (Join-Path $build 'windows-atlas.test.exe') ./internal/atlasops
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Qualify the exact produced PE and ZIP under an actual ordinary account
         shell: pwsh
         run: |
@@ -56,7 +62,9 @@ jobs:
             -Kit $kit `
             -KitTestScript (Join-Path $env:GITHUB_WORKSPACE 'dev/pilot/test-windows-kit.ps1') `
             -MethodFixture (Join-Path $env:GITHUB_WORKSPACE 'adapters/mcp/packaging/testdata/method-ids.txt') `
-            -SdkWitness (Join-Path $build 'maestro-pilot-sdk-witness.exe')
+            -SdkWitness (Join-Path $build 'maestro-pilot-sdk-witness.exe') `
+            -AtlasTestBinary (Join-Path $build 'windows-atlas.test.exe') `
+            -AuthoredBrain -PrivateWiki
       - name: Stage only bounded synthetic evidence
         if: always()
         shell: pwsh

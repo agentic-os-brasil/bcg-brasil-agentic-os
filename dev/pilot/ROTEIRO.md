@@ -36,6 +36,18 @@ Aceite uma vez pelo fluxo apresentado. Reinicie a conexão e peça a leitura da 
 
 Esperado: a captura aceita pode ser lida após reinício; a recusada não existe. Não forneça flags de aprovação em argumentos do modelo.
 
+## 6. Skills e páginas compartilhadas
+
+> No mesmo Maestro, liste os métodos por `methods.list` e mostre o total. Leia a receita `maestro://methods/maestro-operator/resources/authored-brain.md` por `methods.read`. Use um template real para propor `projects/piloto-time.md`, com o texto sintético “Página profissional do piloto”. Mostre a proposta completa para confirmação pelo host. Se a revisão estiver indisponível, pare; use somente `brain.create` para salvar.
+
+Aceite a proposta uma vez. No outro cliente, confira o mesmo workspace e leia essa página por `brain.read`. Compare texto e revisão com os valores retornados na criação. Peça uma edição na seção existente, confirme a proposta e confira a nova revisão.
+
+## 7. Wiki de memória privada
+
+> Consolide explicitamente a captura de memória aceita no passo5 no ciclo diário de hoje. Qualifique somente o job `wiki-incremental-sync`, sem enrolar nem ativar manutenção recorrente. Leia `wiki.status` e `index.md` da geração retornada. Se houver indisponibilidade de fonte ou confirmação, informe o resultado e pare.
+
+Reinicie a conexão e leia a mesma geração. A wiki deve continuar vinculada à fonte aceita. Ela é diferente da página `projects/piloto-time.md`; preparar uma delas não cria nem autoriza a outra.
+
 ## Registrar o resultado
 
-Anote separadamente: preparação local; plugin carregado no Code; extensão carregada no Desktop; continuidade após reinício; captura aceita; captura recusada sem efeito. Marque “não executado” ou “indisponível” quando for o caso. Ferramentas listadas, testes SDK ou um arquivo MCPB criado não substituem o carregamento real do cliente.
+Anote separadamente: preparação local; plugin carregado no Code; extensão carregada no Desktop; continuidade após reinício; captura aceita; captura recusada sem efeito; catálogo de métodos; página autoral no outro cliente; wiki da mesma fonte após reinício. Marque “não executado” ou “indisponível” quando for o caso. Ferramentas listadas, testes SDK ou um arquivo MCPB criado não substituem o carregamento real do cliente.

@@ -22,7 +22,7 @@ SOURCE_COMMIT="$(git -C "$SOURCE" rev-parse HEAD)"
   printf 'source_state=development_snapshot_native_sha256_identifies_exact_bytes\n'
   printf 'server_version=unavailable\npacket_label=0.0.0\nplatforms=darwin-arm64,darwin-amd64\n'
   printf 'darwin_arm64_evidence=ordinary_cli_and_official_sdk_stdio\ndarwin_amd64_evidence=cross_build_and_native_format_only\n'
-  printf 'native_client_loading=not-yet-observed\nwindows_fresh_admission=unavailable\n'
+  printf 'native_client_loading=not-yet-observed\nwindows_included_in_this_archive=false\n'
   printf 'signed_install_update=unavailable\ndocling_unseeded=unavailable\nnative_agents_hooks=unavailable\n'
   printf 'code_plugin_profile=mcp_lifecycle\nlifecycle_context_hooks=configured\nlifecycle_enforcement=unavailable\n'
 } > "$OUT/ARTIFACT.txt"

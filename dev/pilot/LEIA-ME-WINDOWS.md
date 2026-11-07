@@ -7,10 +7,10 @@ Este kit prepara o MCP, o plugin do Claude Code e a extensão do Claude Desktop 
 1. Extraia o ZIP inteiro para uma pasta local comum, com todos os arquivos disponíveis. Não execute dentro da visualização do ZIP nem de uma pasta que seja um link.
 2. Abra `Preparar Maestro.cmd` como usuário comum. Ele usa o Windows PowerShell5.1 do sistema, com a política já definida no computador. Não use “Executar como administrador”.
 3. A preparação cria `%USERPROFILE%\Developer\MaestroPilot`, separando produto, usuário privado, workspace sintético e exportações.
-4. Abra `COMECE-AQUI.txt` nessa pasta. Ele contém os comandos de registro do plugin Code e o caminho do MCPB a importar no Desktop.
+4. Abra `COMECE-AQUI.txt` nessa pasta. Ele indica `exports\Abrir Code.cmd` e o MCPB a importar no Desktop. O launcher carrega o plugin somente nessa janela, sem registro global.
 5. Siga `ROTEIRO.md` e registre os resultados dos dois clientes separadamente.
 
-Você precisa de **Claude Code**, com o comando `claude` disponível no PowerShell, e de **Claude Desktop**, instalados e autenticados pelo fluxo normal. Após registrar o plugin conforme `COMECE-AQUI.txt`, abra a pasta `workspace` indicada nesse arquivo e execute `claude` para iniciar uma nova sessão do Claude Code. O participante não precisa de Go, Python, Git ou acesso ao repositório. O preparador não instala clientes, modifica login ou usa um modelo. Se o computador bloquear o script ou o executável, preserve a mensagem e pare; não altere a política de execução, SmartScreen, WDAC ou AppLocker para continuar.
+Use o cliente que pretende testar: **Claude Code**, com o comando `claude` disponível no PowerShell, ou **Claude Desktop**, instalado e autenticado pelo fluxo normal. Para Code, abra o launcher indicado em `COMECE-AQUI.txt`; para Desktop, importe o MCPB. O participante não precisa de Go, Python, Git ou acesso ao repositório. O preparador não instala clientes, modifica login ou usa um modelo. Se o computador bloquear o script ou o executável, preserve a mensagem e pare; não altere a política de execução, SmartScreen, WDAC ou AppLocker para continuar.
 
 Os pacotes são gerados no seu computador porque contêm seus caminhos absolutos. Compartilhe somente o ZIP genérico e seu checksum; não compartilhe a pasta `user`, o plugin exportado ou o MCPB gerado localmente. Checksum identifica os bytes e não substitui a confiança do computador/aplicativo.
 
@@ -24,11 +24,13 @@ O plugin do Claude Code inclui hooks de contexto `SessionStart`, `UserPromptSubm
 
 A preparação explícita cria o estado necessário. Os hooks validam e usam esse vínculo: o início lê memória gerada e aprovada, cada prompt fornece metadados e o fim registra uma observação limitada. Eles não inicializam/reparam estado ausente, capturam conversas, consolidam memória, compilam wiki ou executam manutenção recorrente. Para consumir memória nova em uma sessão, primeiro faça a captura revisada e a consolidação explícita.
 
-Docling sem runtime admitido, agentes/guardas nativos sem qualificação, Yoda/modelo, wiki privada Windows e instalação/atualização assinada permanecem indisponíveis. Esses hooks não concedem aprovação nem conclusão de trabalho. A extensão Desktop mantém o MCP sem hooks do Code. A presença de receitas não comprova que suas dependências executam. Testes do SDK, arquivo MCPB e registro do plugin não substituem o carregamento real dos clientes.
+O MCP também oferece descoberta/leitura/plano dos 92 métodos, páginas autorais `brain.*` e wiki de memória privada Windows. A wiki exige captura revisada, consolidação explícita e qualificação do job `wiki-incremental-sync`; ela não é o índice das páginas autorais. Preparar o kit não ativa trabalho recorrente.
+
+Docling sem runtime admitido, agentes/guardas nativos sem qualificação, Yoda/modelo e instalação/atualização assinada permanecem indisponíveis. Os hooks não concedem aprovação nem conclusão de trabalho. A extensão Desktop mantém o MCP sem hooks do Code. A presença de receitas não comprova que suas dependências executam. Testes do SDK, arquivo MCPB e registro do plugin não substituem o carregamento real dos clientes.
 
 ## Trocar de kit ou remover
 
-Uma versão diferente requer uma pasta nova de ensaio e pacotes regenerados. Antes de registrar o novo kit, remova pelo gerenciador normal do Code o plugin e o marketplace `maestro-pilot-20261105` anteriores e remova a extensão anterior do Desktop. O estado privado antigo permanece preservado; não há migração automática entre ensaios.
+Uma versão diferente requer uma pasta nova de ensaio e pacotes regenerados. Feche a janela antiga do Code e use o launcher da nova pasta. Se instalou o plugin antigo globalmente, desative-o pelo gerenciador normal; remova a extensão anterior do Desktop antes de importar a nova. O estado privado antigo permanece preservado; não há migração automática entre ensaios.
 
 O preparador PowerShell aceita `-Root` somente dentro de seu diretório local `Developer`, para um destino novo ou para repetir o mesmo kit completo. Para escolher uma pasta irmã nova, abra **Windows PowerShell 5.1 como usuário comum** na pasta do kit extraído e execute:
 

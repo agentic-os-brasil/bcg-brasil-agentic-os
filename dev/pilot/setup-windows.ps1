@@ -169,23 +169,28 @@ try {
     Write-Output (Invoke-Maestro (@('plugin', '--lifecycle-context') + $binding + @('--server', $Binary, '--destination', (Join-Path $marketplace 'plugins/maestro-product'), '--version', '0.0.0')))
     Write-NewText (Join-Path $marketplace '.claude-plugin/marketplace.json') '{"name":"maestro-pilot-20261105","owner":{"name":"Maestro"},"plugins":[{"name":"maestro-product","source":"./plugins/maestro-product"}]}'
     Write-Output (Invoke-Maestro (@('mcpb') + $binding + @('--server', $Binary, '--destination', (Join-Path $Root 'exports/maestro-pilot.mcpb'), '--version', '0.0.0')))
-    Write-NewText (Join-Path $Root 'kit-files.sha256') (Get-ManagedInventory $Root)
     $workspaceQuoted = (Join-Path $Root 'workspace').Replace("'", "''")
-    $marketplaceQuoted = $marketplace.Replace("'", "''")
+    $pluginQuoted = (Join-Path $marketplace 'plugins/maestro-product').Replace("'", "''")
+    $settings = Join-Path $Root 'exports/code-pilot-settings.json'
+    Write-NewText $settings '{"autoMemoryEnabled":false}'
+    $settingsQuoted = $settings.Replace("'", "''")
+    $codeLauncher = "`$ErrorActionPreference = 'Stop'`r`nSet-Location -LiteralPath '$workspaceQuoted'`r`n& claude --plugin-dir '$pluginQuoted' --setting-sources project,local --settings '$settingsQuoted'`r`nif (`$LASTEXITCODE -ne 0) { exit `$LASTEXITCODE }`r`n"
+    Write-NewText (Join-Path $Root 'exports/Abrir Code.ps1') (([string][char]0xfeff) + $codeLauncher)
+    Write-NewText (Join-Path $Root 'exports/Abrir Code.cmd') "@echo off`r`nsetlocal DisableDelayedExpansion`r`n`"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe`" -NoLogo -NoProfile -File `"%~dp0Abrir Code.ps1`"`r`nset `"MAESTRO_CODE_EXIT=%errorlevel%`"`r`nif not `"%MAESTRO_CODE_EXIT%`"==`"0`" pause`r`nexit /b %MAESTRO_CODE_EXIT%`r`n"
+    Write-NewText (Join-Path $Root 'kit-files.sha256') (Get-ManagedInventory $Root)
     $instructions = @"
 MAESTRO - ENSAIO DE DESENVOLVIMENTO
 
 Servidor ordinary unversioned: versao unavailable. O rotulo 0.0.0 identifica apenas os pacotes.
 Nao ha assinatura de release ou atualizacao automatica.
 
-No PowerShell comum, abra o workspace e registre o plugin:
-  cd '$workspaceQuoted'
-  claude plugin marketplace add '$marketplaceQuoted'
-  claude plugin install maestro-product@maestro-pilot-20261105 --scope user
+Abra este arquivo para iniciar o Code com o plugin deste ensaio:
+  $(Join-Path $Root 'exports/Abrir Code.cmd')
+O Code precisa estar instalado e autenticado pelo fluxo normal. O launcher carrega o plugin apenas nessa janela, sem cadastro no perfil global.
 
 O plugin inclui hooks de contexto SessionStart, UserPromptSubmit e Stop. Eles exigem que o Claude Code suporte hooks command com shell powershell; nao dependem de Git Bash ou WSL. Configuracao gerada nao comprova execucao no cliente. Guardas, agentes, captura automatica e manutencao recorrente permanecem indisponiveis.
 
-Abra uma nova sessao do Code nessa pasta. No Desktop, importe pelo fluxo normal:
+No Desktop, importe pelo fluxo normal:
   $(Join-Path $Root 'exports/maestro-pilot.mcpb')
 
 Compare o workspace_id de maestro_context nos dois clientes com a criacao real:
