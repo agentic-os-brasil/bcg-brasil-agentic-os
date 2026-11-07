@@ -115,6 +115,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
+      - name: Record Windows canonical qualification source
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          QUALIFICATION_SOURCE: ${{ github.sha }}
+          QUALIFICATION_REF: ${{ github.ref }}
+        run: Write-Output "canonical_workflow source=$env:QUALIFICATION_SOURCE ref=$env:QUALIFICATION_REF profile=not_started"
       - name: Select physical macOS temporary directory
         if: runner.os == 'macOS'
         shell: bash
