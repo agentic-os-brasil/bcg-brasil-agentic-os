@@ -3,8 +3,10 @@ package docling
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -74,69 +76,7 @@ func PlaceVerified(ctx context.Context, o Options, release releaseverify.Verifie
 	}
 	installed := filepath.Join(installedParent, selected.SHA256)
 	if _, err = os.Lstat(installed); errors.Is(err, os.ErrNotExist) {
-		stage, err := os.MkdirTemp(installedParent, ".placing-")
-		if err != nil {
-			return err
-		}
-		defer func() {
-			_ = filepath.WalkDir(stage, func(path string, d os.DirEntry, e error) error {
-				if e == nil && d.IsDir() {
-					_ = os.Chmod(path, 0700)
-				}
-				return e
-			})
-			_ = os.RemoveAll(stage)
-		}()
-		handle, err := os.OpenRoot(stage)
-		if err != nil {
-			return err
-		}
-		defer handle.Close()
-		paths := make([]string, 0, len(entries))
-		for path := range entries {
-			paths = append(paths, path)
-		}
-		sort.Strings(paths)
-		for _, path := range paths {
-			if err = ctx.Err(); err != nil {
-				return err
-			}
-			entry := entries[path]
-			if err = handle.MkdirAll(filepath.Dir(path), 0700); err != nil {
-				return err
-			}
-			file, err := handle.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, os.FileMode(entry.mode))
-			if err != nil {
-				return err
-			}
-			_, writeErr := file.Write(entry.body)
-			closeErr := file.Close()
-			if writeErr != nil {
-				return writeErr
-			}
-			if closeErr != nil {
-				return closeErr
-			}
-		}
-		var directories []string
-		if err = filepath.WalkDir(stage, func(path string, d os.DirEntry, e error) error {
-			if e != nil {
-				return e
-			}
-			if d.IsDir() {
-				directories = append(directories, path)
-			}
-			return nil
-		}); err != nil {
-			return err
-		}
-		sort.Sort(sort.Reverse(sort.StringSlice(directories)))
-		for _, directory := range directories {
-			if err = os.Chmod(directory, 0555); err != nil {
-				return err
-			}
-		}
-		if err = os.Rename(stage, installed); err != nil {
+		if err = placeEntries(ctx, installedParent, selected.SHA256, entries); err != nil {
 			return err
 		}
 	} else if err != nil {
@@ -176,4 +116,185 @@ func placeExact(root, name string, body []byte) error {
 		return err
 	}
 	return scheduler.WriteNewPrivateFile(path, body)
+}
+
+func placeEntries(ctx context.Context, installedParent, name string, entries map[string]entry) (result error) {
+	parent, err := openPlacementDirectory(installedParent)
+	if err != nil {
+		return err
+	}
+	defer parent.Close()
+	confined, err := os.OpenRoot(installedParent)
+	if err != nil {
+		return err
+	}
+	defer confined.Close()
+	opened, err := confined.Open(".")
+	if err != nil {
+		return err
+	}
+	parentInfo, parentErr := parent.Stat()
+	confinedInfo, confinedErr := opened.Stat()
+	_ = opened.Close()
+	if parentErr != nil || confinedErr != nil || !os.SameFile(parentInfo, confinedInfo) {
+		return errors.New("converter placement parent changed")
+	}
+	stage := ".placing-" + rand.Text()
+	if err = confined.Mkdir(stage, 0700); err != nil {
+		return err
+	}
+	handle, err := confined.OpenRoot(stage)
+	if err != nil {
+		return err
+	}
+	defer handle.Close()
+	root, err := openPlacementLeaf(parent, stage)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	opened, err = handle.Open(".")
+	if err != nil {
+		return err
+	}
+	rootInfo, rootErr := root.Stat()
+	extractionInfo, extractionErr := opened.Stat()
+	_ = opened.Close()
+	if rootErr != nil || extractionErr != nil || !os.SameFile(rootInfo, extractionInfo) {
+		return errors.New("converter placement staging root changed")
+	}
+	defer func() {
+		if err := placementLeafMatches(parent, root, stage); errors.Is(err, os.ErrNotExist) {
+			return
+		} else if err != nil {
+			result = errors.Join(result, err)
+			return
+		}
+		err := fs.WalkDir(handle.FS(), ".", func(path string, d fs.DirEntry, e error) error {
+			if e == nil && d.IsDir() {
+				return handle.Chmod(path, 0700)
+			}
+			return e
+		})
+		if err == nil {
+			err = confined.RemoveAll(stage)
+		}
+		result = errors.Join(result, err)
+	}()
+	if err := placementLeafMatches(parent, root, stage); err != nil {
+		return err
+	}
+	paths := make([]string, 0, len(entries))
+	for path := range entries {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		if err = ctx.Err(); err != nil {
+			return err
+		}
+		entry := entries[path]
+		if err = handle.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			return err
+		}
+		file, err := handle.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, os.FileMode(entry.mode))
+		if err != nil {
+			return err
+		}
+		_, writeErr := file.Write(entry.body)
+		if writeErr == nil {
+			writeErr = file.Sync()
+		}
+		closeErr := file.Close()
+		if writeErr != nil {
+			return writeErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+	}
+	var directories []string
+	if err = fs.WalkDir(handle.FS(), ".", func(path string, d fs.DirEntry, e error) error {
+		if e != nil {
+			return e
+		}
+		if d.IsDir() && path != "." {
+			directories = append(directories, path)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(directories)))
+	for _, directory := range directories {
+		if err = handle.Chmod(directory, 0555); err != nil {
+			return err
+		}
+	}
+	return publishPlacement(parent, root, stage, name)
+}
+
+// Test-only interruption seam after exclusive publication and before sealing.
+var placementAfterPublish func() error
+
+func publishPlacement(parent, root *os.File, stage, installed string) (result error) {
+	if err := placementLeafMatches(parent, root, stage); err != nil {
+		return err
+	}
+	err := scheduler.RenamePrivateFileExclusive(parent, stage, installed)
+	if err != nil && placementLeafMatches(parent, root, installed) != nil {
+		return err
+	}
+	defer func() {
+		if result == nil {
+			return
+		}
+		// Restore only this invocation's held tree to its absent staging leaf.
+		rollback := placementLeafMatches(parent, root, installed)
+		if rollback == nil {
+			rollback = root.Chmod(0700)
+		}
+		if rollback == nil {
+			rollback = scheduler.RenamePrivateFileExclusive(parent, installed, stage)
+		}
+		if rollback == nil {
+			rollback = syncPlacementDirectory(parent)
+		}
+		if rollback != nil {
+			result = errors.Join(result, fmt.Errorf("converter placement recovery required: %w", rollback))
+		}
+	}()
+	if err != nil {
+		return err
+	}
+	if placementAfterPublish != nil {
+		if err := placementAfterPublish(); err != nil {
+			return err
+		}
+	}
+	// Seal the held root only after exclusive publication completes.
+	if err := root.Chmod(0555); err != nil {
+		return err
+	}
+	if err := syncPlacementDirectory(root); err != nil {
+		return err
+	}
+	if err := placementLeafMatches(parent, root, installed); err != nil {
+		return err
+	}
+	return syncPlacementDirectory(parent)
+}
+
+func placementLeafMatches(parent, root *os.File, name string) error {
+	leaf, err := openPlacementLeaf(parent, name)
+	if err != nil {
+		return err
+	}
+	defer leaf.Close()
+	heldInfo, heldErr := root.Stat()
+	leafInfo, leafErr := leaf.Stat()
+	if heldErr != nil || leafErr != nil || !os.SameFile(heldInfo, leafInfo) {
+		return errors.New("converter placement directory changed")
+	}
+	return nil
 }
