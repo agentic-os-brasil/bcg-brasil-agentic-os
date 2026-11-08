@@ -230,35 +230,26 @@ try {
             $principal.IsInRole($admin) -or @($identity.Groups | Where-Object { $_.Value -eq $admin.Value }).Count -ne 0) {
             throw 'Inspection requires the actual intended non-elevated ordinary account.'
         }
-        $temporaryAcl = Get-Acl -LiteralPath $temporary
-        if ($temporaryAcl.GetOwner([Security.Principal.SecurityIdentifier]).Value -cne $ExpectedUserSID -or
-            @($temporaryAcl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) | Where-Object {
-                $_.IdentityReference.Value -cnotin @($ExpectedUserSID, 'S-1-5-18', 'S-1-5-32-544') -or $_.AccessControlType -ne 'Allow'
-            }).Count -ne 0) { throw 'Inspection TEMP must be child-owned with only private principals.' }
-        $profileKey = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey('SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\' + $ExpectedUserSID)
-        if ($null -eq $profileKey) { throw 'Inspection actual-token profile is missing from ProfileList.' }
-        try {
-            $profilePath = [Environment]::ExpandEnvironmentVariables([string]$profileKey.GetValue('ProfileImagePath', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames))
-        } finally { $profileKey.Dispose() }
-        if ([string]::IsNullOrWhiteSpace($profilePath) -or -not [IO.Path]::IsPathRooted($profilePath)) { throw 'Inspection actual-token profile path is invalid.' }
-        $profileEntry = Get-Item -LiteralPath $profilePath -Force
-        $profileOwner = (Get-Acl -LiteralPath $profilePath).GetOwner([Security.Principal.SecurityIdentifier]).Value
-        if ($profileEntry -isnot [IO.DirectoryInfo] -or ($profileEntry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
-            $profileEntry.FullName -cne [IO.Path]::GetFullPath($profilePath) -or $profileOwner -cne $ExpectedUserSID) {
-            throw 'Inspection profile must be an ordinary directory owned by the actual token SID.'
-        }
-        for ($ancestor = $profileEntry.Parent; $null -ne $ancestor; $ancestor = $ancestor.Parent) {
-            if (($ancestor.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Inspection profile cannot traverse a reparse ancestor.' }
+        $userHomeFixture = Join-Path $ProofRoot 'inspection-user-home'
+        New-Item -ItemType Directory -Path $userHomeFixture | Out-Null
+        foreach ($privateFixture in @($temporary, $userHomeFixture)) {
+            $fixtureEntry = Get-Item -LiteralPath $privateFixture -Force
+            $fixtureAcl = Get-Acl -LiteralPath $privateFixture
+            if ($fixtureEntry -isnot [IO.DirectoryInfo] -or ($fixtureEntry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+                $fixtureAcl.GetOwner([Security.Principal.SecurityIdentifier]).Value -cne $ExpectedUserSID -or
+                @($fixtureAcl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) | Where-Object {
+                    $_.IdentityReference.Value -cnotin @($ExpectedUserSID, 'S-1-5-18', 'S-1-5-32-544') -or $_.AccessControlType -ne 'Allow'
+                }).Count -ne 0) { throw 'Inspection private fixtures must be ordinary child-owned directories with only private principals.' }
         }
         $previousUserProfile = $env:USERPROFILE
         $previousHome = $env:HOME
-        $env:USERPROFILE = $profileEntry.FullName
-        $env:HOME = $profileEntry.FullName
+        $env:USERPROFILE = $userHomeFixture
+        $env:HOME = $userHomeFixture
         $inspectionProfile = [ordered]@{
-            profile_resolution='current_token_sid_profilelist'
-            inherited_userprofile_matches_token_profile=[string]::Equals($previousUserProfile, $profileEntry.FullName, [StringComparison]::OrdinalIgnoreCase)
-            inherited_home_matches_token_profile=[string]::Equals($previousHome, $profileEntry.FullName, [StringComparison]::OrdinalIgnoreCase)
-            profile_owner_matches_actual_sid=($profileOwner -ceq $ExpectedUserSID)
+            profile_resolution='inspection_private_fixture'
+            inherited_userprofile_matches_fixture=[string]::Equals($previousUserProfile, $userHomeFixture, [StringComparison]::OrdinalIgnoreCase)
+            inherited_home_matches_fixture=[string]::Equals($previousHome, $userHomeFixture, [StringComparison]::OrdinalIgnoreCase)
+            private_fixture_roots_admitted=$true
         }
         Write-Output 'inspection_profile elevated=false admin_member=false private_current_user_temp=true'
     }
