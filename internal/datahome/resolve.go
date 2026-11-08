@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/zipmigration"
 )
 
 type Options struct {
@@ -30,6 +31,8 @@ type Result struct {
 	Origin     string `json:"origin"`
 	Writable   bool   `json:"writable"`
 	Diagnostic string `json:"diagnostic"`
+	// MigrationSourceRoot is exposed only after the sealed commit has been verified.
+	MigrationSourceRoot string `json:"-"`
 }
 
 func Resolve(options Options) (Result, error) {
@@ -89,7 +92,7 @@ func Resolve(options Options) (Result, error) {
 	}
 	if err := scheduler.ValidatePrivateDirectory(result.Home); err != nil {
 		if errors.Is(err, os.ErrNotExist) && marker == nil {
-			return result, nil
+			return unconfirmedHome(options.UserHome, result)
 		}
 		return failed(result, "home-invalid", err)
 	}
@@ -104,7 +107,7 @@ func Resolve(options Options) (Result, error) {
 				return failed(result, "home-inaccessible", readErr)
 			}
 			if len(entries) == 0 && marker == nil {
-				return result, nil
+				return unconfirmedHome(options.UserHome, result)
 			}
 			return failed(result, "origin-unconfirmed", errors.New("home contains data or a locator but has no origin"))
 		}
@@ -134,13 +137,37 @@ func Resolve(options Options) (Result, error) {
 	}
 	if result.Origin == "migrated" {
 		result.Diagnostic = "migration-unverified"
-		return result, nil
+		proof, err := zipmigration.InspectExternal(result.Home, origin["attempt_id"], origin["plan_sha256"])
+		if err != nil || !proof.Current || proof.State != "committed" {
+			if err == nil && proof.State == "revoked" {
+				result.Diagnostic = "migration-revoked"
+			}
+			return result, nil
+		}
+		if !samePath(proof.Home, result.Home) || !samePath(proof.UserHome, options.UserHome) || options.SourceRoot != "" && !samePath(proof.SourceRoot, options.SourceRoot) {
+			return failed(result, "migration-conflict", errors.New("migration proof differs from selected roots"))
+		}
+		result.MigrationSourceRoot = proof.SourceRoot
 	}
 	if !ownershipVerified() {
 		result.Diagnostic = "ownership-unverified"
 		return result, nil
 	}
 	result.Writable, result.Diagnostic = true, "ready"
+	return result, nil
+}
+
+func unconfirmedHome(userHome string, result Result) (Result, error) {
+	if result.SelectedBy != "env" {
+		return result, nil
+	}
+	retired, err := zipmigration.RetiredExternalHome(userHome, result.Home)
+	if err != nil {
+		return failed(result, "migration-unverified", err)
+	}
+	if retired {
+		result.Diagnostic = "migration-revoked"
+	}
 	return result, nil
 }
 

@@ -1,4 +1,4 @@
-// maestro-mcp explicitly initializes a fresh binding or serves an admitted one.
+// maestro-mcp explicitly enrolls a workspace under fresh or admitted owner state.
 package main
 
 import (
@@ -58,9 +58,16 @@ func run() error {
 		if err := product.Preflight(o); err != nil {
 			return err
 		}
-		home, err := datahome.InitializeFresh(datahome.Options{ProductRoot: o.ProductRoot, UserHome: o.UserHome})
+		homeOptions := datahome.Options{ProductRoot: o.ProductRoot, UserHome: o.UserHome}
+		home, err := datahome.Resolve(homeOptions)
 		if err != nil {
 			return err
+		}
+		if !home.Writable {
+			home, err = datahome.InitializeFresh(homeOptions)
+			if err != nil {
+				return err
+			}
 		}
 		w, err := workspace.Initialize(workspace.Options{WorkspacePath: o.WorkspacePath, DataRoot: filepath.Join(home.Home, "state")})
 		if err != nil {

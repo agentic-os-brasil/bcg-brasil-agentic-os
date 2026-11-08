@@ -21,6 +21,9 @@ func run(args []string, in io.Reader, out, diagnostic io.Writer) int {
 	if args[0] == "home" {
 		return inspectHome(args[1:], out, diagnostic)
 	}
+	if len(args) > 1 && args[0] == "migration" && args[1] == "external" {
+		return externalMigration(args[2:], out, diagnostic)
+	}
 	if len(args) == 1 && args[0] == "preflight" {
 		if err := userlevel.EnsureNotElevated(); err != nil {
 			fmt.Fprintln(diagnostic, err)

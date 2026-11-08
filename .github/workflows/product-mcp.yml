@@ -6,6 +6,10 @@ on:
       - 'adapters/mcp/**'
       - 'internal/execution/**'
       - 'internal/datahome/**'
+      - 'internal/zipmigration/**'
+      - 'internal/zipruntime/**'
+      - 'go.mod'
+      - 'go.sum'
       - 'internal/workspace/**'
       - '.github/workflows/product-mcp.yml'
   push:
@@ -14,6 +18,10 @@ on:
       - 'adapters/mcp/**'
       - 'internal/execution/**'
       - 'internal/datahome/**'
+      - 'internal/zipmigration/**'
+      - 'internal/zipruntime/**'
+      - 'go.mod'
+      - 'go.sum'
       - 'internal/workspace/**'
       - '.github/workflows/product-mcp.yml'
 

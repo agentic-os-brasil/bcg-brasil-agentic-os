@@ -1248,3 +1248,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Fresh external state survives managed version/path changes without product writes. New Windows external mutation remains unavailable until its ownership/confinement gates pass. Source CI tests refusal, package and classifier contracts; native qualification remains an explicit dispatch with unchanged preflight and assertions, not an inferred result of source integration. Source migration is a separate explicit Plan/Apply/Inspect/Rollback flow in zipmigration; live brain, historical data and root-bound controls cannot be conflated. E2 remains open until migration and qualification also pass.
 - Refs: specs/058-canonical-home-consumers.md; docs/plans/2026-10-31-maestro-product-mcp.md; internal/zipruntime; cmd/maestro-runtime; installers/zip/user-template/.claude/hooks; bundles/base/tools
 - Supersedes: none
+
+## XMIG - Preserve authored state and revoke migration authority explicitly
+
+- Date: 2026-11-01
+- Status: accepted
+- Owner: Maestro
+- Context: External HOME needs a restartable one-time migration from legacy data or current live brain. A data-only rename breaks v1 readability, copied machine controls may retain authority, and revoking the default HOME alone does not restore legacy selection.
+- Decision: Keep four explicit external operations in zipmigration, with a fixed HOME-relative sealed plan and concordant origin/locator/commit proof. Preserve original trees; import current authored state and archive historical authority outside active readers. Pending controls require fresh owning workflows. Rollback retains new work in a validated same-parent inactive archive and restores only the selection owned by the attempt. Canonical datahome admission consumes the read-only inspector, without an inverse dependency or startup migration.
+- Consequences: Authored state survives product changes and interruption without stale recopy or automatic authority promotion. Pending daily/dream, enrollment and scheduler consent need reconfirmation. Rollback requires a supported preserved original and an archival parent; native working-runtime, unsupported old-client fencing and Windows ownership remain separate gates. No real migration is authorized by source integration.
+- Refs: specs/059-external-state-migration.md; specs/055-data-home-inspection.md; specs/058-canonical-home-consumers.md; docs/plans/2026-10-31-maestro-product-mcp.md; issues #433 and #434
+- Supersedes: none
