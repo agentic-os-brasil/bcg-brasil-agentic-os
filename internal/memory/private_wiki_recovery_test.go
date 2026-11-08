@@ -3,13 +3,17 @@ package memory
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -267,24 +271,172 @@ func TestPrivateWikiOldCohortProcessCannotReadCaptureOrDelete(t *testing.T) {
 	if _, err := e.CompilePrivateWiki(context.Background(), "case-a", ""); err != nil {
 		t.Fatal(err)
 	}
-	for _, operation := range []string{"read", "capture", "delete"} {
-		t.Run(operation, func(t *testing.T) {
-			before := privateWikiTree(t, e.Root)
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			defer cancel()
-			output, err := exec.CommandContext(ctx, helper, operation, e.Root, capture.ID).CombinedOutput()
+	cfg := struct {
+		Policy    Policy                   `json:"policy"`
+		Budgets   map[string]int           `json:"budgets"`
+		Freshness map[string]time.Duration `json:"freshness"`
+		Clock     time.Time                `json:"clock"`
+	}{e.Policy, e.Budgets, e.Freshness, e.Now()}
+	body, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := filepath.Join(t.TempDir(), "historical-config.json")
+	if err := os.WriteFile(config, body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	type oldCall struct {
+		API           string `json:"api"`
+		Outcome       string `json:"outcome"`
+		Error         string `json:"error,omitempty"`
+		ReturnedEmpty bool   `json:"returned_empty"`
+	}
+	type oldResult struct {
+		SchemaVersion      int       `json:"schema_version"`
+		ArtifactKind       string    `json:"artifact_kind"`
+		LibraryRevision    string    `json:"library_revision"`
+		Platform           string    `json:"platform"`
+		Operation          string    `json:"operation"`
+		PositiveControl    bool      `json:"positive_control"`
+		OwnedSupported     bool      `json:"owned_supported"`
+		LegacyContextFound bool      `json:"legacy_context_found"`
+		Calls              []oldCall `json:"calls"`
+	}
+	invoke := func(args ...string) oldResult {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		output, err := exec.CommandContext(ctx, helper, args...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("historical-library harness failed: %v %s", err, output)
+		}
+		var receipt oldResult
+		if err := decodeMemoryJSON(output, &receipt); err != nil || receipt.SchemaVersion != 2 ||
+			receipt.ArtifactKind != "new_harness_unmodified_historical_library" ||
+			receipt.LibraryRevision != "f93e9ce21edcd19246e7e5985d97489297dae18b" ||
+			receipt.Platform != runtime.GOOS || receipt.Operation != args[0] {
+			t.Fatalf("unbound or invalid historical receipt: %v %s", err, output)
+		}
+		t.Logf("historical operation=%s library=%s platform=%s calls=%+v", receipt.Operation, receipt.LibraryRevision, receipt.Platform, receipt.Calls)
+		return receipt
+	}
+	snapshot := func() map[string]string {
+		t.Helper()
+		state := map[string]string{}
+		err := filepath.WalkDir(e.Root, func(path string, entry os.DirEntry, err error) error {
 			if err != nil {
-				t.Fatalf("old writer witness failed: %v %s", err, output)
+				return err
 			}
-			var result struct {
-				Refused bool   `json:"refused"`
-				Code    string `json:"code"`
+			info, err := os.Lstat(path)
+			if err != nil {
+				return err
 			}
-			if json.Unmarshal(output, &result) != nil || !result.Refused || result.Code != "protected_cohort" {
-				t.Fatalf("old writer did not identify protected cohort: %s", output)
+			value := info.Mode().String() + " " + statusSecuritySnapshot(t, path)
+			// Historical activation locks change directory mtimes transiently; final entries and security must remain identical.
+			if !info.IsDir() {
+				value += fmt.Sprintf(" %d %s", info.Size(), info.ModTime())
 			}
-			if !reflect.DeepEqual(before, privateWikiTree(t, e.Root)) {
-				t.Fatal("old process mutated source, graph, fence or modes")
+			if info.Mode()&os.ModeSymlink != 0 {
+				target, err := os.Readlink(path)
+				if err != nil {
+					return err
+				}
+				value += " " + target
+			} else if info.Mode().IsRegular() {
+				body, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				value += fmt.Sprintf(" %x", sha256.Sum256(body))
+			}
+			state[path] = value
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return state
+	}
+	program, err := os.ReadFile(helper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("actual historical-library harness sha256=%x", sha256.Sum256(program))
+	beforePositive := snapshot()
+	fresh := t.TempDir()
+	positive := invoke("positive", fresh, config)
+	if !positive.PositiveControl || !positive.LegacyContextFound || positive.OwnedSupported != (runtime.GOOS != "windows") || len(positive.Calls) != 13 {
+		t.Fatalf("historical API positive control missing: %+v", positive)
+	}
+	wantPositive := []string{"memory.Bootstrap(legacy)", "Engine.Capture(legacy_journal)", "CaptureAttestor.Seal",
+		"Engine.Capture(attested_journal)", "Engine.DreamDailyAttested", "Engine.Status", "Engine.AssembleContext",
+		"memory.Bootstrap(owned)", "Engine.PrepareOwnedCaptureAuthority", "Engine.SealOwnedCapture",
+		"Engine.CaptureOwned", "Engine.ReadCapture", "Engine.DeleteCapture"}
+	for i, call := range positive.Calls {
+		want := "success"
+		if runtime.GOOS == "windows" && i >= 8 {
+			want = "confinement_unavailable"
+		}
+		if call.API != wantPositive[i] || call.Outcome != want || (want == "success" && call.Error != "") ||
+			(want != "success" && (call.Error != ErrConfinementUnavailable.Error() || !call.ReturnedEmpty)) {
+			t.Fatalf("positive library call not genuine: %+v", call)
+		}
+	}
+	legacy := &Engine{Root: filepath.Join(fresh, "legacy", "brain", "memory"), Policy: e.Policy,
+		Budgets: e.Budgets, Freshness: e.Freshness, Now: e.Now}
+	status, err := legacy.Status("case-a")
+	if err != nil || status.State != "ready" || status.CaptureFiles < 2 {
+		t.Fatalf("current reader cannot see actual old positive source: %+v %v", status, err)
+	}
+	bundle, err := legacy.AssembleContext("case-a")
+	found := false
+	for _, section := range bundle.Sections {
+		found = found || strings.Contains(section.Content, "MAESTRO_HISTORICAL_LIBRARY_POSITIVE")
+	}
+	if err != nil || !found {
+		t.Fatalf("genuine historical positive did not return source context: %v", err)
+	}
+	if !reflect.DeepEqual(beforePositive, snapshot()) {
+		t.Fatal("separate historical positive changed the protected root")
+	}
+	operations := []struct {
+		name string
+		api  string
+	}{
+		{"legacy_capture", "Engine.Capture"}, {"legacy_status", "Engine.Status"},
+		{"legacy_context", "Engine.AssembleContext"}, {"owned_read", "Engine.ReadCapture"},
+		{"owned_capture", "Engine.CaptureOwned"}, {"owned_delete", "Engine.DeleteCapture"},
+	}
+	for _, operation := range operations {
+		t.Run(operation.name, func(t *testing.T) {
+			before := snapshot()
+			receipt := invoke(operation.name, e.Root, config, capture.ID, strconv.FormatUint(capture.Revision, 10))
+			expectedCalls := 1
+			if operation.name == "owned_capture" {
+				expectedCalls = 2
+			}
+			if receipt.PositiveControl || len(receipt.Calls) != expectedCalls {
+				t.Fatalf("actual historical operation is missing: %+v", receipt)
+			}
+			want := "visibility_requirement_refused"
+			wantError := "invalid memory visibility checkpoint requirement"
+			if runtime.GOOS == "windows" && strings.HasPrefix(operation.name, "owned_") {
+				want, wantError = "confinement_unavailable", ErrConfinementUnavailable.Error()
+			}
+			if expectedCalls == 2 {
+				seal := receipt.Calls[0]
+				if seal.API != "Engine.SealOwnedCapture" ||
+					(runtime.GOOS == "windows" && (seal.Outcome != "confinement_unavailable" || seal.Error != wantError || !seal.ReturnedEmpty)) ||
+					(runtime.GOOS != "windows" && (seal.Outcome != "success" || seal.Error != "" || seal.ReturnedEmpty)) {
+					t.Fatalf("capture input preparation was misrepresented: %+v", seal)
+				}
+			}
+			actual := receipt.Calls[len(receipt.Calls)-1]
+			if actual.API != operation.api || actual.Outcome != want || actual.Error != wantError || !actual.ReturnedEmpty {
+				t.Fatalf("actual historical call did not refuse truthfully: %+v", actual)
+			}
+			if !reflect.DeepEqual(before, snapshot()) {
+				t.Fatal("historical process changed final source, graph, fence, file metadata or native security")
 			}
 		})
 	}
