@@ -839,9 +839,9 @@ func TestExternalConflictingPartialAndConcurrentAttemptStayOwned(t *testing.T) {
 	}
 }
 
-func TestExternalWindowsMutationRefusesBeforeEffects(t *testing.T) {
+func TestExternalWindowsUnreviewedDigestRefusesBeforeEffects(t *testing.T) {
 	if runtime.GOOS != "windows" {
-		t.Skip("Windows refusal boundary")
+		t.Skip("Windows reviewed-digest boundary")
 	}
 	o := externalFixture(t, "0.1.12")
 	externalPut(t, o.SourceRoot, "data/profile/note.md", "source")
@@ -849,11 +849,17 @@ func TestExternalWindowsMutationRefusesBeforeEffects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = zipmigration.ApplyExternal(p, externalDigest(t, p), nil); err == nil {
-		t.Fatal("Windows mutation admitted")
+	digest := externalDigest(t, p)
+	unreviewed := digest[:len(digest)-1] + "0"
+	if unreviewed == digest {
+		unreviewed = digest[:len(digest)-1] + "1"
 	}
+	if _, err = zipmigration.ApplyExternal(p, unreviewed, nil); err == nil {
+		t.Fatal("Windows unreviewed digest admitted")
+	}
+
 	if _, err = os.Stat(o.Home); !os.IsNotExist(err) {
-		t.Fatal("Windows refusal created HOME")
+		t.Fatal("Windows unreviewed digest created HOME")
 	}
 }
 

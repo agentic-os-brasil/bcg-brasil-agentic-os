@@ -38,10 +38,11 @@ if ($withManifest) {
     }
     $canonical = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $hasMigrationProfile = $canonical.PSObject.Properties.Name -ccontains 'qualification_profile'
-    if ($hasMigrationProfile -and (-not $withCanonical -or $canonical.qualification_profile -cne 'quarantined_windows_migration_primitives_v2')) {
+    if ($hasMigrationProfile -and (-not $withCanonical -or $canonical.qualification_profile -cnotin @('quarantined_windows_migration_primitives_v2', 'windows_public_external_migration_v1'))) {
         throw 'Unknown canonical qualification profile.'
     }
     $withMigration = $withCanonical -and $hasMigrationProfile
+    $withPublicMigration = $withMigration -and $canonical.qualification_profile -ceq 'windows_public_external_migration_v1'
     $expectedPackages = @('execution', 'datahome', 'ownerctx', 'memory', 'privatewiki', 'processidentity')
     if ($withMigration) { $expectedPackages += @('winprivate', 'zipmigration') }
     if ($withInspection) { $expectedPackages = @('datahome', 'scheduler', 'zipruntime', 'maestro-runtime') }
@@ -97,6 +98,34 @@ if ($withManifest) {
                 throw 'Migration primitive inventory differs from the fixed required cases.'
             }
             $entry | Add-Member -NotePropertyName migration_required_tests -NotePropertyValue $required -Force
+        }
+    }
+    if ($withPublicMigration) {
+        $publicMigrationTests = @{
+            zipmigration = @(
+                'TestWindowsExternalPublicReviewedPlanRefusesBeforeEffects',
+                'TestWindowsExternalPublicCommitPreservesOriginalAndOfflineProof',
+                'TestWindowsExternalPublicInterruptionResumesAndRollbackRetainsWork',
+                'TestExternalWindowsUnreviewedDigestRefusesBeforeEffects'
+            )
+            datahome = @('TestResolveCommittedMigrationUsesSealedSourceIdentity')
+        }
+        foreach ($entry in @($canonical.packages | Where-Object { $_.name -cin @('datahome', 'zipmigration') })) {
+            $required = @($publicMigrationTests[$entry.name])
+            if ($entry.name -ceq 'zipmigration') {
+                $publicTests = @($entry.tests | Where-Object { $_ -cmatch '^TestWindowsExternalPublic' })
+                $expectedPublic = @($required | Where-Object { $_ -cmatch '^TestWindowsExternalPublic' })
+                if ($publicTests.Count -ne $expectedPublic.Count -or
+                    @((Compare-Object ($expectedPublic | Sort-Object) ($publicTests | Sort-Object))).Count -ne 0) {
+                    throw 'Public migration inventory differs from the fixed required cases.'
+                }
+            }
+            foreach ($test in $required) {
+                if (@($entry.tests | Where-Object { $_ -ceq $test }).Count -ne 1) {
+                    throw 'Public migration inventory differs from the fixed required cases.'
+                }
+            }
+            $entry | Add-Member -NotePropertyName public_migration_required_tests -NotePropertyValue $required -Force
         }
     }
     foreach ($path in @($canonical.source_root, $canonical.sdk_root, $canonical.sdk_go)) {
@@ -512,7 +541,8 @@ try {
     }
     if ($CanonicalManifest) {
         $manifest = Get-Content -LiteralPath $CanonicalManifest -Raw -Encoding UTF8 | ConvertFrom-Json
-        $migrationProfile = -not $Inspection -and $manifest.qualification_profile -ceq 'quarantined_windows_migration_primitives_v2'
+        $migrationProfile = -not $Inspection -and $manifest.qualification_profile -cin @('quarantined_windows_migration_primitives_v2', 'windows_public_external_migration_v1')
+        $publicMigrationProfile = -not $Inspection -and $manifest.qualification_profile -ceq 'windows_public_external_migration_v1'
         if ($env:GOROOT) { throw 'Canonical evidence refuses caller-supplied GOROOT.' }
         if (-not $Inspection -and
             ((Test-Path Env:MAESTRO_PRIVATE_WIKI_COMPAT_PRODUCER) -or (Test-Path Env:MAESTRO_PRIVATE_WIKI_OLD_WRITER))) {
@@ -643,6 +673,20 @@ try {
                     public_transaction_qualified=$false; scope='quarantined_kernel_adapter_and_admitted_bodies_only'
                 }
             }
+            if ($publicMigrationProfile) { $results[-1].all_skipped_tests = $allSkips }
+            if ($publicMigrationProfile -and $entry.name -cin @('datahome', 'zipmigration')) {
+                $required = @($entry.public_migration_required_tests)
+                $requiredCount = if ($entry.name -ceq 'zipmigration') { 4 } else { 1 }
+                $publicRequiredPassed = $code -eq 0 -and $complete -and $required.Count -eq $requiredCount
+                foreach ($test in $required) {
+                    if (@($outcomes | Where-Object { $_.test -ceq $test -and $_.outcome -ceq 'PASS' }).Count -ne 1 -or
+                        @($allSkips | Where-Object { ($_ -split '/')[0] -ceq $test }).Count -ne 0) { $publicRequiredPassed = $false }
+                }
+                $results[-1].public_migration_proof = [ordered]@{
+                    required_tests=$required; actual_required_tests_passed=$publicRequiredPassed
+                    scope=$(if ($entry.name -ceq 'zipmigration') { 'observed_exported_migration_entrypoints' } else { 'observed_canonical_sealed_source_resolution' })
+                }
+            }
             if ($Inspection) {
                 $results[-1].all_skipped_tests = $allSkips
                 $results[-1].skip_policy = @($entry.skip_policy)
@@ -692,6 +736,18 @@ try {
             }
             if (-not $migrationPrimitivesPassed) { $qualificationComplete = $false }
         }
+        if ($publicMigrationProfile) {
+            $publicTransactionQualified = $migrationPrimitivesPassed -and @($results | Where-Object {
+                $_.name -ceq 'zipmigration' -and $_.public_migration_proof.actual_required_tests_passed -eq $true
+            }).Count -eq 1
+            $canonicalResolutionQualified = $publicTransactionQualified -and @($results | Where-Object {
+                $_.name -ceq 'datahome' -and $_.public_migration_proof.actual_required_tests_passed -eq $true
+            }).Count -eq 1
+            $publicMigrationPassed = $publicTransactionQualified -and $canonicalResolutionQualified
+            if (-not $publicMigrationPassed -or @($results | Where-Object {
+                $_.exit_code -ne 0 -or -not $_.inventory_complete -or $_.all_skipped_tests.Count -ne 0
+            }).Count -ne 0) { $qualificationComplete = $false }
+        }
         $report = [ordered]@{
             schema_version=1; source_revision=$manifest.source_revision; actual_standard_user=$true
             private_current_user_temp=$true; public_source_and_sdk_read_only=$true
@@ -700,11 +756,23 @@ try {
             platform_nonapplicability='unclassified_existing_skips_are_not_passing_coverage'
         }
         if ($migrationProfile) {
-            $report.quarantined_migration_primitives = [ordered]@{
-                actual_required_tests_passed=$migrationPrimitivesPassed; mutation_gate='unavailable'
-                public_transaction_qualified=$false; canonical_resolution_qualified=$false
-                scope='quarantined_kernel_adapter_and_admitted_bodies_only'
-                missing_coverage='Existing skips remain missing coverage; enabled public Apply/Rollback and datahome.Resolve are not qualified.'
+            if (-not $publicMigrationProfile) {
+                $report.quarantined_migration_primitives = [ordered]@{
+                    actual_required_tests_passed=$migrationPrimitivesPassed; mutation_gate='unavailable'
+                    public_transaction_qualified=$false; canonical_resolution_qualified=$false
+                    scope='quarantined_kernel_adapter_and_admitted_bodies_only'
+                    missing_coverage='Existing skips remain missing coverage; enabled public Apply/Rollback and datahome.Resolve are not qualified.'
+                }
+            }
+        }
+        if ($publicMigrationProfile) {
+            $report.qualification_profile = 'windows_public_external_migration_v1'
+            $report.public_external_migration = [ordered]@{
+                actual_prerequisite_tests_passed=$migrationPrimitivesPassed; actual_required_tests_passed=$publicMigrationPassed
+                public_transaction_qualified=$publicTransactionQualified; canonical_resolution_qualified=$canonicalResolutionQualified
+                mutation_gate='local_non_elevated_native_admission'; scope='exact_public_entrypoints_and_sealed_source_resolution'
+                observed_skips_count=@($results | ForEach-Object { $_.all_skipped_tests }).Count
+                missing_coverage='Every observed legacy skip remains missing coverage; subset proof is not full canonical or client qualification.'
             }
         }
         $reportName = if ($Inspection) { 'inspection-contract-results.json' } else { 'canonical-contract-results.json' }
@@ -721,6 +789,7 @@ try {
         $report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $ProofRoot $reportName) -Encoding utf8
         if (-not $qualificationComplete) {
             if ($Inspection) { throw 'Inspection contracts remain incomplete; retain all four package logs and classified outcomes.' }
+            if ($publicMigrationProfile) { throw 'Canonical public migration coverage remains incomplete; retain all eight package logs, actual public/resolver outcomes and skipped coverage.' }
             if ($migrationProfile) { throw 'Canonical migration primitive contracts remain incomplete; retain all eight package logs and actual skipped outcomes.' }
             throw 'Canonical contracts remain incomplete; retain all six package logs and classified outcomes.'
         }

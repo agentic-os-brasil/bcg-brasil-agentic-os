@@ -276,7 +276,7 @@ jobs:
           } finally { Pop-Location }
           $manifest = [ordered]@{
             schema_version=1; source_revision=$revision; source_root=$sourceRoot
-            qualification_profile='quarantined_windows_migration_primitives_v2'
+            qualification_profile='windows_public_external_migration_v1'
             sdk_root=$sdkRoot; sdk_go=$sdkGo
             sdk_go_sha256=(Get-FileHash -LiteralPath $sdkGo -Algorithm SHA256).Hash.ToLowerInvariant()
             source_archive=$archive; source_archive_sha256=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()

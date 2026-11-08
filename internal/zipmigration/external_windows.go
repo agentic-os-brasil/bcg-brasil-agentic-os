@@ -9,8 +9,12 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
 )
 
-func externalMutationAllowed() error { return errors.New("external Windows ownership is unavailable") }
-func externalReadFlags() int         { return os.O_RDONLY }
+// Native handle admission supplies the local ownership/confinement boundary.
+func externalMutationAllowed() error {
+	_, err := winprivate.CurrentUser()
+	return err
+}
+func externalReadFlags() int { return os.O_RDONLY }
 func externalOwnedDirectory(name string, private bool) error {
 	d, err := winprivate.OpenPinnedTree(name)
 	if err != nil {

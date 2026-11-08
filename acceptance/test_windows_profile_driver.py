@@ -569,6 +569,98 @@ Invoke-Expression $reportBlock[0].Extent.Text
 if ($report.Count -ne 0) { throw 'Migration profile changed the default report' }
 """)
 
+    def public_migration_manifest(self):
+        document = self.migration_manifest()
+        document["qualification_profile"] = "windows_public_external_migration_v1"
+        public = re.findall(r"^func (TestWindowsExternalPublic\w+)\(",
+                            (ROOT / "internal/zipmigration/external_public_windows_test.go").read_text(), re.M)
+        self.assertEqual(len(public), 3)
+        document["packages"][-1]["tests"] += public + ["TestExternalWindowsUnreviewedDigestRefusesBeforeEffects"]
+        document["packages"][1]["tests"].append("TestResolveCommittedMigrationUsesSealedSourceIdentity")
+        return document
+
+    def test_public_migration_profile_requires_exact_public_and_resolver_inventory(self):
+        document = self.public_migration_manifest()
+        self.canonical_admission(document, "Canonical public source and SDK inputs")
+        for name in ["TestWindowsExternalPublicReviewedPlanRefusesBeforeEffects",
+                     "TestWindowsExternalPublicCommitPreservesOriginalAndOfflineProof",
+                     "TestWindowsExternalPublicInterruptionResumesAndRollbackRetainsWork",
+                     "TestExternalWindowsUnreviewedDigestRefusesBeforeEffects",
+                     "TestResolveCommittedMigrationUsesSealedSourceIdentity"]:
+            with self.subTest(missing=name):
+                changed = json.loads(json.dumps(document))
+                entry = changed["packages"][1 if name.startswith("TestResolve") else -1]
+                entry["tests"].remove(name)
+                self.canonical_admission(changed, "Public migration inventory differs from the fixed required cases")
+        for name in ["TestWindowsExternalPublicUnexpected", "TestWindowsExternalPublicReviewedPlanRefusesBeforeEffects"]:
+            with self.subTest(extra=name):
+                changed = json.loads(json.dumps(document))
+                changed["packages"][-1]["tests"].append(name)
+                self.canonical_admission(changed, "Public migration inventory differs from the fixed required cases")
+        document["qualification_profile"] = "quarantined_windows_migration_primitives_v1"
+        self.canonical_admission(document, "Unknown canonical qualification profile")
+
+    def test_public_native_acceptance_requires_observed_pass_and_no_nested_skip(self):
+        self.launcher_fragment_check(r"""
+$check=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -ceq '$publicMigrationProfile -and $entry.name -cin @(''datahome'', ''zipmigration'')'},$true))
+if ($check.Count -ne 1) { throw 'Expected actual public package outcome gate' }
+$publicMigrationProfile=$true
+foreach ($package in @('zipmigration','datahome')) {
+ $required=if($package -ceq 'zipmigration') {@('TestWindowsExternalPublicReviewedPlanRefusesBeforeEffects','TestWindowsExternalPublicCommitPreservesOriginalAndOfflineProof','TestWindowsExternalPublicInterruptionResumesAndRollbackRetainsWork','TestExternalWindowsUnreviewedDigestRefusesBeforeEffects')}else{@('TestResolveCommittedMigrationUsesSealedSourceIdentity')}
+ foreach ($mode in @('pass','absent','duplicate','fail','skip','nested-skip','lowercase-pass','exit','partial','missing-required')) {
+  $entry=[pscustomobject]@{name=$package; public_migration_required_tests=$required}; $code=0; $complete=$true; $allSkips=@()
+  $outcomes=@($required | ForEach-Object { @{test=$_;outcome='PASS'} })
+  switch ($mode) {
+   'absent' {$outcomes=@($outcomes | Select-Object -Skip 1)}
+   'duplicate' {$outcomes+=@{test=$required[0];outcome='PASS'}}
+   'fail' {$outcomes[0].outcome='FAIL'}
+   'skip' {$outcomes[0].outcome='SKIP'}
+   'nested-skip' {$allSkips=@($required[0]+'/unavailable')}
+   'lowercase-pass' {$outcomes[0].outcome='pass'}
+   'exit' {$code=1}
+   'partial' {$complete=$false}
+   'missing-required' {$entry.public_migration_required_tests=@()}
+  }
+  $results=@([ordered]@{})
+  Invoke-Expression $check[0].Extent.Text
+  if ($results[-1].public_migration_proof.actual_required_tests_passed -ne ($mode -ceq 'pass')) {throw ('Unobserved public/resolver coverage was accepted: '+$package+'/'+$mode)}
+ }
+}
+""")
+
+    def test_public_report_preserves_legacy_missing_coverage_and_prerequisites(self):
+        self.launcher_fragment_check(r"""
+$gate=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -ceq '$publicMigrationProfile' -and $node.Extent.Text -match '\$publicTransactionQualified\s*='},$true))
+$reportBlock=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -ceq '$publicMigrationProfile' -and $node.Extent.Text -match '\$report.public_external_migration'},$true))
+if ($gate.Count -ne 1 -or $reportBlock.Count -ne 1) {throw 'Expected actual public aggregate and report blocks'}
+$publicMigrationProfile=$true
+foreach ($case in @(@{backend=$true; public=$true; resolver=$true; prior=$true; skips=@(); publicExpected=$true; resolverExpected=$true; overall=$true},@{backend=$true; public=$true; resolver=$true; prior=$true; skips=@('TestLegacy/known'); publicExpected=$true; resolverExpected=$true; overall=$false},@{backend=$true; public=$true; resolver=$true; prior=$false; skips=@(); publicExpected=$true; resolverExpected=$true; overall=$false},@{backend=$false; public=$true; resolver=$true; prior=$true; skips=@(); publicExpected=$false; resolverExpected=$false; overall=$false},@{backend=$true; public=$false; resolver=$true; prior=$true; skips=@(); publicExpected=$false; resolverExpected=$false; overall=$false},@{backend=$true; public=$true; resolver=$false; prior=$true; skips=@(); publicExpected=$true; resolverExpected=$false; overall=$false},@{backend=$true; public=$true; resolver=$true; prior=$true; missing=$true; skips=@(); publicExpected=$true; resolverExpected=$false; overall=$false},@{backend=$true; public=$true; resolver=$true; prior=$true; duplicate=$true; skips=@(); publicExpected=$false; resolverExpected=$false; overall=$false})) {
+ $migrationPrimitivesPassed=$case.backend; $qualificationComplete=$case.prior
+ $results=@(@{name='zipmigration'; exit_code=0; inventory_complete=$true; all_skipped_tests=@(); public_migration_proof=@{actual_required_tests_passed=$case.public}},@{name='datahome'; exit_code=0; inventory_complete=$true; all_skipped_tests=@(); public_migration_proof=@{actual_required_tests_passed=$case.resolver}},@{name='memory'; exit_code=0; inventory_complete=$true; all_skipped_tests=$case.skips})
+ if($case.missing){$results=@($results | Where-Object {$_.name -cne 'datahome'})}
+ if($case.duplicate){$results+=@{name='zipmigration';exit_code=0;inventory_complete=$true;all_skipped_tests=@();public_migration_proof=@{actual_required_tests_passed=$true}}}
+ Invoke-Expression $gate[0].Extent.Text
+ $report=[ordered]@{qualification_complete=$qualificationComplete}
+ Invoke-Expression $reportBlock[0].Extent.Text
+ if($report.qualification_complete -ne $case.overall -or $report.public_external_migration.public_transaction_qualified -ne $case.publicExpected -or $report.public_external_migration.canonical_resolution_qualified -ne $case.resolverExpected -or $report.public_external_migration.observed_skips_count -ne $case.skips.Count){throw 'Public subset proof upgraded missing prerequisites or legacy coverage'}
+}
+$publicMigrationProfile=$false; $report=[ordered]@{}
+Invoke-Expression $reportBlock[0].Extent.Text
+if($report.Count -ne 0){throw 'Public qualification fields changed a historical profile'}
+""")
+
+    def test_public_profile_keeps_incomplete_coverage_failure_and_workflow_selection(self):
+        self.assertIn("qualification_profile='windows_public_external_migration_v1'",
+                      (ROOT / ".github/workflows/product-mcp.yml").read_text())
+        self.launcher_fragment_check(r"""
+$failure=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -ceq '-not $qualificationComplete' -and $node.Extent.Text -match 'Canonical public migration coverage remains incomplete'},$true))
+if($failure.Count -ne 1){throw 'Expected preserved final incomplete coverage failure'}
+$qualificationComplete=$false; $Inspection=$false; $migrationProfile=$true; $publicMigrationProfile=$true
+$refused=$false
+try {Invoke-Expression $failure[0].Extent.Text}catch{if($_.Exception.Message -notmatch 'Canonical public migration coverage remains incomplete'){throw};$refused=$true}
+if(-not $refused){throw 'Public subset received a successful exit despite unresolved coverage'}
+""")
+
     def test_inspection_and_pilot_parameters_are_exclusive(self):
         result = self.invoke({}, "-TestBinary", "unused", "-Server", "unused")
         self.assert_preaccount_refusal(result, "Parameter set cannot be resolved")
