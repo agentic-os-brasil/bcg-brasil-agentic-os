@@ -39,6 +39,33 @@ Once native rename succeeds, `moved` remains true even if a subsequent flush or
 diagnostic-label transfer fails. Preserve that complete destination and let the
 domain journal identify its actual phase; do not delete it or recopy the source.
 
+## Cooperative retirement-pointer replacement
+
+`Stage.PublishReplacingUnderLease(target, name)` is limited to cooperative
+private migration metadata whose fixed pointer already exists. The domain must
+hold the exclusive profile migration lease through publication, validate the
+prior pointer's retired archive and rolled-back proof, and explicitly compare
+its expected prior bytes immediately before this call. Initial absent-pointer
+publication continues to use exclusive `Stage.Publish`.
+
+The kernel validates the pinned private target and an existing regular,
+single-linked private destination, refuses read-only attributes without repair,
+flushes the same retained stage, and requests native replacing rename. Admission
+refuses directories, reparse points, hardlinks, public ACLs and incompatible
+handles. An open reader that withholds DELETE sharing can prevent replacement.
+After publication the stage still holds DELETE access; independent readers must
+share DELETE (the native `Directory.OpenFile` read API does so).
+
+This is an atomic namespace replacement under a cooperative domain lease, not
+an OS compare-and-swap or a generic authored-page replacement API. The target's
+read-admission view closes before rename; custody of that prior target is not
+continuous. Another actor ignoring the lease may change or remove it during
+that gap, and replacing rename supplies no atomic expected-bytes or continued-
+existence predicate. The held stage and pinned target parent remain retained;
+no delete-then-create or pathname reopening substitutes for their custody.
+As with exclusive publication, any late durability or label-transfer error keeps
+`moved=true` once native rename has changed the namespace.
+
 ## Rollback root transfer
 
 Use `OpenMovableDirectory` as the initial root admission for a rollback, before
@@ -80,8 +107,9 @@ this primitive supplies no retry, repair or locator re-creation policy.
 
 The dedicated Windows tests require the actual ordinary-account proof driver.
 They cover source alias refusal and pins, read-only files, deterministic stage
-resume, occupied destinations, same-object publication, archived receipt writes
-and exact deletion with retained-reader/late-error cases. A PE cross-build
+resume, occupied destinations, same-object publication, archived receipt writes,
+exact deletion with retained-reader/late-error cases, and cooperative retirement-
+pointer replacement with unsafe-destination/late-outcome controls. A PE cross-build
 proves compilation only. Native local-volume behavior,
 durability and domain interruption/rollback still require the corresponding
 hosted proof before the adapter can enable mutation.
