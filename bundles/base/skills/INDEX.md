@@ -38,7 +38,7 @@
 | Diagnóstico do Maestro | Faz um diagnóstico da instalação do Maestro em linguagem simples | `skills/maestro-doctor/SKILL.md` |
 | Preparar Ambiente Maestro | Prepara workspace, runtime e manutenção local | `skills/maestro-environment-setup/SKILL.md` |
 | Maestro Knowledge Pill | Gera pílula de conhecimento curta e engajante sobre o Maestro OS em formato Slack Block Kit | `skills/maestro-knowledge-pill/SKILL.md` |
-| Onboarding do Maestro | Inicia a entrevista guiada do owner nas trilhas rápida ou completa | `skills/maestro-onboarding/SKILL.md` |
+| Onboarding do Maestro | Inicia ou retoma a entrevista do dono a partir do perfil salvo | `skills/maestro-onboarding/SKILL.md` |
 | Operador do Maestro | Método operacional carregado no SessionStart — roteia pedidos de controle para o skill certo | `skills/maestro-operator/SKILL.md` |
 | Checkup do Maestro | Confere e repara runtime, hooks e Darwin | `skills/maestro-runtime-checkup/SKILL.md` |
 | Instalação e Atualização do Maestro | Conduz instalação, atualização e recuperação de forma conversacional | `skills/maestro-setup-update/SKILL.md` |
