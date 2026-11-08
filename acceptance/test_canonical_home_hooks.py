@@ -46,8 +46,10 @@ class HomeBinding(unittest.TestCase):
             }],
         }))
         self.env = dict(os.environ, HOME=str(self.profile), USERPROFILE=str(self.profile),
-                        XDG_CACHE_HOME=str(self.base / "shell-host-cache"),
-                        CLAUDE_PROJECT_DIR=str(self.product), CLAUDE_SESSION_ID="fixture")
+                        CLAUDE_PROJECT_DIR=str(self.product), CLAUDE_SESSION_ID="fixture",
+                        XDG_CACHE_HOME=str(self.base / "shell-host/cache"),
+                        XDG_DATA_HOME=str(self.base / "shell-host/data"),
+                        XDG_CONFIG_HOME=str(self.base / "shell-host/config"))
         self.env.pop("MAESTRO_HOME", None)
         self.env.pop("MAESTRO_PY_RECORD", None)
         self.cwd = self.base / "unrelated nested working directory"

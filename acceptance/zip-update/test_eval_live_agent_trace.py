@@ -139,12 +139,13 @@ class LiveQualificationProfileTests(unittest.TestCase):
                                XDG_CACHE_HOME=str(root / "shell-host-cache"),
                                PATH=str(commands) + os.pathsep + os.environ["PATH"],
                                MODEL_MARKER=str(invoked), MAESTRO_HOME=str(root / "outside-owner"))
+            # PowerShell startup owns these files independently of the script under test.
+            if powershell:
+                environment.update(XDG_CACHE_HOME=str(root / "shell-host/cache"),
+                                   XDG_DATA_HOME=str(root / "shell-host/data"),
+                                   XDG_CONFIG_HOME=str(root / "shell-host/config"))
             environment.pop("CLAUDE_CONFIG_DIR", None)
             (current / "sentinel.txt").write_text("preserved operator state", encoding="utf-8")
-            # Initialize the shell host's own cache before measuring product effects.
-            if powershell:
-                subprocess.run(["pwsh", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "exit 0"],
-                               env=environment, capture_output=True, check=True)
             operator_before = {str(path.relative_to(current)): None if path.is_dir() else path.read_bytes()
                                for path in current.rglob("*")}
             cases = [([], {}), (["--profile", "relative-profile"], {}),
