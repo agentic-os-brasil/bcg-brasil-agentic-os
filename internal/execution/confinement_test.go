@@ -80,16 +80,12 @@ func TestStoreRejectsSymlinkContract(t *testing.T) {
 
 func TestOpenConfinedStoreAdmission(t *testing.T) {
 	root := t.TempDir()
-	if err := os.Chmod(root, 0700); err != nil {
-		t.Fatal(err)
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(root, 0700); err != nil {
+			t.Fatal(err)
+		}
 	}
 	store, err := OpenConfinedStore(root)
-	if runtime.GOOS == "windows" {
-		if !errors.Is(err, ErrConfinementUnavailable) {
-			t.Fatalf("Windows confinement must remain unavailable: %v", err)
-		}
-		return
-	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,19 +93,27 @@ func TestOpenConfinedStoreAdmission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Start(testWorkspaceID, item.State.ItemID, 1); err != nil {
+	reopened, err := OpenConfinedStore(root)
+	if err != nil {
 		t.Fatal(err)
+	}
+	started, err := reopened.Start(testWorkspaceID, item.State.ItemID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Start(testWorkspaceID, item.State.ItemID, 1); !errors.Is(err, ErrRevisionConflict) {
+		t.Fatalf("stale revision admitted: %v", err)
+	}
+	observed, err := reopened.Inspect(testWorkspaceID, item.State.ItemID)
+	if err != nil || observed.State != started.State {
+		t.Fatalf("reopened authority changed: %+v %v", observed.State, err)
 	}
 	link := filepath.Join(t.TempDir(), "home")
-	if err := os.Symlink(root, link); err != nil {
-		t.Fatal(err)
-	}
+	confinementDirectoryAlias(t, link, root)
 	if _, err := OpenConfinedStore(link); err == nil {
 		t.Fatal("admitted linked root")
 	}
-	if err := os.Chmod(root, 0755); err != nil {
-		t.Fatal(err)
-	}
+	confinementPublicDirectory(t, root)
 	if _, err := OpenConfinedStore(root); err == nil {
 		t.Fatal("admitted public root")
 	}

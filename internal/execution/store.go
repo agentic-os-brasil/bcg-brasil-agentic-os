@@ -17,6 +17,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 type ItemState string
@@ -1554,8 +1556,40 @@ func randomBytes(size int) []byte {
 
 // ValidateSchemaFile wires the published contract into executable validation.
 func ValidateSchemaFile(path string) error {
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	// Public schemas grant no private authority; read-only hardlinks are allowed.
+	file, err := scheduler.OpenRegularFile(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Size() > maximumLedgerJSONBytes {
+		return errors.New("execution schema must be a bounded regular no-follow file")
+	}
+	body, err := io.ReadAll(io.LimitReader(file, maximumLedgerJSONBytes+1))
+	if err != nil {
+		return err
+	}
+	if len(body) > maximumLedgerJSONBytes {
+		return errors.New("execution schema exceeds size limit")
+	}
 	var schema map[string]any
-	if err := readStrictJSON(path, &schema); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	if err := decoder.Decode(&schema); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("execution schema contains multiple JSON values")
+		}
 		return err
 	}
 	if schema["$schema"] != "https://json-schema.org/draft/2020-12/schema" {
@@ -1578,7 +1612,7 @@ func ValidateSchemaFile(path string) error {
 			return fmt.Errorf("execution state schema %s must have two discriminated variants", name)
 		}
 	}
-	body, err := json.Marshal(schema)
+	body, err = json.Marshal(schema)
 	if err != nil {
 		return err
 	}
