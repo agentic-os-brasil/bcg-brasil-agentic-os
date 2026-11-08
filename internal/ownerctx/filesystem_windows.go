@@ -38,10 +38,19 @@ func acquireOwnerTransition(path string) (func() error, error) {
 		var overlapped windows.Overlapped
 		e = windows.LockFileEx(windows.Handle(f.Fd()), windows.LOCKFILE_EXCLUSIVE_LOCK|windows.LOCKFILE_FAIL_IMMEDIATELY, 0, 1, 0, &overlapped)
 		if e == nil {
-			return func() error {
+			unlock := func() error {
 				var o windows.Overlapped
 				return errors.Join(windows.UnlockFileEx(windows.Handle(f.Fd()), 0, 1, 0, &o), f.Close())
-			}, nil
+			}
+			info, statErr := f.Stat()
+			if statErr != nil {
+				return nil, errors.Join(statErr, unlock())
+			}
+			// A legacy token writer does not participate in native byte-range locking.
+			if info.Size() != 0 {
+				return nil, errors.Join(errors.New("owner transition lock contains legacy or unexpected data; preserve it and close older clients before retrying"), unlock())
+			}
+			return unlock, nil
 		}
 		if !errors.Is(e, windows.ERROR_LOCK_VIOLATION) {
 			f.Close()

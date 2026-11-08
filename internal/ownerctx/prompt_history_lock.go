@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/privatelock"
 )
 
 const promptHistoryLockName = ".lock"
@@ -32,6 +35,13 @@ func withPromptHistoryLock(root string, operation func(entriesPath, configPath s
 }
 
 func acquirePromptHistoryLock(path string) (func() error, error) {
+	if runtime.GOOS == "windows" {
+		unlock, err := acquireOwnerTransition(path)
+		if errors.Is(err, privatelock.ErrBusy) {
+			return nil, ErrPromptHistoryLocked
+		}
+		return unlock, err
+	}
 	tokenBytes := make([]byte, 16)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		return nil, err
