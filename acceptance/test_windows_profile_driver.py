@@ -99,6 +99,40 @@ if ($errors.Count) { throw ($errors | Out-String) }
                     source_root=str(source), sdk_root=str(sdk), sdk_go=str(go), sdk_go_sha256=hashlib.sha256(go.read_bytes()).hexdigest(),
                     packages=entries, vendor_files=[dict(path="modules.txt", sha256=hashlib.sha256(vendor.read_bytes()).hexdigest())])
 
+    def test_workflow_keeps_migration_skips_exact_and_explicitly_unqualified(self):
+        workflow = (ROOT / ".github/workflows/data-home-inspection.yml").read_text()
+        stage = workflow.split("      - name: Stage closed Windows inspection inputs\n", 1)[1]
+        body = stage.split("      - name:", 1)[0].split("        run: |\n", 1)[1]
+        source = self.root / "stage.ps1"
+        source.write_text(textwrap.dedent(body), encoding="utf-8")
+        script = self.root / "migration-policy.ps1"
+        script.write_text(r"""$ErrorActionPreference='Stop'
+$errors=$null
+$ast=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$errors)
+if ($errors.Count) { throw ($errors | Out-String) }
+$assignment=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -ceq '$skipPolicy'},$true))
+if ($assignment.Count -ne 1) { throw 'Expected the actual inspection skip policy' }
+Invoke-Expression $assignment[0].Extent.Text
+$required=@{
+ datahome=@('TestResolveCommittedMigrationUsesSealedSourceIdentity')
+ zipruntime=@('TestMigratedPathsAcceptPhysicalSourceCaseIdentity','TestMigratedPathsRetainSourceAndContinueAcrossProducts','TestMigrationRollbackRequiresActualHomeSelection','TestNewCustomHomeStillRequiresExplicitInitialization','TestUnverifiedMigrationPathsHaveNoRuntimeEffects/pending','TestUnverifiedMigrationPathsHaveNoRuntimeEffects/plan-tamper','TestUnverifiedMigrationPathsHaveNoRuntimeEffects/commit-tamper','TestUnverifiedMigrationPathsHaveNoRuntimeEffects/revoked')
+ 'maestro-runtime'=@('TestExternalCLIApplyStatusAndRollbackKeepBindingExplicit')
+}
+foreach ($package in $required.Keys) {
+ foreach ($test in $required[$package]) {
+  $entry=@($skipPolicy[$package] | Where-Object { $_.test -ceq $test })
+  if ($entry.Count -ne 1 -or $entry[0].reason -notmatch 'native migration coverage is missing') { throw ('Migration skip must remain explicitly unavailable: '+$test) }
+ }
+}
+$children=@($skipPolicy.zipruntime | Where-Object { $_.test -like 'TestUnverifiedMigrationPathsHaveNoRuntimeEffects*' })
+if ($children.Count -ne 4 -or @($children | Where-Object { $_.test -ceq 'TestUnverifiedMigrationPathsHaveNoRuntimeEffects' }).Count -ne 0) { throw 'Migration skips cannot blanket-authorize unknown child tests' }
+foreach ($test in @('TestCodexLifecycleRequiresExplicitMigration','TestHookPreflightPreservesCommittedLegacyAndCaseAliases')) {
+ if (@($skipPolicy.zipruntime | Where-Object { ($_.test -split '/')[0] -ceq $test }).Count) { throw 'Mandatory guarded contracts cannot be skipped' }
+}
+""", encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(source)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_guarded_migration_contracts_cannot_be_classified_as_skips(self):
         document = self.closed_manifest()
         for name in ["TestCodexLifecycleRequiresExplicitMigration", "TestHookPreflightPreservesCommittedLegacyAndCaseAliases/nested"]:

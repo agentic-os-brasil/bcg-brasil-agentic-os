@@ -10,6 +10,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/zipruntime"
 )
 
 // Preflight validates selected paths without creating state or following links.
@@ -18,6 +19,10 @@ func Preflight(o Options) error { _, err := resolveBinding(o); return err }
 func resolveBinding(o Options) (datahome.Result, error) {
 	h, err := datahome.Resolve(datahome.Options{ProductRoot: o.ProductRoot, UserHome: o.UserHome, LookupEnv: o.LookupEnv})
 	if err != nil {
+		return h, errors.New("home_unavailable")
+	}
+	paths := zipruntime.ResolvePaths(o.ProductRoot, zipruntime.Options{UserHome: o.UserHome, LookupEnv: o.LookupEnv})
+	if paths.Mode != "external" && paths.Mode != "initialization_required" {
 		return h, errors.New("home_unavailable")
 	}
 	path := o.WorkspacePath

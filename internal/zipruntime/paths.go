@@ -49,16 +49,25 @@ func ResolvePaths(product string, options Options) Paths {
 	if err != nil {
 		return blocked(home.Diagnostic)
 	}
-	// Status also detects pending/revoked receipts and unsafe legacy ancestors.
-	legacy := zipmigration.Run(product, zipmigration.Options{Status: true})
-	if legacy.State != "not_needed" && legacy.State != "committed" {
-		return blocked("migration_required")
+	hasLegacy := false
+	retainedSource := home.MigrationSourceRoot == product
+	if home.Writable && !retainedSource && home.MigrationSourceRoot != "" && scheduler.ValidateDirectory(home.MigrationSourceRoot) == nil {
+		sourceInfo, sourceErr := os.Stat(home.MigrationSourceRoot)
+		productInfo, productErr := os.Stat(product)
+		retainedSource = sourceErr == nil && productErr == nil && os.SameFile(sourceInfo, productInfo)
 	}
-	brain, err := os.ReadDir(filepath.Join(product, "brain"))
-	if err != nil && !os.IsNotExist(err) {
-		return blocked("legacy-inaccessible")
+	// The sealed source is retired; its preserved v1 state no longer governs HOME.
+	if !home.Writable || !retainedSource {
+		legacy := zipmigration.Run(product, zipmigration.Options{Status: true})
+		if legacy.State != "not_needed" && legacy.State != "committed" {
+			return blocked("migration_required")
+		}
+		brain, err := os.ReadDir(filepath.Join(product, "brain"))
+		if err != nil && !os.IsNotExist(err) {
+			return blocked("legacy-inaccessible")
+		}
+		hasLegacy = len(brain) > 0 || legacy.State == "committed"
 	}
-	hasLegacy := len(brain) > 0 || legacy.State == "committed"
 	if home.Writable {
 		if hasLegacy {
 			return blocked("legacy-home-conflict")
