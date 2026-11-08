@@ -5,6 +5,7 @@ package winprivate
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -376,6 +377,46 @@ func assertRemovalPreserved(t *testing.T, before removalState, path string) {
 	}
 }
 
+func setRemovalFixtureAccess(t *testing.T, path string, access uint32) {
+	t.Helper()
+	original, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldACL, _, err := original.DACL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	control, _, err := original.Control()
+	if err != nil {
+		t.Fatal(err)
+	}
+	restore := windows.SECURITY_INFORMATION(windows.DACL_SECURITY_INFORMATION | windows.UNPROTECTED_DACL_SECURITY_INFORMATION)
+	if control&windows.SE_DACL_PROTECTED != 0 {
+		restore = windows.DACL_SECURITY_INFORMATION | windows.PROTECTED_DACL_SECURITY_INFORMATION
+	}
+	t.Cleanup(func() {
+		if err := windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, restore, nil, nil, oldACL, nil); err != nil {
+			t.Error(err)
+		}
+	})
+	sid, err := CurrentUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sd, err := windows.SecurityDescriptorFromString(fmt.Sprintf("D:P(A;;0x%x;;;%s)(A;;FA;;;SY)(A;;FA;;;BA)", access, sid.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	acl, _, err := sd.DACL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestWindowsMigrationRemoveExactRequiresCompleteExpectedBytes(t *testing.T) {
 	parent := migrationPrivateParent(t)
 	body := []byte("planned locator\n")
@@ -531,42 +572,36 @@ func TestWindowsMigrationRemoveExactRejectsUnsafeOrBusyLeaves(t *testing.T) {
 				})
 			}
 			if kind == "delete-denied" {
-				original, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
+				// Configure the fixture before admission; old handles must not retain deletion rights.
+				parentPath := parent.File.Name()
+				if err := parent.Close(); err != nil {
+					t.Fatal(err)
+				}
+				parentAccess := uint32(privateDirAccess | windows.WRITE_DAC | windows.WRITE_OWNER)
+				leafAccess := uint32(windows.FILE_GENERIC_READ | windows.FILE_GENERIC_WRITE | windows.WRITE_DAC | windows.WRITE_OWNER)
+				const fileDeleteChild = 0x40
+				if parentAccess&(windows.DELETE|fileDeleteChild) != 0 || leafAccess&windows.DELETE != 0 {
+					t.Fatal("fixture grants an alternate deletion path")
+				}
+				setRemovalFixtureAccess(t, parentPath, parentAccess)
+				setRemovalFixtureAccess(t, path, leafAccess)
+				var err error
+				parent, err = OpenPinnedTree(parentPath)
 				if err != nil {
-					t.Fatal(err)
+					t.Fatal("restricted parent is not privately admitted", err)
 				}
-				oldACL, _, err := original.DACL()
+				defer parent.Close()
+				readable, err := parent.OpenFile(name, os.O_RDONLY)
 				if err != nil {
+					t.Fatal("restricted leaf is not privately readable", err)
+				}
+				if err := readable.Close(); err != nil {
 					t.Fatal(err)
 				}
-				control, _, err := original.Control()
-				if err != nil {
-					t.Fatal(err)
-				}
-				restore := windows.SECURITY_INFORMATION(windows.DACL_SECURITY_INFORMATION | windows.UNPROTECTED_DACL_SECURITY_INFORMATION)
-				if control&windows.SE_DACL_PROTECTED != 0 {
-					restore = windows.DACL_SECURITY_INFORMATION | windows.PROTECTED_DACL_SECURITY_INFORMATION
-				}
-				t.Cleanup(func() {
-					if err := windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, restore, nil, nil, oldACL, nil); err != nil {
-						t.Error(err)
-					}
-				})
-				sid, err := CurrentUser()
-				if err != nil {
-					t.Fatal(err)
-				}
-				sd, err := windows.SecurityDescriptorFromString("D:P(D;;0x10000;;;" + sid.String() + ")(A;;FA;;;" + sid.String() + ")(A;;FA;;;SY)(A;;FA;;;BA)")
-				if err != nil {
-					t.Fatal(err)
-				}
-				acl, _, err := sd.DACL()
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err := windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil); err != nil {
-					t.Fatal(err)
-				}
+			}
+			parentSecurity, err := windows.GetNamedSecurityInfo(parent.File.Name(), windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+			if err != nil {
+				t.Fatal(err)
 			}
 			before, external := removalSnapshot(t, path), removalSnapshot(t, outside)
 			selected := parent
@@ -590,6 +625,10 @@ func TestWindowsMigrationRemoveExactRejectsUnsafeOrBusyLeaves(t *testing.T) {
 			}
 			assertRemovalPreserved(t, before, path)
 			assertRemovalPreserved(t, external, outside)
+			afterParentSecurity, err := windows.GetNamedSecurityInfo(parent.File.Name(), windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+			if err != nil || parentSecurity.String() != afterParentSecurity.String() {
+				t.Fatal("refusal changed the parent's private security", err)
+			}
 		})
 	}
 }
