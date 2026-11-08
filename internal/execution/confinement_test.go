@@ -2,7 +2,10 @@ package execution
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -165,10 +168,7 @@ func TestEvidenceRejectsLinkedAndOversizedArtifactsWithoutMutation(t *testing.T)
 				t.Fatal(err)
 			}
 			before, external := confinementTreeSnapshot(t, store.Root), confinementTreeSnapshot(t, externalRoot)
-			var workspaceBefore map[string]string
-			if kind != "oversize" {
-				workspaceBefore = confinementTreeSnapshot(t, workspace)
-			}
+			workspaceBefore := confinementTreeSnapshot(t, workspace)
 			_, err = store.CollectEvidence(testWorkspaceID, item.State.ItemID, EvidenceInput{WorkspaceRoot: workspace, ExpectedRevision: 2, AttemptID: item.State.ActiveAttemptID, CriterionID: "artifact"})
 			if err == nil {
 				t.Fatal("accepted unsafe artifact")
@@ -176,8 +176,8 @@ func TestEvidenceRejectsLinkedAndOversizedArtifactsWithoutMutation(t *testing.T)
 			if !reflect.DeepEqual(before, confinementTreeSnapshot(t, store.Root)) || !reflect.DeepEqual(external, confinementTreeSnapshot(t, externalRoot)) {
 				t.Fatal("unsafe-artifact refusal mutated ledger or external target")
 			}
-			if kind != "oversize" && !reflect.DeepEqual(workspaceBefore, confinementTreeSnapshot(t, workspace)) {
-				t.Fatal("unsafe-artifact refusal mutated workspace aliases")
+			if !reflect.DeepEqual(workspaceBefore, confinementTreeSnapshot(t, workspace)) {
+				t.Fatal("unsafe-artifact refusal mutated workspace artifacts or aliases")
 			}
 			observed, err := store.Inspect(testWorkspaceID, item.State.ItemID)
 			if err != nil || observed.State.StateRevision != 2 {
@@ -308,11 +308,20 @@ func confinementTreeSnapshot(t *testing.T, root string) map[string]string {
 			}
 			value += " " + target
 		} else if info.Mode().IsRegular() {
-			body, err := os.ReadFile(path)
+			file, err := os.Open(path)
 			if err != nil {
 				return err
 			}
-			value += " " + string(body)
+			digest := sha256.New()
+			count, readErr := io.Copy(digest, io.LimitReader(file, info.Size()+1))
+			closeErr := file.Close()
+			if readErr != nil || closeErr != nil {
+				return errors.Join(readErr, closeErr)
+			}
+			if count != info.Size() {
+				return fmt.Errorf("fixture changed size during snapshot: %s", path)
+			}
+			value += fmt.Sprintf(" %d %x", count, digest.Sum(nil))
 		}
 		snapshot[path] = value
 		return nil
@@ -321,4 +330,26 @@ func confinementTreeSnapshot(t *testing.T, root string) map[string]string {
 		t.Fatal(err)
 	}
 	return snapshot
+}
+
+func TestConfinementTreeSnapshotDetectsSameSizeArtifactMutation(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "result.txt")
+	if err := os.WriteFile(path, []byte("before"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := confinementTreeSnapshot(t, root)
+	if err := os.WriteFile(path, []byte("forged"), info.Mode().Perm()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	if reflect.DeepEqual(before, confinementTreeSnapshot(t, root)) {
+		t.Fatal("snapshot missed same-size artifact corruption with restored mtime")
+	}
 }
