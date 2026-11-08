@@ -40,3 +40,31 @@ func TestInitializeFreshPartialFailureNeverGrantsAuthorityOrErasesForeignState(t
 		t.Fatalf("foreign data modified: %q %v", body, readErr)
 	}
 }
+
+func initializePrivateObject(t *testing.T, path string) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := os.FileMode(0600)
+	if info.IsDir() {
+		want = 0700
+	}
+	if info.Mode().Perm() != want {
+		t.Fatalf("private mode for %s = %04o, want %04o", path, info.Mode().Perm(), want)
+	}
+}
+func initializeDirectoryAlias(t *testing.T, alias, target string) {
+	t.Helper()
+	if err := os.Symlink(target, alias); err != nil {
+		t.Fatal(err)
+	}
+}
+func initializePublicDirectory(t *testing.T, path string) {
+	t.Helper()
+	if err := os.Chmod(path, 0755); err != nil {
+		t.Fatal(err)
+	}
+}
+func initializeSecuritySnapshot(t *testing.T, path string) string { t.Helper(); return "" }
