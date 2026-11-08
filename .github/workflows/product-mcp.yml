@@ -229,15 +229,51 @@ jobs:
         run: |
           $publicRoot = $env:MAESTRO_CANONICAL_PUBLIC_ROOT
           ./acceptance/windows-core-pilot.ps1 -TestBinary (Join-Path $publicRoot 'bin/windows-core.test.exe') -Server (Join-Path $publicRoot 'bin/maestro-mcp.exe') -OutputRoot (Join-Path $env:RUNNER_TEMP 'canonical-native-proof') -CanonicalManifest (Join-Path $publicRoot 'canonical-contract-manifest.json')
+      - name: Stage only bounded Windows canonical evidence
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $proof = Join-Path $env:RUNNER_TEMP 'canonical-native-proof'
+          $evidence = Join-Path $env:RUNNER_TEMP 'canonical-profile-evidence'
+          New-Item -ItemType Directory -Path $evidence -ErrorAction Stop | Out-Null
+          $sources = @([pscustomobject]@{
+            root=$proof
+            names=@('native-test.stdout.log', 'native-test.stderr.log', 'native-core-proof.json',
+              'canonical-execution.log', 'canonical-datahome.log', 'canonical-ownerctx.log',
+              'canonical-memory.log', 'canonical-privatewiki.log', 'canonical-processidentity.log',
+              'canonical-contract-results.json')
+          })
+          if ($env:MAESTRO_CANONICAL_PUBLIC_ROOT) {
+            $sources += [pscustomobject]@{root=$env:MAESTRO_CANONICAL_PUBLIC_ROOT; names=@('canonical-contract-manifest.json')}
+          }
+          foreach ($source in $sources) {
+            if (-not (Test-Path -LiteralPath $source.root)) { continue }
+            $directory = Get-Item -LiteralPath $source.root -Force
+            if (-not $directory.PSIsContainer -or ($directory.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              throw 'Evidence source must be an ordinary directory; it will not be uploaded.'
+            }
+            foreach ($name in $source.names) {
+              $path = Join-Path $source.root $name
+              if (-not (Test-Path -LiteralPath $path)) { continue }
+              $entry = Get-Item -LiteralPath $path -Force
+              if ($entry -isnot [IO.FileInfo] -or ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $entry.Length -gt 2097152) {
+                throw 'Evidence is not a bounded ordinary synthetic proof file; it will not be uploaded.'
+              }
+              $destination = Join-Path $evidence $name
+              $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+              Copy-Item -LiteralPath $path -Destination $destination -ErrorAction Stop
+              if ((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -cne $hash) {
+                throw 'Staged evidence differs from the original proof bytes.'
+              }
+            }
+          }
       - name: Retain exact Windows canonical profile evidence
         if: always() && runner.os == 'Windows'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-canonical-profile-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/canonical-native-proof/*.log
-            ${{ runner.temp }}/canonical-native-proof/*.json
-            ${{ env.MAESTRO_CANONICAL_PUBLIC_ROOT }}/canonical-contract-manifest.json
+          path: ${{ runner.temp }}/canonical-profile-evidence/
           if-no-files-found: error
           retention-days: 7
       - name: Canonical workspace initialization contracts on admitted Unix runners
