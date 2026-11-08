@@ -139,7 +139,8 @@ def validate_index_tree():
             machine_output = folder == MACHINE and name in machine_files
             if name.endswith(".md") or machine_output:
                 info = os.lstat(os.path.join(folder, name))
-                if not stat.S_ISREG(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+                if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or getattr(info, "st_file_attributes", 0) & 0x400):
                     raise OSError("unsafe brain index file")
 
 

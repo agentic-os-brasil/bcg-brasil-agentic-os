@@ -242,7 +242,8 @@ def load(rebuild=False):
                 info = os.lstat(path)
             except FileNotFoundError:
                 continue
-            if not stat.S_ISREG(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                or getattr(info, "st_file_attributes", 0) & 0x400):
                 raise OSError("unsafe skill cache leaf")
     except OSError:
         print("erro: cache de skills inseguro ou inacessivel", file=sys.stderr)
