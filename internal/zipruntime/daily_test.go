@@ -95,7 +95,13 @@ func TestDailyValidationAndLongScopeBudget(t *testing.T) {
 		t.Fatal(len(got))
 	}
 	base := checkpoint(t, root, "owner", "bad", "", "work")
-	for _, body := range []string{base + " {}", strings.Replace(base, root, root+"-wrong", 1), strings.Replace(base, "agent-authored", "attested", 1), string([]byte{0xff})} {
+	workspace, _ := json.Marshal(root)
+	wrongWorkspace, _ := json.Marshal(root + "-wrong")
+	mismatchedWorkspace := strings.Replace(base, string(workspace), string(wrongWorkspace), 1)
+	if mismatchedWorkspace == base {
+		t.Fatal("workspace mismatch fixture did not change the checkpoint")
+	}
+	for _, body := range []string{base + " {}", mismatchedWorkspace, strings.Replace(base, "agent-authored", "attested", 1), string([]byte{0xff})} {
 		dailyPut(t, filepath.Join(root, "brain/.maestro/daily-pending/bad.json"), body)
 		if got := dailyRun(t, root, "daily-stop"); !strings.Contains(got, `"failed":1`) {
 			t.Fatal(got)

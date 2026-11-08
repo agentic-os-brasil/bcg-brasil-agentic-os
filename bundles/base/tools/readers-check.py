@@ -58,6 +58,7 @@ import re
 import sys
 import glob
 import fnmatch
+import posixpath
 
 for _s in (sys.stdout, sys.stderr):
     try:
@@ -272,6 +273,8 @@ def path_candidates(text):
             else:
                 pecas.append("*")          # variavel que nao resolve
         if pecas:
+            # Resolve pais antes de cortar a raiz variavel, em qualquer host.
+            pecas = posixpath.normpath("/".join(pecas).replace("\\", "/")).split("/")
             # Corta o prefixo desconhecido: o que vale e o rabo concreto.
             while pecas and pecas[0] == "*":
                 pecas.pop(0)
