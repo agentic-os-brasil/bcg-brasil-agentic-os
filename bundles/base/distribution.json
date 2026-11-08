@@ -1174,6 +1174,10 @@
       "path": "skills/maestro-operator/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/maestro-operator/resources/authored-brain.md",
+      "path": "skills/maestro-operator/resources/authored-brain.md"
+    },
+    {
       "source": "bundles/base/skills/maestro-runtime-checkup/SKILL.md",
       "path": "skills/maestro-runtime-checkup/SKILL.md"
     },
