@@ -58,11 +58,30 @@ Existing children are not a second active HOME. The domain must bind its archive
 name, attempt/digest, revocation, locator and retirement records and must refuse
 an unrelated occupied archive. All post-rename errors retain `moved=true`.
 
+## Exact locator retirement
+
+`Directory.RemoveExact(name, expected)` requires the complete expected metadata
+within the 16 MiB record bound. It opens the existing regular, single-linked
+private leaf once with read/DELETE access and without write/delete sharing,
+compares size and bounded bytes on that handle, then marks that same object for
+deletion. It never creates a missing leaf, follows an alias, repairs a DACL or
+clears a read-only attribute. A writer or another incompatible handle can make
+the operation unavailable; permission errors are never reclassified as success.
+
+`marked=true` means the native delete disposition took effect. It remains true
+if a later close or parent flush fails. Ordinary legacy Windows disposition can
+leave the original object/name delete-pending while an independent sharing
+reader remains open. The operation therefore does not promise immediate
+physical absence or authorize deleting a subsequently reused basename. The
+domain must preserve its retirement evidence and interpret pending/busy states;
+this primitive supplies no retry, repair or locator re-creation policy.
+
 ## Qualification limit
 
 The dedicated Windows tests require the actual ordinary-account proof driver.
 They cover source alias refusal and pins, read-only files, deterministic stage
-resume, occupied destinations, same-object publication and archived receipt
-writes. A PE cross-build proves compilation only. Native local-volume behavior,
+resume, occupied destinations, same-object publication, archived receipt writes
+and exact deletion with retained-reader/late-error cases. A PE cross-build
+proves compilation only. Native local-volume behavior,
 durability and domain interruption/rollback still require the corresponding
 hosted proof before the adapter can enable mutation.

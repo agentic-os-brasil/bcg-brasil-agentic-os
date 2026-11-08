@@ -3,7 +3,9 @@
 package winprivate
 
 import (
+	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -327,4 +329,73 @@ func (m *MovableDirectory) MoveTo(name string) (moved bool, err error) {
 	var labelErr error
 	m.directory.File, labelErr = relabelHeldFile(m.directory.File, m.Path())
 	return true, errors.Join(err, labelErr)
+}
+
+const exactRemovalMaximum = 16 << 20
+
+// RemoveExact retires only the complete expected metadata in the admitted leaf.
+// marked reports a successful delete disposition, not immediate physical absence:
+// independent sharing readers may keep the object/name pending until they close.
+func (d *Directory) RemoveExact(name string, expected []byte) (marked bool, err error) {
+	return d.removeExact(name, expected, nil)
+}
+
+// afterMark is a private deny-only test seam; it cannot bypass admission or the
+// exact comparison, and production callers never supply it.
+func (d *Directory) removeExact(name string, expected []byte, afterMark func(*os.File) error) (marked bool, err error) {
+	if len(expected) > exactRemovalMaximum {
+		return false, errors.New("exact removal expected bytes exceed the metadata bound")
+	}
+	if err := Leaf(name); err != nil {
+		return false, err
+	}
+	parent, err := clonePinnedDirectory(d)
+	if err != nil {
+		return false, err
+	}
+	defer func() { err = errors.Join(err, parent.Close()) }()
+	access := uint32(windows.FILE_GENERIC_READ | windows.DELETE | windows.READ_CONTROL | windows.SYNCHRONIZE)
+	h, err := ntOpenShared(parent.Handle(), name, access, windows.FILE_OPEN, fileOptions, windows.FILE_SHARE_READ)
+	if err != nil {
+		return false, err
+	}
+	f := os.NewFile(uintptr(h), filepath.Join(parent.File.Name(), name))
+	defer func() {
+		err = errors.Join(err, f.Close())
+		if marked {
+			err = errors.Join(err, parent.Sync())
+		}
+	}()
+	if err := Validate(h, false); err != nil {
+		return false, err
+	}
+	var attributes windows.ByHandleFileInformation
+	if err := windows.GetFileInformationByHandle(h, &attributes); err != nil {
+		return false, err
+	}
+	if attributes.FileAttributes&windows.FILE_ATTRIBUTE_READONLY != 0 {
+		return false, errors.New("exact removal refuses a read-only leaf")
+	}
+	info, err := f.Stat()
+	if err != nil {
+		return false, err
+	}
+	if info.Size() != int64(len(expected)) {
+		return false, errors.New("exact removal bytes differ from the expected metadata")
+	}
+	body, err := io.ReadAll(io.LimitReader(f, int64(len(expected))+1))
+	if err != nil {
+		return false, err
+	}
+	if !bytes.Equal(body, expected) {
+		return false, errors.New("exact removal bytes differ from the expected metadata")
+	}
+	if err := markDelete(h); err != nil {
+		return false, err
+	}
+	marked = true
+	if afterMark != nil {
+		err = afterMark(f)
+	}
+	return marked, err
 }

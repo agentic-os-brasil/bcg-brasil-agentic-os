@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"unsafe"
 
@@ -339,5 +340,256 @@ func TestWindowsMigrationMovableRootKeepsArchivedAuthority(t *testing.T) {
 	}
 	if _, err := os.Stat(homePath); !os.IsNotExist(err) {
 		t.Fatal("old HOME path was recreated", err)
+	}
+}
+
+type removalState struct {
+	body     []byte
+	info     os.FileInfo
+	security string
+}
+
+func removalSnapshot(t *testing.T, path string) removalState {
+	t.Helper()
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sd, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return removalState{body, info, sd.String()}
+}
+
+func assertRemovalPreserved(t *testing.T, before removalState, path string) {
+	t.Helper()
+	after := removalSnapshot(t, path)
+	if !bytes.Equal(before.body, after.body) || before.info.Size() != after.info.Size() ||
+		before.info.Mode() != after.info.Mode() || !before.info.ModTime().Equal(after.info.ModTime()) ||
+		!os.SameFile(before.info, after.info) || before.security != after.security {
+		t.Fatal("exact removal refusal changed bytes, identity, metadata or security")
+	}
+}
+
+func TestWindowsMigrationRemoveExactRequiresCompleteExpectedBytes(t *testing.T) {
+	parent := migrationPrivateParent(t)
+	body := []byte("planned locator\n")
+	name := ".maestro-home.json"
+	if err := parent.Publish(name, body, true); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(parent.File.Name(), name)
+	before := removalSnapshot(t, path)
+	for _, expected := range [][]byte{[]byte("foreign locator\n"), []byte("short")} {
+		if marked, err := parent.RemoveExact(name, expected); marked || err == nil {
+			t.Fatal("different content acquired deletion authority", marked, err)
+		}
+		assertRemovalPreserved(t, before, path)
+	}
+	if marked, err := parent.RemoveExact(name, make([]byte, (16<<20)+1)); marked || err == nil || !strings.Contains(err.Error(), "bound") {
+		t.Fatal("unbounded expected metadata was admitted", marked, err)
+	}
+	assertRemovalPreserved(t, before, path)
+	if marked, err := parent.RemoveExact(name, body); !marked || err != nil {
+		t.Fatal("matching held locator was not retired", marked, err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("unshared locator remains after close", err)
+	}
+	if marked, err := parent.RemoveExact(name, body); marked || !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("missing locator was created or reported marked", marked, err)
+	}
+	if err := parent.Publish("empty", nil, true); err != nil {
+		t.Fatal(err)
+	}
+	if marked, err := parent.RemoveExact("empty", nil); !marked || err != nil {
+		t.Fatal(marked, err)
+	}
+}
+
+func TestWindowsMigrationRemoveExactRetainsMarkedObjectAndReader(t *testing.T) {
+	parent := migrationPrivateParent(t)
+	name, body := "locator.json", []byte("sealed locator")
+	if err := parent.Publish(name, body, true); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(parent.File.Name(), name)
+	native, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := windows.CreateFile(native, windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader := os.NewFile(uintptr(h), path)
+	defer reader.Close()
+	before, err := reader.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	observed := false
+	marked, err := parent.removeExact(name, body, func(held *os.File) error {
+		observed = true
+		current, err := held.Stat()
+		if err != nil || !os.SameFile(before, current) {
+			t.Fatal("delete mark adopted a replacement", err)
+		}
+		if err := os.Rename(path, path+"-replaced"); err == nil {
+			t.Fatal("marked held name could be replaced")
+		}
+		if err := os.Remove(path); err == nil {
+			t.Fatal("another deleter acquired the marked name")
+		}
+		if stage, err := parent.OpenStage(name); err == nil {
+			stage.Close()
+			t.Fatal("marked name acquired a second writer")
+		}
+		return nil
+	})
+	if !observed || !marked || err != nil {
+		t.Fatal("held deletion was not observed", observed, marked, err)
+	}
+	got := make([]byte, len(body))
+	if _, err := reader.ReadAt(got, 0); err != nil || !bytes.Equal(got, body) {
+		t.Fatal("retained reader lost original bytes", err)
+	}
+	after, err := reader.Stat()
+	if err != nil || !os.SameFile(before, after) {
+		t.Fatal("retained reader identity changed", err)
+	}
+	// Legacy delete disposition may retain a pending name until this reader closes.
+	if err := reader.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("locator remains after all controlled readers close", err)
+	}
+}
+
+func TestWindowsMigrationRemoveExactExposesPostMarkCloseFailure(t *testing.T) {
+	parent := migrationPrivateParent(t)
+	body := []byte("sealed locator")
+	if err := parent.Publish("locator.json", body, true); err != nil {
+		t.Fatal(err)
+	}
+	marked, err := parent.removeExact("locator.json", body, func(held *os.File) error { return held.Close() })
+	if !marked || !errors.Is(err, os.ErrClosed) {
+		t.Fatal("late close failure lost the successful delete mark", marked, err)
+	}
+}
+
+func TestWindowsMigrationRemoveExactRejectsUnsafeOrBusyLeaves(t *testing.T) {
+	for _, kind := range []string{"hardlink", "symlink", "writer", "delete-denied", "read-only", "unpinned"} {
+		t.Run(kind, func(t *testing.T) {
+			parent := migrationPrivateParent(t)
+			body := []byte("original locator")
+			name, outsideName := "locator.json", "original.json"
+			if err := parent.Publish(outsideName, body, true); err != nil {
+				t.Fatal(err)
+			}
+			outside := filepath.Join(parent.File.Name(), outsideName)
+			path := filepath.Join(parent.File.Name(), name)
+			if kind == "hardlink" {
+				if err := os.Link(outside, path); err != nil {
+					t.Fatal(err)
+				}
+			} else if kind == "symlink" {
+				if err := os.Symlink(outside, path); err != nil {
+					t.Fatal("required alias fixture unavailable", err)
+				}
+			} else if err := parent.Publish(name, body, true); err != nil {
+				t.Fatal(err)
+			}
+			var writer *os.File
+			if kind == "writer" {
+				var err error
+				writer, err = parent.OpenFile(name, os.O_RDWR)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer writer.Close()
+			}
+			if kind == "read-only" {
+				native, _ := windows.UTF16PtrFromString(path)
+				attributes, err := windows.GetFileAttributes(native)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := windows.SetFileAttributes(native, attributes&^windows.FILE_ATTRIBUTE_NORMAL|windows.FILE_ATTRIBUTE_READONLY); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() {
+					if err := windows.SetFileAttributes(native, attributes); err != nil {
+						t.Error(err)
+					}
+				})
+			}
+			if kind == "delete-denied" {
+				original, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
+				if err != nil {
+					t.Fatal(err)
+				}
+				oldACL, _, err := original.DACL()
+				if err != nil {
+					t.Fatal(err)
+				}
+				control, _, err := original.Control()
+				if err != nil {
+					t.Fatal(err)
+				}
+				restore := windows.SECURITY_INFORMATION(windows.DACL_SECURITY_INFORMATION | windows.UNPROTECTED_DACL_SECURITY_INFORMATION)
+				if control&windows.SE_DACL_PROTECTED != 0 {
+					restore = windows.DACL_SECURITY_INFORMATION | windows.PROTECTED_DACL_SECURITY_INFORMATION
+				}
+				t.Cleanup(func() {
+					if err := windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, restore, nil, nil, oldACL, nil); err != nil {
+						t.Error(err)
+					}
+				})
+				sid, err := CurrentUser()
+				if err != nil {
+					t.Fatal(err)
+				}
+				sd, err := windows.SecurityDescriptorFromString("D:P(D;;0x10000;;;" + sid.String() + ")(A;;FA;;;" + sid.String() + ")(A;;FA;;;SY)(A;;FA;;;BA)")
+				if err != nil {
+					t.Fatal(err)
+				}
+				acl, _, err := sd.DACL()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before, external := removalSnapshot(t, path), removalSnapshot(t, outside)
+			selected := parent
+			if kind == "unpinned" {
+				var err error
+				selected, err = Open(parent.File.Name(), false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer selected.Close()
+			}
+			marked, err := selected.RemoveExact(name, body)
+			if marked || err == nil {
+				t.Fatal("unsafe or busy leaf was retired", marked, err)
+			}
+			if kind == "writer" && !errors.Is(err, windows.ERROR_SHARING_VIOLATION) {
+				t.Fatal("writer refusal was not native sharing contention", err)
+			}
+			if kind == "delete-denied" && !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+				t.Fatal("delete denial was not preserved", err)
+			}
+			assertRemovalPreserved(t, before, path)
+			assertRemovalPreserved(t, external, outside)
+		})
 	}
 }
