@@ -326,3 +326,33 @@ func TestSessionPacketCarriesOnlyBoundedSharePointSourceGuidance(t *testing.T) {
 		t.Fatal("session packet accepted Codex as the SharePoint collection runtime")
 	}
 }
+
+func TestBuildProductUsesCanonicalOnboardingForEveryProjection(t *testing.T) {
+	for _, state := range []string{"in_progress", "review_required", "complete", "unavailable"} {
+		t.Run(state, func(t *testing.T) {
+			onboarding := ownerctx.OnboardingStatus{State: state, Track: "quick"}
+			if state == "in_progress" {
+				onboarding.NextQuestion = ownerctx.InterviewStep{Facet: "personal-context", Question: "Choose what to share"}
+				onboarding.Remaining = []string{"personal-context"}
+			}
+			if state == "review_required" {
+				onboarding.ReviewDigest = strings.Repeat("a", 64)
+			}
+			if state == "unavailable" {
+				onboarding.Track = "unavailable"
+			}
+			packet := BuildProduct(workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"}, ownerctx.Status{Onboarding: onboarding})
+			if err := packet.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			if packet.Owner.Onboarding.State != state || packet.ContinuousUse.Calibration.State != state || packet.ContinuousUse.Calibration.Track != onboarding.Track {
+				t.Fatalf("derived state reset canonical onboarding: %+v", packet)
+			}
+			for _, action := range packet.ContinuousUse.NextActions {
+				if (state == "complete" || state == "unavailable") && action.ID == continuoususe.ActionCompleteCalibration {
+					t.Fatalf("%s profile routed to onboarding: %+v", state, action)
+				}
+			}
+		})
+	}
+}

@@ -47,12 +47,20 @@ not assume WSL or Git Bash.
 
 ## What the hooks do
 
-- `SessionStart` validates the binding and reads only eligible, committed
+- `SessionStart` validates the binding and reads canonical owner onboarding
+  metadata from the admitted private home: state, track, remaining facet IDs,
+  exact next facet/question and pending final review digest. The bounded owner
+  reader never exposes profile bodies or private paths. Missing or corrupt
+  owner state reports onboarding `unavailable`, preserving the source instead
+  of presenting a fresh interview. Unsafe aliases refuse admission before any
+  context is emitted. `unavailable` describes this read
+  projection only; persisted onboarding retains its four canonical states
+  (`required`, `in_progress`, `review_required`, `complete`). It also reads eligible, committed
   generated memory through the same visibility checks as `memory.context`.
   Historical-data framing, UTF-8 boundaries, per-layer limits, an 8-KiB memory
   ceiling and a 16-KiB total context ceiling remain effective. Raw captures are
   not a fallback for missing or invalid generated views.
-- `UserPromptSubmit` refreshes metadata without repeating memory bodies,
+- `UserPromptSubmit` refreshes the same onboarding metadata without repeating memory bodies,
   retaining prompt text or entering the native-agent admission flow.
 - `Stop` respects the host recursion flag and writes only the canonical
   confined lifecycle observation. It does not checkpoint work, save memory,
@@ -74,3 +82,17 @@ The packet reports configuration separately from actual client execution and
 keeps enforcement unavailable. A real session must independently establish
 context delivery and Stop observation. Such evidence does not qualify the full
 native guard, another client/platform, production signing or automatic updates.
+
+## Resume the same reviewed profile
+
+The Code operator uses `owner.status` before starting or resuming the canonical
+`maestro-onboarding` method. It offers a track only when selection is pending,
+resumes the next unanswered facet after interruption, routes `review_required`
+to the trusted final profile review and continues work when `complete`.
+Track reselection is explicit because even selecting the same track requires a
+new final confirmation. Hooks never select, propose, apply or confirm answers.
+
+Desktop uses that same method through MCP prompts/resources and explicit owner
+operations. MCPB installs no Code hooks; Desktop reads `owner.status` to resume
+progress. Neither method availability nor local SDK tests establish native
+client review/privacy, device acceptance, production signing or pilot readiness.

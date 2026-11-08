@@ -242,8 +242,8 @@
     {
       "id": "maestro-onboarding",
       "display_name": "Onboarding do Maestro",
-      "trigger": "Inicia a entrevista guiada do owner nas trilhas rápida ou completa",
-      "default_prompt": "Use $maestro-onboarding para me dar as boas-vindas ao Maestro e iniciar a entrevista guiada com uma escolha clara entre a trilha curta e a completa.",
+      "trigger": "Inicia ou retoma a entrevista do dono a partir do perfil salvo",
+      "default_prompt": "Use $maestro-onboarding para ler meu progresso salvo e iniciar, retomar ou revisar a entrevista guiada sem repetir respostas já confirmadas.",
       "relative_path": "skills/maestro-onboarding/SKILL.md"
     },
     {
