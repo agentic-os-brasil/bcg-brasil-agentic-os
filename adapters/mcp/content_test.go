@@ -16,7 +16,6 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
@@ -246,8 +245,7 @@ func TestContentRealJourneys(t *testing.T) {
 			if packetRoot != "" {
 				before = contentTree(t, packetRoot, true)
 			}
-			var mu sync.Mutex
-			var progress []float64
+			progress := contentConversionProgress{terminal: make(chan struct{}, 1)}
 			reviewed := 0
 			expectedText := ""
 			host := func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
@@ -260,11 +258,7 @@ func TestContentRealJourneys(t *testing.T) {
 				reviewed++
 				return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"approved": true}}, nil
 			}
-			options := &mcp.ClientOptions{ElicitationHandler: host, ProgressNotificationHandler: func(_ context.Context, r *mcp.ProgressNotificationClientRequest) {
-				mu.Lock()
-				defer mu.Unlock()
-				progress = append(progress, r.Params.Progress)
-			}}
+			options := &mcp.ClientOptions{ElicitationHandler: host, ProgressNotificationHandler: progress.record}
 			cs := connectContent(t, f, options, "")
 			params := &mcp.CallToolParams{Name: "maestro_apply", Arguments: map[string]any{"operation": "content.convert", "source_path": "sample.docx"}}
 			params.SetProgressToken("engineering-conversion")
@@ -288,9 +282,13 @@ func TestContentRealJourneys(t *testing.T) {
 			if provenance["pack_sha256"] != packSHA || provenance["network_denied"] != true {
 				t.Fatal(provenance)
 			}
-			mu.Lock()
-			gotProgress := append([]float64(nil), progress...)
-			mu.Unlock()
+			// The SDK may complete CallTool before its queued progress handler.
+			progressCtx, cancelProgress := context.WithTimeout(t.Context(), 30*time.Second)
+			gotProgress, progressErr := progress.wait(progressCtx)
+			cancelProgress()
+			if progressErr != nil {
+				t.Fatalf("pinned SDK terminal progress missing: %v (%v)", gotProgress, progressErr)
+			}
 			if len(gotProgress) < 2 || gotProgress[0] != 0 || gotProgress[len(gotProgress)-1] != 2 {
 				t.Fatalf("pinned SDK progress missing: %v", gotProgress)
 			}
