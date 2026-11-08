@@ -25,14 +25,7 @@ func TestValidateSchemaFilePublicReadPreservesBytesAndModes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	relative, err := filepath.Rel(cwd, alias)
-	if err != nil {
-		t.Fatal(err)
-	}
+	relative := filepath.Join("..", "..", "schemas", "execution-state.schema.json")
 	for _, path := range []string{original, alias, relative} {
 		if err = ValidateSchemaFile(path); err != nil {
 			t.Fatalf("read-only public schema %s: %v", path, err)
