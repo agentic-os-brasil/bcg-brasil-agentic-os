@@ -50,9 +50,10 @@ not assume WSL or Git Bash.
 - `SessionStart` validates the binding and reads canonical owner onboarding
   metadata from the admitted private home: state, track, remaining facet IDs,
   exact next facet/question and pending final review digest. The bounded owner
-  reader never exposes profile bodies or private paths. Missing, corrupt or
-  unsafe owner state reports onboarding `unavailable`, preserving the source
-  instead of presenting a fresh interview. `unavailable` describes this read
+  reader never exposes profile bodies or private paths. Missing or corrupt
+  owner state reports onboarding `unavailable`, preserving the source instead
+  of presenting a fresh interview. Unsafe aliases refuse admission before any
+  context is emitted. `unavailable` describes this read
   projection only; persisted onboarding retains its four canonical states
   (`required`, `in_progress`, `review_required`, `complete`). It also reads eligible, committed
   generated memory through the same visibility checks as `memory.context`.
