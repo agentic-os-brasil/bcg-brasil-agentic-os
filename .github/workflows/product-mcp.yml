@@ -39,6 +39,7 @@ on:
       - 'internal/updateservice/**'
       - 'dev/release/**'
       - 'dev/pilot/private-wiki-producer/**'
+      - 'dev/pilot/private-wiki-old-cohort/**'
       - 'acceptance/test_windows_profile_driver.py'
       - 'internal/releaseverify/**'
       - 'internal/releaseprovider/**'
@@ -92,6 +93,7 @@ on:
       - 'internal/updateservice/**'
       - 'dev/release/**'
       - 'dev/pilot/private-wiki-producer/**'
+      - 'dev/pilot/private-wiki-old-cohort/**'
       - 'acceptance/test_windows_profile_driver.py'
       - 'internal/releaseverify/**'
       - 'internal/releaseprovider/**'
@@ -184,6 +186,15 @@ jobs:
           $sourceRoot = Join-Path $publicRoot 'source'
           $binaryRoot = Join-Path $publicRoot 'bin'
           New-Item -ItemType Directory -Path $sourceRoot, $binaryRoot -ErrorAction Stop | Out-Null
+          $checkoutRoot = (Get-Location).Path
+          $historicalRevision = 'f93e9ce21edcd19246e7e5985d97489297dae18b'
+          git cat-file -e ($historicalRevision + '^{commit}') 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            git fetch --no-tags --depth=1 origin $historicalRevision
+            if ($LASTEXITCODE -ne 0) { throw 'Pinned historical library fetch failed.' }
+          }
+          $actualHistorical = (git rev-parse ($historicalRevision + '^{commit}')).Trim()
+          if ($LASTEXITCODE -ne 0 -or $actualHistorical -cne $historicalRevision) { throw 'Historical library object differs from its fixed commit.' }
           $revision = (git rev-parse HEAD).Trim()
           $archive = Join-Path $env:RUNNER_TEMP 'canonical-source.tar'
           git archive --format=tar --output=$archive HEAD
@@ -235,6 +246,24 @@ jobs:
               sdk_go_sha256=(Get-FileHash -LiteralPath $sdkGo -Algorithm SHA256).Hash.ToLowerInvariant()
               executable=$producerBuild.executable; executable_sha256=$producerBuild.executable_sha256
             }
+            $historicalRoot = Join-Path $publicRoot 'historical-witness'
+            # The builder requires Git provenance; its library build is offline and unchanged.
+            python (Join-Path $checkoutRoot 'dev/pilot/private-wiki-old-cohort/build.py') $historicalRoot --go $sdkGo
+            if ($LASTEXITCODE -ne 0) { throw 'Actual historical-library harness build failed.' }
+            $historicalBuildPath = Join-Path $historicalRoot 'historical-build.json'
+            $historicalBuild = Get-Content -LiteralPath $historicalBuildPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            $inventoryBytes = [Text.Encoding]::UTF8.GetBytes(($historicalBuild.original_library_files | ConvertTo-Json -Depth 6 -Compress))
+            $hasher = [Security.Cryptography.SHA256]::Create()
+            try { $inventoryHash = ([BitConverter]::ToString($hasher.ComputeHash($inventoryBytes))).Replace('-','').ToLowerInvariant() }
+            finally { $hasher.Dispose() }
+            $historical = [ordered]@{
+              build_manifest=$historicalBuildPath
+              build_manifest_sha256=(Get-FileHash -LiteralPath $historicalBuildPath -Algorithm SHA256).Hash.ToLowerInvariant()
+              original_archive_sha256=$historicalBuild.original_archive_sha256
+              original_library_inventory_sha256=$inventoryHash
+              sdk_go_sha256=(Get-FileHash -LiteralPath $sdkGo -Algorithm SHA256).Hash.ToLowerInvariant()
+              executable=$historicalBuild.executable; executable_sha256=$historicalBuild.executable_sha256
+            }
             Push-Location -LiteralPath (Join-Path $sourceRoot 'adapters/mcp')
             try {
               & $sdkGo test -c . -o (Join-Path $binaryRoot 'windows-core.test.exe')
@@ -248,7 +277,7 @@ jobs:
             sdk_root=$sdkRoot; sdk_go=$sdkGo
             sdk_go_sha256=(Get-FileHash -LiteralPath $sdkGo -Algorithm SHA256).Hash.ToLowerInvariant()
             source_archive=$archive; source_archive_sha256=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-            vendor_files=$vendorFiles; compatible_producer=$producer
+            vendor_files=$vendorFiles; compatible_producer=$producer; historical_witness=$historical
             packages=$entries
           }
           $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $publicRoot 'canonical-contract-manifest.json') -Encoding utf8
@@ -279,6 +308,8 @@ jobs:
           if ($env:MAESTRO_CANONICAL_PUBLIC_ROOT) {
             $sources += [pscustomobject]@{root=$env:MAESTRO_CANONICAL_PUBLIC_ROOT; names=@('canonical-contract-manifest.json')}
             $sources += [pscustomobject]@{root=(Join-Path $env:MAESTRO_CANONICAL_PUBLIC_ROOT 'compatible-producer'); names=@('producer-build.json', 'build.stdout.log', 'build.stderr.log')}
+            $sources += [pscustomobject]@{root=(Join-Path $env:MAESTRO_CANONICAL_PUBLIC_ROOT 'historical-witness'); names=@('historical-build.json')}
+
           }
           foreach ($source in $sources) {
             if (-not (Test-Path -LiteralPath $source.root)) { continue }

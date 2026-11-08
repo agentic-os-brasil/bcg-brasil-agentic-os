@@ -81,7 +81,7 @@ if ($withManifest) {
             }
         }
     }
-    if ($withInspection -or ($withCanonical -and $canonical.compatible_producer)) {
+    if ($withInspection -or ($withCanonical -and ($canonical.compatible_producer -or $canonical.historical_witness))) {
         if ($canonical.source_revision -cnotmatch '^[0-9a-f]{40}$' -or $canonical.source_archive_sha256 -cnotmatch '^[0-9a-f]{64}$' -or
             @($canonical.vendor_files).Count -eq 0 -or @($canonical.vendor_files.path | Sort-Object -Unique).Count -ne @($canonical.vendor_files).Count) {
             throw 'Inspection source and vendored dependencies require a sealed inventory.'
@@ -154,6 +154,77 @@ if ($withManifest) {
             throw 'Compatible producer requires the actual owning memory compatibility test.'
         }
     }
+    if ($withCanonical -and $canonical.historical_witness) {
+        $historical = $canonical.historical_witness
+        $historicalRoot = Join-Path (Split-Path -Parent $canonical.source_root) 'historical-witness'
+        $historicalSource = Join-Path $historicalRoot 'source'
+        $buildPath = Join-Path $historicalRoot 'historical-build.json'
+        $historicalExe = Join-Path $historicalRoot 'private-wiki-old-cohort-harness.exe'
+        $archive = Join-Path $historicalRoot 'historical-source.tar'
+        $pinnedArchive = '23470e1c28445e6699c35cd4503d5b5abcfc614f55b611e02b501cfbfd06e3af'
+        if ($historical.build_manifest -cne $buildPath -or $historical.executable -cne $historicalExe -or
+            $historical.original_archive_sha256 -cne $pinnedArchive -or $historical.sdk_go_sha256 -cne $canonical.sdk_go_sha256) {
+            throw 'Historical witness archive/SDK seal or fixed path differs.'
+        }
+        $buildFile = Get-Item -LiteralPath $buildPath -Force
+        if ($buildFile -isnot [IO.FileInfo] -or ($buildFile.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $buildFile.Length -gt 2097152 -or
+            (Get-FileHash -LiteralPath $buildPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $historical.build_manifest_sha256) {
+            throw 'Historical witness build manifest differs from its bounded ordinary seal.'
+        }
+        $build = Get-Content -LiteralPath $buildPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $helperRelative = 'dev/pilot/private-wiki-old-cohort'
+        $helperRoot = Join-Path $canonical.source_root $helperRelative
+        $revision = 'f93e9ce21edcd19246e7e5985d97489297dae18b'
+        $expectedCommand = @($canonical.sdk_go, 'build', '-mod=readonly', '-trimpath', '-buildvcs=false', '-ldflags', ('-X=main.linkedLibraryRevision=' + $revision), '-o', $historicalExe, ('./' + $helperRelative))
+        if ($build.schema_version -ne 1 -or $build.artifact_kind -cne 'new_harness_unmodified_historical_library' -or
+            $build.historical_release_artifact -ne $false -or $build.library_revision -cne $revision -or
+            $build.target_os -cne 'windows' -or $build.target_arch -cne 'amd64' -or $build.library_unchanged_after_build -ne $true -or
+            $build.original_archive_sha256 -cne $pinnedArchive -or $build.sdk_executable_sha256 -cne $canonical.sdk_go_sha256 -or
+            $build.executable -cne $historicalExe -or $build.executable_sha256 -cne $historical.executable_sha256 -or
+            $build.native_execution -cne 'not_run_by_builder' -or (@($build.build_command) -join "`n") -cne ($expectedCommand -join "`n")) {
+            throw 'Historical witness identity, immutable library or exact build command differs.'
+        }
+        $inventoryBytes = [Text.Encoding]::UTF8.GetBytes(($build.original_library_files | ConvertTo-Json -Depth 6 -Compress))
+        $hasher = [Security.Cryptography.SHA256]::Create()
+        try { $inventoryHash = ([BitConverter]::ToString($hasher.ComputeHash($inventoryBytes))).Replace('-','').ToLowerInvariant() }
+        finally { $hasher.Dispose() }
+        $originalFiles = @($build.original_library_files.PSObject.Properties)
+        $harnessFiles = @($build.harness_files.PSObject.Properties)
+        if ($historical.original_library_inventory_sha256 -cnotmatch '^[0-9a-f]{64}$' -or $inventoryHash -cne $historical.original_library_inventory_sha256 -or
+            $originalFiles.Count -ne 1373 -or $harnessFiles.Count -ne 2 -or
+            @(Compare-Object @(($helperRelative + '/main.go'), ($helperRelative + '/main_test.go')) @($harnessFiles.Name)).Count -ne 0) {
+            throw 'Historical witness complete original-library or added-harness inventory differs.'
+        }
+        $inputs = @(
+            @{path=$archive; sha256=$pinnedArchive},
+            @{path=$canonical.sdk_go; sha256=$build.sdk_executable_sha256},
+            @{path=(Join-Path $helperRoot 'build.py'); sha256=$build.builder_sha256},
+            @{path=$historicalExe; sha256=$historical.executable_sha256}
+        )
+        foreach ($file in $originalFiles) {
+            if ([IO.Path]::IsPathRooted($file.Name) -or $file.Name -match '(^|/)\.\.?(/|$)|[\\:\x00\r\n]') { throw 'Historical witness library path is not confined.' }
+            $inputs += @{path=(Join-Path $historicalSource $file.Name); sha256=$file.Value.sha256}
+        }
+        foreach ($file in $harnessFiles) {
+            $inputs += @{path=(Join-Path $historicalSource $file.Name); sha256=$file.Value}
+            $inputs += @{path=(Join-Path $canonical.source_root $file.Name); sha256=$file.Value}
+        }
+        if (@(Get-ChildItem -LiteralPath $historicalSource -Recurse -File -Force).Count -ne ($originalFiles.Count + $harnessFiles.Count)) {
+            throw 'Historical witness library file inventory was changed after building.'
+        }
+        foreach ($inputFile in $inputs) {
+            $file = Get-Item -LiteralPath $inputFile.path -Force
+            if ($file -isnot [IO.FileInfo] -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+                $inputFile.sha256 -cnotmatch '^[0-9a-f]{64}$' -or (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -cne $inputFile.sha256) {
+                throw 'Historical witness input hash or ordinary-file custody differs.'
+            }
+        }
+        $memory = @($canonical.packages | Where-Object { $_.name -ceq 'memory' })
+        if ($memory.Count -ne 1 -or 'TestPrivateWikiOldCohortProcessCannotReadCaptureOrDelete' -cnotin @($memory[0].tests)) {
+            throw 'Historical witness requires the actual owning memory historical test.'
+        }
+    }
+
 }
 if ($AtlasTestBinary -and -not (Test-Path -LiteralPath $AtlasTestBinary -PathType Leaf)) {
     throw 'The focused atlas publication witness is missing.'
@@ -264,6 +335,14 @@ try {
                 throw 'Copied compatible producer differs from its sealed PE.'
             }
             $canonical.compatible_producer.executable = $copiedProducer
+        }
+        if ($withCanonical -and $canonical.historical_witness) {
+            $copiedHistorical = Join-Path $payload 'private-wiki-old-cohort-harness.exe'
+            Copy-Item -LiteralPath $canonical.historical_witness.executable -Destination $copiedHistorical
+            if ((Get-FileHash -LiteralPath $copiedHistorical -Algorithm SHA256).Hash.ToLowerInvariant() -cne $canonical.historical_witness.executable_sha256) {
+                throw 'Copied historical witness differs from its sealed PE.'
+            }
+            $canonical.historical_witness.executable = $copiedHistorical
         }
         $manifestName = if ($withInspection) { 'inspection-contract-manifest.json' } else { 'canonical-contract-manifest.json' }
         $nativeCanonical = Join-Path $payload $manifestName
@@ -427,6 +506,9 @@ try {
             }
             $producerSelected = $false
             $producerCustodyValid = $true
+            $historicalSelected = $false
+            $historicalCustodyValid = $true
+            $selectHistorical = -not $Inspection -and $entry.name -ceq 'memory' -and $manifest.historical_witness
             $selectProducer = -not $Inspection -and $entry.name -ceq 'memory' -and $manifest.compatible_producer
             Push-Location -LiteralPath $entry.working_directory
             try {
@@ -440,9 +522,22 @@ try {
                     $env:MAESTRO_PRIVATE_WIKI_COMPAT_PRODUCER = $manifest.compatible_producer.executable
                     $producerSelected = $true
                 }
+                if ($selectHistorical) {
+                    if (Test-Path Env:MAESTRO_PRIVATE_WIKI_OLD_WRITER) { throw 'Historical selection refuses an inherited old writer.' }
+                    if ((Get-FileHash -LiteralPath $manifest.historical_witness.executable -Algorithm SHA256).Hash.ToLowerInvariant() -cne $manifest.historical_witness.executable_sha256) {
+                        throw 'Ordinary-account historical witness changed before memory.'
+                    }
+                    $env:MAESTRO_PRIVATE_WIKI_OLD_WRITER = $manifest.historical_witness.executable
+                    $historicalSelected = $true
+                }
                 $output = @(& $entry.binary '-test.v' '-test.timeout=300s' 2>&1 | ForEach-Object { "$_" })
                 $code = $LASTEXITCODE
             } finally {
+                if ($historicalSelected) {
+                    Remove-Item Env:MAESTRO_PRIVATE_WIKI_OLD_WRITER -ErrorAction Stop
+                    $afterHistorical = Get-FileHash -LiteralPath $manifest.historical_witness.executable -Algorithm SHA256 -ErrorAction SilentlyContinue
+                    $historicalCustodyValid = $null -ne $afterHistorical -and $afterHistorical.Hash.ToLowerInvariant() -ceq $manifest.historical_witness.executable_sha256
+                }
                 if ($producerSelected) {
                     Remove-Item Env:MAESTRO_PRIVATE_WIKI_COMPAT_PRODUCER -ErrorAction Stop
                     $afterProducer = Get-FileHash -LiteralPath $manifest.compatible_producer.executable -Algorithm SHA256 -ErrorAction SilentlyContinue
@@ -494,7 +589,18 @@ try {
                     build_manifest_sha256=$manifest.compatible_producer.build_manifest_sha256
                     source_revision=$manifest.source_revision; source_archive_sha256=$manifest.source_archive_sha256
                     copied_pe_custody=$producerCustodyValid; actual_compatibility_test_passed=$compatibilityPassed
-                    old_writer='not_supplied'; native_execution='actual_owning_memory_package_outcome'
+                    old_writer=$(if ($manifest.historical_witness) { 'separately_sealed_historical_library_harness' } else { 'not_supplied' }); native_execution='actual_owning_memory_package_outcome'
+                }
+            }
+            if ($selectHistorical) {
+                $historicalOutcomes = @($outcomes | Where-Object { $_.test -ceq 'TestPrivateWikiOldCohortProcessCannotReadCaptureOrDelete' })
+                $historicalPassed = $historicalSelected -and $historicalCustodyValid -and $historicalOutcomes.Count -eq 1 -and $historicalOutcomes[0].outcome -ceq 'PASS' -and @($allSkips | Where-Object { ($_ -split '/')[0] -ceq 'TestPrivateWikiOldCohortProcessCannotReadCaptureOrDelete' }).Count -eq 0
+                $results[-1].historical_witness_proof = [ordered]@{
+                    kind='new_harness_unmodified_historical_library'; library_revision='f93e9ce21edcd19246e7e5985d97489297dae18b'; historical_release_artifact=$false
+                    executable_sha256=$manifest.historical_witness.executable_sha256; build_manifest_sha256=$manifest.historical_witness.build_manifest_sha256
+                    original_archive_sha256=$manifest.historical_witness.original_archive_sha256; original_library_inventory_sha256=$manifest.historical_witness.original_library_inventory_sha256
+                    copied_pe_custody=$historicalCustodyValid; actual_historical_test_passed=$historicalPassed
+                    native_execution='actual_owning_memory_package_outcome'; owned_windows_confinement='actual_unavailable_is_not_visibility_fence_proof'
                 }
             }
             Write-Output ($prefix + '_result package=' + $entry.name + ' exit=' + $code + ' inventory_complete=' + $complete + ' skips=' + $skipped.Count)
@@ -506,6 +612,9 @@ try {
         }
         if (-not $Inspection -and $manifest.compatible_producer -and @($results | Where-Object {
             $_.name -ceq 'memory' -and $_.compatible_producer_proof.actual_compatibility_test_passed -eq $true
+        }).Count -ne 1) { $qualificationComplete = $false }
+        if (-not $Inspection -and $manifest.historical_witness -and @($results | Where-Object {
+            $_.name -ceq 'memory' -and $_.historical_witness_proof.actual_historical_test_passed -eq $true
         }).Count -ne 1) { $qualificationComplete = $false }
         $report = [ordered]@{
             schema_version=1; source_revision=$manifest.source_revision; actual_standard_user=$true

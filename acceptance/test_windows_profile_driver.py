@@ -1,5 +1,6 @@
 """Closed qualification inputs and actual launcher fragments without accounts."""
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -355,6 +356,127 @@ foreach ($case in @(@{outcome='PASS'; custody=$true; skips=@(); expected=$true},
  $producerSelected=$true; $producerCustodyValid=$case.custody; $compatOutcomes=@(@{outcome=$case.outcome}); $allSkips=$case.skips
  Invoke-Expression $checks[0].Extent.Text
  if ($compatibilityPassed -ne $case.expected) { throw 'Unqualified compatible producer was accepted' }
+}
+""")
+
+    def test_historical_acceptance_requires_real_pass_without_nested_skip_and_custody(self):
+        self.launcher_fragment_check(r"""
+$checks=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -ceq '$historicalPassed'},$true))
+if ($checks.Count -ne 1) { throw 'Expected actual historical acceptance predicate' }
+foreach ($case in @(@{outcome='PASS'; custody=$true; skips=@(); expected=$true},@{outcome='SKIP'; custody=$true; skips=@(); expected=$false},@{outcome='FAIL'; custody=$true; skips=@(); expected=$false},@{outcome='PASS'; custody=$false; skips=@(); expected=$false},@{outcome='PASS'; custody=$true; skips=@('TestPrivateWikiOldCohortProcessCannotReadCaptureOrDelete/nested'); expected=$false})) {
+ $historicalSelected=$true; $historicalCustodyValid=$case.custody; $historicalOutcomes=@(@{outcome=$case.outcome}); $allSkips=$case.skips
+ Invoke-Expression $checks[0].Extent.Text
+ if ($historicalPassed -ne $case.expected) { throw 'Unqualified historical witness was accepted' }
+}
+""")
+
+    def historical_fixture(self):
+        document = self.producer_fixture()
+        output = self.root / "historical-witness"
+        output.mkdir()
+        source = output / "source"
+        source.mkdir()
+        builder_path = ROOT / "dev/pilot/private-wiki-old-cohort/build.py"
+        spec = importlib.util.spec_from_file_location("historical_builder", builder_path)
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        archive = subprocess.check_output(["git", "archive", "--format=tar", builder.REVISION], cwd=ROOT)
+        (output / "historical-source.tar").write_bytes(archive)
+        records = builder.extract_pinned_archive(archive, source)
+        harness = {}
+        for name in ["main.go", "main_test.go"]:
+            relative = "dev/pilot/private-wiki-old-cohort/" + name
+            for root in [source, Path(document["source_root"])]:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"unexecuted synthetic harness fixture")
+            harness[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
+        helper = Path(document["source_root"]) / "dev/pilot/private-wiki-old-cohort"
+        (helper / "build.py").write_bytes(b"unexecuted synthetic builder fixture")
+        executable = output / "private-wiki-old-cohort-harness.exe"
+        executable.write_bytes(b"unexecuted synthetic PE custody fixture")
+        digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+        build = dict(schema_version=1, artifact_kind="new_harness_unmodified_historical_library",
+                     historical_release_artifact=False, library_revision=builder.REVISION,
+                     original_archive_sha256=hashlib.sha256(archive).hexdigest(), original_library_files=records,
+                     harness_files=harness, builder_sha256=digest(helper / "build.py"),
+                     sdk_executable_sha256=document["sdk_go_sha256"], target_os="windows", target_arch="amd64",
+                     executable=str(executable), executable_sha256=digest(executable), library_unchanged_after_build=True,
+                     native_execution="not_run_by_builder", build_command=[document["sdk_go"], "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-ldflags",
+                     "-X=main.linkedLibraryRevision=" + builder.REVISION, "-o", str(executable), "./dev/pilot/private-wiki-old-cohort"])
+        report = output / "historical-build.json"
+        report.write_text(json.dumps(build), encoding="utf-8")
+        document["historical_witness"] = dict(build_manifest=str(report), build_manifest_sha256=digest(report),
+                  original_archive_sha256=build["original_archive_sha256"], sdk_go_sha256=document["sdk_go_sha256"],
+                  original_library_inventory_sha256=hashlib.sha256(json.dumps(records, separators=(",", ":")).encode()).hexdigest(),
+                  executable=str(executable), executable_sha256=digest(executable))
+        document["packages"][3]["tests"].append("TestPrivateWikiOldCohortProcessCannotReadCaptureOrDelete")
+        return document
+
+    def historical_guard_check(self, document, expected):
+        self.manifest.write_text(json.dumps(document), encoding="utf-8")
+        script = self.root / "historical-guard.ps1"
+        script.write_text(r"""$ErrorActionPreference='Stop'
+$ast=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$null)
+$guard=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -ceq '$withCanonical -and $canonical.historical_witness' -and $node.Extent.Text -match 'archive/SDK seal'},$true))
+if ($guard.Count -ne 1) { throw 'Expected actual sealed historical witness guard' }
+$withCanonical=$true; $canonical=Get-Content -LiteralPath $args[1] -Raw | ConvertFrom-Json
+if ($args[2] -ceq 'ALLOW') { Invoke-Expression $guard[0].Extent.Text; exit 0 }
+$refused=$false
+try { Invoke-Expression $guard[0].Extent.Text } catch { if ($_.Exception.Message -notmatch $args[2]) { throw }; $refused=$true }
+if (-not $refused) { throw 'Historical substitution was accepted' }
+""", encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER), str(self.manifest), expected],
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_historical_refuses_archive_sdk_report_inventory_and_pe_substitution(self):
+        document = self.historical_fixture()
+        self.historical_guard_check(document, "ALLOW")
+        for field in ["original_archive_sha256", "sdk_go_sha256", "build_manifest_sha256", "original_library_inventory_sha256", "executable_sha256"]:
+            with self.subTest(field=field):
+                original = document["historical_witness"][field]
+                document["historical_witness"][field] = "0" * 64
+                self.historical_guard_check(document, "Historical witness")
+                document["historical_witness"][field] = original
+
+    def test_historical_refuses_changed_library_and_missing_owning_test(self):
+        document = self.historical_fixture()
+        document["packages"][3]["tests"].remove("TestPrivateWikiOldCohortProcessCannotReadCaptureOrDelete")
+        self.historical_guard_check(document, "actual owning memory historical test")
+        document["packages"][3]["tests"].append("TestPrivateWikiOldCohortProcessCannotReadCaptureOrDelete")
+        original = self.root / "historical-witness/source/go.mod"
+        original.write_bytes(original.read_bytes() + b"\n// altered old library\n")
+        self.historical_guard_check(document, "input hash or ordinary-file custody")
+
+    def test_historical_refuses_resealed_release_claim_or_altered_build_command(self):
+        document = self.historical_fixture()
+        report = Path(document["historical_witness"]["build_manifest"])
+        original = json.loads(report.read_text())
+        for field, replacement in [("historical_release_artifact", True), ("build_command", ["unapproved build"]),
+                                   ("library_unchanged_after_build", False)]:
+            with self.subTest(field=field):
+                altered = dict(original, **{field: replacement})
+                report.write_text(json.dumps(altered), encoding="utf-8")
+                document["historical_witness"]["build_manifest_sha256"] = hashlib.sha256(report.read_bytes()).hexdigest()
+                self.historical_guard_check(document, "identity, immutable library or exact build command")
+
+    def test_historical_env_is_selected_only_for_memory_and_cleaned(self):
+        document = self.historical_fixture()
+        self.launcher_fragment_check(r"""
+$selection=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -ceq '$selectHistorical'},$true))
+$binding=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -ceq '$selectHistorical' -and $node.Extent.Text -match '\$env:MAESTRO_PRIVATE_WIKI_OLD_WRITER'},$true))
+$cleanup=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -ceq '$historicalSelected'},$true))
+if ($selection.Count -ne 1 -or $binding.Count -ne 1 -or $cleanup.Count -ne 1) { throw 'Expected actual historical selection/binding/cleanup blocks' }
+$historicalPath=Join-Path $PSScriptRoot 'historical-witness/private-wiki-old-cohort-harness.exe'
+$manifest=[pscustomobject]@{historical_witness=[pscustomobject]@{executable=$historicalPath; executable_sha256=(Get-FileHash -LiteralPath $historicalPath -Algorithm SHA256).Hash.ToLowerInvariant()}}
+foreach ($case in @(@{name='execution'; inspection=$false; selected=$false},@{name='memory'; inspection=$false; selected=$true},@{name='memory'; inspection=$true; selected=$false})) {
+ $Inspection=$case.inspection; $entry=[pscustomobject]@{name=$case.name}; $historicalSelected=$false; $historicalCustodyValid=$true
+ Invoke-Expression $selection[0].Extent.Text
+ Invoke-Expression $binding[0].Extent.Text
+ if ($historicalSelected -ne $case.selected -or (Test-Path Env:MAESTRO_PRIVATE_WIKI_OLD_WRITER) -ne $case.selected) { throw 'Historical witness escaped memory-only scope' }
+ Invoke-Expression $cleanup[0].Extent.Text
+ if ((Test-Path Env:MAESTRO_PRIVATE_WIKI_OLD_WRITER) -or -not $historicalCustodyValid) { throw 'Historical cleanup or custody failed' }
 }
 """)
 
