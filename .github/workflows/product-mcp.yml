@@ -38,6 +38,8 @@ on:
       - 'internal/updateplan/**'
       - 'internal/updateservice/**'
       - 'dev/release/**'
+      - 'dev/pilot/private-wiki-producer/**'
+      - 'acceptance/test_windows_profile_driver.py'
       - 'internal/releaseverify/**'
       - 'internal/releaseprovider/**'
       - 'internal/dev/releasepack/**'
@@ -89,6 +91,8 @@ on:
       - 'internal/updateplan/**'
       - 'internal/updateservice/**'
       - 'dev/release/**'
+      - 'dev/pilot/private-wiki-producer/**'
+      - 'acceptance/test_windows_profile_driver.py'
       - 'internal/releaseverify/**'
       - 'internal/releaseprovider/**'
       - 'internal/dev/releasepack/**'
@@ -204,6 +208,33 @@ jobs:
                 working_directory=(Join-Path $sourceRoot ('internal/' + $name)); tests=$tests
               }
             }
+            & $sdkGo mod vendor
+            if ($LASTEXITCODE -ne 0) { throw 'Compatible producer staging-only vendor closure failed.' }
+            $vendorRoot = Join-Path $sourceRoot 'vendor'
+            $vendorFiles = @(Get-ChildItem -LiteralPath $vendorRoot -Recurse -File | Sort-Object FullName | ForEach-Object {
+              if (($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Producer vendor input must be an ordinary file.' }
+              [ordered]@{path=$_.FullName.Substring($vendorRoot.Length + 1).Replace('\','/'); sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}
+            })
+            $producerRoot = Join-Path $publicRoot 'compatible-producer'
+            $hadGoFlags = Test-Path Env:GOFLAGS
+            $priorGoFlags = $env:GOFLAGS
+            try {
+              $env:GOFLAGS = '-mod=vendor -buildvcs=false'
+              python (Join-Path $sourceRoot 'dev/pilot/private-wiki-producer/build.py') $producerRoot --source-revision $revision --go $sdkGo
+              if ($LASTEXITCODE -ne 0) { throw 'Actual compatible producer build failed.' }
+            } finally {
+              if ($hadGoFlags) { $env:GOFLAGS = $priorGoFlags }
+              else { Remove-Item Env:GOFLAGS -ErrorAction SilentlyContinue }
+            }
+            $producerBuildPath = Join-Path $producerRoot 'producer-build.json'
+            $producerBuild = Get-Content -LiteralPath $producerBuildPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            $producer = [ordered]@{
+              build_manifest=$producerBuildPath
+              build_manifest_sha256=(Get-FileHash -LiteralPath $producerBuildPath -Algorithm SHA256).Hash.ToLowerInvariant()
+              source_archive_sha256=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+              sdk_go_sha256=(Get-FileHash -LiteralPath $sdkGo -Algorithm SHA256).Hash.ToLowerInvariant()
+              executable=$producerBuild.executable; executable_sha256=$producerBuild.executable_sha256
+            }
             Push-Location -LiteralPath (Join-Path $sourceRoot 'adapters/mcp')
             try {
               & $sdkGo test -c . -o (Join-Path $binaryRoot 'windows-core.test.exe')
@@ -216,7 +247,8 @@ jobs:
             schema_version=1; source_revision=$revision; source_root=$sourceRoot
             sdk_root=$sdkRoot; sdk_go=$sdkGo
             sdk_go_sha256=(Get-FileHash -LiteralPath $sdkGo -Algorithm SHA256).Hash.ToLowerInvariant()
-            source_archive_sha256=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+            source_archive=$archive; source_archive_sha256=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+            vendor_files=$vendorFiles; compatible_producer=$producer
             packages=$entries
           }
           $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $publicRoot 'canonical-contract-manifest.json') -Encoding utf8
@@ -246,6 +278,7 @@ jobs:
           })
           if ($env:MAESTRO_CANONICAL_PUBLIC_ROOT) {
             $sources += [pscustomobject]@{root=$env:MAESTRO_CANONICAL_PUBLIC_ROOT; names=@('canonical-contract-manifest.json')}
+            $sources += [pscustomobject]@{root=(Join-Path $env:MAESTRO_CANONICAL_PUBLIC_ROOT 'compatible-producer'); names=@('producer-build.json', 'build.stdout.log', 'build.stderr.log')}
           }
           foreach ($source in $sources) {
             if (-not (Test-Path -LiteralPath $source.root)) { continue }

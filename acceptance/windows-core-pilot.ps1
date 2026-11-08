@@ -24,6 +24,9 @@ $withKit = $kitInputCount -eq $kitInputs.Count
 $withCanonical = -not [string]::IsNullOrWhiteSpace($CanonicalManifest)
 $withInspection = $PSCmdlet.ParameterSetName -eq 'Inspection'
 $withManifest = $withCanonical -or $withInspection
+if ($withCanonical -and ((Test-Path Env:MAESTRO_PRIVATE_WIKI_COMPAT_PRODUCER) -or (Test-Path Env:MAESTRO_PRIVATE_WIKI_OLD_WRITER))) {
+    throw 'Canonical qualification refuses inherited producer helpers.'
+}
 if ($withManifest) {
     $manifestPath = if ($withInspection) { $InspectionManifest } else { $CanonicalManifest }
     if ($withInspection) {
@@ -78,7 +81,7 @@ if ($withManifest) {
             }
         }
     }
-    if ($withInspection) {
+    if ($withInspection -or ($withCanonical -and $canonical.compatible_producer)) {
         if ($canonical.source_revision -cnotmatch '^[0-9a-f]{40}$' -or $canonical.source_archive_sha256 -cnotmatch '^[0-9a-f]{64}$' -or
             @($canonical.vendor_files).Count -eq 0 -or @($canonical.vendor_files.path | Sort-Object -Unique).Count -ne @($canonical.vendor_files).Count) {
             throw 'Inspection source and vendored dependencies require a sealed inventory.'
@@ -91,6 +94,64 @@ if ($withManifest) {
                 (Get-FileHash -LiteralPath $inputFile.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -cne $file.sha256) {
                 throw 'Inspection vendored input differs from its sealed ordinary file.'
             }
+        }
+    }
+    if ($withCanonical -and $canonical.compatible_producer) {
+        $producer = $canonical.compatible_producer
+        $producerRoot = Join-Path (Split-Path -Parent $canonical.source_root) 'compatible-producer'
+        $buildPath = Join-Path $producerRoot 'producer-build.json'
+        $producerExe = Join-Path $producerRoot 'private-wiki-compatible-producer.exe'
+        if ($producer.build_manifest -cne $buildPath -or $producer.executable -cne $producerExe -or
+            $producer.source_archive_sha256 -cne $canonical.source_archive_sha256 -or $producer.sdk_go_sha256 -cne $canonical.sdk_go_sha256) {
+            throw 'Compatible producer source/archive/SDK seal or fixed path differs.'
+        }
+        $buildFile = Get-Item -LiteralPath $buildPath -Force
+        if ($buildFile -isnot [IO.FileInfo] -or ($buildFile.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $buildFile.Length -gt 2097152 -or
+            (Get-FileHash -LiteralPath $buildPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $producer.build_manifest_sha256) {
+            throw 'Compatible producer build manifest differs from its bounded ordinary seal.'
+        }
+        $build = Get-Content -LiteralPath $buildPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $overlay = Join-Path $producerRoot 'compiler.go'
+        $overlayMap = Join-Path $producerRoot 'overlay.json'
+        $compiler = Join-Path $canonical.source_root 'internal/privatewiki/compiler.go'
+        $helperRoot = Join-Path $canonical.source_root 'dev/pilot/private-wiki-producer'
+        $expectedCommand = @($canonical.sdk_go, 'build', '-trimpath', '-buildvcs=false', '-overlay', $overlayMap, '-o', $producerExe, './dev/pilot/private-wiki-producer')
+        if ($build.schema_version -ne 1 -or $build.kind -cne 'compatible-description-variant-not-historical-release' -or
+            $build.source_revision -cne $canonical.source_revision -or $build.source_state -cne 'caller_sealed_source_archive' -or
+            $build.target_os -cne 'windows' -or $build.target_arch -cne 'amd64' -or $build.compiler_path -cne 'internal/privatewiki/compiler.go' -or
+            $build.executable -cne $producerExe -or $build.executable_sha256 -cne $producer.executable_sha256 -or
+            $build.native_execution -cne 'not_run_by_builder' -or (@($build.build_command) -join "`n") -cne ($expectedCommand -join "`n")) {
+            throw 'Compatible producer identity, target or exact build command differs.'
+        }
+        $inputs = @(
+            @{path=$canonical.source_archive; sha256=$canonical.source_archive_sha256},
+            @{path=$canonical.sdk_go; sha256=$canonical.sdk_go_sha256},
+            @{path=$compiler; sha256=$build.original_compiler_sha256},
+            @{path=$overlay; sha256=$build.overlay_compiler_sha256},
+            @{path=$overlayMap; sha256=$build.overlay_json_sha256},
+            @{path=(Join-Path $helperRoot 'main.go'); sha256=$build.helper_main_sha256},
+            @{path=(Join-Path $helperRoot 'build.py'); sha256=$build.builder_sha256},
+            @{path=$producerExe; sha256=$producer.executable_sha256}
+        )
+        foreach ($inputFile in $inputs) {
+            $file = Get-Item -LiteralPath $inputFile.path -Force
+            if ($file -isnot [IO.FileInfo] -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+                $inputFile.sha256 -cnotmatch '^[0-9a-f]{64}$' -or (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -cne $inputFile.sha256) {
+                throw 'Compatible producer input hash or ordinary-file custody differs.'
+            }
+        }
+        $original = [IO.File]::ReadAllText($compiler)
+        $seam = 'commonFrontmatter(m, "Memory Index", "Memory navigation", in.CommittedAt)'
+        $variant = 'commonFrontmatter(m, "Memory Index", "Compatible producer-only description", in.CommittedAt)'
+        $replacements = @((Get-Content -LiteralPath $overlayMap -Raw -Encoding UTF8 | ConvertFrom-Json).Replace.PSObject.Properties)
+        if ([regex]::Matches($original, [regex]::Escape($seam)).Count -ne 1 -or
+            [IO.File]::ReadAllText($overlay) -cne $original.Replace($seam, $variant) -or $replacements.Count -ne 1 -or
+            $replacements[0].Name -cne $compiler -or $replacements[0].Value -cne $overlay) {
+            throw 'Compatible producer overlay is not the single approved description-only replacement.'
+        }
+        $memory = @($canonical.packages | Where-Object { $_.name -ceq 'memory' })
+        if ($memory.Count -ne 1 -or 'TestPrivateWikiCompatibleProducerAcrossActualBinaries' -cnotin @($memory[0].tests)) {
+            throw 'Compatible producer requires the actual owning memory compatibility test.'
         }
     }
 }
@@ -195,6 +256,14 @@ try {
                 throw 'Copied canonical test executable differs from its sealed source.'
             }
             $entry.binary = $copied
+        }
+        if ($withCanonical -and $canonical.compatible_producer) {
+            $copiedProducer = Join-Path $payload 'private-wiki-compatible-producer.exe'
+            Copy-Item -LiteralPath $canonical.compatible_producer.executable -Destination $copiedProducer
+            if ((Get-FileHash -LiteralPath $copiedProducer -Algorithm SHA256).Hash.ToLowerInvariant() -cne $canonical.compatible_producer.executable_sha256) {
+                throw 'Copied compatible producer differs from its sealed PE.'
+            }
+            $canonical.compatible_producer.executable = $copiedProducer
         }
         $manifestName = if ($withInspection) { 'inspection-contract-manifest.json' } else { 'canonical-contract-manifest.json' }
         $nativeCanonical = Join-Path $payload $manifestName
@@ -311,6 +380,10 @@ try {
     if ($CanonicalManifest) {
         $manifest = Get-Content -LiteralPath $CanonicalManifest -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($env:GOROOT) { throw 'Canonical evidence refuses caller-supplied GOROOT.' }
+        if (-not $Inspection -and
+            ((Test-Path Env:MAESTRO_PRIVATE_WIKI_COMPAT_PRODUCER) -or (Test-Path Env:MAESTRO_PRIVATE_WIKI_OLD_WRITER))) {
+            throw 'Ordinary-account canonical evidence refuses inherited producer helpers.'
+        }
         foreach ($root in @($manifest.source_root, $manifest.sdk_root)) {
             $probe = Join-Path $root ('ordinary-write-probe-' + [Guid]::NewGuid().ToString('N'))
             $wrote = $false
@@ -352,11 +425,31 @@ try {
             if ($LASTEXITCODE -ne 0 -or @((Compare-Object ($entry.tests | Sort-Object) ($listed | Sort-Object))).Count -ne 0) {
                 throw 'The actual canonical binary test inventory differs from its closed manifest.'
             }
+            $producerSelected = $false
+            $producerCustodyValid = $true
+            $selectProducer = -not $Inspection -and $entry.name -ceq 'memory' -and $manifest.compatible_producer
             Push-Location -LiteralPath $entry.working_directory
             try {
+                if ($selectProducer) {
+                    if ((Test-Path Env:MAESTRO_PRIVATE_WIKI_COMPAT_PRODUCER) -or (Test-Path Env:MAESTRO_PRIVATE_WIKI_OLD_WRITER)) {
+                        throw 'Memory producer selection refuses inherited helpers.'
+                    }
+                    if ((Get-FileHash -LiteralPath $manifest.compatible_producer.executable -Algorithm SHA256).Hash.ToLowerInvariant() -cne $manifest.compatible_producer.executable_sha256) {
+                        throw 'Ordinary-account compatible producer changed before memory.'
+                    }
+                    $env:MAESTRO_PRIVATE_WIKI_COMPAT_PRODUCER = $manifest.compatible_producer.executable
+                    $producerSelected = $true
+                }
                 $output = @(& $entry.binary '-test.v' '-test.timeout=300s' 2>&1 | ForEach-Object { "$_" })
                 $code = $LASTEXITCODE
-            } finally { Pop-Location }
+            } finally {
+                if ($producerSelected) {
+                    Remove-Item Env:MAESTRO_PRIVATE_WIKI_COMPAT_PRODUCER -ErrorAction Stop
+                    $afterProducer = Get-FileHash -LiteralPath $manifest.compatible_producer.executable -Algorithm SHA256 -ErrorAction SilentlyContinue
+                    $producerCustodyValid = $null -ne $afterProducer -and $afterProducer.Hash.ToLowerInvariant() -ceq $manifest.compatible_producer.executable_sha256
+                }
+                Pop-Location
+            }
             $body = $output -join "`n"
             if ([Text.Encoding]::UTF8.GetByteCount($body) -gt 2097152) { throw 'Canonical package output exceeds the bounded log contract.' }
             $prefix = if ($Inspection) { 'inspection' } else { 'canonical' }
@@ -393,6 +486,17 @@ try {
                 $results[-1].unclassified_skips = $unclassified
                 $results[-1].required_migration_tests_passed = $requiredPassed
             }
+            if ($selectProducer) {
+                $compatOutcomes = @($outcomes | Where-Object { $_.test -ceq 'TestPrivateWikiCompatibleProducerAcrossActualBinaries' })
+                $compatibilityPassed = $producerSelected -and $producerCustodyValid -and $compatOutcomes.Count -eq 1 -and $compatOutcomes[0].outcome -ceq 'PASS' -and @($allSkips | Where-Object { ($_ -split '/')[0] -ceq 'TestPrivateWikiCompatibleProducerAcrossActualBinaries' }).Count -eq 0
+                $results[-1].compatible_producer_proof = [ordered]@{
+                    kind='compatible-description-variant-not-historical-release'; executable_sha256=$manifest.compatible_producer.executable_sha256
+                    build_manifest_sha256=$manifest.compatible_producer.build_manifest_sha256
+                    source_revision=$manifest.source_revision; source_archive_sha256=$manifest.source_archive_sha256
+                    copied_pe_custody=$producerCustodyValid; actual_compatibility_test_passed=$compatibilityPassed
+                    old_writer='not_supplied'; native_execution='actual_owning_memory_package_outcome'
+                }
+            }
             Write-Output ($prefix + '_result package=' + $entry.name + ' exit=' + $code + ' inventory_complete=' + $complete + ' skips=' + $skipped.Count)
         }
         $qualificationComplete = @($results | Where-Object { $_.exit_code -ne 0 -or -not $_.inventory_complete -or $_.skipped_tests.Count -ne 0 }).Count -eq 0
@@ -400,6 +504,9 @@ try {
             $qualificationComplete = @($results | Where-Object { $_.exit_code -ne 0 -or -not $_.inventory_complete -or
                 $_.unclassified_skips.Count -ne 0 -or -not $_.required_migration_tests_passed }).Count -eq 0
         }
+        if (-not $Inspection -and $manifest.compatible_producer -and @($results | Where-Object {
+            $_.name -ceq 'memory' -and $_.compatible_producer_proof.actual_compatibility_test_passed -eq $true
+        }).Count -ne 1) { $qualificationComplete = $false }
         $report = [ordered]@{
             schema_version=1; source_revision=$manifest.source_revision; actual_standard_user=$true
             private_current_user_temp=$true; public_source_and_sdk_read_only=$true

@@ -1,4 +1,4 @@
-"""Closed inspection mode refuses malformed inputs before creating an account."""
+"""Closed qualification inputs and actual launcher fragments without accounts."""
 import hashlib
 import json
 import os
@@ -71,6 +71,29 @@ if ($errors.Count) { throw ($errors | Out-String) }
             script.write_text(body, encoding="utf-8")
             parser = self.root / "parse-workflow.ps1"
             parser.write_text("$e=$null; [Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$e) | Out-Null; if($e.Count){throw ($e | Out-String)}", encoding="utf-8")
+            result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(parser), str(script)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_product_workflow_windows_blocks_parse(self):
+        lines = (ROOT / ".github/workflows/product-mcp.yml").read_text().splitlines()
+        current, blocks = [], []
+        for index, line in enumerate(lines):
+            if line.startswith("      - "):
+                current = []
+            current.append(line)
+            if line == "        run: |" and "        shell: pwsh" in current:
+                body = []
+                for child in lines[index + 1:]:
+                    if child and not child.startswith("          "):
+                        break
+                    body.append(child)
+                blocks.append(textwrap.dedent("\n".join(body)))
+        self.assertEqual(len(blocks), 4)
+        parser = self.root / "parse-product.ps1"
+        parser.write_text("$e=$null; [Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$e) | Out-Null; if($e.Count){throw ($e | Out-String)}", encoding="utf-8")
+        for index, body in enumerate(blocks):
+            script = self.root / f"product-{index}.ps1"
+            script.write_text(body, encoding="utf-8")
             result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(parser), str(script)], capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
@@ -211,6 +234,128 @@ Invoke-Expression $guard[0].Extent.Text
 $env:USERPROFILE='synthetic-inherited-runner-profile'; $env:HOME='synthetic-inherited-home'
 foreach ($assignment in $bindings) { Invoke-Expression $assignment.Extent.Text }
 if ($env:USERPROFILE -cne $userHomeFixture -or $env:HOME -cne $userHomeFixture -or $inspectionProfile.inherited_userprofile_matches_fixture -or $inspectionProfile.inherited_home_matches_fixture -or -not $inspectionProfile.private_fixture_roots_admitted -or $inspectionProfile.profile_resolution -cne 'inspection_private_fixture') { throw 'Inherited environment survived the admitted fixture binding' }
+""")
+
+    def producer_fixture(self):
+        source, sdk = self.root / "source", self.root / "sdk"
+        output = self.root / "compatible-producer"
+        output.mkdir()
+        sdk.mkdir()
+        go = sdk / "go.exe"
+        go.write_bytes(b"unexecuted SDK fixture")
+        compiler = source / "internal/privatewiki/compiler.go"
+        compiler.parent.mkdir(parents=True)
+        original = 'commonFrontmatter(m, "Memory Index", "Memory navigation", in.CommittedAt)'
+        compiler.write_text(original, encoding="utf-8")
+        overlay = output / "compiler.go"
+        overlay.write_text(original.replace('"Memory navigation"', '"Compatible producer-only description"'), encoding="utf-8")
+        mapping = output / "overlay.json"
+        mapping.write_text(json.dumps({"Replace": {str(compiler): str(overlay)}}), encoding="utf-8")
+        helper = source / "dev/pilot/private-wiki-producer"
+        helper.mkdir(parents=True)
+        (helper / "main.go").write_bytes(b"unexecuted helper fixture")
+        (helper / "build.py").write_bytes(b"unexecuted builder fixture")
+        executable = output / "private-wiki-compatible-producer.exe"
+        executable.write_bytes(b"unexecuted PE custody fixture")
+        archive = self.root / "canonical-source.tar"
+        archive.write_bytes(b"sealed archive fixture")
+        digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+        build = dict(schema_version=1, kind="compatible-description-variant-not-historical-release",
+                     source_revision="a" * 40, source_state="caller_sealed_source_archive", target_os="windows", target_arch="amd64",
+                     compiler_path="internal/privatewiki/compiler.go", original_compiler_sha256=digest(compiler),
+                     overlay_compiler_sha256=digest(overlay), overlay_json_sha256=digest(mapping),
+                     helper_main_sha256=digest(helper / "main.go"), builder_sha256=digest(helper / "build.py"),
+                     executable=str(executable), executable_sha256=digest(executable), native_execution="not_run_by_builder",
+                     build_command=[str(go), "build", "-trimpath", "-buildvcs=false", "-overlay", str(mapping), "-o", str(executable), "./dev/pilot/private-wiki-producer"])
+        report = output / "producer-build.json"
+        report.write_text(json.dumps(build), encoding="utf-8")
+        selected = dict(build_manifest=str(report), build_manifest_sha256=digest(report),
+                        source_archive_sha256=digest(archive), sdk_go_sha256=digest(go),
+                        executable=str(executable), executable_sha256=digest(executable))
+        packages = [dict(name=name, tests=["TestPrivateWikiCompatibleProducerAcrossActualBinaries"] if name == "memory" else ["TestFixture"])
+                    for name in ["execution", "datahome", "ownerctx", "memory", "privatewiki", "processidentity"]]
+        return dict(packages=packages, source_root=str(source), source_revision=build["source_revision"], source_archive=str(archive),
+                    source_archive_sha256=digest(archive), sdk_go=str(go), sdk_go_sha256=digest(go), compatible_producer=selected)
+
+    def producer_guard_check(self, document, expected, inherited=None):
+        self.manifest.write_text(json.dumps(document), encoding="utf-8")
+        script = self.root / "producer-guard.ps1"
+        script.write_text(r"""$ErrorActionPreference='Stop'
+$ast=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$null)
+$guard=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -ceq '$withCanonical -and $canonical.compatible_producer' -and $node.Extent.Text -match 'source/archive/SDK seal'},$true))
+if ($guard.Count -ne 1) { throw 'Expected the actual sealed producer guard' }
+$withCanonical=$true
+$canonical=Get-Content -LiteralPath $args[1] -Raw | ConvertFrom-Json
+$environmentGuard=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Extent.Text -match 'Canonical qualification refuses inherited producer helpers'},$true))
+if ($environmentGuard.Count -ne 1) { throw 'Expected actual canonical inherited-environment refusal' }
+if ($args[2] -ceq 'ALLOW') { Invoke-Expression $environmentGuard[0].Extent.Text; Invoke-Expression $guard[0].Extent.Text; exit 0 }
+$refused=$false
+try { Invoke-Expression $environmentGuard[0].Extent.Text; Invoke-Expression $guard[0].Extent.Text } catch { if ($_.Exception.Message -notmatch $args[2]) { throw }; $refused=$true }
+if (-not $refused) { throw 'Producer substitution was accepted' }
+""", encoding="utf-8")
+        env = dict(os.environ)
+        if inherited:
+            env[inherited] = "synthetic-inherited-substitute"
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER), str(self.manifest), expected],
+                                capture_output=True, text=True, timeout=30, env=env)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_producer_refuses_inherited_compatible_or_old_writer(self):
+        document = self.producer_fixture()
+        for variable in ["MAESTRO_PRIVATE_WIKI_COMPAT_PRODUCER", "MAESTRO_PRIVATE_WIKI_OLD_WRITER"]:
+            with self.subTest(variable=variable):
+                self.producer_guard_check(document, "refuses inherited producer helpers", variable)
+
+    def test_producer_refuses_archive_sdk_report_and_pe_substitution(self):
+        document = self.producer_fixture()
+        self.producer_guard_check(document, "ALLOW")
+        for field in ["source_archive_sha256", "sdk_go_sha256", "build_manifest_sha256", "executable_sha256"]:
+            with self.subTest(field=field):
+                original = document["compatible_producer"][field]
+                document["compatible_producer"][field] = "0" * 64
+                self.producer_guard_check(document, "Compatible producer")
+                document["compatible_producer"][field] = original
+
+    def test_producer_refuses_a_resealed_non_description_overlay(self):
+        document = self.producer_fixture()
+        report = Path(document["compatible_producer"]["build_manifest"])
+        build = json.loads(report.read_text())
+        overlay = report.with_name("compiler.go")
+        overlay.write_text("unapproved compiler replacement", encoding="utf-8")
+        build["overlay_compiler_sha256"] = hashlib.sha256(overlay.read_bytes()).hexdigest()
+        report.write_text(json.dumps(build), encoding="utf-8")
+        document["compatible_producer"]["build_manifest_sha256"] = hashlib.sha256(report.read_bytes()).hexdigest()
+        self.producer_guard_check(document, "single approved description-only replacement")
+
+    def test_producer_env_is_selected_only_for_memory_and_cleaned(self):
+        document = self.producer_fixture()
+        self.launcher_fragment_check(r"""
+$selection=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -ceq '$selectProducer'},$true))
+$binding=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -ceq '$selectProducer' -and $node.Extent.Text -match '\$env:MAESTRO_PRIVATE_WIKI_COMPAT_PRODUCER'},$true))
+$cleanup=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -ceq '$producerSelected'},$true))
+if ($selection.Count -ne 1 -or $binding.Count -ne 1 -or $cleanup.Count -ne 1) { throw 'Expected actual producer selection/binding/cleanup blocks' }
+$producerPath=Join-Path $PSScriptRoot 'compatible-producer/private-wiki-compatible-producer.exe'
+$manifest=[pscustomobject]@{compatible_producer=[pscustomobject]@{executable=$producerPath; executable_sha256=(Get-FileHash -LiteralPath $producerPath -Algorithm SHA256).Hash.ToLowerInvariant()}}
+foreach ($case in @(@{name='execution'; inspection=$false; selected=$false},@{name='memory'; inspection=$false; selected=$true},@{name='memory'; inspection=$true; selected=$false})) {
+ $Inspection=$case.inspection; $entry=[pscustomobject]@{name=$case.name}; $producerSelected=$false; $producerCustodyValid=$true
+ Invoke-Expression $selection[0].Extent.Text
+ Invoke-Expression $binding[0].Extent.Text
+ if ($producerSelected -ne $case.selected -or (Test-Path Env:MAESTRO_PRIVATE_WIKI_COMPAT_PRODUCER) -ne $case.selected) { throw 'Producer escaped memory-only scope' }
+ Invoke-Expression $cleanup[0].Extent.Text
+ if (Test-Path Env:MAESTRO_PRIVATE_WIKI_COMPAT_PRODUCER) { throw 'Producer remained inherited after memory' }
+ if (-not $producerCustodyValid) { throw 'Unchanged producer custody was lost' }
+}
+""")
+
+    def test_actual_compatibility_acceptance_requires_pass_without_skip_and_custody(self):
+        self.launcher_fragment_check(r"""
+$checks=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -ceq '$compatibilityPassed'},$true))
+if ($checks.Count -ne 1) { throw 'Expected actual compatibility acceptance predicate' }
+foreach ($case in @(@{outcome='PASS'; custody=$true; skips=@(); expected=$true},@{outcome='SKIP'; custody=$true; skips=@(); expected=$false},@{outcome='FAIL'; custody=$true; skips=@(); expected=$false},@{outcome='PASS'; custody=$false; skips=@(); expected=$false},@{outcome='PASS'; custody=$true; skips=@('TestPrivateWikiCompatibleProducerAcrossActualBinaries/nested'); expected=$false})) {
+ $producerSelected=$true; $producerCustodyValid=$case.custody; $compatOutcomes=@(@{outcome=$case.outcome}); $allSkips=$case.skips
+ Invoke-Expression $checks[0].Extent.Text
+ if ($compatibilityPassed -ne $case.expected) { throw 'Unqualified compatible producer was accepted' }
+}
 """)
 
     def test_inspection_and_pilot_parameters_are_exclusive(self):
