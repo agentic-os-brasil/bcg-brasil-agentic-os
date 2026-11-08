@@ -76,7 +76,7 @@ jobs:
           $stagedBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           "GOCACHE=$freshCache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Canonical ledger, HOME and owner contracts
-        run: go test ./internal/execution ./internal/datahome ./internal/ownerctx -timeout=300s
+        run: go test ./internal/execution ./internal/datahome ./internal/ownerctx ./internal/privatelock -timeout=300s
       - name: Canonical workspace initialization contracts on admitted Unix runners
         if: runner.os != 'Windows'
         run: go test ./internal/workspace -timeout=180s
