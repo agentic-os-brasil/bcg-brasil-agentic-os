@@ -28,3 +28,5 @@ func schemaLeafAlias(t *testing.T, alias, directory string) {
 		t.Fatal(err)
 	}
 }
+
+func confinementSecuritySnapshot(t *testing.T, path string) string { t.Helper(); return "" }
