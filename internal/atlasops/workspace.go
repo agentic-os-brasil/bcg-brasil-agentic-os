@@ -22,8 +22,9 @@ type workspaceScope struct {
 // WorkspacePolicy is supplied by the admitted host, never by a page/tool
 // argument. Metadata validation remains a separate authoring concern.
 type WorkspacePolicy struct {
-	AdmitPage      func(string) error
-	BeforeMutation func() error
+	ExpectedLifecycleRevision *uint64
+	AdmitPage                 func(string) error
+	BeforeMutation            func() error
 }
 
 // OpenWorkspace opens only the exact registered workspace brain without pages

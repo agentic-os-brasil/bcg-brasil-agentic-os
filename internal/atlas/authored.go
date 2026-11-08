@@ -72,6 +72,11 @@ func AuthoredDiagnostics(page, workspaceID, text string) []string {
 // ValidateAuthoredPage validates only the declared source profile. Optional
 // fields remain in the original Markdown; this reader does not rewrite them.
 func ValidateAuthoredPage(page, workspaceID, text string) (map[string]string, error) {
+	return ValidateAuthoredIdentity(page, workspaceID, text, strings.TrimSuffix(page, ".md"))
+}
+
+// ValidateAuthoredIdentity accepts only the identity selected by the owning lifecycle.
+func ValidateAuthoredIdentity(page, workspaceID, text, stableID string) (map[string]string, error) {
 	fail := func(code string) (map[string]string, error) { return nil, errors.New(code) }
 	if len(text) == 0 || len(text) > 256<<10 || !utf8.ValidString(text) || strings.ContainsRune(text, 0) {
 		return fail("authored_body_invalid")
@@ -104,7 +109,7 @@ func ValidateAuthoredPage(page, workspaceID, text string) (map[string]string, er
 			return fail("authored_frontmatter_required")
 		}
 	}
-	if fields["id"] != strings.TrimSuffix(page, ".md") || fields["scope"] != AuthoredScope(page, workspaceID) {
+	if fields["id"] != stableID || fields["scope"] != AuthoredScope(page, workspaceID) {
 		return fail("authored_scope_invalid")
 	}
 	if utf8.RuneCountInString(fields["summary"]) > 150 || len(fields["title"]) > 512 {
@@ -128,4 +133,48 @@ func ValidateAuthoredPage(page, workspaceID, text string) (map[string]string, er
 		return fail("authored_title_mismatch")
 	}
 	return fields, nil
+}
+
+// RelocateAuthored preserves identity and narrows only the selected page's scope.
+func RelocateAuthored(source, target, workspaceID, text, stableID string) (string, error) {
+	fields, err := ValidateAuthoredIdentity(source, workspaceID, text, stableID)
+	if err != nil {
+		return "", err
+	}
+	oldScope, newScope := fields["scope"], AuthoredScope(target, workspaceID)
+	if strings.HasPrefix(newScope, "account/") && fields["sensitivity"] == "owner-private" {
+		return "", errors.New("authored_sensitivity_widening_unavailable")
+	}
+	if oldScope == newScope {
+		return text, nil
+	}
+	if !strings.HasPrefix(oldScope, "workspace/") && !strings.HasPrefix(newScope, oldScope+"/case/") {
+		return "", errors.New("authored_scope_widening_unavailable")
+	}
+	newline := "\n"
+	if strings.Contains(text, "\r\n") {
+		newline = "\r\n"
+	}
+	lines := strings.Split(text, newline)
+	end := false
+	for index := 1; index < len(lines); index++ {
+		if lines[index] == "---" {
+			end = true
+			break
+		}
+		if strings.HasPrefix(lines[index], "scope:") {
+			lines[index] = "scope: " + strconv.Quote(newScope)
+		}
+		if strings.HasPrefix(newScope, "account/") && strings.HasPrefix(lines[index], "sensitivity:") {
+			lines[index] = "sensitivity: client-confidential"
+		}
+	}
+	if !end {
+		return "", errors.New("authored_frontmatter_invalid")
+	}
+	updated := strings.Join(lines, newline)
+	if _, err = ValidateAuthoredIdentity(target, workspaceID, updated, stableID); err != nil {
+		return "", err
+	}
+	return updated, nil
 }

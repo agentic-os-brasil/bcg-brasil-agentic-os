@@ -4,6 +4,6 @@ package scheduler
 
 import "errors"
 
-func renamePrivateExclusive(_ int, _, _ string) error {
+func renamePrivateExclusiveBetween(_ int, _ string, _ int, _ string) error {
 	return errors.New("atomic exclusive private rename is unavailable on this platform")
 }

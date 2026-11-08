@@ -30,5 +30,15 @@ func (engine *Engine) beginMutation() (func() error, error) {
 		_ = release()
 		return nil, err
 	}
+	if expected := engine.workspacePolicy.ExpectedLifecycleRevision; expected != nil {
+		current, err := engine.LifecycleRevision()
+		if err != nil || current != *expected {
+			_ = release()
+			if err != nil {
+				return nil, err
+			}
+			return nil, ErrLifecycleChanged
+		}
+	}
 	return release, nil
 }

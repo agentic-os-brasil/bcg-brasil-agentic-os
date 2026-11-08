@@ -149,3 +149,79 @@ func publishAtlasFile(path string, body []byte, exclusive, privateParent bool) e
 	}
 	return directory.Sync()
 }
+
+func moveAtlasFile(source, target, expected string) error {
+	from, err := atlasDirectory(filepath.Dir(source), true)
+	if err != nil {
+		return err
+	}
+	defer from.Close()
+	to, err := atlasDirectory(filepath.Dir(target), true)
+	if err != nil {
+		return err
+	}
+	defer to.Close()
+	file, err := atlasOpenAt(from, filepath.Base(source), os.O_RDONLY)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	selected, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	body, err := io.ReadAll(io.LimitReader(file, maximumPageBytes+1))
+	if err != nil {
+		return err
+	}
+	if digest(string(body)) != expected {
+		return ErrLifecycleChanged
+	}
+	if err = scheduler.RenamePrivateFileExclusiveBetween(from, filepath.Base(source), to, filepath.Base(target)); err != nil {
+		return err
+	}
+	if err = from.Sync(); err != nil {
+		return err
+	}
+	if err = to.Sync(); err != nil {
+		return err
+	}
+	published, err := atlasOpenAt(to, filepath.Base(target), os.O_RDONLY)
+	if err != nil {
+		return err
+	}
+	defer published.Close()
+	current, err := published.Stat()
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(selected, current) {
+		return ErrLifecycleChanged
+	}
+	return nil
+}
+
+func sameAtlasFile(a, b string) (bool, error) {
+	inspect := func(path string) (os.FileInfo, error) {
+		d, err := atlasDirectory(filepath.Dir(path), true)
+		if err != nil {
+			return nil, err
+		}
+		defer d.Close()
+		f, err := atlasOpenAt(d, filepath.Base(path), os.O_RDONLY)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		return f.Stat()
+	}
+	x, err := inspect(a)
+	if err != nil {
+		return false, err
+	}
+	y, err := inspect(b)
+	if err != nil {
+		return false, err
+	}
+	return os.SameFile(x, y), nil
+}

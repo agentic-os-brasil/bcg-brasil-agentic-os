@@ -596,6 +596,8 @@
         "brain.append",
         "brain.create",
         "brain.link",
+        "brain.move",
+        "brain.retire",
         "brain.prepare",
         "brain.read",
         "brain.set_field",

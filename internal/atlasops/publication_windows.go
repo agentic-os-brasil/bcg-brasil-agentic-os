@@ -41,3 +41,42 @@ func readAtlasFile(path string, maximum int64, _ bool) ([]byte, error) {
 	defer file.Close()
 	return winprivate.Read(file, maximum)
 }
+
+func moveAtlasFile(source, target, expected string) error {
+	from, err := winprivate.OpenPinnedTree(filepath.Dir(source))
+	if err != nil {
+		return err
+	}
+	defer from.Close()
+	to, err := winprivate.OpenPinnedTree(filepath.Dir(target))
+	if err != nil {
+		return err
+	}
+	defer to.Close()
+	return from.RenamePinnedExclusive(filepath.Base(source), to, filepath.Base(target), expected)
+}
+
+func sameAtlasFile(a, b string) (bool, error) {
+	inspect := func(path string) (os.FileInfo, error) {
+		d, err := winprivate.OpenPinnedTree(filepath.Dir(path))
+		if err != nil {
+			return nil, err
+		}
+		defer d.Close()
+		f, err := d.OpenFile(filepath.Base(path), os.O_RDONLY)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		return f.Stat()
+	}
+	x, err := inspect(a)
+	if err != nil {
+		return false, err
+	}
+	y, err := inspect(b)
+	if err != nil {
+		return false, err
+	}
+	return os.SameFile(x, y), nil
+}

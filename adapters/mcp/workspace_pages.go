@@ -13,6 +13,20 @@ import (
 // workspacePath is the one current-scope owner for page and content routes. It
 // admits paths, not authored metadata or conversion provenance.
 func (b *Bound) workspacePath(relative string) error {
+	if err := b.workspacePathAdmission(relative); err != nil {
+		return err
+	}
+	if strings.HasPrefix(relative, "brain/") && strings.HasSuffix(relative, ".md") {
+		engine, err := atlasops.OpenWorkspace(atlas.Options{DataRoot: filepath.Join(b.home, "state"), WorkspacePath: b.options.WorkspacePath, WorkspaceID: b.workspaceID})
+		if err != nil {
+			return err
+		}
+		return engine.AdmitPhysicalPage(strings.TrimPrefix(relative, "brain/"))
+	}
+	return nil
+}
+
+func (b *Bound) workspacePathAdmission(relative string) error {
 	if artifactPath(relative) != nil {
 		return errors.New("workspace_path_invalid")
 	}
@@ -41,7 +55,7 @@ func (b *Bound) workspacePage(page string) error {
 	if artifactPath(page) != nil || !strings.HasSuffix(page, ".md") {
 		return errors.New("workspace_page_invalid")
 	}
-	if err := b.workspacePath("brain/" + page); err != nil {
+	if err := b.workspacePathAdmission("brain/" + page); err != nil {
 		return err
 	}
 	if b.observeWorkspaceTransition != nil {

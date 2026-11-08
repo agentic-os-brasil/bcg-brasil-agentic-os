@@ -38,11 +38,13 @@ type CollectRequest struct {
 }
 
 type PageProjection struct {
-	Page       string `json:"page"`
-	Revision   string `json:"revision"`
-	Pointer    string `json:"pointer"`
-	Content    string `json:"content,omitempty"`
-	Attenuated bool   `json:"attenuated"`
+	StableID          string `json:"stable_id,omitempty"`
+	LifecycleRevision uint64 `json:"lifecycle_revision"`
+	Page              string `json:"page"`
+	Revision          string `json:"revision"`
+	Pointer           string `json:"pointer"`
+	Content           string `json:"content,omitempty"`
+	Attenuated        bool   `json:"attenuated"`
 }
 
 type Omission struct {
@@ -84,6 +86,10 @@ func (engine *Engine) Collect(request CollectRequest) (Projection, error) {
 		return Projection{}, errors.New("a delegated reader requires explicit owner authorization for this projection")
 	}
 
+	cohort, err := engine.LifecycleRevision()
+	if err != nil {
+		return Projection{}, err
+	}
 	projection := Projection{
 		Purpose:     strings.TrimSpace(request.Purpose),
 		Reader:      request.Reader,
@@ -98,7 +104,7 @@ func (engine *Engine) Collect(request CollectRequest) (Projection, error) {
 			// degrading quietly into an omission.
 			return Projection{}, err
 		}
-		body, err := engine.read(relative)
+		page, err := engine.readPage(relative)
 		if err != nil {
 			if isNotExist(err) {
 				projection.Omissions = append(projection.Omissions, Omission{Page: relative, Reason: "page does not exist"})
@@ -106,15 +112,14 @@ func (engine *Engine) Collect(request CollectRequest) (Projection, error) {
 			}
 			return Projection{}, err
 		}
-		page := PageProjection{
-			Page:     relative,
-			Revision: digest(body),
-			Pointer:  engine.pointer(relative),
+		if page.LifecycleRevision != cohort {
+			return Projection{}, ErrLifecycleChanged
 		}
+		body := page.Content
 		if request.Reader == ReaderDelegate {
 			// An authorized delegate learns that the page exists and can ask
 			// the owner for what it holds. It does not receive the body.
-			page.Attenuated = true
+			page.Attenuated, page.Content = true, ""
 			projection.Pages = append(projection.Pages, page)
 			continue
 		}
@@ -126,13 +131,23 @@ func (engine *Engine) Collect(request CollectRequest) (Projection, error) {
 		page.Content = body
 		projection.Pages = append(projection.Pages, page)
 	}
-	// Earlier named pages must still be admitted at disclosure after a
-	// multi-page collection. This does not claim custody of arbitrary marker writers.
+	if engine.beforeAuthoredDisclosure != nil {
+		engine.beforeAuthoredDisclosure()
+	}
+	// All named pages retain the same lifecycle cohort through disclosure.
 	for _, page := range projection.Pages {
-		if err := engine.admitWorkspacePage(page.Page); err != nil {
+		if err := engine.validatePageProjection(page); err != nil {
 			return Projection{}, err
 		}
 	}
+	current, err := engine.LifecycleRevision()
+	if err != nil {
+		return Projection{}, err
+	}
+	if current != cohort {
+		return Projection{}, ErrLifecycleChanged
+	}
+
 	return projection, nil
 }
 
@@ -154,9 +169,15 @@ func (engine *Engine) ReviewPage(request CollectRequest) (PageProjection, error)
 	if err != nil {
 		return PageProjection{}, err
 	}
-	body, err := engine.read(relative)
+	page, err := engine.readPage(relative)
 	if err != nil {
 		return PageProjection{}, err
 	}
-	return PageProjection{Page: relative, Revision: digest(body), Pointer: engine.pointer(relative), Content: body}, nil
+	if engine.beforeAuthoredDisclosure != nil {
+		engine.beforeAuthoredDisclosure()
+	}
+	if err = engine.validatePageProjection(page); err != nil {
+		return PageProjection{}, err
+	}
+	return page, nil
 }

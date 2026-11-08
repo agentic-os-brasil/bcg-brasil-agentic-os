@@ -158,6 +158,7 @@ func productQuerySchema() map[string]any {
 }
 
 type input struct {
+	ExpectedLifecycleRevision  *uint64  `json:"expected_lifecycle_revision"`
 	MethodID                   string   `json:"method_id"`
 	ResourceURI                string   `json:"resource_uri"`
 	Generation                 string   `json:"generation"`

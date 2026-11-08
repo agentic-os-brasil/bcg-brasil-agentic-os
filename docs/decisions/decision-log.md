@@ -1453,3 +1453,14 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: Namespace replacement and conflicting native handles refuse rather than redirect effects. Retirement cannot pin the graph that it must delete; it holds the workspace parent and recursively retains each DELETE-authorized child until cleanup. Failed cleanup leaves the durable denial barrier and reports incomplete retirement. Unix IO ordering and the pure compiler remain unchanged. Native Windows conformance, final packet/client acceptance and production release qualification remain separate gates.
 - Refs: specs/008-wiki-update-okf.md; docs/product-windows-private-wiki.md; internal/memory/private_wiki_custody_windows.go; internal/winprivate; #468; #460; PWKC; BRPG
 - Supersedes: none
+
+## PLIF - Preserve authored identity and visibility through reviewed lifecycle
+
+- Date: 2026-11-06
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Authored IDs initially equal page paths, while reorganization and archive must preserve identity, current case authority, newer work and derived visibility across clients and interrupted effects.
+- Decision: Extend the canonical atlasops journal with reviewed move and fixed archive operations, stable identity/current-location metadata, reserved aliases and a durable pre-effect visibility/invalidation barrier. Re-admit current locations for alias reads; converted sources remain physical. Enumerate affected references only within the admitted corpus and refuse incomplete analysis there. Narrowing scope is exact reviewed metadata; widening is unavailable. Reuse canonical held exclusive rename and retain archived source files in the existing non-addressable machine namespace.
+- Consequences: No hard-delete endpoint, generic filesystem authority, separate transaction runner, automatic reference rewrite or private-memory/index takeover is introduced. Queries never recover operations. Explicit retries prove exact matching effects and preserve conflicts/newer bytes. Authored derived readers must consume the lifecycle revision before disclosing current or old generations. Native platform and final client/package evidence remain separate gates.
+- Refs: specs/066-product-page-lifecycle.md; specs/064-product-authored-brain.md; BRPG; AJRC; https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/462; https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/460
+- Supersedes: none

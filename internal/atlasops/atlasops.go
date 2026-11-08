@@ -77,13 +77,17 @@ func (provenance Provenance) validate() error {
 
 // Result is the terminal outcome of one operation.
 type Result struct {
-	Operation   string     `json:"operation"`
-	Page        string     `json:"page"`
-	State       string     `json:"state"`
-	Revision    string     `json:"revision,omitempty"`
-	OperationID string     `json:"operation_id"`
-	RecordedAt  time.Time  `json:"recorded_at"`
-	Provenance  Provenance `json:"provenance"`
+	PageState         string     `json:"page_state,omitempty"`
+	StableID          string     `json:"stable_id,omitempty"`
+	Location          string     `json:"location,omitempty"`
+	LifecycleRevision uint64     `json:"lifecycle_revision,omitempty"`
+	Operation         string     `json:"operation"`
+	Page              string     `json:"page"`
+	State             string     `json:"state"`
+	Revision          string     `json:"revision,omitempty"`
+	OperationID       string     `json:"operation_id"`
+	RecordedAt        time.Time  `json:"recorded_at"`
+	Provenance        Provenance `json:"provenance"`
 	// Proposal carries the content the caller would have written when a
 	// revision conflict stopped the write. Nothing was persisted.
 	Proposal string `json:"proposal,omitempty"`
@@ -117,6 +121,10 @@ type Engine struct {
 	// afterPageEffect permits deterministic interruption tests without an
 	// exposed runtime option or model-controlled failure switch.
 	afterPageEffect func() error
+	// Private fault seam for durable lifecycle phase interruption tests.
+	afterLifecyclePhase func(string) error
+	// Private fault seam before read disclosure; never a runtime option.
+	beforeAuthoredDisclosure func()
 }
 
 // Open resolves the owner atlas root and makes sure it is reachable through
@@ -141,6 +149,9 @@ func Open(dataRoot string, now func() time.Time) (*Engine, error) {
 // not revocation. Attended writes carry the owner's own request and need no
 // further authority.
 func (engine *Engine) authorize(provenance Provenance, operation, page string) error {
+	if err := engine.AdmitPhysicalPage(page); err != nil {
+		return err
+	}
 	if err := engine.admitWorkspacePage(page); err != nil {
 		return err
 	}
@@ -395,12 +406,21 @@ func insertUnderSection(body, section, entry string) (string, error) {
 
 // resolve rejects anything that is not a plain relative page inside the root.
 func (engine *Engine) resolve(page string) (string, error) {
+	location, _, err := engine.LocatePage(page)
+	return location.Location, err
+}
+
+func (engine *Engine) relativePage(page string) (string, error) {
 	if err := engine.validateBinding(); err != nil {
 		return "", err
 	}
 	if err := engine.admitWorkspacePage(page); err != nil {
 		return "", err
 	}
+	return relativeAtlasPage(page)
+}
+
+func relativeAtlasPage(page string) (string, error) {
 	trimmed := strings.TrimSpace(page)
 	if trimmed == "" {
 		return "", errors.New("owner atlas page is required")
@@ -427,23 +447,66 @@ func (engine *Engine) pagePath(relative string) string {
 }
 
 func (engine *Engine) read(relative string) (string, error) {
-	if err := engine.validateBinding(); err != nil {
-		return "", err
+	page, err := engine.readPage(relative)
+	return page.Content, err
+}
+
+func (engine *Engine) readPage(relative string) (PageProjection, error) {
+	location, revision, err := engine.LocatePage(relative)
+	if err != nil {
+		return PageProjection{}, err
 	}
-	if err := engine.admitWorkspacePage(relative); err != nil {
-		return "", err
+	if location.Location != relative {
+		return PageProjection{}, ErrLifecycleChanged
+	}
+	if err = engine.validateBinding(); err != nil {
+		return PageProjection{}, err
+	}
+	if err = engine.admitWorkspacePage(relative); err != nil {
+		return PageProjection{}, err
 	}
 	body, err := readAtlasFile(engine.pagePath(relative), maximumPageBytes, engine.workspace != nil)
 	if err != nil {
-		return "", err
+		return PageProjection{}, err
 	}
-	if err = engine.admitWorkspacePage(relative); err != nil {
-		return "", err
+	page := PageProjection{Page: relative, Revision: digest(string(body)), Pointer: engine.pointer(relative), Content: string(body), StableID: location.StableID, LifecycleRevision: revision}
+	if err = engine.validatePageProjection(page); err != nil {
+		return PageProjection{}, err
 	}
-	return string(body), nil
+	return page, nil
+}
+
+func (engine *Engine) validatePageProjection(page PageProjection) error {
+	location, revision, err := engine.LocatePage(page.Page)
+	if err != nil {
+		return err
+	}
+	if revision != page.LifecycleRevision || location.Location != page.Page || location.StableID != page.StableID {
+		return ErrLifecycleChanged
+	}
+	current, err := engine.LifecycleRevision()
+	if err != nil {
+		return err
+	}
+	if current != page.LifecycleRevision {
+		return ErrLifecycleChanged
+	}
+	return nil
 }
 
 func (engine *Engine) operationID(operation, page, key string) string {
+	if engine.workspace != nil {
+		if state, err := engine.lifecycle(); err == nil {
+			for id, item := range state.Pages {
+				for _, name := range item.Names {
+					if canonicalPageName(name) == canonicalPageName(page) {
+						page = id + ".md"
+						break
+					}
+				}
+			}
+		}
+	}
 	return digest(operation + "\x00" + page + "\x00" + key)
 }
 

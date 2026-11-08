@@ -8,6 +8,7 @@ package winprivate
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -827,18 +828,39 @@ func Publish(path string, body []byte, exclusive bool) error {
 	return d.Publish(filepath.Base(path), body, exclusive)
 }
 func (d *Directory) Rename(source string, target *Directory, name string, replace bool) error {
+	return d.rename(source, target, name, replace, false, "")
+}
+
+// RenamePinnedExclusive retains the selected source and refuses an occupied target.
+func (d *Directory) RenamePinnedExclusive(source string, target *Directory, name, expectedSHA string) error {
+	return d.rename(source, target, name, false, true, expectedSHA)
+}
+func (d *Directory) rename(source string, target *Directory, name string, replace, pinned bool, expectedSHA string) error {
 	if err := Leaf(source); err != nil {
 		return err
 	}
 	if err := Validate(d.Handle(), true); err != nil {
 		return err
 	}
-	h, err := ntOpen(d.Handle(), source, windows.DELETE|windows.FILE_GENERIC_READ|windows.FILE_GENERIC_WRITE|windows.READ_CONTROL, windows.FILE_OPEN, windows.FILE_SYNCHRONOUS_IO_NONALERT|windows.FILE_OPEN_NO_RECALL|windows.FILE_WRITE_THROUGH)
+	sharing := uint32(windows.FILE_SHARE_READ | windows.FILE_SHARE_WRITE | windows.FILE_SHARE_DELETE)
+	if pinned {
+		sharing = windows.FILE_SHARE_READ
+	}
+	h, err := ntOpenShared(d.Handle(), source, windows.DELETE|windows.FILE_GENERIC_READ|windows.FILE_GENERIC_WRITE|windows.READ_CONTROL, windows.FILE_OPEN, windows.FILE_SYNCHRONOUS_IO_NONALERT|windows.FILE_OPEN_NO_RECALL|windows.FILE_WRITE_THROUGH, sharing)
 	if err != nil {
 		return err
 	}
 	f := os.NewFile(uintptr(h), filepath.Join(d.File.Name(), source))
 	defer f.Close()
+	if expectedSHA != "" {
+		body, readErr := Read(f, 256<<10)
+		if readErr != nil {
+			return readErr
+		}
+		if fmt.Sprintf("%x", sha256.Sum256(body)) != expectedSHA {
+			return errors.New("selected rename source changed")
+		}
+	}
 	if _, err = renameHandle(f, target, name, replace); err != nil {
 		return err
 	}

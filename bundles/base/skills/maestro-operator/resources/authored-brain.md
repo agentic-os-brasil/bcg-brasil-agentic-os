@@ -30,6 +30,26 @@ have their own operations.
    or add a reference to a named existing page with `brain.link`. Read the link
    target through the same connector and admitted scope. Frontmatter changes
    use a complete page update. A truncated read is not a replacement body.
+For a requested move, retain `stable_id`, the current `page`, its content
+`revision` and `lifecycle_revision` from `brain.read`. Call `brain.move` with that
+page, an absent `target`, `expected_page_revision` and
+`expected_lifecycle_revision`. The lifecycle revision is an intention fence,
+never approval. The complete host review shows location, exact scope/sensitivity
+changes and affected references within the admitted corpus. Reference pages are
+not automatically rewritten. Wider or foreign scopes, ambiguous case collisions
+and an occupied target stop this route. Existing aliases resolve only through
+the current location's admission; their spelling and stable ID remain intact.
+After a successful move, use the returned location for readback and preserve the
+registered stable ID in a replacement body. The workspace README anchor is fixed.
+
+For requested retirement, call `brain.retire` with the current page and the
+same exact content/lifecycle revisions. Review the complete page, fixed archive
+effect and affected references. Retirement retains the file in Maestro's
+private archive and reserves its identity and names; there is no hard-delete
+mode. Confirm `page_state: retired` and the returned lifecycle revision, then
+verify authored reads and named collection refuse both current and former
+names. An archived page cannot become a converted-document source.
+
 6. **Review and verify.** Every mutation requires the host's approval of the
    exact displayed record. The server binds the full current/proposed page,
    workspace and target to that response. Let the actual host complete its
@@ -57,3 +77,10 @@ edit can retain legacy prose; a new page or complete replacement needs valid
 authored metadata. Roots, absolute paths, private owner/memory locations,
 arbitrary files and other case scopes are outside this recipe. Page names use
 forward slashes relative to this workspace's brain on Mac and Windows.
+
+For `brain_lifecycle_incomplete`, preserve the original move/archive request,
+including its original content and lifecycle revisions. The reported lifecycle
+revision invalidates prior views; it does not replace the original request's
+intention fence. Explicitly review that same request to resume its owned effect.
+Reads never finish it. If scope admission is lost, restore authority through the
+normal case-selection route before requesting any pending details or retry.

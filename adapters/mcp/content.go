@@ -83,14 +83,15 @@ func DecodeKnowledgeMutation(body []byte) (KnowledgeMutation, error) {
 }
 
 type contentArtifact struct {
-	Scope         string             `json:"scope"`
-	WorkspaceID   string             `json:"workspace_id"`
-	WorkspacePath string             `json:"workspace_path"`
-	SourcePath    string             `json:"source_path"`
-	Result        ingest.Result      `json:"result"`
-	Provenance    docling.Provenance `json:"provenance"`
-	Markdown      []byte             `json:"markdown"`
-	Document      []byte             `json:"document"`
+	SourceLifecycleRevision *uint64            `json:"source_lifecycle_revision,omitempty"`
+	Scope                   string             `json:"scope"`
+	WorkspaceID             string             `json:"workspace_id"`
+	WorkspacePath           string             `json:"workspace_path"`
+	SourcePath              string             `json:"source_path"`
+	Result                  ingest.Result      `json:"result"`
+	Provenance              docling.Provenance `json:"provenance"`
+	Markdown                []byte             `json:"markdown"`
+	Document                []byte             `json:"document"`
 }
 
 func contentDigest(body []byte) string { sum := sha256.Sum256(body); return hex.EncodeToString(sum[:]) }
@@ -101,14 +102,14 @@ func validContentDigest(s string) bool {
 func (b *Bound) contentDirectory() string {
 	return filepath.Join(b.home, "state", "content", b.workspaceID, "artifacts")
 }
-func (b *Bound) publishContent(ctx context.Context, source string, conversion docling.Conversion) (string, error) {
+func (b *Bound) publishContent(ctx context.Context, source string, conversion docling.Conversion, sourceRevision *uint64) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
 	if err := b.validate(); err != nil {
 		return "", err
 	}
-	artifact := contentArtifact{Scope: b.home, WorkspaceID: b.workspaceID, WorkspacePath: b.options.WorkspacePath, SourcePath: source, Result: conversion.Result, Provenance: conversion.Provenance, Markdown: conversion.Markdown, Document: conversion.Document}
+	artifact := contentArtifact{SourceLifecycleRevision: sourceRevision, Scope: b.home, WorkspaceID: b.workspaceID, WorkspacePath: b.options.WorkspacePath, SourcePath: source, Result: conversion.Result, Provenance: conversion.Provenance, Markdown: conversion.Markdown, Document: conversion.Document}
 	if err := b.validateContent(artifact); err != nil {
 		return "", err
 	}
@@ -140,9 +141,39 @@ func (b *Bound) publishContent(ctx context.Context, source string, conversion do
 	}
 	return id, nil
 }
+func (b *Bound) contentSourceRevision(source string) (*uint64, error) {
+	if !strings.HasPrefix(source, "brain/") || !strings.HasSuffix(source, ".md") {
+		return nil, nil
+	}
+	engine, err := b.knowledgeEngine()
+	if err != nil {
+		return nil, err
+	}
+	page := strings.TrimPrefix(source, "brain/")
+	location, revision, err := engine.LocatePage(page)
+	if err != nil {
+		return nil, err
+	}
+	if location.Location != page {
+		return nil, atlasops.ErrLifecycleChanged
+	}
+	return &revision, nil
+}
+
 func (b *Bound) validateContent(a contentArtifact) error {
 	if err := b.workspacePath(a.SourcePath); err != nil {
 		return err
+	}
+	revision, err := b.contentSourceRevision(a.SourcePath)
+	if err != nil {
+		return err
+	}
+	if revision != nil {
+		// Legacy artifacts are admitted only before this workspace has any
+		// authored lifecycle history; missing metadata never bridges an ABA.
+		if a.SourceLifecycleRevision == nil && *revision != 0 || a.SourceLifecycleRevision != nil && *a.SourceLifecycleRevision != *revision {
+			return atlasops.ErrLifecycleChanged
+		}
 	}
 	if a.Scope != b.home || a.WorkspaceID != b.workspaceID || a.WorkspacePath != b.options.WorkspacePath || artifactPath(a.SourcePath) != nil || a.Result.WorkspaceID != b.workspaceID || a.Result.Status != ingest.StatusUsable || a.Result.Adapter != "docling" || !a.Provenance.NetworkDenied || !validContentDigest(a.Result.SourceSHA256) || !validContentDigest(a.Provenance.PackSHA256) || !validContentDigest(a.Provenance.ManifestSHA256) || !validContentDigest(a.Provenance.LockSHA256) || a.Provenance.MarkdownSHA256 != contentDigest(a.Markdown) || a.Provenance.DocumentSHA256 != contentDigest(a.Document) || !utf8.Valid(a.Markdown) || !utf8.Valid(a.Document) || !json.Valid(a.Document) || len(a.Markdown) == 0 || int64(len(a.Markdown)+len(a.Document)) > ingest.DefaultPolicy().MaxOutputBytes || a.Result.OutputBytes != int64(len(a.Markdown)+len(a.Document)) {
 		return errors.New("artifact_unavailable")
@@ -196,15 +227,16 @@ func (b *Bound) checkSelectedContentSource(ctx context.Context, source, digest s
 func (b *Bound) knowledgeEngine() (*atlasops.Engine, error) { return b.workspaceEngine(nil) }
 
 type KnowledgeReview struct {
-	Scope        string                   `json:"scope"`
-	WorkspaceID  string                   `json:"workspace_id"`
-	Mutation     KnowledgeMutation        `json:"mutation"`
-	SourcePath   string                   `json:"source_path"`
-	SourceSHA256 string                   `json:"source_sha256"`
-	Conversion   docling.Provenance       `json:"conversion"`
-	Current      *atlasops.PageProjection `json:"current,omitempty"`
-	Provenance   atlasops.Provenance      `json:"provenance"`
-	ReviewDigest string                   `json:"review_digest"`
+	LifecycleRevision uint64                   `json:"lifecycle_revision,omitempty"`
+	Scope             string                   `json:"scope"`
+	WorkspaceID       string                   `json:"workspace_id"`
+	Mutation          KnowledgeMutation        `json:"mutation"`
+	SourcePath        string                   `json:"source_path"`
+	SourceSHA256      string                   `json:"source_sha256"`
+	Conversion        docling.Provenance       `json:"conversion"`
+	Current           *atlasops.PageProjection `json:"current,omitempty"`
+	Provenance        atlasops.Provenance      `json:"provenance"`
+	ReviewDigest      string                   `json:"review_digest"`
 }
 
 func (b *Bound) KnowledgeReview(in KnowledgeMutation) (KnowledgeReview, error) {
@@ -242,6 +274,10 @@ func (b *Bound) knowledgeReview(ctx context.Context, in KnowledgeMutation) (Know
 	if err != nil {
 		return r, err
 	}
+	r.LifecycleRevision, err = engine.LifecycleRevision()
+	if err != nil {
+		return r, err
+	}
 	current, err := engine.ReviewPage(atlasops.CollectRequest{Purpose: "Review exact knowledge change", Reader: atlasops.ReaderOwnerSession, Pages: []string{in.Page}})
 	if err == nil {
 		r.Current = &current
@@ -250,6 +286,9 @@ func (b *Bound) knowledgeReview(ctx context.Context, in KnowledgeMutation) (Know
 	}
 	if in.Operation == "knowledge.append" && r.Current == nil {
 		return r, errors.New("page_unavailable")
+	}
+	if err = b.validateContent(a); err != nil {
+		return r, err
 	}
 	body, _ := json.Marshal(r)
 	r.ReviewDigest = contentDigest(body)
@@ -273,6 +312,7 @@ func (b *Bound) applyKnowledgeReview(ctx context.Context, in KnowledgeMutation, 
 	if err != nil {
 		return atlasops.Result{}, err
 	}
+	engine.ExpectLifecycleRevision(r.LifecycleRevision)
 	if err := ctx.Err(); err != nil {
 		return atlasops.Result{}, err
 	}
@@ -304,6 +344,11 @@ func (b *Bound) handleContent(ctx context.Context, req *mcp.CallToolRequest, in 
 			if err = b.workspacePath(in.SourcePath); err != nil {
 				break
 			}
+			var sourceRevision *uint64
+			sourceRevision, err = b.contentSourceRevision(in.SourcePath)
+			if err != nil {
+				break
+			}
 			contentProgress(ctx, req, 0, "Verifying the local runtime and converting the selected document")
 			var conversion docling.Conversion
 			conversion, err = b.DoclingRuntime().Convert(ctx, ingest.Request{SourcePath: in.SourcePath, WorkspacePath: b.options.WorkspacePath, Policy: ingest.DefaultPolicy()}, b.workspaceID)
@@ -313,7 +358,7 @@ func (b *Bound) handleContent(ctx context.Context, req *mcp.CallToolRequest, in 
 			if err == nil && conversion.Result.Status == ingest.StatusUsable {
 				contentProgress(ctx, req, 1, "Publishing the verified workspace artifact")
 				var id string
-				id, err = b.publishContent(ctx, in.SourcePath, conversion)
+				id, err = b.publishContent(ctx, in.SourcePath, conversion, sourceRevision)
 				conversion.Result.ArtifactRef = id
 			}
 			value = map[string]any{"result": conversion.Result, "provenance": conversion.Provenance}
@@ -340,7 +385,8 @@ func (b *Bound) handleContent(ctx context.Context, req *mcp.CallToolRequest, in 
 				for end < len(body) && !utf8.RuneStart(body[end]) {
 					end--
 				}
-				value = map[string]any{"artifact_id": in.ArtifactID, "format": in.Format, "text": string(body[in.Offset:end]), "next_offset": end, "has_more": end < len(body), "result": a.Result, "provenance": a.Provenance}
+				value = map[string]any{"artifact_id": in.ArtifactID, "format": in.Format, "text": string(body[in.Offset:end]), "next_offset": end, "has_more": end < len(body), "result": a.Result, "provenance": a.Provenance, "source_lifecycle_revision": a.SourceLifecycleRevision}
+				err = b.validateContent(a)
 			}
 		case "knowledge.collect":
 			var engine *atlasops.Engine
