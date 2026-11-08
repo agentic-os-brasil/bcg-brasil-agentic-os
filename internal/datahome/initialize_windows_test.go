@@ -58,7 +58,33 @@ func initializeDirectoryAlias(t *testing.T, alias, target string) {
 }
 func initializePublicDirectory(t *testing.T, path string) {
 	t.Helper()
-	sd, err := windows.SecurityDescriptorFromString("D:P(A;;FA;;;WD)")
+	previous, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, _, err := previous.DACL()
+	if err != nil || original == nil {
+		t.Fatal("fixture requires an existing finite DACL", err)
+	}
+	control, _, err := previous.Control()
+	if err != nil {
+		t.Fatal(err)
+	}
+	restoreFlags := windows.SECURITY_INFORMATION(windows.DACL_SECURITY_INFORMATION | windows.UNPROTECTED_DACL_SECURITY_INFORMATION)
+	if control&windows.SE_DACL_PROTECTED != 0 {
+		restoreFlags = windows.DACL_SECURITY_INFORMATION | windows.PROTECTED_DACL_SECURITY_INFORMATION
+	}
+	t.Cleanup(func() {
+		if err := windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, restoreFlags, nil, nil, original, nil); err != nil {
+			t.Errorf("restore synthetic fixture DACL: %v", err)
+		}
+	})
+	user, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Existing children must retain owner access when inherited ACEs propagate.
+	sd, err := windows.SecurityDescriptorFromString("D:P(A;OICI;FA;;;" + user.User.Sid.String() + ")(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;WD)")
 	if err != nil {
 		t.Fatal(err)
 	}
