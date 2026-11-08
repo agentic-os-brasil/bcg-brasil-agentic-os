@@ -7,6 +7,7 @@ on:
       - 'internal/execution/**'
       - 'internal/datahome/**'
       - 'internal/zipmigration/**'
+      - 'internal/winprivate/**'
       - 'internal/zipruntime/**'
       - 'internal/adaptercfg/**'
       - 'internal/claudeadapter/**'
@@ -61,6 +62,7 @@ on:
       - 'internal/execution/**'
       - 'internal/datahome/**'
       - 'internal/zipmigration/**'
+      - 'internal/winprivate/**'
       - 'internal/zipruntime/**'
       - 'internal/adaptercfg/**'
       - 'internal/claudeadapter/**'
@@ -206,7 +208,7 @@ jobs:
           $entries = @()
           Push-Location -LiteralPath $sourceRoot
           try {
-            foreach ($name in @('execution', 'datahome', 'ownerctx', 'memory', 'privatewiki', 'processidentity')) {
+            foreach ($name in @('execution', 'datahome', 'ownerctx', 'memory', 'privatewiki', 'processidentity', 'winprivate', 'zipmigration')) {
               $package = './internal/' + $name
               $binary = Join-Path $binaryRoot ($name + '.test.exe')
               & $sdkGo test -c $package -o $binary
@@ -274,6 +276,7 @@ jobs:
           } finally { Pop-Location }
           $manifest = [ordered]@{
             schema_version=1; source_revision=$revision; source_root=$sourceRoot
+            qualification_profile='quarantined_windows_migration_primitives_v1'
             sdk_root=$sdkRoot; sdk_go=$sdkGo
             sdk_go_sha256=(Get-FileHash -LiteralPath $sdkGo -Algorithm SHA256).Hash.ToLowerInvariant()
             source_archive=$archive; source_archive_sha256=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -303,6 +306,7 @@ jobs:
             names=@('native-test.stdout.log', 'native-test.stderr.log', 'native-core-proof.json',
               'canonical-execution.log', 'canonical-datahome.log', 'canonical-ownerctx.log',
               'canonical-memory.log', 'canonical-privatewiki.log', 'canonical-processidentity.log',
+              'canonical-winprivate.log', 'canonical-zipmigration.log',
               'canonical-contract-results.json')
           })
           if ($env:MAESTRO_CANONICAL_PUBLIC_ROOT) {

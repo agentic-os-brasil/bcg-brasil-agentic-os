@@ -37,13 +37,65 @@ if ($withManifest) {
         if (Test-Path -LiteralPath $OutputRoot) { throw 'Use a new inspection output; previous proof is preserved.' }
     }
     $canonical = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $hasMigrationProfile = $canonical.PSObject.Properties.Name -ccontains 'qualification_profile'
+    if ($hasMigrationProfile -and (-not $withCanonical -or $canonical.qualification_profile -cne 'quarantined_windows_migration_primitives_v1')) {
+        throw 'Unknown canonical qualification profile.'
+    }
+    $withMigration = $withCanonical -and $hasMigrationProfile
     $expectedPackages = @('execution', 'datahome', 'ownerctx', 'memory', 'privatewiki', 'processidentity')
+    if ($withMigration) { $expectedPackages += @('winprivate', 'zipmigration') }
     if ($withInspection) { $expectedPackages = @('datahome', 'scheduler', 'zipruntime', 'maestro-runtime') }
     $actualPackages = @($canonical.packages | ForEach-Object { $_.name })
+    if ($withMigration -and (@($actualPackages | Where-Object { $_ -cnotin $expectedPackages }).Count -ne 0 -or
+        @($actualPackages | Sort-Object -Unique).Count -ne $actualPackages.Count)) {
+        throw 'Migration primitive qualification requires exactly the eight owning packages.'
+    }
     if ($canonical.schema_version -ne 1 -or $actualPackages.Count -ne $expectedPackages.Count -or
         @((Compare-Object ($expectedPackages | Sort-Object) ($actualPackages | Sort-Object))).Count -ne 0) {
         if ($withInspection) { throw 'Inspection qualification requires exactly the four owning packages.' }
+        if ($withMigration) { throw 'Migration primitive qualification requires exactly the eight owning packages.' }
         throw 'Canonical qualification requires exactly the six owning packages.'
+    }
+    if ($withMigration) {
+        $migrationTests = @{
+            winprivate = @(
+                'TestWindowsMigrationSourceTreeIsReadOnlyAndPinned',
+                'TestWindowsMigrationSourceChildRetainsParentCustody',
+                'TestWindowsMigrationStageResumesAndPublishesTheHeldFile',
+                'TestWindowsMigrationStageRejectsUnpinnedAndLinkedInputs',
+                'TestWindowsMigrationMovableRootKeepsArchivedAuthority',
+                'TestWindowsMigrationRemoveExactRequiresCompleteExpectedBytes',
+                'TestWindowsMigrationRemoveExactRetainsMarkedObjectAndReader',
+                'TestWindowsMigrationRemoveExactExposesPostMarkCloseFailure',
+                'TestWindowsMigrationRemoveExactRejectsUnsafeOrBusyLeaves',
+                'TestWindowsMigrationStageReplacesCooperativeMetadataUnderLease',
+                'TestWindowsMigrationLeasedReplacementRefusesUnsafeDestinations',
+                'TestWindowsMigrationLeasedReplacementReportsMovedAfterLateFailure'
+            )
+            zipmigration = @(
+                'TestWindowsExternalAdapterResumesTheSameDeterministicStage',
+                'TestWindowsExternalAdapterRefusesForeignStagePrefixAndHardlink',
+                'TestWindowsExternalAdapterSourceInventoryRetainsRootAndOriginalBytes',
+                'TestWindowsExternalAdapterMovableRootWritesReceiptsInArchive',
+                'TestWindowsExternalAdapterLocatorRetirementRequiresExactBytes',
+                'TestWindowsExternalAdapterV1ReceiptAcceptsEvolvedAuthoredBrain',
+                'TestWindowsExternalAdapterPlanValidationKeepsInitialMovableCustody',
+                'TestWindowsExternalAdapterAdmittedTransactionPreservesV1SourceAndProof',
+                'TestWindowsExternalAdapterAdmittedTransactionResumesAndRollsBackEvolvedWork',
+                'TestWindowsExternalAdapterAdmittedTransactionReusesRetirementAndRefusesForeignProof',
+                'TestWindowsExternalAdapterAdmittedTransactionHonorsProfileLeaseAndForeignLocator'
+            )
+        }
+        foreach ($entry in @($canonical.packages | Where-Object { $_.name -cin @('winprivate', 'zipmigration') })) {
+            $required = @($migrationTests[$entry.name])
+            $prefix = if ($entry.name -ceq 'winprivate') { '^TestWindowsMigration' } else { '^TestWindowsExternalAdapter' }
+            $nativeTests = @($entry.tests | Where-Object { $_ -cmatch $prefix })
+            if ($nativeTests.Count -ne $required.Count -or
+                @((Compare-Object ($required | Sort-Object) ($nativeTests | Sort-Object))).Count -ne 0) {
+                throw 'Migration primitive inventory differs from the fixed required cases.'
+            }
+            $entry | Add-Member -NotePropertyName migration_required_tests -NotePropertyValue $required -Force
+        }
     }
     foreach ($path in @($canonical.source_root, $canonical.sdk_root, $canonical.sdk_go)) {
         if (-not [IO.Path]::IsPathRooted($path) -or -not (Test-Path -LiteralPath $path)) {
@@ -458,6 +510,7 @@ try {
     }
     if ($CanonicalManifest) {
         $manifest = Get-Content -LiteralPath $CanonicalManifest -Raw -Encoding UTF8 | ConvertFrom-Json
+        $migrationProfile = -not $Inspection -and $manifest.qualification_profile -ceq 'quarantined_windows_migration_primitives_v1'
         if ($env:GOROOT) { throw 'Canonical evidence refuses caller-supplied GOROOT.' }
         if (-not $Inspection -and
             ((Test-Path Env:MAESTRO_PRIVATE_WIKI_COMPAT_PRODUCER) -or (Test-Path Env:MAESTRO_PRIVATE_WIKI_OLD_WRITER))) {
@@ -575,6 +628,19 @@ try {
                 log_sha256=(Get-FileHash -LiteralPath $packageLog -Algorithm SHA256).Hash.ToLowerInvariant()
                 owner_mismatch_diagnostics=([regex]::Matches($body, 'private object belongs to a different Windows owner')).Count
             }
+            if ($migrationProfile -and $entry.name -cin @('winprivate', 'zipmigration')) {
+                $required = @($entry.migration_required_tests)
+                $migrationPrimitivePassed = $code -eq 0 -and $complete -and $required.Count -gt 0
+                foreach ($test in $required) {
+                    if (@($outcomes | Where-Object { $_.test -ceq $test -and $_.outcome -ceq 'PASS' }).Count -ne 1 -or
+                        @($allSkips | Where-Object { ($_ -split '/')[0] -ceq $test }).Count -ne 0) { $migrationPrimitivePassed = $false }
+                }
+                $results[-1].all_skipped_tests = $allSkips
+                $results[-1].migration_primitives_proof = [ordered]@{
+                    required_tests=$required; actual_required_tests_passed=$migrationPrimitivePassed
+                    public_transaction_qualified=$false; scope='quarantined_kernel_adapter_and_admitted_bodies_only'
+                }
+            }
             if ($Inspection) {
                 $results[-1].all_skipped_tests = $allSkips
                 $results[-1].skip_policy = @($entry.skip_policy)
@@ -616,12 +682,28 @@ try {
         if (-not $Inspection -and $manifest.historical_witness -and @($results | Where-Object {
             $_.name -ceq 'memory' -and $_.historical_witness_proof.actual_historical_test_passed -eq $true
         }).Count -ne 1) { $qualificationComplete = $false }
+        if ($migrationProfile) {
+            $migrationPrimitivesPassed = $true
+            foreach ($name in @('winprivate', 'zipmigration')) {
+                if (@($results | Where-Object { $_.name -ceq $name -and
+                    $_.migration_primitives_proof.actual_required_tests_passed -eq $true }).Count -ne 1) { $migrationPrimitivesPassed = $false }
+            }
+            if (-not $migrationPrimitivesPassed) { $qualificationComplete = $false }
+        }
         $report = [ordered]@{
             schema_version=1; source_revision=$manifest.source_revision; actual_standard_user=$true
             private_current_user_temp=$true; public_source_and_sdk_read_only=$true
             sdk_go_sha256=$manifest.sdk_go_sha256; sdk_root=$selectedRoot
             packages=$results; qualification_complete=$qualificationComplete
             platform_nonapplicability='unclassified_existing_skips_are_not_passing_coverage'
+        }
+        if ($migrationProfile) {
+            $report.quarantined_migration_primitives = [ordered]@{
+                actual_required_tests_passed=$migrationPrimitivesPassed; mutation_gate='unavailable'
+                public_transaction_qualified=$false; canonical_resolution_qualified=$false
+                scope='quarantined_kernel_adapter_and_admitted_bodies_only'
+                missing_coverage='Existing skips remain missing coverage; enabled public Apply/Rollback and datahome.Resolve are not qualified.'
+            }
         }
         $reportName = if ($Inspection) { 'inspection-contract-results.json' } else { 'canonical-contract-results.json' }
         if ($Inspection) {
@@ -637,6 +719,7 @@ try {
         $report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $ProofRoot $reportName) -Encoding utf8
         if (-not $qualificationComplete) {
             if ($Inspection) { throw 'Inspection contracts remain incomplete; retain all four package logs and classified outcomes.' }
+            if ($migrationProfile) { throw 'Canonical migration primitive contracts remain incomplete; retain all eight package logs and actual skipped outcomes.' }
             throw 'Canonical contracts remain incomplete; retain all six package logs and classified outcomes.'
         }
     }

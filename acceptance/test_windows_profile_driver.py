@@ -3,6 +3,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -478,6 +479,82 @@ foreach ($case in @(@{name='execution'; inspection=$false; selected=$false},@{na
  Invoke-Expression $cleanup[0].Extent.Text
  if ((Test-Path Env:MAESTRO_PRIVATE_WIKI_OLD_WRITER) -or -not $historicalCustodyValid) { throw 'Historical cleanup or custody failed' }
 }
+""")
+
+    def migration_manifest(self):
+        suites = {}
+        for name, file in [("winprivate", "internal/winprivate/migration_windows_test.go"),
+                           ("zipmigration", "internal/zipmigration/external_fs_windows_test.go")]:
+            suites[name] = re.findall(r"^func (TestWindows(?:Migration|ExternalAdapter)\w+)\(", (ROOT / file).read_text(), re.M)
+        self.assertEqual([len(suites[name]) for name in ["winprivate", "zipmigration"]], [12, 11])
+        names = ["execution", "datahome", "ownerctx", "memory", "privatewiki", "processidentity", "winprivate", "zipmigration"]
+        return dict(schema_version=1, qualification_profile="quarantined_windows_migration_primitives_v1",
+                    packages=[dict(name=name, tests=suites.get(name, ["TestFixture"])) for name in names])
+
+    def canonical_admission(self, document, expected):
+        self.manifest.write_text(json.dumps(document), encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(DRIVER), "-CanonicalManifest", str(self.manifest),
+                                 "-TestBinary", "unused", "-Server", "unused", "-OutputRoot", str(self.root / "proof")],
+                                capture_output=True, text=True, timeout=30)
+        self.assert_preaccount_refusal(result, expected)
+
+    def test_migration_profile_requires_exact_eight_packages_and_preserves_default_six(self):
+        document = self.migration_manifest()
+        self.canonical_admission(document, "Canonical public source and SDK inputs")
+        original = document["packages"][-1]["name"]
+        for name in ["ZIPMIGRATION", "arbitrary", "winprivate"]:
+            document["packages"][-1]["name"] = name
+            self.canonical_admission(document, "Migration primitive qualification requires exactly")
+        document["packages"][-1]["name"] = original
+        document["packages"].pop()
+        self.canonical_admission(document, "Migration primitive qualification requires exactly")
+        document["packages"].pop()
+        del document["qualification_profile"]
+        self.canonical_admission(document, "Canonical public source and SDK inputs")
+        document["qualification_profile"] = "arbitrary-profile"
+        self.canonical_admission(document, "Unknown canonical qualification profile")
+
+    def test_migration_profile_refuses_missing_extra_or_duplicate_native_cases(self):
+        document = self.migration_manifest()
+        for index in [-2, -1]:
+            original = list(document["packages"][index]["tests"])
+            prefix = "TestWindowsMigration" if index == -2 else "TestWindowsExternalAdapter"
+            for tests in [original[:-1], original + [prefix + "Unexpected"], original + [original[0]]]:
+                with self.subTest(package=document["packages"][index]["name"], tests=len(tests)):
+                    document["packages"][index]["tests"] = tests
+                    self.canonical_admission(document, "Migration primitive inventory differs from the fixed required cases")
+            document["packages"][index]["tests"] = original
+
+    def test_migration_native_acceptance_requires_actual_pass_complete_inventory_and_no_nested_skip(self):
+        self.launcher_fragment_check(r"""
+$check=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -ceq '$migrationProfile -and $entry.name -cin @(''winprivate'', ''zipmigration'')'},$true))
+if ($check.Count -ne 1) { throw 'Expected actual migration primitive acceptance block' }
+$migrationProfile=$true
+foreach ($case in @(@{outcomes=@('PASS'); code=0; complete=$true; skips=@(); expected=$true},@{outcomes=@(); code=0; complete=$true; skips=@(); expected=$false},@{outcomes=@('PASS','PASS'); code=0; complete=$true; skips=@(); expected=$false},@{outcomes=@('FAIL'); code=1; complete=$true; skips=@(); expected=$false},@{outcomes=@('SKIP'); code=0; complete=$true; skips=@(); expected=$false},@{outcomes=@('PASS'); code=0; complete=$true; skips=@('TestRequired/nested'); expected=$false},@{outcomes=@('PASS'); code=1; complete=$true; skips=@(); expected=$false},@{outcomes=@('PASS'); code=0; complete=$false; skips=@(); expected=$false})) {
+ $entry=[pscustomobject]@{name='winprivate'; migration_required_tests=@('TestRequired')}; $code=$case.code; $complete=$case.complete; $allSkips=$case.skips
+ $outcomes=@($case.outcomes | ForEach-Object { @{test='TestRequired'; outcome=$_} }); $results=@([ordered]@{})
+ Invoke-Expression $check[0].Extent.Text
+ if ($results[-1].migration_primitives_proof.actual_required_tests_passed -ne $case.expected -or $results[-1].migration_primitives_proof.public_transaction_qualified -ne $false) { throw 'Migration primitive proof accepted absent, failing, skipped or incomplete execution' }
+}
+""")
+
+    def test_migration_report_does_not_upgrade_missing_coverage_or_public_transaction(self):
+        self.launcher_fragment_check(r"""
+$gate=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -ceq '$migrationProfile' -and $node.Extent.Text -match '\$migrationPrimitivesPassed\s*='},$true))
+$reportBlock=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -ceq '$migrationProfile' -and $node.Extent.Text -match '\$report.quarantined_migration_primitives'},$true))
+if ($gate.Count -ne 1 -or $reportBlock.Count -ne 1) { throw 'Expected actual migration aggregate gate and report' }
+$migrationProfile=$true
+foreach ($case in @(@{count=2; passed=$true; prior=$true; expected=$true},@{count=1; passed=$true; prior=$true; expected=$false},@{count=2; passed=$false; prior=$true; expected=$false},@{count=2; passed=$true; prior=$false; expected=$false},@{count=2; passed=$true; prior=$true; duplicate=$true; expected=$false})) {
+ $results=@(@{name='winprivate'; migration_primitives_proof=@{actual_required_tests_passed=$case.passed}},@{name='zipmigration'; migration_primitives_proof=@{actual_required_tests_passed=$case.passed}}) | Select-Object -First $case.count
+ if ($case.duplicate) { $results[1].name='winprivate' }
+ $qualificationComplete=$case.prior; $report=[ordered]@{}
+ Invoke-Expression $gate[0].Extent.Text
+ Invoke-Expression $reportBlock[0].Extent.Text
+ if ($qualificationComplete -ne $case.expected -or $report.quarantined_migration_primitives.public_transaction_qualified -ne $false -or $report.quarantined_migration_primitives.mutation_gate -cne 'unavailable') { throw 'Primitive acceptance upgraded missing coverage or public mutation authority' }
+}
+$migrationProfile=$false; $report=[ordered]@{}
+Invoke-Expression $reportBlock[0].Extent.Text
+if ($report.Count -ne 0) { throw 'Migration profile changed the default report' }
 """)
 
     def test_inspection_and_pilot_parameters_are_exclusive(self):
