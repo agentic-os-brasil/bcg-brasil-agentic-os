@@ -9,6 +9,8 @@ on:
       - 'internal/scheduler/**'
       - 'cmd/maestro-runtime/**'
       - 'acceptance/test_canonical_home_*.py'
+      - 'acceptance/windows-core-pilot.ps1'
+      - 'acceptance/test_windows_profile_driver.py'
       - 'installers/zip/user-template/.claude/hooks/**'
       - 'bundles/base/tools/**'
       - '.github/workflows/data-home-inspection.yml'
@@ -23,6 +25,8 @@ on:
       - 'internal/scheduler/**'
       - 'cmd/maestro-runtime/**'
       - 'acceptance/test_canonical_home_*.py'
+      - 'acceptance/windows-core-pilot.ps1'
+      - 'acceptance/test_windows_profile_driver.py'
       - 'installers/zip/user-template/.claude/hooks/**'
       - 'bundles/base/tools/**'
       - '.github/workflows/data-home-inspection.yml'
@@ -52,7 +56,167 @@ jobs:
           temporary_root=$(cd "$RUNNER_TEMP" && pwd -P)
           printf 'TMPDIR=%s\nGOTMPDIR=%s\n' "$temporary_root" "$temporary_root" >> "$GITHUB_ENV"
       - name: Inspection, shared path and consumer contracts
+        if: runner.os != 'Windows'
         run: go test ./internal/datahome ./internal/scheduler ./internal/zipmigration ./internal/zipruntime ./cmd/maestro-runtime
+      - name: Check ordinary-user driver admission
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          MAESTRO_TEST_TMP: ${{ runner.temp }}
+        run: python -m unittest acceptance.test_windows_profile_driver -v
+      - name: Stage closed Windows inspection inputs
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:GOROOT) { throw 'Inspection refuses caller-supplied GOROOT.' }
+          $installedRoot = (go env GOROOT).Trim()
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned SDK lookup failed.' }
+          $publicRoot = Join-Path $env:SystemDrive ('MaestroInspection-' + [Guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $publicRoot -ErrorAction Stop | Out-Null
+          $acl = [Security.AccessControl.DirectorySecurity]::new()
+          $acl.SetAccessRuleProtection($true, $false)
+          foreach ($sid in @('S-1-5-18', 'S-1-5-32-544')) {
+            $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new($sid), 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
+          }
+          $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-32-545'), 'ReadAndExecute', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
+          Set-Acl -LiteralPath $publicRoot -AclObject $acl
+          $sdkRoot = Join-Path $publicRoot 'sdk'
+          New-Item -ItemType Directory -Path $sdkRoot | Out-Null
+          Get-ChildItem -LiteralPath $installedRoot -Force | Copy-Item -Destination $sdkRoot -Recurse
+          $sdkGo = Join-Path $sdkRoot 'bin/go.exe'
+          if ((Get-FileHash -LiteralPath (Join-Path $installedRoot 'bin/go.exe') -Algorithm SHA256).Hash -cne
+              (Get-FileHash -LiteralPath $sdkGo -Algorithm SHA256).Hash) { throw 'Copied inspection SDK differs from pinned executable.' }
+          if ((& $sdkGo env GOROOT).Trim() -cne $sdkRoot -or $LASTEXITCODE -ne 0) { throw 'Copied SDK selected an unexpected GOROOT.' }
+          $sourceRoot = Join-Path $publicRoot 'source'
+          $binaryRoot = Join-Path $publicRoot 'bin'
+          New-Item -ItemType Directory -Path $sourceRoot, $binaryRoot | Out-Null
+          $revision = (git rev-parse HEAD).Trim()
+          $archive = Join-Path $env:RUNNER_TEMP 'inspection-source.tar'
+          git archive --format=tar --output=$archive HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Exact inspection source archive failed.' }
+          tar -xf $archive -C $sourceRoot
+          if ($LASTEXITCODE -ne 0) { throw 'Inspection source staging failed.' }
+          $env:GOCACHE = Join-Path $env:RUNNER_TEMP 'inspection-build-cache'
+          $env:GOTOOLCHAIN = 'local'
+          $env:GOFLAGS = '-buildvcs=false'
+          $skipPolicy = @{
+            datahome = @(
+              @{test='TestInitializeFreshRefusesExistingAmbiguousStateWithoutChanges'; reason='Existing Unix-mode and native-reparse counterparts remain unqualified here.'},
+              @{test='TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator'; reason='Existing raw-source Windows reparse subcases remain unqualified coverage.'},
+              @{test='TestResolveRejectsPubliclyWritableUserHome'; reason='Unix mode-bit contract.'},
+              @{test='TestResolveCaseDistinctNondefaultCannotBypassLocator'; reason='Case-insensitive filesystem cannot create distinct case-only homes.'},
+              @{test='TestResolveCaseDistinctLocatorCannotAuthorizeDifferentHome'; reason='Case-insensitive filesystem cannot create distinct case-only homes.'}
+            )
+            scheduler = @(
+              @{test='TestReplacePrivateFileRejectsSymlinkedLeaf'; reason='Unix symlink fixture; native Windows reparse counterpart is separate.'},
+              @{test='TestWindowsSecureSchedulerRejectsReparseAncestor'; reason='Existing symlink fixture requires Developer Mode or privilege; a skip is retained as unqualified coverage.'},
+              @{test='TestSchedulerRejectsSymlinkedRootAncestorBeforeMkdir'; reason='Existing Unix symlink setup.'},
+              @{test='TestSchedulerStoreRejectsSymlinkedWorkspaceAncestor'; reason='Existing Unix symlink setup.'},
+              @{test='TestSecurePathWalkSurvivesAncestorRenameToSymlink'; reason='Unix descriptor-relative walk.'},
+              @{test='TestSecureLeafIOSurvivesAncestorSwapForEnrollmentReceiptAndLease'; reason='Unix adversarial swap fixture.'},
+              @{test='TestSecureLeafReadAndRemoveSurviveAncestorSwap'; reason='Unix adversarial swap fixture.'},
+              @{test='TestLeaseTransactionPinsGuardAndStateToOneDirectory'; reason='Unix rename-semantics fixture.'}
+            )
+            zipruntime = @(
+              @{test='TestBoundCodexIgnoresNestedHijackAndQuotesRoot'; reason='POSIX execution fixture.'},
+              @{test='TestBoundPackagedWrapperFromNestedCWD'; reason='Native macOS wrapper fixture.'},
+              @{test='TestDailyReviewHardlinksAndFIFO'; reason='Unix FIFO or host-dependent alias fixture; actual skips remain explicit.'},
+              @{test='TestDailyBoundedConcurrentAndAliases'; reason='Existing host-dependent symlink fixture.'},
+              @{test='TestGuardAliasAndMarkerEdges'; reason='Existing host-dependent alias fixtures.'},
+              @{test='TestHookOwnedAliasesBlockCanonicalAdmission'; reason='Raw HOME source does not admit Windows external ownership.'},
+              @{test='TestHookPreflightRetainsDailySourceRefusal'; reason='Raw HOME source does not admit Windows external ownership.'},
+              @{test='TestExternalHomeContinuesAcrossProductVersions'; reason='Raw HOME source does not admit Windows external ownership.'},
+              @{test='TestUnavailableAuthorityPreservesBothTrees'; reason='Raw HOME source does not admit Windows external ownership.'},
+              @{test='TestExternalUnsafeStateBlocksBeforeContextReceipt'; reason='Raw HOME source does not admit Windows external ownership.'}
+            )
+            'maestro-runtime' = @(
+              @{test='TestHomePathsRequiresExplicitInitAndKeepsProductUntouched'; reason='Raw HOME source does not admit Windows external ownership.'}
+            )
+          }
+          $packages = @(
+            @{name='datahome'; relative='internal/datahome'}, @{name='scheduler'; relative='internal/scheduler'},
+            @{name='zipruntime'; relative='internal/zipruntime'}, @{name='maestro-runtime'; relative='cmd/maestro-runtime'}
+          )
+          $entries = @()
+          Push-Location -LiteralPath $sourceRoot
+          try {
+            # TestHomePathsCompiledCLI rebuilds the real CLI offline under the ordinary account.
+            & $sdkGo mod vendor
+            if ($LASTEXITCODE -ne 0) { throw 'Staging-only vendored dependency closure failed.' }
+            $env:GOFLAGS = '-mod=vendor -buildvcs=false'
+            foreach ($package in $packages) {
+              $binary = Join-Path $binaryRoot ($package.name + '.test.exe')
+              & $sdkGo test -c ('./' + $package.relative) -o $binary
+              if ($LASTEXITCODE -ne 0) { throw "Inspection witness build failed: $($package.name)" }
+              $tests = @(& $binary '-test.list' '^(Test|Example)')
+              if ($LASTEXITCODE -ne 0 -or $tests.Count -eq 0) { throw 'Inspection test inventory is empty or unavailable.' }
+              $entries += [ordered]@{
+                name=$package.name; package=('./' + $package.relative); binary=$binary
+                sha256=(Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant()
+                working_directory=(Join-Path $sourceRoot $package.relative); tests=$tests; skip_policy=$skipPolicy[$package.name]
+              }
+            }
+          } finally { Pop-Location }
+          $vendorRoot = Join-Path $sourceRoot 'vendor'
+          $vendorFiles = @(Get-ChildItem -LiteralPath $vendorRoot -Recurse -File | Sort-Object FullName | ForEach-Object {
+            if (($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Vendored dependency cannot be a reparse file.' }
+            [ordered]@{path=$_.FullName.Substring($vendorRoot.Length + 1).Replace('\','/'); sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}
+          })
+          $manifest = [ordered]@{
+            schema_version=1; source_revision=$revision; source_root=$sourceRoot
+            source_archive_sha256=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+            sdk_root=$sdkRoot; sdk_go=$sdkGo; sdk_go_sha256=(Get-FileHash -LiteralPath $sdkGo -Algorithm SHA256).Hash.ToLowerInvariant()
+            vendor_files=$vendorFiles; packages=$entries
+          }
+          $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $publicRoot 'inspection-contract-manifest.json') -Encoding utf8
+          "MAESTRO_INSPECTION_PUBLIC_ROOT=$publicRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Inspection contracts under the qualified ordinary-user profile
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./acceptance/windows-core-pilot.ps1 -InspectionManifest (Join-Path $env:MAESTRO_INSPECTION_PUBLIC_ROOT 'inspection-contract-manifest.json') -OutputRoot (Join-Path $env:RUNNER_TEMP 'inspection-native-proof')
+      - name: Stage only bounded inspection evidence
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidence = Join-Path $env:RUNNER_TEMP 'inspection-profile-evidence'
+          New-Item -ItemType Directory -Path $evidence | Out-Null
+          $sources = @([pscustomobject]@{
+            root=(Join-Path $env:RUNNER_TEMP 'inspection-native-proof')
+            names=@('native-test.stdout.log', 'native-test.stderr.log', 'inspection-datahome.log', 'inspection-scheduler.log',
+              'inspection-zipruntime.log', 'inspection-maestro-runtime.log', 'inspection-contract-results.json')
+          })
+          if ($env:MAESTRO_INSPECTION_PUBLIC_ROOT) {
+            $sources += [pscustomobject]@{root=$env:MAESTRO_INSPECTION_PUBLIC_ROOT; names=@('inspection-contract-manifest.json')}
+          }
+          foreach ($source in $sources) {
+            if (-not (Test-Path -LiteralPath $source.root)) { continue }
+            $directory = Get-Item -LiteralPath $source.root -Force
+            if (-not $directory.PSIsContainer -or ($directory.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Evidence root must be an ordinary directory.' }
+            foreach ($name in $source.names) {
+              $path = Join-Path $source.root $name
+              if (-not (Test-Path -LiteralPath $path)) { continue }
+              $file = Get-Item -LiteralPath $path -Force
+              if ($file -isnot [IO.FileInfo] -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $file.Length -gt 2097152) { throw 'Evidence must be a bounded ordinary synthetic file.' }
+              $destination = Join-Path $evidence $name
+              Copy-Item -LiteralPath $path -Destination $destination
+              if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -cne (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash) { throw 'Evidence copy changed bytes.' }
+            }
+          }
+      - name: Retain exact inspection profile evidence
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-inspection-profile-${{ github.sha }}
+          path: ${{ runner.temp }}/inspection-profile-evidence/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Preserve full-source migration contract coverage
+        if: runner.os == 'Windows'
+        run: go test ./internal/zipmigration
       - name: Static checks at the same boundaries
         run: go vet ./internal/datahome ./internal/scheduler ./internal/zipmigration ./internal/zipruntime ./cmd/maestro-runtime
 

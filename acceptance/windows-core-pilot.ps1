@@ -1,17 +1,18 @@
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = 'Pilot')]
 param(
-    [Parameter(Mandatory = $true)][string]$TestBinary,
-    [Parameter(Mandatory = $true)][string]$Server,
+    [Parameter(Mandatory = $true, ParameterSetName = 'Pilot')][string]$TestBinary,
+    [Parameter(Mandatory = $true, ParameterSetName = 'Pilot')][string]$Server,
     [Parameter(Mandatory = $true)][string]$OutputRoot,
-    [string]$Kit,
-    [string]$KitTestScript,
-    [string]$MethodFixture,
-    [string]$SdkWitness,
-    [string]$AtlasTestBinary,
-    [string]$DoclingTestBinary,
-    [string]$CanonicalManifest,
-    [switch]$AuthoredBrain,
-    [switch]$PrivateWiki
+    [Parameter(ParameterSetName = 'Pilot')][string]$Kit,
+    [Parameter(ParameterSetName = 'Pilot')][string]$KitTestScript,
+    [Parameter(ParameterSetName = 'Pilot')][string]$MethodFixture,
+    [Parameter(ParameterSetName = 'Pilot')][string]$SdkWitness,
+    [Parameter(ParameterSetName = 'Pilot')][string]$AtlasTestBinary,
+    [Parameter(ParameterSetName = 'Pilot')][string]$DoclingTestBinary,
+    [Parameter(ParameterSetName = 'Pilot')][string]$CanonicalManifest,
+    [Parameter(ParameterSetName = 'Pilot')][switch]$AuthoredBrain,
+    [Parameter(ParameterSetName = 'Pilot')][switch]$PrivateWiki,
+    [Parameter(Mandatory = $true, ParameterSetName = 'Inspection')][string]$InspectionManifest
 )
 $ErrorActionPreference = 'Stop'
 $kitInputs = @($Kit, $KitTestScript, $MethodFixture, $SdkWitness)
@@ -21,12 +22,24 @@ if ($kitInputCount -ne 0 -and $kitInputCount -ne $kitInputs.Count) {
 }
 $withKit = $kitInputCount -eq $kitInputs.Count
 $withCanonical = -not [string]::IsNullOrWhiteSpace($CanonicalManifest)
-if ($withCanonical) {
-    $canonical = Get-Content -LiteralPath $CanonicalManifest -Raw -Encoding UTF8 | ConvertFrom-Json
+$withInspection = $PSCmdlet.ParameterSetName -eq 'Inspection'
+$withManifest = $withCanonical -or $withInspection
+if ($withManifest) {
+    $manifestPath = if ($withInspection) { $InspectionManifest } else { $CanonicalManifest }
+    if ($withInspection) {
+        $manifestFile = Get-Item -LiteralPath $manifestPath -Force
+        if ($manifestFile -isnot [IO.FileInfo] -or ($manifestFile.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $manifestFile.Length -gt 2097152) {
+            throw 'Inspection manifest must be a bounded ordinary file.'
+        }
+        if (Test-Path -LiteralPath $OutputRoot) { throw 'Use a new inspection output; previous proof is preserved.' }
+    }
+    $canonical = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $expectedPackages = @('execution', 'datahome', 'ownerctx', 'memory', 'privatewiki', 'processidentity')
+    if ($withInspection) { $expectedPackages = @('datahome', 'scheduler', 'zipruntime', 'maestro-runtime') }
     $actualPackages = @($canonical.packages | ForEach-Object { $_.name })
     if ($canonical.schema_version -ne 1 -or $actualPackages.Count -ne $expectedPackages.Count -or
         @((Compare-Object ($expectedPackages | Sort-Object) ($actualPackages | Sort-Object))).Count -ne 0) {
+        if ($withInspection) { throw 'Inspection qualification requires exactly the four owning packages.' }
         throw 'Canonical qualification requires exactly the six owning packages.'
     }
     foreach ($path in @($canonical.source_root, $canonical.sdk_root, $canonical.sdk_go)) {
@@ -38,14 +51,45 @@ if ($withCanonical) {
         throw 'Canonical pinned SDK hash differs from its manifest.'
     }
     foreach ($entry in $canonical.packages) {
-        if ($entry.package -cne ('./internal/' + $entry.name) -or
-            $entry.working_directory -cne (Join-Path $canonical.source_root ('internal/' + $entry.name)) -or
+        $relative = 'internal/' + $entry.name
+        if ($withInspection -and $entry.name -eq 'maestro-runtime') { $relative = 'cmd/maestro-runtime' }
+        if ($entry.package -cne ('./' + $relative) -or
+            $entry.working_directory -cne (Join-Path $canonical.source_root $relative) -or
             @($entry.tests).Count -eq 0 -or @($entry.tests | Sort-Object -Unique).Count -ne @($entry.tests).Count -or
             @($entry.tests | Where-Object { $_ -cnotmatch '^(Test|Example)[A-Za-z0-9_]*$' }).Count -ne 0) {
             throw 'Canonical package identity, working directory or closed test inventory is invalid.'
         }
         if ((Get-FileHash -LiteralPath $entry.binary -Algorithm SHA256).Hash.ToLowerInvariant() -cne $entry.sha256) {
             throw 'Canonical test executable differs from its manifest.'
+        }
+        if ($withInspection) {
+            $policies = @($entry.skip_policy)
+            if (@($policies | Where-Object { $_.test -cnotin @($entry.tests) -or [string]::IsNullOrWhiteSpace($_.reason) }).Count -ne 0 -or
+                @($policies.test | Sort-Object -Unique).Count -ne $policies.Count) {
+                throw 'Inspection skips require unique existing tests and explicit platform reasons.'
+            }
+            if ($entry.name -eq 'zipruntime') {
+                foreach ($required in @('TestCodexLifecycleRequiresExplicitMigration', 'TestHookPreflightPreservesCommittedLegacyAndCaseAliases')) {
+                    if ($required -cnotin @($entry.tests) -or $required -cin @($policies.test)) {
+                        throw 'Both guarded migration contracts must run without skips.'
+                    }
+                }
+            }
+        }
+    }
+    if ($withInspection) {
+        if ($canonical.source_revision -cnotmatch '^[0-9a-f]{40}$' -or $canonical.source_archive_sha256 -cnotmatch '^[0-9a-f]{64}$' -or
+            @($canonical.vendor_files).Count -eq 0 -or @($canonical.vendor_files.path | Sort-Object -Unique).Count -ne @($canonical.vendor_files).Count) {
+            throw 'Inspection source and vendored dependencies require a sealed inventory.'
+        }
+        foreach ($file in $canonical.vendor_files) {
+            if ([IO.Path]::IsPathRooted($file.path) -or $file.path -match '(^|/)\.\.?(/|$)|[\\:\x00\r\n]' -or
+                $file.sha256 -cnotmatch '^[0-9a-f]{64}$') { throw 'Invalid sealed vendor path or hash.' }
+            $inputFile = Get-Item -LiteralPath (Join-Path $canonical.source_root ('vendor/' + $file.path)) -Force
+            if ($inputFile -isnot [IO.FileInfo] -or ($inputFile.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+                (Get-FileHash -LiteralPath $inputFile.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -cne $file.sha256) {
+                throw 'Inspection vendored input differs from its sealed ordinary file.'
+            }
         }
     }
 }
@@ -100,8 +144,10 @@ try {
     New-Item -ItemType Directory -Path $payload | Out-Null
     $nativeTest = Join-Path $payload 'windows-core.test.exe'
     $nativeServer = Join-Path $payload 'maestro-mcp.exe'
-    Copy-Item -LiteralPath $TestBinary -Destination $nativeTest
-    Copy-Item -LiteralPath $Server -Destination $nativeServer
+    if (-not $withInspection) {
+        Copy-Item -LiteralPath $TestBinary -Destination $nativeTest
+        Copy-Item -LiteralPath $Server -Destination $nativeServer
+    }
     if ($AtlasTestBinary) {
         $nativeAtlasTest = Join-Path $payload 'windows-atlas.test.exe'
         Copy-Item -LiteralPath $AtlasTestBinary -Destination $nativeAtlasTest
@@ -140,7 +186,7 @@ try {
             throw 'The generic ZIP checksum does not bind the actual archive.'
         }
     }
-    if ($withCanonical) {
+    if ($withManifest) {
         foreach ($entry in $canonical.packages) {
             $copied = Join-Path $payload ($entry.name + '.test.exe')
             Copy-Item -LiteralPath $entry.binary -Destination $copied
@@ -149,12 +195,15 @@ try {
             }
             $entry.binary = $copied
         }
-        $nativeCanonical = Join-Path $payload 'canonical-contract-manifest.json'
+        $manifestName = if ($withInspection) { 'inspection-contract-manifest.json' } else { 'canonical-contract-manifest.json' }
+        $nativeCanonical = Join-Path $payload $manifestName
         $canonical | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $nativeCanonical -Encoding utf8
     }
-    $env:MAESTRO_WINDOWS_CORE_PROOF = '1'
-    $env:MAESTRO_WINDOWS_CORE_SERVER = $nativeServer
-    $env:MAESTRO_WINDOWS_CORE_PROOF_ROOT = $OutputRoot
+    if (-not $withInspection) {
+        $env:MAESTRO_WINDOWS_CORE_PROOF = '1'
+        $env:MAESTRO_WINDOWS_CORE_SERVER = $nativeServer
+        $env:MAESTRO_WINDOWS_CORE_PROOF_ROOT = $OutputRoot
+    }
     $stdout = Join-Path $OutputRoot 'native-test.stdout.log'
     $stderr = Join-Path $OutputRoot 'native-test.stderr.log'
     # LoadUserProfile does not replace the caller's inherited TEMP/TMP.
@@ -162,13 +211,32 @@ try {
     # owner is the standard user; never grant that user access to runner data.
     $launcher = Join-Path $payload 'native-user-launcher.ps1'
     @'
-param([string]$TestBinary, [string]$ProofRoot, [string]$Kit, [string]$KitTestScript, [string]$SdkWitness, [string]$AtlasTestBinary, [string]$DoclingTestBinary, [string]$DoclingTestSHA256, [switch]$AuthoredBrain, [switch]$PrivateWiki, [string]$CanonicalManifest)
+param([string]$TestBinary, [string]$ProofRoot, [string]$Kit, [string]$KitTestScript, [string]$SdkWitness, [string]$AtlasTestBinary, [string]$DoclingTestBinary, [string]$DoclingTestSHA256, [switch]$AuthoredBrain, [switch]$PrivateWiki, [string]$CanonicalManifest, [switch]$Inspection, [string]$ExpectedUserSID)
 $ErrorActionPreference = 'Stop'
 try {
     $temporary = Join-Path $ProofRoot 'user-temp'
     New-Item -ItemType Directory -Path $temporary | Out-Null
     $env:TEMP = $temporary
     $env:TMP = $temporary
+    if ($Inspection) {
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $admin = [Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')
+        $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+        Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class InspectionToken { [DllImport("advapi32.dll", SetLastError=true)] public static extern bool GetTokenInformation(IntPtr token, int kind, out uint value, uint length, out uint returned); }'
+        [uint32]$elevation = 0; [uint32]$returned = 0
+        if (-not [InspectionToken]::GetTokenInformation($identity.Token, 20, [ref]$elevation, 4, [ref]$returned) -or
+            $returned -ne 4 -or $elevation -ne 0 -or $identity.User.Value -cne $ExpectedUserSID -or
+            $principal.IsInRole($admin) -or @($identity.Groups | Where-Object { $_.Value -eq $admin.Value }).Count -ne 0) {
+            throw 'Inspection requires the actual intended non-elevated ordinary account.'
+        }
+        $temporaryAcl = Get-Acl -LiteralPath $temporary
+        if ($temporaryAcl.GetOwner([Security.Principal.SecurityIdentifier]).Value -cne $ExpectedUserSID -or
+            @($temporaryAcl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) | Where-Object {
+                $_.IdentityReference.Value -cnotin @($ExpectedUserSID, 'S-1-5-18', 'S-1-5-32-544') -or $_.AccessControlType -ne 'Allow'
+            }).Count -ne 0) { throw 'Inspection TEMP must be child-owned with only private principals.' }
+        Write-Output 'inspection_profile elevated=false admin_member=false private_current_user_temp=true'
+    }
+    if (-not $Inspection) {
     $families = @('Core', 'DirectoryDurability', 'PrivateState', 'OwnerReview')
     if ($AuthoredBrain) { $families += 'AuthoredBrain' }
     if ($PrivateWiki) { $families += 'PrivateWiki' }
@@ -222,6 +290,7 @@ try {
         }
         Write-Output ('native_windows_docling placement_tests_passed=' + $doclingTests.Count + ' binary_sha256=' + $DoclingTestSHA256)
     }
+    }
     if ($CanonicalManifest) {
         $manifest = Get-Content -LiteralPath $CanonicalManifest -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($env:GOROOT) { throw 'Canonical evidence refuses caller-supplied GOROOT.' }
@@ -240,6 +309,19 @@ try {
         $env:GOMODCACHE = Join-Path $env:GOPATH 'pkg/mod'
         $env:GOENV = 'off'
         $env:GOTOOLCHAIN = 'local'
+        if ($Inspection) {
+            $env:GOTMPDIR = $temporary
+            $env:GOWORK = 'off'
+            $env:GOFLAGS = '-mod=vendor -buildvcs=false'
+            $env:GOPROXY = 'off'
+            $env:GOSUMDB = 'off'
+            foreach ($file in $manifest.vendor_files) {
+                $path = Join-Path $manifest.source_root ('vendor/' + $file.path)
+                if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -cne $file.sha256) {
+                    throw 'Ordinary-account vendor input differs from its sealed source.'
+                }
+            }
+        }
         $selectedRoot = (& $manifest.sdk_go env GOROOT).Trim()
         if ($LASTEXITCODE -ne 0 -or $selectedRoot -cne $manifest.sdk_root) {
             throw 'Ordinary-account SDK did not retain the compiled public root.'
@@ -260,7 +342,8 @@ try {
             } finally { Pop-Location }
             $body = $output -join "`n"
             if ([Text.Encoding]::UTF8.GetByteCount($body) -gt 2097152) { throw 'Canonical package output exceeds the bounded log contract.' }
-            $packageLog = Join-Path $ProofRoot ('canonical-' + $entry.name + '.log')
+            $prefix = if ($Inspection) { 'inspection' } else { 'canonical' }
+            $packageLog = Join-Path $ProofRoot ($prefix + '-' + $entry.name + '.log')
             [IO.File]::WriteAllText($packageLog, $body + "`n", (New-Object Text.UTF8Encoding($false)))
             $outcomes = @([regex]::Matches($body, '(?m)^--- (PASS|FAIL|SKIP): ((?:Test|Example)[A-Za-z0-9_]*) ') | ForEach-Object {
                 [ordered]@{test=$_.Groups[2].Value; outcome=$_.Groups[1].Value}
@@ -268,6 +351,18 @@ try {
             $observed = @($outcomes | ForEach-Object { $_.test })
             $complete = @((Compare-Object ($entry.tests | Sort-Object) ($observed | Sort-Object))).Count -eq 0
             $skipped = @($outcomes | Where-Object { $_.outcome -eq 'SKIP' } | ForEach-Object { $_.test })
+            $allSkips = @([regex]::Matches($body, '(?m)^\s*--- SKIP: ((?:Test|Example)\S*) ') | ForEach-Object { $_.Groups[1].Value })
+            $unclassified = @()
+            $requiredPassed = $true
+            if ($Inspection) {
+                $unclassified = @($allSkips | Where-Object { ($_ -split '/')[0] -cnotin @($entry.skip_policy.test) })
+                if ($entry.name -eq 'zipruntime') {
+                    foreach ($test in @('TestCodexLifecycleRequiresExplicitMigration', 'TestHookPreflightPreservesCommittedLegacyAndCaseAliases')) {
+                        if (@($outcomes | Where-Object { $_.test -ceq $test -and $_.outcome -ceq 'PASS' }).Count -ne 1 -or
+                            @($allSkips | Where-Object { ($_ -split '/')[0] -ceq $test }).Count -ne 0) { $requiredPassed = $false }
+                    }
+                }
+            }
             $results += [ordered]@{
                 name=$entry.name; package=$entry.package; sha256=$entry.sha256; exit_code=$code
                 expected_tests=@($entry.tests); outcomes=$outcomes; inventory_complete=$complete
@@ -275,9 +370,19 @@ try {
                 log_sha256=(Get-FileHash -LiteralPath $packageLog -Algorithm SHA256).Hash.ToLowerInvariant()
                 owner_mismatch_diagnostics=([regex]::Matches($body, 'private object belongs to a different Windows owner')).Count
             }
-            Write-Output ('canonical_result package=' + $entry.name + ' exit=' + $code + ' inventory_complete=' + $complete + ' skips=' + $skipped.Count)
+            if ($Inspection) {
+                $results[-1].all_skipped_tests = $allSkips
+                $results[-1].skip_policy = @($entry.skip_policy)
+                $results[-1].unclassified_skips = $unclassified
+                $results[-1].required_migration_tests_passed = $requiredPassed
+            }
+            Write-Output ($prefix + '_result package=' + $entry.name + ' exit=' + $code + ' inventory_complete=' + $complete + ' skips=' + $skipped.Count)
         }
         $qualificationComplete = @($results | Where-Object { $_.exit_code -ne 0 -or -not $_.inventory_complete -or $_.skipped_tests.Count -ne 0 }).Count -eq 0
+        if ($Inspection) {
+            $qualificationComplete = @($results | Where-Object { $_.exit_code -ne 0 -or -not $_.inventory_complete -or
+                $_.unclassified_skips.Count -ne 0 -or -not $_.required_migration_tests_passed }).Count -eq 0
+        }
         $report = [ordered]@{
             schema_version=1; source_revision=$manifest.source_revision; actual_standard_user=$true
             private_current_user_temp=$true; public_source_and_sdk_read_only=$true
@@ -285,8 +390,16 @@ try {
             packages=$results; qualification_complete=$qualificationComplete
             platform_nonapplicability='unclassified_existing_skips_are_not_passing_coverage'
         }
-        $report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $ProofRoot 'canonical-contract-results.json') -Encoding utf8
-        if (-not $qualificationComplete) { throw 'Canonical contracts remain incomplete; retain all six package logs and classified outcomes.' }
+        $reportName = if ($Inspection) { 'inspection-contract-results.json' } else { 'canonical-contract-results.json' }
+        if ($Inspection) {
+            $report.elevated = $false; $report.admin_member = $false
+            $report.platform_nonapplicability = 'classified_existing_skips_are_not_passing_coverage'
+        }
+        $report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $ProofRoot $reportName) -Encoding utf8
+        if (-not $qualificationComplete) {
+            if ($Inspection) { throw 'Inspection contracts remain incomplete; retain all four package logs and classified outcomes.' }
+            throw 'Canonical contracts remain incomplete; retain all six package logs and classified outcomes.'
+        }
     }
     if ($Kit) {
         if ($PSVersionTable.PSEdition -ne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) {
@@ -346,12 +459,14 @@ try {
 }
 '@ | Set-Content -LiteralPath $launcher -Encoding utf8
     $powershell = Join-Path $PSHOME 'pwsh.exe'
-    $arguments = @('-NoLogo', '-NoProfile', '-NonInteractive', '-File', "`"$launcher`"", '-TestBinary', "`"$nativeTest`"", '-ProofRoot', "`"$OutputRoot`"")
+    $arguments = @('-NoLogo', '-NoProfile', '-NonInteractive', '-File', "`"$launcher`"", '-ProofRoot', "`"$OutputRoot`"")
+    if ($withInspection) { $arguments += @('-Inspection', '-ExpectedUserSID', $account.SID.Value) }
+    else { $arguments += @('-TestBinary', "`"$nativeTest`"") }
     if ($AtlasTestBinary) { $arguments += @('-AtlasTestBinary', "`"$nativeAtlasTest`"") }
     if ($DoclingTestBinary) { $arguments += @('-DoclingTestBinary', "`"$nativeDoclingTest`"", '-DoclingTestSHA256', $doclingHash) }
     if ($AuthoredBrain) { $arguments += '-AuthoredBrain' }
     if ($PrivateWiki) { $arguments += '-PrivateWiki' }
-    if ($withCanonical) { $arguments += @('-CanonicalManifest', "`"$nativeCanonical`"") }
+    if ($withManifest) { $arguments += @('-CanonicalManifest', "`"$nativeCanonical`"") }
     if ($withKit) {
         $powershell = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
         $arguments += @('-Kit', "`"$nativeKit`"", '-KitTestScript', "`"$nativeKitTest`"", '-SdkWitness', "`"$nativeSdk`"")
@@ -366,7 +481,7 @@ try {
         if ($hadModulePath) { $env:PSModulePath = $priorModulePath }
         else { Remove-Item Env:PSModulePath -ErrorAction SilentlyContinue }
     }
-    if ($withKit -or $AuthoredBrain -or $AtlasTestBinary -or $DoclingTestBinary) {
+    if ($withKit -or $AuthoredBrain -or $AtlasTestBinary -or $DoclingTestBinary -or $withInspection) {
         foreach ($path in @($stdout, $stderr)) {
             if ((Get-Item -LiteralPath $path).Length -gt 2097152) { throw 'Native proof output exceeded its bounded synthetic log contract.' }
         }
@@ -375,6 +490,18 @@ try {
     if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr }
     if ($process.ExitCode -ne 0) { throw "Native core test failed with exit $($process.ExitCode); retain the actual log." }
     $log = Get-Content -LiteralPath $stdout -Raw
+    if ($withInspection) {
+        $reportPath = Join-Path $OutputRoot 'inspection-contract-results.json'
+        $reportFile = Get-Item -LiteralPath $reportPath -Force
+        if ($reportFile -isnot [IO.FileInfo] -or ($reportFile.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $reportFile.Length -gt 2097152) {
+            throw 'Inspection proof must be a bounded ordinary file.'
+        }
+        $report = Get-Content -LiteralPath $reportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if (-not $report.qualification_complete -or -not $report.actual_standard_user -or
+            $log -notmatch 'inspection_profile elevated=false admin_member=false private_current_user_temp=true') {
+            throw 'The standard-user inspection proof did not run completely.'
+        }
+    } else {
     if ($log -notmatch 'native_windows_environment private_current_user_temp=true' -or $log -notmatch 'native_windows_token elevated=false admin_member=false' -or $log -notmatch '--- PASS: TestWindowsCorePilot' -or $log -notmatch '--- PASS: TestWindowsDirectoryDurabilityPilot' -or $log -notmatch '--- PASS: TestWindowsPrivateStatePilot' -or $log -notmatch '--- PASS: TestWindowsOwnerReviewPilot' -or $log -match '--- SKIP:') {
         throw 'The standard-user native proof did not run completely.'
     }
@@ -406,6 +533,7 @@ try {
         if ($finalProof.shipping_server_sha256 -cne $serverHash -or $finalProof.generic_zip_sha256 -cne $zipHash) {
             throw 'Final proof does not bind the produced PE and generic ZIP.'
         }
+    }
     }
 } finally {
     Remove-Item Env:MAESTRO_WINDOWS_CORE_PROOF -ErrorAction SilentlyContinue
