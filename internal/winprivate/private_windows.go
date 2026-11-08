@@ -32,8 +32,9 @@ const unsafeAttributes = windows.FILE_ATTRIBUTE_REPARSE_POINT | windows.FILE_ATT
 
 // Directory owns its no-follow native handles. Close releases all custody.
 type Directory struct {
-	File      *os.File
-	ancestors []windows.Handle
+	File       *os.File
+	ancestors  []windows.Handle
+	pinnedTree bool
 }
 
 func CurrentUser() (*windows.SID, error) {
@@ -362,7 +363,7 @@ func walk(path string, create, private, fresh bool, step func(string), pinned bo
 		}
 	}
 	accepted = true
-	return &Directory{File: os.NewFile(uintptr(h), path), ancestors: ancestors}, nil
+	return &Directory{File: os.NewFile(uintptr(h), path), ancestors: ancestors, pinnedTree: pinned}, nil
 }
 
 func (d *Directory) Close() error {
