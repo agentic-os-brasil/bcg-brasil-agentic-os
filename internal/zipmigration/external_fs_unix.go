@@ -13,7 +13,10 @@ import (
 	"path/filepath"
 )
 
-type externalTree struct{ *engine }
+type externalTree struct {
+	*engine
+	sourceOnly bool
+}
 
 func externalOpen(root string) (*externalTree, error) {
 	if err := scheduler.ValidateDirectory(root); err != nil {
@@ -23,7 +26,7 @@ func externalOpen(root string) (*externalTree, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &externalTree{&engine{r, root}}, nil
+	return &externalTree{engine: &engine{r, root}}, nil
 }
 func externalReadLimit(e *externalTree, relative string, private bool, maximum int64) ([]byte, error) {
 	if err := e.check(relative); err != nil {
@@ -66,9 +69,9 @@ func externalEnsure(e *externalTree, name string, body []byte) error {
 		if !bytes.Equal(current, body) {
 			return errors.New("foreign external control or target content")
 		}
-		return nil
+		return externalSyncPublication(e, name)
 	}
-	if !os.IsNotExist(err) {
+	if !externalMissing(err) {
 		return err
 	}
 	if err = e.check(name); err != nil {
@@ -83,10 +86,10 @@ func externalEnsure(e *externalTree, name string, body []byte) error {
 			return err
 		}
 	}
-	if err = e.root.MkdirAll(path.Dir(name), 0700); err != nil {
+	if err = e.mkdir(path.Dir(name)); err != nil {
 		return err
 	}
-	if err = e.root.MkdirAll(path.Dir(temporary), 0700); err != nil {
+	if err = e.mkdir(path.Dir(temporary)); err != nil {
 		return err
 	}
 	partial, err := externalReadLimit(e, temporary, true, int64(len(body)))
@@ -112,10 +115,7 @@ func externalEnsure(e *externalTree, name string, body []byte) error {
 	if err == nil {
 		err = f.Sync()
 	}
-	closeErr := f.Close()
-	if err == nil {
-		err = closeErr
-	}
+	err = errors.Join(err, f.Close())
 	if err != nil {
 		return err
 	}
@@ -123,64 +123,89 @@ func externalEnsure(e *externalTree, name string, body []byte) error {
 	if _, err = e.root.Lstat(name); !os.IsNotExist(err) {
 		return errors.New("publication target appeared")
 	}
-	if err = externalPublish(e, temporary, name); err != nil {
-		return err
-	}
-	directory, err := e.root.Open(path.Dir(name))
-	if err != nil {
-		return err
-	}
-	err = directory.Sync()
-	closeErr = directory.Close()
-	if err == nil {
-		err = closeErr
-	}
+	_, err = externalPublish(e, temporary, name)
 	return err
 }
-func externalPublish(e *externalTree, from, to string) error {
-	if err := e.check(from); err != nil {
-		return err
+func externalPublish(e *externalTree, from, to string) (bool, error) {
+	return externalPublishAfterRename(e, from, to, nil)
+}
+func externalPublishAfterRename(e *externalTree, from, to string, afterRename func(*os.File, *os.File)) (moved bool, err error) {
+	if e.sourceOnly {
+		return false, errors.New("source tree grants no mutation authority")
 	}
-	if err := e.check(to); err != nil {
-		return err
+
+	if err = e.check(from); err != nil {
+		return false, err
+	}
+	if err = e.check(to); err != nil {
+		return false, err
 	}
 	source, err := e.root.Open(path.Dir(from))
 	if err != nil {
-		return err
+		return false, err
 	}
-	defer source.Close()
+	defer func() { err = errors.Join(err, source.Close()) }()
 	target, err := e.root.Open(path.Dir(to))
 	if err != nil {
-		return err
+		return false, err
 	}
-	defer target.Close()
-	return externalRenameExclusive(int(source.Fd()), path.Base(from), int(target.Fd()), path.Base(to))
+	defer func() { err = errors.Join(err, target.Close()) }()
+	if err = externalRenameExclusive(int(source.Fd()), path.Base(from), int(target.Fd()), path.Base(to)); err != nil {
+		return false, err
+	}
+	moved = true
+	if afterRename != nil {
+		afterRename(source, target)
+	}
+	return true, errors.Join(source.Sync(), target.Sync())
 }
 
-func externalOpenSource(root string) (*externalTree, error)   { return externalOpen(root) }
+func externalOpenSource(root string) (*externalTree, error) {
+	e, err := externalOpen(root)
+	if err == nil {
+		e.sourceOnly = true
+	}
+	return e, err
+}
 func externalOpenMovable(root string) (*externalTree, error)  { return externalOpen(root) }
 func (e *externalTree) close() error                          { return e.root.Close() }
 func (e *externalTree) stat(name string) (os.FileInfo, error) { return e.root.Lstat(name) }
-func (e *externalTree) mkdir(name string) error               { return e.root.MkdirAll(name, 0700) }
+func (e *externalTree) mkdir(name string) error {
+	if e.sourceOnly {
+		return errors.New("source tree grants no mutation authority")
+	}
+	if err := e.root.MkdirAll(name, 0700); err != nil {
+		return err
+	}
+	return e.syncPath(name)
+}
 func (e *externalTree) walk(name string, visit fs.WalkDirFunc) error {
 	return fs.WalkDir(e.root.FS(), name, visit)
 }
-func (e *externalTree) move(archive string) (bool, error) {
+func (e *externalTree) move(archive string) (moved bool, err error) {
+	if e.sourceOnly {
+		return false, errors.New("source tree grants no mutation authority")
+	}
+
 	parent, err := externalOpen(filepath.Dir(e.project))
 	if err != nil {
 		return false, err
 	}
-	defer parent.close()
-	if err = externalPublish(parent, filepath.Base(e.project), filepath.Base(archive)); err != nil {
-		return false, err
+	defer func() { err = errors.Join(err, parent.close()) }()
+	moved, err = externalPublish(parent, filepath.Base(e.project), filepath.Base(archive))
+	if moved {
+		e.project = archive
 	}
-	e.project = archive
-	return true, nil
+	return moved, err
 }
 func (e *externalTree) removeExact(name string, expected []byte) (bool, error) {
+	if e.sourceOnly {
+		return false, errors.New("source tree grants no mutation authority")
+	}
+
 	body, err := externalRead(e, name, true)
-	if os.IsNotExist(err) {
-		return false, nil
+	if externalMissing(err) {
+		return false, e.syncPath(path.Dir(name))
 	}
 	if err != nil {
 		return false, err
@@ -188,19 +213,20 @@ func (e *externalTree) removeExact(name string, expected []byte) (bool, error) {
 	if !bytes.Equal(body, expected) {
 		return false, errors.New("locator belongs to another attempt")
 	}
-	err = e.root.Remove(name)
-	return err == nil, err
+	if err = e.root.Remove(name); err != nil {
+		return false, err
+	}
+	return true, e.syncPath(path.Dir(name))
 }
 func (e *externalTree) publishRetirementUnderLease(next, name string, body []byte) error {
+	if e.sourceOnly {
+		return errors.New("source tree grants no mutation authority")
+	}
+
 	if err := e.root.Rename(next, name); err != nil {
 		return err
 	}
-	directory, err := e.root.Open(path.Dir(name))
-	if err != nil {
-		return err
-	}
-	defer directory.Close()
-	return directory.Sync()
+	return e.syncPath(name)
 }
 
 func externalPathInfo(name string, held ...*externalTree) (os.FileInfo, error) { return os.Lstat(name) }
@@ -212,4 +238,65 @@ func externalV1Committed(e *externalTree, _, _ []record) error {
 		return errors.New("v1 source is not committed")
 	}
 	return nil
+}
+
+func (e *externalTree) syncPath(name string) error {
+	if e.sourceOnly {
+		return errors.New("source tree grants no sync authority")
+	}
+	if err := e.check(name); err != nil {
+		return err
+	}
+	for {
+		f, err := e.root.OpenFile(name, externalReadFlags(), 0)
+		if err != nil {
+			return err
+		}
+		err = errors.Join(f.Sync(), f.Close())
+		if err != nil || name == "." {
+			return err
+		}
+		name = path.Dir(name)
+	}
+}
+
+func externalOpenHome(root string, create bool) (*externalTree, error) {
+	if create {
+		if _, err := os.Lstat(root); externalMissing(err) {
+			if err = os.Mkdir(root, 0700); err != nil {
+				return nil, err
+			}
+		} else if err != nil {
+			return nil, err
+		}
+	}
+	if err := externalOwnedDirectory(root, true); err != nil {
+		return nil, err
+	}
+	return externalOpen(root)
+}
+func (e *externalTree) syncHomeParent() error {
+	if e.sourceOnly {
+		return errors.New("source tree grants no sync authority")
+	}
+	parent, err := externalOpen(filepath.Dir(e.project))
+	if err != nil {
+		return err
+	}
+	return errors.Join(parent.syncPath("."), parent.close())
+}
+
+func (e *externalTree) restoreHome(home string) error {
+	if e.sourceOnly {
+		return errors.New("source tree grants no mutation authority")
+	}
+
+	if err := os.Mkdir(home, 0700); err != nil && !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	entries, err := os.ReadDir(home)
+	if err != nil || len(entries) != 0 {
+		return errors.New("prior empty home conflicts")
+	}
+	return e.syncHomeParent()
 }

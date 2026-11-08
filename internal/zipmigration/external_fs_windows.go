@@ -21,10 +21,11 @@ import (
 
 // Each transaction owns its admitted roots; no pathname registry carries custody.
 type externalTree struct {
-	project   string
-	source    *winprivate.SourceTree
-	directory *winprivate.Directory
-	movable   *winprivate.MovableDirectory
+	project    string
+	source     *winprivate.SourceTree
+	directory  *winprivate.Directory
+	movable    *winprivate.MovableDirectory
+	homeParent *winprivate.Directory
 }
 
 func externalOpen(root string) (*externalTree, error) {
@@ -41,28 +42,111 @@ func externalOpenSource(root string) (*externalTree, error) {
 	}
 	return &externalTree{project: root, source: d}, nil
 }
-func externalOpenMovable(root string) (*externalTree, error) {
-	d, err := winprivate.OpenMovableDirectory(root)
+func externalOpenHome(root string, create bool) (*externalTree, error) {
+	parent, err := winprivate.OpenPinnedTree(filepath.Dir(root))
 	if err != nil {
 		return nil, err
 	}
-	return &externalTree{project: root, movable: d}, nil
+	d, err := parent.PinnedChild(filepath.Base(root), create, false)
+	if err != nil {
+		return nil, errors.Join(err, parent.Close())
+	}
+	return &externalTree{project: root, directory: d, homeParent: parent}, nil
 }
+func externalOpenMovable(root string) (*externalTree, error) {
+	parent, err := winprivate.OpenPinnedTree(filepath.Dir(root))
+	if err != nil {
+		return nil, err
+	}
+	d, err := winprivate.OpenMovableDirectory(root)
+	if err != nil {
+		return nil, errors.Join(err, parent.Close())
+	}
+	return &externalTree{project: root, movable: d, homeParent: parent}, nil
+}
+
 func (e *externalTree) privateRoot() *winprivate.Directory {
 	if e.movable != nil {
 		return e.movable.Directory()
 	}
 	return e.directory
 }
-func (e *externalTree) close() error {
+func (e *externalTree) close() (err error) {
 	if e.movable != nil {
-		return e.movable.Close()
+		err = e.movable.Close()
+	} else if e.source != nil {
+		err = e.source.Close()
+	} else {
+		err = e.directory.Close()
 	}
-	if e.source != nil {
-		return e.source.Close()
+	if e.homeParent != nil {
+		err = errors.Join(err, e.homeParent.Close())
 	}
-	return e.directory.Close()
+	return err
 }
+func (e *externalTree) syncHomeParent() error {
+	if e.source != nil || e.homeParent == nil {
+		return errors.New("HOME durability requires its admitted private parent")
+	}
+	return e.homeParent.Sync()
+}
+
+// Flush only admitted private destinations, from the file through held ancestry.
+func (e *externalTree) syncPrivate(name string, create bool) (err error) {
+	if e.source != nil {
+		return errors.New("source tree grants no sync authority")
+	}
+	if err = externalRelative(name); err != nil {
+		return err
+	}
+	directoryName := name
+	file := false
+	if !create {
+		info, statErr := e.stat(name)
+		if statErr != nil {
+			return statErr
+		}
+		file = !info.IsDir()
+		if file {
+			directoryName = path.Dir(name)
+		}
+	}
+	root := e.privateRoot()
+	if root == nil {
+		return errors.New("held private root is missing")
+	}
+	chain := []*winprivate.Directory{root}
+	defer func() {
+		for i := len(chain) - 1; i > 0; i-- {
+			err = errors.Join(err, chain[i].Close())
+		}
+	}()
+	for _, component := range strings.Split(directoryName, "/") {
+		if component == "." {
+			continue
+		}
+		next, openErr := chain[len(chain)-1].PinnedChild(component, create, false)
+		if openErr != nil {
+			return openErr
+		}
+		chain = append(chain, next)
+	}
+	if file {
+		f, openErr := chain[len(chain)-1].OpenFile(path.Base(name), os.O_RDWR)
+		if openErr != nil {
+			return openErr
+		}
+		if err = errors.Join(f.Sync(), f.Close()); err != nil {
+			return err
+		}
+	}
+	for i := len(chain) - 1; i >= 0; i-- {
+		err = errors.Join(err, chain[i].Sync())
+	}
+	return err
+}
+func (e *externalTree) syncPath(name string) error { return e.syncPrivate(name, false) }
+
 func externalRelative(name string) error {
 	if name == "." {
 		return nil
@@ -73,7 +157,7 @@ func externalRelative(name string) error {
 	_, err := collisionKey(name)
 	return err
 }
-func (e *externalTree) privateDirectory(name string, create bool) (*winprivate.Directory, func(), error) {
+func (e *externalTree) privateDirectory(name string, create bool) (*winprivate.Directory, func() error, error) {
 	if err := externalRelative(name); err != nil {
 		return nil, nil, err
 	}
@@ -88,17 +172,21 @@ func (e *externalTree) privateDirectory(name string, create bool) (*winprivate.D
 		}
 		next, err := d.PinnedChild(component, create, false)
 		if owned {
-			d.Close()
+			err = errors.Join(err, d.Close())
 		}
 		if err != nil {
+			if next != nil {
+				err = errors.Join(err, next.Close())
+			}
 			return nil, nil, err
 		}
 		d, owned = next, true
 	}
-	return d, func() {
+	return d, func() error {
 		if owned {
-			d.Close()
+			return d.Close()
 		}
+		return nil
 	}, nil
 }
 func (e *externalTree) sourceDirectory(name string) (*winprivate.SourceTree, func(), error) {
@@ -173,7 +261,7 @@ func (e *externalTree) openFile(name string, private bool) (*os.File, func(), er
 		close()
 		return nil, nil, err
 	}
-	return f, close, nil
+	return f, func() { close() }, nil
 }
 func (e *externalTree) stat(name string) (os.FileInfo, error) {
 	if err := externalRelative(name); err != nil {
@@ -297,36 +385,36 @@ func (e *externalTree) walk(name string, visit fs.WalkDirFunc) error {
 	}
 	return walk(name, info)
 }
-func (e *externalTree) mkdir(name string) error {
-	_, close, err := e.privateDirectory(name, true)
-	if err != nil {
-		return err
-	}
-	close()
-	return nil
-}
+func (e *externalTree) mkdir(name string) error { return e.syncPrivate(name, true) }
+
 func externalEnsure(e *externalTree, name string, body []byte) (err error) {
 	current, err := externalReadLimit(e, name, true, int64(len(body)))
 	if err == nil {
 		if !bytes.Equal(current, body) {
 			return errors.New("foreign external control or target content")
 		}
-		return nil
+		return externalSyncPublication(e, name)
 	}
 	if !externalMissing(err) {
 		return err
 	}
-	target, closeTarget, err := e.privateDirectory(path.Dir(name), true)
+	if err = e.mkdir(path.Dir(name)); err != nil {
+		return err
+	}
+	target, closeTarget, err := e.privateDirectory(path.Dir(name), false)
 	if err != nil {
 		return err
 	}
-	defer closeTarget()
+	defer func() { err = errors.Join(err, closeTarget()) }()
 	temporary := externalTemporary(name)
-	staging, closeStaging, err := e.privateDirectory(path.Dir(temporary), true)
+	if err = e.mkdir(path.Dir(temporary)); err != nil {
+		return err
+	}
+	staging, closeStaging, err := e.privateDirectory(path.Dir(temporary), false)
 	if err != nil {
 		return err
 	}
-	defer closeStaging()
+	defer func() { err = errors.Join(err, closeStaging()) }()
 	stage, err := staging.OpenStage(path.Base(temporary))
 	if err != nil {
 		return err
@@ -353,8 +441,11 @@ func externalEnsure(e *externalTree, name string, body []byte) (err error) {
 		return err
 	}
 	// Publish retains the exact file whose prefix was validated above.
-	_, err = stage.Publish(target, path.Base(name))
-	return err
+	moved, publishErr := stage.Publish(target, path.Base(name))
+	if !moved {
+		return publishErr
+	}
+	return errors.Join(publishErr, e.syncPrivate(path.Dir(name), false), e.syncPrivate(path.Dir(temporary), false))
 }
 func (e *externalTree) move(archive string) (bool, error) {
 	if e.movable == nil || filepath.Dir(archive) != filepath.Dir(e.project) {
@@ -363,16 +454,17 @@ func (e *externalTree) move(archive string) (bool, error) {
 	moved, err := e.movable.MoveTo(filepath.Base(archive))
 	if moved {
 		e.project = archive
+		err = errors.Join(err, e.syncHomeParent())
 	}
 	return moved, err
 }
-func (e *externalTree) removeExact(name string, expected []byte) (bool, error) {
+func (e *externalTree) removeExact(name string, expected []byte) (marked bool, err error) {
 	d, close, err := e.privateDirectory(path.Dir(name), false)
 	if err != nil {
 		return false, err
 	}
-	defer close()
-	marked, err := d.RemoveExact(path.Base(name), expected)
+	defer func() { err = errors.Join(err, close()) }()
+	marked, err = d.RemoveExact(path.Base(name), expected)
 	if !marked && externalMissing(err) {
 		return false, nil
 	}
@@ -396,12 +488,12 @@ func (e *externalTree) publishRetirementUnderLease(next, name string, body []byt
 	if err != nil {
 		return err
 	}
-	defer closeSource()
+	defer func() { err = errors.Join(err, closeSource()) }()
 	target, closeTarget, err := e.privateDirectory(path.Dir(name), false)
 	if err != nil {
 		return err
 	}
-	defer closeTarget()
+	defer func() { err = errors.Join(err, closeTarget()) }()
 	stage, err := source.OpenStage(path.Base(next))
 	if err != nil {
 		return err
@@ -421,8 +513,11 @@ func (e *externalTree) publishRetirementUnderLease(next, name string, body []byt
 	if !bytes.Equal(actual, body) {
 		return errors.New("retirement stage changed")
 	}
-	_, err = stage.PublishReplacingUnderLease(target, path.Base(name))
-	return err
+	moved, publishErr := stage.PublishReplacingUnderLease(target, path.Base(name))
+	if !moved {
+		return publishErr
+	}
+	return errors.Join(publishErr, e.syncPrivate(path.Dir(name), false))
 }
 
 func externalPathInfo(name string, held ...*externalTree) (os.FileInfo, error) {
@@ -470,7 +565,10 @@ func externalAcquire(e *externalTree, attempt string) (func(), error) {
 	if err := externalProfileControls(e.project, attempt); err != nil {
 		return nil, err
 	}
-	d, close, err := e.privateDirectory(externalIntentControl, true)
+	if err := e.mkdir(externalIntentControl); err != nil {
+		return nil, err
+	}
+	d, close, err := e.privateDirectory(externalIntentControl, false)
 	if err != nil {
 		return nil, err
 	}
@@ -578,4 +676,19 @@ func externalV1Committed(e *externalTree, data, brain []record) error {
 		}
 	}
 	return nil
+}
+
+func (e *externalTree) restoreHome(home string) error {
+	if e.source != nil || e.homeParent == nil || filepath.Dir(home) != filepath.Dir(e.project) {
+		return errors.New("prior HOME requires its admitted private parent")
+	}
+	d, err := e.homeParent.PinnedChild(filepath.Base(home), true, false)
+	if err != nil {
+		return err
+	}
+	entries, err := d.ReadDir(1)
+	if err != nil || len(entries) != 0 {
+		return errors.Join(errors.New("prior empty home conflicts"), err, d.Close())
+	}
+	return errors.Join(d.Sync(), d.Close(), e.homeParent.Sync())
 }

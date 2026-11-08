@@ -59,7 +59,7 @@ func externalAcquire(e *externalTree, attempt string) (func(), error) {
 	if err := e.check(name); err != nil {
 		return nil, err
 	}
-	if err := e.root.MkdirAll(path.Dir(name), 0700); err != nil {
+	if err := e.mkdir(path.Dir(name)); err != nil {
 		return nil, err
 	}
 	f, err := e.root.OpenFile(name, os.O_RDWR|os.O_CREATE|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0600)

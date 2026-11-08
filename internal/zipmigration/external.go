@@ -780,6 +780,48 @@ func externalTemporary(name string) string {
 	return path.Join(externalControl, ".staging", hash([]byte(name))+".tmp")
 }
 
+func externalSyncPath(e *externalTree, name string) error { return e.syncPath(name) }
+func externalMkdirAll(e *externalTree, name string) error { return e.mkdir(name) }
+
+func externalSyncPublication(e *externalTree, name string) error {
+	if err := externalSyncPath(e, name); err != nil {
+		return err
+	}
+	staging := path.Dir(externalTemporary(name))
+	for {
+		info, err := e.stat(staging)
+		if externalMissing(err) && staging != "." {
+			staging = path.Dir(staging)
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			return errors.New("publication staging parent is not a directory")
+		}
+		return externalSyncPath(e, staging)
+	}
+}
+func externalSyncCommitted(p ExternalPlan) (err error) {
+	home, err := externalOpenHome(p.Home, false)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, home.close()) }()
+	if err = externalSyncPublication(home, externalName(p.AttemptID, "commit.json")); err != nil {
+		return err
+	}
+	profile, err := externalOpen(p.UserHome)
+	if err != nil {
+		return err
+	}
+	if err = errors.Join(externalSyncPublication(profile, ".maestro-home.json"), profile.close()); err != nil {
+		return err
+	}
+	return home.syncHomeParent()
+}
+
 func externalIntentName(attempt string) string {
 	return path.Join(externalIntentControl, attempt, "intent.json")
 }
@@ -841,7 +883,7 @@ func ApplyExternal(p ExternalPlan, digest string, progress func(ExternalProgress
 }
 
 // Native qualification exercises this exact transaction while public admission stays closed.
-func applyExternal(p ExternalPlan, digest string, progress func(ExternalProgress) error) (ExternalStatus, error) {
+func applyExternal(p ExternalPlan, digest string, progress func(ExternalProgress) error) (status ExternalStatus, err error) {
 	s := externalStatus(p, digest, "blocked")
 	if err := userlevel.EnsureNotElevated(); err != nil {
 		return s, err
@@ -857,6 +899,11 @@ func applyExternal(p ExternalPlan, digest string, progress func(ExternalProgress
 		return s, err
 	}
 	if current, err := InspectExternal(p.Home, p.AttemptID, digest); err == nil && current.Current {
+		if err = externalSyncCommitted(p); err != nil {
+			pending := externalStatus(p, digest, "pending")
+			pending.Diagnostic = "migration-durability-pending"
+			return pending, err
+		}
 		current.State = "already_migrated"
 		return current, nil
 	}
@@ -928,21 +975,22 @@ func applyExternal(p ExternalPlan, digest string, progress func(ExternalProgress
 	if err = externalEnsure(u, externalIntentName(p.AttemptID), b); err != nil {
 		return s, err
 	}
-	if _, err = externalPathInfo(p.Home); externalMissing(err) {
-		if err = externalCreateHome(p.Home); err != nil {
-			return s, err
-		}
-	} else if err != nil {
-		return s, err
-	}
-	if err = externalOwnedDirectory(p.Home, true); err != nil {
-		return s, err
-	}
-	e, err := externalOpen(p.Home)
+	s = externalStatus(p, digest, "pending")
+	e, err := externalOpenHome(p.Home, true)
 	if err != nil {
 		return s, err
 	}
-	defer e.close()
+	defer func() {
+		if closeErr := e.close(); closeErr != nil {
+			err = errors.Join(err, closeErr)
+			status.Current = false
+			status.State = "pending"
+			status.Diagnostic = "migration-durability-pending"
+		}
+	}()
+	if err = e.syncHomeParent(); err != nil {
+		return s, err
+	}
 	planName := externalName(p.AttemptID, "plan.json")
 	if err = externalResumeTree(e, p); err != nil {
 		return s, err
@@ -1037,7 +1085,7 @@ func externalLoadTree(home, attempt, digest string, movable bool) (ExternalPlan,
 	if err := externalOwnedDirectory(home, true); err != nil {
 		return p, nil, err
 	}
-	open := externalOpen
+	open := func(root string) (*externalTree, error) { return externalOpenHome(root, false) }
 	if movable {
 		open = externalOpenMovable
 	}
@@ -1059,7 +1107,7 @@ func externalLoadTree(home, attempt, digest string, movable bool) (ExternalPlan,
 		err = errors.New("external plan binding mismatch")
 	}
 	if err != nil {
-		e.close()
+		err = errors.Join(err, e.close())
 		return p, nil, err
 	}
 	return p, e, nil
@@ -1079,7 +1127,7 @@ func externalCheckRecord(e *externalTree, p ExternalPlan, digest, name, phase st
 	return nil
 }
 
-func InspectExternal(home, attempt, digest string) (ExternalStatus, error) {
+func InspectExternal(home, attempt, digest string) (status ExternalStatus, err error) {
 	s := ExternalStatus{State: "unverified", Diagnostic: "migration-unverified"}
 	p, e, err := externalLoad(home, attempt, digest)
 	archived := false
@@ -1091,7 +1139,14 @@ func InspectExternal(home, attempt, digest string) (ExternalStatus, error) {
 	if err != nil {
 		return s, err
 	}
-	defer e.close()
+	defer func() {
+		if closeErr := e.close(); closeErr != nil {
+			err = errors.Join(err, closeErr)
+			status.Current = false
+			status.State = "unverified"
+			status.Diagnostic = "migration-unverified"
+		}
+	}()
 	s = externalStatusAt(p, digest, "pending", e.project)
 	if _, err = externalRead(e, externalName(attempt, "revoked.json"), true); err == nil {
 		s.State = "revoked"
@@ -1159,7 +1214,7 @@ func RollbackExternal(home, attempt, digest string, progress func(ExternalProgre
 	return rollbackExternal(home, attempt, digest, progress)
 }
 
-func rollbackExternal(home, attempt, digest string, progress func(ExternalProgress) error) (ExternalStatus, error) {
+func rollbackExternal(home, attempt, digest string, progress func(ExternalProgress) error) (status ExternalStatus, err error) {
 	s := ExternalStatus{State: "blocked", Diagnostic: "migration-unverified"}
 	if err := userlevel.EnsureNotElevated(); err != nil {
 		return s, err
@@ -1174,7 +1229,14 @@ func rollbackExternal(home, attempt, digest string, progress func(ExternalProgre
 	if err != nil {
 		return s, err
 	}
-	defer e.close()
+	defer func() {
+		if closeErr := e.close(); closeErr != nil {
+			err = errors.Join(err, closeErr)
+			status.Current = false
+			status.State = "rollback_pending"
+			status.Diagnostic = "migration-durability-pending"
+		}
+	}()
 	if !archived {
 		if err = externalRoots(p.ExternalOptions, true, e); err != nil {
 			return s, err
@@ -1205,6 +1267,11 @@ func rollbackExternal(home, attempt, digest string, progress func(ExternalProgre
 		return s, err
 	}
 	s = externalStatusAt(p, digest, "rollback_pending", e.project)
+	if archived {
+		if err = e.syncHomeParent(); err != nil {
+			return s, err
+		}
+	}
 	if !archived {
 		version, layout, _, sourceErr := externalSource(p.SourceRoot)
 		if sourceErr != nil || version != p.SourceVersion || layout != p.SourceLayout {
@@ -1250,15 +1317,15 @@ func rollbackExternal(home, attempt, digest string, progress func(ExternalProgre
 	if err != nil {
 		return s, err
 	}
+	if err = externalSyncPath(u, "."); err != nil {
+		return s, err
+	}
 	if p.PriorHome {
-		if err = externalCreateHome(home); err != nil && !os.IsExist(err) {
+		if err = e.restoreHome(home); err != nil {
 			return s, err
 		}
-		entries, er := externalPathEntries(home)
-		if er != nil || len(entries) != 0 {
-			return s, errors.New("prior empty home conflicts")
-		}
 	}
+
 	if err = externalEnsure(e, externalName(attempt, "rollback.json"), externalCanonical(externalRecord{1, attempt, digest, "rolled_back"})); err != nil {
 		return s, err
 	}
@@ -1275,7 +1342,7 @@ func externalLoadArchived(home, archive, attempt, digest string, held ...*extern
 	if err := externalOwnedDirectory(archive, true); err != nil {
 		return p, nil, err
 	}
-	e, err := externalOpen(archive)
+	e, err := externalOpenHome(archive, false)
 	if err != nil {
 		return p, nil, err
 	}
@@ -1296,7 +1363,7 @@ func externalLoadArchived(home, archive, attempt, digest string, held ...*extern
 		err = externalCheckRecord(e, p, digest, "revoked.json", "revoked")
 	}
 	if err != nil {
-		e.close()
+		err = errors.Join(err, e.close())
 		return p, nil, err
 	}
 	return p, e, nil
@@ -1339,7 +1406,7 @@ func RetiredExternalHome(userHome, home string) (bool, error) {
 }
 
 // Prior retirement checks may run while a newer HOME has movable custody.
-func retiredExternalHome(userHome, home string, held ...*externalTree) (bool, error) {
+func retiredExternalHome(userHome, home string, held ...*externalTree) (retired bool, err error) {
 	if err := externalClean(userHome); err != nil {
 		return false, err
 	}
@@ -1375,7 +1442,12 @@ func retiredExternalHome(userHome, home string, held ...*externalTree) (bool, er
 	if err != nil {
 		return false, err
 	}
-	defer e.close()
+	defer func() {
+		if closeErr := e.close(); closeErr != nil {
+			err = errors.Join(err, closeErr)
+			retired = false
+		}
+	}()
 	if p.UserHome != userHome {
 		return false, errors.New("retired profile mismatch")
 	}
@@ -1418,7 +1490,7 @@ func externalPublishRetirement(u *externalTree, p ExternalPlan, digest string, h
 		return err
 	}
 	if bytes.Equal(previous, body) {
-		return nil
+		return externalSyncPublication(u, name)
 	}
 	next := name + ".next-" + p.AttemptID
 	if err = externalEnsure(u, next, body); err != nil {
