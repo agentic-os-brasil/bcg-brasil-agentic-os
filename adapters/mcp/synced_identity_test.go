@@ -1,7 +1,10 @@
 package product_test
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -29,7 +32,29 @@ func TestIdentityAdvertisesSignedSourceExecutionContract(t *testing.T) {
 	if wire.SchemaVersion != 2 || wire.ExecutionContract != "maestro-synced-source-v1" {
 		t.Fatalf("actual identity cannot qualify signed-source execution: schema=%d contract=%q", wire.SchemaVersion, wire.ExecutionContract)
 	}
-	if len(identity.Resources) != 261 {
-		t.Fatalf("immutable resource closure changed: got %d, want 261", len(identity.Resources))
+	// Independent canonical file and literal URI: matching a production
+	// catalog to itself cannot prove the new disclosed recipe was retained.
+	canonical, err := os.ReadFile("../../bundles/base/skills/maestro-operator/resources/authored-brain.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const authoredURI = "maestro://methods/maestro-operator/resources/authored-brain.md"
+	found := 0
+	for index, resource := range identity.Resources {
+		if index > 0 && identity.Resources[index-1].URI >= resource.URI {
+			t.Fatal("identity URI closure is duplicated or unsorted")
+		}
+		if resource.URI == authoredURI {
+			found++
+			if resource.Bytes != int64(len(canonical)) || resource.SHA256 != fmt.Sprintf("%x", sha256.Sum256(canonical)) {
+				t.Fatal("authored recipe identity differs from canonical source URI/hash/size", resource)
+			}
+		}
+	}
+	if found != 1 {
+		t.Fatal("identity must contain exactly one canonical authored recipe", found)
+	}
+	if len(identity.Resources) != 262 {
+		t.Fatalf("immutable resource closure changed: got %d, want 262", len(identity.Resources))
 	}
 }
