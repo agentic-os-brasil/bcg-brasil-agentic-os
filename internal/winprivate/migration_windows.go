@@ -236,6 +236,19 @@ func relabelHeldFile(file *os.File, name string) (*os.File, error) {
 // Publish returns moved=true once the namespace changed, even if a later flush
 // fails. Domain recovery must preserve that complete object rather than recopy.
 func (s *Stage) Publish(target *Directory, name string) (moved bool, err error) {
+	return s.publish(target, name, false)
+}
+
+// PublishReplacingUnderLease atomically replaces existing cooperative private
+// metadata with this same held stage. The caller must hold its exclusive profile
+// migration lease, validate the retired archive authority, and compare the prior
+// record bytes before calling. This is not an expected-object CAS: the target's
+// admission view closes before rename. Initial publication must use Publish.
+func (s *Stage) PublishReplacingUnderLease(target *Directory, name string) (moved bool, err error) {
+	return s.publish(target, name, true)
+}
+
+func (s *Stage) publish(target *Directory, name string, replace bool) (moved bool, err error) {
 	if s == nil || s.File == nil || s.published {
 		return false, errors.New("stage is closed or already published")
 	}
@@ -250,11 +263,26 @@ func (s *Stage) Publish(target *Directory, name string) (moved bool, err error) 
 		nextParent.Close()
 		return false, err
 	}
+	if replace {
+		old, err := nextParent.OpenFile(name, os.O_RDONLY)
+		if err != nil {
+			return false, errors.Join(err, nextParent.Close())
+		}
+		var attributes windows.ByHandleFileInformation
+		err = windows.GetFileInformationByHandle(windows.Handle(old.Fd()), &attributes)
+		if err == nil && attributes.FileAttributes&windows.FILE_ATTRIBUTE_READONLY != 0 {
+			err = errors.New("leased publication refuses a read-only destination")
+		}
+		err = errors.Join(err, old.Close())
+		if err != nil {
+			return false, errors.Join(err, nextParent.Close())
+		}
+	}
 	if err := s.File.Sync(); err != nil {
 		nextParent.Close()
 		return false, err
 	}
-	moved, err = renameHandle(s.File, nextParent, name, false)
+	moved, err = renameHandle(s.File, nextParent, name, replace)
 	if !moved {
 		return false, errors.Join(err, nextParent.Close())
 	}

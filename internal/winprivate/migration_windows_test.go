@@ -5,6 +5,7 @@ package winprivate
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -230,9 +231,7 @@ func TestWindowsMigrationStageResumesAndPublishesTheHeldFile(t *testing.T) {
 	if _, err := os.Stat(stagePath); !os.IsNotExist(err) {
 		t.Fatal("old stage name remains", err)
 	}
-	if got, err := os.ReadFile(filepath.Join(target.File.Name(), "complete.md")); err != nil || string(got) != "prefix-complete" {
-		t.Fatal("published bytes differ", err)
-	}
+	assertMigrationPublishedBytes(t, target, "complete.md", "prefix-complete")
 	if got, err := os.ReadFile(filepath.Join(target.File.Name(), "occupied.md")); err != nil || string(got) != "occupied" {
 		t.Fatal("occupied target changed", err)
 	}
@@ -373,6 +372,46 @@ func assertRemovalPreserved(t *testing.T, before removalState, path string) {
 		before.info.Mode() != after.info.Mode() || !before.info.ModTime().Equal(after.info.ModTime()) ||
 		!os.SameFile(before.info, after.info) || before.security != after.security {
 		t.Fatal("exact removal refusal changed bytes, identity, metadata or security")
+	}
+}
+
+func setRemovalFixtureAccess(t *testing.T, path string, access uint32) {
+	t.Helper()
+	original, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldACL, _, err := original.DACL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	control, _, err := original.Control()
+	if err != nil {
+		t.Fatal(err)
+	}
+	restore := windows.SECURITY_INFORMATION(windows.DACL_SECURITY_INFORMATION | windows.UNPROTECTED_DACL_SECURITY_INFORMATION)
+	if control&windows.SE_DACL_PROTECTED != 0 {
+		restore = windows.DACL_SECURITY_INFORMATION | windows.PROTECTED_DACL_SECURITY_INFORMATION
+	}
+	t.Cleanup(func() {
+		if err := windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, restore, nil, nil, oldACL, nil); err != nil {
+			t.Error(err)
+		}
+	})
+	sid, err := CurrentUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sd, err := windows.SecurityDescriptorFromString(fmt.Sprintf("D:P(A;;0x%x;;;%s)(A;;FA;;;SY)(A;;FA;;;BA)", access, sid.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	acl, _, err := sd.DACL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -531,42 +570,36 @@ func TestWindowsMigrationRemoveExactRejectsUnsafeOrBusyLeaves(t *testing.T) {
 				})
 			}
 			if kind == "delete-denied" {
-				original, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
+				// Configure the fixture before admission; old handles must not retain deletion rights.
+				parentPath := parent.File.Name()
+				if err := parent.Close(); err != nil {
+					t.Fatal(err)
+				}
+				parentAccess := uint32(privateDirAccess | windows.WRITE_DAC | windows.WRITE_OWNER)
+				leafAccess := uint32(windows.FILE_GENERIC_READ | windows.FILE_GENERIC_WRITE | windows.WRITE_DAC | windows.WRITE_OWNER)
+				const fileDeleteChild = 0x40
+				if parentAccess&(windows.DELETE|fileDeleteChild) != 0 || leafAccess&windows.DELETE != 0 {
+					t.Fatal("fixture grants an alternate deletion path")
+				}
+				setRemovalFixtureAccess(t, parentPath, parentAccess)
+				setRemovalFixtureAccess(t, path, leafAccess)
+				var err error
+				parent, err = OpenPinnedTree(parentPath)
 				if err != nil {
-					t.Fatal(err)
+					t.Fatal("restricted parent is not privately admitted", err)
 				}
-				oldACL, _, err := original.DACL()
+				defer parent.Close()
+				readable, err := parent.OpenFile(name, os.O_RDONLY)
 				if err != nil {
+					t.Fatal("restricted leaf is not privately readable", err)
+				}
+				if err := readable.Close(); err != nil {
 					t.Fatal(err)
 				}
-				control, _, err := original.Control()
-				if err != nil {
-					t.Fatal(err)
-				}
-				restore := windows.SECURITY_INFORMATION(windows.DACL_SECURITY_INFORMATION | windows.UNPROTECTED_DACL_SECURITY_INFORMATION)
-				if control&windows.SE_DACL_PROTECTED != 0 {
-					restore = windows.DACL_SECURITY_INFORMATION | windows.PROTECTED_DACL_SECURITY_INFORMATION
-				}
-				t.Cleanup(func() {
-					if err := windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, restore, nil, nil, oldACL, nil); err != nil {
-						t.Error(err)
-					}
-				})
-				sid, err := CurrentUser()
-				if err != nil {
-					t.Fatal(err)
-				}
-				sd, err := windows.SecurityDescriptorFromString("D:P(D;;0x10000;;;" + sid.String() + ")(A;;FA;;;" + sid.String() + ")(A;;FA;;;SY)(A;;FA;;;BA)")
-				if err != nil {
-					t.Fatal(err)
-				}
-				acl, _, err := sd.DACL()
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err := windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil); err != nil {
-					t.Fatal(err)
-				}
+			}
+			parentSecurity, err := windows.GetNamedSecurityInfo(parent.File.Name(), windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+			if err != nil {
+				t.Fatal(err)
 			}
 			before, external := removalSnapshot(t, path), removalSnapshot(t, outside)
 			selected := parent
@@ -590,6 +623,227 @@ func TestWindowsMigrationRemoveExactRejectsUnsafeOrBusyLeaves(t *testing.T) {
 			}
 			assertRemovalPreserved(t, before, path)
 			assertRemovalPreserved(t, external, outside)
+			afterParentSecurity, err := windows.GetNamedSecurityInfo(parent.File.Name(), windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+			if err != nil || parentSecurity.String() != afterParentSecurity.String() {
+				t.Fatal("refusal changed the parent's private security", err)
+			}
 		})
+	}
+}
+
+func TestWindowsMigrationStageReplacesCooperativeMetadataUnderLease(t *testing.T) {
+	parent := migrationPrivateParent(t)
+	if err := parent.Publish("retired.json", []byte("prior retirement"), true); err != nil {
+		t.Fatal(err)
+	}
+	if err := parent.Publish("unrelated.md", []byte("keep unrelated"), true); err != nil {
+		t.Fatal(err)
+	}
+	unrelated := removalSnapshot(t, filepath.Join(parent.File.Name(), "unrelated.md"))
+	stage, err := parent.OpenStage("next-retirement.part")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stage.Write([]byte("next retirement")); err != nil {
+		stage.Close()
+		t.Fatal(err)
+	}
+	if err := stage.Close(); err != nil {
+		t.Fatal(err)
+	}
+	stage, err = parent.OpenStage("next-retirement.part")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stage.Close()
+	before, err := stage.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The domain supplies the lease, archive proof and prior-byte comparison;
+	// this kernel test covers only the finite publication beneath that contract.
+	if moved, err := stage.PublishReplacingUnderLease(parent, "missing.json"); moved || !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("replacement accepted an initially absent destination", moved, err)
+	}
+	if moved, err := stage.PublishReplacingUnderLease(parent, "retired.json"); !moved || err != nil {
+		t.Fatal("cooperative metadata was not replaced", moved, err)
+	}
+	after, err := stage.Stat()
+	if err != nil || !os.SameFile(before, after) {
+		t.Fatal("replacement adopted a different stage", err)
+	}
+	if _, err := os.Stat(filepath.Join(parent.File.Name(), "next-retirement.part")); !os.IsNotExist(err) {
+		t.Fatal("published stage name remains", err)
+	}
+	assertMigrationPublishedBytes(t, parent, "retired.json", "next retirement")
+	assertRemovalPreserved(t, unrelated, filepath.Join(parent.File.Name(), "unrelated.md"))
+	if moved, err := stage.PublishReplacingUnderLease(parent, "retired.json"); moved || err == nil {
+		t.Fatal("already published stage was reused", moved, err)
+	}
+}
+
+func TestWindowsMigrationLeasedReplacementRefusesUnsafeDestinations(t *testing.T) {
+	for _, kind := range []string{"directory", "hardlink", "symlink", "readonly", "public", "busy", "unpinned"} {
+		t.Run(kind, func(t *testing.T) {
+			parent := migrationPrivateParent(t)
+			name := "retired.json"
+			path := filepath.Join(parent.File.Name(), name)
+			if err := parent.Publish("unrelated.md", []byte("keep unrelated"), true); err != nil {
+				t.Fatal(err)
+			}
+			unrelated := removalSnapshot(t, filepath.Join(parent.File.Name(), "unrelated.md"))
+			if kind == "directory" {
+				d, err := parent.PinnedChild(name, true, true)
+				if err != nil {
+					t.Fatal(err)
+				}
+				d.Close()
+			} else if kind == "symlink" {
+				if err := os.Symlink(filepath.Join(parent.File.Name(), "unrelated.md"), path); err != nil {
+					t.Fatal("required alias fixture unavailable", err)
+				}
+			} else {
+				if err := parent.Publish(name, []byte("prior retirement"), true); err != nil {
+					t.Fatal(err)
+				}
+			}
+			switch kind {
+			case "hardlink":
+				if err := os.Link(path, path+"-alias"); err != nil {
+					t.Fatal("required hardlink fixture unavailable", err)
+				}
+			case "readonly":
+				if err := os.Chmod(path, 0400); err != nil {
+					t.Fatal(err)
+				}
+				defer os.Chmod(path, 0600)
+			case "public":
+				sid, err := CurrentUser()
+				if err != nil {
+					t.Fatal(err)
+				}
+				sd, err := windows.SecurityDescriptorFromString("O:" + sid.String() + "D:P(A;;FA;;;" + sid.String() + ")(A;;FA;;;SY)(A;;FA;;;BA)(A;;GR;;;WD)")
+				if err != nil {
+					t.Fatal(err)
+				}
+				acl, _, err := sd.DACL()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil); err != nil {
+					t.Fatal(err)
+				}
+			case "busy":
+				reader, err := os.Open(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer reader.Close()
+			}
+			before, err := os.Lstat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			security, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var originalBytes []byte
+			if !before.IsDir() {
+				originalBytes, err = os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			stage, err := parent.OpenStage("next-retirement.part")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer stage.Close()
+			if _, err := stage.Write([]byte("next retirement")); err != nil {
+				t.Fatal(err)
+			}
+			stageBefore, err := stage.Stat()
+			if err != nil {
+				t.Fatal(err)
+			}
+			target := parent
+			if kind == "unpinned" {
+				target, err = Open(parent.File.Name(), false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer target.Close()
+			}
+			if moved, err := stage.PublishReplacingUnderLease(target, name); moved || err == nil {
+				t.Fatal("unsafe replacement destination was accepted", moved, err)
+			}
+			after, err := os.Lstat(path)
+			if err != nil || !os.SameFile(before, after) || before.Mode() != after.Mode() {
+				t.Fatal("refusal changed the destination identity or attributes", err)
+			}
+			afterSecurity, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+			if err != nil || afterSecurity.String() != security.String() {
+				t.Fatal("refusal changed destination security", err)
+			}
+			if !before.IsDir() {
+				got, err := os.ReadFile(path)
+				if err != nil || !bytes.Equal(got, originalBytes) {
+					t.Fatal("refusal changed destination bytes", err)
+				}
+			}
+			stageAfter, err := stage.Stat()
+			if err != nil || !os.SameFile(stageBefore, stageAfter) || stage.published {
+				t.Fatal("refusal lost or published the held stage", err)
+			}
+			assertRemovalPreserved(t, unrelated, filepath.Join(parent.File.Name(), "unrelated.md"))
+		})
+	}
+}
+
+func TestWindowsMigrationLeasedReplacementReportsMovedAfterLateFailure(t *testing.T) {
+	parent := migrationPrivateParent(t)
+	if err := parent.Publish("retired.json", []byte("prior retirement"), true); err != nil {
+		t.Fatal(err)
+	}
+	stage, err := parent.OpenStage("next-retirement.part")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stage.Close()
+	if _, err := stage.Write([]byte("next retirement")); err != nil {
+		t.Fatal(err)
+	}
+	before, err := stage.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Force only the old-parent finalization to fail after native rename. The
+	// source remains held and the independent destination retains its pins.
+	if err := stage.parent.File.Close(); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := stage.PublishReplacingUnderLease(parent, "retired.json")
+	if !moved || !errors.Is(err, os.ErrClosed) || !stage.published {
+		t.Fatal("late error lost the namespace-effect verdict", moved, err)
+	}
+	after, err := stage.Stat()
+	if err != nil || !os.SameFile(before, after) {
+		t.Fatal("late failure lost the published held object", err)
+	}
+	assertMigrationPublishedBytes(t, parent, "retired.json", "next retirement")
+}
+
+// The publication keeps DELETE access on the stage; a second read must share
+// DELETE rather than use the standard library's incompatible pathname reader.
+func assertMigrationPublishedBytes(t *testing.T, parent *Directory, name, expected string) {
+	t.Helper()
+	f, err := parent.OpenFile(name, os.O_RDONLY)
+	if err != nil {
+		t.Fatal("published read view unavailable", err)
+	}
+	got, readErr := io.ReadAll(f)
+	if err := errors.Join(readErr, f.Close()); err != nil || string(got) != expected {
+		t.Fatal("published bytes differ", err)
 	}
 }
