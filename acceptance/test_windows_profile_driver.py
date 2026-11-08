@@ -101,8 +101,10 @@ if ($errors.Count) { throw ($errors | Out-String) }
 
     def test_guarded_migration_contracts_cannot_be_classified_as_skips(self):
         document = self.closed_manifest()
-        document["packages"][2]["skip_policy"] = [dict(test="TestCodexLifecycleRequiresExplicitMigration", reason="must not bypass")]
-        self.assert_preaccount_refusal(self.invoke(document), "Both guarded migration contracts must run without skips")
+        for name in ["TestCodexLifecycleRequiresExplicitMigration", "TestHookPreflightPreservesCommittedLegacyAndCaseAliases/nested"]:
+            with self.subTest(name=name):
+                document["packages"][2]["skip_policy"] = [dict(test=name, reason="must not bypass")]
+                self.assert_preaccount_refusal(self.invoke(document), "Both guarded migration contracts must run without skips")
 
     def test_changed_binary_refuses_before_account_creation(self):
         document = self.closed_manifest()
@@ -113,6 +115,70 @@ if ($errors.Count) { throw ($errors | Out-String) }
         document = self.closed_manifest()
         document["vendor_files"][0]["sha256"] = "0" * 64
         self.assert_preaccount_refusal(self.invoke(document), "Inspection vendored input differs from its sealed ordinary file")
+
+    def launcher_fragment_check(self, assertions):
+        script = self.root / "launcher-fragment.ps1"
+        script.write_text(r"""$ErrorActionPreference='Stop'
+$tokens=$null; $errors=$null
+[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$tokens,[ref]$errors) | Out-Null
+if ($errors.Count) { throw ($errors | Out-String) }
+$launcher=@($tokens | Where-Object { $_.Kind -eq 'HereStringLiteral' })
+$ast=[Management.Automation.Language.Parser]::ParseInput($launcher[0].Value,[ref]$null,[ref]$errors)
+if ($errors.Count) { throw ($errors | Out-String) }
+$classifier=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -ceq '$unclassified' -and $node.Right.Extent.Text -match '\$allSkips'},$true))
+$acceptance=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -ceq '$qualificationComplete' -and $node.Right.Extent.Text -match 'unclassified_skips'},$true))
+if ($classifier.Count -ne 1 -or $acceptance.Count -ne 1) { throw 'Expected the actual classifier and acceptance assignments' }
+""" + assertions, encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_actual_classifier_accepts_only_explicit_exact_skip_names(self):
+        self.launcher_fragment_check(r"""
+$entry=[pscustomobject]@{skip_policy=@(@{test='TestParent'},@{test='TestParent/known'})}
+$allSkips=@('TestParent','TestParent/known')
+Invoke-Expression $classifier[0].Extent.Text
+if ($unclassified.Count -ne 0) { throw 'Explicit exact skip names were refused' }
+""")
+
+    def test_actual_classifier_refuses_unknown_child_beneath_allowed_parent(self):
+        self.launcher_fragment_check(r"""
+$entry=[pscustomobject]@{skip_policy=@(@{test='TestParent'})}
+$allSkips=@('TestParent/new-child')
+Invoke-Expression $classifier[0].Extent.Text
+if ($unclassified.Count -ne 1 -or $unclassified[0] -cne 'TestParent/new-child') { throw 'Unknown nested skip inherited its parent policy' }
+$results=@(@{exit_code=0; inventory_complete=$true; unclassified_skips=$unclassified; required_migration_tests_passed=$true})
+Invoke-Expression $acceptance[0].Extent.Text
+if ($qualificationComplete) { throw 'Unknown nested skip received execution acceptance' }
+""")
+
+    def test_nested_policy_requires_an_existing_parent_test(self):
+        document = self.closed_manifest()
+        document["packages"][0]["skip_policy"] = [dict(test="TestMissing/known", reason="orphan fixture")]
+        self.assert_preaccount_refusal(self.invoke(document), "Inspection skips require unique existing tests")
+
+    def test_explicit_nested_policy_reaches_the_next_custody_check(self):
+        document = self.closed_manifest()
+        document["packages"][0]["skip_policy"] = [dict(test="TestFixture/known", reason="explicit fixture subtest")]
+        document["vendor_files"][0]["sha256"] = "0" * 64
+        self.assert_preaccount_refusal(self.invoke(document), "Inspection vendored input differs from its sealed ordinary file")
+
+    def test_actual_inspection_report_distinguishes_execution_and_coverage(self):
+        self.launcher_fragment_check(r"""
+$coverage=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -ceq '$Inspection' -and $node.Extent.Text -match '\$report.all_contracts_qualified'},$true))
+if ($coverage.Count -ne 1) { throw 'Expected the actual Inspection coverage report block' }
+$Inspection=$true
+foreach ($case in @(@{skips=@('TestParent','TestParent/known'); unknown=@(); accepted=$true; classified=2; qualified=$false},@{skips=@('TestParent/new'); unknown=@('TestParent/new'); accepted=$false; classified=0; qualified=$false},@{skips=@(); unknown=@(); accepted=$true; classified=0; qualified=$true})) {
+ $qualificationComplete=$case.accepted
+ $report=[ordered]@{qualification_complete=$qualificationComplete}
+ $results=@(@{all_skipped_tests=$case.skips; unclassified_skips=$case.unknown})
+ Invoke-Expression $coverage[0].Extent.Text
+ if ($report.qualification_complete -ne $case.accepted -or $report.all_contracts_qualified -ne $case.qualified -or $report.observed_skips_count -ne $case.skips.Count -or $report.classified_skips_count -ne $case.classified -or $report.unclassified_skips_count -ne $case.unknown.Count -or -not $report.native_coverage) { throw 'Inspection execution acceptance hid missing native coverage' }
+}
+$Inspection=$false
+$report=[ordered]@{qualification_complete=$true}
+Invoke-Expression $coverage[0].Extent.Text
+if ($report.Count -ne 1) { throw 'Inspection fields changed the default canonical report' }
+""")
 
     def test_inspection_and_pilot_parameters_are_exclusive(self):
         result = self.invoke({}, "-TestBinary", "unused", "-Server", "unused")
