@@ -246,6 +246,21 @@ class HomeBinding(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertEqual(self.snapshot(self.product), before)
 
+    def test_prompt_stub_preserves_unicode_within_character_budget(self):
+        self.env['MAESTRO_HOME'] = str(self.profile / 'mémoire-界')
+        brain = self.initialize()
+        scaffold = self.run_hook('first-run-scaffold')
+        self.assertEqual(scaffold.returncode, 0, scaffold.stderr)
+        first = self.run_hook('context-inject-userprompt')
+        self.assertEqual(first.returncode, 0, first.stderr)
+        stub = self.run_hook('context-inject-userprompt')
+        self.assertEqual(stub.returncode, 0, stub.stderr)
+        expected = ('<!-- maestro:context-inject:stub -->\n'
+                    f'Memory: {brain}/memory/ · Load specific tiers on demand.\n')
+        self.assertEqual(stub.stdout, expected[:160])
+        self.assertLessEqual(len(stub.stdout), 160)
+        self.assertIn('mémoire-界', stub.stdout)
+
     def test_same_owner_marker_across_read_only_product_versions(self):
         brain = self.initialize()
         self.assertEqual(self.run_hook("first-run-scaffold").returncode, 0)

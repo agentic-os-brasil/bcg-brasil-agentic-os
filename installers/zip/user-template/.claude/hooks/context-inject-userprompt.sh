@@ -58,18 +58,10 @@ SESSION_ID=$(printf '%s' "$SESSION_ID" | tr -c 'A-Za-z0-9._-' '_')
 MARKER="$STATE_DIR/context-inject-${SESSION_ID}.marker"
 
 truncate_stdout() {
-  # $1 = max chars
-  local max="$1"
-  awk -v max="$max" 'BEGIN{n=0} {
-    line=$0
-    if (n + length(line) + 1 > max) {
-      remain = max - n
-      if (remain > 0) { print substr(line,1,remain) }
-      exit
-    }
-    print line
-    n += length(line) + 1
-  }'
+  # The budget counts characters; byte-oriented awk can split a UTF-8 sequence.
+  maestro_py -c 'import sys
+text = sys.stdin.buffer.read().decode("utf-8")
+sys.stdout.buffer.write(text[:int(sys.argv[1])].encode("utf-8"))' "$1"
 }
 
 emit_minimal() {
