@@ -135,24 +135,31 @@ func (engine *Engine) lifecycle() (lifecycleState, error) {
 	if err = json.Unmarshal(body, &state); err != nil {
 		return state, err
 	}
-	if state.SchemaVersion != 1 || state.Pages == nil {
-		return state, ErrLifecycleChanged
-	}
-	if err = engine.validateScope(state.Workspace); err != nil {
+	if _, err = engine.lifecycleBody(state); err != nil {
 		return state, err
 	}
+	return state, nil
+}
+
+func (engine *Engine) lifecycleBody(state lifecycleState) ([]byte, error) {
+	if state.SchemaVersion != 1 || state.Pages == nil {
+		return nil, ErrLifecycleChanged
+	}
+	if err := engine.validateScope(state.Workspace); err != nil {
+		return nil, err
+	}
 	if len(state.Pages) > 1024 || state.Revision > 9007199254740991 {
-		return state, ErrLifecycleChanged
+		return nil, ErrLifecycleChanged
 	}
 	seen := map[string]string{}
 	for id, page := range state.Pages {
 		if id == "" || page.StableID != id || len(page.Names) == 0 || len(page.Names) > 128 || page.State != "active" && page.State != "retired" {
-			return state, ErrLifecycleChanged
+			return nil, ErrLifecycleChanged
 		}
 		for _, name := range page.Names {
 			clean, err := relativeAtlasPage(name)
 			if err != nil || clean != name || seen[canonicalPageName(name)] != "" && seen[canonicalPageName(name)] != id {
-				return state, ErrLifecycleChanged
+				return nil, ErrLifecycleChanged
 			}
 			seen[canonicalPageName(name)] = id
 		}
@@ -162,23 +169,30 @@ func (engine *Engine) lifecycle() (lifecycleState, error) {
 			validIdentity = validIdentity || name == id+".md"
 		}
 		if !validLocation || !validIdentity {
-			return state, ErrLifecycleChanged
+			return nil, ErrLifecycleChanged
 		}
 	}
 	if state.Pending != nil {
 		pending := *state.Pending
 		if err := validateLifecyclePrepared(pending); err != nil || state.Revision != pending.Request.ExpectedLifecycleRevision+1 {
-			return state, ErrLifecycleChanged
+			return nil, ErrLifecycleChanged
 		}
 		source := pending.Request.Page
 		if item, ok := state.Pages[pending.StableID]; ok {
 			source = item.Location
 		}
 		if pending.Source != source {
-			return state, ErrLifecycleChanged
+			return nil, ErrLifecycleChanged
 		}
 	}
-	return state, nil
+	body, err := json.Marshal(state)
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > maximumPageBytes {
+		return nil, errors.New("authored lifecycle exceeds bounded metadata")
+	}
+	return body, nil
 }
 
 func validateLifecyclePrepared(pending lifecyclePrepared) error {
@@ -283,12 +297,9 @@ func (engine *Engine) saveLifecycle(state lifecycleState) error {
 	if err := engine.validateBinding(); err != nil {
 		return err
 	}
-	body, err := json.Marshal(state)
+	body, err := engine.lifecycleBody(state)
 	if err != nil {
 		return err
-	}
-	if len(body) > maximumPageBytes {
-		return errors.New("authored lifecycle exceeds bounded metadata")
 	}
 	_, readErr := readAtlasFile(engine.journalDirPath("lifecycle.json"), maximumPageBytes, true)
 	if readErr != nil && !isNotExist(readErr) {
@@ -528,27 +539,37 @@ func (engine *Engine) applyLifecycle(request lifecycleRequest) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	// The exact owning pending retry re-admits its held effect below; ordinary
-	// physical admission deliberately refuses every pending identity.
-	if state.Pending == nil {
-		if err = engine.authorize(request.Provenance, request.Operation, review.Source.Page); err != nil {
-			return Result{}, err
-		}
-	}
 	id, requestDigest, err := engine.lifecycleIdentity(request)
 	if err != nil {
 		return Result{}, err
 	}
-	if state.Pending == nil {
+	var pending lifecyclePrepared
+	if state.Pending != nil {
+		pending = *state.Pending
+	} else if review.prepared != nil {
+		pending = *review.prepared
+	} else {
 		location, pageState := review.Target, "active"
 		if request.Operation == "retire-page" {
 			location, pageState = review.Source.Page, "retired"
 		}
 		result := Result{PageState: pageState, Operation: request.Operation, Page: review.Source.Page, State: StateWritten, Revision: digest(review.Proposed), OperationID: id, RecordedAt: engine.now().UTC(), Provenance: request.Provenance, StableID: review.StableID, Location: location, LifecycleRevision: state.Revision + 2}
-		pending := lifecyclePrepared{OperationID: id, RequestDigest: requestDigest, Request: request, StableID: review.StableID, Source: review.Source.Page, Target: review.Target, Before: review.Source.Revision, After: digest(review.Proposed), Result: result}
-		if review.prepared != nil {
-			pending = *review.prepared
-		} else {
+		pending = lifecyclePrepared{OperationID: id, RequestDigest: requestDigest, Request: request, StableID: review.StableID, Source: review.Source.Page, Target: review.Target, Before: review.Source.Revision, After: digest(review.Proposed), Result: result}
+	}
+	terminal := terminalLifecycle(state, pending)
+	if _, err = engine.lifecycleBody(terminal); err != nil {
+		return Result{}, err
+	}
+	if state.Pending == nil {
+		barrier := state
+		barrier.Pending, barrier.Revision = &pending, state.Revision+1
+		if _, err = engine.lifecycleBody(barrier); err != nil {
+			return Result{}, err
+		}
+		if err = engine.authorize(request.Provenance, request.Operation, review.Source.Page); err != nil {
+			return Result{}, err
+		}
+		if review.prepared == nil {
 			entry, _ := json.Marshal(lifecycleRecord{SchemaVersion: 3, Workspace: engine.workspace, Prepared: pending})
 			if err = publishAtlasFile(engine.journalPath(id), entry, true, true); err != nil {
 				return Result{}, err
@@ -557,7 +578,7 @@ func (engine *Engine) applyLifecycle(request lifecycleRequest) (Result, error) {
 				return Result{}, err
 			}
 		}
-		state.Pending, state.Revision = &pending, state.Revision+1
+		state = barrier
 		if err = engine.saveLifecycle(state); err != nil {
 			return Result{}, err
 		}
@@ -565,7 +586,6 @@ func (engine *Engine) applyLifecycle(request lifecycleRequest) (Result, error) {
 			return Result{}, err
 		}
 	}
-	pending := *state.Pending
 	if err = engine.validateBinding(); err != nil {
 		return Result{}, err
 	}
@@ -643,20 +663,7 @@ func (engine *Engine) applyLifecycle(request lifecycleRequest) (Result, error) {
 			return Result{}, err
 		}
 	}
-	location, exists := state.Pages[pending.StableID]
-	if !exists {
-		location = PageLocation{StableID: pending.StableID, Names: []string{pending.Source}}
-	}
-	location.Location, location.State = pending.Result.Location, pending.Result.PageState
-	found := false
-	for _, name := range location.Names {
-		found = found || canonicalPageName(name) == canonicalPageName(pending.Target)
-	}
-	if !found && pending.Request.Operation == "move-page" {
-		location.Names = append(location.Names, pending.Target)
-		sort.Strings(location.Names)
-	}
-	state.Pages[location.StableID], state.Pending, state.Revision = location, nil, state.Revision+1
+	state = terminal
 	if err = engine.saveLifecycle(state); err != nil {
 		return Result{}, err
 	}
@@ -671,6 +678,30 @@ func (engine *Engine) applyLifecycle(request lifecycleRequest) (Result, error) {
 		return Result{}, err
 	}
 	return pending.Result, nil
+}
+
+func terminalLifecycle(state lifecycleState, pending lifecyclePrepared) lifecycleState {
+	terminal := state
+	terminal.Pages = make(map[string]PageLocation, len(state.Pages)+1)
+	for id, page := range state.Pages {
+		terminal.Pages[id] = page
+	}
+	location, exists := state.Pages[pending.StableID]
+	if !exists {
+		location = PageLocation{StableID: pending.StableID, Names: []string{pending.Source}}
+	}
+	location.Names = append([]string{}, location.Names...)
+	location.Location, location.State = pending.Result.Location, pending.Result.PageState
+	found := false
+	for _, name := range location.Names {
+		found = found || canonicalPageName(name) == canonicalPageName(pending.Target)
+	}
+	if !found && pending.Request.Operation == "move-page" {
+		location.Names = append(location.Names, pending.Target)
+		sort.Strings(location.Names)
+	}
+	terminal.Pages[location.StableID], terminal.Pending, terminal.Revision = location, nil, pending.Result.LifecycleRevision
+	return terminal
 }
 
 // ExpectLifecycleRevision installs the host's private reviewed state fence.
