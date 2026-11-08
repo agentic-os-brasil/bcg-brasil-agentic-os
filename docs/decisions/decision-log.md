@@ -1259,3 +1259,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Authored state survives product changes and interruption without stale recopy or automatic authority promotion. Pending daily/dream, enrollment and scheduler consent need reconfirmation. Rollback requires a supported preserved original and an archival parent; native working-runtime, unsupported old-client fencing and Windows ownership remain separate gates. No real migration is authorized by source integration.
 - Refs: specs/059-external-state-migration.md; specs/055-data-home-inspection.md; specs/058-canonical-home-consumers.md; docs/plans/2026-10-31-maestro-product-mcp.md; issues #433 and #434
 - Supersedes: none
+
+## OMCP - Keep reviewed owner and memory authority in canonical modules
+
+- Date: 2026-11-01
+- Status: accepted
+- Owner: Maestro
+- Context: Product MCP needs complete owner and memory journeys. Model-supplied approval flags are not trusted review, and historical manifest fallback or derived self-carry can restore deleted memory.
+- Decision: Extend ownerctx and memory at their existing interfaces, with exact bounded review, digest/base/revision fencing and private confined persistence. Product host interaction uses actual MCP form elicitation or explicit local operator confirmation, never a model-provided boolean or credential. Distinguish reviewed owner capture from existing attested skill-route metadata. Revoke visibility before lifecycle mutation and invalidate generated memory conservatively per workspace before rebuilding from surviving sources.
+- Consequences: Sensitive profile review goes only to the trusted client/operator, not ordinary model tool output. Clients without elicitation require a local fallback and separate native qualification. Correction/deletion/retention can temporarily invalidate unrelated generated summaries in the same workspace; this trades recomputation for a smaller complete no-resurrection rule. Source completion does not grant native, provider, signing or publication acceptance.
+- Refs: specs/060-product-owner-memory.md; specs/006-memory-persistence.md; docs/plans/2026-11-01-product-owner-memory.md; internal/ownerctx; internal/memory; adapters/mcp
+- Supersedes: none

@@ -4,6 +4,7 @@ package packaging
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha256"
 	"debug/elf"
 	"debug/macho"
 	"debug/pe"
@@ -11,14 +12,14 @@ import (
 	"errors"
 	"fmt"
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
-	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
-	techcoreskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/tech-core/skills"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
+	"unicode"
 )
 
 type Options struct {
@@ -92,14 +93,15 @@ func BuildPlugin(options Options) error {
 	if err = os.WriteFile(filepath.Join(o.Destination, "skills/resume/SKILL.md"), []byte(resume), 0600); err != nil {
 		return err
 	}
-	return writePocockMethods(o)
+	return writeMethods(o)
 }
 
 const operator = `---
 name: operator
-description: Run a new execution contract, checkpoint or complete work in the bound Maestro workspace.
+description: Start or resume reviewed owner onboarding or execution work in the bound Maestro workspace.
 ---
 Read maestro_context before work. Treat unavailable binding as a stop: ask the owner to inspect the locally selected paths. Startup never initializes state.
+For owner onboarding, read maestro://methods/maestro-onboarding/SKILL.md through MCP resources and query owner.status first. Offer a track only when track is selection_required; resume required/in_progress at its exact next_question, route review_required to owner.onboarding_review and trusted owner.confirm_onboarding, and continue ordinary work when complete. Select owner.track only for an explicit owner choice, because even the same selection invalidates final confirmation. Use owner.interview, owner.propose, owner.review and trusted owner.apply for each answer; re-read owner.status after application or confirmation. Declining or deferring preserves saved progress. Metadata and model assertions never approve a change. If trusted host review is unavailable, ask the local operator to use owner-review/owner-apply or owner-onboarding-review/owner-confirm-onboarding; local owner-track requires explicit --confirm. This recipe grants no shell or owner-file fallback.
 Use maestro_query execution.list for metadata and execution.next with the chosen item ID for bounded continuation. Create only after the owner requests work: objective, next_step and workspace-relative artifact paths define the immutable artifact snapshot contract. Read execution.contract for the immutable bounded criterion IDs and relative artifact paths; use those responses when collecting evidence.
 Use maestro_apply with the current expected_revision. Start creates an attempt; checkpoint, pause, evidence and complete require that attempt_id. Save a concise checkpoint before pause. On revision_conflict or attempt_conflict, read current continuation and reconcile; never retry with invented state.
 Collect artifact evidence after writing the requested result; complete revalidates it. Changed artifacts require new evidence. External sends, model execution, arbitrary commands, approval, deletion and full export have no tool authority here.
@@ -138,30 +140,34 @@ func binaryName(platform string) string {
 	return "maestro-mcp"
 }
 
-func writePocockMethods(o Options) error {
-	catalog, err := techcoreskills.Catalog()
+func writeMethods(o Options) error {
+	methods, err := product.PackagedMethods()
 	if err != nil {
 		return err
 	}
-	methods := map[string]map[string][]byte{}
-	for _, skill := range catalog.Skills {
-		if strings.HasPrefix(skill.ID, "pocock-") {
-			files, err := techcoreskills.Files(skill.ID)
-			if err != nil {
-				return err
-			}
-			methods[skill.ID] = files
-		}
+	var ids []string
+	for _, method := range methods.Methods {
+		ids = append(ids, regexp.QuoteMeta(method.ID))
 	}
-	methods["interaction-profile"], err = baseskills.Files("interaction-profile")
-	if err != nil {
-		return err
-	}
-	for id, files := range methods {
-		for relative, body := range files {
-			target := filepath.Join(o.Destination, "skills", id, filepath.FromSlash(relative))
+	sort.Slice(ids, func(i, j int) bool { return len(ids[i]) > len(ids[j]) })
+	reference := regexp.MustCompile("[/\\$\"`](?:" + strings.Join(ids, "|") + ")\\b")
+	projectedHashes := map[string]string{}
+	for _, method := range methods.Methods {
+		for relative, body := range method.Files {
+			path := "skills/" + method.ID + "/" + relative
+			target := filepath.Join(o.Destination, filepath.FromSlash(path))
 			if strings.HasSuffix(relative, ".md") {
-				body = namespaceMethodReferences(body, "maestro-product")
+				body = namespaceMethodReferences(body, "maestro-product", reference)
+			}
+			if relative == "SKILL.md" {
+				end := bytes.Index(body[4:], []byte("\n---\n"))
+				if end < 0 {
+					return errors.New("embedded method frontmatter unavailable")
+				}
+				end += 9
+				prefix := append([]byte(nil), body[:end]...)
+				prefix = append(prefix, []byte("\nBefore applying this method, read [Maestro product authority](../../METHODS.md) and its [canonical policy](../../agent-skill-policy.json). Use the admitted implemented MCP operations for domain effects; an instruction does not grant filesystem, native CLI, installation or external-action authority.\n")...)
+				body = append(prefix, body[end:]...)
 			}
 			if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {
 				return err
@@ -169,23 +175,43 @@ func writePocockMethods(o Options) error {
 			if err := os.WriteFile(target, body, 0600); err != nil {
 				return err
 			}
+			projectedHashes[path] = fmt.Sprintf("%x", sha256.Sum256(body))
 		}
 	}
 	provenance, err := json.MarshalIndent(map[string]any{
-		"canonical":  json.RawMessage(techcoreskills.Provenance()),
-		"projection": "markdown_invocation_namespace",
-		"namespace":  "maestro-product",
-		"hash_scope": "canonical_product_source_before_projection",
+		"canonical":         json.RawMessage(methods.Assets["pocock-upstream.json"]),
+		"projection":        "markdown_invocation_namespace",
+		"namespace":         "maestro-product",
+		"hash_scope":        "canonical_product_source_before_projection",
+		"authority_overlay": "SKILL.md_pointer_to_packaged_METHODS.md",
 	}, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(o.Destination, "pocock-upstream.json"), append(provenance, '\n'), 0600)
+	methods.Assets["pocock-upstream.json"] = append(provenance, '\n')
+	projection, err := json.MarshalIndent(map[string]any{"namespace": "maestro-product", "projection": "markdown_invocation_namespace", "hash_scope": "distributed_plugin_bytes", "files": projectedHashes}, "", "  ")
+	if err != nil {
+		return err
+	}
+	methods.Assets["methods-projection.json"] = append(projection, '\n')
+	var names []string
+	for name := range methods.Assets {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if err := os.WriteFile(filepath.Join(o.Destination, name), methods.Assets[name], 0600); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Claude resolves plugin methods by qualified name; canonical IDs and metadata
 // remain shared with ZIP and other runtimes.
-func namespaceMethodReferences(body []byte, namespace string) []byte {
+var skillToolInvocations = regexp.MustCompile("(?i)\\bSkill tool (?:with|twice, for) [\"`][a-z0-9-]+[\"`](?: and [\"`][a-z0-9-]+[\"`])*")
+
+func namespaceMethodReferences(body []byte, namespace string, reference *regexp.Regexp) []byte {
 	frontmatter := []byte{}
 	if bytes.HasPrefix(body, []byte("---\n")) {
 		if end := bytes.Index(body[4:], []byte("\n---\n")); end >= 0 {
@@ -193,15 +219,41 @@ func namespaceMethodReferences(body []byte, namespace string) []byte {
 			frontmatter, body = body[:end], body[end:]
 		}
 	}
-	reference := regexp.MustCompile("[/\\$\"`](?:pocock-[a-z0-9-]+|interaction-profile)\\b")
-	projected := reference.ReplaceAllStringFunc(string(body), func(match string) string {
-		prefix := match[:1]
-		if prefix == "$" {
-			prefix = "/"
+	var projected bytes.Buffer
+	start := 0
+	skillCalls := skillToolInvocations.FindAllIndex(body, -1)
+	for _, span := range reference.FindAllIndex(body, -1) {
+		lo, hi := span[0], span[1]
+		invocation := body[lo] == '/' || body[lo] == '$'
+		// Quoted IDs are Skill arguments only within an explicit Skill-tool call.
+		for _, call := range skillCalls {
+			if lo >= call[0] && hi <= call[1] {
+				invocation = true
+				break
+			}
 		}
-		return prefix + namespace + ":" + match[1:]
-	})
-	return append(append([]byte{}, frontmatter...), projected...)
+		if !invocation {
+			continue
+		}
+		// Resource paths and URLs are file references, not plugin invocations.
+		pathSuffix := hi < len(body) && strings.ContainsRune("/-", rune(body[hi]))
+		fileExtension := hi+1 < len(body) && body[hi] == '.' && unicode.IsLetter(rune(body[hi+1]))
+		pathPrefix := body[lo] == '/' && lo > 0 && strings.ContainsRune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_./:", rune(body[lo-1]))
+		if pathSuffix || fileExtension || pathPrefix {
+			continue
+		}
+		projected.Write(body[start:lo])
+		prefix := body[lo]
+		if prefix == '$' {
+			prefix = '/'
+		}
+		projected.WriteByte(prefix)
+		projected.WriteString(namespace + ":")
+		projected.Write(body[lo+1 : hi])
+		start = hi
+	}
+	projected.Write(body[start:])
+	return append(append([]byte{}, frontmatter...), projected.Bytes()...)
 }
 
 // BuildExtension writes only a manifest and selected executable to a new MCPB.

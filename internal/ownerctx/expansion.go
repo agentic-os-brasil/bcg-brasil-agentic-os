@@ -11,8 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/privatelock"
 )
 
 const expansionSchemaVersion = 1
@@ -89,7 +87,7 @@ func expansionStatus(root string, value registry, onboarding OnboardingStatus) (
 	}
 	now := time.Now().UTC()
 	for _, facet := range onboardingFacets {
-		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(facets[facet].Record.Path)))
+		body, err := readOwnerFacet(filepath.Join(root, filepath.FromSlash(facets[facet].Record.Path)))
 		if err != nil || !facetAnswered(root, facet) {
 			result.Unknown++
 			if result.NextFacet == "" {
@@ -173,7 +171,7 @@ func NextExpansionQuestion(root string) (ExpansionQuestion, error) {
 }
 
 func DraftExpansion(root, questionToken, proposedBody string, consent, noClientData bool) (ExpansionDraft, error) {
-	unlock, err := privatelock.Acquire(filepath.Join(root, "owner", "interview", ".transition.lock"))
+	unlock, err := acquireOwnerTransition(filepath.Join(root, "owner", "interview", ".transition.lock"))
 	if err != nil {
 		return ExpansionDraft{}, err
 	}
@@ -219,7 +217,7 @@ func ReviewExpansion(root, id string) (ExpansionDraft, error) {
 }
 
 func ConfirmExpansion(root, id, reviewDigest string, confirmed bool) (ExpansionDraft, error) {
-	unlock, err := privatelock.Acquire(filepath.Join(root, "owner", "interview", ".transition.lock"))
+	unlock, err := acquireOwnerTransition(filepath.Join(root, "owner", "interview", ".transition.lock"))
 	if err != nil {
 		return ExpansionDraft{}, err
 	}
@@ -248,7 +246,7 @@ func confirmExpansionLocked(root, id, reviewDigest string, confirmed bool) (Expa
 		if !secureDigestEqual(currentToken, d.QuestionToken) || facetSHA(root, d.Facet) != d.BaseSHA256 {
 			return ExpansionDraft{}, ErrRevisionConflict
 		}
-		receipt, err = SubmitRefinement(root, RefinementInput{Facet: d.Facet, Evidence: "explicit owner SELF expansion interview " + d.QuestionID, ProposedBody: d.ProposedBody, ProducerID: "owner-interview"})
+		receipt, err = submitRefinementLocked(root, RefinementInput{Facet: d.Facet, Evidence: "explicit owner SELF expansion interview " + d.QuestionID, ProposedBody: d.ProposedBody, ProducerID: "owner-interview"})
 		if err != nil {
 			return ExpansionDraft{}, err
 		}
@@ -259,7 +257,7 @@ func confirmExpansionLocked(root, id, reviewDigest string, confirmed bool) (Expa
 	} else {
 		receipt = RefinementReceipt{ID: d.RefinementID}
 	}
-	receipt, err = ApplyRefinement(root, receipt.ID, true)
+	receipt, err = applyRefinementLocked(root, receipt.ID, true)
 	if err != nil {
 		return ExpansionDraft{}, err
 	}
@@ -304,14 +302,14 @@ func validExpansionDraft(d ExpansionDraft) bool {
 	return d.SchemaVersion == expansionSchemaVersion && d.Kind == "owner_self_expansion" && containsFacet(onboardingFacets, d.Facet) && d.QuestionID == "self-"+d.Facet && d.QuestionVersion == 1 && d.Consent && d.NoClientData && !d.CreatedAt.IsZero() && validState && validID && d.BaseSHA256 != "" && d.ProposedBody != "" && validateExpansionBody(d.ProposedBody) == nil && secureDigestEqual(d.ReviewDigest, expansionDraftDigest(d))
 }
 func facetSHA(root, facet string) string {
-	body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(facets[facet].Record.Path)))
+	body, err := readOwnerFacet(filepath.Join(root, filepath.FromSlash(facets[facet].Record.Path)))
 	if err != nil {
 		return ""
 	}
 	return digest(string(body))
 }
 func loadExpansionRegistry(root string) (expansionRegistry, error) {
-	body, err := os.ReadFile(filepath.Join(root, "owner", "interview", "confirmations.json"))
+	body, err := readOwnerFile(filepath.Join(root, "owner", "interview", "confirmations.json"), maximumOwnerRegistryBytes)
 	if errors.Is(err, os.ErrNotExist) {
 		return expansionRegistry{SchemaVersion: expansionSchemaVersion, Confirmations: map[string]FacetConfirmation{}}, nil
 	}
@@ -319,7 +317,7 @@ func loadExpansionRegistry(root string) (expansionRegistry, error) {
 		return expansionRegistry{}, err
 	}
 	var value expansionRegistry
-	if json.Unmarshal(body, &value) != nil || value.SchemaVersion != expansionSchemaVersion {
+	if decodePrivateJSON(body, &value) != nil || value.SchemaVersion != expansionSchemaVersion {
 		return expansionRegistry{}, errors.New("owner SELF expansion confirmations are invalid")
 	}
 	if value.Confirmations == nil {
@@ -333,7 +331,7 @@ func loadExpansionRegistry(root string) (expansionRegistry, error) {
 	return value, nil
 }
 func readExpansionDraftPath(path string) (ExpansionDraft, error) {
-	body, err := os.ReadFile(path)
+	body, err := readOwnerFile(path, maximumOwnerRegistryBytes)
 	if err != nil {
 		return ExpansionDraft{}, err
 	}
