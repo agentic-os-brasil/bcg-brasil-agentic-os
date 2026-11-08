@@ -38,7 +38,7 @@ if ($withManifest) {
     }
     $canonical = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $hasMigrationProfile = $canonical.PSObject.Properties.Name -ccontains 'qualification_profile'
-    if ($hasMigrationProfile -and (-not $withCanonical -or $canonical.qualification_profile -cne 'quarantined_windows_migration_primitives_v1')) {
+    if ($hasMigrationProfile -and (-not $withCanonical -or $canonical.qualification_profile -cne 'quarantined_windows_migration_primitives_v2')) {
         throw 'Unknown canonical qualification profile.'
     }
     $withMigration = $withCanonical -and $hasMigrationProfile
@@ -83,7 +83,9 @@ if ($withManifest) {
                 'TestWindowsExternalAdapterAdmittedTransactionPreservesV1SourceAndProof',
                 'TestWindowsExternalAdapterAdmittedTransactionResumesAndRollsBackEvolvedWork',
                 'TestWindowsExternalAdapterAdmittedTransactionReusesRetirementAndRefusesForeignProof',
-                'TestWindowsExternalAdapterAdmittedTransactionHonorsProfileLeaseAndForeignLocator'
+                'TestWindowsExternalAdapterAdmittedTransactionHonorsProfileLeaseAndForeignLocator',
+                'TestWindowsExternalAdapterDurabilityRetriesHeldObjectsWithoutSourceEffects',
+                'TestWindowsExternalAdapterDurabilityRetainsParentCustodyAcrossRollback'
             )
         }
         foreach ($entry in @($canonical.packages | Where-Object { $_.name -cin @('winprivate', 'zipmigration') })) {
@@ -510,7 +512,7 @@ try {
     }
     if ($CanonicalManifest) {
         $manifest = Get-Content -LiteralPath $CanonicalManifest -Raw -Encoding UTF8 | ConvertFrom-Json
-        $migrationProfile = -not $Inspection -and $manifest.qualification_profile -ceq 'quarantined_windows_migration_primitives_v1'
+        $migrationProfile = -not $Inspection -and $manifest.qualification_profile -ceq 'quarantined_windows_migration_primitives_v2'
         if ($env:GOROOT) { throw 'Canonical evidence refuses caller-supplied GOROOT.' }
         if (-not $Inspection -and
             ((Test-Path Env:MAESTRO_PRIVATE_WIKI_COMPAT_PRODUCER) -or (Test-Path Env:MAESTRO_PRIVATE_WIKI_OLD_WRITER))) {

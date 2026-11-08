@@ -483,12 +483,14 @@ foreach ($case in @(@{name='execution'; inspection=$false; selected=$false},@{na
 
     def migration_manifest(self):
         suites = {}
-        for name, file in [("winprivate", "internal/winprivate/migration_windows_test.go"),
-                           ("zipmigration", "internal/zipmigration/external_fs_windows_test.go")]:
-            suites[name] = re.findall(r"^func (TestWindows(?:Migration|ExternalAdapter)\w+)\(", (ROOT / file).read_text(), re.M)
-        self.assertEqual([len(suites[name]) for name in ["winprivate", "zipmigration"]], [12, 11])
+        for name, files in [("winprivate", ["internal/winprivate/migration_windows_test.go"]),
+                            ("zipmigration", ["internal/zipmigration/external_fs_windows_test.go",
+                                              "internal/zipmigration/external_durability_windows_test.go"])]:
+            suites[name] = [test for file in files for test in re.findall(
+                r"^func (TestWindows(?:Migration|ExternalAdapter)\w+)\(", (ROOT / file).read_text(), re.M)]
+        self.assertEqual([len(suites[name]) for name in ["winprivate", "zipmigration"]], [12, 13])
         names = ["execution", "datahome", "ownerctx", "memory", "privatewiki", "processidentity", "winprivate", "zipmigration"]
-        return dict(schema_version=1, qualification_profile="quarantined_windows_migration_primitives_v1",
+        return dict(schema_version=1, qualification_profile="quarantined_windows_migration_primitives_v2",
                     packages=[dict(name=name, tests=suites.get(name, ["TestFixture"])) for name in names])
 
     def canonical_admission(self, document, expected):
@@ -513,6 +515,16 @@ foreach ($case in @(@{name='execution'; inspection=$false; selected=$false},@{na
         self.canonical_admission(document, "Canonical public source and SDK inputs")
         document["qualification_profile"] = "arbitrary-profile"
         self.canonical_admission(document, "Unknown canonical qualification profile")
+
+    def test_migration_profile_requires_both_native_durability_cases(self):
+        document = self.migration_manifest()
+        self.canonical_admission(document, "Canonical public source and SDK inputs")
+        for test in ("TestWindowsExternalAdapterDurabilityRetriesHeldObjectsWithoutSourceEffects",
+                     "TestWindowsExternalAdapterDurabilityRetainsParentCustodyAcrossRollback"):
+            with self.subTest(test=test):
+                changed = json.loads(json.dumps(document))
+                changed["packages"][-1]["tests"].remove(test)
+                self.canonical_admission(changed, "Migration primitive inventory differs")
 
     def test_migration_profile_refuses_missing_extra_or_duplicate_native_cases(self):
         document = self.migration_manifest()
