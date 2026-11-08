@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const maximumOwnerRegistryBytes = 64 << 10
@@ -124,6 +125,12 @@ type reversion struct {
 // its hash remains in the owner registry; the caller must retain the returned
 // value in a private credential surface. Direct CLI submission has no token.
 func AuthorizeProducer(root, id string) (string, error) {
+	var result string
+	err := withOwnerTransition(root, func() error { var err error; result, err = authorizeProducerLocked(root, id); return err })
+	return result, err
+}
+
+func authorizeProducerLocked(root, id string) (string, error) {
 	if strings.TrimSpace(id) == "" {
 		return "", errors.New("producer id is required")
 	}
@@ -149,6 +156,12 @@ func AuthorizeProducer(root, id string) (string, error) {
 // run only when the producer presents an authorized capability; otherwise the
 // owner may still explicitly confirm the proposal.
 func SubmitRefinement(root string, input RefinementInput) (RefinementReceipt, error) {
+	var result RefinementReceipt
+	err := withOwnerTransition(root, func() error { var err error; result, err = submitRefinementLocked(root, input); return err })
+	return result, err
+}
+
+func submitRefinementLocked(root string, input RefinementInput) (RefinementReceipt, error) {
 	definition, err := facetDefinition(root, input.Facet)
 	if err != nil {
 		return RefinementReceipt{}, err
@@ -156,7 +169,16 @@ func SubmitRefinement(root string, input RefinementInput) (RefinementReceipt, er
 	if strings.TrimSpace(input.Evidence) == "" || strings.TrimSpace(input.ProposedBody) == "" {
 		return RefinementReceipt{}, errors.New("refinement evidence and proposed body are required")
 	}
-	current, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(definition.Path)))
+	if !utf8.ValidString(input.ProposedBody) || !utf8.ValidString(input.Evidence) {
+		return RefinementReceipt{}, errors.New("owner refinement text must be valid UTF-8")
+	}
+	if strings.ContainsRune(input.ProposedBody, 0) || strings.ContainsRune(input.Evidence, 0) {
+		return RefinementReceipt{}, errors.New("owner refinement text cannot contain NUL")
+	}
+	if len(input.Evidence) > maximumOwnerEvidenceBytes || len(input.ProposedBody) > maximumOwnerFacetBytes {
+		return RefinementReceipt{}, errors.New("owner refinement exceeds bounded text size")
+	}
+	current, err := readOwnerFacet(filepath.Join(root, filepath.FromSlash(definition.Path)))
 	if err != nil {
 		return RefinementReceipt{}, err
 	}
@@ -202,6 +224,12 @@ func SubmitRefinement(root string, input RefinementInput) (RefinementReceipt, er
 }
 
 func ApplyRefinement(root, id string, confirmed bool) (RefinementReceipt, error) {
+	var result RefinementReceipt
+	err := withOwnerTransition(root, func() error { var err error; result, err = applyRefinementLocked(root, id, confirmed); return err })
+	return result, err
+}
+
+func applyRefinementLocked(root, id string, confirmed bool) (RefinementReceipt, error) {
 	p, err := readProposal(root, id)
 	if err != nil {
 		return RefinementReceipt{}, err
@@ -217,6 +245,16 @@ func ApplyRefinement(root, id string, confirmed bool) (RefinementReceipt, error)
 }
 
 func RevertRefinement(root, auditID string, confirmed bool) (RefinementReceipt, error) {
+	var result RefinementReceipt
+	err := withOwnerTransition(root, func() error {
+		var err error
+		result, err = revertRefinementLocked(root, auditID, confirmed)
+		return err
+	})
+	return result, err
+}
+
+func revertRefinementLocked(root, auditID string, confirmed bool) (RefinementReceipt, error) {
 	if !confirmed {
 		return RefinementReceipt{}, ErrConfirmationRequired
 	}
@@ -224,16 +262,23 @@ func RevertRefinement(root, auditID string, confirmed bool) (RefinementReceipt, 
 	if err != nil {
 		return RefinementReceipt{}, err
 	}
-	before, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(item.BeforePath)))
+	expectedBefore := filepath.ToSlash(filepath.Join("owner", "refinement", "versions", item.Facet, item.ProposalID+".before.md"))
+	if item.BeforePath != expectedBefore {
+		return RefinementReceipt{}, errors.New("owner audit version path is invalid")
+	}
+	before, err := readOwnerFacet(filepath.Join(root, filepath.FromSlash(item.BeforePath)))
 	if err != nil {
 		return RefinementReceipt{}, err
+	}
+	if digest(string(before)) != item.BeforeSHA256 {
+		return RefinementReceipt{}, ErrRevisionConflict
 	}
 	definition, err := facetDefinition(root, item.Facet)
 	if err != nil {
 		return RefinementReceipt{}, err
 	}
 	currentPath := filepath.Join(root, filepath.FromSlash(definition.Path))
-	current, err := os.ReadFile(currentPath)
+	current, err := readOwnerFacet(currentPath)
 	if err != nil {
 		return RefinementReceipt{}, err
 	}
@@ -260,7 +305,7 @@ func apply(root string, p proposal, definition facetRecord, confirmed bool) (Ref
 		return RefinementReceipt{}, ErrConfirmationRequired
 	}
 	currentPath := filepath.Join(root, filepath.FromSlash(definition.Path))
-	before, err := os.ReadFile(currentPath)
+	before, err := readOwnerFacet(currentPath)
 	if err != nil {
 		return RefinementReceipt{}, err
 	}
@@ -334,38 +379,22 @@ func authorizedProducer(root, id, capability string) (bool, error) {
 }
 
 func readRegistry(root string) (registry, error) {
-	path := filepath.Join(root, "owner", "registry.json")
-	info, err := os.Lstat(path)
+	body, err := readOwnerFile(filepath.Join(root, "owner", "registry.json"), maximumOwnerRegistryBytes)
 	if err != nil {
 		return registry{}, err
-	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return registry{}, errors.New("owner context registry must be a regular non-symlink file")
-	}
-	if info.Size() <= 0 || info.Size() > maximumOwnerRegistryBytes || (runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0) {
-		return registry{}, errors.New("owner context registry must be a bounded owner-only file")
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		return registry{}, err
-	}
-	defer file.Close()
-	body, err := io.ReadAll(io.LimitReader(file, maximumOwnerRegistryBytes+1))
-	if err != nil {
-		return registry{}, err
-	}
-	if int64(len(body)) > maximumOwnerRegistryBytes {
-		return registry{}, errors.New("owner context registry exceeds the bounded JSON limit")
 	}
 	var value registry
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&value); err != nil || (value.SchemaVersion != 2 && value.SchemaVersion != 3) {
+	if err := decodePrivateJSON(body, &value); err != nil || (value.SchemaVersion != 2 && value.SchemaVersion != 3) {
 		return registry{}, errors.New("owner context registry is invalid")
 	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return registry{}, errors.New("owner context registry contains multiple JSON values")
+	for id, record := range value.Facets {
+		template, ok := facets[id]
+		if !ok || record.Path != template.Record.Path || record.Sensitivity != template.Record.Sensitivity || record.Refinement != template.Record.Refinement || !sameStrings(record.Readers, template.Record.Readers) {
+			return registry{}, errors.New("owner context registry facet binding is invalid")
+		}
+	}
+	if value.OperatingState != statePath {
+		return registry{}, errors.New("owner context registry operating path is invalid")
 	}
 	if value.SchemaVersion == 2 && value.OnboardingTrack == "" {
 		value.OnboardingTrack = OnboardingTrackComplete
@@ -386,19 +415,43 @@ func writeOwnerRegistry(root string, value registry) error {
 }
 
 func readProposal(root, id string) (proposal, error) {
+	if !validOwnerArtifactID(id) {
+		return proposal{}, errors.New("owner proposal identity is invalid")
+	}
 	var p proposal
 	if err := readPrivateJSON(proposalPath(root, id), &p); err != nil {
 		return proposal{}, err
+	}
+	if p.ID != id || !validOnboardingDigest(p.SourceSHA256) || strings.TrimSpace(p.Evidence) == "" || strings.TrimSpace(p.ProposedBody) == "" || strings.ContainsRune(p.ProposedBody, 0) || strings.ContainsRune(p.Evidence, 0) || len(p.Evidence) > maximumOwnerEvidenceBytes || len(p.ProposedBody) > maximumOwnerFacetBytes || (p.State != "proposed" && p.State != "applied") {
+		return proposal{}, errors.New("owner proposal binding is invalid")
 	}
 	return p, nil
 }
 
 func readAudit(root, id string) (audit, error) {
+	if !validOwnerArtifactID(id) {
+		return audit{}, errors.New("owner audit identity is invalid")
+	}
 	var item audit
 	if err := readPrivateJSON(auditPath(root, id), &item); err != nil {
 		return audit{}, err
 	}
+	if item.ID != id || !validOwnerArtifactID(item.ProposalID) || facets[item.Facet].Record.Path == "" {
+		return audit{}, errors.New("owner audit binding is invalid")
+	}
 	return item, nil
+}
+
+func validOwnerArtifactID(id string) bool {
+	if id == "" || len(id) > 160 {
+		return false
+	}
+	for _, r := range id {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '.') {
+			return false
+		}
+	}
+	return id != "." && id != ".."
 }
 
 func receipt(p proposal) RefinementReceipt {
@@ -476,87 +529,74 @@ func writePrivateJSONIfAbsent(path string, value any) error {
 	if err != nil {
 		return err
 	}
-	directory := filepath.Dir(path)
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		return err
+	if len(body)+1 > maximumOwnerRegistryBytes {
+		return errors.New("owner proposal exceeds bounded JSON size")
 	}
-	if err := validatePrivateParents(directory); err != nil {
-		return err
-	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-	if err != nil {
-		return err
-	}
-	if _, err := file.Write(append(body, '\n')); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if err := file.Close(); err != nil {
-		return err
-	}
-	return syncPrivateDirectory(directory)
+	return publishOwnerFile(path, append(body, '\n'), true)
 }
 
 func readPrivateJSON(path string, target any) error {
-	body, err := os.ReadFile(path)
+	body, err := readOwnerFile(path, maximumOwnerRegistryBytes)
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(body, target)
+	return decodePrivateJSON(body, target)
 }
 
-func writePrivateFile(path string, body []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+func decodePrivateJSON(body []byte, target any) error {
+	if !utf8.Valid(body) {
+		return errors.New("owner JSON must be valid UTF-8")
+	}
+	if err := checkJSONKeys(json.NewDecoder(bytes.NewReader(body))); err != nil {
 		return err
 	}
-	return os.WriteFile(path, body, 0o600)
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return errors.New("owner JSON contains trailing values")
+	}
+	return nil
 }
 
-func atomicPrivateWrite(path string, body []byte) error {
-	directory := filepath.Dir(path)
-	if err := os.MkdirAll(directory, 0o700); err != nil {
+func checkJSONKeys(decoder *json.Decoder) error {
+	token, err := decoder.Token()
+	if err != nil {
 		return err
 	}
-	if err := validatePrivateParents(directory); err != nil {
-		return err
+	delim, ok := token.(json.Delim)
+	if !ok {
+		return nil
 	}
-	if info, err := os.Lstat(path); err == nil {
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			return fmt.Errorf("private target is not a regular file: %s", path)
+	if delim != '{' && delim != '[' {
+		return errors.New("invalid owner JSON")
+	}
+	keys := map[string]bool{}
+	for decoder.More() {
+		if delim == '{' {
+			token, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			key, ok := token.(string)
+			if !ok || keys[key] {
+				return errors.New("owner JSON contains duplicate keys")
+			}
+			keys[key] = true
 		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
+		if err := checkJSONKeys(decoder); err != nil {
+			return err
+		}
 	}
-	temporary, err := os.CreateTemp(directory, ".private-*")
-	if err != nil {
-		return err
-	}
-	temporaryPath := temporary.Name()
-	defer os.Remove(temporaryPath)
-	if err := temporary.Chmod(0o600); err != nil {
-		_ = temporary.Close()
-		return err
-	}
-	if _, err := temporary.Write(body); err != nil {
-		_ = temporary.Close()
-		return err
-	}
-	if err := temporary.Sync(); err != nil {
-		_ = temporary.Close()
-		return err
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(temporaryPath, path); err != nil {
-		return err
-	}
-	return syncPrivateDirectory(directory)
+	_, err = decoder.Token()
+	return err
 }
+
+func writePrivateFile(path string, body []byte) error   { return atomicPrivateWrite(path, body) }
+func atomicPrivateWrite(path string, body []byte) error { return publishOwnerFile(path, body, false) }
 
 func validatePrivateParents(directory string) error {
 	abs, err := filepath.Abs(directory)

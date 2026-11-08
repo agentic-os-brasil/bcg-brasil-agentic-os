@@ -4,20 +4,35 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
 func TestPersistentUnlockedFileIsRecoverable(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".transition.lock")
-	if err := os.WriteFile(path, []byte("stale legacy sentinel"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	unlock, err := Acquire(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := unlock(); err != nil {
-		t.Fatal(err)
+	for _, test := range []struct{ name, body string }{{"empty", ""}, {"legacy-data", "stale legacy sentinel"}} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), ".transition.lock")
+			if err := os.WriteFile(path, []byte(test.body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			unlock, err := Acquire(path)
+			if runtime.GOOS == "windows" && test.body != "" {
+				if err == nil || unlock != nil {
+					t.Fatal("legacy token data acquired a native lock")
+				}
+			} else {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := unlock(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			body, err := os.ReadFile(path)
+			if err != nil || string(body) != test.body {
+				t.Fatal("recovery changed retained guard bytes", err)
+			}
+		})
 	}
 }
 

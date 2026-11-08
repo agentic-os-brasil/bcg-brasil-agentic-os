@@ -29,7 +29,7 @@ func TestFilesIncludesNestedResourcesAndRejectsFactoryPaths(t *testing.T) {
 	}
 }
 
-func TestGuidedOwnerSkillsCarryExactResumableReviewCommands(t *testing.T) {
+func TestGuidedOwnerSkillsCarryResumableReviewContracts(t *testing.T) {
 	for _, test := range []struct {
 		id       string
 		required []string
@@ -38,8 +38,17 @@ func TestGuidedOwnerSkillsCarryExactResumableReviewCommands(t *testing.T) {
 			id: "maestro-onboarding",
 			required: []string{
 				"Maestro Onboarding",
-				"brain/owner/onboarding.json",
-				"brain/owner/identity.json",
+				"owner.status",
+				"owner.track",
+				"owner.interview",
+				"owner.propose",
+				"owner.review",
+				"owner.apply",
+				"owner.onboarding_review",
+				"owner.confirm_onboarding",
+				"review_required",
+				"next_question",
+				"review_digest",
 				"interaction-profile",
 			},
 		},

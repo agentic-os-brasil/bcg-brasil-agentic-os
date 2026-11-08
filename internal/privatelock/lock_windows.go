@@ -15,6 +15,16 @@ func tryLockFile(file *os.File) error {
 	if errors.Is(err, windows.ERROR_LOCK_VIOLATION) {
 		return ErrBusy
 	}
+	if err == nil {
+		info, statErr := file.Stat()
+		if statErr != nil {
+			return errors.Join(statErr, unlockFile(file))
+		}
+		// Legacy token writers do not honor the native byte-range lock.
+		if info.Size() != 0 {
+			return errors.Join(errors.New("private transition lock contains legacy or unexpected data; preserve it and close older clients before retrying"), unlockFile(file))
+		}
+	}
 	return err
 }
 

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -131,6 +132,7 @@ type registry struct {
 	OnboardingConfirmedAt     string                    `json:"onboarding_confirmed_at,omitempty"`
 	OnboardingConfirmedSHA256 string                    `json:"onboarding_confirmed_sha256,omitempty"`
 	OnboardingTrack           string                    `json:"onboarding_track,omitempty"`
+	OnboardingTrackRevision   uint64                    `json:"onboarding_track_revision,omitempty"`
 }
 
 type producerRecord struct {
@@ -248,8 +250,13 @@ var onboardingTracks = map[string]onboardingTrackDefinition{
 }
 
 func Initialize(root string) (Status, error) {
+	unlock, err := acquireOwnerTransition(filepath.Join(root, "owner", "interview", ".transition.lock"))
+	if err != nil {
+		return Status{}, err
+	}
+	defer unlock()
 	directory := filepath.Join(root, "owner")
-	if err := os.MkdirAll(directory, 0o700); err != nil {
+	if err := ensureOwnerDirectory(directory); err != nil {
 		return Status{}, err
 	}
 	for _, template := range facets {
@@ -263,7 +270,7 @@ func Initialize(root string) (Status, error) {
 	if err := create(filepath.Join(root, filepath.FromSlash(selfIndexPath)), selfIndexTemplate); err != nil {
 		return Status{}, err
 	}
-	if err := os.MkdirAll(filepath.Join(directory, "sources", "assessments"), 0o700); err != nil {
+	if err := ensureOwnerDirectory(filepath.Join(directory, "sources", "assessments")); err != nil {
 		return Status{}, err
 	}
 	if _, _, err := ensurePromptHistoryStore(root); err != nil {
@@ -279,7 +286,7 @@ func Initialize(root string) (Status, error) {
 		if err != nil {
 			return Status{}, err
 		}
-		if err := os.WriteFile(path, append(body, '\n'), 0o600); err != nil {
+		if err := publishOwnerFile(path, append(body, '\n'), true); err != nil {
 			return Status{}, err
 		}
 	} else if err != nil {
@@ -519,6 +526,12 @@ func interviewStepForTrack(track, facet string) InterviewStep {
 // SelectOnboardingTrack records an explicit owner choice. Changing track
 // invalidates any prior confirmation because the reviewed facet set changes.
 func SelectOnboardingTrack(root, track string) (Status, error) {
+	var result Status
+	err := withOwnerTransition(root, func() error { var err error; result, err = selectOnboardingTrackLocked(root, track); return err })
+	return result, err
+}
+
+func selectOnboardingTrackLocked(root, track string) (Status, error) {
 	if _, ok := onboardingTracks[track]; !ok {
 		return Status{}, errors.New("onboarding track must be quick or complete")
 	}
@@ -526,6 +539,10 @@ func SelectOnboardingTrack(root, track string) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
+	if value.OnboardingTrackRevision == ^uint64(0) {
+		return Status{}, errors.New("onboarding track revision is exhausted")
+	}
+	value.OnboardingTrackRevision++
 	value.SchemaVersion = 3
 	value.OnboardingTrack = track
 	value.OnboardingConfirmedAt = ""
@@ -541,12 +558,12 @@ func facetAnswered(root, id string) bool {
 	if !ok {
 		return false
 	}
-	body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)))
+	body, err := readOwnerFacet(filepath.Join(root, filepath.FromSlash(template.Record.Path)))
 	return err == nil && strings.TrimSpace(string(body)) != strings.TrimSpace(template.Body)
 }
 
 func openTasks(root, relative string) TaskStatus {
-	body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))
+	body, err := readOwnerFile(filepath.Join(root, filepath.FromSlash(relative)), maximumOwnerRegistryBytes)
 	if err != nil {
 		return TaskStatus{State: "unavailable"}
 	}
@@ -570,6 +587,12 @@ func openTasks(root, relative string) TaskStatus {
 // answered non-sensitive facets. Any later change invalidates the digest and
 // returns onboarding to review_required.
 func ConfirmOnboarding(root, expectedDigest string) (Status, error) {
+	var result Status
+	err := withOwnerTransition(root, func() error { var err error; result, err = confirmOnboardingLocked(root, expectedDigest); return err })
+	return result, err
+}
+
+func confirmOnboardingLocked(root, expectedDigest string) (Status, error) {
 	if !validOnboardingDigest(expectedDigest) {
 		return Status{}, errors.New("onboarding confirmation requires the 64-character SHA-256 review_digest shown by bcgos owner onboarding status; nothing was changed")
 	}
@@ -577,8 +600,11 @@ func ConfirmOnboarding(root, expectedDigest string) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	status := onboarding(root, facetsFromRegistry(root, value), value.OnboardingTrack, "", "")
-	if status.State != "review_required" || status.ReviewDigest == "" {
+	status, err := reviewOnboarding(root)
+	if err != nil {
+		return Status{}, err
+	}
+	if (status.State != "review_required" && status.State != "complete") || status.ReviewDigest == "" {
 		return Status{}, errors.New("onboarding answers are not ready for owner confirmation")
 	}
 	if !secureDigestEqual(expectedDigest, status.ReviewDigest) {
@@ -615,12 +641,24 @@ func facetsFromRegistry(root string, value registry) map[string]Facet {
 	return result
 }
 
+func onboardingTrackDigestParts(track string, revision uint64) []string {
+	parts := []string{"track\x00" + track}
+	// Preserve legacy confirmed profiles until an explicit selection advances revision.
+	if revision != 0 {
+		parts = append(parts, "track_revision\x00"+strconv.FormatUint(revision, 10))
+	}
+	return parts
+}
+
 func onboardingDigest(root string, definition onboardingTrackDefinition) string {
-	parts := make([]string, 0, len(definition.Facets)+1)
-	parts = append(parts, "track\x00"+definition.ID)
+	value, err := readRegistry(root)
+	if err != nil {
+		return ""
+	}
+	parts := onboardingTrackDigestParts(definition.ID, value.OnboardingTrackRevision)
 	for _, id := range definition.Facets {
 		template := facets[id]
-		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)))
+		body, err := readOwnerFacet(filepath.Join(root, filepath.FromSlash(template.Record.Path)))
 		if err != nil {
 			return ""
 		}
@@ -647,7 +685,7 @@ func onboardingDigestForFacets(root, track string, ids []string) string {
 	parts = append(parts, "track\x00"+track)
 	for _, id := range ids {
 		template := facets[id]
-		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)))
+		body, err := readOwnerFacet(filepath.Join(root, filepath.FromSlash(template.Record.Path)))
 		if err != nil {
 			return ""
 		}
@@ -660,7 +698,7 @@ func legacyOnboardingDigest(root string) string {
 	parts := make([]string, 0, len(legacyOnboardingFacets))
 	for _, id := range legacyOnboardingFacets {
 		template := facets[id]
-		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)))
+		body, err := readOwnerFacet(filepath.Join(root, filepath.FromSlash(template.Record.Path)))
 		if err != nil {
 			return ""
 		}
@@ -687,20 +725,9 @@ func pointer(root, relative string) Pointer {
 }
 
 func create(path, body string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	err := publishOwnerFile(path, []byte(body), true)
 	if errors.Is(err, os.ErrExist) {
-		return nil
+		_, err = readOwnerFile(path, maximumOwnerRegistryBytes)
 	}
-	if err != nil {
-		return err
-	}
-	_, err = file.WriteString(body)
-	closeErr := file.Close()
-	if err != nil {
-		return err
-	}
-	return closeErr
+	return err
 }

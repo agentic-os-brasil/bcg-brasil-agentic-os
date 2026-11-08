@@ -5,6 +5,16 @@ description: Método operacional do Maestro, carregado no início de cada sessã
 
 # Maestro Operator
 
+## Owner onboarding in product MCP
+
+When the owner begins, resumes or reviews onboarding through the admitted
+Maestro connector, follow [Maestro Onboarding](../maestro-onboarding/SKILL.md).
+Read `owner.status` first: resume `in_progress` from its pending question,
+review `review_required`, and continue ordinary work when `complete`. Preserve
+saved progress on deferral or declined confirmation. The product route uses
+only the exposed owner operations and trusted host review; legacy filesystem
+and helper instructions below grant no fallback for this route.
+
 Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
 
 
