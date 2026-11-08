@@ -234,7 +234,7 @@ func (e *externalTree) check(name string) error {
 	for _, part := range strings.Split(name, "/") {
 		current = path.Join(current, part)
 		_, err := e.stat(current)
-		if os.IsNotExist(err) {
+		if externalMissing(err) {
 			return nil
 		}
 		if err != nil {
@@ -313,7 +313,7 @@ func externalEnsure(e *externalTree, name string, body []byte) (err error) {
 		}
 		return nil
 	}
-	if !os.IsNotExist(err) {
+	if !externalMissing(err) {
 		return err
 	}
 	target, closeTarget, err := e.privateDirectory(path.Dir(name), true)
@@ -373,7 +373,7 @@ func (e *externalTree) removeExact(name string, expected []byte) (bool, error) {
 	}
 	defer close()
 	marked, err := d.RemoveExact(path.Base(name), expected)
-	if os.IsNotExist(err) {
+	if !marked && externalMissing(err) {
 		return false, nil
 	}
 	if marked && err == nil {
@@ -382,7 +382,7 @@ func (e *externalTree) removeExact(name string, expected []byte) (bool, error) {
 		if probeErr == nil {
 			return true, errors.New("locator retirement is pending; close readers and resume rollback")
 		}
-		if !os.IsNotExist(probeErr) {
+		if !externalMissing(probeErr) {
 			return true, probeErr
 		}
 	}

@@ -130,6 +130,25 @@ func externalClean(p string) error {
 	}
 	return nil
 }
+
+// Missing metadata is idempotent only when every joined outcome is absence.
+func externalMissing(err error) bool {
+	if !errors.Is(err, fs.ErrNotExist) {
+		return false
+	}
+	switch wrapped := err.(type) {
+	case interface{ Unwrap() []error }:
+		for _, part := range wrapped.Unwrap() {
+			if part != nil && !externalMissing(part) {
+				return false
+			}
+		}
+	case interface{ Unwrap() error }:
+		return externalMissing(wrapped.Unwrap())
+	}
+	return true
+}
+
 func externalContains(a, b string) bool {
 	r, e := filepath.Rel(a, b)
 	return e == nil && (r == "." || r != ".." && !strings.HasPrefix(r, ".."+string(os.PathSeparator)))
@@ -140,7 +159,7 @@ func externalContains(a, b string) bool {
 // distinct case-sensitive paths as aliases or requiring retired sources online.
 func externalPhysicalContains(a, b string, held ...*externalTree) (bool, error) {
 	info, err := externalPathInfo(a, held...)
-	if os.IsNotExist(err) {
+	if externalMissing(err) {
 		return false, nil
 	}
 	if err != nil {
@@ -158,7 +177,7 @@ func externalPhysicalContains(a, b string, held ...*externalTree) (bool, error) 
 			if os.SameFile(info, other) {
 				return true, nil
 			}
-		} else if !os.IsNotExist(err) {
+		} else if !externalMissing(err) {
 			return false, err
 		}
 		if filepath.Dir(current) == current {
@@ -194,7 +213,7 @@ func externalPrivateParents(e *externalTree, relative string) error {
 		}
 		current = path.Join(current, component)
 		info, err := e.stat(current)
-		if os.IsNotExist(err) {
+		if externalMissing(err) {
 			return nil
 		} else if err != nil {
 			return err
@@ -251,7 +270,7 @@ func externalReservedProfileWrite(userHome, write string, held ...*externalTree)
 				}
 				return nil
 			}
-		} else if !os.IsNotExist(err) {
+		} else if !externalMissing(err) {
 			return err
 		}
 		if filepath.Dir(current) == current {
@@ -423,7 +442,7 @@ func externalInventory(e *externalTree, tree string) ([]record, error) {
 		return nil, err
 	}
 	info, err := e.stat(tree)
-	if os.IsNotExist(err) {
+	if externalMissing(err) {
 		return []record{}, nil
 	}
 	if err != nil {
@@ -558,7 +577,7 @@ func PlanExternal(o ExternalOptions) (ExternalPlan, error) {
 	}
 	if _, err := externalPathInfo(filepath.Join(o.UserHome, ".maestro-home.json")); err == nil {
 		return ExternalPlan{}, errors.New("existing locator requires inspection, not a new migration")
-	} else if !os.IsNotExist(err) {
+	} else if !externalMissing(err) {
 		return ExternalPlan{}, err
 	}
 	p := ExternalPlan{SchemaVersion: 1, AttemptID: id(), ExternalOptions: o, Entries: []ExternalEntry{}}
@@ -578,7 +597,7 @@ func PlanExternal(o ExternalOptions) (ExternalPlan, error) {
 			return p, errors.New("home already populated")
 		}
 		p.PriorHome = true
-	} else if !os.IsNotExist(err) {
+	} else if !externalMissing(err) {
 		return p, err
 	}
 	version, layout, records, err := externalSource(o.SourceRoot)
@@ -867,7 +886,7 @@ func applyExternal(p ExternalPlan, digest string, progress func(ExternalProgress
 	if version != p.SourceVersion || layout != p.SourceLayout || fingerprint(records) != p.SourceFingerprint {
 		return s, errors.New("source drift")
 	}
-	if _, err = externalPathInfo(p.ArchiveRoot); !os.IsNotExist(err) {
+	if _, err = externalPathInfo(p.ArchiveRoot); !externalMissing(err) {
 		return s, errors.New("rollback archive already exists")
 	}
 	u, err := externalOpen(p.UserHome)
@@ -879,10 +898,10 @@ func applyExternal(p ExternalPlan, digest string, progress func(ExternalProgress
 	if intentErr == nil && !bytes.Equal(intent, b) {
 		return s, errors.New("intent does not match reviewed plan")
 	}
-	if intentErr != nil && !os.IsNotExist(intentErr) {
+	if intentErr != nil && !externalMissing(intentErr) {
 		return s, intentErr
 	}
-	if os.IsNotExist(intentErr) {
+	if externalMissing(intentErr) {
 		if info, er := externalPathInfo(p.Home); er == nil {
 			if !info.IsDir() {
 				return s, errors.New("home is not empty")
@@ -891,10 +910,10 @@ func applyExternal(p ExternalPlan, digest string, progress func(ExternalProgress
 			if er != nil || len(entries) != 0 {
 				return s, errors.New("unowned populated home")
 			}
-		} else if !os.IsNotExist(er) {
+		} else if !externalMissing(er) {
 			return s, er
 		}
-		if _, er := u.stat(".maestro-home.json"); !os.IsNotExist(er) {
+		if _, er := u.stat(".maestro-home.json"); !externalMissing(er) {
 			return s, errors.New("foreign locator")
 		}
 	}
@@ -909,7 +928,7 @@ func applyExternal(p ExternalPlan, digest string, progress func(ExternalProgress
 	if err = externalEnsure(u, externalIntentName(p.AttemptID), b); err != nil {
 		return s, err
 	}
-	if _, err = externalPathInfo(p.Home); os.IsNotExist(err) {
+	if _, err = externalPathInfo(p.Home); externalMissing(err) {
 		if err = externalCreateHome(p.Home); err != nil {
 			return s, err
 		}
@@ -1064,7 +1083,7 @@ func InspectExternal(home, attempt, digest string) (ExternalStatus, error) {
 	s := ExternalStatus{State: "unverified", Diagnostic: "migration-unverified"}
 	p, e, err := externalLoad(home, attempt, digest)
 	archived := false
-	if os.IsNotExist(err) {
+	if externalMissing(err) {
 		archive := filepath.Join(filepath.Dir(home), ".maestro-rollback-"+attempt)
 		p, e, err = externalLoadArchived(home, archive, attempt, digest)
 		archived = err == nil
@@ -1081,12 +1100,12 @@ func InspectExternal(home, attempt, digest string) (ExternalStatus, error) {
 			if err = externalCheckRecord(e, p, digest, "rollback.json", "rolled_back"); err == nil {
 				s.State = "rolled_back"
 				s.Diagnostic = "legacy-handoff-ready"
-			} else if !os.IsNotExist(err) {
+			} else if !externalMissing(err) {
 				return s, err
 			}
 		}
 		return s, nil
-	} else if !os.IsNotExist(err) {
+	} else if !externalMissing(err) {
 		return s, err
 	}
 	for _, record := range []struct{ name, phase string }{{"prepared.json", "prepared"}, {"copied.json", "copied"}, {"commit.json", "committed"}} {
@@ -1148,7 +1167,7 @@ func rollbackExternal(home, attempt, digest string, progress func(ExternalProgre
 	p, e, err := externalLoadTree(home, attempt, digest, true)
 	archive := filepath.Join(filepath.Dir(home), ".maestro-rollback-"+attempt)
 	archived := false
-	if os.IsNotExist(err) {
+	if externalMissing(err) {
 		p, e, err = externalLoadArchived(home, archive, attempt, digest)
 		archived = err == nil
 	}
@@ -1182,7 +1201,7 @@ func rollbackExternal(home, attempt, digest string, progress func(ExternalProgre
 	if err = externalLocatorOwned(guard, p); err != nil {
 		return s, err
 	}
-	if err = externalRetirementOwned(guard, p, digest); err != nil {
+	if err = externalRetirementOwned(guard, p, digest, e); err != nil {
 		return s, err
 	}
 	s = externalStatusAt(p, digest, "rollback_pending", e.project)
@@ -1195,7 +1214,7 @@ func rollbackExternal(home, attempt, digest string, progress func(ExternalProgre
 			}
 			return s, fmt.Errorf("original unavailable: %w", err)
 		}
-		if _, err = externalPathInfo(archive); !os.IsNotExist(err) {
+		if _, err = externalPathInfo(archive); !externalMissing(err) {
 			return s, errors.New("rollback archive exists")
 		}
 		if err = externalEnsure(e, externalName(attempt, "revoked.json"), externalCanonical(externalRecord{1, attempt, digest, "revoked"})); err != nil {
@@ -1221,7 +1240,7 @@ func rollbackExternal(home, attempt, digest string, progress func(ExternalProgre
 		return s, err
 	}
 	defer u.close()
-	if err = externalPublishRetirement(u, p, digest); err != nil {
+	if err = externalPublishRetirement(u, p, digest, e); err != nil {
 		return s, err
 	}
 	if err = externalProgress(progress, "retired", 0, 0); err != nil {
@@ -1248,7 +1267,7 @@ func rollbackExternal(home, attempt, digest string, progress func(ExternalProgre
 	return s, externalProgress(progress, "rolled_back", 0, 0)
 }
 
-func externalLoadArchived(home, archive, attempt, digest string) (ExternalPlan, *externalTree, error) {
+func externalLoadArchived(home, archive, attempt, digest string, held ...*externalTree) (ExternalPlan, *externalTree, error) {
 	var p ExternalPlan
 	if !externalAttempt.MatchString(attempt) || !externalDigestPattern.MatchString(digest) {
 		return p, nil, errors.New("invalid rollback binding")
@@ -1268,7 +1287,7 @@ func externalLoadArchived(home, archive, attempt, digest string) (ExternalPlan, 
 		err = externalDecode(b, &p)
 	}
 	if err == nil {
-		err = externalValidatePlan(p, e)
+		err = externalValidatePlan(p, append([]*externalTree{e}, held...)...)
 	}
 	if err == nil && (p.Home != home || p.ArchiveRoot != archive || p.AttemptID != attempt) {
 		err = errors.New("archived binding mismatch")
@@ -1285,7 +1304,7 @@ func externalLoadArchived(home, archive, attempt, digest string) (ExternalPlan, 
 
 func externalLocatorOwned(e *externalTree, p ExternalPlan) error {
 	b, err := externalRead(e, ".maestro-home.json", true)
-	if os.IsNotExist(err) {
+	if externalMissing(err) {
 		return nil
 	}
 	if err != nil {
@@ -1316,6 +1335,11 @@ func externalRetirementBody(p ExternalPlan, digest string) []byte {
 // RetiredExternalHome is a deny-only lookup for an unconfirmed explicit HOME.
 // It never selects a source, grants authority, creates or repairs records.
 func RetiredExternalHome(userHome, home string) (bool, error) {
+	return retiredExternalHome(userHome, home)
+}
+
+// Prior retirement checks may run while a newer HOME has movable custody.
+func retiredExternalHome(userHome, home string, held ...*externalTree) (bool, error) {
 	if err := externalClean(userHome); err != nil {
 		return false, err
 	}
@@ -1334,7 +1358,7 @@ func RetiredExternalHome(userHome, home string) (bool, error) {
 	}
 	defer u.close()
 	body, err := externalRead(u, externalRetirementName(home), true)
-	if os.IsNotExist(err) {
+	if externalMissing(err) {
 		return false, nil
 	}
 	if err != nil {
@@ -1347,7 +1371,7 @@ func RetiredExternalHome(userHome, home string) (bool, error) {
 	if r.SchemaVersion != 1 || r.Home != home || r.UserHome != userHome || !externalAttempt.MatchString(r.AttemptID) || !externalDigestPattern.MatchString(r.PlanSHA256) || r.ArchiveRoot != filepath.Join(filepath.Dir(home), ".maestro-rollback-"+r.AttemptID) {
 		return false, errors.New("retired binding mismatch")
 	}
-	p, e, err := externalLoadArchived(home, r.ArchiveRoot, r.AttemptID, r.PlanSHA256)
+	p, e, err := externalLoadArchived(home, r.ArchiveRoot, r.AttemptID, r.PlanSHA256, held...)
 	if err != nil {
 		return false, err
 	}
@@ -1360,9 +1384,9 @@ func RetiredExternalHome(userHome, home string) (bool, error) {
 	}
 	return true, nil
 }
-func externalRetirementOwned(u *externalTree, p ExternalPlan, digest string) error {
+func externalRetirementOwned(u *externalTree, p ExternalPlan, digest string, held ...*externalTree) error {
 	body, err := externalRead(u, externalRetirementName(p.Home), true)
-	if os.IsNotExist(err) {
+	if externalMissing(err) {
 		return nil
 	}
 	if err != nil {
@@ -1371,7 +1395,7 @@ func externalRetirementOwned(u *externalTree, p ExternalPlan, digest string) err
 	if bytes.Equal(body, externalRetirementBody(p, digest)) {
 		return nil
 	}
-	retired, err := RetiredExternalHome(p.UserHome, p.Home)
+	retired, err := retiredExternalHome(p.UserHome, p.Home, held...)
 	if err != nil {
 		return err
 	}
@@ -1380,14 +1404,14 @@ func externalRetirementOwned(u *externalTree, p ExternalPlan, digest string) err
 	}
 	return nil
 }
-func externalPublishRetirement(u *externalTree, p ExternalPlan, digest string) error {
-	if err := externalRetirementOwned(u, p, digest); err != nil {
+func externalPublishRetirement(u *externalTree, p ExternalPlan, digest string, held ...*externalTree) error {
+	if err := externalRetirementOwned(u, p, digest, held...); err != nil {
 		return err
 	}
 	name := externalRetirementName(p.Home)
 	body := externalRetirementBody(p, digest)
 	previous, err := externalRead(u, name, true)
-	if os.IsNotExist(err) {
+	if externalMissing(err) {
 		return externalEnsure(u, name, body)
 	}
 	if err != nil {
