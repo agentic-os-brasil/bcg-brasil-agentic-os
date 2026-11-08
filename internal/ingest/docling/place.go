@@ -148,11 +148,21 @@ func placeEntries(ctx context.Context, installedParent, name string, entries map
 		return err
 	}
 	defer handle.Close()
-	root, err := handle.Open(".")
+	root, err := openPlacementLeaf(parent, stage)
 	if err != nil {
 		return err
 	}
 	defer root.Close()
+	opened, err = handle.Open(".")
+	if err != nil {
+		return err
+	}
+	rootInfo, rootErr := root.Stat()
+	extractionInfo, extractionErr := opened.Stat()
+	_ = opened.Close()
+	if rootErr != nil || extractionErr != nil || !os.SameFile(rootInfo, extractionInfo) {
+		return errors.New("converter placement staging root changed")
+	}
 	defer func() {
 		if err := placementLeafMatches(parent, root, stage); errors.Is(err, os.ErrNotExist) {
 			return
@@ -262,7 +272,7 @@ func publishPlacement(parent, root *os.File, stage, installed string) (result er
 			return err
 		}
 	}
-	// Darwin requires the root to remain writable until its rename completes.
+	// Seal the held root only after exclusive publication completes.
 	if err := root.Chmod(0555); err != nil {
 		return err
 	}
