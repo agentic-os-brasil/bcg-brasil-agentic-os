@@ -410,10 +410,47 @@ func externalNativeSnapshot(t *testing.T, root string) map[string]externalNative
 func externalNativeUnchanged(t *testing.T, root string, before map[string]externalNativeEntrySnapshot) {
 	t.Helper()
 	after := externalNativeSnapshot(t, root)
-	if !reflect.DeepEqual(before, after) {
-		t.Fatal("native bytes, entry inventory, modes, modification times or owner/group/DACL/attributes changed", root)
+	if reflect.DeepEqual(before, after) {
+		return
 	}
+	for name, old := range before {
+		current, exists := after[name]
+		if !exists {
+			t.Errorf("native entry %q removed", name)
+			continue
+		}
+		if old == current {
+			continue
+		}
+		t.Errorf("native entry %q changed: mode=%v->%v modified=%d->%d attributes=%#x->%#x body_length=%d->%d body_sha256=%s->%s owner_group_DACL=%q->%q", name, old.Mode, current.Mode, old.Modified, current.Modified, old.Attributes, current.Attributes, len(old.Body), len(current.Body), hash([]byte(old.Body)), hash([]byte(current.Body)), old.Security, current.Security)
+		full := filepath.Join(root, name)
+		if info, err := os.Lstat(full); err != nil {
+			t.Logf("fresh Lstat %q: %v", name, err)
+		} else {
+			t.Logf("fresh Lstat %q mode=%v modified=%d", name, info.Mode(), info.ModTime().UnixNano())
+		}
+		f, err := os.Open(full)
+		if err != nil {
+			t.Logf("fresh metadata handle %q: %v", name, err)
+			continue
+		}
+		info, statErr := f.Stat()
+		var native windows.ByHandleFileInformation
+		nativeErr := windows.GetFileInformationByHandle(windows.Handle(f.Fd()), &native)
+		closeErr := f.Close()
+		if statErr == nil {
+			t.Logf("fresh handle Stat %q mode=%v modified=%d", name, info.Mode(), info.ModTime().UnixNano())
+		}
+		t.Logf("fresh native metadata %q attributes=%#x modified=%d stat_error=%v native_error=%v close_error=%v", name, native.FileAttributes, native.LastWriteTime.Nanoseconds(), statErr, nativeErr, closeErr)
+	}
+	for name := range after {
+		if _, existed := before[name]; !existed {
+			t.Errorf("native entry %q added", name)
+		}
+	}
+	t.FailNow()
 }
+
 func externalNativeRead(t *testing.T, root, name, want string) {
 	t.Helper()
 	body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(name)))
@@ -606,10 +643,23 @@ func TestWindowsExternalAdapterAdmittedTransactionHonorsProfileLeaseAndForeignLo
 		guard.close()
 		t.Fatal(err)
 	}
+	// Prime the persistent empty lock before comparing the profile's full bytes.
+	release()
+	profile := externalNativeSnapshot(t, o.UserHome)
+	lockPath := filepath.Join(o.UserHome, externalIntentControl, "apply.lock")
+	lockIdentity, err := os.Stat(lockPath)
+	if err != nil || !lockIdentity.Mode().IsRegular() || lockIdentity.Size() != 0 {
+		guard.close()
+		t.Fatal("persistent migration lock is not an empty regular file", err)
+	}
+	release, err = externalAcquire(guard, plan.AttemptID)
+	if err != nil {
+		guard.close()
+		t.Fatal(err)
+	}
 	func() {
 		defer guard.close()
 		defer release()
-		profile := externalNativeSnapshot(t, o.UserHome)
 		executable, err := os.Executable()
 		if err != nil {
 			t.Fatal(err)
@@ -626,14 +676,19 @@ func TestWindowsExternalAdapterAdmittedTransactionHonorsProfileLeaseAndForeignLo
 		if _, err = os.Stat(o.Home); !os.IsNotExist(err) {
 			t.Fatal("held lease created home", err)
 		}
-		externalNativeUnchanged(t, o.UserHome, profile)
+		// Byte zero is deliberately locked; metadata still proves the same empty file.
+		heldIdentity, err := os.Stat(lockPath)
+		if err != nil || heldIdentity.Size() != 0 || !os.SameFile(lockIdentity, heldIdentity) {
+			t.Fatal("held migration lock identity or empty length changed", err)
+		}
 	}()
+	externalNativeUnchanged(t, o.UserHome, profile)
 	if status, err := applyExternal(plan, digest, nil); err != nil || !status.Current {
 		t.Fatal("apply after lease release failed", status.State, err)
 	}
 	externalNativePut(t, o.UserHome, ".maestro-home.json", string(externalCanonical(externalLocator{1, o.Home, "00000000000000000000000000000000"})))
 	active := externalNativeSnapshot(t, o.Home)
-	profile := externalNativeSnapshot(t, o.UserHome)
+	profile = externalNativeSnapshot(t, o.UserHome)
 	if _, err = rollbackExternal(o.Home, plan.AttemptID, digest, nil); err == nil {
 		t.Fatal("foreign locator revoked home")
 	}
