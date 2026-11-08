@@ -43,11 +43,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go build -trimpath -o (Join-Path $build 'maestro-pilot-sdk-witness.exe') ../../dev/pilot/smoke.go
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Compile the canonical publication witness for the same kit
+      - name: Compile publication and Docling placement witnesses for the same kit
         shell: powershell
         run: |
           $build = Join-Path $env:RUNNER_TEMP 'Developer/windows-pilot-kit-build'
           go test -c -o (Join-Path $build 'windows-atlas.test.exe') ./internal/atlasops
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go test -c -o (Join-Path $build 'windows-docling.test.exe') ./internal/ingest/docling
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Qualify the exact produced PE and ZIP under an actual ordinary account
         shell: pwsh
@@ -64,6 +66,7 @@ jobs:
             -MethodFixture (Join-Path $env:GITHUB_WORKSPACE 'adapters/mcp/packaging/testdata/method-ids.txt') `
             -SdkWitness (Join-Path $build 'maestro-pilot-sdk-witness.exe') `
             -AtlasTestBinary (Join-Path $build 'windows-atlas.test.exe') `
+            -DoclingTestBinary (Join-Path $build 'windows-docling.test.exe') `
             -AuthoredBrain -PrivateWiki
       - name: Stage only bounded synthetic evidence
         if: always()
