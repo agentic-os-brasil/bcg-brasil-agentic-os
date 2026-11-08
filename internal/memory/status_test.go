@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"testing"
 	"time"
@@ -46,54 +47,47 @@ func TestStatusReportsEmptyAndCommittedWorkspace(t *testing.T) {
 	}
 }
 
-func TestStatusUsesTemporaryAliasAndRefusesApplicationAlias(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Unix temporary-directory alias; Windows ownership has separate contracts")
-	}
+func TestStatusRefusesApplicationAliasAndPreservesActivationLock(t *testing.T) {
 	base := t.TempDir()
-	physical, temporary := filepath.Join(base, "physical"), filepath.Join(base, "temporary")
-	if err := os.Mkdir(physical, 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(physical, temporary); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("TMPDIR", temporary)
-	root := filepath.Join(temporary, "memory")
+	root := filepath.Join(base, "memory")
 	if err := Bootstrap(root, "case-a"); err != nil {
 		t.Fatal(err)
 	}
 	engine := &Engine{Root: root}
 	status, err := engine.Status("case-a")
 	if err != nil || status.State != "empty" || status.ActivationLocked {
-		t.Fatalf("temporary alias status=%#v err=%v", status, err)
+		t.Fatalf("physical status=%#v err=%v", status, err)
 	}
-	lock := filepath.Join(physical, "memory", "workspaces", "case-a", ".locks", "activation.lock")
-	if err := os.Mkdir(lock, 0700); err != nil {
+	lock := filepath.Join(root, "workspaces", "case-a", ".locks", "activation.lock")
+	if err := memoryMkdir(lock, 0700); err != nil {
 		t.Fatal(err)
 	}
 	status, err = engine.Status("case-a")
 	if err != nil || !status.ActivationLocked {
-		t.Fatalf("temporary alias lost active lock: status=%#v err=%v", status, err)
+		t.Fatalf("physical status lost active lock: status=%#v err=%v", status, err)
 	}
-	external := filepath.Join(base, "external")
-	if err := os.Mkdir(external, 0700); err != nil {
+	external := t.TempDir()
+	if err := Bootstrap(external, "case-a"); err != nil {
 		t.Fatal(err)
 	}
-	canary := filepath.Join(external, "keep.txt")
-	if err := os.WriteFile(canary, []byte("preserve external state"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(external, "keep.txt"), []byte("preserve external state"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(external, filepath.Join(physical, "application-alias")); err != nil {
-		t.Fatal(err)
+	if status, err := (&Engine{Root: external}).Status("case-a"); err != nil || status.State != "empty" {
+		t.Fatalf("physical external control=%#v err=%v", status, err)
 	}
-	if _, err := (&Engine{Root: filepath.Join(temporary, "application-alias")}).Status("case-a"); err == nil {
+	alias := filepath.Join(base, "application-alias")
+	statusDirectoryAlias(t, alias, external)
+	before, outside := statusTreeSnapshot(t, base), statusTreeSnapshot(t, external)
+	if _, err := (&Engine{Root: alias}).Status("case-a"); err == nil {
 		t.Fatal("status followed an application-controlled ancestor alias")
 	}
-	entries, err := os.ReadDir(external)
-	body, readErr := os.ReadFile(canary)
-	if err != nil || readErr != nil || len(entries) != 1 || entries[0].Name() != "keep.txt" || string(body) != "preserve external state" {
-		t.Fatalf("status changed external target: entries=%v err=%v read=%v body=%q", entries, err, readErr, body)
+	if !reflect.DeepEqual(before, statusTreeSnapshot(t, base)) || !reflect.DeepEqual(outside, statusTreeSnapshot(t, external)) {
+		t.Fatal("status refusal mutated the memory root or external target")
+	}
+	status, err = engine.Status("case-a")
+	if err != nil || !status.ActivationLocked {
+		t.Fatalf("alias refusal lost active lock: status=%#v err=%v", status, err)
 	}
 }
 
@@ -122,20 +116,15 @@ func TestBootstrapMaterializesAnEmptyWorkspaceMemoryRoot(t *testing.T) {
 }
 
 func TestBootstrapRejectsSymlinkedAncestorWithoutWritingOutsideRoot(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink creation requires privileges on some Windows runners")
-	}
-	root := t.TempDir()
-	external := filepath.Join(root, "external")
-	if err := os.MkdirAll(external, 0o700); err != nil {
-		t.Fatal(err)
-	}
+	root, external := t.TempDir(), t.TempDir()
 	linked := filepath.Join(root, "linked")
-	if err := os.Symlink(external, linked); err != nil {
-		t.Fatal(err)
-	}
+	statusDirectoryAlias(t, linked, external)
+	before, outside := statusTreeSnapshot(t, root), statusTreeSnapshot(t, external)
 	if err := Bootstrap(filepath.Join(linked, "memory"), "case-a"); err == nil {
 		t.Fatal("memory bootstrap followed a symlinked ancestor")
+	}
+	if !reflect.DeepEqual(before, statusTreeSnapshot(t, root)) || !reflect.DeepEqual(outside, statusTreeSnapshot(t, external)) {
+		t.Fatal("bootstrap refusal mutated the selected root or external target")
 	}
 	entries, err := os.ReadDir(external)
 	if err != nil || len(entries) != 0 {
@@ -235,4 +224,42 @@ func TestContinuityStatusVerifiesAndBoundsAttestedCaptures(t *testing.T) {
 	if _, err := engine.ContinuityStatus("case-a"); err == nil {
 		t.Fatal("unbounded memory commit history was accepted")
 	}
+}
+
+func statusTreeSnapshot(t *testing.T, root string) map[string]string {
+	t.Helper()
+	snapshot := map[string]string{}
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		value := info.Mode().String() + statusSecuritySnapshot(t, path)
+		// NTFS may defer fixture directory timestamps until a later inspection.
+		if runtime.GOOS != "windows" || !info.IsDir() {
+			value += " " + info.ModTime().String()
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			value += " " + target
+		} else if info.Mode().IsRegular() {
+			body, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			value += " " + string(body)
+		}
+		snapshot[path] = value
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return snapshot
 }

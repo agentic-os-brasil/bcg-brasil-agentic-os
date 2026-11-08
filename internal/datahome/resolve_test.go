@@ -154,20 +154,25 @@ func TestResolveMigrationRemainsUnverifiedAndRecordsMustAgree(t *testing.T) {
 }
 
 func TestResolveRejectsPubliclyWritableUserHome(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Unix permission contract")
-	}
 	opts := fixture(t)
-	if err := os.Chmod(opts.UserHome, 0777); err != nil {
+	if err := os.WriteFile(filepath.Join(opts.UserHome, "keep.txt"), []byte("preserve user home"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	if got, err := datahome.Resolve(opts); err != nil || got.Diagnostic != "fresh-unconfirmed" || got.Writable {
+		t.Fatalf("safe userhome fixture was not admitted read-only: %+v %v", got, err)
+	}
+	if runtime.GOOS == "windows" {
+		initializePublicDirectory(t, opts.UserHome)
+	} else if err := os.Chmod(opts.UserHome, 0777); err != nil {
+		t.Fatal(err)
+	}
+	before := homeSnapshot(t, opts.UserHome)
 	got, err := datahome.Resolve(opts)
 	if err == nil || got.Writable {
 		t.Fatalf("writable userhome accepted: %+v %v", got, err)
 	}
-	info, err := os.Stat(opts.UserHome)
-	if err != nil || info.Mode().Perm() != 0777 {
-		t.Fatalf("inspection repaired permissions: %v %v", info, err)
+	if !reflect.DeepEqual(before, homeSnapshot(t, opts.UserHome)) {
+		t.Fatal("unsafe-userhome inspection mutated content, metadata or permissions")
 	}
 }
 
