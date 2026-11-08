@@ -815,10 +815,15 @@ func externalProgress(progress func(ExternalProgress) error, phase string, copie
 }
 
 func ApplyExternal(p ExternalPlan, digest string, progress func(ExternalProgress) error) (ExternalStatus, error) {
-	s := externalStatus(p, digest, "blocked")
 	if err := externalMutationAllowed(); err != nil {
-		return s, err
+		return externalStatus(p, digest, "blocked"), err
 	}
+	return applyExternal(p, digest, progress)
+}
+
+// Native qualification exercises this exact transaction while public admission stays closed.
+func applyExternal(p ExternalPlan, digest string, progress func(ExternalProgress) error) (ExternalStatus, error) {
+	s := externalStatus(p, digest, "blocked")
 	if err := userlevel.EnsureNotElevated(); err != nil {
 		return s, err
 	}
@@ -1129,10 +1134,14 @@ func InspectExternal(home, attempt, digest string) (ExternalStatus, error) {
 }
 
 func RollbackExternal(home, attempt, digest string, progress func(ExternalProgress) error) (ExternalStatus, error) {
-	s := ExternalStatus{State: "blocked", Diagnostic: "migration-unverified"}
 	if err := externalMutationAllowed(); err != nil {
-		return s, err
+		return ExternalStatus{State: "blocked", Diagnostic: "migration-unverified"}, err
 	}
+	return rollbackExternal(home, attempt, digest, progress)
+}
+
+func rollbackExternal(home, attempt, digest string, progress func(ExternalProgress) error) (ExternalStatus, error) {
+	s := ExternalStatus{State: "blocked", Diagnostic: "migration-unverified"}
 	if err := userlevel.EnsureNotElevated(); err != nil {
 		return s, err
 	}
