@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -640,9 +641,21 @@ func facetsFromRegistry(root string, value registry) map[string]Facet {
 	return result
 }
 
+func onboardingTrackDigestParts(track string, revision uint64) []string {
+	parts := []string{"track\x00" + track}
+	// Preserve legacy confirmed profiles until an explicit selection advances revision.
+	if revision != 0 {
+		parts = append(parts, "track_revision\x00"+strconv.FormatUint(revision, 10))
+	}
+	return parts
+}
+
 func onboardingDigest(root string, definition onboardingTrackDefinition) string {
-	parts := make([]string, 0, len(definition.Facets)+1)
-	parts = append(parts, "track\x00"+definition.ID)
+	value, err := readRegistry(root)
+	if err != nil {
+		return ""
+	}
+	parts := onboardingTrackDigestParts(definition.ID, value.OnboardingTrackRevision)
 	for _, id := range definition.Facets {
 		template := facets[id]
 		body, err := readOwnerFacet(filepath.Join(root, filepath.FromSlash(template.Record.Path)))

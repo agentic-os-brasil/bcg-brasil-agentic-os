@@ -183,7 +183,7 @@ func seedOwnerAnswers(t *testing.T, f ownerFixture) {
 }
 
 func TestOwnerChangedDuringTrustedReview(t *testing.T) {
-	for _, kind := range []string{"base", "proposal", "profile", "track", "binding"} {
+	for _, kind := range []string{"base", "proposal", "profile", "track", "same_track", "track_aba", "binding"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newOwnerFixture(t, false)
 			seedOwnerAnswers(t, f)
@@ -226,6 +226,15 @@ func TestOwnerChangedDuringTrustedReview(t *testing.T) {
 					if _, err := ownerctx.SelectOnboardingTrack(f.root, "complete"); err != nil {
 						return nil, err
 					}
+				case "same_track", "track_aba":
+					if kind == "track_aba" {
+						if _, err := ownerctx.SelectOnboardingTrack(f.root, "complete"); err != nil {
+							return nil, err
+						}
+					}
+					if _, err := ownerctx.SelectOnboardingTrack(f.root, "quick"); err != nil {
+						return nil, err
+					}
 				case "binding":
 					if err := os.Rename(f.options.WorkspacePath, f.options.WorkspacePath+"-moved"); err != nil {
 						return nil, err
@@ -235,7 +244,7 @@ func TestOwnerChangedDuringTrustedReview(t *testing.T) {
 			})
 			op := "owner.apply"
 			extra := map[string]any{"proposal_id": p.ID}
-			if kind == "profile" || kind == "track" {
+			if kind == "profile" || kind == "track" || kind == "same_track" || kind == "track_aba" {
 				op = "owner.confirm_onboarding"
 				extra = nil
 			}

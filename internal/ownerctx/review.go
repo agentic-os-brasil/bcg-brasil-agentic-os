@@ -146,7 +146,7 @@ func reviewOnboarding(root string) (OnboardingReview, error) {
 		return OnboardingReview{}, errors.New("select an onboarding track before review")
 	}
 	result := OnboardingReview{Track: definition.ID, State: "review_required", Facets: make([]OnboardingFacetReview, 0, len(definition.Facets))}
-	parts := []string{"track\x00" + definition.ID}
+	parts := onboardingTrackDigestParts(definition.ID, value.OnboardingTrackRevision)
 	for _, id := range definition.Facets {
 		record, ok := value.Facets[id]
 		if !ok {

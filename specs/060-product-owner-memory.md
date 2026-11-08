@@ -56,7 +56,10 @@ would otherwise race a read/validate/write sequence.
 Track selection binds the current selection revision as well as its value.
 Compare the review and commit the choice under the same canonical transition
 lock; even a competing selection of the same value invalidates an earlier
-approval. A monotonic optional registry counter supplies that revision. Older
+approval, including during final profile confirmation. Final review and status
+digests bind the same revision; revision-zero legacy confirmed profiles retain
+their previous digest until a new explicit selection. A monotonic optional registry
+counter supplies that revision. Older
 strict readers may refuse the extended registry after a selection; preserve the
 registry and upgrade the reader rather than removing authority metadata.
 
@@ -66,7 +69,9 @@ internal counters stay out of the form message. The full canonical envelope,
 including these proofs and admitted scope, still binds the MRTR response and
 the canonical compare-and-apply. Local operator review may show the full JSON.
 
-Profile proposal/facet text rejects embedded NUL before persistence or review.
+Profile proposal/facet text rejects embedded NUL and malformed UTF-8 before
+persistence or review. Private JSON is validated before decoding can replace
+malformed bytes.
 This preserves existing valid-text digest framing while refusing ambiguous
 legacy bodies; malformed existing files remain intact for explicit operator
 cleanup and cannot acquire or retain confirmed onboarding status.
