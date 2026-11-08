@@ -802,13 +802,81 @@ func externalTemporary(name string) string {
 	}
 	return path.Join(externalControl, ".staging", hash([]byte(name))+".tmp")
 }
+
+// Sync the object before its containing entries, including retry-created ancestors.
+func externalSyncPath(e *engine, name string) error {
+	if err := e.check(name); err != nil {
+		return err
+	}
+	for {
+		f, err := e.root.OpenFile(name, externalReadFlags(), 0)
+		if err != nil {
+			return err
+		}
+		err = errors.Join(f.Sync(), f.Close())
+		if err != nil || name == "." {
+			return err
+		}
+		name = path.Dir(name)
+	}
+}
+
+// A previous rename may be visible even when its source-directory flush failed.
+func externalSyncPublication(e *engine, name string) error {
+	if err := externalSyncPath(e, name); err != nil {
+		return err
+	}
+	staging := path.Dir(externalTemporary(name))
+	for {
+		info, err := e.root.Lstat(staging)
+		if os.IsNotExist(err) && staging != "." {
+			staging = path.Dir(staging)
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			return errors.New("publication staging parent is not a directory")
+		}
+		return externalSyncPath(e, staging)
+	}
+}
+func externalSyncCommitted(p ExternalPlan) error {
+	for _, control := range []struct{ root, name string }{
+		{p.Home, externalName(p.AttemptID, "commit.json")},
+		{p.UserHome, ".maestro-home.json"},
+	} {
+		e, err := externalOpen(control.root)
+		if err != nil {
+			return err
+		}
+		if err = errors.Join(externalSyncPublication(e, control.name), e.root.Close()); err != nil {
+			return err
+		}
+	}
+	return externalSyncHomeParent(p.Home)
+}
+func externalMkdirAll(e *engine, name string) error {
+	if err := e.root.MkdirAll(name, 0700); err != nil {
+		return err
+	}
+	return externalSyncPath(e, name)
+}
+func externalSyncHomeParent(home string) error {
+	parent, err := externalOpen(filepath.Dir(home))
+	if err != nil {
+		return err
+	}
+	return errors.Join(externalSyncPath(parent, "."), parent.root.Close())
+}
 func externalEnsure(e *engine, name string, body []byte) error {
 	current, err := externalReadLimit(e, name, true, int64(len(body)))
 	if err == nil {
 		if !bytes.Equal(current, body) {
 			return errors.New("foreign external control or target content")
 		}
-		return nil
+		return externalSyncPublication(e, name)
 	}
 	if !os.IsNotExist(err) {
 		return err
@@ -825,10 +893,10 @@ func externalEnsure(e *engine, name string, body []byte) error {
 			return err
 		}
 	}
-	if err = e.root.MkdirAll(path.Dir(name), 0700); err != nil {
+	if err = externalMkdirAll(e, path.Dir(name)); err != nil {
 		return err
 	}
-	if err = e.root.MkdirAll(path.Dir(temporary), 0700); err != nil {
+	if err = externalMkdirAll(e, path.Dir(temporary)); err != nil {
 		return err
 	}
 	partial, err := externalReadLimit(e, temporary, true, int64(len(body)))
@@ -854,10 +922,7 @@ func externalEnsure(e *engine, name string, body []byte) error {
 	if err == nil {
 		err = f.Sync()
 	}
-	closeErr := f.Close()
-	if err == nil {
-		err = closeErr
-	}
+	err = errors.Join(err, f.Close())
 	if err != nil {
 		return err
 	}
@@ -865,18 +930,7 @@ func externalEnsure(e *engine, name string, body []byte) error {
 	if _, err = e.root.Lstat(name); !os.IsNotExist(err) {
 		return errors.New("publication target appeared")
 	}
-	if err = externalPublish(e, temporary, name); err != nil {
-		return err
-	}
-	directory, err := e.root.Open(path.Dir(name))
-	if err != nil {
-		return err
-	}
-	err = directory.Sync()
-	closeErr = directory.Close()
-	if err == nil {
-		err = closeErr
-	}
+	_, err = externalPublish(e, temporary, name)
 	return err
 }
 func externalIntentName(attempt string) string {
@@ -951,6 +1005,11 @@ func ApplyExternal(p ExternalPlan, digest string, progress func(ExternalProgress
 		return s, err
 	}
 	if current, err := InspectExternal(p.Home, p.AttemptID, digest); err == nil && current.Current {
+		if err = externalSyncCommitted(p); err != nil {
+			pending := externalStatus(p, digest, "pending")
+			pending.Diagnostic = "migration-durability-pending"
+			return pending, err
+		}
 		current.State = "already_migrated"
 		return current, nil
 	}
@@ -1009,6 +1068,7 @@ func ApplyExternal(p ExternalPlan, digest string, progress func(ExternalProgress
 	if err = externalEnsure(u, externalIntentName(p.AttemptID), b); err != nil {
 		return s, err
 	}
+	s = externalStatus(p, digest, "pending")
 	if _, err = os.Lstat(p.Home); os.IsNotExist(err) {
 		if err = os.Mkdir(p.Home, 0700); err != nil {
 			return s, err
@@ -1017,6 +1077,9 @@ func ApplyExternal(p ExternalPlan, digest string, progress func(ExternalProgress
 		return s, err
 	}
 	if err = externalOwnedDirectory(p.Home, true); err != nil {
+		return s, err
+	}
+	if err = externalSyncHomeParent(p.Home); err != nil {
 		return s, err
 	}
 	e, err := externalOpen(p.Home)
@@ -1058,7 +1121,7 @@ func ApplyExternal(p ExternalPlan, digest string, progress func(ExternalProgress
 			return s, err
 		}
 		if entry.Kind == "directory" {
-			if err = e.root.MkdirAll(entry.Target, 0700); err != nil {
+			if err = externalMkdirAll(e, entry.Target); err != nil {
 				return s, err
 			}
 		} else {
@@ -1086,7 +1149,7 @@ func ApplyExternal(p ExternalPlan, digest string, progress func(ExternalProgress
 			return s, err
 		}
 	}
-	if err = e.root.MkdirAll("state", 0700); err != nil {
+	if err = externalMkdirAll(e, "state"); err != nil {
 		return s, err
 	}
 	_, _, records, err = externalSource(p.SourceRoot)
@@ -1280,6 +1343,11 @@ func RollbackExternal(home, attempt, digest string, progress func(ExternalProgre
 		return s, err
 	}
 	s = externalStatusAt(p, digest, "rollback_pending", e.project)
+	if archived {
+		if err = externalSyncHomeParent(home); err != nil {
+			return s, err
+		}
+	}
 	if !archived {
 		version, layout, _, sourceErr := externalSource(p.SourceRoot)
 		if sourceErr != nil || version != p.SourceVersion || layout != p.SourceLayout {
@@ -1302,12 +1370,14 @@ func RollbackExternal(home, attempt, digest string, progress func(ExternalProgre
 		if err != nil {
 			return s, err
 		}
-		err = externalPublish(parent, filepath.Base(home), filepath.Base(archive))
-		parent.root.Close()
+		moved, err := externalPublish(parent, filepath.Base(home), filepath.Base(archive))
+		if moved {
+			s = externalStatusAt(p, digest, "rollback_pending", archive)
+		}
+		err = errors.Join(err, parent.root.Close())
 		if err != nil {
 			return s, err
 		}
-		s = externalStatusAt(p, digest, "rollback_pending", archive)
 		if err = externalProgress(progress, "archived", 0, 0); err != nil {
 			return s, err
 		}
@@ -1334,6 +1404,10 @@ func RollbackExternal(home, attempt, digest string, progress func(ExternalProgre
 	} else if !os.IsNotExist(err) {
 		return s, err
 	}
+	// An absent locator may be the result of an interrupted, unflushed removal.
+	if err = externalSyncPath(u, "."); err != nil {
+		return s, err
+	}
 	if p.PriorHome {
 		if err = os.Mkdir(home, 0700); err != nil && !os.IsExist(err) {
 			return s, err
@@ -1341,6 +1415,9 @@ func RollbackExternal(home, attempt, digest string, progress func(ExternalProgre
 		entries, er := os.ReadDir(home)
 		if er != nil || len(entries) != 0 {
 			return s, errors.New("prior empty home conflicts")
+		}
+		if err = externalSyncHomeParent(home); err != nil {
+			return s, err
 		}
 	}
 	if err = externalEnsure(e, externalName(attempt, "rollback.json"), externalCanonical(externalRecord{1, attempt, digest, "rolled_back"})); err != nil {
@@ -1386,24 +1463,36 @@ func externalLoadArchived(home, archive, attempt, digest string) (ExternalPlan, 
 	return p, e, nil
 }
 
-func externalPublish(e *engine, from, to string) error {
-	if err := e.check(from); err != nil {
-		return err
+func externalPublish(e *engine, from, to string) (bool, error) {
+	return externalPublishAfterRename(e, from, to, nil)
+}
+
+// afterRename is a deny-only test hook; production always supplies nil.
+func externalPublishAfterRename(e *engine, from, to string, afterRename func(*os.File, *os.File)) (moved bool, err error) {
+	if err = e.check(from); err != nil {
+		return false, err
 	}
-	if err := e.check(to); err != nil {
-		return err
+	if err = e.check(to); err != nil {
+		return false, err
 	}
 	source, err := e.root.Open(path.Dir(from))
 	if err != nil {
-		return err
+		return false, err
 	}
-	defer source.Close()
+	defer func() { err = errors.Join(err, source.Close()) }()
 	target, err := e.root.Open(path.Dir(to))
 	if err != nil {
-		return err
+		return false, err
 	}
-	defer target.Close()
-	return externalRenameExclusive(int(source.Fd()), path.Base(from), int(target.Fd()), path.Base(to))
+	defer func() { err = errors.Join(err, target.Close()) }()
+	if err = externalRenameExclusive(int(source.Fd()), path.Base(from), int(target.Fd()), path.Base(to)); err != nil {
+		return false, err
+	}
+	moved = true
+	if afterRename != nil {
+		afterRename(source, target)
+	}
+	return true, errors.Join(source.Sync(), target.Sync())
 }
 
 func externalLocatorOwned(e *engine, p ExternalPlan) error {
@@ -1517,7 +1606,7 @@ func externalPublishRetirement(u *engine, p ExternalPlan, digest string) error {
 		return err
 	}
 	if bytes.Equal(previous, body) {
-		return nil
+		return externalSyncPublication(u, name)
 	}
 	next := name + ".next-" + p.AttemptID
 	if err = externalEnsure(u, next, body); err != nil {
@@ -1530,10 +1619,5 @@ func externalPublishRetirement(u *engine, p ExternalPlan, digest string) error {
 	if err = u.root.Rename(next, name); err != nil {
 		return err
 	}
-	directory, err := u.root.Open(path.Dir(name))
-	if err != nil {
-		return err
-	}
-	defer directory.Close()
-	return directory.Sync()
+	return externalSyncPath(u, name)
 }

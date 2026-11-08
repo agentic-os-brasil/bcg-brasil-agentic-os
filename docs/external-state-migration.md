@@ -92,6 +92,15 @@ prior empty-home state. It never overwrites the original or an existing archive.
 Resume the same rollback if interrupted. Keep the archive until newer edits are
 reconciled; inactive does not mean deleted.
 
+Durable phases flush written files before the affected containing directories,
+including newly created ancestors, a custom HOME parent, both sides of staging
+publication, archive movement and locator removal. A durability flush or
+publication-handle close failure is an error, not successful completion. If an archive move already occurred, the
+returned pending state retains its actual archive paths; retry the same attempt
+to reflush and converge. Directory-sync failure is never silently downgraded.
+These barriers do not by themselves qualify power-loss behavior on every
+filesystem, a native client, or protection from uncoordinated same-user writers.
+
 The helper checks the actual previous binding read-only. If `MAESTRO_HOME` still
 selects the archived attempt, it reports `rolled_back_binding_pending` and exit 2
 even after the file transaction completed. It does not change the parent shell or
