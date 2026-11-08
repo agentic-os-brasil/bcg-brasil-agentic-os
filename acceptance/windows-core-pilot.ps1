@@ -8,6 +8,7 @@ param(
     [string]$MethodFixture,
     [string]$SdkWitness,
     [string]$AtlasTestBinary,
+    [string]$DoclingTestBinary,
     [string]$CanonicalManifest,
     [switch]$AuthoredBrain,
     [switch]$PrivateWiki
@@ -50,6 +51,13 @@ if ($withCanonical) {
 }
 if ($AtlasTestBinary -and -not (Test-Path -LiteralPath $AtlasTestBinary -PathType Leaf)) {
     throw 'The focused atlas publication witness is missing.'
+}
+if ($DoclingTestBinary) {
+    $doclingEntry = Get-Item -LiteralPath $DoclingTestBinary -Force
+    if ($doclingEntry -isnot [IO.FileInfo] -or ($doclingEntry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw 'The focused Docling placement witness must be an ordinary file.'
+    }
+    $doclingHash = (Get-FileHash -LiteralPath $DoclingTestBinary -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 if ($AuthoredBrain -and -not $AtlasTestBinary) {
     throw 'Public authored-brain qualification also requires the publication and journal witnesses.'
@@ -97,6 +105,13 @@ try {
     if ($AtlasTestBinary) {
         $nativeAtlasTest = Join-Path $payload 'windows-atlas.test.exe'
         Copy-Item -LiteralPath $AtlasTestBinary -Destination $nativeAtlasTest
+    }
+    if ($DoclingTestBinary) {
+        $nativeDoclingTest = Join-Path $payload 'windows-docling.test.exe'
+        Copy-Item -LiteralPath $DoclingTestBinary -Destination $nativeDoclingTest
+        if ((Get-FileHash -LiteralPath $nativeDoclingTest -Algorithm SHA256).Hash.ToLowerInvariant() -cne $doclingHash) {
+            throw 'The copied Docling placement witness differs from the compiled executable.'
+        }
     }
     if ($withKit) {
         $nativeKit = Join-Path $payload ([IO.Path]::GetFileName($Kit))
@@ -147,7 +162,7 @@ try {
     # owner is the standard user; never grant that user access to runner data.
     $launcher = Join-Path $payload 'native-user-launcher.ps1'
     @'
-param([string]$TestBinary, [string]$ProofRoot, [string]$Kit, [string]$KitTestScript, [string]$SdkWitness, [string]$AtlasTestBinary, [switch]$AuthoredBrain, [switch]$PrivateWiki, [string]$CanonicalManifest)
+param([string]$TestBinary, [string]$ProofRoot, [string]$Kit, [string]$KitTestScript, [string]$SdkWitness, [string]$AtlasTestBinary, [string]$DoclingTestBinary, [string]$DoclingTestSHA256, [switch]$AuthoredBrain, [switch]$PrivateWiki, [string]$CanonicalManifest)
 $ErrorActionPreference = 'Stop'
 try {
     $temporary = Join-Path $ProofRoot 'user-temp'
@@ -185,6 +200,27 @@ try {
                 throw 'Every requested atlas kernel must actually pass under the ordinary account.'
             }
         }
+    }
+    if ($DoclingTestBinary) {
+        if ((Get-FileHash -LiteralPath $DoclingTestBinary -Algorithm SHA256).Hash.ToLowerInvariant() -cne $DoclingTestSHA256) {
+            throw 'The ordinary-account Docling placement witness changed.'
+        }
+        $doclingTests = @('TestPlacementWindowsSealsAndFlushesHeldRoot', 'TestPlacementWindowsPreservesOccupiedDestination')
+        $doclingPattern = '^(' + ($doclingTests -join '|') + ')$'
+        $doclingOutput = @(& $DoclingTestBinary '-test.run' $doclingPattern '-test.v' '-test.timeout=600s' 2>&1 | ForEach-Object { "$_" })
+        $doclingExit = $LASTEXITCODE
+        $doclingLog = $doclingOutput -join "`n"
+        if ([Text.Encoding]::UTF8.GetByteCount($doclingLog) -gt 2097152) { throw 'Docling placement output exceeds the bounded log contract.' }
+        $doclingOutput | Write-Output
+        if ($doclingExit -ne 0 -or $doclingLog -match '--- (FAIL|SKIP):') {
+            throw 'The actual ordinary-account Docling placement tests did not pass completely.'
+        }
+        foreach ($test in $doclingTests) {
+            if ($doclingLog -notmatch ('(?m)^--- PASS: ' + $test + ' ')) {
+                throw 'Every requested Docling placement test must actually pass under the ordinary account.'
+            }
+        }
+        Write-Output ('native_windows_docling placement_tests_passed=' + $doclingTests.Count + ' binary_sha256=' + $DoclingTestSHA256)
     }
     if ($CanonicalManifest) {
         $manifest = Get-Content -LiteralPath $CanonicalManifest -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -312,6 +348,7 @@ try {
     $powershell = Join-Path $PSHOME 'pwsh.exe'
     $arguments = @('-NoLogo', '-NoProfile', '-NonInteractive', '-File', "`"$launcher`"", '-TestBinary', "`"$nativeTest`"", '-ProofRoot', "`"$OutputRoot`"")
     if ($AtlasTestBinary) { $arguments += @('-AtlasTestBinary', "`"$nativeAtlasTest`"") }
+    if ($DoclingTestBinary) { $arguments += @('-DoclingTestBinary', "`"$nativeDoclingTest`"", '-DoclingTestSHA256', $doclingHash) }
     if ($AuthoredBrain) { $arguments += '-AuthoredBrain' }
     if ($PrivateWiki) { $arguments += '-PrivateWiki' }
     if ($withCanonical) { $arguments += @('-CanonicalManifest', "`"$nativeCanonical`"") }
@@ -329,7 +366,7 @@ try {
         if ($hadModulePath) { $env:PSModulePath = $priorModulePath }
         else { Remove-Item Env:PSModulePath -ErrorAction SilentlyContinue }
     }
-    if ($withKit -or $AuthoredBrain -or $AtlasTestBinary) {
+    if ($withKit -or $AuthoredBrain -or $AtlasTestBinary -or $DoclingTestBinary) {
         foreach ($path in @($stdout, $stderr)) {
             if ((Get-Item -LiteralPath $path).Length -gt 2097152) { throw 'Native proof output exceeded its bounded synthetic log contract.' }
         }
@@ -352,6 +389,9 @@ try {
     }
     if ($AuthoredBrain -and $log -notmatch '(?m)^--- PASS: TestWindowsAtlasJournalKernel ') {
         throw 'The atlas journal kernel did not pass under the ordinary account.'
+    }
+    if ($DoclingTestBinary -and $log -notmatch ('(?m)^' + [regex]::Escape('native_windows_docling placement_tests_passed=2 binary_sha256=' + $doclingHash))) {
+        throw 'The Docling placement proof does not bind both passing tests to the compiled executable.'
     }
     if ($withKit) {
         foreach ($proofName in @('native-core-proof.json', 'native-kit-proof.json', 'native-kit-sdk-proof.json', 'native-kit-qualification.json')) {
