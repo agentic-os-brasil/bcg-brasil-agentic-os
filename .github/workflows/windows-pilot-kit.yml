@@ -2,7 +2,7 @@ name: Windows exact-artifact pilot kit
 
 on:
   push:
-    branches: [codex/integration/maestro-windows-pilot-kit, codex/integration/maestro-full-pilot-kit]
+    branches: [codex/integration/maestro-windows-pilot-kit, codex/integration/maestro-full-pilot-kit, codex/integration/maestro-product-integrated]
   pull_request:
     paths:
       - '.github/workflows/windows-pilot-kit.yml'

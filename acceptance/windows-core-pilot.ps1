@@ -295,7 +295,7 @@ try {
             shipping_server_sha256=$shippingHash
             generic_zip_sha256=(Get-FileHash -LiteralPath ($Kit + '.zip') -Algorithm SHA256).Hash.ToLowerInvariant()
             sdk_witness_sha256=(Get-FileHash -LiteralPath $SdkWitness -Algorithm SHA256).Hash.ToLowerInvariant()
-            core_families_passed=4; core_skips=0; kit_acceptance=$true; fresh_prepared_sdk_binding=$true
+            core_families_passed=$families.Count; core_skips=0; kit_acceptance=$true; fresh_prepared_sdk_binding=$true
             sdk_paused_revision=4; sdk_resumed_revision=5; stale_attempt_refused=$true
             reviewed_memory_restart=$true; declined_owner_bytes_unchanged=$true
             native_Code_Desktop='not_run'; mode='ordinary_unversioned_developer_rehearsal'
