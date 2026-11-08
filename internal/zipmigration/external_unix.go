@@ -51,7 +51,7 @@ func externalRegular(info os.FileInfo, private bool) error {
 	return nil
 }
 
-func externalAcquire(e *engine, attempt string) (func(), error) {
+func externalAcquire(e *externalTree, attempt string) (func(), error) {
 	if err := externalProfileControls(e.project, attempt); err != nil {
 		return nil, err
 	}
