@@ -282,6 +282,65 @@ class CanonicalHomeTools(unittest.TestCase):
                     alias.unlink(missing_ok=True)
 
 
+    def assert_hardlinked_output_is_preserved(self, relative, tool, *args):
+        self.initialize()
+        brain = self.home / 'brain'
+        (brain / 'daily').mkdir()
+        for day in ('2026-10-30', '2026-10-31'):
+            (brain / 'daily' / f'{day}.md').write_text(
+                f'---\nid: daily/{day}\ntitle: Capacity planning {day}\n'
+                'summary: Capacity planning evidence\ntype: daily\nscope: owner\n'
+                f'status: active\nsensitivity: owner-private\nupdated: {day}\n'
+                '---\n# Capacity planning\n\nCapacity planning evidence.\n')
+        skill = self.product / 'bundles/base/skills/cache-guard/SKILL.md'
+        skill.parent.mkdir(parents=True)
+        skill.write_text('---\nname: cache-guard\ndescription: Guard cache paths\n---\n# Guard\n')
+        outside = self.base / 'outside sentinel.txt'
+        outside.write_bytes(b'Outside owner bytes must survive output publication.\n')
+        outside.chmod(0o640)
+        alias = brain / relative
+        os.link(outside, alias)
+
+        def snapshot():
+            values = {}
+            for path in self.base.rglob('*'):
+                info = path.lstat()
+                values[str(path.relative_to(self.base))] = (
+                    stat.S_IMODE(info.st_mode), info.st_dev, info.st_ino, info.st_nlink,
+                    hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None)
+            return values
+
+        before = snapshot()
+        outside_key = str(outside.relative_to(self.base))
+        result = self.tool(tool, *args)
+        after = snapshot()
+        changed = sorted(key for key in set(before) | set(after)
+                         if before.get(key) != after.get(key))
+        self.assertEqual({
+            'exit': result.returncode,
+            'stdout': result.stdout,
+            'outside': after.get(outside_key),
+            'alias_preserved': alias.exists() and os.path.samefile(outside, alias),
+            'changed_paths': changed,
+        }, {
+            'exit': 2,
+            'stdout': '',
+            'outside': before[outside_key],
+            'alias_preserved': True,
+            'changed_paths': [],
+        }, result.stderr)
+
+    def test_index_refuses_hardlinked_daily_index_without_effects(self):
+        self.assert_hardlinked_output_is_preserved('daily/daily_index.md', 'brain-index.py')
+
+    def test_index_refuses_hardlinked_backlinks_temporary_without_effects(self):
+        self.assert_hardlinked_output_is_preserved('.maestro/backlinks.json.tmp', 'brain-index.py')
+
+    def test_skill_rebuild_refuses_hardlinked_temporary_without_effects(self):
+        self.assert_hardlinked_output_is_preserved('.maestro/skill-route-index.json.tmp',
+                                                 'skill-route.py', '--names', '--rebuild')
+
+
     def test_skill_cache_rejects_cache_and_temp_aliases_before_read_or_build(self):
         self.initialize()
         skill = self.product / 'bundles/base/skills/cache-guard/SKILL.md'
