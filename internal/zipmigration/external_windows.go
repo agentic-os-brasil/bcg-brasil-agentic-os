@@ -6,13 +6,17 @@ import (
 	"errors"
 	"os"
 
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
 )
 
 func externalMutationAllowed() error { return errors.New("external Windows ownership is unavailable") }
 func externalReadFlags() int         { return os.O_RDONLY }
 func externalOwnedDirectory(name string, private bool) error {
-	return scheduler.ValidateDirectory(name)
+	d, err := winprivate.OpenPinnedTree(name)
+	if err != nil {
+		return err
+	}
+	return d.Close()
 }
 func externalDirectoryInfo(info os.FileInfo, private bool) error {
 	if !info.IsDir() {
@@ -27,6 +31,4 @@ func externalRegular(info os.FileInfo, private bool) error {
 	return nil
 }
 
-func externalAcquire(*engine, string) (func(), error) { return nil, externalMutationAllowed() }
-
-func externalWritableDirectory(name string) error { return scheduler.ValidateDirectory(name) }
+func externalWritableDirectory(name string) error { return externalOwnedDirectory(name, true) }
