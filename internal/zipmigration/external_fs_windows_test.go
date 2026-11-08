@@ -5,6 +5,7 @@ package zipmigration
 import (
 	"bytes"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -13,6 +14,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -362,34 +364,51 @@ type externalNativeEntrySnapshot struct {
 	Body       string
 	Security   string
 	Attributes uint32
+	Identity   [3]uint32
 }
 
 func externalNativeSnapshot(t *testing.T, root string) map[string]externalNativeEntrySnapshot {
 	t.Helper()
 	snapshot := map[string]externalNativeEntrySnapshot{}
-	err := filepath.WalkDir(root, func(full string, entry fs.DirEntry, err error) error {
+	if err := filepath.WalkDir(root, externalNativeSnapshotStep(root, snapshot)); err != nil {
+		t.Fatal("native snapshot failed", err)
+	}
+	return snapshot
+}
+func externalNativeSnapshotStep(root string, snapshot map[string]externalNativeEntrySnapshot) fs.WalkDirFunc {
+	return func(full string, _ fs.DirEntry, walkErr error) (err error) {
+		if walkErr != nil {
+			return walkErr
+		}
+		// Enumeration can cache NTFS directory metadata; measure the held object.
+		nativeName, err := windows.UTF16PtrFromString(`\\?\` + full)
 		if err != nil {
 			return err
 		}
-		info, err := entry.Info()
+		handle, err := windows.CreateFile(nativeName, windows.GENERIC_READ|windows.READ_CONTROL, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_BACKUP_SEMANTICS|windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
 		if err != nil {
 			return err
 		}
-		security, err := windows.GetNamedSecurityInfo(full, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.GROUP_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+		f := os.NewFile(uintptr(handle), full)
+		defer func() { err = errors.Join(err, f.Close()) }()
+		info, err := f.Stat()
 		if err != nil {
 			return err
 		}
-		nativeName, err := windows.UTF16PtrFromString(full)
+		var native windows.ByHandleFileInformation
+		if err = windows.GetFileInformationByHandle(handle, &native); err != nil {
+			return err
+		}
+		if native.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 || (!info.IsDir() && !info.Mode().IsRegular()) {
+			return errors.New("native snapshot requires ordinary non-reparse entries")
+		}
+		security, err := windows.GetSecurityInfo(handle, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.GROUP_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
 		if err != nil {
 			return err
 		}
-		attributes, err := windows.GetFileAttributes(nativeName)
-		if err != nil {
-			return err
-		}
-		record := externalNativeEntrySnapshot{Mode: info.Mode(), Modified: info.ModTime().UnixNano(), Security: security.String(), Attributes: attributes}
+		record := externalNativeEntrySnapshot{Mode: info.Mode(), Modified: native.LastWriteTime.Nanoseconds(), Security: security.String(), Attributes: native.FileAttributes, Identity: [3]uint32{native.VolumeSerialNumber, native.FileIndexHigh, native.FileIndexLow}}
 		if !info.IsDir() {
-			body, err := os.ReadFile(full)
+			body, err := io.ReadAll(f)
 			if err != nil {
 				return err
 			}
@@ -401,12 +420,52 @@ func externalNativeSnapshot(t *testing.T, root string) map[string]externalNative
 		}
 		snapshot[relative] = record
 		return nil
-	})
-	if err != nil {
-		t.Fatal("native snapshot failed", err)
 	}
-	return snapshot
 }
+func TestWindowsExternalSnapshotUsesFreshHandleMetadata(t *testing.T) {
+	externalNativeAccount(t)
+	root := t.TempDir()
+	directory := filepath.Join(root, "observed")
+	if err := os.Mkdir(directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	before := externalNativeSnapshot(t, root)
+	entries, err := os.ReadDir(root)
+	if err != nil || len(entries) != 1 {
+		t.Fatal("cached enumeration fixture failed", err)
+	}
+	cached := entries[0]
+	old, err := cached.Info()
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := time.Unix(1700000000, 0).UTC()
+	if err = os.Chtimes(directory, changed, changed); err != nil {
+		t.Fatal(err)
+	}
+	stale, err := cached.Info()
+	if err != nil || stale.ModTime().UnixNano() != old.ModTime().UnixNano() || stale.ModTime().UnixNano() == changed.UnixNano() {
+		t.Fatal("fixture did not retain stale enumeration metadata", err)
+	}
+	observed := map[string]externalNativeEntrySnapshot{}
+	if err = externalNativeSnapshotStep(root, observed)(directory, cached, nil); err != nil {
+		t.Fatal(err)
+	}
+	actual := observed["observed"]
+	if actual.Modified != changed.UnixNano() {
+		t.Fatal("snapshot trusted stale enumeration or changed the exact timestamp", actual.Modified, changed.UnixNano())
+	}
+	previous := before["observed"]
+	previous.Modified = actual.Modified
+	if previous != actual {
+		t.Fatal("timestamp-only fixture changed other measured fields")
+	}
+	after := externalNativeSnapshot(t, root)
+	if after["observed"] != actual || reflect.DeepEqual(before, after) {
+		t.Fatal("complete snapshot lost the explicit modification-time change")
+	}
+}
+
 func externalNativeUnchanged(t *testing.T, root string, before map[string]externalNativeEntrySnapshot) {
 	t.Helper()
 	after := externalNativeSnapshot(t, root)
@@ -422,7 +481,7 @@ func externalNativeUnchanged(t *testing.T, root string, before map[string]extern
 		if old == current {
 			continue
 		}
-		t.Errorf("native entry %q changed: mode=%v->%v modified=%d->%d attributes=%#x->%#x body_length=%d->%d body_sha256=%s->%s owner_group_DACL=%q->%q", name, old.Mode, current.Mode, old.Modified, current.Modified, old.Attributes, current.Attributes, len(old.Body), len(current.Body), hash([]byte(old.Body)), hash([]byte(current.Body)), old.Security, current.Security)
+		t.Errorf("native entry %q changed: mode=%v->%v modified=%d->%d attributes=%#x->%#x identity=%v->%v body_length=%d->%d body_sha256=%s->%s owner_group_DACL=%q->%q", name, old.Mode, current.Mode, old.Modified, current.Modified, old.Attributes, current.Attributes, old.Identity, current.Identity, len(old.Body), len(current.Body), hash([]byte(old.Body)), hash([]byte(current.Body)), old.Security, current.Security)
 		full := filepath.Join(root, name)
 		if info, err := os.Lstat(full); err != nil {
 			t.Logf("fresh Lstat %q: %v", name, err)
