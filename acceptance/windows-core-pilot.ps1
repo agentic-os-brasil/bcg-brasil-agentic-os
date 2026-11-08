@@ -235,6 +235,31 @@ try {
             @($temporaryAcl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) | Where-Object {
                 $_.IdentityReference.Value -cnotin @($ExpectedUserSID, 'S-1-5-18', 'S-1-5-32-544') -or $_.AccessControlType -ne 'Allow'
             }).Count -ne 0) { throw 'Inspection TEMP must be child-owned with only private principals.' }
+        $profileKey = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey('SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\' + $ExpectedUserSID)
+        if ($null -eq $profileKey) { throw 'Inspection actual-token profile is missing from ProfileList.' }
+        try {
+            $profilePath = [Environment]::ExpandEnvironmentVariables([string]$profileKey.GetValue('ProfileImagePath', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames))
+        } finally { $profileKey.Dispose() }
+        if ([string]::IsNullOrWhiteSpace($profilePath) -or -not [IO.Path]::IsPathRooted($profilePath)) { throw 'Inspection actual-token profile path is invalid.' }
+        $profileEntry = Get-Item -LiteralPath $profilePath -Force
+        $profileOwner = (Get-Acl -LiteralPath $profilePath).GetOwner([Security.Principal.SecurityIdentifier]).Value
+        if ($profileEntry -isnot [IO.DirectoryInfo] -or ($profileEntry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+            $profileEntry.FullName -cne [IO.Path]::GetFullPath($profilePath) -or $profileOwner -cne $ExpectedUserSID) {
+            throw 'Inspection profile must be an ordinary directory owned by the actual token SID.'
+        }
+        for ($ancestor = $profileEntry.Parent; $null -ne $ancestor; $ancestor = $ancestor.Parent) {
+            if (($ancestor.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Inspection profile cannot traverse a reparse ancestor.' }
+        }
+        $previousUserProfile = $env:USERPROFILE
+        $previousHome = $env:HOME
+        $env:USERPROFILE = $profileEntry.FullName
+        $env:HOME = $profileEntry.FullName
+        $inspectionProfile = [ordered]@{
+            profile_resolution='current_token_sid_profilelist'
+            inherited_userprofile_matches_token_profile=[string]::Equals($previousUserProfile, $profileEntry.FullName, [StringComparison]::OrdinalIgnoreCase)
+            inherited_home_matches_token_profile=[string]::Equals($previousHome, $profileEntry.FullName, [StringComparison]::OrdinalIgnoreCase)
+            profile_owner_matches_actual_sid=($profileOwner -ceq $ExpectedUserSID)
+        }
         Write-Output 'inspection_profile elevated=false admin_member=false private_current_user_temp=true'
     }
     if (-not $Inspection) {
@@ -394,6 +419,7 @@ try {
         $reportName = if ($Inspection) { 'inspection-contract-results.json' } else { 'canonical-contract-results.json' }
         if ($Inspection) {
             $report.elevated = $false; $report.admin_member = $false
+            $report.profile_environment = $inspectionProfile
             $report.platform_nonapplicability = 'classified_existing_skips_are_not_passing_coverage'
             $report.observed_skips_count = @($results | ForEach-Object { $_.all_skipped_tests }).Count
             $report.unclassified_skips_count = @($results | ForEach-Object { $_.unclassified_skips }).Count

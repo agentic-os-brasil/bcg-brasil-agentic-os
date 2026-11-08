@@ -103,8 +103,11 @@ jobs:
           $env:GOFLAGS = '-buildvcs=false'
           $skipPolicy = @{
             datahome = @(
-              @{test='TestInitializeFreshRefusesExistingAmbiguousStateWithoutChanges'; reason='Existing Unix-mode and native-reparse counterparts remain unqualified here.'},
-              @{test='TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator'; reason='Existing raw-source Windows reparse subcases remain unqualified coverage.'},
+              @{test='TestInitializeFreshRefusesExistingAmbiguousStateWithoutChanges/symlink'; reason='Observed Windows branch skips this native reparse fixture; native coverage is missing.'},
+              @{test='TestInitializeFreshRefusesExistingAmbiguousStateWithoutChanges/ancestor-symlink'; reason='Observed Windows branch skips this native reparse fixture; native coverage is missing.'},
+              @{test='TestInitializeFreshRefusesExistingAmbiguousStateWithoutChanges/public-home'; reason='Observed Unix mode-bit fixture is not applicable on Windows.'},
+              @{test='TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator/linked-home'; reason='Observed Windows branch skips this native reparse fixture; native coverage is missing.'},
+              @{test='TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator/linked-missing-ancestor'; reason='Observed Windows branch skips this native reparse fixture; native coverage is missing.'},
               @{test='TestResolveRejectsPubliclyWritableUserHome'; reason='Unix mode-bit contract.'},
               @{test='TestResolveCaseDistinctNondefaultCannotBypassLocator'; reason='Case-insensitive filesystem cannot create distinct case-only homes.'},
               @{test='TestResolveCaseDistinctLocatorCannotAuthorizeDifferentHome'; reason='Case-insensitive filesystem cannot create distinct case-only homes.'}
@@ -122,7 +125,7 @@ jobs:
             zipruntime = @(
               @{test='TestBoundCodexIgnoresNestedHijackAndQuotesRoot'; reason='POSIX execution fixture.'},
               @{test='TestBoundPackagedWrapperFromNestedCWD'; reason='Native macOS wrapper fixture.'},
-              @{test='TestDailyReviewHardlinksAndFIFO'; reason='Unix FIFO or host-dependent alias fixture; actual skips remain explicit.'},
+              @{test='TestDailyReviewHardlinksAndFIFO/fifo'; reason='Observed Unix FIFO fixture is not applicable on Windows; the hardlink sibling must execute.'},
               @{test='TestDailyBoundedConcurrentAndAliases'; reason='Existing host-dependent symlink fixture.'},
               @{test='TestGuardAliasAndMarkerEdges'; reason='Existing host-dependent alias fixtures.'},
               @{test='TestHookOwnedAliasesBlockCanonicalAdmission'; reason='Raw HOME source does not admit Windows external ownership.'},

@@ -180,6 +180,32 @@ Invoke-Expression $coverage[0].Extent.Text
 if ($report.Count -ne 1) { throw 'Inspection fields changed the default canonical report' }
 """)
 
+    def test_actual_profile_guard_rejects_foreign_owner(self):
+        self.launcher_fragment_check(r"""
+$guard=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -match '\$profileEntry'},$true))
+if ($guard.Count -ne 1) { throw 'Expected the actual profile identity guard' }
+$profilePath=$PSScriptRoot
+$profileEntry=Get-Item -LiteralPath $profilePath
+$ExpectedUserSID='synthetic-current-account'; $profileOwner='synthetic-foreign-account'
+$refused=$false
+try { Invoke-Expression $guard[0].Extent.Text } catch { if ($_.Exception.Message -notmatch 'Inspection profile must') { throw }; $refused=$true }
+if (-not $refused) { throw 'Foreign profile owner was accepted' }
+""")
+
+    def test_actual_profile_bindings_replace_inherited_paths_with_attested_profile(self):
+        self.launcher_fragment_check(r"""
+$guard=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -match '\$profileEntry'},$true))
+$bindings=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -cin @('$previousUserProfile','$previousHome','$env:USERPROFILE','$env:HOME','$inspectionProfile')},$true) | Sort-Object { $_.Extent.StartOffset })
+if ($guard.Count -ne 1 -or $bindings.Count -ne 5) { throw 'Expected actual profile guard and environment/provenance assignments' }
+$profilePath=$PSScriptRoot
+$profileEntry=Get-Item -LiteralPath $profilePath
+$ExpectedUserSID='synthetic-current-account'; $profileOwner=$ExpectedUserSID
+Invoke-Expression $guard[0].Extent.Text
+$env:USERPROFILE='synthetic-inherited-runner-profile'; $env:HOME='synthetic-inherited-home'
+foreach ($assignment in $bindings) { Invoke-Expression $assignment.Extent.Text }
+if ($env:USERPROFILE -cne $profileEntry.FullName -or $env:HOME -cne $profileEntry.FullName -or $inspectionProfile.inherited_userprofile_matches_token_profile -or $inspectionProfile.inherited_home_matches_token_profile -or -not $inspectionProfile.profile_owner_matches_actual_sid -or $inspectionProfile.profile_resolution -cne 'current_token_sid_profilelist') { throw 'Inherited environment survived the attested profile binding' }
+""")
+
     def test_inspection_and_pilot_parameters_are_exclusive(self):
         result = self.invoke({}, "-TestBinary", "unused", "-Server", "unused")
         self.assert_preaccount_refusal(result, "Parameter set cannot be resolved")
