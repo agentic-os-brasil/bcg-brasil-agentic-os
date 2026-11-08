@@ -21,9 +21,18 @@ or enroll a producer. Keep owner content outside managed product directories.
 
 ## Complete the interview
 
-Query `owner.interview` with `track=quick` or `complete` to obtain the canonical
-questions. Apply `owner.track` with that track to request a trusted human form.
-Decline or missing form support leaves the choice unchanged.
+Read `owner.status` first and follow the canonical `maestro-onboarding` method
+available through the Code plugin and the Desktop MCP prompts/resources. Offer
+`quick` or `complete` only when `track=selection_required`. Apply `owner.track`
+for the explicit choice, then query `owner.interview` with the selected track
+to obtain its canonical steps. Decline or missing form support leaves the choice
+unchanged. Selecting any track again invalidates the previous final confirmation.
+
+For `required` or `in_progress` with a selected track, resume `next_question`
+and `remaining` instead of selecting the track again. `review_required` goes
+directly to final review; `complete` continues ordinary work without restarting
+the interview. Re-read status after each successful answer. Deferring onboarding
+or declining a review preserves progress and does not block unrelated work.
 
 For each answer, apply `owner.propose` with `facet`, an `evidence` summary and
 `proposed_body`. This creates a proposal without automatic producer authority.
@@ -68,7 +77,7 @@ remain compatible.
 ## Discover methods
 
 Code packets include 92 canonical methods and two operator/resume aliases.
-Desktop discovers those methods through 92 MCP prompts and 247 immutable
+Desktop discovers those methods through MCP prompts and immutable
 method/policy/provenance/license resources. The catalog records canonical source
 hashes; Code's separate `methods-projection.json` records projection hashes.
 Method resources cannot fetch owner-local files. Check

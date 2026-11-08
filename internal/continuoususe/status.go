@@ -41,7 +41,7 @@ const (
 )
 
 var actionTemplates = map[string]NextAction{
-	ActionCompleteCalibration:  {ID: ActionCompleteCalibration, Command: "bcgos owner onboarding status", Reason: "finish or confirm the deterministic owner calibration before routing ordinary work"},
+	ActionCompleteCalibration:  {ID: ActionCompleteCalibration, Command: "bcgos owner onboarding status", Reason: "resume or confirm owner calibration when chosen; ordinary work remains available"},
 	ActionCheckpointActiveWork: {ID: ActionCheckpointActiveWork, Command: "bcgos work next --active --workspace <workspace>", Reason: "resolve the active item, then write a bounded checkpoint before the next handoff"},
 	ActionResumeActiveWork:     {ID: ActionResumeActiveWork, Command: "bcgos work next --active --workspace <workspace>", Reason: "resolve the bounded checkpoint and resume through a new fenced attempt"},
 	ActionResolveAmbiguousWork: {ID: ActionResolveAmbiguousWork, Command: "bcgos work inspect --workspace <workspace> --item <id>", Reason: "multiple active items require an explicit item selection"},
@@ -173,7 +173,10 @@ func Build(source Source) (Status, error) {
 		status.State = StateUnavailable
 		status.NextActions = append(status.NextActions, actionTemplates[ActionRepairWorkspace])
 	}
-	if source.CalibrationState != "complete" {
+	if source.CalibrationState == "unavailable" {
+		status.State = StateUnavailable
+		status.NextActions = append(status.NextActions, actionTemplates[ActionInspectContinuity])
+	} else if source.CalibrationState != "complete" {
 		if status.State != StateUnavailable {
 			status.State = StateActionRequired
 		}
@@ -331,12 +334,12 @@ func validateSource(source Source) error {
 		return errors.New("continuous-use workspace state is required")
 	}
 	switch source.CalibrationState {
-	case "required", "in_progress", "review_required", "complete":
+	case "required", "in_progress", "review_required", "complete", "unavailable":
 	default:
 		return errors.New("continuous-use calibration state is invalid")
 	}
 	switch source.CalibrationTrack {
-	case "selection_required", "quick", "complete":
+	case "selection_required", "quick", "complete", "unavailable":
 	default:
 		return errors.New("continuous-use calibration track is invalid")
 	}

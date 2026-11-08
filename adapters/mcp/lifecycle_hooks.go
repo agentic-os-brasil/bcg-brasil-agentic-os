@@ -8,6 +8,7 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeadapter"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionhook"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
@@ -19,7 +20,12 @@ func (b *Bound) claudeLifecycleContext(event string) (sessionhook.ClaudeOutput, 
 	if err != nil {
 		return sessionhook.ClaudeOutput{}, err
 	}
-	packet := sessionctx.BuildProduct(inspection)
+	owner, ownerErr := ownerctx.Inspect(b.ownerRoot())
+	if ownerErr != nil || !owner.Initialized {
+		// Read availability is a projection, never a persisted owner transition.
+		owner = ownerctx.Status{Onboarding: ownerctx.OnboardingStatus{State: "unavailable", Track: "unavailable"}}
+	}
+	packet := sessionctx.BuildProduct(inspection, owner)
 	if event == "SessionStart" {
 		packet.Memory = sessionctx.Memory{State: "unavailable", Message: "committed reviewed memory unavailable; use memory.context for explicit diagnosis"}
 		e, cfg, memoryErr := b.memoryEngine()

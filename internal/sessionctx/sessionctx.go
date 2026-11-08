@@ -141,6 +141,7 @@ type Onboarding struct {
 	Track        string   `json:"track"`
 	Remaining    []string `json:"remaining,omitempty"`
 	NextQuestion string   `json:"next_question,omitempty"`
+	NextFacet    string   `json:"next_facet,omitempty"`
 	ReviewDigest string   `json:"review_digest,omitempty"`
 }
 
@@ -253,8 +254,8 @@ type Packet struct {
 
 // BuildProduct projects admitted metadata only; private source availability is
 // discovered through explicit MCP queries, not inferred from absent inputs.
-func BuildProduct(inspection workspace.Inspection) Packet {
-	packet := Build(Sources{Workspace: inspection, Profile: profile.State{Profile: "standard", Source: "product_default"}})
+func BuildProduct(inspection workspace.Inspection, owner ownerctx.Status) Packet {
+	packet := Build(Sources{Workspace: inspection, Owner: owner, Profile: profile.State{Profile: "standard", Source: "product_default"}})
 	packet.ProductSurface = true
 	return packet
 }
@@ -342,7 +343,7 @@ func Build(sources Sources) Packet {
 			Facets:         sessionFacets(sources.Owner.Facets),
 			OperatingState: pointer(sources.Owner.OperatingState),
 			Tasks:          pointer(sources.Owner.Tasks),
-			Onboarding:     Onboarding{State: onboarding.State, Track: onboarding.Track, Remaining: append([]string(nil), onboarding.Remaining...), NextQuestion: onboarding.NextQuestion.Question, ReviewDigest: onboarding.ReviewDigest},
+			Onboarding:     Onboarding{State: onboarding.State, Track: onboarding.Track, Remaining: append([]string(nil), onboarding.Remaining...), NextQuestion: onboarding.NextQuestion.Question, NextFacet: onboarding.NextQuestion.Facet, ReviewDigest: onboarding.ReviewDigest},
 			SelfIndex:      pointer(selfIndex),
 			Expansion:      SelfExpansion{State: expansion.State, Total: expansion.Total, Current: expansion.Current, Unknown: expansion.Unknown, Stale: expansion.Stale, NextFacet: expansion.NextFacet, ReviewCount: expansion.ReviewCount},
 			OpenTasks:      OpenTasks{State: openTasks.State, Count: openTasks.Count},
@@ -413,7 +414,7 @@ func (packet Packet) Validate() error {
 			return errors.New("session context packet has an invalid memory pointer")
 		}
 	}
-	if packet.Owner.Onboarding.State != "required" && packet.Owner.Onboarding.State != "in_progress" && packet.Owner.Onboarding.State != "review_required" && packet.Owner.Onboarding.State != "complete" {
+	if packet.Owner.Onboarding.State != "required" && packet.Owner.Onboarding.State != "in_progress" && packet.Owner.Onboarding.State != "review_required" && packet.Owner.Onboarding.State != "complete" && packet.Owner.Onboarding.State != "unavailable" {
 		return errors.New("session context packet has an invalid onboarding state")
 	}
 	if (packet.Owner.Onboarding.State == "required" || packet.Owner.Onboarding.State == "in_progress") && packet.Owner.Onboarding.NextQuestion == "" {
