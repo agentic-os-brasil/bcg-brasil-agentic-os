@@ -74,8 +74,10 @@ def verify_library(source, records, harness_files):
 def build(output, go):
     if not output.is_absolute() or output.exists() or output.is_symlink():
         raise ValueError("use a new absolute output directory; previous proof is preserved")
-    archive = subprocess.run(["git", "archive", "--format=tar", REVISION], cwd=ROOT,
-                             check=True, capture_output=True).stdout
+    # Archive bytes must retain the pinned LF and mode seal on every host.
+    archive = subprocess.run(["git", "-c", "core.autocrlf=false", "-c", "core.eol=lf",
+                              "-c", "tar.umask=0002", "archive", "--format=tar", REVISION],
+                             cwd=ROOT, check=True, capture_output=True).stdout
     if len(archive) > MAX_ARCHIVE:
         raise ValueError("historical archive exceeds its bound")
     output.mkdir(mode=0o700)
