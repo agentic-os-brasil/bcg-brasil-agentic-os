@@ -64,13 +64,14 @@ if ($withManifest) {
         }
         if ($withInspection) {
             $policies = @($entry.skip_policy)
-            if (@($policies | Where-Object { $_.test -cnotin @($entry.tests) -or [string]::IsNullOrWhiteSpace($_.reason) }).Count -ne 0 -or
+            if (@($policies | Where-Object { ($_.test -split '/')[0] -cnotin @($entry.tests) -or
+                    $_.test -cnotmatch '^(Test|Example)[A-Za-z0-9_]*(/[^\s/]+)*$' -or [string]::IsNullOrWhiteSpace($_.reason) }).Count -ne 0 -or
                 @($policies.test | Sort-Object -Unique).Count -ne $policies.Count) {
                 throw 'Inspection skips require unique existing tests and explicit platform reasons.'
             }
             if ($entry.name -eq 'zipruntime') {
                 foreach ($required in @('TestCodexLifecycleRequiresExplicitMigration', 'TestHookPreflightPreservesCommittedLegacyAndCaseAliases')) {
-                    if ($required -cnotin @($entry.tests) -or $required -cin @($policies.test)) {
+                    if ($required -cnotin @($entry.tests) -or @($policies | Where-Object { ($_.test -split '/')[0] -ceq $required }).Count -ne 0) {
                         throw 'Both guarded migration contracts must run without skips.'
                     }
                 }
@@ -355,7 +356,7 @@ try {
             $unclassified = @()
             $requiredPassed = $true
             if ($Inspection) {
-                $unclassified = @($allSkips | Where-Object { ($_ -split '/')[0] -cnotin @($entry.skip_policy.test) })
+                $unclassified = @($allSkips | Where-Object { $_ -cnotin @($entry.skip_policy.test) })
                 if ($entry.name -eq 'zipruntime') {
                     foreach ($test in @('TestCodexLifecycleRequiresExplicitMigration', 'TestHookPreflightPreservesCommittedLegacyAndCaseAliases')) {
                         if (@($outcomes | Where-Object { $_.test -ceq $test -and $_.outcome -ceq 'PASS' }).Count -ne 1 -or
@@ -394,6 +395,11 @@ try {
         if ($Inspection) {
             $report.elevated = $false; $report.admin_member = $false
             $report.platform_nonapplicability = 'classified_existing_skips_are_not_passing_coverage'
+            $report.observed_skips_count = @($results | ForEach-Object { $_.all_skipped_tests }).Count
+            $report.unclassified_skips_count = @($results | ForEach-Object { $_.unclassified_skips }).Count
+            $report.classified_skips_count = $report.observed_skips_count - $report.unclassified_skips_count
+            $report.all_contracts_qualified = $qualificationComplete -and $report.observed_skips_count -eq 0
+            $report.native_coverage = 'Four inspection package binaries only; classified skips are missing coverage, and native Code/Desktop is not qualified.'
         }
         $report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $ProofRoot $reportName) -Encoding utf8
         if (-not $qualificationComplete) {
