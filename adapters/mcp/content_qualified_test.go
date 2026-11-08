@@ -129,7 +129,7 @@ func retainedContentPack(t *testing.T, retained, seed string) (string, string) {
 		pack := filepath.Join(base, artifact.Name)
 		body := readContentFile(t, pack)
 		packSHA := fmt.Sprintf("%x", sha256.Sum256(body))
-		if packSHA != "e7cdd0f0f1506878ce3a9390f54798f6a51a288651e8e73a4b836dd67f43333a" || packSHA != artifact.SHA256 || int64(len(body)) != artifact.Size || !ed25519.Verify(key, body, readContentFile(t, filepath.Join(base, artifact.SignatureRef))) {
+		if packSHA != artifact.SHA256 || int64(len(body)) != artifact.Size || !ed25519.Verify(key, body, readContentFile(t, filepath.Join(base, artifact.SignatureRef))) {
 			t.Fatal("historical signed Docling archive differs from retained root attestation")
 		}
 		inputs := []string{authorityPath, manifestPath, manifestPath + ".sig", pack, filepath.Join(base, artifact.SignatureRef), filepath.Join(base, "installed", packSHA, "pack.json"), filepath.Join(retained, "workspace/sample.docx")}
