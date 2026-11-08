@@ -180,30 +180,37 @@ Invoke-Expression $coverage[0].Extent.Text
 if ($report.Count -ne 1) { throw 'Inspection fields changed the default canonical report' }
 """)
 
-    def test_actual_profile_guard_rejects_foreign_owner(self):
+    def test_actual_private_fixture_guard_rejects_foreign_owner_and_acl(self):
         self.launcher_fragment_check(r"""
-$guard=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -match '\$profileEntry'},$true))
-if ($guard.Count -ne 1) { throw 'Expected the actual profile identity guard' }
-$profilePath=$PSScriptRoot
-$profileEntry=Get-Item -LiteralPath $profilePath
-$ExpectedUserSID='synthetic-current-account'; $profileOwner='synthetic-foreign-account'
-$refused=$false
-try { Invoke-Expression $guard[0].Extent.Text } catch { if ($_.Exception.Message -notmatch 'Inspection profile must') { throw }; $refused=$true }
-if (-not $refused) { throw 'Foreign profile owner was accepted' }
+$guard=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -match '\$fixtureEntry'},$true))
+if ($guard.Count -ne 1) { throw 'Expected the actual private fixture attestation guard' }
+$fixtureEntry=Get-Item -LiteralPath $PSScriptRoot
+$ExpectedUserSID='synthetic-current-account'
+foreach ($case in @(@{owner='synthetic-foreign-account'; grant=$ExpectedUserSID},@{owner=$ExpectedUserSID; grant='synthetic-foreign-account'})) {
+ $fixtureAcl=[pscustomobject]@{OwnerValue=$case.owner; RuleSID=$case.grant}
+ $fixtureAcl | Add-Member ScriptMethod GetOwner { param($kind) [pscustomobject]@{Value=$this.OwnerValue} }
+ $fixtureAcl | Add-Member ScriptMethod GetAccessRules { param($explicit,$inherited,$kind) @([pscustomobject]@{IdentityReference=[pscustomobject]@{Value=$this.RuleSID}; AccessControlType='Allow'}) }
+ $refused=$false
+ try { Invoke-Expression $guard[0].Extent.Text } catch { if ($_.Exception.Message -notmatch 'Inspection private fixtures must') { throw }; $refused=$true }
+ if (-not $refused) { throw 'Foreign owner or effective ACL principal was accepted' }
+}
 """)
 
-    def test_actual_profile_bindings_replace_inherited_paths_with_attested_profile(self):
+    def test_actual_fixture_bindings_replace_inherited_environment(self):
         self.launcher_fragment_check(r"""
-$guard=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -match '\$profileEntry'},$true))
+$guard=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -match '\$fixtureEntry'},$true))
 $bindings=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -cin @('$previousUserProfile','$previousHome','$env:USERPROFILE','$env:HOME','$inspectionProfile')},$true) | Sort-Object { $_.Extent.StartOffset })
-if ($guard.Count -ne 1 -or $bindings.Count -ne 5) { throw 'Expected actual profile guard and environment/provenance assignments' }
-$profilePath=$PSScriptRoot
-$profileEntry=Get-Item -LiteralPath $profilePath
-$ExpectedUserSID='synthetic-current-account'; $profileOwner=$ExpectedUserSID
+if ($guard.Count -ne 1 -or $bindings.Count -ne 5) { throw 'Expected actual fixture guard and environment/provenance assignments' }
+$userHomeFixture=$PSScriptRoot
+$fixtureEntry=Get-Item -LiteralPath $userHomeFixture
+$ExpectedUserSID='synthetic-current-account'
+$fixtureAcl=[pscustomobject]@{OwnerValue=$ExpectedUserSID; RuleSID=$ExpectedUserSID}
+$fixtureAcl | Add-Member ScriptMethod GetOwner { param($kind) [pscustomobject]@{Value=$this.OwnerValue} }
+$fixtureAcl | Add-Member ScriptMethod GetAccessRules { param($explicit,$inherited,$kind) @([pscustomobject]@{IdentityReference=[pscustomobject]@{Value=$this.RuleSID}; AccessControlType='Allow'}) }
 Invoke-Expression $guard[0].Extent.Text
 $env:USERPROFILE='synthetic-inherited-runner-profile'; $env:HOME='synthetic-inherited-home'
 foreach ($assignment in $bindings) { Invoke-Expression $assignment.Extent.Text }
-if ($env:USERPROFILE -cne $profileEntry.FullName -or $env:HOME -cne $profileEntry.FullName -or $inspectionProfile.inherited_userprofile_matches_token_profile -or $inspectionProfile.inherited_home_matches_token_profile -or -not $inspectionProfile.profile_owner_matches_actual_sid -or $inspectionProfile.profile_resolution -cne 'current_token_sid_profilelist') { throw 'Inherited environment survived the attested profile binding' }
+if ($env:USERPROFILE -cne $userHomeFixture -or $env:HOME -cne $userHomeFixture -or $inspectionProfile.inherited_userprofile_matches_fixture -or $inspectionProfile.inherited_home_matches_fixture -or -not $inspectionProfile.private_fixture_roots_admitted -or $inspectionProfile.profile_resolution -cne 'inspection_private_fixture') { throw 'Inherited environment survived the admitted fixture binding' }
 """)
 
     def test_inspection_and_pilot_parameters_are_exclusive(self):
