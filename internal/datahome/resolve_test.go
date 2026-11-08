@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -177,20 +178,26 @@ func confirm(t *testing.T, home string) {
 func TestResolveRediscoversConfirmedNondefaultFromLocator(t *testing.T) {
 	opts := fixture(t)
 	home := filepath.Join(opts.UserHome, "state with spaces")
-	confirm(t, home)
-	record(t, filepath.Join(opts.UserHome, ".maestro-home.json"), map[string]any{"schema_version": 1, "home": home, "attempt_id": ""})
+	opts.LookupEnv = func(string) (string, bool) { return home, true }
+	if _, err := datahome.InitializeFresh(opts); err != nil {
+		t.Fatal(err)
+	}
+	opts.LookupEnv = func(string) (string, bool) { return "", false }
+	root := filepath.Dir(opts.UserHome)
+	before := homeSnapshot(t, root)
 	got, err := datahome.Resolve(opts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if runtime.GOOS == "windows" {
-		if got.Writable || got.Diagnostic != "ownership-unverified" {
-			t.Fatalf("unqualified Windows ownership: %+v", got)
-		}
-		return
-	}
 	if got.Home != home || got.SelectedBy != "marker" || got.Origin != "fresh-confirmed" || !got.Writable || got.Diagnostic != "ready" {
 		t.Fatalf("unexpected locator result: %+v", got)
+	}
+	metadata := filepath.Join(got.BrainRoot, ".maestro")
+	for _, path := range []string{home, got.BrainRoot, metadata, filepath.Join(metadata, "origin.json"), filepath.Join(opts.UserHome, ".maestro-home.json")} {
+		initializePrivateObject(t, path)
+	}
+	if after := homeSnapshot(t, root); !reflect.DeepEqual(before, after) {
+		t.Fatalf("read-only resolution changed original tree: before=%v after=%v", before, after)
 	}
 }
 
