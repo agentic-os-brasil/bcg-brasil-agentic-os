@@ -59,6 +59,7 @@ import sys
 import glob
 import fnmatch
 import posixpath
+import ntpath
 
 for _s in (sys.stdout, sys.stderr):
     try:
@@ -275,8 +276,12 @@ def path_candidates(text):
             else:
                 pecas.append("*")          # variavel que nao resolve
         if pecas:
-            # Resolve pais antes de cortar a raiz variavel, em qualquer host.
-            pecas = posixpath.normpath("/".join(pecas).replace("\\", "/")).split("/")
+            pecas = [p.replace("\\", "/") for p in pecas]
+            # Raizes de drive dependem do estado Windows; nao inferir um leitor.
+            if any(ntpath.splitdrive(p)[0] for p in pecas):
+                continue
+            # Join preserva o reset absoluto antes de resolver pais em qualquer host.
+            pecas = posixpath.normpath(posixpath.join(*pecas)).split("/")
             # Corta o prefixo desconhecido: o que vale e o rabo concreto.
             while pecas and pecas[0] == "*":
                 pecas.pop(0)

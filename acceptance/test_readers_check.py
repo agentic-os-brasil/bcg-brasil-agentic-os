@@ -1,6 +1,7 @@
 """Focused contracts for reconstructed shipped-configuration reader paths."""
 
 import importlib.util
+import json
 from pathlib import Path
 import unittest
 
@@ -25,6 +26,20 @@ class ReconstructedReaderPathsTests(unittest.TestCase):
                 source = ('HERE = "' + directory + '"\n'
                           'open(os.path.join(HERE, "..", "agents", "activation-policy.json"))')
                 self.assertTrue(readers.code_reads(self.target, readers.path_candidates(source)))
+
+    def test_absolute_and_drive_components_do_not_keep_the_previous_root(self):
+        for component, parents in [
+            ("/unrelated", 2),
+            ("\\unrelated", 2),
+            ("C:\\unrelated", 3),
+            ("C:unrelated", 2),
+            ("\\\\server\\share\\unrelated", 4),
+        ]:
+            with self.subTest(component=component):
+                arguments = [component, *([".."] * parents), "agents", "activation-policy.json"]
+                source = ('HERE = "bundles/base/tools"\nopen(os.path.join(HERE, '
+                          + ", ".join(json.dumps(value) for value in arguments) + '))')
+                self.assertFalse(readers.code_reads(self.target, readers.path_candidates(source)))
 
     def test_bare_filename_wrong_sibling_and_escaping_join_do_not_count(self):
         for source in [
