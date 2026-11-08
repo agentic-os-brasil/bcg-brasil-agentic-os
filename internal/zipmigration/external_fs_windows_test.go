@@ -688,7 +688,7 @@ func TestWindowsExternalAdapterAdmittedTransactionHonorsProfileLeaseAndForeignLo
 	}
 	externalNativePut(t, o.UserHome, ".maestro-home.json", string(externalCanonical(externalLocator{1, o.Home, "00000000000000000000000000000000"})))
 	active := externalNativeSnapshot(t, o.Home)
-	profile := externalNativeSnapshot(t, o.UserHome)
+	profile = externalNativeSnapshot(t, o.UserHome)
 	if _, err = rollbackExternal(o.Home, plan.AttemptID, digest, nil); err == nil {
 		t.Fatal("foreign locator revoked home")
 	}
