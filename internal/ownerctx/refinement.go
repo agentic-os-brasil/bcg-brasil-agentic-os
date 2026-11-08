@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const maximumOwnerRegistryBytes = 64 << 10
@@ -167,6 +168,9 @@ func submitRefinementLocked(root string, input RefinementInput) (RefinementRecei
 	}
 	if strings.TrimSpace(input.Evidence) == "" || strings.TrimSpace(input.ProposedBody) == "" {
 		return RefinementReceipt{}, errors.New("refinement evidence and proposed body are required")
+	}
+	if !utf8.ValidString(input.ProposedBody) || !utf8.ValidString(input.Evidence) {
+		return RefinementReceipt{}, errors.New("owner refinement text must be valid UTF-8")
 	}
 	if strings.ContainsRune(input.ProposedBody, 0) || strings.ContainsRune(input.Evidence, 0) {
 		return RefinementReceipt{}, errors.New("owner refinement text cannot contain NUL")
@@ -540,6 +544,9 @@ func readPrivateJSON(path string, target any) error {
 }
 
 func decodePrivateJSON(body []byte, target any) error {
+	if !utf8.Valid(body) {
+		return errors.New("owner JSON must be valid UTF-8")
+	}
 	if err := checkJSONKeys(json.NewDecoder(bytes.NewReader(body))); err != nil {
 		return err
 	}

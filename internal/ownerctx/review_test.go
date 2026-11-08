@@ -238,3 +238,97 @@ func TestReviewedOwnerRejectsPersistedNULProposalBeforeEffects(t *testing.T) {
 		t.Fatal("malformed proposal produced an audit")
 	}
 }
+
+func TestReviewedOwnerRejectsInvalidUTF8BeforeEffects(t *testing.T) {
+	invalid := string([]byte{'b', 0xff, 'd'})
+	t.Run("intake", func(t *testing.T) {
+		root := ownerRoot(t)
+		for _, input := range []ownerctx.RefinementInput{
+			{Facet: "owner-identity", Evidence: "explicit answer", ProposedBody: invalid},
+			{Facet: "owner-identity", Evidence: invalid, ProposedBody: "valid answer"},
+		} {
+			if _, err := ownerctx.SubmitRefinement(root, input); err == nil {
+				t.Fatal("invalid UTF-8 intake accepted")
+			}
+		}
+		if entries, _ := os.ReadDir(filepath.Join(root, "owner", "refinement", "proposals")); len(entries) != 0 {
+			t.Fatal("rejected intake persisted proposal")
+		}
+	})
+	t.Run("canonical facet", func(t *testing.T) {
+		root := ownerRoot(t)
+		if _, err := ownerctx.SelectOnboardingTrack(root, "quick"); err != nil {
+			t.Fatal(err)
+		}
+		for _, step := range ownerctx.QuickStartInterview().Steps {
+			proposal := proposeOwner(t, root, step.Facet, "Synthetic answer for "+step.Facet)
+			review, err := ownerctx.ReviewRefinement(root, proposal.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ownerctx.ApplyReviewedRefinement(root, proposal.ID, review.ReviewDigest, true); err != nil {
+				t.Fatal(err)
+			}
+		}
+		onboarding, err := ownerctx.ReviewOnboarding(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ownerctx.ConfirmOnboarding(root, onboarding.ReviewDigest); err != nil {
+			t.Fatal(err)
+		}
+		proposal := proposeOwner(t, root, "owner-identity", "valid answer")
+		review, err := ownerctx.ReviewRefinement(root, proposal.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(root, "owner", "self", "owner-identity.md")
+		if err := os.WriteFile(path, []byte(invalid), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := ownerctx.ReviewRefinement(root, proposal.ID); err == nil || got.CurrentBody != "" {
+			t.Fatal("invalid facet entered trusted review")
+		}
+		if got, err := ownerctx.ReviewOnboarding(root); err == nil || len(got.Facets) != 0 {
+			t.Fatal("invalid facet entered onboarding review")
+		}
+		if _, err := ownerctx.ApplyReviewedRefinement(root, proposal.ID, review.ReviewDigest, true); err == nil {
+			t.Fatal("invalid facet overwritten")
+		}
+		if got, err := os.ReadFile(path); err != nil || string(got) != invalid {
+			t.Fatalf("invalid original altered: %v", err)
+		}
+		if _, err := ownerctx.ConfirmOnboarding(root, onboarding.ReviewDigest); err == nil {
+			t.Fatal("invalid facet confirmed")
+		}
+		status, err := ownerctx.Inspect(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if status.Onboarding.State == "complete" || status.Onboarding.ReviewDigest != "" {
+			t.Fatal("invalid facet retained complete status or digest")
+		}
+	})
+	t.Run("persisted proposal", func(t *testing.T) {
+		root := ownerRoot(t)
+		proposal := proposeOwner(t, root, "owner-identity", "replacement marker")
+		path := filepath.Join(root, "owner", "refinement", "proposals", proposal.ID+".json")
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body = []byte(strings.Replace(string(body), "replacement marker", invalid, 1))
+		if err := os.WriteFile(path, body, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := ownerctx.ReviewRefinement(root, proposal.ID); err == nil || got.ProposedBody != "" {
+			t.Fatal("invalid persisted proposal entered review")
+		}
+		if _, err := ownerctx.ApplyRefinement(root, proposal.ID, true); err == nil {
+			t.Fatal("invalid persisted proposal applied")
+		}
+		if entries, _ := os.ReadDir(filepath.Join(root, "owner", "refinement", "audits")); len(entries) != 0 {
+			t.Fatal("invalid proposal produced audit")
+		}
+	})
+}

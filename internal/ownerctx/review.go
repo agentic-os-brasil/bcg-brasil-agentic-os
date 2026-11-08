@@ -4,6 +4,7 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 )
 
 const maximumOwnerFacetBytes = 12 << 10
@@ -13,6 +14,9 @@ func readOwnerFacet(path string) ([]byte, error) {
 	body, err := readOwnerFile(path, maximumOwnerFacetBytes)
 	if err != nil {
 		return nil, err
+	}
+	if !utf8.Valid(body) {
+		return nil, errors.New("owner facet text must be valid UTF-8")
 	}
 	// Onboarding digests use NUL framing; facet text must not contain it.
 	if strings.ContainsRune(string(body), 0) {
