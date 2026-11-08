@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -37,6 +38,9 @@ func runMethodDiscovery(t *testing.T, stdio bool) {
 	lookup := func(string) (string, bool) { return "", false }
 	h, err := datahome.InitializeFresh(datahome.Options{ProductRoot: prod, UserHome: home, LookupEnv: lookup})
 	if err != nil {
+		if runtime.GOOS == "windows" && !h.Writable && h.Diagnostic == "ownership-unverified" {
+			t.Skip("fresh Windows ownership is unavailable; native method discovery is not qualified")
+		}
 		t.Fatal(err)
 	}
 	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: ws, DataRoot: filepath.Join(h.Home, "state")}); err != nil {
