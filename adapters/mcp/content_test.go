@@ -1,7 +1,6 @@
 package product_test
 
 import (
-	"archive/zip"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -11,7 +10,6 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -487,30 +485,18 @@ func TestContentRealJourneys(t *testing.T) {
 				if err := packaging.BuildExtension(packet); err != nil {
 					t.Fatal(err)
 				}
-				archive, err := zip.OpenReader(packet.Destination)
+				entries, err := contentExtensionEntries(packet, packetRoot)
 				if err != nil {
 					t.Fatal(err)
 				}
 				desktop := filepath.Join(filepath.Dir(packetRoot), "desktop")
-				for _, entry := range archive.File {
-					if entry.Name != "manifest.json" && entry.Name != "server/maestro-mcp" && entry.Name != "managed/trust/release-authority-registry.json" {
-						t.Fatalf("unexpected package data %s", entry.Name)
-					}
-					reader, err := entry.Open()
-					if err != nil {
-						t.Fatal(err)
-					}
-					body, err := io.ReadAll(reader)
-					reader.Close()
-					if err != nil {
-						t.Fatal(err)
-					}
-					putContentFile(t, filepath.Join(desktop, entry.Name), body)
-					if err := os.Chmod(filepath.Join(desktop, entry.Name), entry.Mode()); err != nil {
+				for name, entry := range entries {
+					path := filepath.Join(desktop, name)
+					putContentFile(t, path, entry.body)
+					if err := os.Chmod(path, entry.mode); err != nil {
 						t.Fatal(err)
 					}
 				}
-				archive.Close()
 				contentTree(t, desktop, true)
 				desktopFixture := f
 				desktopFixture.binary = filepath.Join(desktop, "server/maestro-mcp")
