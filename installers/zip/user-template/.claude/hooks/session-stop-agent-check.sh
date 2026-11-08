@@ -34,7 +34,9 @@
 set +e
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
-BRAIN_DIR="$PROJECT_DIR/brain"
+. "$(dirname "${BASH_SOURCE[0]}")/lib/maestro-runtime.sh" || exit 0
+maestro_bind_home "$PROJECT_DIR" || exit 0
+BRAIN_DIR="$MAESTRO_BRAIN_ROOT"
 MACHINE="$BRAIN_DIR/.maestro"
 POLICY="$PROJECT_DIR/bundles/base/agents/activation-policy.json"
 RUNS="$MACHINE/agent-runs.json"
@@ -48,10 +50,11 @@ maestro_python >/dev/null 2>&1 || exit 0
 
 mkdir -p "$MACHINE" 2>/dev/null
 
-PYTHONIOENCODING=utf-8 maestro_py - "$PROJECT_DIR" "$POLICY" "$RUNS" "$DIAG" <<'PY' 2>/dev/null
+PYTHONIOENCODING=utf-8 maestro_py - "$PROJECT_DIR" "$POLICY" "$RUNS" "$DIAG" "$BRAIN_DIR" <<'PY' 2>/dev/null
 import datetime, glob, io, json, os, sys
 
 project, policy_p, runs_p, diag_p = sys.argv[1:5]
+brain = sys.argv[5]
 now = datetime.datetime.now(datetime.timezone.utc)
 
 
@@ -117,8 +120,12 @@ for agent in policy.get("agents", []):
         continue                          # dormente nunca e armado
 
     aid = agent["id"]
-    marker_p = os.path.join(project, auto.get("marker", ""))
-    if not auto.get("marker"):
+    relative = auto.get("marker", "")
+    if not isinstance(relative, str) or not relative.startswith("brain/.maestro/"):
+        continue
+    marker_p = os.path.realpath(os.path.join(brain, relative[6:]))
+    machine = os.path.realpath(os.path.join(brain, ".maestro"))
+    if os.path.commonpath([machine, marker_p]) != machine:
         continue
     if os.path.exists(marker_p):
         continue                          # ja pendente: nao reescreve

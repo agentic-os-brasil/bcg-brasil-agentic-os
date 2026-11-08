@@ -3,5 +3,6 @@
 set +e
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
 . "$(dirname "${BASH_SOURCE[0]}")/lib/maestro-runtime.sh"
+maestro_bind_home "$PROJECT_DIR" || exit 0
 maestro_runtime "$PROJECT_DIR" daily-stop --root "$PROJECT_DIR" || printf 'Maestro: daily checkpoint remains pending.\n' >&2
 exit 0

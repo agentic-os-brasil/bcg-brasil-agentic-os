@@ -5,6 +5,9 @@ description: Use quando o dono pedir para aprender com conversas anteriores ou p
 
 # Aprender com logs selecionados
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Extrair sinais profissionais de conversas explicitamente escolhidas e propor
 rascunhos por faceta. O dono confirma cada mudança; nada é promovido pelo silêncio.
 Leia references/extraction-and-mapping.md e references/provenance.md antes de ler

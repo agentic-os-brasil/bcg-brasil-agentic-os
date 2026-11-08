@@ -5,7 +5,10 @@ description: Resolve the active Maestro interaction profile before selecting lan
 
 # Interaction Profile
 
-Resolve the active user-local profile by reading `${CLAUDE_PROJECT_DIR}/brain/owner/style.json` (preferred key: `interaction_profile`). If the file or key is absent, fall back to `${CLAUDE_PROJECT_DIR}/brain/owner/identity.json`. Do not infer the profile from a role, project, client, memory or the user's current wording.
+Before owner-state file operations, follow [admitted owner-state paths](resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
+Resolve the admitted owner brain first, then read `owner/style.json` under its `brain_root` (preferred key: `interaction_profile`). If that admitted file or key is absent, fall back to `owner/identity.json` under the same root. An unavailable binding uses the standard profile without probing a product-relative directory. Do not infer the profile from a role, project, client, memory or the user's current wording.
 
 ## Behavior matrix
 

@@ -5,6 +5,9 @@ description: Run the weekly professional retrospective against the owner's devel
 
 # Retro
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Walk the week with the owner, then write what they decided. This is a
 conversation that produces a page, not a report generator.
 

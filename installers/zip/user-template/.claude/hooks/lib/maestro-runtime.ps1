@@ -37,3 +37,17 @@ function Invoke-MaestroRuntime {
   $Payload | & $binary @RuntimeArgs
   if ($LASTEXITCODE -ne 0) { throw 'Maestro helper failed' }
 }
+
+function Get-MaestroOwnerPaths([string]$Project) {
+  try {
+    $raw = Invoke-MaestroRuntime -Root $Project -RuntimeArgs @('home','paths','--product-root',$Project)
+  } catch {
+    [Console]::Out.WriteLine('<!-- maestro:state-unavailable -->')
+    throw 'Maestro owner state unavailable. Run /maestro-doctor before initialization or recovery.'
+  }
+  $paths = ($raw -join "`n") | ConvertFrom-Json
+  if (-not $paths.writable -or $paths.mode -notin @('external','legacy') -or -not $paths.brain_root -or -not $paths.metadata_root) {
+    throw 'Maestro owner state unavailable. Run /maestro-doctor before initialization or recovery.'
+  }
+  return $paths
+}

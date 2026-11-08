@@ -22,7 +22,9 @@
 set +e
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
-BRAIN_DIR="$PROJECT_DIR/brain"
+. "$(dirname "${BASH_SOURCE[0]}")/lib/maestro-runtime.sh" || exit 0
+maestro_bind_home "$PROJECT_DIR" || exit 0
+BRAIN_DIR="$MAESTRO_BRAIN_ROOT"
 TOOL="$PROJECT_DIR/bundles/base/tools/brain-index.py"
 PATHS_TOOL="$PROJECT_DIR/bundles/base/tools/paths-check.py"
 MACHINE="$BRAIN_DIR/.maestro"
@@ -43,7 +45,7 @@ maestro_python >/dev/null 2>&1 || exit 0
 # o dono via saude verde do estado de semanas atras. Falhar em silencio e pior
 # que falhar.
 COMPILE_ERR="$MACHINE/.index-failed"
-if ( cd "$PROJECT_DIR" && PYTHONIOENCODING=utf-8 maestro_py "$TOOL" >/dev/null 2>&1 ); then
+if ( cd "$PROJECT_DIR" && PYTHONIOENCODING=utf-8 maestro_py "$TOOL" --product-root "$PROJECT_DIR" >/dev/null 2>&1 ); then
   rm -f "$COMPILE_ERR" 2>/dev/null
 else
   mkdir -p "$MACHINE" 2>/dev/null
@@ -59,7 +61,7 @@ fi
 # curadoria: um caminho morto quebra a skill que o cita.
 DEAD_PATHS=0
 if [ -f "$PATHS_TOOL" ]; then
-  DEAD_PATHS=$( cd "$PROJECT_DIR" && PYTHONIOENCODING=utf-8 maestro_py "$PATHS_TOOL" --count 2>/dev/null )
+  DEAD_PATHS=$( cd "$PROJECT_DIR" && PYTHONIOENCODING=utf-8 maestro_py "$PATHS_TOOL" --product-root "$PROJECT_DIR" --count 2>/dev/null )
   case "$DEAD_PATHS" in ''|*[!0-9]*) DEAD_PATHS=0 ;; esac
 fi
 

@@ -35,6 +35,9 @@ jobs:
             dist/Maestro-v0.2.0-windows-powershell.sha256
           if-no-files-found: error
   windows-native:
+    # Source checks do not qualify installation. Dispatch this gate on an
+    # approved non-elevated runner; keep its preflight and assertions intact.
+    if: github.event_name == 'workflow_dispatch'
     needs: windows-package
     runs-on: windows-latest
     steps:

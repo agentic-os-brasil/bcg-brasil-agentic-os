@@ -2,6 +2,7 @@
 
 $script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [Console]::OutputEncoding = $script:Utf8NoBom
+. (Join-Path $PSScriptRoot 'maestro-runtime.ps1')
 
 function Read-MaestroStdin {
     $stdin = [Console]::OpenStandardInput()
@@ -162,8 +163,8 @@ function Invoke-MaestroFirstRunScaffold {
         [Console]::Error.WriteLine('maestro first-run-scaffold: CLAUDE_PROJECT_DIR unset and no VERSION found nearby — skipping scaffold (fail-open).')
         return
     }
-    if (-not (Test-MaestroMigrationReady $project)) { return }
-    $data = Join-Path $project 'brain'
+    $paths = Get-MaestroOwnerPaths $project
+    $data = $paths.brain_root
     $marker = Join-Path $data '.initialized'
     $log = Join-Path $data '.scaffold.log'
     $timestamp = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
@@ -418,6 +419,7 @@ function Get-MaestroAgentRoute([string]$Project, [string]$Prompt) {
 function Invoke-MaestroContextInject {
     $project = Get-MaestroProjectDir
     if (-not $project) { return }
+    $paths = Get-MaestroOwnerPaths $project
     $inputRaw = Read-MaestroStdin
     $prompt = ''
     try { $prompt = [string](Get-MaestroProperty ($inputRaw | ConvertFrom-Json) 'prompt') } catch {}
@@ -425,19 +427,15 @@ function Invoke-MaestroContextInject {
         $route = Get-MaestroAgentRoute $project $prompt
         if ($route) { [Console]::Out.Write((Limit-MaestroText $route 1600)) }
     }
-    $data = Join-Path $project 'brain'
-    $state = $env:MAESTRO_STATE_DIR
-    if (-not $state) {
-        if ($env:USERPROFILE) { $state = Join-Path $env:USERPROFILE '.claude/state' }
-        else { $state = Join-Path ([System.IO.Path]::GetTempPath()) 'maestro-claude-state' }
-    }
-    try { Ensure-MaestroDirectory $state } catch { $state = [System.IO.Path]::GetTempPath() }
+    $data = $paths.brain_root
+    $state = Join-Path $paths.metadata_root 'context-state'
+    Ensure-MaestroDirectory $state
     $sessionId = $env:CLAUDE_SESSION_ID
     if (-not $sessionId) { $sessionId = "$PID-$([DateTime]::UtcNow.ToString('yyyyMMdd'))" }
     $safeSession = [regex]::Replace($sessionId, '[^A-Za-z0-9._-]', '_')
     $marker = Join-Path $state "context-inject-$safeSession.marker"
     if (Test-Path -LiteralPath $marker -PathType Leaf) {
-        $stub = "<!-- maestro:context-inject:stub -->`nMemory: $project/brain/memory/ · Load specific tiers on demand.`n"
+        $stub = "<!-- maestro:context-inject:stub -->`nMemory: $data/memory/ · Load specific tiers on demand.`n"
         [Console]::Out.Write((Limit-MaestroText $stub 160))
         return
     }
@@ -515,6 +513,7 @@ function Stop-MaestroCrossCase([string]$Reason) {
 function Invoke-MaestroCrossCaseGuard {
     $project = Get-MaestroProjectDir
     if (-not $project) { Stop-MaestroCrossCase 'Project root unavailable.' }
+    $paths = Get-MaestroOwnerPaths $project
     $raw = Read-MaestroStdin
     . (Join-Path $PSScriptRoot 'maestro-runtime.ps1')
     $output = Invoke-MaestroRuntime -Root $project -RuntimeArgs @('codex-hook','PreToolUse','--root',$project) -Payload $raw
@@ -526,6 +525,7 @@ function Invoke-MaestroCrossCaseGuard {
 function Invoke-MaestroAgentAnnouncement {
     $project = Get-MaestroProjectDir
     if (-not $project) { return }
+    $paths = Get-MaestroOwnerPaths $project
     $raw = Read-MaestroStdin
     if (-not $raw -or $raw -notmatch 'subagent_type') { return }
     try { $payload = $raw | ConvertFrom-Json } catch { return }
@@ -554,6 +554,7 @@ function Invoke-MaestroAgentAnnouncement {
 function Invoke-MaestroSessionStopDream {
     $project = Get-MaestroProjectDir
     if (-not $project) { return }
+    $paths = Get-MaestroOwnerPaths $project
     . (Join-Path $PSScriptRoot 'maestro-runtime.ps1')
     Invoke-MaestroRuntime -Root $project -RuntimeArgs @('daily-stop','--root',$project)
 }

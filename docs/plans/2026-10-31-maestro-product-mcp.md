@@ -37,7 +37,8 @@ implementação não provam paridade. Registrar vermelho antes de verde.
 | E6 — Distribuição e paridade por cliente | Instalar/atualizar plugin e MCPB pelo mesmo canal; descobrir e executar os 92 métodos | N→N+1 preserva dados; rollback/recall; métodos manuais continuam manuais; Code CLI/Code tab/Desktop classificados individualmente | E1–E5; destino SharePoint e assinatura organizacional |
 | E7 — Piloto e rollout | Dois colegas instalam e atualizam sem assistência, incluindo pessoa não técnica | Mac e Windows admitidos; doctor e jornada funcional; evidência sanitizada; retirada do ZIP após sobreposição | E6 e gates externos completos |
 
-E1 é a primeira entrega em implementação. E2–E7 permanecem abertas até a prova
+E1 tem fonte integrada no PR #451, com 8/8 checks antes e depois do merge.
+E2–E7 permanecem abertas até a prova
 inteira; nenhuma contagem de skills ou CI substitui aceite de um fluxo.
 O plano não fixa uma data de rollout enquanto os gates externos não tiverem dono e evidência.
 
@@ -105,3 +106,26 @@ verdicts e limitações. Rodar somente testes locais diretamente relacionados;
 o harness completo fica no CI. Guardar recibos em Developer/CodexWorkspace,
 temporários em Developer/tmp e caches em Developer/ToolData. Preservar o checkout
 principal e seu WIP. O estado de execução deste plano fica no ledger da sessão.
+
+## Construção E2 em fluxos funcionais
+
+E2a (Spec058) fecha o uso de HOME pelos consumidores distribuídos para instalações
+novas admitidas, com inicialização explícita, bloqueio antes de efeitos, identidade
+estável e compatibilidade legada caracterizada. E2b fecha a transação de migração
+por operações explícitas PlanExternal/ApplyExternal/InspectExternal/RollbackExternal
+no motor existente; ambas precisam do aceite antes de declarar E2 pronta.
+
+A fonte da E2a está construída e aprovada nas quatro lentes independentes de
+Spec, Standards, Segurança e Interoperabilidade. Testes públicos cobrem os nove
+hooks Bash e PowerShell, ferramentas Python, aliases de leitura/escrita, imports
+do diretório de trabalho e preservação do produto somente leitura. O CI de fonte
+e a qualificação nativa são gates distintos; estes resultados não qualificam
+clientes, Windows, migração real ou distribuição.
+
+A origem comprovada inclui data legado0.1.11/0.1.12, brain novo0.2.0 e brain vivo
+após v1 committed, inclusive target_evolved. O plano deve selar esse layout. Não
+repopular o brain com data histórico: isso omite edições e ressuscita exclusões.
+Controles vinculados ao root e recibos anteriores exigem transformação canônica
+ou preservação inativa explícita; copiar bytes não concede nova autoridade.
+A retenção deve preservar o runtime que realmente consome o layout, inclusive
+a dependência histórica de data que o journal v1 ainda valida.

@@ -17,11 +17,10 @@ set +e
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
 . "$(dirname "${BASH_SOURCE[0]}")/lib/maestro-runtime.sh"
-MIGRATION_RESULT=$(maestro_runtime "$PROJECT_DIR" migration --project "$PROJECT_DIR") || exit 0
-case "$MIGRATION_RESULT" in *'"state":"committed"'*|*'"state":"not_needed"'*) ;; *) printf 'Maestro: migration pending; daily recovery unavailable.\n'; exit 0 ;; esac
+maestro_bind_home "$PROJECT_DIR" || exit 0
 DAILY_RECOVERY=$(maestro_runtime "$PROJECT_DIR" daily-stop --root "$PROJECT_DIR" 2>/dev/null) || DAILY_RECOVERY='{"state":"unavailable"}'
 
-BRAIN_DIR="$PROJECT_DIR/brain"
+BRAIN_DIR="$MAESTRO_BRAIN_ROOT"
 MEMORY_DIR="$BRAIN_DIR/memory"
 PROFILE_DIR="$BRAIN_DIR/owner"
 
@@ -65,7 +64,8 @@ fi
 ENVELOPE_FILE=""
 MEM_EMITTER="$PROJECT_DIR/bundles/base/tools/session-memory-emit.py"
 if [ -f "$MEM_EMITTER" ] && maestro_python >/dev/null 2>&1; then
-  ENVELOPE_FILE=$(mktemp 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/maestro-envelope.$$")
+  mkdir -p "$MAESTRO_METADATA_ROOT" || exit 0
+  ENVELOPE_FILE=$(mktemp "$MAESTRO_METADATA_ROOT/context-envelope.XXXXXX") || exit 0
   : > "$ENVELOPE_FILE" 2>/dev/null
 else
   MEM_EMITTER=""
@@ -96,22 +96,25 @@ emit_profile_json() {
   # literal, the interpreter raises SyntaxError, 2>/dev/null swallows it, and the
   # guard fails open — injecting the empty placeholder identity into every
   # session. context-inject-userprompt.sh already reads it this way.
-  if maestro_python >/dev/null 2>&1; then
-    local initialized
-    initialized=$(PYTHONIOENCODING=utf-8 maestro_py - "$file" <<'PY' 2>/dev/null
-import json, sys
+  maestro_python >/dev/null 2>&1 || return
+  local profile
+  profile=$(PYTHONIOENCODING=utf-8 maestro_py - "$file" "$PROJECT_DIR/bundles/base/tools" <<'PY' 2>/dev/null
+import sys
+sys.path = [sys.argv[2]] + [entry for entry in sys.path if entry]
+import json
+from maestro_paths import read_regular_text
 try:
-    with open(sys.argv[1], encoding="utf-8") as f:
-        print(json.load(f).get("initialized", True))
+    text = read_regular_text(sys.argv[1])
+    if json.loads(text).get("initialized", True) is not False:
+        print(text, end="")
 except Exception:
-    print(True)
+    pass
 PY
 )
-    [ "$initialized" = "False" ] && return
-  fi
+  [ -n "$profile" ] || return
   printf '\n## %s\n' "$label"
   printf '```json\n'
-  cat "$file" 2>/dev/null
+  printf '%s\n' "$profile"
   printf '```\n'
 }
 
@@ -133,6 +136,7 @@ emit_memory_blocks() {
 emit_session_packet() {
 printf '<!-- maestro:session-context:start -->\n'
 printf '# Maestro — Contexto da sessão\n'
+printf 'brain_root: %s\n' "$BRAIN_DIR"
 printf '_Injetado automaticamente pelo hook de início de sessão._\n'
 case "$DAILY_RECOVERY" in *'"state":"pending"'*|*'"state":"migration_blocked"'*|*'"state":"unavailable"'*) printf 'daily_recovery %s\n' "$DAILY_RECOVERY" ;; esac
 
@@ -221,11 +225,11 @@ emit_active_case_context() {
   local case_dir="$accounts_dir/$account_id/cases/$case_id"
   [ -d "$case_dir" ] || return 0
 
-  PYTHONIOENCODING=utf-8 maestro_py - "$PROJECT_DIR" "$account_id" "$case_id" <<'PY' 2>/dev/null
+  PYTHONIOENCODING=utf-8 maestro_py - "$PROJECT_DIR" "$account_id" "$case_id" "$BRAIN_DIR" <<'PY' 2>/dev/null
 import io, json, os, re, sys
 
 project, account_id, case_id = sys.argv[1], sys.argv[2], sys.argv[3]
-accounts = os.path.join(project, "brain", "accounts")
+accounts = os.path.join(sys.argv[4], "accounts")
 case_dir = os.path.join(accounts, account_id, "cases", case_id)
 
 SCOPE_RE = re.compile(
@@ -358,7 +362,7 @@ emit_active_case_context 2>/dev/null
 # e já sabe se deu certo). Emite bloco só quando há algo a fazer; silêncio
 # quando scaffold e onboarding estão OK — mesma disciplina do resto deste
 # arquivo (abertura de dia, saúde do brain).
-FIRST_RUN_FAILED="$PROJECT_DIR/FIRST-RUN-FAILED.txt"
+FIRST_RUN_FAILED="$BRAIN_DIR/FIRST-RUN-FAILED.txt"
 if [ -f "$FIRST_RUN_FAILED" ]; then
   printf '\n## ⚠️ Scaffold do Maestro falhou\n'
   printf '<!-- maestro:scaffold-failed -->\n'
@@ -479,8 +483,11 @@ fi
 # Nao bloqueante nas duas. Mencionar uma vez, cedo, e nao insistir.
 # ---------------------------------------------------------------------------
 if maestro_python >/dev/null 2>&1; then
-  PYTHONIOENCODING=utf-8 maestro_py - "$BRAIN_DIR" <<'PY' 2>/dev/null
-import datetime, glob, io, os, re, sys
+  PYTHONIOENCODING=utf-8 maestro_py - "$BRAIN_DIR" "$PROJECT_DIR/bundles/base/tools" <<'PY' 2>/dev/null
+import sys
+sys.path = [sys.argv[2]] + [entry for entry in sys.path if entry]
+import datetime, glob, io, os, re
+from maestro_paths import read_regular_text
 
 brain = sys.argv[1]
 today = datetime.date.today()
@@ -490,7 +497,7 @@ page = os.path.join(brain, "daily", f"{today.isoformat()}.md")
 opened = False
 if os.path.exists(page):
     try:
-        opened = bool(re.search(r"(?m)^### ", io.open(page, encoding="utf-8").read()))
+        opened = bool(re.search(r"(?m)^### ", read_regular_text(page)))
     except OSError:
         opened = True                     # ilegivel: nao cutuca por causa de erro proprio
 if not opened:
@@ -628,10 +635,10 @@ fi
 # pedido, ele volta no proximo vencimento; nunca na proxima sessao.
 AGENT_POLICY="$PROJECT_DIR/bundles/base/agents/activation-policy.json"
 if [ -f "$AGENT_POLICY" ] && maestro_python >/dev/null 2>&1; then
-  PYTHONIOENCODING=utf-8 maestro_py - "$PROJECT_DIR" "$AGENT_POLICY" <<'PY' 2>/dev/null
+  PYTHONIOENCODING=utf-8 maestro_py - "$BRAIN_DIR" "$AGENT_POLICY" <<'PY' 2>/dev/null
 import io, json, os, sys
 
-project, policy_p = sys.argv[1], sys.argv[2]
+brain, policy_p = sys.argv[1], sys.argv[2]
 try:
     policy = json.load(io.open(policy_p, encoding="utf-8"))
 except (OSError, ValueError):
@@ -641,7 +648,13 @@ for agent in policy.get("agents", []):
     auto = agent.get("auto")
     if not isinstance(auto, dict) or not auto.get("marker"):
         continue
-    marker = os.path.join(project, auto["marker"])
+    relative = auto["marker"]
+    if not isinstance(relative, str) or not relative.startswith("brain/.maestro/"):
+        continue
+    marker = os.path.realpath(os.path.join(brain, relative[6:]))
+    machine = os.path.realpath(os.path.join(brain, ".maestro"))
+    if os.path.commonpath([machine, marker]) != machine:
+        continue
     if not os.path.exists(marker):
         continue
     try:

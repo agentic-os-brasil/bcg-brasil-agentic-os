@@ -18,8 +18,10 @@ Invariantes (spec 007):
 
 Uso:  python3 bundles/base/tools/brain-index.py [--check]
       --check  compila e reporta, sem publicar.
+Configuracao local: --product-root ROOT e --user-home USER; por padrao,
+o produto vem do script e o usuario vem do helper canonico.
 """
-import io, os, re, sys, json, glob, hashlib, datetime, shutil, tempfile, unicodedata
+import io, os, re, sys, json, glob, hashlib, datetime, shutil, tempfile, unicodedata, stat
 
 BRAIN = "brain"
 MACHINE = os.path.join(BRAIN, ".maestro")
@@ -115,6 +117,31 @@ def parse(p):
             v = v[1:-1]
         fm[k] = v
     return fm, body
+
+
+
+def validate_index_tree():
+    """Reject filesystem aliases before source reads, publication or cleanup."""
+    machine_files = {"tasks-seen.json", "backlinks.json", "forward-links.json",
+                     "diagnostics.json", "tasks.json", "route-index.json", "log.md"}
+    machine_files.update({name + ".tmp" for name in machine_files})
+
+    def inaccessible(error):
+        raise error
+
+    for folder, directories, files in os.walk(BRAIN, followlinks=False, onerror=inaccessible):
+        for name in directories:
+            info = os.lstat(os.path.join(folder, name))
+            if (folder == MACHINE and name in machine_files or not stat.S_ISDIR(info.st_mode)
+                    or getattr(info, "st_file_attributes", 0) & 0x400):
+                raise OSError("unsafe brain index directory")
+        for name in files:
+            machine_output = folder == MACHINE and name in machine_files
+            if name.endswith(".md") or machine_output:
+                info = os.lstat(os.path.join(folder, name))
+                if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or getattr(info, "st_file_attributes", 0) & 0x400):
+                    raise OSError("unsafe brain index file")
 
 
 def collect():
@@ -792,9 +819,21 @@ def render_tasks(tasks):
 
 
 def main():
-    check_only = "--check" in sys.argv
+    global BRAIN, MACHINE
+    sys.dont_write_bytecode = True
+    from maestro_paths import consume_paths
+    argv = sys.argv[1:]
+    check_only = "--check" in argv
+    paths = consume_paths(argv, __file__, write=not check_only)
+    BRAIN, MACHINE = paths["brain_root"], paths["metadata_root"]
     if not os.path.isdir(BRAIN):
-        print("erro: brain/ nao encontrado — rode a partir da raiz do Maestro", file=sys.stderr)
+        print("erro: brain/ ausente na origem admitida", file=sys.stderr)
+        return 2
+
+    try:
+        validate_index_tree()
+    except OSError:
+        print("erro: brain/ contem caminho inseguro ou inacessivel", file=sys.stderr)
         return 2
 
     pages = collect()
@@ -979,7 +1018,9 @@ def main():
         return 0
 
     # --- publicacao atomica: escreve em staging, valida, só entao move --------
-    staging = tempfile.mkdtemp(prefix="brain-index-")
+    staging_root = paths["state_root"] if paths["mode"] == "external" else MACHINE
+    os.makedirs(staging_root, mode=0o700, exist_ok=True)
+    staging = tempfile.mkdtemp(prefix="brain-index-", dir=staging_root)
     try:
         for rel, content in outputs.items():
             sp = os.path.join(staging, rel.replace("/", os.sep))

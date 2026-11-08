@@ -25,6 +25,12 @@ class MigrationContract(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(prefix='maestro migração ')
         self.addCleanup(self.tmp.cleanup)
         self.root = pathlib.Path(self.tmp.name)
+        self.profile_tmp = tempfile.TemporaryDirectory(prefix='maestro-profile-')
+        self.addCleanup(self.profile_tmp.cleanup)
+        self.profile = pathlib.Path(self.profile_tmp.name)
+        self.environment = dict(os.environ, HOME=str(self.profile), USERPROFILE=str(self.profile),
+                                CLAUDE_PROJECT_DIR=str(self.root))
+        self.environment.pop('MAESTRO_HOME', None)
 
     def put(self, path, content='conteúdo'):
         p = self.root / path
@@ -34,7 +40,7 @@ class MigrationContract(unittest.TestCase):
 
     def invoke(self, *args):
         p = subprocess.run([str(self.helper), 'migration', '--project', str(self.root), *args],
-                           capture_output=True, text=True)
+                           env=self.environment, capture_output=True, text=True)
         self.assertTrue(p.stdout.startswith('{'), p.stdout + p.stderr)
         return p.returncode, json.loads(p.stdout)
 
@@ -59,7 +65,7 @@ class MigrationContract(unittest.TestCase):
     def adapter(self):
         return subprocess.run(['bash', '-c',
             '. "$1/.claude/hooks/lib/maestro-runtime.sh"; maestro_runtime "$1" migration --project "$1" --status',
-            'adapter', str(self.root)], capture_output=True, text=True)
+            'adapter', str(self.root)], env=self.environment, capture_output=True, text=True)
 
     @unittest.skipUnless(platform.system() == 'Darwin', 'native macOS manifest verifier')
     def test_native_manifest_verifier_and_tamper_rejection(self):
@@ -78,8 +84,8 @@ class MigrationContract(unittest.TestCase):
         self.put('brain/owner/identity.json', 'current')
         self.put('brain/.initialized', 'stale')
         result = subprocess.run(['bash', str(self.root/'.claude/hooks/first-run-scaffold.sh')],
-            env={**os.environ, 'CLAUDE_PROJECT_DIR': str(self.root)}, capture_output=True, text=True)
-        self.assertIn('maestro:migration-blocked', result.stdout)
+            env=self.environment, capture_output=True, text=True)
+        self.assertIn('maestro:state-unavailable', result.stdout)
         self.assertFalse((self.root/'brain/memory').exists(), 'blocked migration allowed backfill writes')
         self.assertEqual((self.root/'brain/owner/identity.json').read_text(), 'current')
 
@@ -91,9 +97,9 @@ class MigrationContract(unittest.TestCase):
         self.put('brain/owner/note.md', 'new authored work')
         self.put('brain/.initialized', 'complete')
         result = subprocess.run(['bash', str(self.root/'.claude/hooks/first-run-scaffold.sh')],
-            env={**os.environ, 'CLAUDE_PROJECT_DIR': str(self.root)}, capture_output=True, text=True)
+            env=self.environment, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0)
-        self.assertNotIn('maestro:migration-blocked', result.stdout)
+        self.assertNotIn('maestro:state-unavailable', result.stdout)
         self.assertEqual((self.root/'brain/owner/note.md').read_text(), 'new authored work')
         self.assertTrue((self.root/'brain/memory').exists(), 'normal initialized backfill did not run')
         verified = self.invoke('--status')[1]
@@ -118,17 +124,17 @@ class MigrationContract(unittest.TestCase):
         target.symlink_to(outside)
         def session_start():
             return subprocess.run(['bash', str(self.root/'.claude/hooks/first-run-scaffold.sh')],
-                env={**os.environ, 'CLAUDE_PROJECT_DIR': str(self.root)}, capture_output=True, text=True)
+                env=self.environment, capture_output=True, text=True)
         for _ in range(2):
             blocked = session_start()
-            self.assertIn('maestro:migration-blocked', blocked.stdout)
+            self.assertIn('maestro:state-unavailable', blocked.stdout)
             self.assertEqual(state.read_bytes(), before_state)
             self.assertEqual(receipt.read_bytes(), before_receipt)
             self.assertFalse((self.root/'brain/memory').exists())
         target.unlink()
         target.write_text('original z')
         recovered = session_start()
-        self.assertNotIn('maestro:migration-blocked', recovered.stdout)
+        self.assertNotIn('maestro:state-unavailable', recovered.stdout)
         self.assertTrue((self.root/'brain/memory').exists())
         self.assertEqual(state.read_bytes(), before_state)
         self.assertEqual(receipt.read_bytes(), before_receipt)

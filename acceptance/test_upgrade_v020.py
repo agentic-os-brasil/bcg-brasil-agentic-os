@@ -94,9 +94,14 @@ def write_fixture(root, relative, content):
 
 
 def scaffold(root):
+    profile = root.parent / "isolated-profile"
+    profile.mkdir(mode=0o700, exist_ok=True)
+    environment = dict(os.environ, HOME=str(profile), USERPROFILE=str(profile),
+                       CLAUDE_PROJECT_DIR=str(root))
+    environment.pop("MAESTRO_HOME", None)
     return subprocess.run(
         ["bash", str(root / ".claude/hooks/first-run-scaffold.sh")],
-        cwd=root, env={**os.environ, "CLAUDE_PROJECT_DIR": str(root)},
+        cwd=root, env=environment,
         capture_output=True, text=True, timeout=120,
     )
 
@@ -267,9 +272,15 @@ class PackagedUpgradeV020(unittest.TestCase):
                 reconciled_settings_hash = sha256(new / ".claude/settings.json")
                 evidence["host_file_reconciliation"] = reconciliation
 
+                pending_start = scaffold(new)
+                self.assertIn("maestro:state-unavailable", pending_start.stdout)
+                self.assertFalse((new / "brain").exists(), "startup performed implicit migration")
+                migrate_call, committed = migration(new)
+                self.assertEqual(migrate_call.returncode, 0, committed)
+                self.assertEqual(committed["state"], "committed", committed)
                 new_start = scaffold(new)
                 self.assertEqual(new_start.returncode, 0, new_start.stderr)
-                self.assertNotIn("maestro:migration-blocked", new_start.stdout, new_start.stdout)
+                self.assertNotIn("maestro:state-unavailable", new_start.stdout, new_start.stdout)
                 self.assertTrue((new / "brain/.initialized").is_file(), "new scaffold did not initialize migrated workspace")
                 status_call, status = migration(new, "--status")
                 self.assertEqual(status_call.returncode, 0, status)
@@ -305,11 +316,11 @@ class PackagedUpgradeV020(unittest.TestCase):
                 authority_before = (state_file.read_bytes(), receipt_file.read_bytes())
                 repeat = scaffold(new)
                 self.assertEqual(repeat.returncode, 0, repeat.stderr)
-                self.assertNotIn("maestro:migration-blocked", repeat.stdout)
+                self.assertNotIn("maestro:state-unavailable", repeat.stdout)
                 authored = write_fixture(new, "brain/owner/fixture-author-note.md", "Synthetic newer authored work.\n")
                 post_edit = scaffold(new)
                 self.assertEqual(post_edit.returncode, 0, post_edit.stderr)
-                self.assertNotIn("maestro:migration-blocked", post_edit.stdout)
+                self.assertNotIn("maestro:state-unavailable", post_edit.stdout)
                 for old_index, new_index in (("owner/atlas/craft/index.md", "craft/craft.md"), ("owner/atlas/learnings/index.md", "learnings/learnings.md")):
                     self.assertEqual((new / "brain" / new_index).read_bytes(), (old / "data" / old_index).read_bytes(), "repeated startup overwrote authored index")
                 _, evolved = migration(new, "--status")

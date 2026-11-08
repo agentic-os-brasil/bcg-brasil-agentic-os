@@ -5,6 +5,9 @@ description: Warm, humanized first-run flow — opens in English to ask which la
 
 # Maestro Onboarding
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Run this skill when a newly installed Maestro workspace receives its first
 guided-onboarding prompt. The goal is a useful, consented professional baseline
 — not a long system explanation and not an unreviewed memory import.

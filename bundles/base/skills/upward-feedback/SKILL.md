@@ -5,6 +5,9 @@ description: Help the owner prepare considered feedback to give upward to a seni
 
 # Upward Feedback
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Help the owner work out what to say, and how to say it, before they say it.
 
 All reads and writes use direct file operations on the owner atlas paths (`brain/owner/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.

@@ -46,6 +46,8 @@
 set +e
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
+. "$(dirname "${BASH_SOURCE[0]}")/lib/maestro-runtime.sh" || exit 0
+maestro_bind_home "$PROJECT_DIR" || exit 0
 POLICY="$PROJECT_DIR/bundles/base/agents/activation-policy.json"
 
 HOOK_INPUT=$(cat 2>/dev/null)

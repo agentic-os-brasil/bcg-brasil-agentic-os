@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/zipmigration"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func TestCodexLifecycleReceiptAndMigration(t *testing.T) {
+func TestCodexLifecycleRequiresExplicitMigration(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, "data/profile"), 0700)
 	os.WriteFile(filepath.Join(root, "data/profile/identity.md"), []byte("private body"), 0600)
@@ -18,8 +19,11 @@ func TestCodexLifecycleReceiptAndMigration(t *testing.T) {
 	if err := Run([]string{"codex-hook", "SessionStart", "--root", root}, strings.NewReader("{\"session_id\":\"fixture\"}"), &start); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(root, "brain/owner/identity.md")); err != nil {
-		t.Fatal("session start did not migrate", err)
+	if _, err := os.Stat(filepath.Join(root, "brain")); !os.IsNotExist(err) || !strings.Contains(start.String(), "migration_required") {
+		t.Fatal("session start performed migration or omitted diagnostic", err, start.String())
+	}
+	if result := zipmigration.Run(root, zipmigration.Options{}); result.State != "committed" {
+		t.Fatal(result)
 	}
 	for _, event := range []string{"PostToolUse", "Stop"} {
 		var out bytes.Buffer

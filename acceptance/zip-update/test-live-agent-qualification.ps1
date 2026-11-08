@@ -1,48 +1,25 @@
-param([Parameter(Mandatory = $true)][string]$Zip)
+param([string]$Zip) # Retained for existing CI callers; trace classification needs no package.
 
 $ErrorActionPreference = 'Stop'
-$repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
-$zipPath = (Resolve-Path -LiteralPath $Zip).Path
 $scratch = Join-Path ([System.IO.Path]::GetTempPath()) ("maestro-live-test-" + [Guid]::NewGuid().ToString('N'))
-$bin = Join-Path $scratch 'bin'
-New-Item -ItemType Directory -Path $bin -Force | Out-Null
+New-Item -ItemType Directory -Path $scratch -Force | Out-Null
 
 try {
-    if ($env:OS -eq 'Windows_NT') {
-        $fake = Join-Path $bin 'claude.cmd'
-        $body = "@echo off`r`nif `"%1`"==`"--version`" (echo claude-fake 1.0& exit /b 0)`r`ntype `"%FAKE_CLAUDE_TRACE%`"`r`n"
-        [System.IO.File]::WriteAllText($fake, $body, [System.Text.Encoding]::ASCII)
-    } else {
-        $fake = Join-Path $bin 'claude'
-        $body = "#!/bin/sh`nif [ `"`$1`" = `"--version`" ]; then echo 'claude-fake 1.0'; exit 0; fi`ncat `"`$FAKE_CLAUDE_TRACE`"`n"
-        [System.IO.File]::WriteAllText($fake, $body, [System.Text.Encoding]::ASCII)
-        & chmod +x $fake
-    }
-    $originalPath = $env:PATH
-    $originalOs = $env:OS
-    $env:PATH = $bin + [System.IO.Path]::PathSeparator + $env:PATH
-    $env:OS = 'Windows_NT'
-
+    . (Join-Path $PSScriptRoot 'lib/LiveAgentTrace.ps1')
     function Run-Qualification([string[]]$FixtureLines, [string]$Name) {
-        $fixture = Join-Path $scratch "$Name-fixture.jsonl"
-        [System.IO.File]::WriteAllLines($fixture, $FixtureLines, (New-Object System.Text.UTF8Encoding($false)))
-        $trace = Join-Path $scratch "$Name-trace.jsonl"
-        $receipt = Join-Path $scratch "$Name-receipt.json"
-        $env:FAKE_CLAUDE_TRACE = $fixture
-        $engine = (Get-Process -Id $PID).Path
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = $engine
-        $psi.Arguments = "-NoLogo -NoProfile -File `"$repo/acceptance/zip-update/live-agent-qualification.ps1`" -Zip `"$zipPath`" -Trace `"$trace`" -Receipt `"$receipt`""
-        $psi.UseShellExecute = $false
-        $psi.RedirectStandardOutput = $true
-        $psi.RedirectStandardError = $true
-        $process = New-Object System.Diagnostics.Process
-        $process.StartInfo = $psi
-        [void]$process.Start()
-        $stdout = $process.StandardOutput.ReadToEnd()
-        $stderr = $process.StandardError.ReadToEnd()
-        $process.WaitForExit()
-        return [pscustomobject]@{ ExitCode=$process.ExitCode; Stdout=$stdout; Stderr=$stderr; Receipt=$receipt }
+        $events = @()
+        foreach ($line in $FixtureLines) { try { $events += ($line | ConvertFrom-Json) } catch {} }
+        $evaluation = Get-MaestroAgentTraceEvaluation -Events $events -ClaudeExitCode 0
+        $receipt = Join-Path $scratch "$Name-classification.json"
+        $classification = [ordered]@{
+            evidence_kind='maestro_claude_agent_trace_classification'
+            runtime_qualified=$false
+            agent_tool_use_ids=$evaluation.AgentToolUseIds
+            checks=$evaluation.Checks
+            verdict=$(if ($evaluation.Passed) { 'TRACE_PASS' } else { 'TRACE_FAIL' })
+        }
+        $classification | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $receipt -Encoding UTF8
+        return [pscustomobject]@{ ExitCode=$(if ($evaluation.Passed) { 0 } else { 1 }); Receipt=$receipt; Stderr=''; Stdout=$classification.verdict }
     }
 
     $promptOnly = @(
@@ -51,7 +28,7 @@ try {
     )
     $falsePositive = Run-Qualification $promptOnly 'false-positive'
     if ($falsePositive.ExitCode -eq 0) { throw 'Prompt tokens alone produced a false PASS' }
-    Write-Host 'PASS  prompt tokens alone cannot pass the PowerShell live evaluator'
+    Write-Host 'PASS  prompt tokens alone cannot pass the PowerShell trace classifier'
 
     $correlated = @(
         '{"type":"system","subtype":"hook_response","hook_event":"SessionStart","hook_id":"session-start-scaffold","exit_code":0,"outcome":"success"}',
@@ -68,8 +45,8 @@ try {
     $pass = Run-Qualification $correlated 'correlated'
     if ($pass.ExitCode -ne 0) { throw "Correlated trace failed: $($pass.Stderr) $($pass.Stdout)" }
     $receiptObject = Get-Content -LiteralPath $pass.Receipt -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($receiptObject.verdict -ne 'PASS' -or $receiptObject.agent_tool_use_ids.yoda -ne 'toolu_yoda') { throw 'Correlated trace receipt is invalid' }
-    Write-Host 'PASS  correlated Yoda trace passes the PowerShell live evaluator'
+    if ($receiptObject.verdict -ne 'TRACE_PASS' -or $receiptObject.runtime_qualified -ne $false -or $receiptObject.evidence_kind -ne 'maestro_claude_agent_trace_classification' -or $receiptObject.agent_tool_use_ids.yoda -ne 'toolu_yoda') { throw 'Correlated trace receipt is invalid' }
+    Write-Host 'PASS  correlated Yoda trace passes the PowerShell trace classifier'
 
     $oneSessionStart = @($correlated[0]) + @($correlated[2..($correlated.Count - 1)])
     if ((Run-Qualification $oneSessionStart 'one-session-start').ExitCode -eq 0) { throw 'One SessionStart response produced PASS' }
@@ -114,7 +91,5 @@ try {
     if ((Run-Qualification $extraAgent 'extra-agent').ExitCode -eq 0) { throw 'An extra Agent call produced PASS' }
     Write-Host 'PASS  extra Agent calls cannot pass the one-call contract'
 } finally {
-    if ($null -ne $originalPath) { $env:PATH = $originalPath }
-    if ($null -ne $originalOs) { $env:OS = $originalOs }
     if (Test-Path -LiteralPath $scratch) { Remove-Item -LiteralPath $scratch -Recurse -Force }
 }

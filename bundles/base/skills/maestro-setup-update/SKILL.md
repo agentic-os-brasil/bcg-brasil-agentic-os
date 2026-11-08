@@ -5,6 +5,9 @@ description: Guia conversacional para instalar, atualizar ou reparar o Maestro a
 
 # Maestro Setup and Update
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Guia conversacional de instalação, atualização e reparo. Oriente a extração em pasta nova e execute as verificações autorizadas pelas ferramentas do host. Não transfira ao usuário trabalho de terminal ou edição manual que o Maestro pode realizar com segurança. Permissões obrigatórias do host nunca são contornadas.
 
 ## Interaction profile
@@ -34,9 +37,12 @@ Se o pedido for rollback, tratar como caso de "reparo com ZIP anterior" (ver se�
    - Se existir, informar: "a pasta Maestro já está aberta aqui, versão v<X.Y.Z>. Podemos seguir com o onboarding."
    - Se não existir, orientar: "abra no Claude Code a pasta Maestro que foi extraída do ZIP. Feche esta janela e reabra pela pasta correta."
 
-2. **Confirmar workspace inicial.** Verificar se `brain/` e `brain/.initialized` existem.
-   - Se ausentes, orientar: "feche a pasta no Claude Code e reabra. Na próxima abertura o Maestro cria a workspace pessoal automaticamente."
-   - Se presentes, seguir.
+2. **Confirmar estado.** Obter os paths pelo helper verificado. Se já estiverem
+   admitidos, seguir com o brain retornado. Caso seja uma instalação nova sem
+   estado anterior, confirmar essa escolha e executar a inicialização local
+   explícita `home init`; os hooks só preenchem o brain depois da admissão.
+   Estado legado, conflito ou origem migrada não verificada exige diagnóstico;
+   não reabrir a janela para criar uma árvore alternativa nem mesclar conteúdo.
 
 3. **Delegar identidade.** Encaminhar para a skill [`maestro-onboarding`](../maestro-onboarding/SKILL.md) sem duplicar o trabalho dela. Frase-ponte sugerida: "com a pasta pronta, vamos à apresentação e captura de identidade. Ativando o onboarding."
 
@@ -48,7 +54,7 @@ Leia `UPDATE-CONTRACT.json` e `UPDATE-RUNBOOK.md` da instalação de destino ant
 
 1. Confirme raiz canônica, host real (Claude Code ou Codex) e versão local/esperada. Não assuma CLAUDE_PROJECT_DIR no Codex. Nunca extraia sobre a instalação em uso.
 2. Siga o ritual em README-INSTALL.md: preserve a instalação anterior inteira, copie a árvore de origem (data/ em 0.1.11/0.1.12) para uma extração nova e reconcile personalizações fora dela. Não mova/apague a origem. Dual trees sem recibo válido exigem diagnóstico antes de escrever.
-3. Execute a migração pelo motor gerenciado e valide seu recibo imutável. Prove leitura dos namespaces retidos usando o resolver; existência de pasta não prova consumo.
+3. Após confirmação da atualização legada coberta, execute explicitamente a migração v1 pelo motor gerenciado e valide seu recibo imutável. Startup e inspeção não a executam; isso não é migração externa para HOME. Prove leitura dos namespaces retidos usando o resolver; existência de pasta não prova consumo.
 4. Abra ou retome o recibo em `brain/.maestro/updates/update-<versão>.json`. Valide todas as bindings do contrato antes de reutilizar PASS: ZIP exato, núcleo, baseline, raiz, host/plataforma e recibo da migração. Divergências preservam a tentativa antiga como stale e exigem nova tentativa.
 5. Prove todos os checks obrigatórios e a reconciliação das personalizações. Configurado, observado pelo adaptador e executado no host nativo são estados diferentes. Claude possui nove handlers; Codex usa seu próprio conjunto. Não exija comandos slash do Claude em outro host.
 6. Rode maestro-doctor e chame Yoda de verdade pelo mecanismo de subagents do host. Aguarde o retorno; registre indisponibilidade sem imitá-lo. MCP/caseOS e Python opcionais indisponíveis não bloqueiam checks locais, mas não podem ser relatados como conectados/instalados.
@@ -76,8 +82,8 @@ Quando um upgrade muda o schema de memória, o release notes do time BCG Brasil 
 
 2. **Mapear cada achado à ação certa.** O [`maestro-doctor`](../maestro-doctor/SKILL.md) reporta em linguagem simples; a tabela mental abaixo traduz cada caso para a orientação ao usuário.
 
-   - **Arquivos core ausentes** (`VERSION`, `CLAUDE.md`, `.claude/`, `bundles/`): "a instalação está incompleta. Baixe o ZIP mais recente indicado no último email do time BCG Brasil AI e siga o `README-INSTALL.md`. A workspace `brain/` é preservada pelo ritual."
-   - **`brain/` ausente, core presente:** "feche o Claude Code e reabra a pasta Maestro. Na próxima abertura a workspace é recriada automaticamente."
+   - **Arquivos core ausentes** (`VERSION`, `CLAUDE.md`, `.claude/`, `bundles/`): "a instalação está incompleta. Baixe o ZIP mais recente indicado no último email do time BCG Brasil AI e siga o `README-INSTALL.md`. O HOME e qualquer estado legado permanecem separados do núcleo e preservados."
+   - **Estado ausente, core presente:** conferir o diagnóstico canônico; uma instalação nova pode ser inicializada explicitamente após a escolha do dono. Não inferir perda, reparar HOME ou recriar brain no produto por reabrir o host.
    - **Hooks presentes mas sem permissão de execução (Mac/Linux):** "reinstale seguindo o `README-INSTALL.md`. A extração de uma pasta nova restaura as permissões corretas."
    - **`brain/` corrompida ou com conteúdo perdido:** ser direto. "o Maestro não guarda backup automático da sua workspace. Se há backup autorizado, restaure em outra pasta e compare, preservando ambas as cópias. Nunca sobrescreva a árvore atual. Sem backup, o conteúdo perdido não é recuperável pelo Maestro."
    - **`VERSION` presente mas fora do formato `X.Y.Z`:** tratar como install corrompido, apontar para o `README-INSTALL.md`.
@@ -104,4 +110,4 @@ Não há rollback automático. Se o usuário pediu para voltar a uma versão ant
 
 ## Encerramento
 
-Ao terminar, resumir em uma linha o desfecho, a versão ativa (lida em `VERSION`) e o caminho absoluto da workspace (`${CLAUDE_PROJECT_DIR}/brain/`). Se houver ação pendente do lado do time BCG Brasil AI (email com link, versão a confirmar), deixar explícito.
+Ao terminar, resumir em uma linha o desfecho, a versão ativa (lida em `VERSION`) e o caminho absoluto da workspace (`<admitted brain_root>/`). Se houver ação pendente do lado do time BCG Brasil AI (email com link, versão a confirmar), deixar explícito.

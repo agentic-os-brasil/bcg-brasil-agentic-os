@@ -5,6 +5,9 @@ description: Create the right Maestro workspace context for a client account and
 
 # Account Case Setup
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 ## Interaction profile
 
 Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) skill before responding. It adjusts explanation depth and language only; it never changes scope, authority, or the confirmation gates.

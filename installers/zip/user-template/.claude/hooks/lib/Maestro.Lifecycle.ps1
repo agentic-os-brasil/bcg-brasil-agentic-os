@@ -1,18 +1,9 @@
 # Native lifecycle support; PS 5.1 syntax, no Bash or Python dependency.
-function Test-MaestroMigrationReady([string]$Project) {
-    if (-not (Test-Path -LiteralPath (Join-Path $Project 'data')) -and -not (Test-Path -LiteralPath (Join-Path $Project 'brain/.maestro/migration/state.json'))) { return $true }
-    try {
-        . (Join-Path $PSScriptRoot 'maestro-runtime.ps1')
-        $raw = Invoke-MaestroRuntime -Root $Project -RuntimeArgs @('migration','--project',$Project)
-        $result = ($raw -join "`n") | ConvertFrom-Json
-        if ($result.state -notin @('committed','not_needed')) { throw 'Migration is not committed' }
-        return $true
-    } catch {
-        [Console]::Out.WriteLine('<!-- maestro:migration-blocked -->')
-        [Console]::Out.WriteLine('Migration unavailable, blocked or partial. Original data/ is preserved. Run /maestro-doctor before initialization.')
-        [Console]::Error.WriteLine($_.Exception.Message)
-        return $false
-    }
+function Get-MaestroOwnerMarker([string]$Brain, [string]$Relative) {
+    if (-not $Relative.StartsWith('brain/')) { throw 'Invalid owner marker path' }
+    $path = Join-Path $Brain $Relative.Substring(6)
+    if (-not (Test-MaestroPathInside $path (Join-Path $Brain '.maestro'))) { throw 'Invalid owner marker path' }
+    return $path
 }
 
 function Assert-MaestroNoAlias([string]$Path) {
@@ -30,8 +21,8 @@ function Assert-MaestroNoAlias([string]$Path) {
     }
 }
 
-function Get-MaestroActiveCase([string]$Project) {
-    $accounts = Join-Path $Project 'brain/accounts'
+function Get-MaestroActiveCase([string]$Brain) {
+    $accounts = Join-Path $Brain 'accounts'
     Assert-MaestroNoAlias $accounts
     $marker = Join-Path $accounts '.active'
     Assert-MaestroNoAlias $marker
@@ -51,6 +42,8 @@ function Get-MaestroActiveCase([string]$Project) {
 function Read-MaestroBounded([string]$Path, [int]$MaxBytes = 4096) {
     Assert-MaestroNoAlias $Path
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return '' }
+    $item = Get-Item -LiteralPath $Path -Force
+    if ((Get-MaestroProperty $item 'LinkType') -eq 'HardLink') { throw 'Aliased source file is not allowed' }
     $stream = [IO.File]::OpenRead($Path)
     try {
         $bytes = New-Object byte[] ($MaxBytes + 1)
@@ -62,15 +55,16 @@ function Read-MaestroBounded([string]$Path, [int]$MaxBytes = 4096) {
 
 function Invoke-MaestroSessionStartMemoryInject {
     $project = Get-MaestroProjectDir
-    if (-not $project -or -not (Test-MaestroMigrationReady $project)) { return }
-    $brain = Join-Path $project 'brain'
+    if (-not $project) { return }
+    $paths = Get-MaestroOwnerPaths $project
+    $brain = $paths.brain_root
     if (-not (Test-Path -LiteralPath $brain)) { return }
     Assert-MaestroNoAlias $brain
     $lines = New-Object 'System.Collections.Generic.List[string]'
     $lines.Add('<!-- maestro:session-context:start -->')
     $lines.Add('# Maestro - Contexto da sessao')
     $lines.Add('Metodo operacional: load bundles/base/skills/maestro-operator/SKILL.md before control-plane work.')
-    $lines.Add('Memory: brain/memory/. Skills: bundles/base/skills/ and bundles/tech-core/skills/. Read specific sources on demand.')
+    $lines.Add('brain_root: ' + $brain + '. Memory: ' + (Join-Path $brain 'memory') + '. Skills: bundles/base/skills/ and bundles/tech-core/skills/. Read specific sources on demand.')
     . (Join-Path $PSScriptRoot 'maestro-runtime.ps1')
     try {
         $recovery = (Invoke-MaestroRuntime -Root $project -RuntimeArgs @('daily-stop','--root',$project)) -join "`n"
@@ -89,7 +83,7 @@ function Invoke-MaestroSessionStartMemoryInject {
     $identity = Read-MaestroBounded (Join-Path $brain 'owner/identity.json') 2048
     if ($identity) { $lines.Add($identity) }
     try {
-        $active = Get-MaestroActiveCase $project
+        $active = Get-MaestroActiveCase $brain
         if ($active) {
             $lines.Add('Active case: ' + $active.Id)
             $lines.Add('Case source: brain/accounts/' + $active.Id.Replace('/','/cases/'))
@@ -111,7 +105,7 @@ function Invoke-MaestroSessionStartMemoryInject {
     foreach ($agent in @($policy.agents)) {
         $auto = Get-MaestroProperty $agent 'auto'
         if (-not $auto -or $agent.status -ne 'active' -or -not $agent.dispatchable) { continue }
-        $marker = Join-Path $project ([string]$auto.marker)
+        $marker = Get-MaestroOwnerMarker $brain ([string]$auto.marker)
         if (-not (Test-MaestroPathInside $marker (Join-Path $brain '.maestro'))) { throw 'Invalid agent marker path' }
         Assert-MaestroNoAlias $marker
         if (Test-Path -LiteralPath $marker) { $lines.Add('Agent review requested: ' + $agent.id + '. This is a pending request, not an executed agent call. Load the policy packet and announce only an actual dispatch.') }
@@ -132,8 +126,11 @@ function Invoke-MaestroSessionStartMemoryInject {
 
 function Invoke-MaestroSessionStopAgentCheck {
     $project = Get-MaestroProjectDir
-    if (-not $project -or -not (Test-Path -LiteralPath (Join-Path $project 'brain/.initialized'))) { return }
-    $machine = Join-Path $project 'brain/.maestro'
+    if (-not $project) { return }
+    $paths = Get-MaestroOwnerPaths $project
+    $brain = $paths.brain_root
+    if (-not (Test-Path -LiteralPath (Join-Path $brain '.initialized'))) { return }
+    $machine = $paths.metadata_root
     Assert-MaestroNoAlias $machine
     $policy = Read-MaestroBounded (Join-Path $project 'bundles/base/agents/activation-policy.json') 65536 | ConvertFrom-Json
     $runsPath = Join-Path $machine 'agent-runs.json'
@@ -145,7 +142,7 @@ function Invoke-MaestroSessionStopAgentCheck {
     foreach ($agent in @($policy.agents)) {
         $auto = Get-MaestroProperty $agent 'auto'
         if (-not $auto -or $agent.status -ne 'active' -or -not $agent.dispatchable) { continue }
-        $marker = Join-Path $project ([string]$auto.marker)
+        $marker = Get-MaestroOwnerMarker $brain ([string]$auto.marker)
         if (-not (Test-MaestroPathInside $marker $machine)) { throw 'Invalid agent marker path' }
         Assert-MaestroNoAlias $marker
         if (Test-Path -LiteralPath $marker) { continue }
@@ -182,8 +179,10 @@ function Invoke-MaestroSessionStopAgentCheck {
 
 function Invoke-MaestroSessionStopBrainIndex {
     $project = Get-MaestroProjectDir
-    if (-not $project -or -not (Test-Path -LiteralPath (Join-Path $project 'brain/.initialized'))) { return }
-    $machine = Join-Path $project 'brain/.maestro'
+    if (-not $project) { return }
+    $paths = Get-MaestroOwnerPaths $project
+    if (-not (Test-Path -LiteralPath (Join-Path $paths.brain_root '.initialized'))) { return }
+    $machine = $paths.metadata_root
     Assert-MaestroNoAlias $machine
     # Optional compiler: never install or discover ambient Python at Stop.
     $python = $env:MAESTRO_PYTHON
@@ -193,7 +192,7 @@ function Invoke-MaestroSessionStopBrainIndex {
         & $python -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' 2>$null | Out-Null
         if ($LASTEXITCODE -eq 0) {
             Push-Location $project
-            try { & $python (Join-Path $project 'bundles/base/tools/brain-index.py') 2>$null | Out-Null; $success = $LASTEXITCODE -eq 0 } finally { Pop-Location }
+            try { & $python (Join-Path $project 'bundles/base/tools/brain-index.py') --product-root $project 2>$null | Out-Null; $success = $LASTEXITCODE -eq 0 } finally { Pop-Location }
             if ($success) { $state.status='available'; $state.reason='Compiler completed through explicitly selected runtime' }
             else { $state.reason='Compiler failed; existing diagnostics are stale' }
         }
@@ -206,8 +205,10 @@ function Invoke-MaestroSessionStopBrainIndex {
 
 function Invoke-MaestroSessionStopEodCheck {
     $project = Get-MaestroProjectDir
-    if (-not $project -or -not (Test-Path -LiteralPath (Join-Path $project 'brain/.initialized'))) { return }
-    $brain = Join-Path $project 'brain'
+    if (-not $project) { return }
+    $paths = Get-MaestroOwnerPaths $project
+    $brain = $paths.brain_root
+    if (-not (Test-Path -LiteralPath (Join-Path $brain '.initialized'))) { return }
     $daily = Join-Path $brain 'daily'
     Assert-MaestroNoAlias $daily
     if (-not (Test-Path -LiteralPath $daily -PathType Container)) { return }

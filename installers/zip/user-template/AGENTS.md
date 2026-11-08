@@ -1,5 +1,10 @@
 # Maestro — native Codex workspace
 
+Before owner-state effects, including automatic daily continuity, follow
+`bundles/base/skills/interaction-profile/resources/owner-paths.md`. Read the
+current admitted runtime paths; missing/blocked authority permits conversation
+without persistence, never product-relative storage or inline initialization.
+
 Before a material final response or interruption, follow the daily continuity
 checkpoint recipe in `bundles/base/skills/maestro-operator/SKILL.md`: select
 bounded agent-authored summary/decisions/next actions, bind the actual session,
@@ -22,9 +27,10 @@ and current request; onboarding is resumable and never prevents useful work.
 
 Canonical product skills are projected into .agents/skills/. Native Codex
 agents live in .codex/agents/. Load each role's canonical bundles/base/agents/<role>/AGENT.md
-before using it. Keep the same brain/, accounts, identity and workspace contracts
-as Claude. Client content remains in its owning case. Read brain/accounts/.active
-to resolve the active <account>/<case>; never infer a case from a name alone.
+before using it. Owner `brain/` paths resolve through the admitted `brain_root`;
+confirmed case/workspace-local paths keep their scope. Client content remains in
+its owning case. Read `accounts/.active` under the admitted owner brain to resolve
+the active <account>/<case>; never infer a case from a name alone.
 
 Maestro remains the user-facing hub. Read bundles/base/agents/activation-policy.json
 before routing: account and case are session scope instances, not dispatched

@@ -19,11 +19,14 @@ Uso:  echo '<texto>' | python3 bundles/base/tools/skill-route.py [--max N]
       python3 bundles/base/tools/skill-route.py --max 5 "texto"
       python3 bundles/base/tools/skill-route.py --names   # so os nomes, para o rollup
       python3 bundles/base/tools/skill-route.py --rebuild
+Configuracao local: --product-root ROOT e --user-home USER; por padrao,
+o produto vem do script e o usuario vem do helper canonico.
 """
-import io, os, re, sys, json, glob, unicodedata
+import io, os, re, sys, json, glob, unicodedata, stat
 
 CACHE = os.path.join("brain", ".maestro", "skill-route-index.json")
 BUNDLES = "bundles"
+CACHE_BINDING = None
 
 STOP = set("""de da do das dos e o a os as um uma para por com em no na nos nas que se ao
 aos sem sobre entre como mais menos ja nao ou eh foi ser sao era pelo pela ate apos antes
@@ -201,10 +204,10 @@ def build():
         fmt = read_frontmatter(path)
         if not fmt:
             continue
-        bundle = path.replace("\\", "/").split("/")[1]
+        bundle = os.path.relpath(path, BUNDLES).replace("\\", "/").split("/")[0]
         skills[sid] = {
             "bundle": bundle,
-            "path": path.replace("\\", "/"),
+            "path": os.path.relpath(path, os.path.dirname(BUNDLES) or ".").replace("\\", "/"),
             "label": fmt["heading"] or sid,
             # resumo curto para o hook nao reabrir arquivo nenhum
             "summary": (triggers.get(sid) or fmt["description"])[:110],
@@ -228,18 +231,32 @@ def build():
         for t, w in weighted.items():
             inverted.setdefault(t, {})[sid] = round(w, 3)
 
-    return {"schema_version": 2, "built_from_mtime": newest_mtime(),
+    return {"schema_version": 2, "built_from_mtime": newest_mtime(), "product_binding": CACHE_BINDING,
             "skills": skills, "terms": inverted}
 
 
 def load(rebuild=False):
+    try:
+        for path in (CACHE, CACHE + ".tmp"):
+            try:
+                info = os.lstat(path)
+            except FileNotFoundError:
+                continue
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                or getattr(info, "st_file_attributes", 0) & 0x400):
+                raise OSError("unsafe skill cache leaf")
+    except OSError:
+        print("erro: cache de skills inseguro ou inacessivel", file=sys.stderr)
+        raise SystemExit(2)
+
     if not rebuild and os.path.exists(CACHE):
         try:
             with io.open(CACHE, encoding="utf-8") as source:
                 idx = json.load(source)
             if not isinstance(idx, dict):
                 raise ValueError("cache com forma inesperada")
-            if idx.get("schema_version") == 2 and idx.get("built_from_mtime") == newest_mtime():
+            if (idx.get("schema_version") == 2 and idx.get("built_from_mtime") == newest_mtime()
+                    and idx.get("product_binding") == CACHE_BINDING):
                 return idx
         except (OSError, ValueError):
             pass
@@ -330,7 +347,16 @@ def route(idx, text, top_n=5):
 
 
 def main():
+    global CACHE, BUNDLES, OPERATOR, CACHE_BINDING
+    sys.dont_write_bytecode = True
+    from maestro_paths import consume_paths
     argv = sys.argv[1:]
+    paths = consume_paths(argv, __file__, write=True)
+    CACHE = os.path.join(paths["metadata_root"], "skill-route-index.json")
+    BUNDLES = os.path.join(paths["product_root"], "bundles")
+    with io.open(os.path.join(paths["product_root"], "VERSION"), encoding="utf-8") as source:
+        CACHE_BINDING = [paths["product_root"], source.read().strip()]
+    OPERATOR = os.path.join(BUNDLES, "base", "skills", "maestro-operator", "SKILL.md")
     top_n, rebuild, names_only = 5, False, False
     if "--rebuild" in argv:
         rebuild = True

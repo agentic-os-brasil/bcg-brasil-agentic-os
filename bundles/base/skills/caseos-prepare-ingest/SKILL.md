@@ -5,6 +5,9 @@ description: Use when the owner supplies or selects professional notes, a docume
 
 # Preparar ingestão — proposta local, sem publicação
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Esta receita organiza material novo autorizado. Não chama ferramentas de escrita,
 upload, aprovação remota ou fila de envio, mesmo se o pedido disser “publique”.
 Para conexão/leitura, siga [caseos-connect](../caseos-connect/SKILL.md), sem

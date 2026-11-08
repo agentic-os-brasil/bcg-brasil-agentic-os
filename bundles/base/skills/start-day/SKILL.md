@@ -5,6 +5,9 @@ description: Open or resume the working day at whatever hour the owner appears, 
 
 # Start Day
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Compose one briefing scoped to the hours that actually remain, and record it on
 today's page.
 

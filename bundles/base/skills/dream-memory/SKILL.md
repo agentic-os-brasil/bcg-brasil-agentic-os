@@ -5,6 +5,9 @@ description: Run or inspect professional memory consolidation through the BCG Br
 
 # Dream Memory
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Operate directly on the workspace memory tree under `brain/memory/` (memória recente, memória semanal, memória de médio prazo e memória permanente). All reads and writes go through the Read, Write and Edit tools, following the invariants below.
 
 Paths beginning `brain/memory/` below are owner defaults. For an active-case

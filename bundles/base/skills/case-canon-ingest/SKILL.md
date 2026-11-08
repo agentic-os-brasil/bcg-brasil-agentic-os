@@ -5,6 +5,9 @@ description: Compile a document, interview synthesis, hypothesis, framework, or 
 
 # Skill: case-canon-ingest
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) before starting. It controls verbosity during
 extraction, but never changes classification requirements, provenance rules, or the
 confirmation-before-save invariant.

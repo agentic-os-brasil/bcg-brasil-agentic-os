@@ -5,6 +5,9 @@ description: Register, pause and resume bounded professional work with local che
 
 # Execution Continuity
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Use this skill when the owner asks to register a task, continue open work,
 pause a deliverable, create a checkpoint or resume work from a previous
 session. This is the runtime-neutral execution ledger; it is not the owner

@@ -1237,3 +1237,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Code and Desktop share the same ledger without a second memory. Initial execution evidence is artifact_snapshot; command execution, full domain parity and platform admission retain their explicit gates. Unverified Windows ownership and migrated origin remain fail-closed. Source integration is separate from native qualification, signing, publication and rollout.
 - Refs: specs/057-product-mcp-execution.md; docs/plans/2026-10-31-maestro-product-mcp.md; internal/execution; internal/datahome; adapters/mcp
 - Supersedes: none
+
+## EHOM - Resolve owner paths before runtime effects
+
+- Date: 2026-10-31
+- Status: accepted
+- Owner: Maestro
+- Context: Distributed helpers, hooks and tools assume owner brain is under the managed product. External HOME admission already exists, but a path lookup must not initialize or migrate state, and product-version changes must not change owner identity.
+- Decision: Use one canonical runtime path decision backed by datahome for Go, shipped Bash/PowerShell and Python consumers. Explicit home init uses fresh-only bootstrap; home paths is read-only. Separate product assets, owner brain/metadata, canonical DataRoot and case/workspace paths. Block unavailable or conflicting authority before effects, retaining characterized legacy identity when admitted. Ordinary startup does not run a mutating migration.
+- Consequences: Fresh external state survives managed version/path changes without product writes. New Windows external mutation remains unavailable until its ownership/confinement gates pass. Source CI tests refusal, package and classifier contracts; native qualification remains an explicit dispatch with unchanged preflight and assertions, not an inferred result of source integration. Source migration is a separate explicit Plan/Apply/Inspect/Rollback flow in zipmigration; live brain, historical data and root-bound controls cannot be conflated. E2 remains open until migration and qualification also pass.
+- Refs: specs/058-canonical-home-consumers.md; docs/plans/2026-10-31-maestro-product-mcp.md; internal/zipruntime; cmd/maestro-runtime; installers/zip/user-template/.claude/hooks; bundles/base/tools
+- Supersedes: none

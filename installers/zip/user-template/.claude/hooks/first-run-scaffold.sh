@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Maestro first-run scaffold — creates brain/ workspace on first session.
+# Maestro first-run scaffold — fills the admitted owner brain after setup.
 # Idempotent. Fail-open. Never blocks Claude Code.
 
 set +e
@@ -34,38 +34,12 @@ fi
 # de um dono novo, que e exatamente a sessao em que ela mais importa.
 # shellcheck source=lib/python.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/python.sh" 2>/dev/null || true
-BRAIN_DIR="$PROJECT_DIR/brain"
+. "$(dirname "${BASH_SOURCE[0]}")/lib/maestro-runtime.sh" || exit 0
+maestro_bind_home "$PROJECT_DIR" || exit 0
+BRAIN_DIR="$MAESTRO_BRAIN_ROOT"
 MARKER="$BRAIN_DIR/.initialized"
 LOG="$BRAIN_DIR/.scaffold.log"
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-# Validate legacy migration before logs, backfills, recovery or initialized fast
-# paths. A stale .initialized or .migrated-to-brain never authorizes scaffolding.
-if [ -d "$PROJECT_DIR/data" ] || [ -f "$BRAIN_DIR/.maestro/migration/state.json" ]; then
-  . "$(dirname "$0")/lib/maestro-runtime.sh" 2>/dev/null
-  MIG_OUT="$(maestro_runtime "$PROJECT_DIR" migration --project "$PROJECT_DIR" 2>/dev/null)"
-  MIG_STATUS=$?
-  MIG_READY=false
-  if [ "$MIG_STATUS" -eq 0 ]; then
-    case "$MIG_OUT" in
-      *'"state":"committed"'*|*'"state":"not_needed"'*) MIG_READY=true ;;
-    esac
-  fi
-  if [ "$MIG_READY" != true ]; then
-    printf '<!-- maestro:migration-blocked -->\n'
-    printf 'A atualização da sua pasta ainda não foi validada. Os arquivos originais em data/ continuam preservados; a inicialização está pendente.\n'
-    printf 'Peça ao Maestro para verificar a migração com /maestro-doctor. O diagnóstico identifica bloqueio, cópia parcial ou componente indisponível.\n'
-    [ -n "$MIG_OUT" ] && printf 'Estado verificável da migração: %s\n' "$MIG_OUT"
-    exit 0
-  fi
-  # This is a live-validated map, not an instruction to guess a new namespace.
-  case "$MIG_OUT" in
-    *'"agents":"data/agents"'*|*'"workspaces":"data/workspaces"'*|*'"canary":"data/canary"'*)
-      printf 'Conteúdo legado preservado e disponível por adaptador: valide cada raiz com maestro-runtime migration --resolve-legacy antes de ler agentes, workspaces ou canary em data/. Não descarte data/.\n'
-      printf 'Mapa validado: %s\n' "$MIG_OUT"
-      ;;
-  esac
-fi
 
 log_line() {
   ( printf '%s  %s\n' "$TS" "$1" >> "$LOG" ) 2>/dev/null
@@ -614,16 +588,7 @@ por OneDrive/MDM, ou disco cheio). O Maestro está rodando sem workspace persist
 
 Próximo passo: peça \"/maestro-doctor\" na próxima mensagem para diagnóstico."
 
-  if ! printf '%s\n' "$BREADCRUMB_BODY" > "$PROJECT_DIR/FIRST-RUN-FAILED.txt" 2>/dev/null; then
-    FALLBACK_DIR="${TMPDIR:-/tmp}"
-    FALLBACK_PATH="$FALLBACK_DIR/Maestro-FIRST-RUN-FAILED-$$.txt"
-    if printf '%s\n\n(Escrito em fallback: diretório do projeto é read-only.)\n' "$BREADCRUMB_BODY" > "$FALLBACK_PATH" 2>/dev/null; then
-      log_line "BREADCRUMB FALLBACK  wrote to $FALLBACK_PATH (project dir read-only)"
-      printf 'Maestro: setup falhou. Breadcrumb: %s\n' "$FALLBACK_PATH" >&2
-    else
-      log_line "BREADCRUMB DOUBLE-FAIL  neither project dir nor TMPDIR writable"
-    fi
-  fi
+  printf '%s\n' "$BREADCRUMB_BODY" > "$BRAIN_DIR/FIRST-RUN-FAILED.txt" 2>/dev/null || printf '%s\n' "$BREADCRUMB_BODY" >&2
   exit 0
 fi
 

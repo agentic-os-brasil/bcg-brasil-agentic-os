@@ -5,6 +5,9 @@ description: Lê as pastas SharePoint autorizadas em `brain/memory/sharepoint-co
 
 # SharePoint Ingest
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Ingerir materiais das pastas SharePoint selecionadas no onboarding e materializar racionais internos + um índice de conceitos que generaliza o contexto do trajeto de pastas. A leitura acontece **em sessão**, usando o conector SharePoint MCP do próprio Claude Code; sem coletor externo, sem enrollment paralelo.
 
 ## Interaction profile
@@ -69,7 +72,7 @@ início e continuar escreveria material de um cliente dentro de outro.
 
 ## Fluxo
 
-1. **Confirmar workspace e config.** Ler `${CLAUDE_PROJECT_DIR}/brain/memory/sharepoint-config.json`. Se ausente ou `status != "selected"`, orientar: "as pastas ainda não foram selecionadas; rodar [`maestro-onboarding`](../maestro-onboarding/SKILL.md) primeiro" e parar.
+1. **Confirmar workspace e config.** Ler `<admitted brain_root>/memory/sharepoint-config.json`. Se ausente ou `status != "selected"`, orientar: "as pastas ainda não foram selecionadas; rodar [`maestro-onboarding`](../maestro-onboarding/SKILL.md) primeiro" e parar.
 
 2. **Pré-checagem de MCP.** Ver seção acima. Fail-closed com orientação.
 

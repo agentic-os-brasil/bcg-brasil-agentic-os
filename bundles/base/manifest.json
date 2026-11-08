@@ -9,7 +9,7 @@
     "distribution_map": "bundles/base/distribution.json",
     "status": "experimental",
     "status_note": "OKF-1 shape is not yet fixed. Downstream consumers should treat this manifest as forward-compatible-only: read known fields, ignore unknown ones. Breaking changes will bump schema_version and land with a migration note in the release provider.",
-    "migration_note": "0.2.0 renomeia a workspace de `data/` para `brain/` e achata o nível `brain/` interno de cada caso. A migração é automática, roda no primeiro SessionStart via bundles/base/tools/migrate-data-to-brain.py, copia sem mover e preserva `data/` intacta. Ver README-INSTALL.md."
+    "migration_note": "A migração v1 de data para brain é uma operação local explícita pelo helper verificado; preserva data e não roda por startup ou inspeção. Estado externo usa HOME admitido pelo resolver canônico, separado de produto e DataRoot. Migração externa dos layouts existentes permanece sujeita à transação e qualificação próprias. Ver README-INSTALL.md."
   },
   "runtime_requirements": {
     "host": [

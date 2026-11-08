@@ -5,6 +5,9 @@ description: Conduct the initial governed interview for agent names, emoji-avata
 
 # Agent Identity Setup
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 ## Interaction profile
 
 Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) before starting. It controls

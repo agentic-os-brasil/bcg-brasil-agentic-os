@@ -5,6 +5,9 @@ description: Use when the owner asks to audit an existing caseOS graph slice, fi
 
 # Preparar enriquecimento — recorte existente, proposta local
 
+Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+
+
 Melhore a qualidade de um recorte autorizado, não invente conhecimento nem publique.
 Siga [caseos-connect](../caseos-connect/SKILL.md) para toda conexão/leitura.
 Para conceitos, leia [o guia](../caseos-tutorial/references/guide.md).
