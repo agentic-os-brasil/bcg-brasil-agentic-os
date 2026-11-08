@@ -140,7 +140,7 @@ func TestCompleteMethodPackets(t *testing.T) {
 					t.Fatalf("method authority pointer missing: %s", id)
 				}
 				switch id {
-				case "dream-memory", "maestro-runtime-checkup", "maestro-environment-setup", "maestro-doctor":
+				case "dream-memory", "maestro-runtime-checkup", "maestro-environment-setup", "maestro-doctor", "maestro-onboarding", "maestro-operator":
 					// Compare the complete recipe against the embedded source, removing
 					// only the separately checked authority paragraph and invocation
 					// namespace/sigil. A valid hash of stale/truncated text is insufficient.
@@ -156,7 +156,7 @@ func TestCompleteMethodPackets(t *testing.T) {
 						expected = bytes.ReplaceAll(expected, []byte("$"+methodID), []byte("/"+methodID))
 					}
 					if !bytes.Equal(projected, expected) {
-						t.Fatalf("complete maintenance recipe differs from canonical bytes: %s", id)
+						t.Fatalf("complete projected recipe differs from canonical bytes: %s", id)
 					}
 				}
 			}
