@@ -432,3 +432,7 @@ pilot readiness.
   Developed by Daniel Scardini · Julia Ribeiro · Marcelho Sanches<br>
   <a href="LICENSE.md">Maestro Proprietary License v1.0 · All rights reserved</a>
 </p>
+
+## Reviewed maintenance through MCP
+
+Eight finite maintenance jobs are available through reviewed MCP lifecycle operations; see [the maintenance guide](docs/product-mcp-maintenance.md). Qualification and enrollment are separate, and enrollment installs no background service. Private wiki operations remain a separate delivery under #506. Windows private admission and real client qualification require independent evidence.

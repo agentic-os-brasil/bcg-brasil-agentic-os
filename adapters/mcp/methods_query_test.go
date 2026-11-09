@@ -458,7 +458,7 @@ func TestMethodContractsRejectInvalidDeclarations(t *testing.T) {
 	}
 }
 
-func TestMethodPlansKeepUnregisteredDomainsUnavailable(t *testing.T) {
+func TestMethodPlansResolveMaintenanceKeepWikiUnavailable(t *testing.T) {
 	f := newMethodQueryFixture(t)
 	client := f.connect(t, "")
 	before := methodTreeSnapshot(t, f.root)
@@ -491,7 +491,11 @@ func TestMethodPlansKeepUnregisteredDomainsUnavailable(t *testing.T) {
 			continue
 		}
 		operations, ok := want[dependency.ID]
-		if !ok || dependency.State != "unavailable" || dependency.Reason != "owning_operations_not_registered" || !reflect.DeepEqual(dependency.Fulfillment, operations) || !reflect.DeepEqual(dependency.Missing, operations) {
+		state, reason, missing := "unavailable", "owning_operations_not_registered", operations
+		if dependency.ID == "domain.maintenance_lifecycle" {
+			state, reason, missing = "available", "owning_operations_registered", nil
+		}
+		if !ok || dependency.State != state || dependency.Reason != reason || !reflect.DeepEqual(dependency.Fulfillment, operations) || len(dependency.Missing) != len(missing) || (len(missing) > 0 && !reflect.DeepEqual(dependency.Missing, missing)) {
 			t.Fatalf("missing dependency lost its exact owning requirements: %+v", dependency)
 		}
 		delete(want, dependency.ID)

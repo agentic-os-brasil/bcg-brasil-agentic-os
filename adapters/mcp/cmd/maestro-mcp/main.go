@@ -10,6 +10,7 @@ import (
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"io"
@@ -23,7 +24,9 @@ var AuthorityRegistrySHA256 string
 
 func main() {
 	if err := run(); err != nil {
-		if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "knowledge-") {
+		if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "maintenance-") {
+			fmt.Fprintln(os.Stderr, "maestro: maintenance operation refused; inspect maintenance-status, review JSON stdin with maintenance-review, then maintenance-apply with the same request, exact --review-digest and explicit --confirm")
+		} else if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "knowledge-") {
 			fmt.Fprintln(os.Stderr, "maestro: knowledge operation refused; read knowledge-review from JSON stdin, then use knowledge-apply with the same request, exact --review-digest and explicit --confirm")
 		} else if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "memory-") {
 			fmt.Fprintln(os.Stderr, "maestro: memory operation refused; read the current private memory-review from JSON stdin, then retry memory-apply with the same request, its --review-digest and explicit --confirm")
@@ -38,6 +41,9 @@ func main() {
 	}
 }
 func run() error {
+	if _, err := processidentity.Current(); err != nil {
+		return err
+	}
 	if len(os.Args) < 2 {
 		return errors.New("command_required")
 	}
@@ -57,11 +63,11 @@ func run() error {
 		flags.StringVar(&proposalID, "proposal-id", "", "exact owner proposal ID")
 	}
 	switch os.Args[1] {
-	case "owner-apply", "owner-confirm-onboarding", "memory-apply", "knowledge-apply":
+	case "owner-apply", "owner-confirm-onboarding", "memory-apply", "knowledge-apply", "maintenance-apply":
 		flags.StringVar(&reviewDigest, "review-digest", "", "exact SHA-256 digest from the full local review")
 	}
 	switch os.Args[1] {
-	case "owner-apply", "owner-confirm-onboarding", "owner-track", "memory-apply", "knowledge-apply":
+	case "owner-apply", "owner-confirm-onboarding", "owner-track", "memory-apply", "knowledge-apply", "maintenance-apply":
 		flags.BoolVar(&confirmed, "confirm", false, "local operator confirms the reviewed operation")
 	}
 	if os.Args[1] == "owner-track" {
@@ -184,6 +190,37 @@ func run() error {
 			value, err = bound.MemoryReview(request)
 		} else {
 			value, err = bound.ApplyMemoryReview(request, reviewDigest, confirmed)
+		}
+		if err != nil {
+			return err
+		}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(value)
+	case "maintenance-review", "maintenance-apply", "maintenance-status", "maintenance-run":
+		bound, err := product.Open(o)
+		if err != nil {
+			return err
+		}
+		var value any
+		if os.Args[1] == "maintenance-status" {
+			value, err = bound.MaintenanceStatus()
+		} else if os.Args[1] == "maintenance-run" {
+			value, err = bound.RunMaintenance(context.Background())
+		} else {
+			body, readErr := io.ReadAll(io.LimitReader(os.Stdin, (16<<10)+1))
+			if readErr != nil || len(body) > 16<<10 {
+				return errors.New("maintenance_input_size")
+			}
+			request, decodeErr := product.DecodeMaintenanceMutation(body)
+			if decodeErr != nil {
+				return decodeErr
+			}
+			if os.Args[1] == "maintenance-review" {
+				value, err = bound.MaintenanceReview(request)
+			} else {
+				value, err = bound.ApplyMaintenanceReview(context.Background(), request, reviewDigest, confirmed)
+			}
 		}
 		if err != nil {
 			return err

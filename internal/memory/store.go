@@ -135,14 +135,21 @@ func (engine *Engine) activate(workspaceID string, artifacts []Artifact) error {
 		return err
 	}
 	commitName := committedAt.Format("20060102T150405.000000000Z") + "-" + transactionID + ".json"
-	after, err := engine.readVisibility(workspaceID)
-	if err != nil {
-		return err
+	publish := func() error {
+		after, err := engine.readVisibility(workspaceID)
+		if err != nil {
+			return err
+		}
+		if after.Generation != barrier.Generation {
+			return ErrCaptureConflict
+		}
+		return memoryRename(pending, filepath.Join(commitsRoot, commitName))
 	}
-	if after.Generation != barrier.Generation {
-		return ErrCaptureConflict
-	}
-	if err := memoryRename(pending, filepath.Join(commitsRoot, commitName)); err != nil {
+	if engine.PublicationGuard != nil {
+		if err := engine.PublicationGuard(publish); err != nil {
+			return err
+		}
+	} else if err := publish(); err != nil {
 		return err
 	}
 	if err := engine.fault("after_commit"); err != nil {

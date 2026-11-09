@@ -1282,3 +1282,7 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: No generic skill runner, filesystem dispatcher, lexical selection of explicit-only methods, caller approval flag or hidden legacy fallback is introduced. Existing method resources/prompts and Code projection consume the same package. Unsupported dependencies remain actionable unavailable. A domain dependency may name finite fulfillment_operations that are resolved against the actual registered schemas; this cannot attest host, connector, provider or runtime admission. Public SDK and restarted compiled-packet tests prove discovery and a genuine continuation journey, not all-method native execution.
 - Refs: specs/065-product-method-discovery.md; specs/056-pocock-product-skillset.md; adapters/mcp/methods.go; #460; #463
 - Supersedes: none
+
+### 2026-11-09 — Reviewed finite maintenance lifecycle (#505)
+
+Expose the eight existing owning maintenance jobs through the admitted MCP binding. Persist qualification and enrollment separately, require exact trusted review for lifecycle changes, and fence effects by current revision, executable identity, lease and source. Host wake/service installation and private wiki navigation remain separate deliveries.
