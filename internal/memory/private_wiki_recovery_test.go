@@ -92,6 +92,36 @@ func TestPrivateWikiOrphanIntentCannotActivateACommit(t *testing.T) {
 	if next, err := e.CompilePrivateWiki(context.Background(), "case-a", r.Generation); err != nil || next.Changed {
 		t.Fatalf("orphan produced graph evidence: %+v %v", next, err)
 	}
+
+	// A later admission failure must stop source publication even after its
+	// protected cohort and pending manifest were prepared successfully.
+	_, priorCommit, err := e.latestManifest("case-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeEvents := privateWikiTree(t, filepath.Join(e.workspaceRoot("case-a"), ".wiki-outbox"))
+	originalPolicy := e.Policy
+	lateAdmission := false
+	e.FaultPoint = func(point string) error {
+		if point == "after_stage_manifest" {
+			lateAdmission = true
+			e.Policy.SchemaVersion = 0
+		}
+		return nil
+	}
+	_, err = e.DreamDailyAttested(context.Background(), "case-a", day.AddDate(0, 0, 1))
+	e.Policy = originalPolicy
+	e.FaultPoint = nil
+	if !lateAdmission || !errors.Is(err, ErrPrivateWikiNativeUnavailable) {
+		t.Fatalf("source activated without current wiki admission: reached=%v err=%v", lateAdmission, err)
+	}
+	_, afterCommit, err := e.latestManifest("case-a")
+	if err != nil || afterCommit != priorCommit {
+		t.Fatalf("failed admission advanced the visible source: before=%s after=%s err=%v", priorCommit, afterCommit, err)
+	}
+	if !reflect.DeepEqual(beforeEvents, privateWikiTree(t, filepath.Join(e.workspaceRoot("case-a"), ".wiki-outbox"))) {
+		t.Fatal("failed admission published an intent or repaired its absence")
+	}
 }
 
 func TestPrivateWikiInterruptedVersionResumesWithoutReplacingFiles(t *testing.T) {
