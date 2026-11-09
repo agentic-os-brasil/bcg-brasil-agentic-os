@@ -24,9 +24,10 @@ unavailable until its migration journal is verified. Existing spike behavior sta
 The ledger must bound reads and use descriptor-relative/no-follow file operations
 for persistence and artifact evidence on admitted platforms. The product adapter
 uses `execution.OpenConfinedStore` as an independent admission gate: Unix supports
-the confined implementation; Windows remains unavailable until its implementation
-and qualification are supplied. Existing Windows Store callers retain compatibility
-and must not be represented as confined product admission. Keep revision/attempt validation, immutable
+the confined implementation; Windows uses the separately qualified ordinary-user
+private engine and its exact source-bound capability profile. Elevated or otherwise
+unqualified ownership/storage remains unavailable. Existing Windows Store callers
+retain compatibility; only the qualified confined product gate grants admission. Keep revision/attempt validation, immutable
 publication, locks and recovery. A check-then-open pathname is not the proof of
 confinement needed by this adapter. Reuse the scheduler's existing secure primitives
 where applicable; do not build a second ledger or copy source data into another store.

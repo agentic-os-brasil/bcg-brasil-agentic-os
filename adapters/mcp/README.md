@@ -51,6 +51,8 @@ are neither included nor captured in server arguments. Client configuration asks
 for Owner directory and Workspace; each participant chooses their own external
 paths. See [portable packet preparation](../../docs/product-runnable-packets.md)
 for exact emitted commands, integrity checks and the client qualification boundary.
+Windows packet proof extends the existing ordinary-user compiled public workflow;
+its four required format/version outcomes remain separate from real client loading.
 Build N+1 to a new destination; existing/newer packets and external state survive.
 Builders do not install or change host profiles, authentication or model settings.
 

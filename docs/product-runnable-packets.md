@@ -72,3 +72,17 @@ The inventory does not replace release signing, a distribution manifest or a
 transactional client updater. Agents/hooks packet assembly and real fresh-client
 installation are tracked separately; this source does not claim pilot delivery,
 SharePoint publication, platform signing or real client acceptance.
+
+## Source-bound Windows packet qualification
+
+The landed Windows private engine has its own ordinary-user qualification. Packet
+qualification additionally requires the existing compiled public workflow to run
+both emitted formats at versions 0.1.0 and 0.1.1 under that actual ordinary account.
+The closed companion inventory requires all four portable child outcomes; missing,
+skipped, duplicate or failed outcomes cannot grant elevated-host exclusions. These
+cases run the real emitted executable through init, inspect and stdio context,
+preserve the same external workspace identity across formats/versions, repeat
+preparation, and refuse overlapping state without private or managed mutation.
+This is native packet/CLI proof when that source-bound hosted run actually passes;
+it does not assert a Code/Desktop loader or UI ran. POSIX-only umask/mode/link
+controls remain separately qualified on Unix.
