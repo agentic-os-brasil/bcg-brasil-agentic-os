@@ -17,7 +17,7 @@ func TestAuthoredBrainResourceHasIndependentCanonicalIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Independently inspected canonical files: 243 method files plus six shared
-	// policy/catalogue/license/provenance/declaration resources plus 14 fixed agent assets.
+	// policy/catalogue/license/provenance/declaration resources and 14 fixed agent assets.
 	if len(resources.Resources) != 263 {
 		t.Fatalf("immutable current resource closure: got %d want 263", len(resources.Resources))
 	}
