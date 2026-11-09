@@ -22,6 +22,7 @@ import (
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
+	baseagents "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/agents"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -61,6 +62,7 @@ func TestPortableProductPacketDoesNotExportPrivateBinding(t *testing.T) {
 	if err := packaging.BuildPlugin(options); err != nil {
 		t.Fatal(err)
 	}
+	assertAgentPacket(t, destination, true)
 	body, err := os.ReadFile(filepath.Join(destination, ".mcp.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -173,7 +175,11 @@ func TestPortableProductPacketDoesNotExportPrivateBinding(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	t.Run("inventory_rejects_self_consistent_missing_or_extra_assets", func(t *testing.T) { exercisePacketInventory(t, destination) })
+	t.Run("inventory_rejects_self_consistent_missing_or_extra_assets", func(t *testing.T) {
+		for _, path := range []string{"managed/runtime/capabilities.json", "managed/agents/catalog.json", "agents/gamma-guardian.md"} {
+			exercisePacketInventory(t, destination, path)
+		}
+	})
 	sourceBefore := packetSnapshot(t, owner)
 	packetBefore := packetSnapshot(t, destination)
 	if err := packaging.BuildPlugin(options); err == nil {
@@ -206,6 +212,7 @@ func TestPortableProductPacketDoesNotExportPrivateBinding(t *testing.T) {
 		}
 		extracted := filepath.Join(root, "relocated extension [space] $() &")
 		extractPortableFixture(t, options.Destination, extracted)
+		assertAgentPacket(t, extracted, false)
 		if _, err := packaging.ValidatePacket(extracted); err != nil {
 			t.Fatal(err)
 		}
@@ -404,6 +411,7 @@ func exercisePortableRuntime(t *testing.T, packet, outside string) {
 	if err := json.Unmarshal(body, &got); err != nil || got.WorkspaceID != initialized.WorkspaceID {
 		t.Fatalf("emitted binding mismatch: %s %v", body, err)
 	}
+	assertEmittedAgentResources(t, ctx, client)
 	if err := client.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -450,7 +458,7 @@ func exercisePortableRuntime(t *testing.T, packet, outside string) {
 
 // Self-consistent rows must not authorize missing canonical payload or the
 // addition of private/development files. No repair happens on validation.
-func exercisePacketInventory(t *testing.T, packet string) {
+func exercisePacketInventory(t *testing.T, packet, name string) {
 	t.Helper()
 	manifestPath := filepath.Join(packet, packaging.InventoryName)
 	original, err := os.ReadFile(manifestPath)
@@ -462,7 +470,6 @@ func exercisePacketInventory(t *testing.T, packet string) {
 		t.Fatal(err)
 	}
 	rows := inventory["files"].([]any)
-	const name = "managed/runtime/capabilities.json"
 	assetPath := filepath.Join(packet, filepath.FromSlash(name))
 	asset, err := os.ReadFile(assetPath)
 	if err != nil {
@@ -556,4 +563,59 @@ func exercisePacketInventory(t *testing.T, packet string) {
 		t.Fatal(err)
 	}
 	restore()
+}
+
+func assertEmittedAgentResources(t *testing.T, ctx context.Context, client *mcp.ClientSession) {
+	t.Helper()
+	canonical, err := baseagents.Files()
+	if err != nil {
+		t.Fatal(err)
+	}
+	agents, methods := 0, 0
+	params := &mcp.ListResourcesParams{}
+	seen := map[string]bool{}
+	for {
+		list, err := client.ListResources(ctx, params)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, resource := range list.Resources {
+			if strings.HasPrefix(resource.URI, "maestro://methods/") {
+				methods++
+			}
+			if !strings.HasPrefix(resource.URI, "maestro://agents/") {
+				continue
+			}
+			agents++
+			path := strings.TrimPrefix(resource.URI, "maestro://agents/")
+			want, ok := canonical[path]
+			if !ok {
+				t.Fatal("unexpected emitted agent URI", resource.URI)
+			}
+			result, err := client.ReadResource(ctx, &mcp.ReadResourceParams{URI: resource.URI})
+			mime := "text/markdown"
+			if strings.HasSuffix(path, ".json") {
+				mime = "application/json"
+			}
+			if err != nil || result == nil || len(result.Contents) != 1 || result.Contents[0].Text != string(want) || result.Contents[0].MIMEType != mime || resource.MIMEType != mime || resource.Size != int64(len(want)) || resource.Meta["sha256"] != fmt.Sprintf("%x", sha256.Sum256(want)) {
+				t.Fatal("emitted agent canonical resource mismatch", resource.URI, err)
+			}
+		}
+		if list.NextCursor == "" {
+			break
+		}
+		if seen[list.NextCursor] {
+			t.Fatal("repeated emitted resource cursor")
+		}
+		seen[list.NextCursor] = true
+		params.Cursor = list.NextCursor
+	}
+	if agents != 14 || methods != 249 {
+		t.Fatalf("emitted discovery: agents=%d methods=%d", agents, methods)
+	}
+	for _, uri := range []string{"maestro://agents/../private.md", "maestro://agents/%2e%2e/private.md", "maestro://agents/maestro/AGENT.md?owner=true", "maestro://agents/brain/owner/self.md"} {
+		if _, err := client.ReadResource(ctx, &mcp.ReadResourceParams{URI: uri}); err == nil {
+			t.Fatal("unsafe emitted agent URI admitted", uri)
+		}
+	}
 }

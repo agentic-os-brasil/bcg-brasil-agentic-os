@@ -11,7 +11,7 @@ import (
 func TestInstallProjectsManagedNativeAgentsIdempotently(t *testing.T) {
 	workspace := t.TempDir()
 	first, err := Install(workspace)
-	if err != nil || first.State != "installed" || len(first.Agents) != 5 {
+	if err != nil || first.State != "installed" || len(first.Agents) != 6 {
 		t.Fatalf("status=%#v err=%v", first, err)
 	}
 	caseBody, err := os.ReadFile(filepath.Join(workspace, ".claude", "agents", "case-agent.md"))
