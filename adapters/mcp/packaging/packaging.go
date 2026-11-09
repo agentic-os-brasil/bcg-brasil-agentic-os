@@ -61,56 +61,7 @@ func prepare(o Options) (Options, string, error) {
 	platform, err := binaryPlatform(o.Server)
 	return o, platform, err
 }
-func args(o Options) []string {
-	return []string{"serve", "--product-root", o.Binding.ProductRoot, "--user-home", o.Binding.UserHome, "--workspace", o.Binding.WorkspacePath}
-}
-func BuildPlugin(options Options) error {
-	o, platform, err := prepare(options)
-	if err != nil {
-		return err
-	}
-	if err = os.Mkdir(o.Destination, 0700); err != nil {
-		return err
-	}
-	for _, dir := range []string{".claude-plugin", "scripts", "skills/operator", "skills/resume"} {
-		if err = os.MkdirAll(filepath.Join(o.Destination, dir), 0700); err != nil {
-			return err
-		}
-	}
-	name := binaryName(platform)
-	if err = copyBinary(o.Server, filepath.Join(o.Destination, "scripts", name)); err != nil {
-		return err
-	}
-	for path, value := range map[string]any{
-		".claude-plugin/plugin.json": map[string]any{"name": "maestro-product", "version": o.Version, "description": "Local participant execution workflow", "author": map[string]string{"name": "Agentic OS Brasil"}},
-		".mcp.json":                  map[string]any{"mcpServers": map[string]any{"maestro": map[string]any{"type": "stdio", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/" + name, "args": args(o)}}},
-	} {
-		body, _ := json.MarshalIndent(value, "", "  ")
-		if err = os.WriteFile(filepath.Join(o.Destination, path), body, 0600); err != nil {
-			return err
-		}
-	}
-	if err = os.WriteFile(filepath.Join(o.Destination, "skills/operator/SKILL.md"), []byte(operator), 0600); err != nil {
-		return err
-	}
-	if err = os.WriteFile(filepath.Join(o.Destination, "skills/resume/SKILL.md"), []byte(resume), 0600); err != nil {
-		return err
-	}
-	registry, err := packagedAuthority(o)
-	if err != nil {
-		return err
-	}
-	if len(registry) > 0 {
-		directory := filepath.Join(o.Destination, "managed", "trust")
-		if err = os.MkdirAll(directory, 0700); err != nil {
-			return err
-		}
-		if err = os.WriteFile(filepath.Join(directory, "release-authority-registry.json"), registry, 0600); err != nil {
-			return err
-		}
-	}
-	return writeMethods(o)
-}
+func BuildPlugin(options Options) error { return buildPortable(options, "plugin") }
 
 const operator = `---
 name: operator
@@ -140,7 +91,7 @@ Read maestro_context, list executions and ask which item only when ambiguous. Re
 // Header validation identifies the declared platform; it does not attest code
 // signing, native host execution, Desktop acceptance or Windows qualification.
 func binaryPlatform(path string) (string, error) {
-	f, err := os.Open(path)
+	f, err := scheduler.OpenRegularFile(path)
 	if err != nil {
 		return "", err
 	}
@@ -163,10 +114,11 @@ func binaryName(platform string) string {
 	return "maestro-mcp"
 }
 
-func writeMethods(o Options) error {
+func methodPayload(namespace string) (map[string][]byte, error) {
+	files := map[string][]byte{}
 	methods, err := product.PackagedMethods()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var ids []string
 	for _, method := range methods.Methods {
@@ -178,56 +130,51 @@ func writeMethods(o Options) error {
 	for _, method := range methods.Methods {
 		for relative, body := range method.Files {
 			path := "skills/" + method.ID + "/" + relative
-			target := filepath.Join(o.Destination, filepath.FromSlash(path))
-			if strings.HasSuffix(relative, ".md") {
-				body = namespaceMethodReferences(body, "maestro-product", reference)
+			if namespace != "" && strings.HasSuffix(relative, ".md") {
+				body = namespaceMethodReferences(body, namespace, reference)
 			}
-			if relative == "SKILL.md" {
+			if namespace != "" && relative == "SKILL.md" {
 				end := bytes.Index(body[4:], []byte("\n---\n"))
 				if end < 0 {
-					return errors.New("embedded method frontmatter unavailable")
+					return nil, errors.New("embedded method frontmatter unavailable")
 				}
 				end += 9
 				prefix := append([]byte(nil), body[:end]...)
 				prefix = append(prefix, []byte("\nBefore applying this method, read [Maestro product authority](../../METHODS.md) and its [canonical policy](../../agent-skill-policy.json). Use the admitted implemented MCP operations for domain effects; an instruction does not grant filesystem, native CLI, installation or external-action authority.\n")...)
 				body = append(prefix, body[end:]...)
 			}
-			if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {
-				return err
-			}
-			if err := os.WriteFile(target, body, 0600); err != nil {
-				return err
-			}
+			files[path] = append([]byte(nil), body...)
 			projectedHashes[path] = fmt.Sprintf("%x", sha256.Sum256(body))
 		}
 	}
-	provenance, err := json.MarshalIndent(map[string]any{
-		"canonical":         json.RawMessage(methods.Assets["pocock-upstream.json"]),
-		"projection":        "markdown_invocation_namespace",
-		"namespace":         "maestro-product",
-		"hash_scope":        "canonical_product_source_before_projection",
-		"authority_overlay": "SKILL.md_pointer_to_packaged_METHODS.md",
-	}, "", "  ")
-	if err != nil {
-		return err
+	if namespace != "" {
+		provenance, err := json.MarshalIndent(map[string]any{
+			"canonical":         json.RawMessage(methods.Assets["pocock-upstream.json"]),
+			"projection":        "markdown_invocation_namespace",
+			"namespace":         namespace,
+			"hash_scope":        "canonical_product_source_before_projection",
+			"authority_overlay": "SKILL.md_pointer_to_packaged_METHODS.md",
+		}, "", "  ")
+		if err != nil {
+			return nil, err
+		}
+		methods.Assets["pocock-upstream.json"] = append(provenance, '\n')
+		projection, err := json.MarshalIndent(map[string]any{"namespace": namespace, "projection": "markdown_invocation_namespace", "hash_scope": "distributed_plugin_bytes", "files": projectedHashes}, "", "  ")
+		if err != nil {
+			return nil, err
+		}
+		methods.Assets["methods-projection.json"] = append(projection, '\n')
+
 	}
-	methods.Assets["pocock-upstream.json"] = append(provenance, '\n')
-	projection, err := json.MarshalIndent(map[string]any{"namespace": "maestro-product", "projection": "markdown_invocation_namespace", "hash_scope": "distributed_plugin_bytes", "files": projectedHashes}, "", "  ")
-	if err != nil {
-		return err
-	}
-	methods.Assets["methods-projection.json"] = append(projection, '\n')
 	var names []string
 	for name := range methods.Assets {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		if err := os.WriteFile(filepath.Join(o.Destination, name), methods.Assets[name], 0600); err != nil {
-			return err
-		}
+		files[name] = append([]byte(nil), methods.Assets[name]...)
 	}
-	return nil
+	return files, nil
 }
 
 // Claude resolves plugin methods by qualified name; canonical IDs and metadata
@@ -279,55 +226,9 @@ func namespaceMethodReferences(body []byte, namespace string, reference *regexp.
 	return append(append([]byte{}, frontmatter...), projected.Bytes()...)
 }
 
-// BuildExtension writes only a manifest and selected executable to a new MCPB.
-func BuildExtension(options Options) error {
-	if filepath.Ext(options.Destination) != ".mcpb" {
-		return errors.New("destination must be a new .mcpb file")
-	}
-	if !filepath.IsAbs(options.Server) {
-		return errors.New("absolute server path required")
-	}
-	o, platform, err := prepare(options)
-	if err != nil {
-		return err
-	}
-	if platform != "darwin" && platform != "win32" {
-		return errors.New("Desktop extension requires macOS Mach-O or Windows PE executable")
-	}
-	path := "server/" + binaryName(platform)
-	manifest, err := json.MarshalIndent(map[string]any{
-		"manifest_version": "0.3", "name": "maestro-product", "version": o.Version,
-		"description":   "Local participant Maestro execution workflow",
-		"author":        map[string]string{"name": "Agentic OS Brasil"},
-		"server":        map[string]any{"type": "binary", "entry_point": path, "mcp_config": map[string]any{"command": "${__dirname}/" + path, "args": args(o)}},
-		"compatibility": map[string]any{"platforms": []string{platform}},
-	}, "", "  ")
-	if err != nil {
-		return err
-	}
-	binary, err := os.Open(o.Server)
-	if err != nil {
-		return err
-	}
-	defer binary.Close()
-	artifact, err := os.OpenFile(o.Destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		return fmt.Errorf("destination must be new; nothing overwritten: %w", err)
-	}
-	archive := zip.NewWriter(artifact)
-	writeErr := addEntry(archive, "manifest.json", 0600, bytes.NewReader(append(manifest, '\n')))
-	if writeErr == nil {
-		writeErr = addEntry(archive, path, 0700, binary)
-	}
-	if writeErr == nil {
-		registry, err := packagedAuthority(o)
-		writeErr = err
-		if writeErr == nil && len(registry) > 0 {
-			writeErr = addEntry(archive, "managed/trust/release-authority-registry.json", 0600, bytes.NewReader(registry))
-		}
-	}
-	return errors.Join(writeErr, archive.Close(), artifact.Close())
-}
+// BuildExtension carries the same closed managed product in an unbound MCPB.
+func BuildExtension(options Options) error { return buildPortable(options, "mcpb") }
+
 func addEntry(archive *zip.Writer, name string, mode os.FileMode, input io.Reader) error {
 	header := &zip.FileHeader{Name: name, Method: zip.Deflate}
 	header.SetMode(mode)
@@ -343,17 +244,32 @@ func contains(parent, child string) bool {
 	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
 func copyBinary(source, destination string) error {
-	in, err := os.Open(source)
+	in, err := scheduler.OpenRegularFile(source)
 	if err != nil {
 		return err
 	}
 	defer in.Close()
-	out, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0700)
+	before, err := in.Stat()
 	if err != nil {
 		return err
 	}
-	_, copyErr := io.Copy(out, in)
-	return errors.Join(copyErr, out.Close())
+	if before.Size() <= 0 || before.Size() > maximumPacketBytes {
+		return errors.New("server size unavailable")
+	}
+	out, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0755)
+	if err != nil {
+		return err
+	}
+	n, copyErr := io.Copy(out, io.LimitReader(in, maximumPacketBytes+1))
+	after, statErr := in.Stat()
+	closeErr := out.Close()
+	if err := errors.Join(copyErr, statErr, closeErr); err != nil {
+		return err
+	}
+	if n != before.Size() || after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime()) || !os.SameFile(before, after) {
+		return errors.New("selected server changed while copying")
+	}
+	return nil
 }
 
 // Packaging carries only the independently pinned public registry, never runtime or workspace state.

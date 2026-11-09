@@ -118,3 +118,8 @@ func Runtime() (RuntimeConfig, error) {
 	}
 	return config, nil
 }
+
+// Files returns detached copies of the canonical managed memory configuration.
+func Files() map[string][]byte {
+	return map[string][]byte{"policy.json": append([]byte(nil), policyJSON...), "runtime.json": append([]byte(nil), runtimeJSON...)}
+}

@@ -1,7 +1,6 @@
 package product_test
 
 import (
-	"archive/zip"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -12,7 +11,6 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -70,6 +68,37 @@ func TestContentUnseededStatus(t *testing.T) {
 	contentCall(t, cs, "maestro_query", map[string]any{"operation": "content.status", "authority": "model"}, true)
 	if !bytes.Equal(readContentFile(t, outside), []byte("PRIVATE_OUTSIDE_DOCUMENT")) || !reflect.DeepEqual(before, methodTreeSnapshot(t, base)) {
 		t.Fatal("refusal changed outside bytes, owner or workspace state")
+	}
+	if runtime.GOOS == "darwin" {
+		t.Run("portable_mcpb_readonly", func(t *testing.T) {
+			base := physicalTempDir(t)
+			binary := filepath.Join(base, "maestro-mcp")
+			if out, err := exec.Command("go", "build", "-o", binary, "./cmd/maestro-mcp").CombinedOutput(); err != nil {
+				t.Fatalf("actual unseeded build: %s %v", out, err)
+			}
+			packet := packaging.Options{Destination: filepath.Join(base, "readback.mcpb"), Server: binary, Version: "0.1.0", Binding: f.options}
+			if err := packaging.BuildExtension(packet); err != nil {
+				t.Fatal(err)
+			}
+			desktop := filepath.Join(base, "desktop [space] $() &")
+			extractProductPacketFixture(t, packet.Destination, desktop)
+			before := contentTree(t, desktop, true)
+			fixture := f
+			fixture.binary = filepath.Join(desktop, "server/maestro-mcp")
+			client := connectContentMCPB(t, fixture, desktop)
+			status := contentCall(t, client, "maestro_query", map[string]any{"operation": "content.status"}, false)
+			assertPolicyCoverage(t, status, "unavailable", "authority_unavailable")
+			context := contentCall(t, client, "maestro_context", map[string]any{}, false)
+			if context["workspace_id"] == nil || context["workspace_id"] == "" {
+				t.Fatal("emitted readback has no admitted workspace")
+			}
+			if err := client.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(before, contentTree(t, desktop, false)) {
+				t.Fatal("readback changed managed file bytes or modes")
+			}
+		})
 	}
 }
 
@@ -185,6 +214,14 @@ func readContentFile(t *testing.T, path string) []byte {
 func contentTree(t *testing.T, root string, readonly bool) map[string]string {
 	t.Helper()
 	out := map[string]string{}
+	// Managed file modes are part of the packet inventory. Protect the namespace
+	// with read-only directories and detect file writes/mode changes by snapshot;
+	// do not manufacture a different distribution mode just for this fixture.
+	if readonly {
+		if _, err := packaging.ValidatePacket(root); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := filepath.WalkDir(root, func(name string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -204,10 +241,7 @@ func contentTree(t *testing.T, root string, readonly bool) map[string]string {
 			return err
 		}
 		rel, _ := filepath.Rel(root, name)
-		out[rel] = fmt.Sprintf("%x", sha256.Sum256(body))
-		if readonly {
-			return os.Chmod(name, info.Mode().Perm()&0555)
-		}
+		out[rel] = fmt.Sprintf("%v:%x", info.Mode(), sha256.Sum256(body))
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -582,34 +616,12 @@ func TestContentRealJourneys(t *testing.T) {
 				if err := packaging.BuildExtension(packet); err != nil {
 					t.Fatal(err)
 				}
-				archive, err := zip.OpenReader(packet.Destination)
-				if err != nil {
-					t.Fatal(err)
-				}
 				desktop := filepath.Join(filepath.Dir(packetRoot), "desktop")
-				for _, entry := range archive.File {
-					if entry.Name != "manifest.json" && entry.Name != "server/maestro-mcp" && entry.Name != "managed/trust/release-authority-registry.json" {
-						t.Fatalf("unexpected package data %s", entry.Name)
-					}
-					reader, err := entry.Open()
-					if err != nil {
-						t.Fatal(err)
-					}
-					body, err := io.ReadAll(reader)
-					reader.Close()
-					if err != nil {
-						t.Fatal(err)
-					}
-					putContentFile(t, filepath.Join(desktop, entry.Name), body)
-					if err := os.Chmod(filepath.Join(desktop, entry.Name), entry.Mode()); err != nil {
-						t.Fatal(err)
-					}
-				}
-				archive.Close()
+				extractProductPacketFixture(t, packet.Destination, desktop)
 				contentTree(t, desktop, true)
 				desktopFixture := f
 				desktopFixture.binary = filepath.Join(desktop, "server/maestro-mcp")
-				desktopClient := connectContent(t, desktopFixture, nil, "")
+				desktopClient := connectContentMCPB(t, desktopFixture, desktop)
 				status := contentCall(t, desktopClient, "maestro_query", map[string]any{"operation": "content.status"}, false)
 				if status["state"] != "ready" || status["pack_sha256"] != packSHA {
 					t.Fatalf("Desktop packet fixed trust seed: %v", status)
@@ -754,4 +766,45 @@ func TestKnowledgeMutationRequiresClosedUTF8Request(t *testing.T) {
 	if _, err := product.DecodeKnowledgeMutation(body); err == nil {
 		t.Fatal("unfenced append admitted")
 	}
+}
+
+// Readback uses the actual emitted MCPB configuration and selected external
+// binding. This is a real packet executable test, not Desktop loader acceptance.
+func connectContentMCPB(t *testing.T, f ownerFixture, root string) *mcp.ClientSession {
+	t.Helper()
+	if status, err := packaging.ValidatePacket(root); err != nil || status.Format != "mcpb" {
+		t.Fatalf("complete MCPB unavailable: %+v %v", status, err)
+	}
+	var manifest struct {
+		Server struct {
+			Type   string `json:"type"`
+			Entry  string `json:"entry_point"`
+			Config struct {
+				Command string   `json:"command"`
+				Args    []string `json:"args"`
+			} `json:"mcp_config"`
+		} `json:"server"`
+	}
+	if err := json.Unmarshal(readContentFile(t, filepath.Join(root, "manifest.json")), &manifest); err != nil {
+		t.Fatal(err)
+	}
+	server := manifest.Server
+	wantArgs := []string{"serve", "--packet", "--product-root", "${__dirname}", "--user-home", "${user_config.user_home}", "--workspace", "${user_config.workspace}"}
+	if server.Type != "binary" || server.Entry != "server/"+productTestBinaryName() || server.Config.Command != "${__dirname}/"+server.Entry || !reflect.DeepEqual(server.Config.Args, wantArgs) {
+		t.Fatal("MCPB readback changed the exact emitted executable/argv contract")
+	}
+	replace := strings.NewReplacer("${__dirname}", root, "${user_config.user_home}", f.options.UserHome, "${user_config.workspace}", f.options.WorkspacePath)
+	command := replace.Replace(server.Config.Command)
+	if command != f.binary {
+		t.Fatal("MCPB readback selected another executable")
+	}
+	for i := range server.Config.Args {
+		server.Config.Args[i] = replace.Replace(server.Config.Args[i])
+	}
+	client, err := mcp.NewClient(&mcp.Implementation{Name: "content-mcpb-readback", Version: "1"}, nil).Connect(context.Background(), &mcp.CommandTransport{Command: exec.Command(command, server.Config.Args...), TerminateDuration: time.Second}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { client.Close() })
+	return client
 }

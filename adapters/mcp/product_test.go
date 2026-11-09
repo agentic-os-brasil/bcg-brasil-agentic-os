@@ -10,6 +10,8 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -209,8 +211,18 @@ func runWorkflow(t *testing.T, stdio bool) {
 	call(a, "maestro_apply", map[string]any{"operation": "execution.create", "objective": strings.Repeat("private-content", 2000), "next_step": "bad", "artifacts": []string{"result.md"}}, true)
 	call(a, "maestro_apply", map[string]any{"operation": "execution.create", "objective": "bad", "next_step": "bad", "artifacts": []string{"result.md"}, "require_yoda_review": true}, true)
 	if stdio {
+		portableOwner, portableWorkspace := filepath.Join(base, "portable owner [space] $() &"), filepath.Join(base, "portable workspace [space] $() &")
+		if err := os.Mkdir(portableOwner, 0700); err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{"authored.synthetic.md", "credentials.synthetic", "client-registration.synthetic.json"} {
+			if err := os.WriteFile(filepath.Join(portableOwner, name), []byte("PRESERVE_"+name), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		portableWorkspaceID := ""
 		for _, version := range []string{"0.1.0", "0.1.1"} {
-			packet := packaging.Options{Destination: filepath.Join(base, "plugin-"+version), Server: binary, Version: version, Binding: o}
+			packet := packaging.Options{Destination: filepath.Join(base, "plugin [space] $() & "+version), Server: binary, Version: version, Binding: o}
 			if err := packaging.BuildPlugin(packet); err != nil {
 				t.Fatal(err)
 			}
@@ -238,12 +250,17 @@ func runWorkflow(t *testing.T, stdio bool) {
 				t.Fatal("plugin binding is not valid JSON", err)
 			}
 			server, ok := configuration.Servers["maestro"]
-			wantArgs := []string{"serve", "--product-root", prod, "--user-home", home, "--workspace", ws}
+			wantArgs := []string{"serve", "--packet", "--product-root", "${CLAUDE_PLUGIN_ROOT}", "--user-home", "${user_config.user_home}", "--workspace", "${user_config.workspace}"}
 			if !ok || len(configuration.Servers) != 1 || server.Type != "stdio" || server.Command != "${CLAUDE_PLUGIN_ROOT}/scripts/"+productTestBinaryName() || !reflect.DeepEqual(server.Args, wantArgs) {
-				t.Fatal("plugin lost its exact decoded executable or binding arguments")
+				t.Fatal("plugin lost its exact decoded executable or external selection arguments")
 			}
-			if runtime.GOOS == "darwin" {
-				packet.Destination = filepath.Join(base, "maestro-"+version+".mcpb")
+			if !t.Run("portable_plugin_"+strings.ReplaceAll(version, ".", "_"), func(t *testing.T) {
+				portableWorkspaceID = runPortableProductPacket(t, packet.Destination, "plugin", portableOwner, portableWorkspace, portableWorkspaceID)
+			}) {
+				t.FailNow()
+			}
+			if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+				packet.Destination = filepath.Join(base, "maestro [space] $() & "+version+".mcpb")
 				if err := packaging.BuildExtension(packet); err != nil {
 					t.Fatal(err)
 				}
@@ -251,10 +268,17 @@ func runWorkflow(t *testing.T, stdio bool) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if len(archive.File) != 2 {
-					t.Fatal("MCPB must contain only manifest and executable")
+				if len(archive.File) < 250 {
+					t.Fatal("MCPB lost its complete managed payload")
 				}
 				archive.Close()
+				if !t.Run("portable_mcpb_"+strings.ReplaceAll(version, ".", "_"), func(t *testing.T) {
+					extracted := filepath.Join(base, "extension [space] $() & "+version)
+					extractProductPacketFixture(t, packet.Destination, extracted)
+					portableWorkspaceID = runPortableProductPacket(t, extracted, "mcpb", portableOwner, portableWorkspace, portableWorkspaceID)
+				}) {
+					t.FailNow()
+				}
 			}
 			after := call(connect(), "maestro_query", map[string]any{"operation": "execution.next", "item_id": id}, false)
 			if after["state"] != "completed" {
@@ -403,4 +427,256 @@ func productTestBinaryName() string {
 		return "maestro-mcp.exe"
 	}
 	return "maestro-mcp"
+}
+
+// Exercise only the actual emitted product's fixed preparation/diagnostic/server
+// journey. Expanding the two documented argv selections is not client-loader proof.
+func runPortableProductPacket(t *testing.T, root, format, owner, selected, expectedID string) string {
+	t.Helper()
+	if status, err := packaging.ValidatePacket(root); err != nil || status.Format != format {
+		t.Fatalf("complete emitted %s packet unavailable: %+v %v", format, status, err)
+	}
+	var command string
+	var args []string
+	rootToken := "${CLAUDE_PLUGIN_ROOT}"
+	if format == "plugin" {
+		var cfg struct {
+			Servers map[string]struct {
+				Type    string   `json:"type"`
+				Command string   `json:"command"`
+				Args    []string `json:"args"`
+			} `json:"mcpServers"`
+		}
+		body, err := os.ReadFile(filepath.Join(root, ".mcp.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(body, &cfg); err != nil {
+			t.Fatal(err)
+		}
+		server, ok := cfg.Servers["maestro"]
+		if !ok || len(cfg.Servers) != 1 || server.Type != "stdio" {
+			t.Fatal("emitted Code config is not one stdio server")
+		}
+		command, args = server.Command, server.Args
+		if command != rootToken+"/scripts/"+productTestBinaryName() {
+			t.Fatal("Code emitted a different executable")
+		}
+	} else if format == "mcpb" {
+		rootToken = "${__dirname}"
+		var cfg struct {
+			Server struct {
+				Type   string `json:"type"`
+				Entry  string `json:"entry_point"`
+				Config struct {
+					Command string   `json:"command"`
+					Args    []string `json:"args"`
+				} `json:"mcp_config"`
+			} `json:"server"`
+		}
+		body, err := os.ReadFile(filepath.Join(root, "manifest.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(body, &cfg); err != nil {
+			t.Fatal(err)
+		}
+		command, args = cfg.Server.Config.Command, cfg.Server.Config.Args
+		if cfg.Server.Type != "binary" || cfg.Server.Entry != "server/"+productTestBinaryName() || command != rootToken+"/"+cfg.Server.Entry {
+			t.Fatal("MCPB emitted a different executable")
+		}
+	} else {
+		t.Fatal("unknown packet fixture format")
+	}
+	wantArgs := []string{"serve", "--packet", "--product-root", rootToken, "--user-home", "${user_config.user_home}", "--workspace", "${user_config.workspace}"}
+	if !reflect.DeepEqual(args, wantArgs) {
+		t.Fatal("emitted argv captures a private binding or changes the runtime contract")
+	}
+	replace := strings.NewReplacer(rootToken, root, "${user_config.user_home}", owner, "${user_config.workspace}", selected)
+	command = replace.Replace(command)
+	for i := range args {
+		args[i] = replace.Replace(args[i])
+	}
+	managedBefore := methodTreeSnapshot(t, root)
+	ownerBefore := methodTreeSnapshot(t, owner)
+	var workspaceBefore map[string]string
+	if expectedID != "" {
+		workspaceBefore = methodTreeSnapshot(t, selected)
+	}
+	run := func(verb string, wantError bool) []byte {
+		t.Helper()
+		argv := append([]string(nil), args...)
+		argv[0] = verb
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		body, err := exec.CommandContext(ctx, command, argv...).CombinedOutput()
+		if (err != nil) != wantError {
+			t.Fatalf("emitted %s: %s %v", verb, body, err)
+		}
+		return body
+	}
+	var inspection struct {
+		Diagnostic string `json:"diagnostic"`
+		Writable   bool   `json:"writable"`
+	}
+	if err := json.Unmarshal(run("inspect", false), &inspection); err != nil {
+		t.Fatal(err)
+	}
+	if expectedID == "" {
+		if inspection.Writable || inspection.Diagnostic != "fresh-unconfirmed" {
+			t.Fatalf("fresh packet doctor: %+v", inspection)
+		}
+		run("serve", true)
+		if _, err := os.Lstat(selected); !os.IsNotExist(err) {
+			t.Fatal("startup or inspect created workspace")
+		}
+	} else if !inspection.Writable || inspection.Diagnostic != "ready" {
+		t.Fatalf("existing packet doctor: %+v", inspection)
+	}
+	if !reflect.DeepEqual(ownerBefore, methodTreeSnapshot(t, owner)) {
+		t.Fatal("read-only packet startup or inspection changed owner state")
+	}
+	var initialized struct {
+		State       string `json:"state"`
+		WorkspaceID string `json:"workspace_id"`
+	}
+	if err := json.Unmarshal(run("init", false), &initialized); err != nil || initialized.State != "ready" || initialized.WorkspaceID == "" {
+		t.Fatalf("emitted preparation: %+v %v", initialized, err)
+	}
+	if expectedID != "" {
+		if initialized.WorkspaceID != expectedID {
+			t.Fatal("new packet changed the existing workspace identity")
+		}
+		// Compare the pre-existing complete state before adopting any post-init
+		// baseline. A first setup by a new packet must not erase old private data.
+		if !reflect.DeepEqual(ownerBefore, methodTreeSnapshot(t, owner)) || !reflect.DeepEqual(workspaceBefore, methodTreeSnapshot(t, selected)) {
+			t.Fatal("first init by new packet changed existing private owner or workspace state")
+		}
+	}
+	if expectedID == "" {
+		if err := os.WriteFile(filepath.Join(selected, "authored-preserved.synthetic.md"), []byte("PRESERVE_PORTABLE_AUTHORED_WORK"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	const historyText = "PORTABLE_REVIEWED_PRIVATE_HISTORY_492"
+	reviewed := 0
+	trustedReview := func(_ context.Context, request *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		if request == nil || request.Params == nil || !strings.Contains(request.Params.Message, historyText) {
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		}
+		reviewed++
+		return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"approved": true}}, nil
+	}
+	client, err := mcp.NewClient(&mcp.Implementation{Name: "emitted-product-packet", Version: "1"}, &mcp.ClientOptions{ElicitationHandler: trustedReview}).Connect(ctx, &mcp.CommandTransport{Command: exec.CommandContext(ctx, command, args...), TerminateDuration: time.Second}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "maestro_context", Arguments: map[string]any{}})
+	if err != nil || result == nil || result.IsError || len(result.Content) != 1 {
+		t.Fatalf("emitted server context: %+v %v", result, err)
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatal("non-text emitted context")
+	}
+	var contextResult struct {
+		WorkspaceID string `json:"workspace_id"`
+	}
+	if err := json.Unmarshal([]byte(text.Text), &contextResult); err != nil || contextResult.WorkspaceID != initialized.WorkspaceID {
+		t.Fatal("emitted server bound another workspace", err)
+	}
+	if expectedID == "" {
+		captured := memoryCall(t, client, "memory.capture", map[string]any{"text": historyText}, false)
+		if captured["eligible"] != true || captured["revision"] != float64(1) || reviewed != 1 {
+			t.Fatal("canonical private canary did not receive exact trusted review")
+		}
+	} else if reviewed != 0 {
+		t.Fatal("ordinary packet readback unexpectedly requested memory mutation")
+	}
+	page := memoryCall(t, client, "memory.list", map[string]any{"limit": 2}, false)
+	captures, ok := page["captures"].([]any)
+	if !ok || len(captures) != 1 {
+		t.Fatal("canonical reviewed private history missing after packet setup")
+	}
+	capture, ok := captures[0].(map[string]any)
+	if !ok || capture["id"] == nil {
+		t.Fatal("private history has no canonical identity")
+	}
+	read := memoryCall(t, client, "memory.read", map[string]any{"capture_id": capture["id"]}, false)
+	readCapture, ok := read["capture"].(map[string]any)
+	if !ok || read["text"] != historyText || readCapture["id"] != capture["id"] || readCapture["revision"] != float64(1) || readCapture["eligible"] != true {
+		t.Fatal("canonical private history changed across packet setup")
+	}
+	authored, err := os.ReadFile(filepath.Join(selected, "authored-preserved.synthetic.md"))
+	if err != nil || string(authored) != "PRESERVE_PORTABLE_AUTHORED_WORK" {
+		t.Fatal("existing authored workspace canary was not preserved", err)
+	}
+	if err := client.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Fresh setup intentionally added the reviewed canary. Every later first
+	// init was already checked against its complete pre-init state above.
+	preparedOwner, preparedWorkspace := methodTreeSnapshot(t, owner), methodTreeSnapshot(t, selected)
+	if err := json.Unmarshal(run("inspect", false), &inspection); err != nil || !inspection.Writable || inspection.Diagnostic != "ready" {
+		t.Fatalf("ready emitted doctor: %+v %v", inspection, err)
+	}
+	run("init", false)
+	bad := append([]string(nil), args...)
+	bad[0] = "init"
+	bad[len(bad)-1] = filepath.Join(root, "forbidden private overlap")
+	if _, err := exec.CommandContext(ctx, command, bad...).CombinedOutput(); err == nil {
+		t.Fatal("overlapping packet setup admitted")
+	}
+	if !reflect.DeepEqual(preparedOwner, methodTreeSnapshot(t, owner)) || !reflect.DeepEqual(preparedWorkspace, methodTreeSnapshot(t, selected)) {
+		t.Fatal("emitted startup/repeat/failure changed private owner, authored, credential or registration state")
+	}
+	if !reflect.DeepEqual(managedBefore, methodTreeSnapshot(t, root)) {
+		t.Fatal("emitted runtime wrote managed assets")
+	}
+	for _, name := range []string{"authored.synthetic.md", "credentials.synthetic", "client-registration.synthetic.json"} {
+		body, err := os.ReadFile(filepath.Join(owner, name))
+		if err != nil || string(body) != "PRESERVE_"+name {
+			t.Fatal("private neighbour not preserved", name, err)
+		}
+	}
+	return initialized.WorkspaceID
+}
+
+// Unpack only the real builder's bounded ordinary files into an exclusive test
+// directory. The product inventory then independently validates the exact payload.
+func extractProductPacketFixture(t *testing.T, archive, destination string) {
+	t.Helper()
+	if err := os.Mkdir(destination, 0700); err != nil {
+		t.Fatal(err)
+	}
+	reader, err := zip.OpenReader(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	for _, entry := range reader.File {
+		if !fs.ValidPath(entry.Name) || strings.Contains(entry.Name, "\\") || !entry.Mode().IsRegular() || entry.UncompressedSize64 > 512<<20 {
+			t.Fatal("unsafe emitted archive entry")
+		}
+		path := filepath.Join(destination, filepath.FromSlash(entry.Name))
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		input, err := entry.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		output, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, entry.Mode().Perm())
+		if err != nil {
+			input.Close()
+			t.Fatal(err)
+		}
+		_, copyErr := io.Copy(output, io.LimitReader(input, 512<<20))
+		inputErr, outputErr := input.Close(), output.Close()
+		if copyErr != nil || inputErr != nil || outputErr != nil {
+			t.Fatal(copyErr, inputErr, outputErr)
+		}
+	}
 }

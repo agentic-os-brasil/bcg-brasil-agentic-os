@@ -36,3 +36,13 @@ func OrientationTemplate() []byte {
 func Maintenance() (maintenance.Catalog, error) {
 	return maintenance.Parse(bytes.NewReader(maintenanceJSON))
 }
+
+// Files returns detached copies of the finite canonical runtime payload.
+func Files() map[string][]byte {
+	return map[string][]byte{
+		"capabilities.json":   append([]byte(nil), capabilitiesJSON...),
+		"hook-policy.json":    append([]byte(nil), hookPolicyJSON...),
+		"orientation.md.tmpl": append([]byte(nil), orientationTemplate...),
+		"maintenance.json":    append([]byte(nil), maintenanceJSON...),
+	}
+}

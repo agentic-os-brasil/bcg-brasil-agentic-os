@@ -43,7 +43,7 @@ ordinary-account evidence from the composed revision qualifies this slice.
 The same sealed MCP executable also runs thirteen portable authored/scope test
 parents with41 exact outcomes under that ordinary account. Only after that
 cohort passes without skips may the host checker exclude those positive tests
-from the elevated host run. The original143+1 adapter outcome ledgers remain
+from the elevated host run. The current147+1 adapter outcome ledgers remain
 separate and unchanged; no extra test binary or authority owner is introduced.
 
 ## Available operations
