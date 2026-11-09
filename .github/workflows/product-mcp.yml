@@ -169,7 +169,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          ./acceptance/windows-core-pilot.ps1 -TestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/mcp.test.exe') -Server (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/maestro-mcp.exe') -AuthoredBrain -AtlasTestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/atlasops.test.exe') -CanonicalManifest (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'engine-build-manifest.json') -OutputRoot (Join-Path $env:RUNNER_TEMP 'native-engine-proof')
+          ./acceptance/windows-core-pilot.ps1 -TestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/mcp.test.exe') -Server (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/maestro-mcp.exe') -AuthoredBrain -PrivateWiki -AtlasTestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/atlasops.test.exe') -CanonicalManifest (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'engine-build-manifest.json') -OutputRoot (Join-Path $env:RUNNER_TEMP 'native-engine-proof')
       - name: Verify exact-source ordinary proof before host-positive exclusions
         id: windows_engine_proof
         if: runner.os == 'Windows'

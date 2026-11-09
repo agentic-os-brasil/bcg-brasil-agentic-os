@@ -422,10 +422,11 @@ remain read-only. Fixed metadata failure codes disclose no private error body.
 
 ### Native availability is independent of ordinary memory
 
-The private-wiki native gate remains closed on Windows until its own qualified
-publication/readback/retirement contract lands. Enabling ordinary memory does
-not upgrade a wiki cohort or emit wiki events. Unprotected ordinary memory keeps
-schema1; existing protected wiki state or an undeclared derivative refuses
-mutation instead of being downgraded. Public wiki queries return the distinct
-native-unavailable error before source access. This boundary is separate from
-any future ordinary-memory provider or filesystem admission.
+The private-wiki native gate admits the actual registered owner/workspace only
+when its supported retained-namespace operation succeeds. On Windows, complete
+source, staging/version and pointer custody supplements ordinary private-memory
+admission; the operation retains those handles through its effects. Unavailable
+custody returns the distinct native-unavailable error before source access and
+cannot downgrade a protected cohort. Current-platform execution, native host
+loading and distribution remain independently evidenced; no imported flag or
+prior startup observation can authorize publication or retirement.

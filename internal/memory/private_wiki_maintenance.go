@@ -42,6 +42,11 @@ func (engine *Engine) InspectPrivateWikiMaintenance(workspace string) (PrivateWi
 	if _, err := processidentity.Current(); err != nil {
 		return out, err
 	}
+	custody, err := engine.holdPrivateWikiWorkspace(workspace)
+	if err != nil {
+		return out, err
+	}
+	defer custody()
 	key, _, _, err := engine.privateWikiScope(workspace)
 	if err != nil {
 		return out, err

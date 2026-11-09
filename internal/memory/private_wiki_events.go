@@ -89,7 +89,7 @@ func (engine *Engine) preparePrivateWikiCohort(workspace string) (visibilityBarr
 	if err != nil {
 		return visibilityBarrier{}, err
 	}
-	if nativeErr := privateWikiNativeAvailable(); nativeErr != nil {
+	if nativeErr := engine.privateWikiNativeAvailable(workspace); nativeErr != nil {
 		if b.PrivateWiki != nil {
 			return visibilityBarrier{}, nativeErr
 		}
@@ -100,6 +100,11 @@ func (engine *Engine) preparePrivateWikiCohort(workspace string) (visibilityBarr
 		}
 		return b, nil
 	}
+	custody, err := engine.holdPrivateWikiWorkspace(workspace)
+	if err != nil {
+		return visibilityBarrier{}, err
+	}
+	defer custody()
 	if b.PrivateWiki == nil {
 		// An established protected derivative cannot be reclassified as legacy by
 		// dropping both checkpoint extension and marker version.
@@ -150,6 +155,11 @@ func (engine *Engine) preparePrivateWikiCohort(workspace string) (visibilityBarr
 // Denial is already durable before cleanup. A failed cleanup keeps the pending
 // generation in source authority and can never make an old view readable.
 func (engine *Engine) retirePrivateWiki(workspace string) error {
+	custody, err := engine.holdPrivateWikiWorkspace(workspace)
+	if err != nil {
+		return ErrPrivateWikiRetirement
+	}
+	defer custody()
 	b, err := engine.preparePrivateWikiCohort(workspace)
 	if err != nil {
 		return err
@@ -160,7 +170,7 @@ func (engine *Engine) retirePrivateWiki(workspace string) error {
 	if engine.fault("wiki_before_retirement") != nil {
 		return ErrPrivateWikiRetirement
 	}
-	if memoryRemoveAll(engine.privateWikiRoot(workspace)) != nil {
+	if privateWikiRetire(engine.privateWikiRoot(workspace)) != nil {
 		return ErrPrivateWikiRetirement
 	}
 	if engine.fault("wiki_after_retirement") != nil {
@@ -183,9 +193,28 @@ func (engine *Engine) privateWikiEventPath(workspace, commit string) string {
 }
 
 func (engine *Engine) publishPrivateWikiCommitIntent(workspace, commit string, manifest CommitManifest) error {
-	if privateWikiNativeAvailable() != nil {
+	if nativeErr := engine.privateWikiNativeAvailable(workspace); nativeErr != nil {
+		// Only an actually verified legacy checkpoint may omit wiki events.
+		// A failed admission after cohort preparation cannot bypass the durable
+		// intent that must precede visibility of a protected source commit.
+		requirement, required, err := engine.readVisibilityRequirement(workspace)
+		if err != nil || !required || requirement.SchemaVersion != 1 || engine.ownedPreflight(workspace) != nil {
+			return nativeErr
+		}
+		barrier, err := engine.readVisibility(workspace)
+		if err != nil || barrier.PrivateWiki != nil {
+			return nativeErr
+		}
+		if _, err := memoryReadDir(engine.privateWikiRoot(workspace)); !errors.Is(err, os.ErrNotExist) {
+			return nativeErr
+		}
 		return nil
 	}
+	custody, err := engine.holdPrivateWikiWorkspace(workspace)
+	if err != nil {
+		return err
+	}
+	defer custody()
 	if filepath.Base(commit) != commit || len(commit) > 192 || strings.HasPrefix(commit, ".") {
 		return ErrPrivateWikiCohort
 	}

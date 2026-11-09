@@ -69,8 +69,19 @@ func (engine *Engine) privateWikiRoot(workspace string) string {
 	return filepath.Join(engine.workspaceRoot(workspace), ".private-wiki")
 }
 
+func (engine *Engine) holdPrivateWikiWorkspace(workspace string) (func(), error) {
+	if err := engine.ownedPreflight(workspace); err != nil {
+		return nil, errors.Join(ErrPrivateWikiNativeUnavailable, ErrPrivateWikiUnavailable, err)
+	}
+	custody, err := privateWikiHold(engine.workspaceRoot(workspace))
+	if err != nil {
+		return nil, errors.Join(ErrPrivateWikiNativeUnavailable, ErrPrivateWikiUnavailable, err)
+	}
+	return custody, nil
+}
+
 func (engine *Engine) privateWikiScope(workspace string) ([]byte, string, string, error) {
-	if err := privateWikiNativeAvailable(); err != nil {
+	if err := engine.privateWikiNativeAvailable(workspace); err != nil {
 		return nil, "", "", err
 	}
 	if engine.ownedPreflight(workspace) != nil {
@@ -190,6 +201,11 @@ func (engine *Engine) CompilePrivateWiki(ctx context.Context, workspace, expecte
 	if _, err := processidentity.Current(); err != nil {
 		return PrivateWikiResult{}, err
 	}
+	custody, err := engine.holdPrivateWikiWorkspace(workspace)
+	if err != nil {
+		return PrivateWikiResult{}, err
+	}
+	defer custody()
 	if _, _, _, err := engine.privateWikiScope(workspace); err != nil {
 		return PrivateWikiResult{}, err
 	}
@@ -312,6 +328,11 @@ func (engine *Engine) currentPrivateWiki(workspace string) (privateWikiSnapshot,
 }
 
 func (engine *Engine) PrivateWikiStatus(workspace string) (PrivateWikiStatus, error) {
+	custody, err := engine.holdPrivateWikiWorkspace(workspace)
+	if err != nil {
+		return PrivateWikiStatus{State: "unavailable"}, err
+	}
+	defer custody()
 	snapshot, err := engine.privateWikiSnapshot(workspace)
 	if err != nil {
 		return PrivateWikiStatus{State: "unavailable"}, err
@@ -367,6 +388,11 @@ func (engine *Engine) ReadPrivateWiki(workspace, generation, reference string, o
 	if generation == "" && offset != 0 {
 		return PrivateWikiPage{}, ErrPrivateWikiUnavailable
 	}
+	custody, err := engine.holdPrivateWikiWorkspace(workspace)
+	if err != nil {
+		return PrivateWikiPage{}, err
+	}
+	defer custody()
 	snapshot, c, err := engine.currentPrivateWiki(workspace)
 	if err != nil {
 		return PrivateWikiPage{}, err
@@ -396,6 +422,11 @@ func (engine *Engine) ReadPrivateWiki(workspace, generation, reference string, o
 }
 
 func (engine *Engine) ReadPrivateWikiSource(workspace, generation, reference string, offset, limit int) (PrivateWikiPage, error) {
+	custody, err := engine.holdPrivateWikiWorkspace(workspace)
+	if err != nil {
+		return PrivateWikiPage{}, err
+	}
+	defer custody()
 	snapshot, c, err := engine.currentPrivateWiki(workspace)
 	if err != nil {
 		return PrivateWikiPage{}, err

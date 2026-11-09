@@ -1381,3 +1381,14 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: One functional delivery must prove actual factory-to-installed-and-packaged MCP continuation with engineering fixtures, then signed synced updates/rollback/recall and registration recovery. Production authority/native signing, devices and clients remain external evidence; no unsigned operator bypass or scaffolding PR establishes completion. A canonical read-only home-address preview grants no admission.
 - Refs: specs/020-release-distribution.md; docs/plans/2026-11-03-synced-product-distribution.md; internal/releasecontract; internal/installer; internal/installtx; adapters/mcp
 - Supersedes: none
+
+## PWKW - Retain admitted Windows wiki namespaces through effects
+
+- Date: 2026-11-09
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Accepted for issue #468 source integration; native execution remains independently qualified. The current Windows private-state owner already implements finite pinned-tree admission and deletion. Wiki snapshot, publication, readback and retirement still need their complete effect to retain that namespace rather than infer support from ordinary-memory availability.
+- Decision: Preserve the explicit wiki gate and make it validate the actual existing owned workspace and supported pinned namespace. Retain admitted workspace, staging/version parents and pointer custody through each owning effect. Use the current native kernel unchanged, and preserve source/cohort/event, denial, exact-parent and immutable readback rules. Never deserialize native authority or replace admission with a platform constant.
+- Consequences: Missing, unsafe or occupied custody remains unavailable without initialization or repair. Windows retains construction staging after leaf custody ends rather than reopening the old name for cleanup; the existing denial-before-whole-wiki-retirement operation owns removal. Unix cleanup ordering remains unchanged. Current native SDK/stdio, custody, sharing and hardlink controls must execute through the existing ordinary-account profile. Historical pre-wiki Windows owned memory is unsupported; actual old-consumer/compatible-producer positives stay on their admitted Mac/Linux platforms. No client installation, service, model, provider, source signing or distribution is activated.
+- Refs: #468; PWKC; specs/008-wiki-update-okf.md; docs/product-windows-private-wiki.md; internal/memory/private_wiki_native.go
+- Supersedes: none

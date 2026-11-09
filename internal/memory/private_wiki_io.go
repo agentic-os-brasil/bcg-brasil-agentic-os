@@ -35,6 +35,11 @@ func privateWikiSafeName(name string) bool {
 }
 
 func (engine *Engine) readPrivateWikiDirectory(directory string) (privatewiki.Candidate, error) {
+	custody, err := privateWikiHold(directory)
+	if err != nil {
+		return privatewiki.Candidate{}, ErrPrivateWikiUnavailable
+	}
+	defer custody()
 	if scheduler.ValidatePrivateDirectory(directory) != nil {
 		return privatewiki.Candidate{}, ErrPrivateWikiUnavailable
 	}
@@ -121,6 +126,11 @@ func (engine *Engine) loadPrivateWiki(workspace string, snapshot privateWikiSnap
 		return privatewiki.Candidate{}, ErrPrivateWikiRetirement
 	}
 	root := engine.privateWikiRoot(workspace)
+	custody, err := privateWikiHold(root)
+	if err != nil {
+		return privatewiki.Candidate{}, err
+	}
+	defer custody()
 	b, err := memoryReadFile(filepath.Join(root, "current.json"), 4096)
 	if errors.Is(err, os.ErrNotExist) {
 		return privatewiki.Candidate{}, os.ErrNotExist
@@ -157,17 +167,27 @@ func (engine *Engine) publishPrivateWiki(ctx context.Context, workspace string, 
 		if scheduler.ValidatePrivateDirectory(dir) != nil {
 			return ErrPrivateWikiUnavailable
 		}
+		custody, err := privateWikiHold(dir)
+		if err != nil {
+			return ErrPrivateWikiUnavailable
+		}
+		defer custody()
 	}
 	stage, err := memoryMkdirTemp(filepath.Join(root, ".staging"), "graph-")
 	if err != nil {
 		return ErrPrivateWikiUnavailable
 	}
-	defer memoryRemoveAll(stage)
+	defer privateWikiFinishStaging(stage)
 	var names []string
 	for name := range c.Files {
 		names = append(names, name)
 	}
 	sort.Strings(names)
+	stageCustody, err := privateWikiHoldParents(stage, names)
+	if err != nil {
+		return ErrPrivateWikiUnavailable
+	}
+	defer stageCustody()
 	for _, name := range names {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -211,6 +231,11 @@ func (engine *Engine) publishPrivateWiki(ctx context.Context, workspace string, 
 	if scheduler.ValidatePrivateDirectory(version) != nil {
 		return ErrPrivateWikiUnavailable
 	}
+	versionCustody, err := privateWikiHoldParents(version, names)
+	if err != nil {
+		return ErrPrivateWikiUnavailable
+	}
+	defer versionCustody()
 	for _, name := range names {
 		if err := ctx.Err(); err != nil {
 			return err

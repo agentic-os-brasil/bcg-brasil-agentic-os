@@ -100,4 +100,4 @@ Windows qualification, organizational signing, release and rollout remain separa
 
 ## Private workspace-memory navigation
 
-`wiki.status`, `wiki.read` and `wiki.source` are bounded read-only variants of `maestro_query`. Use the exact returned generation and references; queries never compile or repair. Reviewed maintenance qualifies and enrolls `wiki-incremental-sync`, `wiki-reconcile` and `wiki-integrity-check` separately. See [the owning guide](../../docs/product-mcp-wiki.md) for source eligibility, revocation and recovery. Native Windows private wiki remains unavailable.
+`wiki.status`, `wiki.read` and `wiki.source` are bounded read-only variants of `maestro_query`. Use the exact returned generation and references; queries never compile or repair. Reviewed maintenance qualifies and enrolls `wiki-incremental-sync`, `wiki-reconcile` and `wiki-integrity-check` separately. See [the owning guide](../../docs/product-mcp-wiki.md) for source eligibility, revocation and recovery. Native Windows wiki requires actual owner/pinned-namespace admission; exact-source ordinary-account execution and real client loading remain separate evidence.

@@ -1,6 +1,6 @@
 # Spec 062 - Product maintenance service
 
-Status: #505 maintenance is landed. Issue #506 composes three source-owned wiki jobs and three read-only queries on that same lifecycle, for eleven supported job IDs in the eighteen-entry catalog. Source/local/hosted/client qualification remains separately recorded. Native Windows private wiki and background wake remain unavailable. See the [operator workflow](../docs/product-mcp-maintenance.md).
+Status: #505 maintenance is landed. Issue #506 composes three source-owned wiki jobs and three read-only queries on that same lifecycle, for eleven supported job IDs in the eighteen-entry catalog. Source/local/hosted/client qualification remains separately recorded. Windows private wiki now has its own retained-namespace admission and exact-source qualification requirement; background wake remains unavailable. See the [operator workflow](../docs/product-mcp-maintenance.md).
 
 ## Outcome
 
