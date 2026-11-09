@@ -779,7 +779,7 @@ try {
             $report.original_assertions = @($results | ForEach-Object { $_.canonical_contract_proof.original_assertions })
             $report.classified_skips = @($results | ForEach-Object { $_.canonical_contract_proof.classified_skips })
             $report.unclassified_skips = @($results | ForEach-Object { $_.canonical_contract_proof.unclassified_skips })
-            $report.native_coverage = 'Eight exact owning packages, six public families, two authored Atlas families, thirteen authored adapter parents and three closed adapter packages with 169 baseline/setup outcomes; client loading remains separate.'
+            $report.native_coverage = 'Eight exact owning packages, six public families, two authored Atlas families, thirteen authored adapter parents and three closed adapter packages with 189 baseline/setup/source outcomes; client loading remains separate.'
         }
         if ($Inspection) {
             $report.elevated = $false; $report.admin_member = $false
