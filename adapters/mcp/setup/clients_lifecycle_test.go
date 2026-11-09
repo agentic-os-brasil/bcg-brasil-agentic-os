@@ -530,8 +530,81 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 			if name == "AuthenticDesktopFirstPublicationRecovery" {
 				expectedBody := read(t, expectedPath)
 				must(t, os.WriteFile(selected.Request.DesktopPath, expectedBody, 0600))
+				// Desktop candidate appearance witnesses that canonical Code
+				// inspection has completed before the Desktop generator runs.
+				// Preserve a subsequent writer's bytes, never adopt a fresh
+				// hash of uninspected content into the current private record.
+				codeCandidate := selected.Request.CodeRoot + ".candidate-" + wrongID + "-" + current.Binding.ManifestSHA256
+				desktopCandidate := selected.Request.DesktopPath + ".candidate-" + wrongID + "-" + current.Binding.ManifestSHA256 + ".mcpb"
+				type observedChange struct {
+					body []byte
+					err  error
+				}
+				changed := make(chan observedChange, 1)
+				stopWriter := make(chan struct{})
+				go func() {
+					ticker := time.NewTicker(time.Millisecond)
+					defer ticker.Stop()
+					deadline := time.NewTimer(time.Minute)
+					defer deadline.Stop()
+					for {
+						if _, err := os.Lstat(desktopCandidate); err == nil {
+							path := filepath.Join(codeCandidate, "Manage Maestro.command")
+							before, err := os.ReadFile(path)
+							if err != nil {
+								changed <- observedChange{err: err}
+								return
+							}
+							body := append(append([]byte{}, before...), []byte("# OBSERVED_POST_INSPECTION_WRITER\n")...)
+							err = os.WriteFile(path, body, 0700)
+							changed <- observedChange{body: body, err: err}
+							return
+						} else if !errors.Is(err, os.ErrNotExist) {
+							changed <- observedChange{err: err}
+							return
+						}
+						select {
+						case <-ticker.C:
+						case <-stopWriter:
+							changed <- observedChange{err: errors.New("post-inspection candidate transition was not observed")}
+							return
+						case <-deadline.C:
+							changed <- observedChange{err: errors.New("post-inspection candidate writer timed out")}
+							return
+						}
+					}
+				}()
 				selected.Request.Reconcile = true
 				review, e := installer.ReviewClientsSeeded(ctx, selected)
+				must(t, e)
+				_, changeErr := setup.ApplyClients(ctx, selected, review.Digest, true)
+				close(stopWriter)
+				mutation := <-changed
+				must(t, mutation.err)
+				if changeErr == nil {
+					t.Fatal("post-inspection Code bytes were adopted as a fresh current materialization")
+				}
+				if _, err := os.Lstat(recordFile); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("observed post-inspection change published a client record: %v", err)
+				}
+				preserved := false
+				for _, path := range []string{selected.Request.CodeRoot, codeCandidate} {
+					if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+						continue
+					} else {
+						must(t, err)
+					}
+					if bytes.Equal(read(t, filepath.Join(path, "Manage Maestro.command")), mutation.body) {
+						preserved = true
+					}
+					// Explicit operator retention preserves changed bytes while
+					// allowing a fresh, separately inspected publication.
+					must(t, os.Rename(path, path+".observed-change"))
+				}
+				if !preserved {
+					t.Fatal("observed post-inspection writer bytes were lost")
+				}
+				review, e = installer.ReviewClientsSeeded(ctx, selected)
 				must(t, e)
 				recovered, e := setup.ApplyClients(ctx, selected, review.Digest, true)
 				must(t, e)

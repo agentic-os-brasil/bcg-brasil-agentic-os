@@ -69,7 +69,16 @@ func CurrentClientMaterializer(o installer.ClientOptions) installer.ClientMateri
 		} else if e != nil {
 			return installer.ClientMaterialization{}, e
 		}
+		// The digest becomes admissible only after canonical inspection and an
+		// unchanged observation. Never promote a fresh post-publication hash.
+		expectedCode, err := installer.ClientTreeDigest(stage)
+		if err != nil {
+			return installer.ClientMaterialization{}, err
+		}
 		if err = inspectMarketplace(ctx, stage, o, identity, s.Server.SHA256); err != nil {
+			return installer.ClientMaterialization{}, err
+		}
+		if err = requireInspectedClientTree(stage, expectedCode); err != nil {
 			return installer.ClientMaterialization{}, err
 		}
 		if _, e := os.Lstat(desktopStage); errors.Is(e, os.ErrNotExist) {
@@ -79,6 +88,10 @@ func CurrentClientMaterializer(o installer.ClientOptions) installer.ClientMateri
 		} else if e != nil {
 			return installer.ClientMaterialization{}, e
 		}
+		expectedDesktop, err := installer.ClientArchiveDigest(desktopStage)
+		if err != nil {
+			return installer.ClientMaterialization{}, err
+		}
 		desktopStatus, err := inspectCurrentPacket(ctx, desktopStage, "mcpb", o, identity, s.Server.SHA256)
 		nativeContract := desktopStatus.NativeContractSHA256
 		if err != nil {
@@ -87,14 +100,25 @@ func CurrentClientMaterializer(o installer.ClientOptions) installer.ClientMateri
 		if err = inspectDesktopCandidateBinding(desktopStage, o, s.TargetOS, nativeContract); err != nil {
 			return installer.ClientMaterialization{}, err
 		}
+		if err = requireInspectedClientArchive(desktopStage, expectedDesktop); err != nil {
+			return installer.ClientMaterialization{}, err
+		}
 		material := installer.ClientMaterialization{Release: s.Release, ManifestSHA256: s.Binding.ManifestSHA256, ClientInputsSHA256: s.Binding.ClientInputsSHA256, ServerSHA256: s.Server.SHA256, EmbeddedInputsSHA256: s.Server.EmbeddedInputsSHA256, BundleSHA256: s.Binding.BundleSHA256, CodeRoot: o.Request.CodeRoot, DesktopPath: o.Request.DesktopPath, DesktopNativeContractSHA256: nativeContract, BootstrapServerSHA256: s.Server.SHA256, BootstrapEmbeddedInputsSHA256: s.Server.EmbeddedInputsSHA256}
 		// First publication may encounter an already-swapped destination. Admit
 		// its exact reviewed native contract before any Code or Desktop swap.
 		if old == nil {
 			if _, e := os.Lstat(o.Request.DesktopPath); e == nil {
+				before, e := installer.ClientArchiveDigest(o.Request.DesktopPath)
+				if e != nil {
+					return material, e
+				}
 				if e = inspectCurrentDesktopContract(ctx, o.Request.DesktopPath, o, identity, s.Server.SHA256, nativeContract); e != nil {
 					return material, e
 				}
+				if e = requireInspectedClientArchive(o.Request.DesktopPath, before); e != nil {
+					return material, e
+				}
+				expectedDesktop = before
 			} else if !errors.Is(e, os.ErrNotExist) {
 				return material, e
 			}
@@ -108,6 +132,10 @@ func CurrentClientMaterializer(o installer.ClientOptions) installer.ClientMateri
 				if e = inspectCurrentDesktopContract(ctx, o.Request.DesktopPath, o, identity, s.Server.SHA256, nativeContract); e != nil {
 					return material, e
 				}
+				if e = requireInspectedClientArchive(o.Request.DesktopPath, sha); e != nil {
+					return material, e
+				}
+				expectedDesktop = sha
 				adoptCurrent = true
 			}
 		}
@@ -120,6 +148,7 @@ func CurrentClientMaterializer(o installer.ClientOptions) installer.ClientMateri
 			if err = packaging.InspectReusedStableExtension(m.DesktopPath, expected, m.DesktopSHA256, m.BootstrapServerSHA256, m.BootstrapEmbeddedInputsSHA256, m.DesktopNativeContractSHA256); err != nil {
 				return material, err
 			}
+			expectedDesktop = m.DesktopSHA256
 			material.BootstrapServerSHA256 = m.BootstrapServerSHA256
 			material.BootstrapEmbeddedInputsSHA256 = m.BootstrapEmbeddedInputsSHA256
 		}
@@ -141,10 +170,10 @@ func CurrentClientMaterializer(o installer.ClientOptions) installer.ClientMateri
 		// candidates. Hash-then-unlink cannot guarantee an uncooperative writer's
 		// later bytes survive, so this operation performs no candidate cleanup.
 
-		material.CodeTreeSHA256, err = installer.ClientTreeDigest(material.CodeRoot)
-		if err != nil {
+		if err = requireInspectedClientTree(material.CodeRoot, expectedCode); err != nil {
 			return material, err
 		}
+		material.CodeTreeSHA256 = expectedCode
 		material.Backups, err = inspectClientBackupInventory(o, old)
 		if err != nil {
 			return material, err
@@ -157,9 +186,36 @@ func CurrentClientMaterializer(o installer.ClientOptions) installer.ClientMateri
 				material.DesktopBackupSHA256 = backup.SHA256
 			}
 		}
-		material.DesktopSHA256, err = installer.ClientArchiveDigest(material.DesktopPath)
-		return material, err
+		if err = requireInspectedClientArchive(material.DesktopPath, expectedDesktop); err != nil {
+			return material, err
+		}
+		material.DesktopSHA256 = expectedDesktop
+		return material, nil
 	}
+}
+
+// These are observable identity checks, not physical custody or atomic
+// publication guarantees. A mismatch leaves all bytes and prior records intact;
+// the caller reports pending/partial materialization for explicit reconciliation.
+func requireInspectedClientTree(path, expected string) error {
+	actual, err := installer.ClientTreeDigest(path)
+	if err != nil {
+		return err
+	}
+	if actual != expected {
+		return errors.New("Code packet changed after canonical inspection; preserve bytes and reconcile partial publication")
+	}
+	return nil
+}
+func requireInspectedClientArchive(path, expected string) error {
+	actual, err := installer.ClientArchiveDigest(path)
+	if err != nil {
+		return err
+	}
+	if actual != expected {
+		return errors.New("Desktop package changed after canonical inspection; preserve bytes and reconcile partial publication")
+	}
+	return nil
 }
 func currentGeneratorArgs(command, destination, server string, o installer.ClientOptions, s installtx.State) []string {
 	return []string{command, "--destination", destination, "--server", server, "--version", s.Release, "--product-root", o.ManagedRoot, "--user-home", o.UserHome, "--workspace", o.Request.Workspace, "--installed-manifest", s.Binding.ManifestSHA256, "--installed-client-inputs", s.Binding.ClientInputsSHA256, "--carrier-profile", installer.StableClientProfile, "--carrier-id", o.Request.CarrierID, "--carrier-version", installer.StableCarrierVersion}
