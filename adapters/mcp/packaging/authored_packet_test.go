@@ -54,11 +54,20 @@ func assertAuthoredBrainOperatorResource(t *testing.T, options packaging.Options
 	if !ok {
 		t.Fatal("packet lacks the admitted Maestro binding")
 	}
-	command := strings.ReplaceAll(server.Command, "${CLAUDE_PLUGIN_ROOT}", options.Destination)
+	replace := strings.NewReplacer(
+		"${CLAUDE_PLUGIN_ROOT}", options.Destination,
+		"${user_config.user_home}", options.Binding.UserHome,
+		"${user_config.workspace}", options.Binding.WorkspacePath,
+	)
+	command := replace.Replace(server.Command)
+	args := append([]string(nil), server.Args...)
+	for i := range args {
+		args[i] = replace.Replace(args[i])
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	client := mcp.NewClient(&mcp.Implementation{Name: "packet-authored-recipe-proof", Version: "1"}, nil)
-	session, err := client.Connect(ctx, &mcp.CommandTransport{Command: exec.CommandContext(ctx, command, server.Args...), TerminateDuration: time.Second}, nil)
+	session, err := client.Connect(ctx, &mcp.CommandTransport{Command: exec.CommandContext(ctx, command, args...), TerminateDuration: time.Second}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
