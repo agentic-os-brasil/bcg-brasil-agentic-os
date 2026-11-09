@@ -547,7 +547,10 @@ func TestWorkspaceTemporaryAliasPreservesExactBinding(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix temporary alias; Windows workspace mutation requires native qualification")
 	}
-	base := t.TempDir()
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	physical, temporary := filepath.Join(base, "physical"), filepath.Join(base, "temporary")
 	if err := os.Mkdir(temporary, 0700); err != nil {
 		t.Fatal(err)
