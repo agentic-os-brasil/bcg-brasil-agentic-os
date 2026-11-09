@@ -243,6 +243,11 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 20
     steps:
+      - name: Select physical macOS temporary directory
+        shell: bash
+        run: |
+          physical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          printf 'TMPDIR=%s\nGOTMPDIR=%s\n' "$physical_temp" "$physical_temp" >> "$GITHUB_ENV"
       - name: Bind modern fixture paths to the assigned runner
         shell: bash
         env:
