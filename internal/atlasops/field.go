@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"path"
 	"strings"
-
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 // SetFieldRequest sets one declared field without rewriting the prose around
@@ -56,12 +54,21 @@ func (engine *Engine) SetField(request SetFieldRequest) (Result, error) {
 	if strings.ContainsAny(value, "\r\n") || len(value) > maximumFieldBytes {
 		return Result{}, fmt.Errorf("owner atlas field value must be a single line under %d bytes", maximumFieldBytes)
 	}
+	release, err := engine.beginMutation()
+	if err != nil {
+		return Result{}, err
+	}
+	defer func() { _ = release() }()
 	if err := engine.authorize(request.Provenance, "set-field", relative); err != nil {
 		return Result{}, err
 	}
 
 	operationID := engine.operationID("set-field", relative, request.Provenance.IdempotencyKey)
-	if recorded, found, err := engine.recordedResult(operationID); err != nil {
+	requestDigest, err := digestRequest(request)
+	if err != nil {
+		return Result{}, err
+	}
+	if recorded, found, err := engine.recordedResult(operationID, requestDigest); err != nil {
 		return Result{}, err
 	} else if found {
 		return recorded, nil
@@ -85,6 +92,7 @@ func (engine *Engine) SetField(request SetFieldRequest) (Result, error) {
 		unchangedReason:  "field already holds this value",
 		expectedRevision: request.ExpectedRevision,
 		provenance:       request.Provenance,
+		requestDigest:    requestDigest,
 	})
 }
 
@@ -111,12 +119,21 @@ func (engine *Engine) Link(request LinkRequest) (Result, error) {
 	if label == "" || strings.ContainsAny(label, "\r\n[]") {
 		return Result{}, errors.New("owner atlas link label is required and must not contain brackets")
 	}
+	release, err := engine.beginMutation()
+	if err != nil {
+		return Result{}, err
+	}
+	defer func() { _ = release() }()
 	if err := engine.authorize(request.Provenance, "link", relative); err != nil {
 		return Result{}, err
 	}
 
 	operationID := engine.operationID("link", relative, request.Provenance.IdempotencyKey)
-	if recorded, found, err := engine.recordedResult(operationID); err != nil {
+	requestDigest, err := digestRequest(request)
+	if err != nil {
+		return Result{}, err
+	}
+	if recorded, found, err := engine.recordedResult(operationID, requestDigest); err != nil {
 		return Result{}, err
 	} else if found {
 		return recorded, nil
@@ -149,6 +166,7 @@ func (engine *Engine) Link(request LinkRequest) (Result, error) {
 		unchangedReason:  "page already references this target",
 		expectedRevision: request.ExpectedRevision,
 		provenance:       request.Provenance,
+		requestDigest:    requestDigest,
 	})
 }
 
@@ -218,6 +236,7 @@ type commitRequest struct {
 	unchangedReason  string
 	expectedRevision string
 	provenance       Provenance
+	requestDigest    string
 }
 
 func (engine *Engine) commitEdit(request commitRequest) (Result, error) {
@@ -235,7 +254,7 @@ func (engine *Engine) commitEdit(request commitRequest) (Result, error) {
 		result.Revision = revision
 		result.Proposal = request.updated
 		result.Reason = "page revision changed since it was read; nothing was written"
-		if err := engine.record(result); err != nil {
+		if err := engine.record(result, request.requestDigest); err != nil {
 			return Result{}, err
 		}
 		return result, nil
@@ -245,18 +264,37 @@ func (engine *Engine) commitEdit(request commitRequest) (Result, error) {
 		result.State = StateUnchanged
 		result.Revision = revision
 		result.Reason = request.unchangedReason
-		if err := engine.record(result); err != nil {
+		if err := engine.record(result, request.requestDigest); err != nil {
 			return Result{}, err
 		}
 		return result, nil
 	}
 
-	if err := scheduler.ReplacePrivateFile(engine.pagePath(request.page), []byte(request.updated)); err != nil {
-		return Result{}, err
+	if len(request.updated) > maximumPageBytes {
+		return Result{}, fmt.Errorf("atlas page exceeds %d bytes", maximumPageBytes)
 	}
 	result.State = StateWritten
 	result.Revision = digest(request.updated)
-	if err := engine.record(result); err != nil {
+	if err := engine.prepare(result, revision, request.requestDigest); err != nil {
+		return Result{}, err
+	}
+	if err := engine.validateBinding(); err != nil {
+		return Result{}, err
+	}
+	if err := engine.authorize(request.provenance, request.operation, request.page); err != nil {
+		return Result{}, err
+	}
+	if err := publishAtlasFile(engine.pagePath(request.page), []byte(request.updated), false, engine.workspace != nil); err != nil {
+		return Result{}, err
+	}
+	if engine.afterPageEffect != nil {
+		if err := engine.afterPageEffect(); err != nil {
+			return Result{}, err
+		}
+	}
+	result.State = StateWritten
+	result.Revision = digest(request.updated)
+	if err := engine.record(result, request.requestDigest); err != nil {
 		return Result{}, err
 	}
 	return result, nil

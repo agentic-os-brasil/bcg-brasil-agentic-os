@@ -8,9 +8,6 @@ import (
 	"path"
 	"strings"
 	"time"
-
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/privatelock"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 // A standing grant is how the owner authorizes a ritual to maintain part of
@@ -195,7 +192,8 @@ func (engine *Engine) AuthorizeGrant(grantID, operation, page string) error {
 	if err != nil {
 		return err
 	}
-	if !strings.HasPrefix(relative+"/", grant.Segment) && !strings.HasPrefix(relative, grant.Segment) {
+	segment := strings.TrimSuffix(grant.Segment, "/")
+	if relative != segment && !strings.HasPrefix(relative, segment+"/") {
 		return fmt.Errorf("standing grant %q does not cover %s", grantID, relative)
 	}
 	return nil
@@ -255,8 +253,9 @@ func (engine *Engine) updateGrant(grantID string, mutate func(*Grant) error) err
 }
 
 type grantsFile struct {
-	SchemaVersion int     `json:"schema_version"`
-	Grants        []Grant `json:"grants"`
+	SchemaVersion int             `json:"schema_version"`
+	Grants        []Grant         `json:"grants"`
+	Workspace     *workspaceScope `json:"workspace,omitempty"`
 }
 
 func (engine *Engine) grantsPath() string {
@@ -264,7 +263,10 @@ func (engine *Engine) grantsPath() string {
 }
 
 func (engine *Engine) readGrants() ([]Grant, error) {
-	body, err := scheduler.ReadPrivateFile(engine.grantsPath(), maximumPageBytes)
+	if err := engine.validateBinding(); err != nil {
+		return nil, err
+	}
+	body, err := readAtlasFile(engine.grantsPath(), maximumPageBytes, true)
 	if err != nil {
 		if isNotExist(err) {
 			return nil, nil
@@ -278,16 +280,16 @@ func (engine *Engine) readGrants() ([]Grant, error) {
 	if document.SchemaVersion != schemaVersion {
 		return nil, fmt.Errorf("owner atlas grant schema %d is not supported", document.SchemaVersion)
 	}
+	if err := engine.validateScope(document.Workspace); err != nil {
+		return nil, err
+	}
 	return document.Grants, nil
 }
 
 // mutateGrants serializes read-modify-write behind a cross-process lock so two
 // sessions cannot silently drop one another's grant.
 func (engine *Engine) mutateGrants(mutate func([]Grant) ([]Grant, error)) error {
-	if err := scheduler.EnsurePrivateDirectory(engine.journalDirPath("")); err != nil {
-		return err
-	}
-	release, err := privatelock.Acquire(engine.journalDirPath("grants.lock"))
+	release, err := engine.beginMutation()
 	if err != nil {
 		return err
 	}
@@ -301,13 +303,16 @@ func (engine *Engine) mutateGrants(mutate func([]Grant) ([]Grant, error)) error 
 	if err != nil {
 		return err
 	}
-	body, err := json.Marshal(grantsFile{SchemaVersion: schemaVersion, Grants: updated})
+	body, err := json.Marshal(grantsFile{SchemaVersion: schemaVersion, Grants: updated, Workspace: engine.workspace})
 	if err != nil {
 		return err
 	}
-	writeErr := scheduler.WriteNewPrivateFile(engine.grantsPath(), body)
+	if err := engine.validateBinding(); err != nil {
+		return err
+	}
+	writeErr := publishAtlasFile(engine.grantsPath(), body, true, true)
 	if errors.Is(writeErr, os.ErrExist) {
-		return scheduler.ReplacePrivateFile(engine.grantsPath(), body)
+		return publishAtlasFile(engine.grantsPath(), body, false, true)
 	}
 	return writeErr
 }
