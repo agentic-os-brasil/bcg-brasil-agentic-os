@@ -5,6 +5,41 @@ description: Register, pause and resume bounded professional work with local che
 
 # Execution Continuity
 
+## MCP product and plugin
+
+When the installed runtime exposes `maestro_context`, confirm its admitted
+workspace and use the current `maestro_query`/`maestro_apply` schemas. The product
+ledger owns this route; model input selects no HOME or workspace root.
+
+1. For a new owner-requested task, query `execution.list` and avoid an equivalent
+   duplicate. Create with `execution.create`, the objective, next step and the
+   selected existing workspace-relative artifacts. This binds their snapshot
+   contract; it does not create missing artifacts or execute their contents.
+2. Use `execution.start` with the actual current revision. It returns the
+   attempt ID used by subsequent writes. Produce requested artifacts only
+   through the separately authorized workspace or host capability.
+3. Before pausing, save the owner-selected concise summary and next step with
+   `execution.checkpoint`, then `execution.pause`, carrying the actual revision
+   and attempt ID at each step. A lifecycle hook does not supply checkpoint text.
+4. To continue in another session or client, query `execution.next` for the
+   selected item. If paused, call `execution.resume` with its current revision,
+   then read `execution.next` again and use the newly returned attempt ID.
+   Reconcile a revision/attempt conflict by reading current state.
+5. Read `execution.contract` for its actual criteria and relative artifact
+   references. Use `execution.evidence` after producing the requested artifact;
+   `execution.complete` revalidates the evidence. Report only the observed state.
+
+Present the work and next step in the selected interaction profile. Product
+continuity ends here. An unavailable operation stays pending; creating private
+task files, raw ledger records or a replacement Markdown queue is not recovery.
+Native Code hooks and Desktop hooks are not prerequisites for these operations.
+
+## Positively identified legacy workspace
+
+Use the remainder only when installation metadata identifies the older workspace
+route and its owning filesystem operations are admitted. Missing MCP capability
+does not select this legacy route.
+
 Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
 
 
