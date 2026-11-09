@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlasops"
@@ -118,6 +119,36 @@ func TestWindowsAuthoredBrainPilot(t *testing.T) {
 	if read["revision"] != linked["revision"] || !strings.Contains(finalText, "The native project scope has been reviewed.") || !strings.Contains(finalText, "- **Status:** ready for native review") || !strings.Contains(finalText, "[Native sponsor](../people/native-sponsor.md)") || strings.Count(finalText, "Native reviewed decision.") != 1 {
 		t.Fatal("native edit workflow lost prose, field, reference or exact-once decision", read)
 	}
+	for _, operation := range []string{"create", "update"} {
+		candidatePage := page
+		if operation == "create" {
+			candidatePage = "projects/native-ambiguous.md"
+		}
+		for _, prefix := range []string{"id: [ignored]\n", "id: {ignored: value}\n", "context: {source: first}\ncontext: {source: second}\n"} {
+			beforeWorkspace, beforeOwner := windowsCoreTree(t, workspacePath), windowsCoreTree(t, home)
+			beforeReviews := reviews.Load()
+			candidate := strings.Replace(authoredBrief(id, candidatePage, "Native reviewed brief"), "---\n", "---\n"+prefix, 1)
+			args := map[string]any{"page": candidatePage, "text": candidate}
+			if operation == "update" {
+				args["expected_page_revision"] = linked["revision"]
+			}
+			brainCall(t, cs, operation, args, true)
+			if reviews.Load() != beforeReviews || !reflect.DeepEqual(beforeWorkspace, windowsCoreTree(t, workspacePath)) || !reflect.DeepEqual(beforeOwner, windowsCoreTree(t, home)) {
+				t.Fatal("ambiguous native metadata reached review or changed page/journal/grant/owner state")
+			}
+		}
+	}
+	const unicodePage = "projects/native-unicode.md"
+	unicodeBody := authoredBrief(id, unicodePage, "Native Unicode brief") + strings.Repeat("colaboração 漢字 🎷\n", 900)
+	brainCall(t, cs, "create", map[string]any{"page": unicodePage, "text": unicodeBody}, false)
+	for offset := 0; offset < len(unicodeBody); {
+		fragment := brainCall(t, cs, "read", map[string]any{"page": unicodePage, "purpose": "Read actual native bounded UTF8 continuation", "offset": offset, "max_bytes": 4096}, false)
+		text := fragment["text"].(string)
+		if len(text) == 0 || len(text) > 4096 || !utf8.ValidString(text) || !strings.HasPrefix(unicodeBody[offset:], text) {
+			t.Fatal("native UTF8 page split or exceeded its bound", offset, len(text))
+		}
+		offset += len(text)
+	}
 	later := strings.Replace(finalText, "## Related", "- Native newer work.\n\n## Related", 1)
 	intervene = func() error {
 		return scheduler.WritePrivateFileAtomic(filepath.Join(workspacePath, "brain", filepath.FromSlash(page)), []byte(later))
@@ -205,7 +236,7 @@ func TestWindowsAuthoredBrainPilot(t *testing.T) {
 	if !reflect.DeepEqual(managed, windowsCoreTree(t, product)) {
 		t.Fatal("authored native journey changed managed product")
 	}
-	t.Log("native_authored_brain shipping_server=true attended_create=true restarted_read=true update=true set_field=true link=true exact_replay_all_edits=true stale_preserves_newer=true declined_prepare_readonly=true hardlink_refused=true selected_case_available=true foreign_case_aliases_refused=true legacy_knowledge_allowed=true knowledge_scope_refused=true crlf_preserved=true")
+	t.Log("native_authored_brain shipping_server=true attended_create=true restarted_read=true update=true set_field=true link=true exact_replay_all_edits=true stale_preserves_newer=true declined_prepare_readonly=true hardlink_refused=true selected_case_available=true foreign_case_aliases_refused=true legacy_knowledge_allowed=true knowledge_scope_refused=true crlf_preserved=true duplicate_metadata_refused_before_review=true utf8_continuations_bounded=true")
 
 	t.Run("eager_registered_brain_identity", func(t *testing.T) {
 		local := windowsPrivateRoot(t)

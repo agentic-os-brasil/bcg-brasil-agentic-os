@@ -16,10 +16,12 @@ import (
 // DELETE sharing to broaden custody after the lock is acquired.
 func (engine *Engine) acquireCorpusLock() (func() error, error) {
 	var held []*winprivate.Directory
-	closeHeld := func() {
+	closeHeld := func() error {
+		var result error
 		for i := len(held) - 1; i >= 0; i-- {
-			_ = held[i].Close()
+			result = errors.Join(result, held[i].Close())
 		}
+		return result
 	}
 	paths := []string{engine.root, engine.journalDirPath("")}
 	if engine.workspace != nil {
@@ -28,20 +30,17 @@ func (engine *Engine) acquireCorpusLock() (func() error, error) {
 	for _, path := range paths {
 		d, err := winprivate.OpenPinned(path)
 		if err != nil {
-			closeHeld()
-			return nil, err
+			return nil, errors.Join(err, closeHeld())
 		}
 		held = append(held, d)
 	}
 	if err := engine.validateBinding(); err != nil {
-		closeHeld()
-		return nil, err
+		return nil, errors.Join(err, closeHeld())
 	}
 	journal := held[len(held)-1]
 	file, err := journal.OpenLock("grants.lock")
 	if err != nil {
-		closeHeld()
-		return nil, err
+		return nil, errors.Join(err, closeHeld())
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	for {
@@ -51,34 +50,30 @@ func (engine *Engine) acquireCorpusLock() (func() error, error) {
 			break
 		}
 		if !errors.Is(err, windows.ERROR_LOCK_VIOLATION) {
-			_ = file.Close()
-			closeHeld()
-			return nil, err
+			return nil, errors.Join(err, file.Close(), closeHeld())
 		}
 		if time.Now().After(deadline) {
-			_ = file.Close()
-			closeHeld()
-			return nil, privatelock.ErrBusy
+			return nil, errors.Join(privatelock.ErrBusy, file.Close(), closeHeld())
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	if err = engine.validateBinding(); err != nil {
+	release := func() error {
 		var o windows.Overlapped
-		_ = windows.UnlockFileEx(windows.Handle(file.Fd()), 0, 1, 0, &o)
-		_ = file.Close()
-		closeHeld()
-		return nil, err
+		return errors.Join(windows.UnlockFileEx(windows.Handle(file.Fd()), 0, 1, 0, &o), file.Close(), closeHeld())
 	}
-	return func() error {
-		var o windows.Overlapped
-		unlockErr := windows.UnlockFileEx(windows.Handle(file.Fd()), 0, 1, 0, &o)
-		closeErr := file.Close()
-		closeHeld()
-		if unlockErr != nil {
-			return unlockErr
-		}
-		return closeErr
-	}, nil
+	info, err := file.Stat()
+	if err != nil {
+		return nil, errors.Join(err, release())
+	}
+	// Legacy token writers do not honor the native byte-range lock. Inspect
+	// the same qualified handle only after acquiring it; never truncate/repair.
+	if info.Size() != 0 {
+		return nil, errors.Join(errors.New("private transition lock contains legacy or unexpected data; preserve it and close older clients before retrying"), release())
+	}
+	if err = engine.validateBinding(); err != nil {
+		return nil, errors.Join(err, release())
+	}
+	return release, nil
 }
 
 // File.Stat eagerly snapshots native file identity from the held handle. A

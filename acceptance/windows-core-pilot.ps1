@@ -255,7 +255,7 @@ try {
     }
     if (-not $Inspection) {
     $families = @('Core', 'DirectoryDurability', 'PrivateState', 'OwnerReview')
-    if ($AuthoredBrain) { $families += 'AuthoredBrain' }
+    if ($AuthoredBrain) { $families += @('AuthoredBrain', 'AuthoredBrainPartialPreparation') }
     if ($PrivateWiki) { $families += 'PrivateWiki' }
     $pattern = '^TestWindows(' + ($families -join '|') + ')Pilot$'
     $coreOutput = @(& $TestBinary '-test.run' $pattern '-test.v' '-test.timeout=600s')
