@@ -136,7 +136,9 @@ SCAR and Spec020's stable-current-client section are the exact accepted contract
 Generate packets through the authenticated current server; keep release-bound
 packets unchanged and stable carriers explicitly typed. The finite installer
 record is outside source custody/Previous. Compatible unchanged Desktop reuse
-is a candidate requiring native qualification, with manual updated-MCPB fallback.
+requires native qualification. Regenerating or manually installing the MCPB keeps
+the same external-launcher contract; a client policy rejecting it makes the stable
+carrier unavailable. An ordinary unmanaged MCPB is a separate profile.
 
 Fresh owner after Task2 gate. Own the exact Code registration/update adapter,
 Desktop confirmation handoff, package-generation/activation receipts, crash
