@@ -83,12 +83,11 @@
       "method_ids": [
         "brain-index"
       ],
-      "required_operations": [
-        "memory.context",
-        "memory.search"
-      ],
+      "required_operations": [],
       "effects": [
-        "read"
+        "read",
+        "host_execution",
+        "write_owner"
       ],
       "output_kinds": [
         "navigation_page",
@@ -98,17 +97,12 @@
         {
           "id": "domain.authored_brain_compiler",
           "kind": "domain",
-          "required": false
+          "required": true
         },
         {
-          "id": "domain.workspace_navigation",
-          "kind": "domain",
-          "required": true,
-          "fulfillment_operations": [
-            "wiki.read",
-            "wiki.source",
-            "wiki.status"
-          ]
+          "id": "host.command_run",
+          "kind": "host",
+          "required": true
         }
       ]
     },

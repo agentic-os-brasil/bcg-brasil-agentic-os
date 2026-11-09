@@ -567,6 +567,48 @@ func TestMethodQueryPacketRestartContinuation(t *testing.T) {
 	}
 }
 
+func TestMethodQueryBrainIndexDefaultRequirementsSDK(t *testing.T) {
+	f := newMethodQueryFixture(t)
+	client := f.connect(t, "")
+	before := methodTreeSnapshot(t, f.root)
+	var plan struct {
+		State        string   `json:"state"`
+		Execution    string   `json:"execution_state"`
+		Effects      []string `json:"effects"`
+		Operations   []any    `json:"operations"`
+		Dependencies []struct {
+			ID          string   `json:"id"`
+			Required    bool     `json:"required"`
+			State       string   `json:"state"`
+			Action      string   `json:"next_action"`
+			Fulfillment []string `json:"fulfillment_operations"`
+		} `json:"dependencies"`
+	}
+	methodQueryDecode(t, client, "maestro_query", map[string]any{"operation": "methods.plan", "method_id": "brain-index"}, &plan)
+	if plan.State != "requirements_unavailable" || plan.Execution != "not_executed" {
+		t.Fatalf("compiler selection claimed execution or admission: %+v", plan)
+	}
+	if !reflect.DeepEqual(plan.Effects, []string{"read", "host_execution", "write_owner"}) {
+		t.Fatalf("default compiler owner publication effects are inaccurate: %v", plan.Effects)
+	}
+	if len(plan.Operations) != 0 {
+		t.Fatalf("read-only memory/wiki operations cannot implement authored compilation: %v", plan.Operations)
+	}
+	want := map[string]bool{"domain.authored_brain_compiler": true, "host.command_run": true}
+	for _, dependency := range plan.Dependencies {
+		if !want[dependency.ID] || !dependency.Required || dependency.State != "unavailable" || dependency.Action == "" || len(dependency.Fulfillment) != 0 {
+			t.Fatalf("default compiler capability can be omitted or fulfilled by navigation: %+v", dependency)
+		}
+		delete(want, dependency.ID)
+	}
+	if len(want) != 0 {
+		t.Fatalf("default compiler prerequisites are missing: %v", want)
+	}
+	if !reflect.DeepEqual(before, methodTreeSnapshot(t, f.root)) {
+		t.Fatal("compiler plan executed a command or published owner files")
+	}
+}
+
 func TestMethodQueryArchitectureRecipeRequirementsSDK(t *testing.T) {
 	f := newMethodQueryFixture(t)
 	client := f.connect(t, "")
