@@ -435,6 +435,15 @@ func (d *Directory) Child(name string, create, exclusive bool) (*Directory, erro
 // Lock contenders share read/write access but neither request nor share DELETE;
 // otherwise a replacement name could point a second writer at a different lock.
 func (d *Directory) OpenLock(name string) (*os.File, error) {
+	return d.openLock(name, windows.FILE_OPEN_IF)
+}
+
+// OpenExistingLock acquires the same custody without creating a guard on reads.
+func (d *Directory) OpenExistingLock(name string) (*os.File, error) {
+	return d.openLock(name, windows.FILE_OPEN)
+}
+
+func (d *Directory) openLock(name string, disposition uint32) (*os.File, error) {
 	if err := Leaf(name); err != nil {
 		return nil, err
 	}
@@ -442,7 +451,7 @@ func (d *Directory) OpenLock(name string) (*os.File, error) {
 		return nil, err
 	}
 	access := uint32(windows.FILE_GENERIC_READ | windows.FILE_GENERIC_WRITE | windows.READ_CONTROL | windows.SYNCHRONIZE)
-	h, err := ntOpenShared(d.Handle(), name, access, windows.FILE_OPEN_IF, fileOptions|windows.FILE_WRITE_THROUGH, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE)
+	h, err := ntOpenShared(d.Handle(), name, access, disposition, fileOptions|windows.FILE_WRITE_THROUGH, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE)
 	if err != nil {
 		return nil, err
 	}

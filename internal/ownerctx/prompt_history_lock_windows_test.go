@@ -153,3 +153,20 @@ func TestWindowsPromptHistoryLockPreservesLegacyTokenUntilItsOwnerReleases(t *te
 		t.Fatal("native release did not retain its empty guard", err)
 	}
 }
+
+func TestWindowsPromptHistoryReadNeverCreatesMissingGuard(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "owner", "prompt-history", promptHistoryLockName)
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ExportPromptHistory(root); err == nil {
+		t.Fatal("read admitted history without its established guard")
+	}
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Fatal("read created a native guard", err)
+	}
+}

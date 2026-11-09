@@ -227,8 +227,20 @@ func runWorkflow(t *testing.T, stdio bool) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(string(manifest), home) || !strings.Contains(string(manifest), ws) {
-				t.Fatal("plugin lost binding")
+			var configuration struct {
+				Servers map[string]struct {
+					Type    string   `json:"type"`
+					Command string   `json:"command"`
+					Args    []string `json:"args"`
+				} `json:"mcpServers"`
+			}
+			if err := json.Unmarshal(manifest, &configuration); err != nil {
+				t.Fatal("plugin binding is not valid JSON", err)
+			}
+			server, ok := configuration.Servers["maestro"]
+			wantArgs := []string{"serve", "--product-root", prod, "--user-home", home, "--workspace", ws}
+			if !ok || len(configuration.Servers) != 1 || server.Type != "stdio" || server.Command != "${CLAUDE_PLUGIN_ROOT}/scripts/"+productTestBinaryName() || !reflect.DeepEqual(server.Args, wantArgs) {
+				t.Fatal("plugin lost its exact decoded executable or binding arguments")
 			}
 			if runtime.GOOS == "darwin" {
 				packet.Destination = filepath.Join(base, "maestro-"+version+".mcpb")

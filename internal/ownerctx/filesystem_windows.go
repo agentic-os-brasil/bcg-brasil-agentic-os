@@ -24,12 +24,22 @@ func publishOwnerFile(path string, body []byte, exclusive bool) error {
 	return d.Publish(filepath.Base(path), body, exclusive)
 }
 func acquireOwnerTransition(path string) (func() error, error) {
-	d, e := winprivate.Open(filepath.Dir(path), true)
+	return acquireOwnerTransitionFile(path, true)
+}
+func acquireExistingOwnerTransition(path string) (func() error, error) {
+	return acquireOwnerTransitionFile(path, false)
+}
+func acquireOwnerTransitionFile(path string, create bool) (func() error, error) {
+	d, e := winprivate.Open(filepath.Dir(path), create)
 	if e != nil {
 		return nil, e
 	}
 	defer d.Close()
-	f, e := d.OpenLock(filepath.Base(path))
+	open := d.OpenExistingLock
+	if create {
+		open = d.OpenLock
+	}
+	f, e := open(filepath.Base(path))
 	if e != nil {
 		return nil, e
 	}
