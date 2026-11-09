@@ -74,7 +74,8 @@ func BuildModernCandidate(ctx context.Context, o ModernOptions) (ModernCandidate
 	if err != nil {
 		return ModernCandidate{}, err
 	}
-	defer os.RemoveAll(stage)
+	// Preserve failed construction for inspection. Reopening this temporary
+	// pathname for cleanup could remove a successor after publication.
 	release := filepath.Join(stage, "candidate")
 	seed := filepath.Join(stage, "seed")
 	for _, directory := range []string{release, filepath.Join(seed, "trust")} {
@@ -185,8 +186,8 @@ func BuildModernCandidate(ctx context.Context, o ModernOptions) (ModernCandidate
 	if err = VerifyCandidate(release); err != nil {
 		return ModernCandidate{}, err
 	}
-	if err = os.Rename(stage, o.Output); err != nil {
-		return ModernCandidate{}, err
+	if err = renameModernCandidate(ctx, stage, o.Output); err != nil {
+		return ModernCandidate{}, fmt.Errorf("publish modern candidate; staging preserved at %s: %w", stage, err)
 	}
 	return ModernCandidate{Directory: filepath.Join(o.Output, "candidate"), Installer: filepath.Join(o.Output, "seed", installerName), AuthorityRegistry: filepath.Join(o.Output, "seed", "trust", "release-authority-registry.json"), Manifest: m}, nil
 }
