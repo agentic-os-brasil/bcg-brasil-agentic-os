@@ -1,6 +1,7 @@
 param([string]$Root, [switch]$Review, [string]$ConfirmDigest)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'Maestro: este preparador requer Windows.' }
 $nl = [string][char]10
 function Fail([string]$Message) { throw "Maestro: $Message" }
 function Write-New([string]$Path, [string]$Body) {

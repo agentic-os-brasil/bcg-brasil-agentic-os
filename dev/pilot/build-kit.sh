@@ -7,6 +7,13 @@ OUT="${1:?Uso: build-kit.sh /caminho/Developer/pasta-do-kit}"
 [[ "$OUT" == /* && "$OUT" == */Developer/* && ! -L "$OUT" ]] || { echo 'Use um destino absoluto sob Developer.' >&2; exit 1; }
 [[ "$(uname -s)" == Darwin ]] || { echo 'Este construtor usa o produtor Mac; os alvos cruzados continuam sem execução nativa inferida.' >&2; exit 1; }
 [[ ! -e "$OUT" ]] || { echo 'O destino já existe; use uma pasta nova para evitar misturar artefatos.' >&2; exit 1; }
+[[ -d "$HOME/Developer" && ! -L "$HOME/Developer" ]] || { echo 'Use uma pasta local Developer no seu perfil.' >&2; exit 1; }
+DEV="$(cd "$HOME/Developer" && pwd -P)"
+PARENT="$(cd "$(dirname "$OUT")" && pwd -P)"
+case "$PARENT/" in "$DEV/"|"$DEV/"*) ;; *) echo 'O destino físico deve permanecer dentro de ~/Developer.' >&2; exit 1;; esac
+OUT="$PARENT/$(basename "$OUT")"
+[[ ! -e "$OUT.zip" ]] || { echo 'O ZIP já existe; preserve-o e escolha outro destino.' >&2; exit 1; }
+
 [[ -z "$(git -C "$SOURCE" status --porcelain --untracked-files=all)" ]] || { echo 'Use uma revisão commitada e limpa; preserve o trabalho local.' >&2; exit 1; }
 mkdir -p "$OUT/bin"
 (cd "$SOURCE/adapters/mcp" && GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -o "$OUT/bin/maestro-mcp-darwin-arm64" ./cmd/maestro-mcp)
