@@ -81,8 +81,49 @@ func TestRetainedXLSXNativeLimits(t *testing.T) {
 		if err != nil || got.Result.Status != ingest.StatusUsable || !bytes.Contains(got.Markdown, []byte("Metrics")) || !bytes.Contains(got.Markdown, []byte("29")) {
 			t.Fatalf("populated XLSX refused: %+v %v", got.Result, err)
 		}
-		if !bytes.Equal(got.Document, read(t, filepath.Join(root, "outputs/sheets.xlsx.document.json"))) || !bytes.Equal(got.Markdown, read(t, filepath.Join(root, "outputs/sheets.xlsx.md"))) {
-			t.Fatal("ordinary output differs from the independently oracled matrix")
+		// The selected workflow creates the retained runtime, not another test's
+		// outputs directory. Inspect this conversion against the committed source.
+		var document policyDocument
+		if err := json.Unmarshal(got.Document, &document); err != nil || document.Schema != "DoclingDocument" {
+			t.Fatal("ordinary conversion is not a DoclingDocument", err)
+		}
+		if len(document.Groups) != 2 || document.Groups[0].Name != "Metrics" || document.Groups[0].Label != "sheet" || document.Groups[1].Name != "Details" || document.Groups[1].Label != "sheet" || len(document.Texts) != 2 || document.Texts[0].Text != "Metrics" || document.Texts[1].Text != "Details" {
+			t.Fatalf("ordinary sheet identity/order lost: %+v %+v", document.Groups, document.Texts)
+		}
+		if len(document.Tables) != 2 || document.Tables[0].Data.Rows != 3 || document.Tables[0].Data.Cols != 3 || document.Tables[1].Data.Rows != 2 || document.Tables[1].Data.Cols != 2 {
+			t.Fatalf("ordinary table shapes changed: %+v", document.Tables)
+		}
+		for _, want := range []struct {
+			table, row, column int
+			text               string
+		}{{0, 1, 0, "delta"}, {0, 1, 1, "23"}, {0, 1, 2, "29"}, {0, 2, 0, "True"}, {1, 1, 0, "0007"}, {1, 1, 1, "3.5"}} {
+			found := false
+			for _, cell := range document.Tables[want.table].Data.Cells {
+				if cell.Row == want.row && cell.Col == want.column && cell.Text == want.text {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("ordinary table %d row %d column %d lost %q", want.table, want.row, want.column, want.text)
+			}
+		}
+		merged := false
+		for _, cell := range document.Tables[0].Data.Cells {
+			if cell.Text == "Merged heading" && cell.Row == 0 && cell.Col == 0 && cell.EndCol == 2 {
+				merged = true
+			}
+		}
+		if !merged {
+			t.Fatal("ordinary merged heading span lost")
+		}
+		for _, marker := range []string{"Metrics", "Details", "delta", "29", "0007"} {
+			if !bytes.Contains(got.Markdown, []byte(marker)) {
+				t.Fatalf("ordinary Markdown lost %q", marker)
+			}
+		}
+		if bytes.Contains(got.Markdown, []byte("100")) {
+			t.Fatal("ordinary uncached formula was evaluated")
 		}
 		if !bytes.Equal(body, read(t, filepath.Join(space, "ordinary.xlsx"))) {
 			t.Fatal("original changed")
