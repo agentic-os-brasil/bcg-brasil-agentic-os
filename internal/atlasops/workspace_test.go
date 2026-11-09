@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -621,5 +622,99 @@ func TestWorkspaceTemporaryAliasPreservesExactBinding(t *testing.T) {
 	}
 	if got := collectPage(t, restarted, page).Content; got != "# Notes\n\n## Evidence\n- exact registered workspace\n" {
 		t.Fatalf("alias refusal changed current page: %q", got)
+	}
+}
+
+func TestWorkspaceOpenRequiresCanonicalRegisteredID(t *testing.T) {
+	base := t.TempDir()
+	options := registeredWorkspace(t, base, filepath.Join(base, "local"), "case")
+	engine, err := atlasops.OpenWorkspace(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := "knowledge/client/identity.md"
+	if _, err := engine.CreatePage(atlasops.CreatePageRequest{Page: page, Body: "# Preserved identity\n", Provenance: provenance("identity-seed")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.CreateGrant(standingGrant()); err != nil {
+		t.Fatal(err)
+	}
+	canary := filepath.Join(base, "outside-canary.txt")
+	if err := os.WriteFile(canary, []byte("preserve outside state"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	relative, err := filepath.Rel(cwd, options.WorkspacePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Observe the entire fixture, including pages, journals, grants, registry and canary.
+	snapshot := func() map[string]string {
+		t.Helper()
+		files := map[string]string{}
+		err := filepath.WalkDir(base, func(path string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			files[path] = info.Mode().String()
+			if !entry.IsDir() {
+				body, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				files[path] += "\x00" + string(body)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return files
+	}
+	missingID := "0123456789abcdef0123456789abcdef"
+	if options.WorkspaceID == missingID {
+		t.Fatal("missing-ID fixture unexpectedly registered")
+	}
+	invalidIDs := []struct{ name, id string }{
+		{"absolute-path", options.WorkspacePath},
+		{"relative-path", relative},
+		{"short", strings.Repeat("a", 31)},
+		{"long", strings.Repeat("a", 33)},
+		{"uppercase", strings.Repeat("A", 32)},
+		{"non-hex", strings.Repeat("g", 32)},
+		{"padded", " " + options.WorkspaceID},
+		{"canonical-unregistered", missingID},
+	}
+	for _, registered := range []bool{true, false} {
+		if !registered {
+			if err := os.Remove(filepath.Join(options.DataRoot, "workspaces", options.WorkspaceID, "binding.json")); err != nil {
+				t.Fatal(err)
+			}
+		}
+		before := snapshot()
+		for _, candidate := range invalidIDs {
+			invalid := options
+			invalid.WorkspaceID = candidate.id
+			if _, err := atlasops.OpenWorkspace(invalid); err == nil {
+				t.Errorf("%s identity bypassed registered=%t workspace admission", candidate.name, registered)
+			}
+			if !reflect.DeepEqual(before, snapshot()) {
+				t.Fatalf("%s admission changed page, journal, grants, registry or outside canary", candidate.name)
+			}
+		}
+		if registered {
+			if got := collectPage(t, engine, page).Content; got != "# Preserved identity\n" {
+				t.Fatalf("legitimate opaque identity lost its page: %q", got)
+			}
+		} else if _, err := atlasops.OpenWorkspace(options); err == nil {
+			t.Fatal("canonical opaque ID bypassed missing registration")
+		}
 	}
 }

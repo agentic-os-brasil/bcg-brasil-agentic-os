@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
+
+var workspaceIDPattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
 
 // workspaceScope is private control metadata, never a model-selected root.
 type workspaceScope struct {
@@ -27,6 +30,9 @@ func OpenWorkspace(options atlas.Options) (*Engine, error) {
 	}
 	if strings.TrimSpace(options.DataRoot) == "" || strings.TrimSpace(options.WorkspacePath) == "" || strings.TrimSpace(options.WorkspaceID) == "" {
 		return nil, errors.New("workspace atlas requires data root, registered workspace path and workspace id")
+	}
+	if !workspaceIDPattern.MatchString(options.WorkspaceID) {
+		return nil, errors.New("workspace atlas requires a canonical opaque workspace id")
 	}
 	dataRoot, err := scheduler.CanonicalPrivatePath(options.DataRoot)
 	if err != nil {
