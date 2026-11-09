@@ -208,8 +208,6 @@ func (b *productBinding) prepareAssessment(command maintenance.Command, source m
 	})
 }
 
-// refreshProduct retains the existing repair owner's sole reversible write:
-// exactly the admitted derived-health cache, never workspace/source authority.
 // First creation publishes exclusively. Existing bytes and failed readback are
 // retained: this profile does not prove physical custody for replacement or
 // compensation against an uncooperative writer.
