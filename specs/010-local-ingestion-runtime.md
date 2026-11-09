@@ -1,6 +1,7 @@
 # Spec 010 - Local ingestion runtime
 
-Status: architecture accepted; distribution pack, adapters and executable command pending.
+Status: authenticated DOCX runtime source implemented; native execution, installed
+client and distribution qualification remain separate gates.
 
 ## Objective
 
@@ -92,11 +93,18 @@ and capability reporting; Docling owns document conversion.
 
 ## Delivery boundary
 
-This specification does not install Docling, download models, package Python,
-or send a document to any service. The next engineering step is a controlled
-distribution spike that produces and validates a signed Windows/macOS runtime
-pack and measures installation size, first-use time, offline behavior and
-extraction quality on sanitized fixtures.
+The initial implementation assembles the exact acquired interpreter and 45 locked
+wheels, authenticates the complete installed closure and converts DOCX offline on
+Apple Silicon macOS. It downloads no dependencies or models, uses no ambient
+Python and preserves an unavailable result for other platforms and formats.
+
+Read the [authenticated runtime guide](../docs/product-offline-runtime.md) when
+assembling a pack, diagnosing authority/availability or qualifying conversion.
+The owning code is `internal/ingest/docling`; `cmd/maestro-docling-pack` constructs
+an unsigned artifact and the native MCP constructor supplies trust. The later
+reviewed-document route and modern signed installer remain separate capabilities.
+Real converter fixtures, native installation/client acceptance and corporate
+release authority must be observed before claiming the broader platform promise.
 
 ## References
 

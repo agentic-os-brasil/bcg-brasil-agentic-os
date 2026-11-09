@@ -113,6 +113,7 @@ type CandidateOptions struct {
 	Allowlist      string
 	Prebuilt       string
 	MarkItDownPack string
+	DoclingPack    string
 	Builder        BinaryBuilder
 	AdHocMacOS     bool
 }
@@ -223,6 +224,18 @@ func BuildCandidate(ctx context.Context, options CandidateOptions) (releasecontr
 			return releasecontract.Manifest{}, fmt.Errorf("stage MarkItDown runtime pack: %w", err)
 		}
 		packArtifact, err := inspectArtifact("runtime_pack", "any", "any", packPath)
+		if err != nil {
+			return releasecontract.Manifest{}, err
+		}
+		manifest.Artifacts = append(manifest.Artifacts, packArtifact)
+	}
+	if options.DoclingPack != "" {
+		packName := "docling-runtime_" + options.Version + "_darwin_arm64.tar.gz"
+		packPath := filepath.Join(staging, packName)
+		if err := stageRegularFile(options.DoclingPack, packPath, 0o644); err != nil {
+			return releasecontract.Manifest{}, fmt.Errorf("stage Docling runtime pack: %w", err)
+		}
+		packArtifact, err := inspectArtifact("runtime_pack", "darwin", "arm64", packPath)
 		if err != nil {
 			return releasecontract.Manifest{}, err
 		}

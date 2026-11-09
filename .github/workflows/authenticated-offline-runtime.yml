@@ -1,0 +1,136 @@
+name: Authenticated offline runtime
+
+on:
+  pull_request:
+    paths:
+      - 'internal/ingest/**'
+      - 'internal/scheduler/**'
+      - 'internal/releasecontract/**'
+      - 'internal/releaseverify/**'
+      - 'cmd/maestro-docling-pack/**'
+      - 'adapters/mcp/docling.go'
+      - 'adapters/mcp/cmd/maestro-mcp/docling_seed.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'docs/product-offline-runtime.md'
+      - 'specs/010-local-ingestion-runtime.md'
+      - '.github/workflows/authenticated-offline-runtime.yml'
+  push:
+    branches: [main, 'codex/integration/maestro-main-authenticated-runtime']
+    paths:
+      - 'internal/ingest/**'
+      - 'internal/scheduler/**'
+      - 'internal/releasecontract/**'
+      - 'internal/releaseverify/**'
+      - 'cmd/maestro-docling-pack/**'
+      - 'adapters/mcp/docling.go'
+      - 'adapters/mcp/cmd/maestro-mcp/docling_seed.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'docs/product-offline-runtime.md'
+      - 'specs/010-local-ingestion-runtime.md'
+      - '.github/workflows/authenticated-offline-runtime.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  authenticated-docling:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Select physical macOS temporary directory
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          physical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          printf 'TMPDIR=%s\n' "$physical_temp" >> "$GITHUB_ENV"
+      - name: Bind fixture paths to the assigned runner
+        shell: bash
+        env:
+          MAESTRO_DOCLING_TEST_INPUTS: ${{ runner.temp }}/maestro-raw-inputs
+          MAESTRO_DOCLING_TEST_ROOT: ${{ runner.temp }}/maestro-engineering-runtime
+          MAESTRO_DOCLING_TEST_EVIDENCE: ${{ runner.temp }}/maestro-docling-evidence.json
+        run: |
+          printf '%s\n' "MAESTRO_DOCLING_TEST_INPUTS=$MAESTRO_DOCLING_TEST_INPUTS" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_DOCLING_TEST_ROOT=$MAESTRO_DOCLING_TEST_ROOT" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_DOCLING_TEST_EVIDENCE=$MAESTRO_DOCLING_TEST_EVIDENCE" >> "$GITHUB_ENV"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: adapters/mcp/go.mod
+      - name: Require the admitted runtime platform
+        shell: bash
+        run: |
+          test "$(uname -s)" = Darwin
+          test "$(uname -m)" = arm64
+          test -x /usr/bin/sandbox-exec
+      # Acquisition is CI-only; the offline assembler verifies every input again.
+      - name: Acquire exact official runtime inputs
+        shell: bash
+        run: |
+          python3 - <<'PYCODE'
+          import hashlib, json, os, pathlib, re, urllib.parse, urllib.request
+          root = pathlib.Path(os.environ["MAESTRO_DOCLING_TEST_INPUTS"])
+          root.mkdir(mode=0o700)
+          source = pathlib.Path("internal/ingest/docling/assemble.go").read_text()
+          def constant(name):
+              match = re.search(r'^\s*' + name + r'\s*=\s*"([^"\n]+)"', source, re.M)
+              assert match, "missing canonical runtime constant: " + name
+              return match.group(1)
+          filename, expected = constant("PythonArchive"), constant("PythonArchiveSHA256")
+          tag = constant("PythonVersion").split("+")[1]
+          assert re.fullmatch(r"[0-9]{8}", tag)
+          inputs = json.loads(pathlib.Path("internal/ingest/docling/runtime/inputs.json").read_text())
+          assert len(inputs) == 45 and len({x["filename"] for x in inputs}) == 45
+          assert sum(x["size"] for x in inputs) <= 512 << 20
+          for item in inputs:
+              parsed = urllib.parse.urlsplit(item["url"])
+              assert parsed.scheme == "https" and parsed.netloc == "files.pythonhosted.org"
+          inputs.append({"filename": filename, "sha256": expected, "size": 256 << 20,
+                         "url": "https://github.com/astral-sh/python-build-standalone/releases/download/" + tag + "/" + filename})
+          for item in inputs:
+              name, expected, size = item["filename"], item["sha256"], item["size"]
+              assert pathlib.PurePosixPath(name).name == name and name not in (".", "..") and "\\" not in name
+              assert re.fullmatch(r"[0-9a-f]{64}", expected) and 0 < size <= 256 << 20
+              target = root / name
+              digest, count = hashlib.sha256(), 0
+              request = urllib.request.Request(item["url"], headers={"User-Agent": "maestro-runtime-ci"})
+              with urllib.request.urlopen(request, timeout=60) as response, target.open("xb") as output:
+                  while chunk := response.read(1 << 20):
+                      count += len(chunk)
+                      assert count <= size, "input exceeds pinned size: " + name
+                      digest.update(chunk)
+                      output.write(chunk)
+              assert digest.hexdigest() == expected, "input digest mismatch: " + name
+              if name != filename:
+                  assert count == size, "input size mismatch: " + name
+              print("verified", name, count, expected)
+          PYCODE
+      - name: Prove authenticated offline conversion and refusal contracts
+        shell: bash
+        run: |
+          evidence="$RUNNER_TEMP/maestro-docling-tests.jsonl"
+          if ! go test ./internal/ingest/docling -run '^TestAuthenticatedRealDocling$' -count=1 -json -timeout=900s > "$evidence"; then
+            cat "$evidence"
+            exit 1
+          fi
+          cat "$evidence"
+          python3 - "$evidence" <<'PYCODE'
+          import json, pathlib, sys
+          events = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+          passed = {e.get("Test") for e in events if e.get("Action") == "pass"}
+          required = {"TestAuthenticatedRealDocling", "TestAuthenticatedRealDocling/cancelled", "TestAuthenticatedRealDocling/expired_deadline"}
+          assert required <= passed, "required native conversion cases did not run: " + repr(required - passed)
+          assert not any(e.get("Action") == "skip" for e in events), "native converter coverage was skipped"
+          PYCODE
+      - name: Retain bounded synthetic conversion evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: authenticated-docling-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/maestro-docling-tests.jsonl
+            ${{ runner.temp }}/maestro-docling-evidence.json
+          if-no-files-found: warn
+          retention-days: 7

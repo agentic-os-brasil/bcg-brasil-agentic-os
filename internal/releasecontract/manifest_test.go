@@ -56,8 +56,8 @@ func TestParseRejectsInvalidReleaseContracts(t *testing.T) {
 		"versionless cli artifact": func(body string) string {
 			return strings.Replace(body, `"name": "bcgos-0.1.0-windows-amd64.exe"`, `"name": "bcgos-windows-amd64.exe"`, 1)
 		},
-		"runtime pack unsupported in v1": func(body string) string {
-			return strings.Replace(body, `"kind": "cli"`, `"kind": "runtime_pack"`, 1)
+		"unknown artifact kind": func(body string) string {
+			return strings.Replace(body, `"kind": "cli"`, `"kind": "unknown_pack"`, 1)
 		},
 		"bundle rejects cli": func(body string) string {
 			return strings.Replace(body, `"compatible_cli": ">=0.1.0 <0.2.0"`, `"compatible_cli": ">=0.2.0 <0.3.0"`, 1)
@@ -165,10 +165,10 @@ func TestSchemaAndParserAgreeOnStructuralFixtures(t *testing.T) {
 			schemaValid: false,
 			parseValid:  false,
 		},
-		"runtime pack requires universal platform": {
+		"runtime pack admits concrete platform": {
 			body:        strings.Replace(validManifestJSON(), `"kind": "cli"`, `"kind": "runtime_pack"`, 1),
 			schemaValid: true,
-			parseValid:  false,
+			parseValid:  true,
 		},
 		"duplicate artifact is semantic": {
 			body:        strings.Replace(validManifestJSON(), duplicateArtifact, duplicateArtifact+","+duplicateArtifact, 1),
@@ -210,4 +210,23 @@ func validManifestJSON() string {
   ],
   "release_notes": {"name": "release-notes-0.1.0.md", "sha256": "` + strings.Repeat("d", 64) + `"}
 }`
+}
+
+func TestRuntimePackAdmitsConcreteAndLegacyPlatforms(t *testing.T) {
+	for _, target := range [][2]string{{"darwin", "arm64"}, {"windows", "amd64"}, {"any", "any"}} {
+		t.Run(target[0]+"-"+target[1], func(t *testing.T) {
+			manifest, err := Parse(strings.NewReader(validManifestJSON()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			manifest.Artifacts = append(manifest.Artifacts, Artifact{Kind: "runtime_pack", OS: target[0], Arch: target[1], Name: "docling-0.1.0.tar.gz", Size: 12, SHA256: strings.Repeat("d", 64), SignatureRef: "docling-0.1.0.tar.gz.sig"})
+			if err := manifest.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			manifest.Artifacts[len(manifest.Artifacts)-1].Arch = "any"
+			if target[0] != "any" && manifest.Validate() == nil {
+				t.Fatal("mixed platform accepted")
+			}
+		})
+	}
 }

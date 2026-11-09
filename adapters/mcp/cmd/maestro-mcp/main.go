@@ -18,6 +18,9 @@ import (
 	"strings"
 )
 
+// AuthorityRegistrySHA256 is linker-bound by the release builder; empty is unavailable.
+var AuthorityRegistrySHA256 string
+
 func main() {
 	if err := run(); err != nil {
 		if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "memory-") {
@@ -65,6 +68,7 @@ func run() error {
 	if err := flags.Parse(os.Args[2:]); err != nil {
 		return err
 	}
+	seedDoclingAuthority(&o)
 	if flags.NArg() != 0 {
 		return errors.New("unexpected_arguments")
 	}
