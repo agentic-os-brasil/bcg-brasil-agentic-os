@@ -296,7 +296,7 @@ func (store Store) ObserveFinalize(session, prompt string) error {
 	})
 }
 
-// CheckMain refuses an omitted child identity while a managed child is active.
+// CheckMain refuses omitted child identity while a dispatch or child is unresolved.
 func (store Store) CheckMain(session, prompt string) error {
 	state, err := store.readBound(session)
 	if errors.Is(err, os.ErrNotExist) {
@@ -305,7 +305,7 @@ func (store Store) CheckMain(session, prompt string) error {
 	if err != nil {
 		return ErrTransition
 	}
-	if state.ActiveAgentID != "" {
+	if state.PendingTool != "" || state.ActiveAgentID != "" {
 		return ErrTransition
 	}
 	if prompt != "" && state.TurnDigest != "" && state.TurnDigest != key("prompt", prompt) {
