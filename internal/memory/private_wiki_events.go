@@ -193,7 +193,21 @@ func (engine *Engine) privateWikiEventPath(workspace, commit string) string {
 }
 
 func (engine *Engine) publishPrivateWikiCommitIntent(workspace, commit string, manifest CommitManifest) error {
-	if engine.privateWikiNativeAvailable(workspace) != nil {
+	if nativeErr := engine.privateWikiNativeAvailable(workspace); nativeErr != nil {
+		// Only an actually verified legacy checkpoint may omit wiki events.
+		// A failed admission after cohort preparation cannot bypass the durable
+		// intent that must precede visibility of a protected source commit.
+		requirement, required, err := engine.readVisibilityRequirement(workspace)
+		if err != nil || !required || requirement.SchemaVersion != 1 || engine.ownedPreflight(workspace) != nil {
+			return nativeErr
+		}
+		barrier, err := engine.readVisibility(workspace)
+		if err != nil || barrier.PrivateWiki != nil {
+			return nativeErr
+		}
+		if _, err := memoryReadDir(engine.privateWikiRoot(workspace)); !errors.Is(err, os.ErrNotExist) {
+			return nativeErr
+		}
 		return nil
 	}
 	custody, err := engine.holdPrivateWikiWorkspace(workspace)
