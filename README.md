@@ -42,6 +42,9 @@ carrier boundary. Source construction and controlled compiled journeys remain
 separate from actual client loading, provider-mediated enforcement and rollout.
 For home/locator conflicts while preparing that work, use the read-only
 [data-home diagnostic](docs/development/data-home-inspection.md).
+For an isolated Code/Desktop developer rehearsal on Mac or Windows, use the
+[pilot kit guide](docs/product-pilot.md); actual client and platform acceptance
+remain separately recorded.
 
 The Tech Core now includes the complete pinned
 [Pocock engineering method set](docs/onboarding/pocock-methods.md), with native

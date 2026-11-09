@@ -14,6 +14,7 @@ import (
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeagents"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
@@ -31,6 +32,7 @@ type Options struct {
 	Destination, Server, Version string
 	Binding                      product.Options
 	NativeHost                   *NativeHost
+	LifecycleContext             bool
 	Carrier                      *StableCarrier
 	stableIdentity               releasecontract.ServerIdentity
 	serverBody                   []byte
@@ -40,8 +42,19 @@ type Options struct {
 }
 
 func prepare(o Options) (Options, string, error) {
+	if o.LifecycleContext && (o.NativeHost != nil || o.native != nil || o.hookOverride != nil) {
+		return o, "", errors.New("lifecycle context and native enforcement profiles are mutually exclusive")
+	}
+	if o.LifecycleContext && o.Carrier == nil && (o.Binding.InstalledManifestSHA256 != "" || o.Binding.InstalledClientInputsSHA256 != "") {
+		return o, "", errors.New("source-bound lifecycle context requires the stable client owner")
+	}
 	if _, err := product.Open(o.Binding); err != nil {
 		return o, "", err
+	}
+	if o.LifecycleContext && o.Carrier == nil {
+		if current, err := installtx.ReadSourceState(filepath.Join(o.Binding.UserHome, ".maestro-install"), o.Binding.ProductRoot); err == nil && current.Source != nil {
+			return o, "", errors.New("enrolled lifecycle context requires the stable client owner")
+		}
 	}
 	if !regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`).MatchString(o.Version) {
 		return o, "", errors.New("numeric semantic version required")

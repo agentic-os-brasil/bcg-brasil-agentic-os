@@ -24,16 +24,17 @@ type packetResource struct {
 
 // Native diagnostics cannot be decoded into process-local NativeHost authority.
 type nativePacketManifest struct {
-	SchemaVersion     int              `json:"schema_version"`
-	Mode              string           `json:"mode"`
-	Target            Target           `json:"target"`
-	Native            NativeCapability `json:"native"`
-	BindingSHA256     string           `json:"binding_sha256,omitempty"`
-	HooksSHA256       string           `json:"hooks_sha256,omitempty"`
-	Resources         []packetResource `json:"embedded_resources"`
-	References        []assetReference `json:"references"`
-	CanonicalAgentIDs []string         `json:"canonical_agent_ids"`
-	ExecutionBoundary string           `json:"execution_boundary"`
+	SchemaVersion     int                  `json:"schema_version"`
+	Mode              string               `json:"mode"`
+	Target            Target               `json:"target"`
+	Native            NativeCapability     `json:"native"`
+	Lifecycle         *LifecycleCapability `json:"lifecycle,omitempty"`
+	BindingSHA256     string               `json:"binding_sha256,omitempty"`
+	HooksSHA256       string               `json:"hooks_sha256,omitempty"`
+	Resources         []packetResource     `json:"embedded_resources"`
+	References        []assetReference     `json:"references"`
+	CanonicalAgentIDs []string             `json:"canonical_agent_ids"`
+	ExecutionBoundary string               `json:"execution_boundary"`
 }
 
 func nativeManifest(target Target, c NativeCapability) (nativePacketManifest, error) {
@@ -145,6 +146,19 @@ func nativePacketPayload(o Options, format string) (map[string][]byte, error) {
 		return nil, err
 	}
 	files := map[string][]byte{}
+	if o.LifecycleContext {
+		if format != "plugin" || c.State != "unavailable" {
+			return nil, errors.New("lifecycle context requires non-enforcing Code profile")
+		}
+		p.Mode = "mcp_lifecycle"
+		p.Lifecycle = lifecycleCapability(o.target)
+		files, err = lifecycleProfileFiles(o.target.Platform(), lifecycleBinding(o), stableBinding(o))
+		if err != nil {
+			return nil, err
+		}
+		p.HooksSHA256 = digest(files["hooks/hooks.json"])
+		p.ExecutionBoundary = passiveExecutionBoundary
+	}
 	if c.State == "qualified" || c.State == "qualification_candidate" {
 		p.BindingSHA256, err = nativeSelectionFingerprint(o.Binding)
 		if err != nil {
@@ -176,10 +190,10 @@ func buildNativeCandidate(o Options, c NativeCapability, hooks []byte) error {
 // Preserve the original closed inventory and bind the additional native bytes.
 // Candidate instrumentation is local engineering input, never native authority.
 func nativeRequiredFiles(root, format string, target Target) (map[string][]byte, error) {
-	return nativeRequiredPayload(directoryPacketSource(root).read, format, target)
+	return nativeRequiredPayload(directoryPacketSource(root).read, format, target, nil, nil)
 }
 
-func nativeRequiredPayload(read func(string, int64) ([]byte, error), format string, target Target) (map[string][]byte, error) {
+func nativeRequiredPayload(read func(string, int64) ([]byte, error), format string, target Target, lifecycle *lifecyclePacketBinding, stable *stablePacketBinding) (map[string][]byte, error) {
 	body, err := read(nativeManifestName, 1<<20)
 	if err != nil {
 		return nil, err
@@ -211,11 +225,30 @@ func nativeRequiredPayload(read func(string, int64) ([]byte, error), format stri
 	}
 	expected.BindingSHA256 = p.BindingSHA256
 	expected.HooksSHA256 = p.HooksSHA256
+	var passive map[string][]byte
+	if lifecycle != nil {
+		if format != "plugin" || p.Native.State != "unavailable" || p.BindingSHA256 != "" {
+			return nil, errors.New("lifecycle profile cannot supply native authority")
+		}
+		// Stable launch metadata is reconstructed by the inventory owner below.
+		passive, err = lifecycleProfileFiles(target.Platform(), lifecycle, stable)
+		if err != nil {
+			return nil, err
+		}
+		expected.Mode = "mcp_lifecycle"
+		expected.Lifecycle = lifecycleCapability(target)
+		expected.ExecutionBoundary = passiveExecutionBoundary
+		expected.HooksSHA256 = digest(passive["hooks/hooks.json"])
+	}
 	want, err := json.MarshalIndent(expected, "", "  ")
 	if err != nil || !bytes.Equal(body, append(want, '\n')) {
 		return nil, errors.New("native diagnostic canonical resources changed")
 	}
 	files := map[string][]byte{nativeManifestName: body}
+	if lifecycle != nil {
+		files["hooks/hooks.json"] = passive["hooks/hooks.json"]
+		return files, nil
+	}
 	if p.Native.State == "unavailable" {
 		if p.BindingSHA256 != "" || p.HooksSHA256 != "" {
 			return nil, errors.New("unavailable native diagnostic contains binding")

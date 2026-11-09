@@ -30,13 +30,14 @@ type packetFile struct {
 	Mode   uint32 `json:"mode"`
 }
 type packetInventory struct {
-	SchemaVersion int                  `json:"schema_version"`
-	Format        string               `json:"format"`
-	Version       string               `json:"version"`
-	Platform      string               `json:"platform"`
-	Server        string               `json:"server"`
-	Files         []packetFile         `json:"files"`
-	Stable        *stablePacketBinding `json:"stable,omitempty"`
+	SchemaVersion int                     `json:"schema_version"`
+	Format        string                  `json:"format"`
+	Version       string                  `json:"version"`
+	Platform      string                  `json:"platform"`
+	Server        string                  `json:"server"`
+	Files         []packetFile            `json:"files"`
+	Stable        *stablePacketBinding    `json:"stable,omitempty"`
+	Lifecycle     *lifecyclePacketBinding `json:"lifecycle,omitempty"`
 }
 
 // PacketStatus is integrity evidence only, never publisher or owner authority.
@@ -167,7 +168,7 @@ func scanPacket(root string) ([]packetFile, error) {
 	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
 	return result, err
 }
-func writeInventory(root, format, version, platform, server string, stable *stablePacketBinding) error {
+func writeInventory(root, format, version, platform, server string, stable *stablePacketBinding, lifecycle *lifecyclePacketBinding) error {
 	files, err := scanPacket(root)
 	if err != nil {
 		return err
@@ -177,7 +178,7 @@ func writeInventory(root, format, version, platform, server string, stable *stab
 			files[i].Mode = 0755
 		}
 	}
-	body, err := json.MarshalIndent(packetInventory{SchemaVersion: packetSchema(stable), Format: format, Version: version, Platform: platform, Server: server, Files: files, Stable: stable}, "", "  ")
+	body, err := json.MarshalIndent(packetInventory{SchemaVersion: packetSchema(stable), Format: format, Version: version, Platform: platform, Server: server, Files: files, Stable: stable, Lifecycle: lifecycle}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -218,6 +219,14 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 	if inventory.Platform != "darwin" && inventory.Platform != "win32" && inventory.Platform != "linux" {
 		return status, errors.New("packet platform unavailable")
 	}
+	if inventory.Lifecycle != nil && inventory.Format != "plugin" {
+		return status, errors.New("lifecycle context requires Code plugin format")
+	}
+	if inventory.Lifecycle != nil {
+		if err := inventory.Lifecycle.validate(inventory.Stable); err != nil {
+			return status, err
+		}
+	}
 	if inventory.Stable != nil {
 		if err := inventory.Stable.validate(); err != nil {
 			return status, err
@@ -236,7 +245,7 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 	if file, found := expected[inventory.Server]; !found || file.Mode != 0755 {
 		return status, errors.New("packet server unavailable")
 	}
-	required, server, err := requiredPacketFiles(inventory.Format, inventory.Platform, inventory.Version, inventory.Stable)
+	required, server, err := requiredPacketFiles(inventory.Format, inventory.Platform, inventory.Version, inventory.Stable, inventory.Lifecycle)
 	if err != nil {
 		return status, err
 	}
@@ -248,7 +257,7 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 	if err != nil || target.Platform() != inventory.Platform {
 		return status, errors.New("packet executable target changed")
 	}
-	native, err := nativeRequiredPayload(source.read, inventory.Format, target)
+	native, err := nativeRequiredPayload(source.read, inventory.Format, target, inventory.Lifecycle, inventory.Stable)
 	if err != nil {
 		return status, err
 	}
@@ -294,7 +303,7 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 	}
 	status.NativeMode = diagnostic.Mode
 	if inventory.Stable != nil {
-		if diagnostic.Mode != "mcp_only" || inventory.Stable.BootstrapServerSHA256 != status.ServerSHA256 {
+		if (diagnostic.Mode != "mcp_only" && diagnostic.Mode != "mcp_lifecycle") || inventory.Stable.BootstrapServerSHA256 != status.ServerSHA256 {
 			return PacketStatus{}, errors.New("stable bootstrap identity changed")
 		}
 		embedded, err := packetEmbeddedDigest(diagnostic.Resources)

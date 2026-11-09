@@ -95,11 +95,17 @@ func contextFor(runtime, semanticEvent string, packet sessionctx.Packet) (string
 		if err := packet.Validate(); err != nil {
 			return "", err
 		}
+		memoryState := "query_required"
+		memoryDiagnostic := ""
+		if semanticEvent == "session_start" {
+			memoryState = packet.Memory.State
+			memoryDiagnostic = packet.Memory.Message
+		}
 		body, err := json.Marshal(map[string]any{
 			"schema_version": 1, "event": semanticEvent, "runtime": runtime,
 			"workspace_id": packet.Workspace.ID, "workspace_state": packet.Workspace.State,
 			"evidence": "adapter_command", "native_qualification": "unavailable",
-			"owner_context": "query_required", "memory_context": "query_required", "execution_context": "query_required",
+			"owner_context": "query_required", "memory_context": memoryState, "memory_diagnostic": memoryDiagnostic, "execution_context": "query_required",
 		})
 		if err != nil {
 			return "", err
@@ -108,7 +114,7 @@ func contextFor(runtime, semanticEvent string, packet sessionctx.Packet) (string
 		if len(context) > MaximumAdditionalContextBytes {
 			return "", fmt.Errorf("product context exceeds budget")
 		}
-		return context, nil
+		return appendMemoryContext(context, semanticEvent, packet.Memory), nil
 	}
 
 	envelope, err := sessionstart.Build(runtime, packet)
@@ -136,8 +142,12 @@ func contextFor(runtime, semanticEvent string, packet sessionctx.Packet) (string
 		available := MaximumAdditionalContextBytes - len(note) - 2
 		return preserveDirectiveEdges(directive, available) + "\n\n" + note, nil
 	}
-	if semanticEvent == "session_start" && packet.Memory.State == "available" && len(packet.Memory.Sections) > 0 {
-		memoryContext := renderMemoryContext(packet.Memory)
+	return appendMemoryContext(context, semanticEvent, packet.Memory), nil
+}
+
+func appendMemoryContext(context, semanticEvent string, value sessionctx.Memory) string {
+	if semanticEvent == "session_start" && value.State == "available" && len(value.Sections) > 0 {
+		memoryContext := renderMemoryContext(value)
 		remaining := MaximumAdditionalContextBytes - len(context) - 2
 		if remaining > MaximumMemoryContextBytes {
 			remaining = MaximumMemoryContextBytes
@@ -156,7 +166,7 @@ func contextFor(runtime, semanticEvent string, packet sessionctx.Packet) (string
 			context += "\n\n" + bounded
 		}
 	}
-	return context, nil
+	return context
 }
 
 func preserveDirectiveEdges(value string, maximum int) string {

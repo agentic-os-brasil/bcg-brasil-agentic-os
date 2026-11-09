@@ -1,6 +1,7 @@
 package packaging
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"path/filepath"
@@ -90,6 +91,11 @@ func prepareStable(o *Options) error {
 	if i.EmbeddedInputsSHA256 != s.Server.EmbeddedInputsSHA256 || i.Version != s.Server.Version || i.AuthorityRegistrySHA256 != o.Binding.AuthorityRegistrySHA256 {
 		return errors.New("actual current stable identity differs")
 	}
+	if o.LifecycleContext {
+		if err = installer.RequireLifecycleClientCapabilities(context.Background(), o.Server, "server", i.Version, i.AuthorityRegistrySHA256); err != nil {
+			return err
+		}
+	}
 	o.stableIdentity = i
 	return stableBinding(*o).validate()
 }
@@ -158,7 +164,7 @@ func inspectStableStatus(status PacketStatus, c StableCarrier, i releasecontract
 	if err := i.Validate(); err != nil {
 		return err
 	}
-	if status.Stable == nil || *status.Stable != c || status.NativeMode != "mcp_only" || status.ServerSHA256 != serverSHA || status.EmbeddedInputsSHA256 != i.EmbeddedInputsSHA256 || status.Version != i.Version || status.RegistrySHA256 != i.AuthorityRegistrySHA256 {
+	if status.Stable == nil || *status.Stable != c || (status.NativeMode != "mcp_only" && !(status.Format == "plugin" && status.NativeMode == "mcp_lifecycle")) || status.ServerSHA256 != serverSHA || status.EmbeddedInputsSHA256 != i.EmbeddedInputsSHA256 || status.Version != i.Version || status.RegistrySHA256 != i.AuthorityRegistrySHA256 {
 		return errors.New("current stable packet identity differs")
 	}
 	return nil
