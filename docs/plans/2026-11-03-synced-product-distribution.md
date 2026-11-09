@@ -1,8 +1,11 @@
 # Deliver one complete synced-folder product install and update path
 
-Status: Task1 source and focused engineering evidence are frozen for independent
-review; Tasks2/3 remain pending. No production release or native qualification is
-implied. Front: `codex/integration/maestro-distribution`.
+Status: Task1 and reviewed Wiki/shared corrections are locally integrated at
+8c1ede63fef4b3a5a17d2d4471e4dc5b4f8c37fe, exact tested/reviewed tree
+b62905ad2137647cae4d8cebe3a8727a551ee9a2. MPDU/Spec020 settle Task2's accepted
+construction contract; implementation is separately released/gated. Task3 remains
+pending. No production release or native qualification is implied.
+Front: `codex/integration/maestro-distribution`.
 Topic: `codex/maestro-synced-distribution`. The reviewed complete native/maintenance
 dependency is incorporated at 62d7758b18b0e9deb616ceacc7c241a34f5b68ce, preserving
 its four-lens-approved tree. MPDI and Spec020 define the accepted modern
@@ -10,15 +13,22 @@ construction contract; implementation and its acceptance remain separately gated
 
 ## Outcome
 
-An owner consumes an authenticated release from a synced SharePoint/OneDrive
-folder, completes one explicit reviewed setup, and receives participant-local
+An owner consumes an authenticated release downloaded and extracted from
+SharePoint into an ordinary local mirror, completes one explicit reviewed setup,
+and receives participant-local
 Code and Desktop packets using the same admitted private state. The explicit
 update path verifies N+1, preserves owner/workspace state, refreshes local
 packets/registration, recovers interruptions and supports managed rollback
 without resetting replay, recall or writer-floor fences. No Git checkout is
 required from participants.
 
-SharePoint is an untrusted replicated transport. Local presence, a checksum or
+Direct Windows OneDrive/Files On-Demand source folders are unavailable in the
+current pilot, including hydrated Cloud Files: source confinement refuses all
+reparse points. Automated sync remains unqualified; ordinary local downloaded
+files must pass the existing source checks. The concrete SharePoint library is
+still pending selection.
+
+SharePoint is an untrusted distribution transport. Local presence, a checksum or
 an authenticated sync account cannot establish artifact authority. The
 independently admitted native installer and pinned public authority seed remain
 the trust root. This delivery contains no cloud deployment or new network MCP

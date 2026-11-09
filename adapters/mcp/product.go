@@ -24,6 +24,9 @@ type Options struct {
 	LookupEnv                            func(string) (string, bool)
 	// These constructor inputs come only from the native binary seed, never tool arguments.
 	AuthorityRegistryPath, AuthorityRegistrySHA256, CLIVersion string
+	// Fixed carrier inputs come from canonical packaging, never MCP arguments.
+	InstalledManifestSHA256, InstalledClientInputsSHA256 string
+	GuardProcess                                         bool
 }
 type Bound struct {
 	options           Options
@@ -44,6 +47,9 @@ func Open(o Options) (*Bound, error) {
 }
 func (b *Bound) validate() error {
 	if _, err := processidentity.Current(); err != nil {
+		return err
+	}
+	if err := b.validateInstalledSource(); err != nil {
 		return err
 	}
 	h, err := resolveBinding(b.options)
@@ -116,6 +122,17 @@ func (b *Bound) Server() *mcp.Server {
 		version = "unavailable"
 	}
 	s := mcp.NewServer(&mcp.Implementation{Name: "maestro-product", Version: version}, nil)
+	s.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, request mcp.Request) (mcp.Result, error) {
+			switch method {
+			case "tools/list", "resources/list", "prompts/list":
+				if err := b.validate(); err != nil {
+					return nil, errors.New("product_restart_or_source_recovery_required")
+				}
+			}
+			return next(ctx, method, request)
+		}
+	})
 	readonly := &mcp.ToolAnnotations{ReadOnlyHint: true}
 	empty := map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
 	s.AddTool(&mcp.Tool{Name: "maestro_context", Description: "Read admitted binding metadata and memory capability hints; inspect maestro_query and maestro_apply schemas for operations. No content export.", InputSchema: empty, Annotations: readonly}, b.handle("context", empty))
@@ -189,6 +206,8 @@ func result(value any, err error) *mcp.CallToolResult {
 		switch {
 		case errors.Is(err, processidentity.ErrChanged):
 			code = "restart_required"
+		case errors.Is(err, ErrSourceRecoveryRequired):
+			code = "source_recovery_required"
 		case errors.Is(err, execution.ErrRevisionConflict):
 			code = "revision_conflict"
 		case errors.Is(err, execution.ErrAttemptConflict):
@@ -198,7 +217,11 @@ func result(value any, err error) *mcp.CallToolResult {
 		case errors.Is(err, execution.ErrItemBusy):
 			code = "item_busy"
 		}
-		value = map[string]string{"code": code}
+		metadata := map[string]string{"code": code}
+		if code == "source_recovery_required" {
+			metadata["next_action"] = "Use the independently admitted local maestro-install source-review/source-check recovery route before restarting."
+		}
+		value = metadata
 	}
 	body, _ := json.Marshal(value)
 	return &mcp.CallToolResult{IsError: err != nil, Content: []mcp.Content{&mcp.TextContent{Text: string(body)}}}

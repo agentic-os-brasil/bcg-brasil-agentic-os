@@ -56,11 +56,21 @@ func run() error {
 	planJSON := flags.String("confirmed-plan", "", "exact canonical activation plan from the reviewed handoff")
 	digest := flags.String("review-digest", "", "exact setup review digest")
 	confirm := flags.Bool("confirm", false, "explicit local confirmation")
+	var launch lifecycleFlags
+	flags.StringVar(&launch.ManagedRoot, "product-root", "", "fixed installed managed directory")
+	flags.StringVar(&launch.UserHome, "user-home", "", "fixed installation owner directory")
+	flags.StringVar(&launch.Workspace, "workspace", "", "fixed admitted workspace directory")
+	flags.StringVar(&launch.ManifestSHA256, "installed-manifest", "", "fixed carrier signed manifest digest")
+	flags.StringVar(&launch.ClientInputsSHA256, "installed-client-inputs", "", "fixed carrier immutable client digest")
+	flags.StringVar(&launch.PlanID, "plan-id", "", "exact reviewed pending plan identifier")
 	if err = flags.Parse(os.Args[2:]); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
 		return errors.New("unexpected positional arguments")
+	}
+	if handled, err := runLifecycle(context.Background(), os.Args[1], executable, registryPath, launch, *digest, *confirm); handled {
+		return err
 	}
 	if os.Args[1] == "install" {
 		if len(*planJSON) > 1<<20 {

@@ -178,11 +178,11 @@
       "executor": "local_adapter",
       "scope": "owner",
       "availability": "unavailable",
-      "availability_reason": "approved release provider and update-check adapter are not installed",
+      "availability_reason": "an enrolled authenticated local source and exact attended review are required",
       "default_enabled": true,
       "unattended": "never",
-      "writes": ["local_diagnostics"],
-      "success_boundary": "a signed update plan is reported; activation still requires explicit confirmation"
+      "writes": ["source_custody", "candidate_plan", "local_diagnostics"],
+      "success_boundary": "the confirmed authenticated generation advances monotonic source custody and produces a bounded verified candidate plan or explicit diagnosis; no enrollment as recurring work or activation is permitted"
     },
     {
       "id": "darwin-housekeeping-daily",

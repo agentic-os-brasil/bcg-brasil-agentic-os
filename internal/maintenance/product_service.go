@@ -21,6 +21,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/updateservice"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
@@ -30,13 +31,17 @@ var ErrQualificationRequired = errors.New("current actual maintenance qualificat
 // ServiceOptions is a native constructor boundary, never a tool schema.
 // Catalog must come from bundles/base/runtime.Maintenance (which imports this package).
 type ServiceOptions struct {
-	ProductRoot, UserHome, WorkspacePath string
-	LookupEnv                            func(string) (string, bool)
-	Catalog                              Catalog
-	CLIVersion                           string
-	Adapter                              string
+	ProductRoot, UserHome, WorkspacePath           string
+	LookupEnv                                      func(string) (string, bool)
+	Catalog                                        Catalog
+	CLIVersion                                     string
+	AuthorityRegistryPath, AuthorityRegistrySHA256 string
+	Adapter                                        string
 	// Now is an optional trusted constructor clock, never tool/CLI input.
 	Now func() time.Time `json:"-"`
+	// InstalledGuard comes from the fixed product binding. It is not a grant
+	// or a model input and cannot replace the live job/control/lease checks.
+	InstalledGuard func(func() error) error `json:"-"`
 }
 
 type Service struct {
@@ -70,14 +75,15 @@ type ProductSchedule struct {
 // ProductReview contains metadata only. Its private binding rejects edited or
 // serialized reviews; trusted confirmation is still required for every Apply.
 type ProductReview struct {
-	Operation       Operation       `json:"operation"`
-	WorkspaceID     string          `json:"workspace_id"`
-	Schedule        ProductSchedule `json:"schedule"`
-	Writes          []string        `json:"writes"`
-	QualificationID string          `json:"qualification_id,omitempty"`
-	Implementation  string          `json:"implementation"`
-	Configuration   string          `json:"configuration"`
-	SourceState     string          `json:"source_state,omitempty"`
+	Operation       Operation                   `json:"operation"`
+	WorkspaceID     string                      `json:"workspace_id"`
+	Schedule        ProductSchedule             `json:"schedule"`
+	Writes          []string                    `json:"writes"`
+	QualificationID string                      `json:"qualification_id,omitempty"`
+	Implementation  string                      `json:"implementation"`
+	Configuration   string                      `json:"configuration"`
+	SourceState     string                      `json:"source_state,omitempty"`
+	SourceReview    *updateservice.SyncedReview `json:"source_review,omitempty"`
 	seal            string
 }
 
@@ -350,6 +356,9 @@ func (s *Service) Review(op Operation) (ProductReview, error) {
 	if op.Kind != "qualify" && op.Kind != "enroll" && op.Kind != "pause" && op.Kind != "resume" && op.Kind != "revoke" {
 		return ProductReview{}, errors.New("unknown maintenance operation")
 	}
+	if op.JobID == UpdateCheckJobID && op.Kind != "qualify" {
+		return ProductReview{}, errors.New("update-check is attended-only; recurring enrollment and activation are unavailable")
+	}
 	c, err := s.loadControl(op.JobID)
 	if err != nil {
 		return ProductReview{}, err
@@ -388,6 +397,13 @@ func (s *Service) Review(op Operation) (ProductReview, error) {
 		if err != nil {
 			return ProductReview{}, err
 		}
+	}
+	if op.JobID == UpdateCheckJobID {
+		review, e := s.updateReview()
+		if e != nil {
+			return ProductReview{}, e
+		}
+		r.SourceReview = &review
 	}
 	r.seal = productDigest([]any{s.binding, r})
 	return r, nil
@@ -488,11 +504,17 @@ func (p *productExecution) guard(publish func() error) error {
 		if c.Revision != p.revision || p.oneShot != "" && c.OneShot != p.oneShot || p.oneShot == "" && c.State != "active" {
 			return ErrProductConflict
 		}
-		if wikiJob(p.jobID) && p.source != "" {
+		if (wikiJob(p.jobID) || p.jobID == UpdateCheckJobID) && p.source != "" {
 			current, err := p.service.sourceState(p.jobID)
 			if err != nil || current != p.source {
 				return ErrProductConflict
 			}
+		}
+		// The update owner acquires installation serialization itself. Holding
+		// that lock here would recursively lock ObserveSource/activation. The
+		// exact current source snapshot above and canonical CAS fence this job.
+		if p.jobID != UpdateCheckJobID && p.service.options.InstalledGuard != nil {
+			return p.service.options.InstalledGuard(publish)
 		}
 		return publish()
 	})
@@ -513,6 +535,7 @@ func (s *Service) worker(p *productExecution) Worker {
 	for _, job := range []string{WikiIncrementalJobID, WikiReconcileJobID, WikiIntegrityJobID} {
 		handlers[job] = productWikiHandler{service: s, expected: p.source, job: job}
 	}
+	handlers[UpdateCheckJobID] = productUpdateHandler{service: s, expected: p.source, execution: p}
 	return Worker{Catalog: s.options.Catalog, Scheduler: s.scheduler, Receipts: s.receipts, Jobs: []scheduler.Job{{ID: p.jobID, Cadence: schedule.Cadence, Weekday: schedule.Weekday, LocalHour: schedule.LocalHour, LocalMinute: schedule.LocalMinute, IntervalHours: schedule.IntervalHours, MaxCatchUp: schedule.MaxCatchUp}}, Handlers: handlers, Deadline: 2 * time.Minute, Now: s.now, product: p}
 }
 
@@ -680,6 +703,25 @@ func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatu
 	receipt, err := s.execute(ctx, p, occ, now)
 	if err != nil {
 		return ProductJobStatus{}, err
+	}
+	if p.jobID == UpdateCheckJobID && receipt.State == ReceiptReviewedNoChange {
+		// A genuine unchanged check may refresh custody and its exact pending
+		// plan, but cannot mint qualification from timestamp-only ID churn.
+		err := p.guard(func() error {
+			c, e := s.loadControl(p.jobID)
+			if e != nil {
+				return e
+			}
+			c.Revision++
+			c.OneShot = ""
+			return s.saveControl(c)
+		})
+		if err != nil {
+			return ProductJobStatus{}, err
+		}
+		status, err := s.jobStatus(p.jobID)
+		status.Reason = "reviewed_no_change"
+		return status, err
 	}
 	if receipt.State != ReceiptSucceeded {
 		return ProductJobStatus{}, ErrQualificationRequired
@@ -925,6 +967,10 @@ func scheduleFor(job string) ProductSchedule {
 	return ProductSchedule{Cadence: scheduler.Daily, MaxCatchUp: 1}
 }
 func (s *Service) sourceState(job string) (string, error) {
+	if job == UpdateCheckJobID {
+		review, err := s.updateReview()
+		return review.Digest, err
+	}
 	if wikiJob(job) {
 		return s.wikiSourceIdentity(job)
 	}

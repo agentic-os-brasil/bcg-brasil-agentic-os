@@ -288,7 +288,7 @@ func TestModernFactoryFirstInstallAndRestart(t *testing.T) {
 	}
 	state, err := installtx.ReadStateForManagedRoot(review.Installation.DataRoot, request.ManagedRoot)
 	must(t, err)
-	if state.SchemaVersion != 3 || state.Profile != "mcp-local-v1" || state.Server.Version != "0.1.42" {
+	if state.SchemaVersion != 4 || state.Source != nil || state.Profile != "mcp-local-v1" || state.Server.Version != "0.1.42" || state.Binding.ManifestSHA256 != sum(read(t, filepath.Join(release, "release-manifest.json"))) || state.Binding.ClientInputsSHA256 != manifest.Delivery.ClientInputsSHA256 {
 		t.Fatalf("modern durable state: %+v", state)
 	}
 	assertChangedInstalledServerRefused(t, ctx, root, request, config, review, result, state)
@@ -306,7 +306,7 @@ func TestModernFactoryFirstInstallAndRestart(t *testing.T) {
 	if len(plans) != 1 {
 		t.Fatalf("unexpected canonical transactions: %v", plans)
 	}
-	for path, wantVersion := range map[string]int{plans[0]: 3, filepath.Join(filepath.Dir(plans[0]), "activation-receipt.json"): 2} {
+	for path, wantVersion := range map[string]int{plans[0]: 4, filepath.Join(filepath.Dir(plans[0]), "activation-receipt.json"): 3} {
 		var wire map[string]any
 		raw := read(t, path)
 		must(t, json.Unmarshal(raw, &wire))

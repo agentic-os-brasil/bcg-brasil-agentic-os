@@ -56,7 +56,11 @@ func (b *Bound) memoryEngine() (*memory.Engine, basememory.RuntimeConfig, error)
 	if err := b.validate(); err != nil {
 		return nil, basememory.RuntimeConfig{}, err
 	}
-	return maintenance.NewProductMemoryEngine(b.home)
+	engine, configuration, err := maintenance.NewProductMemoryEngine(b.home)
+	if err == nil {
+		engine.PublicationGuard = b.guardPublication
+	}
+	return engine, configuration, err
 }
 
 // InitializeMemory is explicit operator setup; reads never prepare a producer key.

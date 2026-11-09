@@ -90,8 +90,8 @@ try {
   & $sdkGo test -c ./setup -o $setupBinary
   if ($LASTEXITCODE -ne 0) { throw 'First-install setup test compilation failed.' }
   $setupInventory = @(& $setupBinary '-test.list' '^(Test|Example)')
-  if ($LASTEXITCODE -ne 0 -or $setupInventory.Count -ne 2 -or
-      @((Compare-Object @('TestModernFactoryFirstInstallAndRestart', 'TestDirectInnerInstallRequiresProductionAuthority') ($setupInventory | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) { throw 'Setup full inventory must contain the two existing actual-process parents.' }
+  if ($LASTEXITCODE -ne 0 -or $setupInventory.Count -ne 4 -or
+      @((Compare-Object @('TestModernFactoryFirstInstallAndRestart', 'TestDirectInnerInstallRequiresProductionAuthority', 'TestModernSyncedSourceLifecycle', 'TestSyncedPublicationInterleavingAndReadOnlyReviews') ($setupInventory | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) { throw 'Setup full inventory must contain the four existing actual-process parents.' }
   & $sdkGo build -o $server ./cmd/maestro-mcp
   if ($LASTEXITCODE -ne 0) { throw 'Shipping MCP compilation failed.' }
   $inventory = @(& $testBinary '-test.list' '^(Test|Example)')

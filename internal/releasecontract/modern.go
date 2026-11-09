@@ -22,6 +22,7 @@ type ServerComponent struct {
 	CompatibleBundle     string `json:"compatible_bundle"`
 	Protocol             string `json:"protocol"`
 	EmbeddedInputsSHA256 string `json:"embedded_inputs_sha256"`
+	ExecutionContract    string `json:"execution_contract,omitempty"`
 }
 type DeliveryComponent struct {
 	Profile            string `json:"profile"`
@@ -122,6 +123,9 @@ func (m Manifest) validateComponents() error {
 	if !hashPattern.MatchString(m.Server.EmbeddedInputsSHA256) || !hashPattern.MatchString(m.Delivery.ClientInputsSHA256) {
 		return errors.New("modern input identities are required")
 	}
+	if m.Server.ExecutionContract != "" && m.Server.ExecutionContract != SyncedSourceContract {
+		return errors.New("unsupported server execution contract")
+	}
 	return validateComponents(CLIComponent{m.Server.Version, m.Server.CompatibleBundle}, BundleComponent{Version: m.Bundle.Version, CompatibleCLI: m.Bundle.CompatibleServer})
 }
 
@@ -148,7 +152,11 @@ func (m Manifest) ClientInputsDigest() (string, error) {
 		a, b := artifacts[i], artifacts[j]
 		return a.Kind+"/"+a.OS+"/"+a.Arch+"/"+a.Name < b.Kind+"/"+b.OS+"/"+b.Arch+"/"+b.Name
 	})
-	body, err := CanonicalJSON(map[string]any{"profile": m.Delivery.Profile, "installer_protocol": m.Delivery.InstallerProtocol, "installer_version": m.Delivery.InstallerVersion, "server_protocol": m.Server.Protocol, "embedded_inputs_sha256": m.Server.EmbeddedInputsSHA256, "artifacts": artifacts})
+	inputs := map[string]any{"profile": m.Delivery.Profile, "installer_protocol": m.Delivery.InstallerProtocol, "installer_version": m.Delivery.InstallerVersion, "server_protocol": m.Server.Protocol, "embedded_inputs_sha256": m.Server.EmbeddedInputsSHA256, "artifacts": artifacts}
+	if m.Server.ExecutionContract != "" {
+		inputs["execution_contract"] = m.Server.ExecutionContract
+	}
+	body, err := CanonicalJSON(inputs)
 	if err != nil {
 		return "", err
 	}
@@ -170,6 +178,7 @@ type ServerIdentity struct {
 	AuthorityRegistrySHA256 string             `json:"authority_registry_sha256"`
 	Resources               []EmbeddedResource `json:"resources"`
 	EmbeddedInputsSHA256    string             `json:"embedded_inputs_sha256"`
+	ExecutionContract       string             `json:"execution_contract,omitempty"`
 }
 
 func EmbeddedDigest(resources []EmbeddedResource) (string, error) {
@@ -181,8 +190,11 @@ func EmbeddedDigest(resources []EmbeddedResource) (string, error) {
 }
 
 func (i ServerIdentity) Validate() error {
-	if i.SchemaVersion != 1 || i.Product != "maestro" || i.Component != "mcp_server" || i.Protocol != ServerProtocol {
+	if (i.SchemaVersion != 1 && i.SchemaVersion != 2) || i.Product != "maestro" || i.Component != "mcp_server" || i.Protocol != ServerProtocol {
 		return errors.New("unsupported server identity")
+	}
+	if (i.SchemaVersion == 1 && i.ExecutionContract != "") || (i.SchemaVersion == 2 && i.ExecutionContract != SyncedSourceContract) {
+		return errors.New("server identity execution contract mismatch")
 	}
 	if _, err := parseVersion(i.Version); err != nil {
 		return err
@@ -240,6 +252,14 @@ func ReadServerIdentity(path string) (ServerIdentity, error) {
 	}
 	if err := ensureSingleJSONValue(decoder); err != nil {
 		return identity, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(output.Bytes(), &fields); err != nil {
+		return identity, err
+	}
+	_, hasContract := fields["execution_contract"]
+	if (identity.SchemaVersion == 1 && hasContract) || (identity.SchemaVersion == 2 && !hasContract) {
+		return identity, errors.New("server identity wire variant mismatch")
 	}
 	return identity, identity.Validate()
 }

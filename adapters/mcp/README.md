@@ -12,7 +12,10 @@ The modern signed factory and explicit reviewed first install are described in
 the [installation guide](../../docs/product-install.md). They materialize complete
 participant-local packets after genuine admission. Their engineering source
 evidence does not establish native signing, client registration/loading or the
-still-pending modern update lifecycle.
+complete modern update lifecycle. The [signed-source guide](../../docs/product-synced-source.md)
+records the generation publisher, synced-folder layout and monotonic local
+custody contract. Delivery evidence tracks source review, hosted CI, actual
+client admission, signing and publication independently.
 
 Reviewed memory adds capture, paged discovery/search/readback, bounded context,
 daily/weekly consolidation and revision-aware correction/deletion/retention.

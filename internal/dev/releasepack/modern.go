@@ -50,7 +50,7 @@ func BuildModernCandidate(ctx context.Context, o ModernOptions) (ModernCandidate
 	if o.Channel != "canary" && o.Channel != "beta" && o.Channel != "stable" {
 		return ModernCandidate{}, errors.New("unsupported modern release channel")
 	}
-	moduleMode, err := modernModuleMode(filepath.Join(o.Root, "adapters", "mcp"))
+	moduleMode, err := ReadOnlyModuleMode(filepath.Join(o.Root, "adapters", "mcp"))
 	if err != nil {
 		return ModernCandidate{}, err
 	}
@@ -74,7 +74,8 @@ func BuildModernCandidate(ctx context.Context, o ModernOptions) (ModernCandidate
 	if err != nil {
 		return ModernCandidate{}, err
 	}
-	defer os.RemoveAll(stage)
+	// Preserve failed construction for inspection. Reopening this temporary
+	// pathname for cleanup could remove a successor after publication.
 	release := filepath.Join(stage, "candidate")
 	seed := filepath.Join(stage, "seed")
 	for _, directory := range []string{release, filepath.Join(seed, "trust")} {
@@ -103,7 +104,7 @@ func BuildModernCandidate(ctx context.Context, o ModernOptions) (ModernCandidate
 	if err != nil {
 		return ModernCandidate{}, err
 	}
-	if identity.Version != o.Version || identity.CompatibleBundle != compatibleRange(o.Version) || identity.AuthorityRegistrySHA256 != pin {
+	if identity.SchemaVersion != 2 || identity.ExecutionContract != releasecontract.SyncedSourceContract || identity.Version != o.Version || identity.CompatibleBundle != compatibleRange(o.Version) || identity.AuthorityRegistrySHA256 != pin {
 		return ModernCandidate{}, errors.New("built server does not match factory inputs")
 	}
 	server, err := inspectArtifact("mcp_server", o.Target.OS, o.Target.Arch, filepath.Join(release, serverName))
@@ -136,7 +137,7 @@ func BuildModernCandidate(ctx context.Context, o ModernOptions) (ModernCandidate
 	if err != nil {
 		return ModernCandidate{}, err
 	}
-	m := releasecontract.Manifest{SchemaVersion: 2, Product: "maestro", Release: o.Version, Channel: o.Channel, Issuer: releasecontract.Issuer{ID: "maestro-release-candidate", KeyID: "candidate-unavailable"}, Server: releasecontract.ServerComponent{Version: o.Version, CompatibleBundle: compatibleRange(o.Version), Protocol: releasecontract.ServerProtocol, EmbeddedInputsSHA256: identity.EmbeddedInputsSHA256}, Bundle: releasecontract.BundleComponent{Version: o.Version, CompatibleServer: compatibleRange(o.Version)}, Delivery: releasecontract.DeliveryComponent{Profile: releasecontract.ModernProfile, InstallerVersion: o.InstallerVersion, InstallerProtocol: releasecontract.InstallerProtocol}, Artifacts: []releasecontract.Artifact{bundle, server}, Migrations: []releasecontract.Migration{}}
+	m := releasecontract.Manifest{SchemaVersion: 2, Product: "maestro", Release: o.Version, Channel: o.Channel, Issuer: releasecontract.Issuer{ID: "maestro-release-candidate", KeyID: "candidate-unavailable"}, Server: releasecontract.ServerComponent{Version: o.Version, CompatibleBundle: compatibleRange(o.Version), Protocol: releasecontract.ServerProtocol, ExecutionContract: identity.ExecutionContract, EmbeddedInputsSHA256: identity.EmbeddedInputsSHA256}, Bundle: releasecontract.BundleComponent{Version: o.Version, CompatibleServer: compatibleRange(o.Version)}, Delivery: releasecontract.DeliveryComponent{Profile: releasecontract.ModernProfile, InstallerVersion: o.InstallerVersion, InstallerProtocol: releasecontract.InstallerProtocol}, Artifacts: []releasecontract.Artifact{bundle, server}, Migrations: []releasecontract.Migration{}}
 	if o.DoclingPack != "" {
 		if o.Target.OS != "darwin" || o.Target.Arch != "arm64" {
 			return ModernCandidate{}, errors.New("Docling has no qualified pack for the selected target")
@@ -185,15 +186,16 @@ func BuildModernCandidate(ctx context.Context, o ModernOptions) (ModernCandidate
 	if err = VerifyCandidate(release); err != nil {
 		return ModernCandidate{}, err
 	}
-	if err = os.Rename(stage, o.Output); err != nil {
-		return ModernCandidate{}, err
+	if err = renameModernCandidate(ctx, stage, o.Output); err != nil {
+		return ModernCandidate{}, fmt.Errorf("publish modern candidate; staging preserved at %s: %w", stage, err)
 	}
 	return ModernCandidate{Directory: filepath.Join(o.Output, "candidate"), Installer: filepath.Join(o.Output, "seed", installerName), AuthorityRegistry: filepath.Join(o.Output, "seed", "trust", "release-authority-registry.json"), Manifest: m}, nil
 }
 
-// The existing ordinary-account launcher supplies a sealed read-only vendor
-// closure. An invalid present closure refuses; it never falls back to download.
-func modernModuleMode(module string) (string, error) {
+// ReadOnlyModuleMode selects the sealed read-only vendor closure supplied by
+// the existing ordinary-account launcher. Invalid present vendor inputs refuse;
+// factory and current fixture compilers never fall back to downloading.
+func ReadOnlyModuleMode(module string) (string, error) {
 	root := filepath.Join(module, "vendor")
 	if _, err := os.Lstat(root); errors.Is(err, os.ErrNotExist) {
 		return "-mod=readonly", nil

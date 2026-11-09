@@ -38,6 +38,7 @@ var (
 	validWrites     = map[string]bool{
 		"none": true, "memory_l1": true, "memory_rollups": true, "wiki_private": true,
 		"runtime_index": true, "owner_observation": true, "local_diagnostics": true, "memory_checkpoint": true,
+		"source_custody": true, "candidate_plan": true,
 	}
 )
 
@@ -167,6 +168,10 @@ func (catalog Catalog) Validate() error {
 
 func validateRequiredJobInvariant(job Job) error {
 	switch job.ID {
+	case "update-check":
+		if job.Category != "update" || job.Executor != "local_adapter" || job.Scope != "owner" || job.Unattended != "never" || len(job.Writes) != 3 || job.Writes[0] != "source_custody" || job.Writes[1] != "candidate_plan" || job.Writes[2] != "local_diagnostics" {
+			return errors.New("update-check requires an attended exact source-custody, candidate-plan and diagnosis contract")
+		}
 	case MemoryCheckpointJobID:
 		if job.Category != "memory" || job.Trigger != "daily_or_presence" || job.Executor != "deterministic" || job.Scope != "workspace" || !job.DefaultEnabled || job.Unattended != "deterministic_only" || len(job.Writes) != 1 || job.Writes[0] != "memory_checkpoint" {
 			return errors.New("memory checkpoint has an unsafe maintenance contract")

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/updateservice"
 )
 
 type CapabilityFinding struct {
@@ -18,6 +19,8 @@ type SourceCoverage struct {
 	State  string `json:"state"`
 }
 type ProductDomainReport struct {
+	CurrentPending       *UpdatePendingReadback       `json:"current_pending,omitempty"`
+	Update               *UpdateDiagnosis             `json:"update,omitempty"`
 	Wiki                 *WikiDiagnostic              `json:"wiki,omitempty"`
 	Period               string                       `json:"period,omitempty"`
 	LifetimeStatus       string                       `json:"lifetime_status,omitempty"`
@@ -48,7 +51,28 @@ func (s *Service) Report(job string) (ProductDomainReport, error) {
 		}
 		out.Finding = report.Finding
 		out.ObservedAt = report.ObservedAt
-		if report.Wiki != nil {
+		if report.Update != nil {
+			out.Update = report.Update
+			out.CurrentPending = &UpdatePendingReadback{State: "unavailable"}
+			if report.Update.Outcome == "candidate_staged_activation_unconfirmed" {
+				// Keep the stored report/plan's actual historical provenance.
+				// A current actionable plan is separately reauthenticated.
+				out.Finding = "historical_update_check"
+				options, e := s.updateOptions()
+				if e == nil {
+					pending, e := updateservice.LoadPending(options.DataRoot)
+					if e == nil {
+						verified, _, e := updateservice.ConfirmPending(options.DataRoot, options.ManagedRoot, pending.Plan.ID, options.Registry)
+						if e == nil && verified.Plan.ToRelease == report.Update.CandidateRelease && verified.Plan.ManifestSHA256 == report.Update.ManifestSHA256 && verified.Plan.ClientInputsSHA256 == report.Update.ClientInputsSHA256 && verified.Plan.Source.GenerationSHA256 == report.Update.GenerationSHA256 {
+							out.CurrentPending = &UpdatePendingReadback{State: "verified_unconfirmed", PlanID: verified.Plan.ID, Source: &verified.Plan.Source.Tuple, Sequence: verified.Plan.Source.Sequence, GenerationSHA256: verified.Plan.Source.GenerationSHA256, CandidateRelease: verified.Plan.ToRelease, ManifestSHA256: verified.Plan.ManifestSHA256, ClientInputsSHA256: verified.Plan.ClientInputsSHA256, TargetOS: verified.Plan.TargetOS, TargetArch: verified.Plan.TargetArch}
+							if verified.Plan.ID == report.Update.PlanID {
+								out.Finding = report.Finding
+							}
+						}
+					}
+				}
+			}
+		} else if report.Wiki != nil {
 			out.Wiki = report.Wiki
 			out.Counts = map[string]int{"concepts": report.Wiki.Concepts, "files": report.Wiki.Files}
 			current, err := s.engine.InspectPrivateWikiMaintenance(s.workspaceID)

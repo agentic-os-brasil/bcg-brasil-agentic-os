@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -34,6 +35,8 @@ var sha256Pattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 var confirmationPlanIDPattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
 
 type PrepareOptions struct {
+	Source             SourceBinding
+	SourceStateSHA256  string
 	UserHome           string
 	Transition         string
 	ConfirmationPlanID string
@@ -48,6 +51,9 @@ type PrepareOptions struct {
 }
 
 type ActivationPlan struct {
+	Source                  SourceBinding      `json:"source_binding,omitempty"`
+	SourceStateSHA256       string             `json:"source_state_sha256,omitempty"`
+	Binding                 ReleaseBinding     `json:"release_binding,omitempty"`
 	UserHome                string             `json:"user_home,omitempty"`
 	Profile                 string             `json:"profile,omitempty"`
 	Server                  ExecutableIdentity `json:"server,omitempty"`
@@ -93,6 +99,8 @@ type ActivateOptions struct {
 }
 
 type State struct {
+	Source        *SourceControl     `json:"source_control,omitempty"`
+	Binding       ReleaseBinding     `json:"release_binding,omitempty"`
 	Profile       string             `json:"profile,omitempty"`
 	Server        ExecutableIdentity `json:"server,omitempty"`
 	SchemaVersion int                `json:"schema_version"`
@@ -112,6 +120,7 @@ type State struct {
 }
 
 type ActivationReceipt struct {
+	Binding            ReleaseBinding     `json:"release_binding,omitempty"`
 	Profile            string             `json:"profile,omitempty"`
 	Server             ExecutableIdentity `json:"server,omitempty"`
 	SchemaVersion      int                `json:"schema_version"`
@@ -138,6 +147,8 @@ type ActivationReceipt struct {
 }
 
 type stateWire struct {
+	Source        *SourceControl     `json:"source_control,omitempty"`
+	Binding       ReleaseBinding     `json:"release_binding,omitempty"`
 	Profile       string             `json:"profile,omitempty"`
 	Server        ExecutableIdentity `json:"server,omitempty"`
 	SchemaVersion int                `json:"schema_version"`
@@ -157,6 +168,7 @@ type stateWire struct {
 }
 
 type Snapshot struct {
+	Binding       ReleaseBinding     `json:"release_binding,omitempty"`
 	Profile       string             `json:"profile,omitempty"`
 	Server        ExecutableIdentity `json:"server,omitempty"`
 	Release       string             `json:"release"`
@@ -291,6 +303,21 @@ func Prepare(verified releaseverify.VerifiedRelease, options PrepareOptions) (st
 		plan.RuntimePackSHA256 = runtimePack.SHA256
 		plan.RuntimePackSize = runtimePack.Size
 	}
+	binding, err := bindingForPrepared(verified, plan)
+	if err != nil {
+		return "", err
+	}
+	plan.Binding = binding
+	plan.Source = options.Source
+	plan.SourceStateSHA256 = options.SourceStateSHA256
+	if binding.ManifestSHA256 != "" {
+		plan.SchemaVersion = 4
+	}
+	if plan.SchemaVersion == 4 {
+		if _, err := checkCandidateServer(plan.StagedCLI, plan.Server); err != nil {
+			return "", err
+		}
+	}
 	planPath := filepath.Join(transaction, PlanName)
 	if err := WritePlan(planPath, plan); err != nil {
 		return "", err
@@ -322,7 +349,7 @@ func ValidatePrepared(
 	if err != nil {
 		return ActivationPlan{}, err
 	}
-	if plan.UserHome != options.UserHome || plan.Profile != profileForManifest(verified.Manifest) || plan.Server != serverForManifest(verified.Manifest, *cliArtifact) ||
+	if plan.Source != options.Source || plan.SourceStateSHA256 != options.SourceStateSHA256 || plan.UserHome != options.UserHome || plan.Profile != profileForManifest(verified.Manifest) || plan.Server != serverForManifest(verified.Manifest, *cliArtifact) ||
 		plan.Transition != options.Transition ||
 		plan.ConfirmationPlanID != options.ConfirmationPlanID ||
 		plan.FromRelease != options.FromRelease ||
@@ -377,6 +404,12 @@ func ValidatePrepared(
 		}
 		if err := verifyRegularFile(plan.StagedRuntimePack, plan.RuntimePackSize, plan.RuntimePackSHA256); err != nil {
 			return ActivationPlan{}, fmt.Errorf("verify staged MarkItDown runtime pack: %w", err)
+		}
+	}
+	if plan.SchemaVersion == 4 {
+		binding, err := bindingForPrepared(verified, plan)
+		if err != nil || binding != plan.Binding {
+			return ActivationPlan{}, errors.New("prepared signed release binding changed")
 		}
 	}
 	return plan, nil
@@ -436,12 +469,19 @@ func Activate(
 			return err
 		}
 	}
+	reuseBundle := false
 	if _, err := os.Stat(bundleTarget); err == nil {
-		return fmt.Errorf("bundle version already exists: %s", plan.BundleVersion)
+		if plan.SchemaVersion != 4 {
+			return fmt.Errorf("bundle version already exists: %s", plan.BundleVersion)
+		}
+		if err := verifyBoundBundle(plan.ManagedRoot, plan.DataRoot, plan.BundleVersion, plan.Binding); err != nil {
+			return fmt.Errorf("existing immutable bundle differs from signed candidate: %w", err)
+		}
+		reuseBundle = true
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	current, stateErr := ReadStateForManagedRoot(plan.DataRoot, plan.ManagedRoot)
+	current, stateErr := readTransitionState(plan.DataRoot, plan.ManagedRoot, plan.SchemaVersion == 4)
 	hadState := stateErr == nil
 	if stateErr != nil && !errors.Is(stateErr, os.ErrNotExist) {
 		return stateErr
@@ -462,10 +502,29 @@ func Activate(
 		}
 		info, err := os.Lstat(activeCLI)
 		if err != nil {
+			if plan.SchemaVersion == 4 {
+				return fmt.Errorf("payload_repair_unavailable: active source executable is missing; explicit payload repair required, installation preserved: %w", err)
+			}
 			return fmt.Errorf("active CLI is unavailable before update: %w", err)
 		}
 		if !info.Mode().IsRegular() {
 			return errors.New("active CLI must be a regular file before update")
+		}
+		if plan.SchemaVersion == 4 {
+			if err := verifyRegularFile(activeCLI, current.Server.Size, current.Server.SHA256); err != nil {
+				return fmt.Errorf("payload_repair_unavailable: active source executable differs from signed current release; explicit payload repair required, installation preserved: %w", err)
+			}
+		}
+	}
+	if plan.SchemaVersion == 4 && plan.Transition == "update" {
+		if !sourceMatchesPlan(current, plan) || StateDigest(current) != plan.SourceStateSHA256 {
+			return errors.New("source custody changed after update confirmation")
+		}
+		if err := validateSourceAdmission(plan.ManagedRoot, current, time.Now()); err != nil {
+			return err
+		}
+		if err := releaseEligible(current.Source, plan.Release, plan.Binding); err != nil {
+			return err
 		}
 	}
 	activatedAt := time.Now().UTC()
@@ -546,14 +605,18 @@ func Activate(
 		if backup != "" {
 			_ = os.Rename(backup, activeCLI)
 		}
-		_ = os.RemoveAll(bundleTarget)
+		if !reuseBundle {
+			_ = os.RemoveAll(bundleTarget)
+		}
 		if runtimeTarget != "" {
 			_ = os.RemoveAll(runtimeTarget)
 		}
 		return cause
 	}
-	if err := os.Rename(pendingBundle, bundleTarget); err != nil {
-		return restore(fmt.Errorf("activate bundle: %w", err))
+	if !reuseBundle {
+		if err := os.Rename(pendingBundle, bundleTarget); err != nil {
+			return restore(fmt.Errorf("activate bundle: %w", err))
+		}
 	}
 	if pendingRuntime != "" {
 		if err := os.Rename(pendingRuntime, runtimeTarget); err != nil {
@@ -573,8 +636,8 @@ func Activate(
 		options.afterPayload()
 	}
 	next := State{
-		SchemaVersion: schemaForProfile(plan.Profile, 2),
-		Profile:       plan.Profile, Server: plan.Server,
+		SchemaVersion: plan.SchemaVersion, Binding: plan.Binding, Source: current.Source,
+		Profile: plan.Profile, Server: plan.Server,
 		ManagedRoot:   plan.ManagedRoot,
 		Release:       plan.Release,
 		Channel:       plan.Channel,
@@ -590,7 +653,7 @@ func Activate(
 	}
 	if hadState {
 		next.Previous = &Snapshot{
-			Profile: current.Profile, Server: current.Server,
+			Profile: current.Profile, Server: current.Server, Binding: current.Binding,
 			Release: current.Release, Channel: current.Channel, CLIVersion: current.CLIVersion,
 			BundleVersion: current.BundleVersion, TargetOS: current.TargetOS, TargetArch: current.TargetArch,
 			RoleAuthority: current.RoleAuthority, MigrationID: current.MigrationID,
@@ -615,13 +678,31 @@ func stateMatchesSource(state State, plan ActivationPlan) bool {
 }
 
 func Rollback(managedRoot, dataRoot string, checker func(path, version string) error) error {
+	return rollback(managedRoot, dataRoot, checker, "")
+}
+
+func rollback(managedRoot, dataRoot string, checker func(path, version string) error, expectedDigest string) error {
 	managedRoot, dataRoot, err := normalizedRoots(managedRoot, dataRoot)
 	if err != nil {
 		return err
 	}
-	current, err := ReadStateForManagedRoot(dataRoot, managedRoot)
+	current, err := readTransitionState(dataRoot, managedRoot, expectedDigest != "")
 	if err != nil {
 		return err
+	}
+	if expectedDigest != "" && current.SchemaVersion != 4 {
+		return errors.New("source-aware rollback requires protected schema4 installation")
+	}
+	if current.SchemaVersion == 4 {
+		if expectedDigest == "" {
+			return errors.New("source-aware rollback requires exact trusted review")
+		}
+		if StateDigest(current) != expectedDigest {
+			return errors.New("rollback review is stale")
+		}
+		if err := validateQualifiedRollback(managedRoot, dataRoot, current, time.Now()); err != nil {
+			return err
+		}
 	}
 	if current.Previous == nil {
 		return errors.New("no previous Maestro installation is available")
@@ -657,6 +738,18 @@ func Rollback(managedRoot, dataRoot string, checker func(path, version string) e
 		return err
 	}
 	defer unlock()
+	fresh, err := readTransitionState(dataRoot, managedRoot, expectedDigest != "")
+	if err != nil {
+		return err
+	}
+	if StateDigest(fresh) != StateDigest(current) {
+		return errors.New("installed/source state changed before rollback")
+	}
+	if current.SchemaVersion == 4 {
+		if err := validateQualifiedRollback(managedRoot, dataRoot, current, time.Now()); err != nil {
+			return err
+		}
+	}
 	activeCLI := filepath.Join(managedRoot, "bin", executableForProfile(current.TargetOS, current.Profile))
 	if err := ensureSafePath(managedRoot, activeCLI); err != nil {
 		return err
@@ -684,8 +777,8 @@ func Rollback(managedRoot, dataRoot string, checker func(path, version string) e
 		return fmt.Errorf("rolled-back CLI self-check failed: %w", err)
 	}
 	next := State{
-		SchemaVersion: schemaForProfile(current.Previous.Profile, 2),
-		Profile:       current.Previous.Profile, Server: current.Previous.Server,
+		SchemaVersion: current.SchemaVersion, Binding: current.Previous.Binding, Source: current.Source,
+		Profile: current.Previous.Profile, Server: current.Previous.Server,
 		ManagedRoot:   managedRoot,
 		Release:       current.Previous.Release,
 		Channel:       current.Previous.Channel,
@@ -699,7 +792,7 @@ func Rollback(managedRoot, dataRoot string, checker func(path, version string) e
 		PolicySHA256:  current.Previous.PolicySHA256,
 		ActivatedAt:   time.Now().UTC(),
 		Previous: &Snapshot{
-			Profile: current.Profile, Server: current.Server,
+			Profile: current.Profile, Server: current.Server, Binding: current.Binding,
 			Release: current.Release, Channel: current.Channel, CLIVersion: current.CLIVersion,
 			BundleVersion: current.BundleVersion, TargetOS: current.TargetOS, TargetArch: current.TargetArch,
 			RoleAuthority: current.RoleAuthority, MigrationID: current.MigrationID,
@@ -756,7 +849,7 @@ func ValidateReconciliation(planPath string, options PrepareOptions) (bool, erro
 	if err != nil {
 		return true, err
 	}
-	current, err := ReadStateForManagedRoot(options.DataRoot, options.ManagedRoot)
+	current, err := readTransitionState(options.DataRoot, options.ManagedRoot, plan.SchemaVersion == 4)
 	if err != nil {
 		return true, err
 	}
@@ -798,9 +891,14 @@ func ReconcileActivated(planPath string, options ActivateOptions) (bool, error) 
 		return false, err
 	}
 	defer unlock()
-	current, err := ReadStateForManagedRoot(options.PrepareOptions.DataRoot, options.PrepareOptions.ManagedRoot)
+	current, err := readTransitionState(options.PrepareOptions.DataRoot, options.PrepareOptions.ManagedRoot, plan.SchemaVersion == 4)
 	if err != nil {
 		return false, err
+	}
+	if plan.SchemaVersion == 4 {
+		if err := validateReconcileSource(plan, current); err != nil {
+			return false, err
+		}
 	}
 	if stateMatchesSource(current, plan) {
 		payloadErr := verifyActivatedPayload(plan)
@@ -823,6 +921,12 @@ func ReconcileActivated(planPath string, options ActivateOptions) (bool, error) 
 			); err != nil {
 				return false, fmt.Errorf("complete interrupted activation state: %w", err)
 			}
+			if plan.SchemaVersion == 4 {
+				_, err := ValidateQualifiedLaunch(plan.ManagedRoot, plan.DataRoot, plan.Binding, time.Now())
+				if err != nil {
+					return true, fmt.Errorf("activation reconciled but qualified launch blocked: %w", err)
+				}
+			}
 			return true, nil
 		}
 		if err := restoreInterruptedActivation(plan, receipt); err != nil {
@@ -840,6 +944,12 @@ func ReconcileActivated(planPath string, options ActivateOptions) (bool, error) 
 	}
 	if err := verifyActivatedPayload(plan); err != nil {
 		return false, err
+	}
+	if plan.SchemaVersion == 4 {
+		_, err := ValidateQualifiedLaunch(plan.ManagedRoot, plan.DataRoot, plan.Binding, time.Now())
+		if err != nil {
+			return true, fmt.Errorf("activation already applied but qualified launch blocked: %w", err)
+		}
 	}
 	return true, nil
 }
@@ -877,7 +987,7 @@ func readActivationReceipt(planPath string, plan ActivationPlan) (ActivationRece
 	if err := readJSONStrict(filepath.Join(filepath.Dir(planPath), ReceiptName), &receipt); err != nil {
 		return ActivationReceipt{}, err
 	}
-	if receipt != receiptForPlan(plan, receipt.CommittedAt) ||
+	if !reflect.DeepEqual(receipt, receiptForPlan(plan, receipt.CommittedAt)) ||
 		receipt.CommittedAt.IsZero() ||
 		receipt.CommittedAt.Location() != time.UTC {
 		return ActivationReceipt{}, errors.New("activation receipt does not match the confirmed plan")
@@ -944,8 +1054,18 @@ func restoreInterruptedActivation(plan ActivationPlan, receipt ActivationReceipt
 	default:
 		return backupErr
 	}
-	if err := os.RemoveAll(filepath.Join(plan.ManagedRoot, "bundles", plan.BundleVersion)); err != nil {
-		return err
+	retainBundle := false
+	if plan.SchemaVersion == 4 {
+		state, err := ReadSourceState(plan.DataRoot, plan.ManagedRoot)
+		if err != nil {
+			return err
+		}
+		retainBundle = state.BundleVersion == plan.BundleVersion || (state.Previous != nil && state.Previous.BundleVersion == plan.BundleVersion && state.Previous.Binding.ManifestSHA256 == plan.Binding.ManifestSHA256)
+	}
+	if !retainBundle {
+		if err := os.RemoveAll(filepath.Join(plan.ManagedRoot, "bundles", plan.BundleVersion)); err != nil {
+			return err
+		}
 	}
 	if err := os.RemoveAll(filepath.Join(plan.ManagedRoot, "bundles", ".pending-"+plan.TransactionID)); err != nil {
 		return err
@@ -962,8 +1082,8 @@ func restoreInterruptedActivation(plan ActivationPlan, receipt ActivationReceipt
 
 func committedTargetState(plan ActivationPlan, source State, activatedAt time.Time) State {
 	return State{
-		SchemaVersion: schemaForProfile(plan.Profile, 2),
-		Profile:       plan.Profile, Server: plan.Server,
+		SchemaVersion: plan.SchemaVersion, Binding: plan.Binding, Source: source.Source,
+		Profile: plan.Profile, Server: plan.Server,
 		ManagedRoot:   plan.ManagedRoot,
 		Release:       plan.Release,
 		Channel:       plan.Channel,
@@ -977,7 +1097,7 @@ func committedTargetState(plan ActivationPlan, source State, activatedAt time.Ti
 		PolicySHA256:  plan.PolicySHA256,
 		ActivatedAt:   activatedAt,
 		Previous: &Snapshot{
-			Profile: source.Profile, Server: source.Server,
+			Profile: source.Profile, Server: source.Server, Binding: source.Binding,
 			Release: source.Release, Channel: source.Channel, CLIVersion: source.CLIVersion,
 			BundleVersion: source.BundleVersion, TargetOS: source.TargetOS, TargetArch: source.TargetArch,
 			RoleAuthority: source.RoleAuthority, MigrationID: source.MigrationID,
@@ -992,6 +1112,9 @@ func stateMatchesCommittedTarget(
 	plan ActivationPlan,
 	receipt ActivationReceipt,
 ) bool {
+	if plan.SchemaVersion == 4 && (state.SchemaVersion != 4 || state.Binding != plan.Binding || state.Source == nil || state.Source.Tuple != plan.Source.Tuple || state.Source.Sequence < plan.Source.Sequence) {
+		return false
+	}
 	return state.Profile == plan.Profile && state.Server == plan.Server && state.Release == plan.Release &&
 		state.Channel == plan.Channel &&
 		state.CLIVersion == plan.CLIVersion &&
@@ -1014,8 +1137,8 @@ func stateMatchesCommittedTarget(
 
 func receiptForPlan(plan ActivationPlan, committedAt time.Time) ActivationReceipt {
 	return ActivationReceipt{
-		SchemaVersion: map[bool]int{true: 2, false: 1}[plan.Profile != ""],
-		Profile:       plan.Profile, Server: plan.Server,
+		SchemaVersion: receiptSchema(plan), Binding: plan.Binding,
+		Profile: plan.Profile, Server: plan.Server,
 		ConfirmationPlanID: plan.ConfirmationPlanID,
 		TransactionID:      plan.TransactionID,
 		Release:            plan.Release,
@@ -1067,7 +1190,10 @@ func writeActivationReceipt(planPath string, receipt ActivationReceipt) error {
 }
 
 func WriteState(dataRoot string, state State) error {
-	if state.SchemaVersion != schemaForProfile(state.Profile, 2) || !validModernIdentity(state.Profile, state.Server) || state.Profile != "" && state.CLIVersion != state.Server.Version || state.ManagedRoot == "" {
+	if err := guardStateWrite(dataRoot, state); err != nil {
+		return err
+	}
+	if state.SchemaVersion != stateSchema(state.Profile, state.Binding) || !validModernIdentity(state.Profile, state.Server) || state.Profile != "" && state.CLIVersion != state.Server.Version || state.ManagedRoot == "" {
 		return errors.New("new install state must use schema version 2 with a managed root")
 	}
 	if !validRoleState(state.RoleAuthority, state.MigrationID, state.CatalogSHA256, state.PolicySHA256) {
@@ -1120,8 +1246,8 @@ func readState(dataRoot, expectedManagedRoot string, allowV1Migration bool) (Sta
 			return State{}, fmt.Errorf("migrate install state to schema version 2: %w", err)
 		}
 		return state, nil
-	case 2, 3:
-		if wire.SchemaVersion != schemaForProfile(wire.Profile, 2) {
+	case 2, 3, 4:
+		if wire.SchemaVersion != stateSchema(wire.Profile, wire.Binding) {
 			return State{}, errors.New("install schema/profile mismatch")
 		}
 		if wire.ManagedRoot == nil || *wire.ManagedRoot == "" {
@@ -1143,6 +1269,12 @@ func readState(dataRoot, expectedManagedRoot string, allowV1Migration bool) (Sta
 }
 
 func validStateCore(state stateWire) bool {
+	if state.SchemaVersion == 4 && (!validReleaseBinding(state.Binding) || state.Server.ExecutionContract != releasecontract.SyncedSourceContract || validateSourceShape(state.Source) != nil) {
+		return false
+	}
+	if state.SchemaVersion != 4 && (state.Binding != (ReleaseBinding{}) || state.Source != nil) {
+		return false
+	}
 	if !validModernIdentity(state.Profile, state.Server) || state.Profile != "" && state.Server.Version != state.CLIVersion {
 		return false
 	}
@@ -1183,7 +1315,7 @@ func validRoleState(authority, migrationID, catalogSHA256, policySHA256 string) 
 func stateFromWire(wire stateWire, managedRoot string) State {
 	return State{
 		SchemaVersion: wire.SchemaVersion,
-		Profile:       wire.Profile, Server: wire.Server,
+		Profile:       wire.Profile, Server: wire.Server, Binding: wire.Binding, Source: wire.Source,
 		ManagedRoot:   managedRoot,
 		Release:       wire.Release,
 		Channel:       wire.Channel,
@@ -1794,6 +1926,9 @@ func writeJSONAtomic(path string, value any, mode os.FileMode) error {
 		return err
 	}
 	body = append(body, '\n')
+	if len(body) > 1<<20 {
+		return errors.New("JSON custody exceeds supported 1 MiB bound")
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
