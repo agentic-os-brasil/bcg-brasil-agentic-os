@@ -132,6 +132,16 @@ func buildPortable(options Options, format string) error {
 		}
 		files[name] = body
 	}
+	native, err := nativePacketPayload(o, format)
+	if err != nil {
+		return err
+	}
+	for name, body := range native {
+		if _, exists := files[name]; exists {
+			return fmt.Errorf("native packet asset collision: %s", name)
+		}
+		files[name] = body
+	}
 	registry, err := packagedAuthority(o)
 	if err != nil {
 		return err
@@ -176,7 +186,7 @@ func buildPortable(options Options, format string) error {
 	if err := os.Chmod(filepath.Join(stage, filepath.FromSlash(server)), 0755); err != nil {
 		return err
 	}
-	if got, err := binaryPlatform(filepath.Join(stage, filepath.FromSlash(server))); err != nil || got != platform {
+	if body, target, err := readNativeBinary(filepath.Join(stage, filepath.FromSlash(server))); err != nil || target != o.target || digest(body) != digest(o.serverBody) {
 		return errors.New("selected server changed while packaging")
 	}
 	if err := writeInventory(stage, format, o.Version, platform, server); err != nil {

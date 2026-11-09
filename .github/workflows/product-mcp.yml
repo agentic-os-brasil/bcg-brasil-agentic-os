@@ -16,6 +16,14 @@ on:
       - 'internal/userlevel/**'
       - 'internal/zipmigration/**'
       - 'internal/zipruntime/**'
+      - 'internal/adaptercfg/**'
+      - 'internal/claudeadapter/**'
+      - 'internal/claudeagents/**'
+      - 'internal/nativeagentflow/**'
+      - 'internal/sessionctx/**'
+      - 'internal/sessionhook/**'
+      - 'internal/lifecycle/**'
+      - 'internal/workspacepolicy/**'
       - 'go.mod'
       - 'go.sum'
       - 'internal/workspace/**'
@@ -50,6 +58,14 @@ on:
       - 'internal/userlevel/**'
       - 'internal/zipmigration/**'
       - 'internal/zipruntime/**'
+      - 'internal/adaptercfg/**'
+      - 'internal/claudeadapter/**'
+      - 'internal/claudeagents/**'
+      - 'internal/nativeagentflow/**'
+      - 'internal/sessionctx/**'
+      - 'internal/sessionhook/**'
+      - 'internal/lifecycle/**'
+      - 'internal/workspacepolicy/**'
       - 'go.mod'
       - 'go.sum'
       - 'internal/workspace/**'
@@ -152,6 +168,10 @@ jobs:
       - name: Canonical workspace initialization contracts on admitted Unix runners
         if: runner.os != 'Windows'
         run: go test ./internal/workspace -timeout=180s
+      - name: Canonical native hook and qualification source contracts
+        if: runner.os != 'Windows'
+        run: go test ./internal/adaptercfg ./internal/claudeadapter ./internal/claudeagents ./internal/nativeagentflow ./internal/sessionctx ./internal/sessionhook ./internal/lifecycle ./internal/workspacepolicy -timeout=300s
+      # Compiled/source fixtures do not qualify an actual native client.
       # Exact-source ordinary execution above qualifies only the closed positive
       # inventory. The elevated host still executes unsafe/elevated/no-bootstrap
       # refusals and every unexcluded package/test below.

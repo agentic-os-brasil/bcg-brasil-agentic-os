@@ -41,6 +41,16 @@ cannot omit a canonical file or add a private/development file. Inventory integr
 does not authenticate a publisher or authorize an owner operation. On Windows,
 POSIX archive modes express roles rather than a filesystem permission guarantee.
 
+`maestro-packet.json` additionally records exact canonical public resource hashes,
+reference availability and native construction evidence. Its labels grant no host
+authority and do not replace the closed file inventory. A separately qualified
+participant-local Code build adds the finite existing hook adapter and a digest
+checking the reviewed owner/workspace selection. Its vectors retain these same
+relocation tokens and external selectors; another selection refuses before hook
+effects. See [attended native qualification](product-native-plugin.md). The
+ordinary Code packet retains six inert projected specialists without active
+hooks; Desktop carries canonical resources without Code-native mechanics.
+
 ## Prepare and run the actual emitted executable
 
 Keep the packet separate from owner state and workspace. The Owner directory

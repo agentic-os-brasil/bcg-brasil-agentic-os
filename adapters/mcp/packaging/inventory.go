@@ -194,6 +194,17 @@ func ValidatePacket(root string) (PacketStatus, error) {
 	if err != nil {
 		return status, err
 	}
+	_, target, err := readNativeBinary(filepath.Join(root, filepath.FromSlash(server)))
+	if err != nil || target.Platform() != inventory.Platform {
+		return status, errors.New("packet executable target changed")
+	}
+	native, err := nativeRequiredFiles(root, inventory.Format, target)
+	if err != nil {
+		return status, err
+	}
+	for name, body := range native {
+		required[name] = body
+	}
 	if inventory.Server != server {
 		return status, errors.New("packet server role changed")
 	}
@@ -212,9 +223,6 @@ func ValidatePacket(root string) (PacketStatus, error) {
 				return status, errors.New("unexpected packet asset")
 			}
 		}
-	}
-	if platform, err := binaryPlatform(filepath.Join(root, filepath.FromSlash(server))); err != nil || platform != inventory.Platform {
-		return status, errors.New("packet executable platform changed")
 	}
 	actual, err := scanPacket(root)
 	if err != nil {
