@@ -37,7 +37,8 @@ func (b *Bound) confirm(ctx context.Context, req *mcp.CallToolRequest, question 
 	}
 	maximum := 1 << 20
 	// A full 256KiB page plus its proposed replacement can expand sixfold in JSON.
-	if _, ok := review.(KnowledgeReview); ok {
+	switch review.(type) {
+	case KnowledgeReview, BrainReview:
 		maximum = 4 << 20
 	}
 	envelope, err := json.MarshalIndent(review, "", "  ")

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -51,14 +52,15 @@ func TestCompleteMethodPackets(t *testing.T) {
 	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: ws, DataRoot: filepath.Join(h.Home, "state")}); err != nil {
 		t.Fatal(err)
 	}
-	server, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
+	server := filepath.Join(base, "maestro-mcp")
+	if output, err := exec.Command("go", "build", "-o", server, "../cmd/maestro-mcp").CombinedOutput(); err != nil {
+		t.Fatalf("build the shipping packet server: %s %v", output, err)
 	}
 	opts := packaging.Options{Destination: filepath.Join(base, "plugin"), Server: server, Version: "0.2.0", Binding: product.Options{ProductRoot: prod, UserHome: home, WorkspacePath: ws, LookupEnv: lookup}}
 	if err := packaging.BuildPlugin(opts); err != nil {
 		t.Fatal(err)
 	}
+	assertAuthoredBrainOperatorResource(t, opts)
 	oracle, err := os.ReadFile("testdata/method-ids.txt")
 	if err != nil {
 		t.Fatal(err)

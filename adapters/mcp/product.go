@@ -27,6 +27,9 @@ type Bound struct {
 	options           Options
 	home, workspaceID string
 	store             execution.Store
+	// Deterministic test seams; neither is exposed as runtime configuration or tool authority.
+	afterBrainPrepareEffect    func() error
+	observeWorkspaceTransition func(stage, page string)
 }
 
 func Open(o Options) (*Bound, error) {
@@ -107,8 +110,8 @@ func (b *Bound) Server() *mcp.Server {
 	empty := map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
 	s.AddTool(&mcp.Tool{Name: "maestro_context", Description: "Read admitted binding metadata and memory capability hints; inspect maestro_query and maestro_apply schemas for operations. No content export.", InputSchema: empty, Annotations: readonly}, b.handle("context", empty))
 	query := productQuerySchema()
-	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read immutable methods and requirements, owner metadata/questions, execution continuation, eligible memory, converted content or named workspace knowledge through bounded pages. Private owner/legacy text requires trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
-	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Convert local documents and apply reviewed workspace knowledge, owner or memory changes; consolidate local deterministic memory. Execution changes require revision/attempt checks and artifact snapshot criteria.", InputSchema: productApplySchema()}, b.handle("apply", productApplySchema()))
+	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read immutable methods and requirements, owner metadata/questions, execution continuation, eligible memory, authored pages, converted content or named workspace knowledge through bounded pages. Private owner/legacy text requires trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
+	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Author reviewed workspace pages, convert local documents and apply reviewed workspace knowledge, owner or memory changes; consolidate local deterministic memory. Execution changes require revision/attempt checks and artifact snapshot criteria.", InputSchema: productApplySchema()}, b.handle("apply", productApplySchema()))
 	b.registerMethods(s)
 	return s
 }
@@ -119,7 +122,7 @@ func productQuerySchema() map[string]any {
 		variant("execution.next", map[string]any{"item_id": strSchema(96)}, "item_id"),
 		variant("execution.contract", map[string]any{"item_id": strSchema(96)}, "item_id"),
 	}
-	for _, group := range [][]any{ownerQueries(), memoryQueries(), methodsQueries(), contentQueries()} {
+	for _, group := range [][]any{ownerQueries(), memoryQueries(), methodsQueries(), contentQueries(), brainQueries()} {
 		variants = append(variants, group...)
 	}
 	return map[string]any{"type": "object", "oneOf": variants}
@@ -133,6 +136,10 @@ type input struct {
 	Format                     string   `json:"format"`
 	Page                       string   `json:"page"`
 	Section                    string   `json:"section"`
+	Field                      string   `json:"field"`
+	Value                      string   `json:"value"`
+	Target                     string   `json:"target"`
+	Label                      string   `json:"label"`
 	ExpectedPageRevision       string   `json:"expected_page_revision"`
 	Purpose                    string   `json:"purpose"`
 	Pages                      []string `json:"pages"`
@@ -213,14 +220,17 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		if d.Decode(new(any)) != io.EOF {
 			return result(nil, errors.New("trailing_input")), nil
 		}
-		if len(req.Params.Arguments) > 128<<10 && in.Operation != "knowledge.create" {
+		if len(req.Params.Arguments) > 128<<10 && in.Operation != "knowledge.create" && in.Operation != "brain.create" && in.Operation != "brain.update" {
 			return result(nil, errors.New("input_size")), nil
 		}
-		if len(req.Params.Arguments) > 16<<10 && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" && in.Operation != "knowledge.create" && in.Operation != "knowledge.append" {
+		if len(req.Params.Arguments) > 16<<10 && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" && in.Operation != "knowledge.create" && in.Operation != "knowledge.append" && in.Operation != "brain.append" && in.Operation != "brain.create" && in.Operation != "brain.update" {
 			return result(nil, errors.New("input_size")), nil
 		}
 		if kind == "context" {
 			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "next_max_bytes": 2048, "memory": map[string]any{"context_operation": "memory.context", "max_page_bytes": 4096, "synthesis": "local_deterministic", "lifetime": "two_l3_generations_and_exact_owner_review"}, "methods": map[string]any{"list_operation": "methods.list", "read_operation": "methods.read", "plan_operation": "methods.plan", "max_page_bytes": 4096, "mode": "methods_not_authority"}}, nil), nil
+		}
+		if strings.HasPrefix(in.Operation, "brain.") {
+			return b.handleBrain(ctx, req, in), nil
 		}
 		if strings.HasPrefix(in.Operation, "methods.") {
 			return b.handleMethods(in), nil

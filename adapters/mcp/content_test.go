@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -48,8 +49,28 @@ func TestContentUnseededStatus(t *testing.T) {
 		t.Fatalf("unseeded runtime: %v", got)
 	}
 	assertPolicyCoverage(t, got, "unavailable", "authority_unavailable")
-	contentCall(t, cs, "maestro_apply", map[string]any{"operation": "content.convert", "source_path": "../outside.docx"}, false)
+	source := readContentFile(t, "../../internal/ingest/docling/testdata/sample.docx")
+	putContentFile(t, filepath.Join(f.options.WorkspacePath, "sample.docx"), source)
+	outside := filepath.Join(filepath.Dir(f.options.WorkspacePath), "outside.docx")
+	putContentFile(t, outside, []byte("PRIVATE_OUTSIDE_DOCUMENT"))
+	base := filepath.Dir(f.options.ProductRoot)
+	before := methodTreeSnapshot(t, base)
+	got = contentCall(t, cs, "maestro_apply", map[string]any{"operation": "content.convert", "source_path": "sample.docx"}, false)
+	conversion := got["result"].(map[string]any)
+	if conversion["status"] != "unavailable" || conversion["artifact_ref"] != nil {
+		t.Fatalf("valid unseeded conversion created an artifact: %v", got)
+	}
+	if !reflect.DeepEqual(before, methodTreeSnapshot(t, base)) {
+		t.Fatal("unseeded conversion changed source, owner or workspace state")
+	}
+	got = contentCall(t, cs, "maestro_apply", map[string]any{"operation": "content.convert", "source_path": "../outside.docx"}, true)
+	if got["code"] != "content_rejected" || strings.Contains(fmt.Sprint(got), "PRIVATE_OUTSIDE_DOCUMENT") {
+		t.Fatalf("out-of-workspace source was not refused privately: %v", got)
+	}
 	contentCall(t, cs, "maestro_query", map[string]any{"operation": "content.status", "authority": "model"}, true)
+	if !bytes.Equal(readContentFile(t, outside), []byte("PRIVATE_OUTSIDE_DOCUMENT")) || !reflect.DeepEqual(before, methodTreeSnapshot(t, base)) {
+		t.Fatal("refusal changed outside bytes, owner or workspace state")
+	}
 }
 
 func assertPolicyCoverage(t *testing.T, got map[string]any, state, reason string) {

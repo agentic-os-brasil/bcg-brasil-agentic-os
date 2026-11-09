@@ -129,6 +129,13 @@ func (engine *Engine) Collect(request CollectRequest) (Projection, error) {
 		page.Content = body
 		projection.Pages = append(projection.Pages, page)
 	}
+	// Earlier named pages must still be admitted at disclosure after a
+	// multi-page collection. This does not claim custody of arbitrary marker writers.
+	for _, page := range projection.Pages {
+		if err := engine.admitWorkspacePage(page.Page); err != nil {
+			return Projection{}, err
+		}
+	}
 	return projection, nil
 }
 
