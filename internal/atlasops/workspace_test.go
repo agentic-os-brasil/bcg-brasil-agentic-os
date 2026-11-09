@@ -12,6 +12,7 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlasops"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
@@ -538,5 +539,87 @@ func TestStandingGrantCoverageUsesWholePathComponents(t *testing.T) {
 	}
 	if err := engine.AuthorizeGrant(grant.GrantID, "create-page", "knowledge/client-other/note.md"); err == nil {
 		t.Fatal("segment authorized a similarly prefixed sibling")
+	}
+}
+
+func TestWorkspaceTemporaryAliasPreservesExactBinding(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix temporary alias; Windows workspace mutation requires native qualification")
+	}
+	base := t.TempDir()
+	physical, temporary := filepath.Join(base, "physical"), filepath.Join(base, "temporary")
+	if err := os.Mkdir(temporary, 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", temporary)
+	dataRoot := filepath.Join(base, "state")
+	aliasWorkspace := filepath.Join(temporary, "case")
+	physicalWorkspace := filepath.Join(physical, "case")
+	initialized, err := workspace.Initialize(workspace.Options{DataRoot: dataRoot, WorkspacePath: aliasWorkspace})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Keep the real public registration intact while exposing its fixed temporary alias.
+	if err := os.Rename(temporary, physical); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(physical, temporary); err != nil {
+		t.Fatal(err)
+	}
+	registered, err := workspace.ResolveReference(initialized.WorkspaceID, dataRoot)
+	if err != nil || registered != aliasWorkspace {
+		t.Fatalf("raw registration fixture: %q %v", registered, err)
+	}
+	canonical, err := scheduler.CanonicalPrivatePath(aliasWorkspace)
+	if err != nil || canonical != physicalWorkspace || canonical == registered {
+		t.Fatalf("physical fixture: %q %v", canonical, err)
+	}
+	options := atlas.Options{DataRoot: dataRoot, WorkspacePath: aliasWorkspace, WorkspaceID: initialized.WorkspaceID}
+	engine, err := atlasops.OpenWorkspace(options)
+	if err != nil || engine.Root() != filepath.Join(physicalWorkspace, "brain") {
+		t.Fatalf("temporary alias admission: %v %v", engine, err)
+	}
+	page := "knowledge/alias.md"
+	created, err := engine.CreatePage(atlasops.CreatePageRequest{Page: page, Body: "# Notes\n\n## Evidence\n", Provenance: provenance("alias-create")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.AppendEntry(atlasops.AppendEntryRequest{Page: page, Section: "## Evidence", Entry: "- exact registered workspace", ExpectedRevision: created.Revision, Provenance: provenance("alias-append")}); err != nil {
+		t.Fatal(err)
+	}
+	options.WorkspacePath = physicalWorkspace
+	restarted, err := atlasops.OpenWorkspace(options)
+	if err != nil {
+		t.Fatal("physical spelling lost registered alias identity", err)
+	}
+	if got := collectPage(t, restarted, page).Content; got != "# Notes\n\n## Evidence\n- exact registered workspace\n" {
+		t.Fatalf("alias restart changed page: %q", got)
+	}
+	outside, err := workspace.Initialize(workspace.Options{DataRoot: dataRoot, WorkspacePath: filepath.Join(physical, "foreign")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	canary := filepath.Join(outside.WorkspacePath, "keep.txt")
+	if err := os.WriteFile(canary, []byte("preserve foreign workspace"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	application := filepath.Join(physical, "application-alias")
+	if err := os.Symlink(physicalWorkspace, application); err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range []atlas.Options{
+		{DataRoot: dataRoot, WorkspacePath: aliasWorkspace, WorkspaceID: outside.WorkspaceID},
+		{DataRoot: dataRoot, WorkspacePath: outside.WorkspacePath, WorkspaceID: initialized.WorkspaceID},
+		{DataRoot: dataRoot, WorkspacePath: filepath.Join(temporary, "application-alias"), WorkspaceID: initialized.WorkspaceID},
+	} {
+		if _, err := atlasops.OpenWorkspace(candidate); err == nil {
+			t.Fatal("foreign or application-alias binding admitted")
+		}
+	}
+	if body, err := os.ReadFile(canary); err != nil || string(body) != "preserve foreign workspace" {
+		t.Fatal("alias refusal changed outside canary", err)
+	}
+	if got := collectPage(t, restarted, page).Content; got != "# Notes\n\n## Evidence\n- exact registered workspace\n" {
+		t.Fatalf("alias refusal changed current page: %q", got)
 	}
 }

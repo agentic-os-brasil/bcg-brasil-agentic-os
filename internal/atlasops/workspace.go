@@ -75,6 +75,10 @@ func (engine *Engine) validateBinding() error {
 	if err != nil {
 		return err
 	}
+	registered, err = scheduler.CanonicalPrivatePath(registered)
+	if err != nil {
+		return err
+	}
 	if registered != scope.WorkspacePath {
 		return errors.New("workspace atlas requires the exact registered workspace path and id")
 	}
