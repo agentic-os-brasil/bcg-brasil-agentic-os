@@ -62,6 +62,12 @@ type Projection struct {
 // does not exist becomes an omission rather than an error, so a caller can act
 // on what is there and still see honestly what was not.
 func (engine *Engine) Collect(request CollectRequest) (Projection, error) {
+	if err := validateAtlasText(request.Purpose); err != nil {
+		return Projection{}, err
+	}
+	if err := engine.validateBinding(); err != nil {
+		return Projection{}, err
+	}
 	if strings.TrimSpace(request.Purpose) == "" {
 		return Projection{}, errors.New("owner atlas collect requires a declared purpose")
 	}
@@ -106,7 +112,7 @@ func (engine *Engine) Collect(request CollectRequest) (Projection, error) {
 		page := PageProjection{
 			Page:     relative,
 			Revision: digest(body),
-			Pointer:  "bcgos://atlas/owner/" + relative,
+			Pointer:  engine.pointer(relative),
 		}
 		if request.Reader == ReaderDelegate {
 			// An authorized delegate learns that the page exists and can ask
