@@ -15,7 +15,7 @@ status: stable
 x-maestro-profile-version: "1"
 x-maestro-stable-id: managed/wiki-okf
 x-maestro-scope: managed
-x-maestro-source-fingerprint: cf9684f71fa2e509d87944a36d5ea0ccb00f952d5b4ff433250d23b2be0acc7b
+x-maestro-source-fingerprint: b116988bbbd862085fe230eb404b1febc2c483752f06adc3dd29a93a8a90164e
 x-maestro-freshness: fresh
 x-maestro-status: active
 x-maestro-generator-version: maestro-managed-wiki/0.2
@@ -456,3 +456,13 @@ wiki.source variants. Read/source require exact generation, registered reference
 finite offset and 4–4,096-byte UTF-8 pages. Derive scope from admitted binding;
 accept no workspace/root/provider/identity/approval argument. Status/startup
 remain read-only. Fixed metadata failure codes disclose no private error body.
+
+### Native availability is independent of ordinary memory
+
+The private-wiki native gate remains closed on Windows until its own qualified
+publication/readback/retirement contract lands. Enabling ordinary memory does
+not upgrade a wiki cohort or emit wiki events. Unprotected ordinary memory keeps
+schema1; existing protected wiki state or an undeclared derivative refuses
+mutation instead of being downgraded. Public wiki queries return the distinct
+native-unavailable error before source access. This boundary is separate from
+any future ordinary-memory provider or filesystem admission.

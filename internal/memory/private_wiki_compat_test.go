@@ -14,13 +14,7 @@ import (
 )
 
 func TestPrivateWikiCompatibleProducerAcrossActualBinaries(t *testing.T) {
-	helper := os.Getenv("MAESTRO_PRIVATE_WIKI_COMPAT_PRODUCER")
-	if helper == "" {
-		t.Skip("actual compatible producer not selected")
-	}
-	if !filepath.IsAbs(helper) {
-		t.Fatal("producer path must be absolute")
-	}
+	helper, proof := privateWikiBinaryFixture(t, "producer", "MAESTRO_PRIVATE_WIKI_COMPAT_PRODUCER")
 	e, _, _ := privateWikiEngine(t)
 	cfg := struct {
 		Policy    Policy                   `json:"policy"`
@@ -38,10 +32,15 @@ func TestPrivateWikiCompatibleProducerAcrossActualBinaries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("producer failed: %v %s", err, output)
 	}
-	var produced PrivateWikiResult
+	var produced struct {
+		PrivateWikiResult
+		wikiFixtureReceipt
+	}
 	if json.Unmarshal(output, &produced) != nil || !produced.Changed {
 		t.Fatalf("producer did not build a real graph: %s", output)
 	}
+	verifyWikiFixtureReceipt(t, produced.wikiFixtureReceipt, proof, body)
+	retainWikiFixtureEvidence(t, "producer", body, output)
 	manifestPath := filepath.Join(e.privateWikiRoot("case-a"), "versions", produced.Generation, "manifest.json")
 	originalManifest, err := os.ReadFile(manifestPath)
 	if err != nil {

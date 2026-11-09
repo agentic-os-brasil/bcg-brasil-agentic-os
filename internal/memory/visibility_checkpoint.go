@@ -152,8 +152,10 @@ func (engine *Engine) publishVisibility(workspaceID string, denied map[string]ui
 	b.Revision++
 	if len(denied) > 0 {
 		b.Generation = b.Revision
-		event := engine.newPrivateWikiEvent(workspaceID, "access_revoked", "", b.Generation, engine.Now().UTC(), false)
-		b.PrivateWiki.DenialEvent = &event
+		if b.PrivateWiki != nil {
+			event := engine.newPrivateWikiEvent(workspaceID, "access_revoked", "", b.Generation, engine.Now().UTC(), false)
+			b.PrivateWiki.DenialEvent = &event
+		}
 	}
 	for id, revision := range denied {
 		if revision > b.Denied[id] {

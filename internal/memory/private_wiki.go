@@ -70,6 +70,9 @@ func (engine *Engine) privateWikiRoot(workspace string) string {
 }
 
 func (engine *Engine) privateWikiScope(workspace string) ([]byte, string, string, error) {
+	if err := privateWikiNativeAvailable(); err != nil {
+		return nil, "", "", err
+	}
 	if engine.ownedPreflight(workspace) != nil {
 		return nil, "", "", ErrPrivateWikiUnavailable
 	}

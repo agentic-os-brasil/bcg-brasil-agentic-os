@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -256,32 +255,59 @@ func TestPrivateWikiLivePublicationGuardCanRefuseAfterSnapshot(t *testing.T) {
 }
 
 func TestPrivateWikiOldCohortProcessCannotReadCaptureOrDelete(t *testing.T) {
-	helper := os.Getenv("MAESTRO_PRIVATE_WIKI_OLD_WRITER")
-	if helper == "" {
-		t.Skip("actual old-cohort helper not selected")
+	helper, proof := privateWikiBinaryFixture(t, "old_writer", "MAESTRO_PRIVATE_WIKI_OLD_WRITER")
+	e, capture, day := privateWikiEngine(t)
+	config := struct {
+		Policy    Policy                   `json:"policy"`
+		Budgets   map[string]int           `json:"budgets"`
+		Freshness map[string]time.Duration `json:"freshness"`
+		At        time.Time                `json:"at"`
+		Text      string                   `json:"text"`
+	}{e.Policy, e.Budgets, e.Freshness, day, "legacy positive-control marker"}
+	body, err := json.Marshal(config)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !filepath.IsAbs(helper) {
-		t.Fatal("old helper path must be absolute")
+	configName := filepath.Join(t.TempDir(), "legacy-config.json")
+	if os.WriteFile(configName, body, 0600) != nil {
+		t.Fatal("legacy config write")
 	}
-	e, capture, _ := privateWikiEngine(t)
+	// Actual unprotected successes prove the historical consumer is functional,
+	// rather than interpreting an unrelated broken executable as a cohort refusal.
+	positiveRoot := filepath.Join(t.TempDir(), "brain", "memory")
+	seed := invokeOldWikiFixture(t, helper, proof, "seed", positiveRoot, "", configName, "positive-seed")
+	if seed.Refused || seed.Capture == nil || seed.Capture.Revision != 1 || !seed.Capture.Eligible {
+		t.Fatalf("legacy seed unavailable: %+v", seed)
+	}
+	read := invokeOldWikiFixture(t, helper, proof, "read", positiveRoot, seed.Capture.ID, configName, "positive-read")
+	if read.Refused || read.Record == nil || read.Record.Text != config.Text || read.Record.ID != seed.Capture.ID {
+		t.Fatal("legacy read positive control failed")
+	}
+	extra := invokeOldWikiFixture(t, helper, proof, "capture", positiveRoot, "", configName, "positive-capture")
+	if extra.Refused || extra.Capture == nil || extra.Capture.ID == seed.Capture.ID || !extra.Capture.Eligible {
+		t.Fatal("legacy capture positive control failed")
+	}
+	removed := invokeOldWikiFixture(t, helper, proof, "delete", positiveRoot, seed.Capture.ID, configName, "positive-delete")
+	if removed.Refused || removed.Mutation == nil || removed.Mutation.Removed != 1 || !removed.Mutation.Complete {
+		t.Fatal("legacy delete positive control failed")
+	}
+	positive := *e
+	positive.Root = positiveRoot
+	if _, err := positive.ReadCapture("case-a", seed.Capture.ID); !errors.Is(err, ErrCaptureUnavailable) {
+		t.Fatalf("legacy delete did not remove real source visibility: %v", err)
+	}
+	if kept, err := positive.ReadCapture("case-a", extra.Capture.ID); err != nil || kept.Text != config.Text {
+		t.Fatal("legacy mutation lost unrelated real source")
+	}
 	if _, err := e.CompilePrivateWiki(context.Background(), "case-a", ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, operation := range []string{"read", "capture", "delete"} {
 		t.Run(operation, func(t *testing.T) {
 			before := privateWikiTree(t, e.Root)
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			defer cancel()
-			output, err := exec.CommandContext(ctx, helper, operation, e.Root, capture.ID).CombinedOutput()
-			if err != nil {
-				t.Fatalf("old writer witness failed: %v %s", err, output)
-			}
-			var result struct {
-				Refused bool   `json:"refused"`
-				Code    string `json:"code"`
-			}
-			if json.Unmarshal(output, &result) != nil || !result.Refused || result.Code != "protected_cohort" {
-				t.Fatalf("old writer did not identify protected cohort: %s", output)
+			result := invokeOldWikiFixture(t, helper, proof, operation, e.Root, capture.ID, configName, "protected-"+operation)
+			if !result.Refused || result.Code != "protected_cohort" {
+				t.Fatalf("old real API did not identify protected cohort: %+v", result)
 			}
 			if !reflect.DeepEqual(before, privateWikiTree(t, e.Root)) {
 				t.Fatal("old process mutated source, graph, fence or modes")

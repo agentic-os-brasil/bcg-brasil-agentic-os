@@ -124,3 +124,29 @@ Desktop loading, Windows private-handle admission, native wake, hosted CI,
 organization signing, distribution and participant acceptance remain separate
 evidence. Independent Task2 acceptance and four complete-front reviews must close
 before a publishable front is claimed.
+
+## Actual binary compatibility qualification
+
+A finite Unix CI job builds an actual legacy memory consumer against immutable
+main `d1e8f18d` and a separate current producer with one fixture-only navigation
+description change. The old consumer must first succeed at real unprotected
+read/capture/delete, then refuse the protected schema2 cohort without changing
+source, graph or modes. The producer must run canonical compilation and retain
+its own executable provenance; the current reader preserves that evidence and
+can compile a genuinely new current-build generation.
+
+The job provisions both existing contracts, rejects missing/skipped coverage,
+and retains helper source, immutable source/archive/tree and executable hashes,
+exact configuration bytes/hashes and observed results. Default local runs that
+omit these helper programs do not qualify binary compatibility.
+
+The public interface is `wiki.status`, `wiki.read` and `wiki.source`; compilation
+belongs to `wiki-incremental-sync`, `wiki-reconcile` and `wiki-integrity-check`
+through the existing reviewed maintenance lifecycle. There is no private-wiki
+search RPC in this source delivery.
+
+Native Windows wiki admission has an independent explicit refusal, even if
+ordinary owned-memory confinement later becomes available. Unprotected memory
+keeps its existing schema without wiki events; an already protected derivative
+cannot be silently reclassified. That native gate changes only after the owning
+wiki publication/readback/retirement qualification is established.

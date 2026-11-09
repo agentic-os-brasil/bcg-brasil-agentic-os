@@ -89,6 +89,17 @@ func (engine *Engine) preparePrivateWikiCohort(workspace string) (visibilityBarr
 	if err != nil {
 		return visibilityBarrier{}, err
 	}
+	if nativeErr := privateWikiNativeAvailable(); nativeErr != nil {
+		if b.PrivateWiki != nil {
+			return visibilityBarrier{}, nativeErr
+		}
+		// Ordinary unprotected memory keeps its existing schema and no wiki IO.
+		// A retained derivative cannot be reclassified by removing its marker.
+		if _, err := memoryReadDir(engine.privateWikiRoot(workspace)); !errors.Is(err, os.ErrNotExist) {
+			return visibilityBarrier{}, nativeErr
+		}
+		return b, nil
+	}
 	if b.PrivateWiki == nil {
 		// An established protected derivative cannot be reclassified as legacy by
 		// dropping both checkpoint extension and marker version.
@@ -143,7 +154,7 @@ func (engine *Engine) retirePrivateWiki(workspace string) error {
 	if err != nil {
 		return err
 	}
-	if b.Generation == 0 || b.PrivateWiki.RetiredThrough == b.Generation {
+	if b.PrivateWiki == nil || b.Generation == 0 || b.PrivateWiki.RetiredThrough == b.Generation {
 		return nil
 	}
 	if engine.fault("wiki_before_retirement") != nil {
@@ -172,6 +183,9 @@ func (engine *Engine) privateWikiEventPath(workspace, commit string) string {
 }
 
 func (engine *Engine) publishPrivateWikiCommitIntent(workspace, commit string, manifest CommitManifest) error {
+	if privateWikiNativeAvailable() != nil {
+		return nil
+	}
 	if filepath.Base(commit) != commit || len(commit) > 192 || strings.HasPrefix(commit, ".") {
 		return ErrPrivateWikiCohort
 	}
