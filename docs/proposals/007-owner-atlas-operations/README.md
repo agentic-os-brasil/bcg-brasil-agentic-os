@@ -1,8 +1,11 @@
 # Proposal 007 — Owner atlas operations
 
-**Status:** accepted architecture; implementation pending. Specifies the
-preferred transactional operation set and ships no segment, skill or runtime
-capability by itself.
+**Status:** accepted architecture; the named collect/create/append/field/link
+and scoped-grant owning APIs are implemented for the owner and registered
+workspace corpora. Archive, restore, redact, delete and export remain pending.
+This proposal installs no segment, skill or native runtime capability by itself.
+See the [implementation and qualification boundary](../../workspace-knowledge-operations.md)
+when integrating these owning operations into a product adapter.
 
 **Original contribution:** Marcelo Petrof Sanches. Refined against the current
 advisory-runtime and owner-sovereignty contracts.
@@ -130,8 +133,9 @@ If the adapter is unavailable:
   overwriting the other.
 - Workspace/client writers require a separate proposal and do not inherit these
   grants.
-- Implementation remains pending until the identifiers, registry, journal,
-  path boundary and operation tests above exist.
+- The implemented subset has scoped identifiers, grant registry, journal,
+  no-follow publication and recovery tests. The remaining operation set and
+  native/client qualification keep their separate completion gates.
 
 ## Explicit non-decisions
 

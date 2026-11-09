@@ -1,5 +1,5 @@
-// Package atlasops performs the named, bounded operations over the owner
-// atlas. A skill never edits a page itself: it asks for an operation here and
+// Package atlasops performs named, bounded operations over one owner or
+// registered workspace atlas. A skill asks for an operation here and
 // reports what came back, exactly as the canonical memory engine is used.
 //
 // The owner still owns the corpus. These operations exist for the cases where
@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
@@ -57,6 +58,9 @@ type Provenance struct {
 }
 
 func (provenance Provenance) validate() error {
+	if err := validateAtlasText(provenance.Origin, provenance.SessionID, provenance.GrantID, provenance.Ritual, provenance.OccurrenceID, provenance.IdempotencyKey); err != nil {
+		return err
+	}
 	if strings.TrimSpace(provenance.IdempotencyKey) == "" {
 		return errors.New("owner atlas write requires an idempotency key")
 	}
@@ -106,16 +110,24 @@ type AppendEntryRequest struct {
 	Provenance       Provenance
 }
 
-// Engine binds the operations to one canonical owner atlas root.
+// Engine binds the operations to one canonical owner or workspace atlas root.
 type Engine struct {
-	root     string
-	dataRoot string
-	now      func() time.Time
+	root             string
+	dataRoot         string
+	now              func() time.Time
+	workspace        *workspaceScope
+	boundDirectories []os.FileInfo
+	// afterPageEffect permits deterministic interruption tests without an
+	// exposed runtime option or model-controlled failure switch.
+	afterPageEffect func() error
 }
 
 // Open resolves the owner atlas root and makes sure it is reachable through
 // the no-follow boundary. It creates no page.
 func Open(dataRoot string, now func() time.Time) (*Engine, error) {
+	if err := validateAtlasText(dataRoot); err != nil {
+		return nil, err
+	}
 	root, err := atlas.OwnerRoot(dataRoot)
 	if err != nil {
 		return nil, err
@@ -150,13 +162,16 @@ func (engine *Engine) journalDirPath(name string) string {
 	return filepath.Join(engine.root, journalDirectory, name)
 }
 
-// Root is the canonical owner atlas root this engine is bound to.
+// Root is the canonical atlas root this engine is bound to.
 func (engine *Engine) Root() string { return engine.root }
 
 // CreatePage writes a page if it is absent. An existing page is preserved:
 // creation never replaces content, so a repeated bootstrap or a re-run of a
 // ritual cannot discard what the owner wrote.
 func (engine *Engine) CreatePage(request CreatePageRequest) (Result, error) {
+	if err := validateAtlasText(request.Body); err != nil {
+		return Result{}, err
+	}
 	relative, err := engine.resolve(request.Page)
 	if err != nil {
 		return Result{}, err
@@ -167,12 +182,21 @@ func (engine *Engine) CreatePage(request CreatePageRequest) (Result, error) {
 	if len(request.Body) == 0 || len(request.Body) > maximumPageBytes {
 		return Result{}, fmt.Errorf("owner atlas page body must be between 1 and %d bytes", maximumPageBytes)
 	}
+	release, err := engine.beginMutation()
+	if err != nil {
+		return Result{}, err
+	}
+	defer func() { _ = release() }()
 	if err := engine.authorize(request.Provenance, "create-page", relative); err != nil {
 		return Result{}, err
 	}
 
 	operationID := engine.operationID("create-page", relative, request.Provenance.IdempotencyKey)
-	if recorded, found, err := engine.recordedResult(operationID); err != nil {
+	requestDigest, err := digestRequest(request)
+	if err != nil {
+		return Result{}, err
+	}
+	if recorded, found, err := engine.recordedResult(operationID, requestDigest); err != nil {
 		return Result{}, err
 	} else if found {
 		return recorded, nil
@@ -190,9 +214,35 @@ func (engine *Engine) CreatePage(request CreatePageRequest) (Result, error) {
 		RecordedAt:  engine.now().UTC(),
 		Provenance:  request.Provenance,
 	}
-	writeErr := scheduler.WriteNewPrivateFile(full, []byte(request.Body))
+	existing, readErr := engine.read(relative)
+	if readErr == nil {
+		result.State = StateUnchanged
+		result.Revision = digest(existing)
+		result.Reason = "page already exists and was preserved"
+		return result, engine.record(result, requestDigest)
+	}
+	if !isNotExist(readErr) {
+		return Result{}, readErr
+	}
+	result.State = StateWritten
+	result.Revision = digest(request.Body)
+	if err := engine.prepare(result, "", requestDigest); err != nil {
+		return Result{}, err
+	}
+	if err := engine.validateBinding(); err != nil {
+		return Result{}, err
+	}
+	if err := engine.authorize(request.Provenance, "create-page", relative); err != nil {
+		return Result{}, err
+	}
+	writeErr := publishAtlasFile(full, []byte(request.Body), true, engine.workspace != nil)
 	switch {
 	case writeErr == nil:
+		if engine.afterPageEffect != nil {
+			if err := engine.afterPageEffect(); err != nil {
+				return Result{}, err
+			}
+		}
 		result.State = StateWritten
 		result.Revision = digest(request.Body)
 	case errors.Is(writeErr, os.ErrExist):
@@ -206,7 +256,7 @@ func (engine *Engine) CreatePage(request CreatePageRequest) (Result, error) {
 	default:
 		return Result{}, writeErr
 	}
-	if err := engine.record(result); err != nil {
+	if err := engine.record(result, requestDigest); err != nil {
 		return Result{}, err
 	}
 	return result, nil
@@ -216,6 +266,9 @@ func (engine *Engine) CreatePage(request CreatePageRequest) (Result, error) {
 // never creates the section, never touches another section, and never
 // overwrites a page that changed underneath the caller.
 func (engine *Engine) AppendEntry(request AppendEntryRequest) (Result, error) {
+	if err := validateAtlasText(request.Section, request.Entry, request.ExpectedRevision); err != nil {
+		return Result{}, err
+	}
 	relative, err := engine.resolve(request.Page)
 	if err != nil {
 		return Result{}, err
@@ -231,12 +284,21 @@ func (engine *Engine) AppendEntry(request AppendEntryRequest) (Result, error) {
 	if strings.TrimSpace(entry) == "" || len(entry) > maximumEntryBytes {
 		return Result{}, fmt.Errorf("owner atlas entry must be between 1 and %d bytes", maximumEntryBytes)
 	}
+	release, err := engine.beginMutation()
+	if err != nil {
+		return Result{}, err
+	}
+	defer func() { _ = release() }()
 	if err := engine.authorize(request.Provenance, "append-entry", relative); err != nil {
 		return Result{}, err
 	}
 
 	operationID := engine.operationID("append-entry", relative, request.Provenance.IdempotencyKey)
-	if recorded, found, err := engine.recordedResult(operationID); err != nil {
+	requestDigest, err := digestRequest(request)
+	if err != nil {
+		return Result{}, err
+	}
+	if recorded, found, err := engine.recordedResult(operationID, requestDigest); err != nil {
 		return Result{}, err
 	} else if found {
 		return recorded, nil
@@ -246,43 +308,14 @@ func (engine *Engine) AppendEntry(request AppendEntryRequest) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	revision := digest(current)
-
 	updated, err := insertUnderSection(current, section, entry)
 	if err != nil {
 		return Result{}, err
 	}
 
-	result := Result{
-		Operation:   "append-entry",
-		Page:        relative,
-		OperationID: operationID,
-		RecordedAt:  engine.now().UTC(),
-		Provenance:  request.Provenance,
-	}
-
-	if expected := strings.TrimSpace(request.ExpectedRevision); expected != "" && expected != revision {
-		// The page moved under the caller. Hand back what would have been
-		// written rather than deciding on the owner's behalf.
-		result.State = StateProposed
-		result.Revision = revision
-		result.Proposal = updated
-		result.Reason = "page revision changed since it was read; nothing was written"
-		if err := engine.record(result); err != nil {
-			return Result{}, err
-		}
-		return result, nil
-	}
-
-	if err := scheduler.ReplacePrivateFile(engine.pagePath(relative), []byte(updated)); err != nil {
-		return Result{}, err
-	}
-	result.State = StateWritten
-	result.Revision = digest(updated)
-	if err := engine.record(result); err != nil {
-		return Result{}, err
-	}
-	return result, nil
+	return engine.commitEdit(commitRequest{operation: "append-entry", operationID: operationID,
+		page: relative, current: current, updated: updated, changed: true,
+		expectedRevision: request.ExpectedRevision, provenance: request.Provenance, requestDigest: requestDigest})
 }
 
 // insertUnderSection places the entry at the end of the named section, leaving
@@ -337,6 +370,12 @@ func insertUnderSection(body, section, entry string) (string, error) {
 
 // resolve rejects anything that is not a plain relative page inside the root.
 func (engine *Engine) resolve(page string) (string, error) {
+	if err := validateAtlasText(page); err != nil {
+		return "", err
+	}
+	if err := engine.validateBinding(); err != nil {
+		return "", err
+	}
 	trimmed := strings.TrimSpace(page)
 	if trimmed == "" {
 		return "", errors.New("owner atlas page is required")
@@ -363,7 +402,10 @@ func (engine *Engine) pagePath(relative string) string {
 }
 
 func (engine *Engine) read(relative string) (string, error) {
-	body, err := scheduler.ReadPrivateFile(engine.pagePath(relative), maximumPageBytes)
+	if err := engine.validateBinding(); err != nil {
+		return "", err
+	}
+	body, err := readAtlasFile(engine.pagePath(relative), maximumPageBytes, engine.workspace != nil)
 	if err != nil {
 		return "", err
 	}
@@ -376,8 +418,11 @@ func (engine *Engine) operationID(operation, page, key string) string {
 
 // recordedResult replays a completed operation instead of repeating it, so a
 // retry of the same idempotency key converges rather than duplicating.
-func (engine *Engine) recordedResult(operationID string) (Result, bool, error) {
-	body, err := scheduler.ReadPrivateFile(engine.journalPath(operationID), maximumPageBytes)
+func (engine *Engine) recordedResult(operationID, requestDigest string) (Result, bool, error) {
+	if err := engine.validateBinding(); err != nil {
+		return Result{}, false, err
+	}
+	body, err := readAtlasFile(engine.journalPath(operationID), maximumPageBytes, true)
 	if errors.Is(err, os.ErrNotExist) {
 		return Result{}, false, nil
 	}
@@ -391,8 +436,50 @@ func (engine *Engine) recordedResult(operationID string) (Result, bool, error) {
 	if err := json.Unmarshal(body, &entry); err != nil {
 		return Result{}, false, err
 	}
-	if entry.SchemaVersion != schemaVersion {
+	if entry.SchemaVersion != schemaVersion && entry.SchemaVersion != 2 {
 		return Result{}, false, fmt.Errorf("owner atlas journal schema %d is not supported", entry.SchemaVersion)
+	}
+	if err := engine.validateScope(entry.Workspace); err != nil {
+		return Result{}, false, err
+	}
+	if entry.RequestDigest != requestDigest && (entry.RequestDigest != "" || engine.workspace != nil || entry.SchemaVersion == 2) {
+		return Result{}, false, errors.New("atlas idempotency key is already bound to a different request")
+	}
+	if entry.Result.OperationID != operationID {
+		return Result{}, false, errors.New("atlas journal operation identity changed")
+	}
+	if entry.SchemaVersion == 2 {
+		if entry.Prepared == nil || !validDigest(entry.Prepared.AfterRevision) ||
+			(entry.Prepared.BeforeRevision != "" && !validDigest(entry.Prepared.BeforeRevision)) ||
+			!validDigest(entry.RequestDigest) || entry.Result.Revision != entry.Prepared.AfterRevision || entry.Result.State != StateWritten {
+			return Result{}, false, errors.New("atlas prepared journal is invalid")
+		}
+		relative, err := engine.resolve(entry.Result.Page)
+		if err != nil || relative != entry.Result.Page {
+			return Result{}, false, errors.New("atlas prepared page is invalid")
+		}
+		current, err := engine.read(relative)
+		currentRevision := ""
+		if err == nil {
+			currentRevision = digest(current)
+		} else if !isNotExist(err) {
+			return Result{}, false, err
+		}
+		switch currentRevision {
+		case entry.Prepared.AfterRevision:
+			if err := engine.record(entry.Result, requestDigest); err != nil {
+				return Result{}, false, err
+			}
+		case entry.Prepared.BeforeRevision:
+			return Result{}, false, nil
+		default:
+			conflict := entry.Result
+			conflict.State, conflict.Revision = StateProposed, currentRevision
+			conflict.Reason = "page changed after an interrupted operation; pending evidence and newer content were preserved"
+			return conflict, true, nil
+		}
+	} else if entry.Prepared != nil {
+		return Result{}, false, errors.New("atlas completed journal contains pending state")
 	}
 	replayed := entry.Result
 	if replayed.State == StateWritten {
@@ -403,11 +490,88 @@ func (engine *Engine) recordedResult(operationID string) (Result, bool, error) {
 }
 
 type journalRecord struct {
-	SchemaVersion int    `json:"schema_version"`
-	Result        Result `json:"result"`
+	SchemaVersion int             `json:"schema_version"`
+	Result        Result          `json:"result"`
+	Workspace     *workspaceScope `json:"workspace,omitempty"`
+	RequestDigest string          `json:"request_digest,omitempty"`
+	Prepared      *preparedEdit   `json:"prepared,omitempty"`
 }
 
-func (engine *Engine) record(result Result) error {
+type preparedEdit struct {
+	BeforeRevision string `json:"before_revision"`
+	AfterRevision  string `json:"after_revision"`
+}
+
+func validateAtlasText(values ...string) error {
+	for _, value := range values {
+		if !utf8.ValidString(value) {
+			return errors.New("atlas text must be valid UTF-8")
+		}
+	}
+	return nil
+}
+
+func readAtlasFile(path string, maximum int64, privateParent bool) ([]byte, error) {
+	body, err := readAtlasBytes(path, maximum, privateParent)
+	if err != nil {
+		return nil, err
+	}
+	if !utf8.Valid(body) {
+		return nil, errors.New("atlas file must contain valid UTF-8")
+	}
+	return body, nil
+}
+
+func digestRequest(request any) (string, error) {
+	body, err := json.Marshal(request)
+	if err != nil {
+		return "", err
+	}
+	return digest(string(body)), nil
+}
+
+func validDigest(value string) bool {
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == sha256.Size && value == strings.ToLower(value)
+}
+
+// Prepared records use v2 so an older reader cannot mistake intent for a
+// completed effect. They contain hashes and metadata, never draft content.
+func (engine *Engine) prepare(result Result, before, requestDigest string) error {
+	if err := engine.validateBinding(); err != nil {
+		return err
+	}
+	entry := journalRecord{SchemaVersion: 2, Result: result, Workspace: engine.workspace, RequestDigest: requestDigest,
+		Prepared: &preparedEdit{BeforeRevision: before, AfterRevision: result.Revision}}
+	body, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+	err = publishAtlasFile(engine.journalPath(result.OperationID), body, true, true)
+	if !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	existing, err := readAtlasFile(engine.journalPath(result.OperationID), maximumPageBytes, true)
+	if err != nil {
+		return err
+	}
+	var pending journalRecord
+	if err := json.Unmarshal(existing, &pending); err != nil {
+		return err
+	}
+	if err := engine.validateScope(pending.Workspace); err != nil {
+		return err
+	}
+	if pending.SchemaVersion != 2 || pending.Prepared == nil || *pending.Prepared != *entry.Prepared || pending.RequestDigest != requestDigest || pending.Result.OperationID != result.OperationID {
+		return errors.New("atlas prepared effect no longer matches this request")
+	}
+	return nil
+}
+
+func (engine *Engine) record(result Result, requestDigest string) error {
+	if err := engine.validateBinding(); err != nil {
+		return err
+	}
 	directory := filepath.Join(engine.root, journalDirectory)
 	if err := scheduler.EnsurePrivateDirectory(directory); err != nil {
 		return err
@@ -416,13 +580,27 @@ func (engine *Engine) record(result Result) error {
 	// still owns, and a receipt keeps metadata rather than content.
 	persisted := result
 	persisted.Proposal = ""
-	body, err := json.Marshal(journalRecord{SchemaVersion: schemaVersion, Result: persisted})
+	body, err := json.Marshal(journalRecord{SchemaVersion: schemaVersion, Result: persisted, Workspace: engine.workspace, RequestDigest: requestDigest})
 	if err != nil {
 		return err
 	}
-	err = scheduler.WriteNewPrivateFile(engine.journalPath(result.OperationID), body)
+	err = publishAtlasFile(engine.journalPath(result.OperationID), body, true, true)
 	if errors.Is(err, os.ErrExist) {
-		return nil
+		existing, err := readAtlasFile(engine.journalPath(result.OperationID), maximumPageBytes, true)
+		if err != nil {
+			return err
+		}
+		var pending journalRecord
+		if err := json.Unmarshal(existing, &pending); err != nil {
+			return err
+		}
+		if err := engine.validateScope(pending.Workspace); err != nil {
+			return err
+		}
+		if pending.SchemaVersion != 2 || pending.Prepared == nil || pending.RequestDigest != requestDigest || pending.Result.OperationID != result.OperationID {
+			return errors.New("atlas completion does not match a prepared effect")
+		}
+		return publishAtlasFile(engine.journalPath(result.OperationID), body, false, true)
 	}
 	return err
 }
