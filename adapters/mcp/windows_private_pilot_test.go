@@ -25,10 +25,10 @@ import (
 
 func TestWindowsWorkspaceInitializationMatchesElevation(t *testing.T) {
 	base := physicalTempDir(t)
-	before := treeSnapshot(t, base)
+	before := methodTreeSnapshot(t, base)
 	got, err := workspace.Initialize(workspace.Options{WorkspacePath: filepath.Join(base, "workspace"), DataRoot: filepath.Join(base, "data")})
 	if windows.GetCurrentProcessToken().IsElevated() {
-		if !errors.Is(err, userlevel.ErrElevatedProcess) || got.WorkspaceID != "" || !reflect.DeepEqual(before, treeSnapshot(t, base)) {
+		if !errors.Is(err, userlevel.ErrElevatedProcess) || got.WorkspaceID != "" || !reflect.DeepEqual(before, methodTreeSnapshot(t, base)) {
 			t.Fatalf("elevated initialization did not refuse before effects: %+v %v", got, err)
 		}
 		t.Log("actual elevated host initialization refused without filesystem effects")
@@ -67,7 +67,7 @@ func TestWindowsAdmissionRefused(t *testing.T) {
 		windowsPrivateFixtureDirectory(t, path)
 	}
 	windowsFixtureDACL(t, home, "D:P(A;OICI;FA;;;"+user.String()+")(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;;FR;;;WD)")
-	before := treeSnapshot(t, base)
+	before := methodTreeSnapshot(t, base)
 	security, err := windows.GetNamedSecurityInfo(home, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
 	if err != nil {
 		t.Fatal(err)
@@ -107,7 +107,7 @@ func TestWindowsAdmissionRefused(t *testing.T) {
 		t.Fatal("unsafe Windows product store admitted")
 	}
 	afterSecurity, err := windows.GetNamedSecurityInfo(home, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
-	if err != nil || security.String() != afterSecurity.String() || !reflect.DeepEqual(before, treeSnapshot(t, base)) {
+	if err != nil || security.String() != afterSecurity.String() || !reflect.DeepEqual(before, methodTreeSnapshot(t, base)) {
 		t.Fatal("refused Windows admission changed existing bytes, modes or native security", err)
 	}
 	if _, err := os.Lstat(filepath.Join(home, ".maestro")); !os.IsNotExist(err) {

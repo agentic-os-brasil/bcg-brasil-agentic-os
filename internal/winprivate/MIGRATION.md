@@ -2,8 +2,9 @@
 
 These operations supply filesystem custody for Spec059. They do not enable
 external migration, authorize a plan, or implement its journal/recovery protocol.
-The migration gate remains unavailable until the finite adapter and native
-qualification cover the complete transaction.
+The canonical external-state adapter supplies reviewed plan, receipt, retirement
+and recovery policy. Exact-source native qualification must cover the complete
+transaction before this composition is considered release-ready.
 
 ## Source reads
 
@@ -112,4 +113,4 @@ exact deletion with retained-reader/late-error cases, and cooperative retirement
 pointer replacement with unsafe-destination/late-outcome controls. A PE cross-build
 proves compilation only. Native local-volume behavior,
 durability and domain interruption/rollback still require the corresponding
-hosted proof before the adapter can enable mutation.
+hosted proof before the composed adapter is considered qualified for release.

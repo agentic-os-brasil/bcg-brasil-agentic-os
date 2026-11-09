@@ -352,3 +352,65 @@ foreach($invalid in @(($publicBody+"    --- PASS: TestPublic/unknown (0.00s)`n")
 ''', encoding="utf-8")
         result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER)], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_host_exclusions_refuse_unqualified_or_wrong_source_evidence(self):
+        public = self.root / "public"
+        proof = self.root / "native-engine-proof"
+        public.mkdir()
+        proof.mkdir()
+        revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        manifest = dict(source_revision=revision, sdk_go_sha256="a" * 64, public_server_sha256="b" * 64)
+        report = dict(source_revision=revision, qualification_profile="windows_private_engine_v1",
+                      actual_standard_user=True, private_current_user_temp=True, public_source_and_sdk_read_only=True,
+                      qualification_complete=True, sdk_go_sha256="a" * 64, public_families=dict(qualified=True), packages=[])
+        core = dict(server_sha256="b" * 64, elevated=False, admin_member=False)
+        (public / "engine-build-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        (proof / "native-core-proof.json").write_text(json.dumps(core), encoding="utf-8")
+        environment = dict(os.environ, MAESTRO_ENGINE_PUBLIC_ROOT=str(public), RUNNER_TEMP=str(self.root),
+                           GITHUB_OUTPUT=str(self.root / "host-exclusions.txt"))
+        for source, message in [(revision, "Closed native owner/public assertion coverage is incomplete"),
+                                ("0" * 40, "Exact-source ordinary-account engine and shipping proof did not qualify")]:
+            report["source_revision"] = source
+            (proof / "engine-contract-results.json").write_text(json.dumps(report), encoding="utf-8")
+            result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(ROOT / "acceptance/windows-engine-check.ps1")],
+                                    cwd=ROOT, env=environment, capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(message, result.stdout + result.stderr)
+            self.assertFalse((self.root / "host-exclusions.txt").exists())
+
+    def test_current_companion_literals_are_closed_and_bound_to_source(self):
+        parser = self.root / "ledger.ps1"
+        parser.write_text(r'''$ErrorActionPreference='Stop'
+$errors=$null
+$ast=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$errors)
+if($errors.Count){throw ($errors | Out-String)}
+$helperAST=[Management.Automation.Language.Parser]::ParseFile($args[1],[ref]$null,[ref]$errors)
+$helper=@($helperAST.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Read-EngineLiteralArray'},$true))
+if($helper.Count -ne 1){throw 'Expected actual source literal reader'}
+Invoke-Expression $helper[0].Extent.Text
+$values=@{}
+foreach($name in @('$adapterParents','$adapterAssertions','$adapterCommandParents')) {
+ $assignment=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq $name},$true))
+ if($assignment.Count -ne 1){throw 'Expected one closed actual source declaration'}
+ $values[$name]=@(Read-EngineLiteralArray $assignment[0])
+ if($values[$name].Count -eq 0 -or @($values[$name]|Sort-Object -CaseSensitive -Unique).Count -ne $values[$name].Count){throw 'Source inventory is empty or duplicated'}
+}
+foreach($child in $values['$adapterAssertions']) {
+ if(($child -split '/')[0] -cnotin $values['$adapterParents']){throw 'Assertion is outside the exact selected source parents'}
+}
+foreach($parent in $values['$adapterParents']) {
+ if($parent -cnotin $values['$adapterAssertions']){throw 'Selected source parent is missing from outcome requirements'}
+}
+$values|ConvertTo-Json -Depth 4 -Compress
+''', encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(parser), str(DRIVER), str(ROOT / "acceptance/windows-engine-check.ps1")], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        ledger = json.loads(result.stdout)
+        source = "\n".join(p.read_text() for p in (ROOT / "adapters/mcp").glob("*_test.go"))
+        for name in ledger["$adapterParents"]:
+            self.assertIn(f"func {name}(", source)
+        self.assertNotIn("TestCompiledClaudeHook", ledger["$adapterParents"])
+        self.assertNotIn("TestContentDesktopPacketOracle", ledger["$adapterParents"])
+        command = "\n".join(p.read_text() for p in (ROOT / "adapters/mcp/cmd/maestro-mcp").glob("*_test.go"))
+        for name in ledger["$adapterCommandParents"]:
+            self.assertIn(f"func {name}(", command)

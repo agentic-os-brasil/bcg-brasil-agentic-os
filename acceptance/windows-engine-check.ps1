@@ -28,6 +28,7 @@ if (@($report.packages).Count -ne 8 -or
     @($report.public_families.required_tests).Count -ne 4 -or @($report.public_families.required_assertions).Count -ne 21 -or
     @($report.public_families.outcomes | Where-Object { $_.outcome -cne 'PASS' }).Count -ne 0 -or
     @($report.public_families.observed_skips).Count -ne 0 -or @($report.unclassified_skips).Count -ne 0 -or
+    @($report.original_assertions).Count -ne 39 -or
     @($report.original_assertions | Where-Object { $_.disposition -cnotin @('executed_pass', 'classified_platform_nonapplicability') }).Count -ne 0) {
     throw 'Closed native owner/public assertion coverage is incomplete.'
 }
@@ -43,7 +44,15 @@ foreach ($entry in @($report.packages) + @($report.adapter_packages)) {
         (Get-FileHash -LiteralPath $log.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -cne $entry.log_sha256) {
         throw 'Engine log identity changed or exceeded its bound.'
     }
-    if ($entry.name -cin $expected -and $entry.canonical_contract_proof.qualified -ne $true) { throw 'An owning capability-pair proof is incomplete.' }
+    if ($entry.name -cin $expected) {
+        if ($entry.canonical_contract_proof.qualified -ne $true -or
+            @((Compare-Object (@($sealed[0].tests) | Sort-Object -CaseSensitive) (@($entry.expected_tests) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0 -or
+            @((Compare-Object (@($sealed[0].tests) | Sort-Object -CaseSensitive) (@($entry.outcomes.test) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0 -or
+            @($entry.outcomes.test | Sort-Object -CaseSensitive -Unique).Count -ne @($sealed[0].tests).Count -or
+            @($entry.outcomes | Where-Object { $_.outcome -cnotin @('PASS', 'SKIP') }).Count -ne 0) {
+            throw 'An owning capability-pair proof or full observed inventory is incomplete.'
+        }
+    }
 }
 if ($report.adapter_profile -cne 'windows_private_engine_adapters_v1' -or @($report.adapter_packages).Count -ne 2 -or
     @((Compare-Object @('mcp', 'mcp-command') (@($report.adapter_packages.name) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) {
@@ -54,6 +63,20 @@ $sealedDriver = Join-Path $manifest.source_root 'acceptance/windows-core-pilot.p
 if ((Get-FileHash -LiteralPath $driver -Algorithm SHA256).Hash -cne (Get-FileHash -LiteralPath $sealedDriver -Algorithm SHA256).Hash) {
     throw 'Host exclusion contract differs from exact committed driver source.'
 }
+function Read-EngineLiteralArray($Assignment) {
+    $arrays = @($Assignment.Right.FindAll({param($node) $node -is [Management.Automation.Language.ArrayExpressionAst]}, $true))
+    if ($arrays.Count -ne 1 -or $arrays[0].SubExpression.Statements.Count -ne 1) { throw 'Expected one literal source array.' }
+    $pipeline = $arrays[0].SubExpression.Statements[0]
+    if ($pipeline -isnot [Management.Automation.Language.PipelineAst] -or $pipeline.PipelineElements.Count -ne 1 -or
+        $pipeline.PipelineElements[0] -isnot [Management.Automation.Language.CommandExpressionAst]) { throw 'Source array cannot execute commands.' }
+    $expression = $pipeline.PipelineElements[0].Expression
+    if ($expression -isnot [Management.Automation.Language.ArrayLiteralAst] -and $expression -isnot [Management.Automation.Language.StringConstantExpressionAst]) {
+        throw 'Source array must contain constant test names.'
+    }
+    $values = @($expression.SafeGetValue())
+    if ($values.Count -eq 0 -or @($values | Where-Object { $_ -isnot [string] }).Count -ne 0) { throw 'Source array requires string constants.' }
+    return $values
+}
 $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile($driver, [ref]$null, [ref]$errors)
 if ($errors.Count) { throw 'Host exclusion source could not be parsed.' }
@@ -61,7 +84,7 @@ $closed = @{}
 foreach ($variable in @('$adapterParents', '$adapterAssertions', '$adapterCommandParents')) {
     $assignments = @($ast.FindAll({param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -ceq $variable}, $true))
     if ($assignments.Count -ne 1) { throw 'Expected one literal current adapter assertion source.' }
-    $closed[$variable] = @($assignments[0].Right.SafeGetValue())
+    $closed[$variable] = @(Read-EngineLiteralArray $assignments[0])
 }
 foreach ($entry in $report.adapter_packages) {
     $parents = if ($entry.name -ceq 'mcp') { $closed['$adapterParents'] } else { $closed['$adapterCommandParents'] }
