@@ -65,6 +65,17 @@ jobs:
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: adapters/mcp/go.mod
+      - name: Select physical temporary root on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          python3 - <<'PYTHON'
+          import os, pathlib, tempfile
+          root = pathlib.Path(os.environ["RUNNER_TEMP"]).resolve(strict=True)
+          temporary = tempfile.mkdtemp(prefix="maestro-product-", dir=root)
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as environment:
+              environment.write(f"TMPDIR={temporary}\nGOTMPDIR={temporary}\n")
+          PYTHON
       # shortcut: runner toolcache paths fail Go canonicalization; remove when unchanged witness tests pass there.
       # Related upstream report: https://github.com/golang/go/issues/82447
       - name: Stage Windows SDK for canonical command evidence
