@@ -1,0 +1,129 @@
+name: Maestro Windows native engine
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, codex/integration/maestro-main-windows-engine]
+    paths:
+      - 'internal/**'
+      - 'adapters/mcp/**'
+      - 'acceptance/windows-core-pilot.ps1'
+      - '.github/workflows/windows-native-engine.yml'
+      - 'go.mod'
+      - 'go.sum'
+  pull_request:
+    paths:
+      - 'internal/**'
+      - 'adapters/mcp/**'
+      - 'acceptance/windows-core-pilot.ps1'
+      - '.github/workflows/windows-native-engine.yml'
+      - 'go.mod'
+      - 'go.sum'
+
+permissions:
+  contents: read
+
+jobs:
+  native-engine:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: adapters/mcp/go.mod
+      - name: Stage exact public source, SDK and shipping executables
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:GOROOT) { throw 'Native engine proof refuses caller-supplied GOROOT.' }
+          $installedRoot = (go env GOROOT).Trim()
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned SDK lookup failed.' }
+          $publicRoot = Join-Path $env:SystemDrive ('MaestroNativeEngine-' + [Guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $publicRoot -ErrorAction Stop | Out-Null
+          $acl = [Security.AccessControl.DirectorySecurity]::new()
+          $acl.SetAccessRuleProtection($true, $false)
+          foreach ($sid in @('S-1-5-18', 'S-1-5-32-544')) {
+            $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new($sid), 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
+          }
+          $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-32-545'), 'ReadAndExecute', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
+          Set-Acl -LiteralPath $publicRoot -AclObject $acl
+          $sdkRoot = Join-Path $publicRoot 'sdk'
+          New-Item -ItemType Directory -Path $sdkRoot | Out-Null
+          Get-ChildItem -LiteralPath $installedRoot -Force | Copy-Item -Destination $sdkRoot -Recurse
+          $sdkGo = Join-Path $sdkRoot 'bin/go.exe'
+          if ((Get-FileHash -LiteralPath (Join-Path $installedRoot 'bin/go.exe') -Algorithm SHA256).Hash -cne
+              (Get-FileHash -LiteralPath $sdkGo -Algorithm SHA256).Hash) { throw 'Copied SDK differs from pinned executable.' }
+          if ((& $sdkGo env GOROOT).Trim() -cne $sdkRoot -or $LASTEXITCODE -ne 0) { throw 'Copied SDK selected an unexpected GOROOT.' }
+          $sourceRoot = Join-Path $publicRoot 'source'
+          $binaryRoot = Join-Path $publicRoot 'bin'
+          New-Item -ItemType Directory -Path $sourceRoot, $binaryRoot | Out-Null
+          $revision = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $revision -cnotmatch '^[0-9a-f]{40}$') { throw 'Exact source revision is unavailable.' }
+          $archive = Join-Path $env:RUNNER_TEMP 'native-engine-source.tar'
+          git archive --format=tar --output=$archive HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Exact source archive failed.' }
+          tar -xf $archive -C $sourceRoot
+          if ($LASTEXITCODE -ne 0) { throw 'Exact source staging failed.' }
+          $env:GOCACHE = Join-Path $env:RUNNER_TEMP 'native-engine-build-cache'
+          $env:GOTOOLCHAIN = 'local'
+          $env:GOFLAGS = '-buildvcs=false'
+          $testBinary = Join-Path $binaryRoot 'mcp.test.exe'
+          $server = Join-Path $binaryRoot 'maestro-mcp.exe'
+          Push-Location -LiteralPath (Join-Path $sourceRoot 'adapters/mcp')
+          try {
+            & $sdkGo test -c . -o $testBinary
+            if ($LASTEXITCODE -ne 0) { throw 'Public native test compilation failed.' }
+            & $sdkGo build -o $server ./cmd/maestro-mcp
+            if ($LASTEXITCODE -ne 0) { throw 'Shipping MCP compilation failed.' }
+            $inventory = @(& $testBinary '-test.list' '^(Test|Example)')
+            if ($LASTEXITCODE -ne 0 -or 'TestWindowsCorePilot' -cnotin $inventory -or
+                @($inventory | Sort-Object -Unique).Count -ne $inventory.Count -or
+                @($inventory | Where-Object { $_ -cnotmatch '^(Test|Example)[A-Za-z0-9_]*$' }).Count -ne 0) { throw 'Closed test inventory is unavailable or invalid.' }
+          } finally { Pop-Location }
+          $manifest = [ordered]@{
+            schema_version=1; source_revision=$revision
+            source_archive_sha256=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+            sdk_go_sha256=(Get-FileHash -LiteralPath $sdkGo -Algorithm SHA256).Hash.ToLowerInvariant()
+            test_binary_sha256=(Get-FileHash -LiteralPath $testBinary -Algorithm SHA256).Hash.ToLowerInvariant()
+            shipping_server_sha256=(Get-FileHash -LiteralPath $server -Algorithm SHA256).Hash.ToLowerInvariant()
+            tests=$inventory; selected_families=@('Core', 'DirectoryDurability', 'PrivateState', 'OwnerReview')
+          }
+          $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $publicRoot 'engine-build-manifest.json') -Encoding utf8
+          "MAESTRO_ENGINE_PUBLIC_ROOT=$publicRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Public init and restart under the actual ordinary account
+        shell: pwsh
+        run: |
+          ./acceptance/windows-core-pilot.ps1 -TestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/mcp.test.exe') -Server (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/maestro-mcp.exe') -OutputRoot (Join-Path $env:RUNNER_TEMP 'native-engine-proof')
+      - name: Stage only bounded synthetic evidence
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidence = Join-Path $env:RUNNER_TEMP 'native-engine-evidence'
+          New-Item -ItemType Directory -Path $evidence -ErrorAction Stop | Out-Null
+          $sources = @([pscustomobject]@{root=(Join-Path $env:RUNNER_TEMP 'native-engine-proof'); names=@('native-test.stdout.log', 'native-test.stderr.log', 'native-core-proof.json')})
+          if ($env:MAESTRO_ENGINE_PUBLIC_ROOT) {
+            $sources += [pscustomobject]@{root=$env:MAESTRO_ENGINE_PUBLIC_ROOT; names=@('engine-build-manifest.json')}
+          }
+          foreach ($source in $sources) {
+            if (-not (Test-Path -LiteralPath $source.root)) { continue }
+            $directory = Get-Item -LiteralPath $source.root -Force
+            if ($directory -isnot [IO.DirectoryInfo] -or ($directory.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Evidence root must be an ordinary directory.' }
+            foreach ($name in $source.names) {
+              $path = Join-Path $source.root $name
+              if (-not (Test-Path -LiteralPath $path)) { continue }
+              $file = Get-Item -LiteralPath $path -Force
+              if ($file -isnot [IO.FileInfo] -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $file.Length -gt 2097152) { throw 'Evidence must be a bounded ordinary synthetic file.' }
+              $destination = Join-Path $evidence $name
+              Copy-Item -LiteralPath $path -Destination $destination
+              if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -cne (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash) { throw 'Evidence copy changed bytes.' }
+            }
+          }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: windows-native-engine-${{ github.sha }}
+          path: ${{ runner.temp }}/native-engine-evidence/
+          if-no-files-found: error
+          retention-days: 7

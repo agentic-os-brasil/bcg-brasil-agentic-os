@@ -50,29 +50,30 @@ if ($errors.Count) { throw ($errors | Out-String) }
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_workflow_windows_blocks_parse(self):
-        workflow = (ROOT / ".github/workflows/data-home-inspection.yml").read_text()
-        current = []
-        blocks = []
-        lines = workflow.splitlines()
-        for index, line in enumerate(lines):
-            if line.startswith("      - "):
-                current = []
-            current.append(line)
-            if line == "        run: |" and "        shell: pwsh" in current:
-                body = []
-                for child in lines[index + 1:]:
-                    if child and not child.startswith("          "):
-                        break
-                    body.append(child)
-                blocks.append(textwrap.dedent("\n".join(body)))
-        self.assertEqual(len(blocks), 3)
-        for index, body in enumerate(blocks):
-            script = self.root / f"workflow-{index}.ps1"
-            script.write_text(body, encoding="utf-8")
-            parser = self.root / "parse-workflow.ps1"
-            parser.write_text("$e=$null; [Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$e) | Out-Null; if($e.Count){throw ($e | Out-String)}", encoding="utf-8")
-            result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(parser), str(script)], capture_output=True, text=True, timeout=30)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        for workflow_path in (".github/workflows/data-home-inspection.yml", ".github/workflows/windows-native-engine.yml"):
+            workflow = (ROOT / workflow_path).read_text()
+            current = []
+            blocks = []
+            lines = workflow.splitlines()
+            for index, line in enumerate(lines):
+                if line.startswith("      - "):
+                    current = []
+                current.append(line)
+                if line == "        run: |" and "        shell: pwsh" in current:
+                    body = []
+                    for child in lines[index + 1:]:
+                        if child and not child.startswith("          "):
+                            break
+                        body.append(child)
+                    blocks.append(textwrap.dedent("\n".join(body)))
+            self.assertEqual(len(blocks), 3)
+            for index, body in enumerate(blocks):
+                script = self.root / f"workflow-{index}.ps1"
+                script.write_text(body, encoding="utf-8")
+                parser = self.root / "parse-workflow.ps1"
+                parser.write_text("$e=$null; [Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$e) | Out-Null; if($e.Count){throw ($e | Out-String)}", encoding="utf-8")
+                result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(parser), str(script)], capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def closed_manifest(self):
         source = self.root / "source"
