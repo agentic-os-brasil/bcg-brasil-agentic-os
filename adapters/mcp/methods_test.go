@@ -140,7 +140,7 @@ func runMethodDiscovery(t *testing.T, stdio bool) {
 	if index.SchemaVersion != 1 || len(index.Methods) != 92 {
 		t.Fatalf("invalid index: %+v", index)
 	}
-	expectedResources := 5
+	expectedResources := 6
 	for _, method := range index.Methods {
 		files, err := baseskills.Files(method.ID)
 		if err != nil {
@@ -184,6 +184,10 @@ func runMethodDiscovery(t *testing.T, stdio bool) {
 	}
 	if read("maestro://methods/agent-skill-policy.json") != string(baseskills.AgentSkillPolicy()) {
 		t.Fatal("canonical policy changed")
+	}
+	declaration, err := os.ReadFile("method-contracts.json")
+	if err != nil || read("maestro://methods/method-contracts.json") != string(declaration) {
+		t.Fatal("canonical method declaration changed")
 	}
 	license, err := os.ReadFile("../../LICENSE.md")
 	if err != nil || read("maestro://methods/LICENSE.md") != string(license) {
