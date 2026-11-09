@@ -120,3 +120,30 @@ Use the workflow artifact for exact source revision, source/SDK and executable
 hashes, expected and observed inventories, public/resolver proof, remaining skips
 and failure logs. This acceptance machinery is repository development tooling and
 is excluded from the distributed product.
+## Ordinary-account adapter journeys after canonical qualification
+
+`windows_adapter_journeys_v1` is a separate, closed companion to the existing
+eight-package canonical profile. It binds the complete inventories and hashes of
+the MCP adapter and command test executables, then runs eleven named positive
+SDK, compiled-server, packet, hook and initialization journeys under the same
+actual non-elevated account. Each required parent and every observed child must
+PASS exactly once; missing, duplicate, unknown, failed or skipped outcomes refuse
+this companion qualification. The canonical31-row ledger,30 prerequisites and
+independent compatibility witnesses retain their original meanings.
+
+The elevated hosted-account step runs the remaining adapter contracts, including
+explicit unsafe-DACL and elevated-initialization refusal without filesystem
+effects. It excludes only the exact eleven positive parents after the companion
+report proves they passed; it does not turn their host rejection into a skip or
+ordinary-user evidence. Existing separate native installation gates stay separate.
+
+The bounded artifact retains the original seventeen canonical proof files plus
+`adapter-mcp.log`, `adapter-mcp-command.log` and `adapter-contract-results.json`.
+These synthetic executable journeys do not prove installed Code/Desktop loading,
+production signing, colleague distribution or hostile same-user filesystem custody.
+Nested Go rebuilds use the pinned SDK and source module checksums; this companion
+does not claim offline development dependency acquisition.
+
+This routing correction has source/parser evidence until its exact native CI run
+is retained. Earlier canonical success and the later elevated-host fixture failure
+remain distinct observations and are preserved in the integration evidence.

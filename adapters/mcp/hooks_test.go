@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -20,14 +21,26 @@ import (
 
 type hookFixture struct{ binary, base, prod, owner, work, home string }
 
+func hookDirectoryAlias(t *testing.T, alias, target string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		shell := filepath.Join(os.Getenv("SystemRoot"), "System32", "cmd.exe")
+		if out, err := exec.Command(shell, "/c", "mklink", "/J", alias, target).CombinedOutput(); err != nil {
+			t.Fatalf("required ordinary-user directory junction unavailable: %s %v", out, err)
+		}
+		return
+	}
+	if err := os.Symlink(target, alias); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func newHookFixture(t *testing.T, binary string) hookFixture {
 	t.Helper()
 	base := physicalTempDir(t)
 	f := hookFixture{binary: binary, base: base, prod: filepath.Join(base, "product"), owner: filepath.Join(base, "owner"), work: filepath.Join(base, "work")}
 	for _, p := range []string{f.prod, f.owner} {
-		if err := os.Mkdir(p, 0700); err != nil {
-			t.Fatal(err)
-		}
+		privateFixtureDirectory(t, p)
 	}
 	cmd := exec.Command(binary, append([]string{"init"}, f.flags()...)...)
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -137,7 +150,7 @@ func treeSnapshot(t *testing.T, root string) map[string]string {
 
 // One real build supplies every public command oracle below. No native host is launched.
 func TestCompiledClaudeHook(t *testing.T) {
-	binary := filepath.Join(physicalTempDir(t), "maestro-mcp")
+	binary := filepath.Join(physicalTempDir(t), productTestBinaryName())
 	if out, err := exec.Command("go", "build", "-o", binary, "./cmd/maestro-mcp").CombinedOutput(); err != nil {
 		t.Fatalf("build: %v %s", err, out)
 	}
@@ -188,7 +201,7 @@ func TestCompiledClaudeHook(t *testing.T) {
 		f := newHookFixture(t, binary)
 		outside := filepath.Join(f.base, "outside")
 		os.Mkdir(outside, 0700)
-		os.Symlink(outside, filepath.Join(f.work, "alias"))
+		hookDirectoryAlias(t, filepath.Join(f.work, "alias"), outside)
 		fields := toolFields("Read", "cross-cwd", map[string]any{"file_path": "safe.md"})
 		fields["cwd"] = outside
 		out, _, code := f.call("PreToolUse", fields)
@@ -204,8 +217,8 @@ func TestCompiledClaudeHook(t *testing.T) {
 		os.Remove(filepath.Join(f.work, "alias"))
 		nested := filepath.Join(f.work, "nested")
 		os.Mkdir(nested, 0700)
-		os.Symlink(outside, filepath.Join(nested, "escape"))
-		os.Symlink(nested, filepath.Join(f.work, "internal-alias"))
+		hookDirectoryAlias(t, filepath.Join(nested, "escape"), outside)
+		hookDirectoryAlias(t, filepath.Join(f.work, "internal-alias"), nested)
 		hookDeny(t, f, toolFields("Glob", "nested-alias", map[string]any{"pattern": "internal-alias/**/*.md"}))
 		os.Remove(filepath.Join(nested, "escape"))
 		os.Remove(filepath.Join(f.work, "internal-alias"))
@@ -334,7 +347,7 @@ func TestCompiledClaudeHook(t *testing.T) {
 		f := newHookFixture(t, binary)
 		outside := filepath.Join(f.base, "outside")
 		os.Mkdir(outside, 0700)
-		os.Symlink(outside, filepath.Join(f.home, "state/native-agent-flow"))
+		hookDirectoryAlias(t, filepath.Join(f.home, "state/native-agent-flow"), outside)
 		before := treeSnapshot(t, outside)
 		_, _, code := f.call("UserPromptSubmit", nil)
 		if code != 2 {
@@ -367,7 +380,7 @@ func TestCompiledClaudeHook(t *testing.T) {
 		hookAllow(t, f, dispatchFields("case", "case-agent"))
 		outside := filepath.Join(f.base, "receipt-outside")
 		os.Mkdir(outside, 0700)
-		os.Symlink(outside, filepath.Join(f.home, "state/runtime"))
+		hookDirectoryAlias(t, filepath.Join(f.home, "state/runtime"), outside)
 		_, _, code := f.call("SubagentStart", agentFields("case", "case-agent"))
 		if code != 1 {
 			t.Fatal("receipt alias was not refused")

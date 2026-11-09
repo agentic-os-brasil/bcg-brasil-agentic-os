@@ -166,6 +166,37 @@ if ($withManifest) {
             $entry | Add-Member -NotePropertyName canonical_skip_policy -NotePropertyValue @($canonicalPolicies[$entry.name] | Where-Object { $null -ne $_ }) -Force
         }
     }
+    $withAdapters = ($canonical.PSObject.Properties.Name -ccontains 'adapter_profile') -or ($canonical.PSObject.Properties.Name -ccontains 'adapter_packages')
+    if ($withAdapters) {
+        if (-not $withCanonicalContracts -or $canonical.adapter_profile -cne 'windows_adapter_journeys_v1') { throw 'Unknown adapter qualification profile.' }
+        $adapterRequired = @{
+            mcp = @('TestContentCompiledQualifiedStartup', 'TestContentDesktopPacketOracle', 'TestCompiledClaudeHook', 'TestMethodQueryDiscoverySDK', 'TestMethodQueryPlanSDK', 'TestMethodQueryPacketRestartContinuation', 'TestMethodQueryArchitectureRecipeRequirementsSDK', 'TestPackagedMethodsDiscovery', 'TestPackagedMethodsStdioDiscovery')
+            'mcp-command' = @('TestProductInitCreatesAndPreservesLifecycleFilesystem', 'TestPublicationReadyIsAtomicAndExclusive')
+        }
+        $adapterNames = @($canonical.adapter_packages | ForEach-Object { $_.name })
+        if ($adapterNames.Count -ne 2 -or @($adapterNames | Sort-Object -Unique).Count -ne 2 -or @($adapterNames | Where-Object { $_ -cnotin @('mcp', 'mcp-command') }).Count -ne 0) {
+            throw 'Adapter journeys require exactly the two closed packages.'
+        }
+        foreach ($entry in $canonical.adapter_packages) {
+            $relative = if ($entry.name -ceq 'mcp') { 'adapters/mcp' } else { 'adapters/mcp/cmd/maestro-mcp' }
+            $required = @($adapterRequired[$entry.name])
+            if ($entry.package -cne ('./' + $relative) -or $entry.working_directory -cne (Join-Path $canonical.source_root $relative) -or
+                @($entry.tests).Count -eq 0 -or @($entry.tests | Sort-Object -Unique).Count -ne @($entry.tests).Count -or
+                @($entry.tests | Where-Object { $_ -cnotmatch '^(Test|Example)[A-Za-z0-9_]*$' }).Count -ne 0) { throw 'Adapter package identity or closed inventory is invalid.' }
+            foreach ($test in $required) {
+                if (@($entry.tests | Where-Object { $_ -ceq $test }).Count -ne 1) { throw 'Adapter inventory omits a required public journey.' }
+            }
+            $binary = Get-Item -LiteralPath $entry.binary -Force
+            if ($binary -isnot [IO.FileInfo] -or ($binary.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+                $entry.sha256 -cnotmatch '^[0-9a-f]{64}$' -or (Get-FileHash -LiteralPath $binary.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -cne $entry.sha256) { throw 'Adapter executable differs from its sealed ordinary file.' }
+            $entry | Add-Member -NotePropertyName required_tests -NotePropertyValue $required -Force
+            $assertions = @($required)
+            if ($entry.name -ceq 'mcp') {
+                $assertions += @('root_removal_and_allowed_control', 'startup_read_only_and_current_context', 'malformed_event_and_size_fail_closed', 'paths_glob_regex_and_cross_case', 'namespace_and_predispatch', 'observations_retries_and_body_privacy', 'optional_prompt_identity_never_resets', 'concurrent_reservations_choose_one', 'private_alias_and_changed_binding', 'failed_observation_grants_no_child_authority', 'truncated_state_never_reinitializes', 'stop_recursion_has_no_completion_effect') | ForEach-Object { 'TestCompiledClaudeHook/' + $_ }
+            }
+            $entry | Add-Member -NotePropertyName required_assertions -NotePropertyValue $assertions -Force
+        }
+    }
     foreach ($path in @($canonical.source_root, $canonical.sdk_root, $canonical.sdk_go)) {
         if (-not [IO.Path]::IsPathRooted($path) -or -not (Test-Path -LiteralPath $path)) {
             throw 'Canonical public source and SDK inputs must be existing absolute paths.'
@@ -449,6 +480,14 @@ try {
             }
             $entry.binary = $copied
         }
+        if ($withAdapters) {
+            foreach ($entry in $canonical.adapter_packages) {
+                $copied = Join-Path $payload ($entry.name + '-journeys.test.exe')
+                Copy-Item -LiteralPath $entry.binary -Destination $copied
+                if ((Get-FileHash -LiteralPath $copied -Algorithm SHA256).Hash.ToLowerInvariant() -cne $entry.sha256) { throw 'Copied adapter executable differs from its seal.' }
+                $entry.binary = $copied
+            }
+        }
         if ($withCanonical -and $canonical.compatible_producer) {
             $copiedProducer = Join-Path $payload 'private-wiki-compatible-producer.exe'
             Copy-Item -LiteralPath $canonical.compatible_producer.executable -Destination $copiedProducer
@@ -665,6 +704,18 @@ try {
             }
             return [ordered]@{qualified=($qualified -and $unclassified.Count -eq 0); required_tests=@($Entry.canonical_required_tests)
                 original_assertions=$original; classified_skips=$classified; unclassified_skips=$unclassified; observed_skips=$skips}
+        }
+        function Get-AdapterPackageProof($Entry, [string]$Body, [int]$ExitCode) {
+            $observed = @([regex]::Matches($Body, '(?m)^\s*--- (PASS|FAIL|SKIP): ((?:Test|Example)\S*) ') | ForEach-Object { [ordered]@{test=$_.Groups[2].Value; outcome=$_.Groups[1].Value} })
+            $tops = @($observed | Where-Object { $_.test -cnotmatch '/' })
+            $required = @($Entry.required_tests)
+            $assertions = @($Entry.required_assertions)
+            $qualified = $ExitCode -eq 0 -and $required.Count -gt 0 -and $tops.Count -eq $required.Count -and
+                $assertions.Count -eq $observed.Count -and @((Compare-Object ($assertions | Sort-Object) ($observed.test | Sort-Object))).Count -eq 0 -and
+                @($observed.test | Sort-Object -Unique).Count -eq $observed.Count -and
+                @($observed | Where-Object { $_.outcome -cne 'PASS' -or $_.test.Split('/')[0] -cnotin $required }).Count -eq 0 -and
+                @((Compare-Object ($required | Sort-Object) ($tops.test | Sort-Object))).Count -eq 0
+            return [ordered]@{qualified=$qualified; required_tests=$required; required_assertions=$assertions; outcomes=$observed; observed_skips=@($observed | Where-Object { $_.outcome -ceq 'SKIP' } | ForEach-Object { $_.test })}
         }
         $manifest = Get-Content -LiteralPath $CanonicalManifest -Raw -Encoding UTF8 | ConvertFrom-Json
         $migrationProfile = -not $Inspection -and $manifest.qualification_profile -cin @('quarantined_windows_migration_primitives_v2', 'windows_public_external_migration_v1', 'windows_canonical_contracts_v1')
@@ -961,6 +1012,30 @@ try {
             if ($publicMigrationProfile) { throw 'Canonical public migration coverage remains incomplete; retain all eight package logs, actual public/resolver outcomes and skipped coverage.' }
             if ($migrationProfile) { throw 'Canonical migration primitive contracts remain incomplete; retain all eight package logs and actual skipped outcomes.' }
             throw 'Canonical contracts remain incomplete; retain all six package logs and classified outcomes.'
+        }
+        if ($manifest.adapter_profile -ceq 'windows_adapter_journeys_v1') {
+            $adapterResults = @()
+            foreach ($entry in $manifest.adapter_packages) {
+                if ((Get-FileHash -LiteralPath $entry.binary -Algorithm SHA256).Hash.ToLowerInvariant() -cne $entry.sha256) { throw 'Ordinary-account adapter executable changed.' }
+                $listed = @(& $entry.binary '-test.list' '^(Test|Example)')
+                if ($LASTEXITCODE -ne 0 -or @((Compare-Object ($entry.tests | Sort-Object) ($listed | Sort-Object))).Count -ne 0) { throw 'Actual adapter inventory differs from its seal.' }
+                $pattern = '^(' + (($entry.required_tests | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')$'
+                Push-Location -LiteralPath $entry.working_directory
+                try {
+                    $output = @(& $entry.binary '-test.run' $pattern '-test.v' '-test.timeout=900s' 2>&1 | ForEach-Object { "$_" })
+                    $code = $LASTEXITCODE
+                } finally { Pop-Location }
+                $body = $output -join "`n"
+                if ([Text.Encoding]::UTF8.GetByteCount($body) -gt 2097152) { throw 'Adapter journey output exceeds the bounded log contract.' }
+                $logName = 'adapter-' + $entry.name + '.log'
+                [IO.File]::WriteAllText((Join-Path $ProofRoot $logName), $body + "`n", (New-Object Text.UTF8Encoding($false)))
+                $proof = Get-AdapterPackageProof $entry $body $code
+                $adapterResults += [ordered]@{name=$entry.name; package=$entry.package; sha256=$entry.sha256; exit_code=$code; log=$logName; log_sha256=(Get-FileHash -LiteralPath (Join-Path $ProofRoot $logName) -Algorithm SHA256).Hash.ToLowerInvariant(); proof=$proof}
+            }
+            $adaptersQualified = $adapterResults.Count -eq 2 -and @($adapterResults | Where-Object { -not $_.proof.qualified }).Count -eq 0
+            $adapterReport = [ordered]@{schema_version=1; source_revision=$manifest.source_revision; profile='windows_adapter_journeys_v1'; actual_standard_user=$true; private_current_user_temp=$true; source_and_sdk_read_only=$true; packages=$adapterResults; qualification_complete=$adaptersQualified; native_client_loading=$false}
+            $adapterReport | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $ProofRoot 'adapter-contract-results.json') -Encoding utf8
+            if (-not $adaptersQualified) { throw 'Ordinary-account adapter journeys remain incomplete; retain both exact logs and all outcomes.' }
         }
     }
     if ($Kit) {

@@ -90,7 +90,7 @@ if ($errors.Count) { throw ($errors | Out-String) }
                         break
                     body.append(child)
                 blocks.append(textwrap.dedent("\n".join(body)))
-        self.assertEqual(len(blocks), 4)
+        self.assertEqual(len(blocks), 5)
         parser = self.root / "parse-product.ps1"
         parser.write_text("$e=$null; [Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$e) | Out-Null; if($e.Count){throw ($e | Out-String)}", encoding="utf-8")
         for index, body in enumerate(blocks):
@@ -606,6 +606,83 @@ if ($report.Count -ne 0) { throw 'Migration profile changed the default report' 
                 entry = next(item for item in changed["packages"] if item["name"] == package)
                 entry["tests"].remove(name)
                 self.canonical_admission(changed, "Canonical Windows inventory differs from its closed contract")
+
+    def test_adapter_journeys_require_a_closed_separate_profile(self):
+        document = self.canonical_contract_manifest()
+        document["adapter_profile"] = "windows_adapter_journeys_v1"
+        document["adapter_packages"] = []
+        self.canonical_admission(document, "Adapter journeys require exactly the two closed packages")
+        document["adapter_profile"] = "unapproved"
+        self.canonical_admission(document, "Unknown adapter qualification profile")
+
+    def test_adapter_proof_rejects_missing_duplicate_unknown_failed_or_skipped_outcomes(self):
+        self.launcher_fragment_check(r"""
+$proof=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Get-AdapterPackageProof'},$true))
+if($proof.Count -ne 1){throw 'Expected actual separate adapter proof function'}
+Invoke-Expression $proof[0].Extent.Text
+$entry=[pscustomobject]@{required_tests=@('TestFirst','TestSecond');required_assertions=@('TestFirst','TestFirst/child','TestSecond')}
+$valid="--- PASS: TestFirst/child (0.01s)`n--- PASS: TestFirst (0.01s)`n--- PASS: TestSecond (0.01s)"
+if(-not (Get-AdapterPackageProof $entry $valid 0).qualified){throw 'Complete actual adapter outcomes refused'}
+foreach($body in @($valid.Replace('--- PASS: TestFirst/child','--- SKIP: TestFirst/child'),$valid.Replace('--- PASS: TestSecond','--- FAIL: TestSecond'),$valid.Replace('--- PASS: TestSecond (0.01s)',''),$valid.Replace('--- PASS: TestFirst/child (0.01s)',''),$valid.Replace('TestFirst/child','TestFirst/unknown'),($valid+"`n--- PASS: TestSecond (0.01s)"),($valid+"`n--- PASS: TestUnknown (0.01s)"),($valid+"`n--- PASS: TestFirst/child (0.01s)"))){
+ if((Get-AdapterPackageProof $entry $body 0).qualified){throw ('Incomplete or duplicate adapter outcomes accepted: '+$body)}
+}
+if((Get-AdapterPackageProof $entry $valid 1).qualified){throw 'Nonzero adapter process accepted'}
+""")
+
+    def test_adapter_admission_binds_identity_inventory_and_binary(self):
+        required = {
+            "mcp": ["TestContentCompiledQualifiedStartup", "TestContentDesktopPacketOracle", "TestCompiledClaudeHook", "TestMethodQueryDiscoverySDK", "TestMethodQueryPlanSDK", "TestMethodQueryPacketRestartContinuation", "TestMethodQueryArchitectureRecipeRequirementsSDK", "TestPackagedMethodsDiscovery", "TestPackagedMethodsStdioDiscovery"],
+            "mcp-command": ["TestProductInitCreatesAndPreservesLifecycleFilesystem", "TestPublicationReadyIsAtomicAndExclusive"],
+        }
+        document = dict(adapter_profile="windows_adapter_journeys_v1", source_root=str(self.root / "source"), adapter_packages=[])
+        for name, tests in required.items():
+            relative = "adapters/mcp" if name == "mcp" else "adapters/mcp/cmd/maestro-mcp"
+            directory = Path(document["source_root"]) / relative
+            directory.mkdir(parents=True, exist_ok=True)
+            binary = self.root / (name + ".test.exe")
+            binary.write_bytes(b"unexecuted adapter admission fixture")
+            document["adapter_packages"].append(dict(name=name, package="./" + relative, working_directory=str(directory), tests=tests, binary=str(binary), sha256=hashlib.sha256(binary.read_bytes()).hexdigest()))
+        script = self.root / "adapter-admission.ps1"
+        script.write_text(r"""$ErrorActionPreference='Stop'
+$ast=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$null)
+$guard=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.IfStatementAst] -and $n.Clauses[0].Item1.Extent.Text -ceq '$withAdapters' -and $n.Extent.Text -match 'Unknown adapter qualification profile'},$true))
+if($guard.Count -ne 1){throw 'Expected actual closed adapter admission'}
+$canonical=Get-Content -LiteralPath $args[1] -Raw | ConvertFrom-Json
+$withAdapters=$true; $withCanonicalContracts=$true
+if($args[2] -ceq 'ALLOW'){Invoke-Expression $guard[0].Extent.Text;exit 0}
+$refused=$false
+try {Invoke-Expression $guard[0].Extent.Text}catch{if($_.Exception.Message -notmatch $args[2]){throw};$refused=$true}
+if(-not $refused){throw 'Unsafe adapter admission accepted'}
+""", encoding="utf-8")
+        def check(value, expected):
+            self.manifest.write_text(json.dumps(value), encoding="utf-8")
+            result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER), str(self.manifest), expected], capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        check(document, "ALLOW")
+        for field, replacement, reason in [("name", "unknown", "two closed packages"), ("package", "./arbitrary", "identity or closed inventory"), ("working_directory", str(self.root), "identity or closed inventory"), ("tests", required["mcp"][:-1], "omits a required public journey"), ("tests", required["mcp"] + [required["mcp"][0]], "identity or closed inventory"), ("sha256", "0" * 64, "differs from its sealed ordinary file")]:
+            with self.subTest(field=field, reason=reason):
+                changed = json.loads(json.dumps(document))
+                changed["adapter_packages"][0][field] = replacement
+                check(changed, reason)
+
+    def test_adapter_host_exclusions_are_exact_and_covered_by_ordinary_manifest(self):
+        workflow = (ROOT / ".github/workflows/product-mcp.yml").read_text()
+        script = self.root / "adapter-host-skip.ps1"
+        start = workflow.index("      - name: Product Windows host refusals and remaining package contracts")
+        block = workflow[start:workflow.index("      - name: Product module static checks", start)]
+        body = textwrap.dedent(block.split("        run: |\n", 1)[1])
+        expected = ["TestContentCompiledQualifiedStartup", "TestContentDesktopPacketOracle", "TestCompiledClaudeHook", "TestMethodQueryDiscoverySDK", "TestMethodQueryPlanSDK", "TestMethodQueryPacketRestartContinuation", "TestMethodQueryArchitectureRecipeRequirementsSDK", "TestPackagedMethodsDiscovery", "TestPackagedMethodsStdioDiscovery", "TestProductInitCreatesAndPreservesLifecycleFilesystem", "TestPublicationReadyIsAtomicAndExclusive"]
+        script.write_text(r"""$ErrorActionPreference='Stop'
+$ast=[Management.Automation.Language.Parser]::ParseInput($args[0],[ref]$null,[ref]$null)
+$assignment=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq '$skip'},$true))
+if($assignment.Count -ne 1){throw 'Expected actual exact host exclusion assignment'}
+$positive=ConvertFrom-Json $args[1]
+$separateNative=@()
+Invoke-Expression $assignment[0].Extent.Text
+foreach($name in $positive){if($name -cnotmatch $skip -or ($name+'Unexpected') -cmatch $skip -or ('Unexpected'+$name) -cmatch $skip){throw 'Host exclusion escaped the exact ordinary-account set'}}
+""", encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), body, json.dumps(expected)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def canonical_fragment_check(self, assertions):
         document = self.canonical_contract_manifest()

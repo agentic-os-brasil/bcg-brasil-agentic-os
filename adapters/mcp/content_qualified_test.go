@@ -215,9 +215,7 @@ func (r qualifiedContentRelease) install(t *testing.T) ownerFixture {
 	root := contentFixtureRoot(t)
 	user, workspace := filepath.Join(root, "owner"), filepath.Join(root, "workspace")
 	for _, path := range []string{user, workspace} {
-		if err := os.Mkdir(path, 0700); err != nil {
-			t.Fatal(err)
-		}
+		privateFixtureDirectory(t, path)
 	}
 	seedSHA := contentFileSHA(t, r.factory.Installer)
 	// Match setup's canonical factory test: this attests only exact engineering

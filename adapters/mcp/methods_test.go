@@ -31,9 +31,7 @@ func runMethodDiscovery(t *testing.T, stdio bool) {
 	base := physicalTempDir(t)
 	prod, home, ws := filepath.Join(base, "product"), filepath.Join(base, "owner"), filepath.Join(base, "workspace")
 	for _, path := range []string{prod, home} {
-		if err := os.Mkdir(path, 0700); err != nil {
-			t.Fatal(err)
-		}
+		privateFixtureDirectory(t, path)
 	}
 	lookup := func(string) (string, bool) { return "", false }
 	h, err := datahome.InitializeFresh(datahome.Options{ProductRoot: prod, UserHome: home, LookupEnv: lookup})
@@ -54,7 +52,7 @@ func runMethodDiscovery(t *testing.T, stdio bool) {
 	ctx := context.Background()
 	var transport mcp.Transport
 	if stdio {
-		binary := filepath.Join(base, "maestro-mcp")
+		binary := filepath.Join(base, productTestBinaryName())
 		if out, err := exec.Command("go", "build", "-o", binary, "./cmd/maestro-mcp").CombinedOutput(); err != nil {
 			t.Fatalf("build: %s: %v", out, err)
 		}
@@ -62,7 +60,7 @@ func runMethodDiscovery(t *testing.T, stdio bool) {
 		if err := packaging.BuildPlugin(packaging.Options{Destination: packet, Server: binary, Version: "0.2.0", Binding: options}); err != nil {
 			t.Fatal(err)
 		}
-		transport = &mcp.CommandTransport{Command: exec.Command(filepath.Join(packet, "scripts", "maestro-mcp"), "serve", "--product-root", prod, "--user-home", home, "--workspace", ws), TerminateDuration: time.Second}
+		transport = &mcp.CommandTransport{Command: exec.Command(filepath.Join(packet, "scripts", filepath.Base(binary)), "serve", "--product-root", prod, "--user-home", home, "--workspace", ws), TerminateDuration: time.Second}
 	} else {
 		b, err := product.Open(options)
 		if err != nil {

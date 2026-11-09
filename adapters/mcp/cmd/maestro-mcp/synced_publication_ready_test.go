@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 type pausedPublicationReady struct {
@@ -26,7 +28,7 @@ func TestPublicationReadyIsAtomicAndExclusive(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := filepath.Join(base, "barrier")
-	if err = os.Mkdir(root, 0700); err != nil {
+	if err = scheduler.EnsurePrivateDirectory(root); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(root, "ready.json")

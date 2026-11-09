@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/zipmigration"
 )
@@ -22,7 +23,7 @@ func TestProductInitCreatesAndPreservesLifecycleFilesystem(t *testing.T) {
 	}
 	productRoot, user, work := filepath.Join(base, "product"), filepath.Join(base, "owner"), filepath.Join(base, "workspace")
 	for _, path := range []string{productRoot, user} {
-		if err := os.Mkdir(path, 0700); err != nil {
+		if err := scheduler.EnsurePrivateDirectory(path); err != nil {
 			t.Fatal(err)
 		}
 	}

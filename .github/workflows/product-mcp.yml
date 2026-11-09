@@ -272,6 +272,15 @@ jobs:
               if ($LASTEXITCODE -ne 0) { throw 'Existing core witness build failed.' }
               & $sdkGo build -o (Join-Path $binaryRoot 'maestro-mcp.exe') ./cmd/maestro-mcp
               if ($LASTEXITCODE -ne 0) { throw 'Existing shipping server build failed.' }
+              $adapterEntries = @()
+              foreach ($adapter in @(@{name='mcp'; package='.'; relative='adapters/mcp'}, @{name='mcp-command'; package='./cmd/maestro-mcp'; relative='adapters/mcp/cmd/maestro-mcp'})) {
+                $binary = Join-Path $binaryRoot ($adapter.name + '-journeys.test.exe')
+                & $sdkGo test -c $adapter.package -o $binary
+                if ($LASTEXITCODE -ne 0) { throw 'Adapter public journey build failed.' }
+                $tests = @(& $binary '-test.list' '^(Test|Example)')
+                if ($LASTEXITCODE -ne 0 -or $tests.Count -eq 0) { throw 'Adapter public journey inventory failed.' }
+                $adapterEntries += [ordered]@{name=$adapter.name; package=('./' + $adapter.relative); working_directory=(Join-Path $sourceRoot $adapter.relative); binary=$binary; sha256=(Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant(); tests=$tests}
+              }
             } finally { Pop-Location }
           } finally { Pop-Location }
           $manifest = [ordered]@{
@@ -282,6 +291,7 @@ jobs:
             source_archive=$archive; source_archive_sha256=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
             vendor_files=$vendorFiles; compatible_producer=$producer; historical_witness=$historical
             packages=$entries
+            adapter_profile='windows_adapter_journeys_v1'; adapter_packages=$adapterEntries
           }
           $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $publicRoot 'canonical-contract-manifest.json') -Encoding utf8
       - name: Canonical ledger, HOME, owner and memory contracts on Unix
@@ -307,7 +317,7 @@ jobs:
               'canonical-execution.log', 'canonical-datahome.log', 'canonical-ownerctx.log',
               'canonical-memory.log', 'canonical-privatewiki.log', 'canonical-processidentity.log',
               'canonical-winprivate.log', 'canonical-zipmigration.log',
-              'canonical-contract-results.json')
+              'canonical-contract-results.json', 'adapter-mcp.log', 'adapter-mcp-command.log', 'adapter-contract-results.json')
           })
           if ($env:MAESTRO_CANONICAL_PUBLIC_ROOT) {
             $sources += [pscustomobject]@{root=$env:MAESTRO_CANONICAL_PUBLIC_ROOT; names=@('canonical-contract-manifest.json')}
@@ -362,10 +372,25 @@ jobs:
       # Windows must preserve ownership refusals; this job is not native admission.
       # Its elevated runner cannot qualify ordinary-user workspace initialization.
       - name: Product protocol, bootstrap refusal and package contracts
+        if: runner.os != 'Windows'
         working-directory: adapters/mcp
         # The actual first-install tracer runs separately on an admitted native
         # runner. Elevated Windows CI cannot qualify ordinary-user installation.
         run: go test ./... -skip '^(TestModernFactoryFirstInstallAndRestart|TestDirectInnerInstallRequiresProductionAuthority|TestModernSyncedSourceLifecycle|TestSyncedPublicationInterleavingAndReadOnlyReviews|TestProductDarwinSDKAndShippingStdioLifecycle)$' -timeout=900s
+      - name: Product Windows host refusals and remaining package contracts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: adapters/mcp
+        run: |
+          $report = Get-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'canonical-native-proof/adapter-contract-results.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+          $positive = @($report.packages | ForEach-Object { $_.proof.required_tests })
+          if ($report.profile -cne 'windows_adapter_journeys_v1' -or -not $report.qualification_complete -or
+              -not $report.actual_standard_user -or $positive.Count -ne 11 -or @($positive | Sort-Object -Unique).Count -ne 11 -or
+              @($report.packages | Where-Object { -not $_.proof.qualified -or $_.proof.observed_skips.Count -ne 0 }).Count -ne 0) { throw 'The exact ordinary-account adapter journeys must pass before host exclusions.' }
+          $separateNative = @('TestModernFactoryFirstInstallAndRestart', 'TestDirectInnerInstallRequiresProductionAuthority', 'TestModernSyncedSourceLifecycle', 'TestSyncedPublicationInterleavingAndReadOnlyReviews', 'TestProductDarwinSDKAndShippingStdioLifecycle')
+          $skip = '^(' + ((@($positive) + $separateNative | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')$'
+          go test ./... -skip $skip -timeout=900s
+          if ($LASTEXITCODE -ne 0) { throw 'Hosted Windows refusal or remaining adapter contract failed.' }
       - name: Product module static checks
         working-directory: adapters/mcp
         run: go vet ./...

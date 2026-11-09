@@ -14,10 +14,63 @@ import (
 	"testing"
 	"unsafe"
 
+	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/userlevel"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"golang.org/x/sys/windows"
 )
+
+func TestWindowsWorkspaceInitializationMatchesElevation(t *testing.T) {
+	base := physicalTempDir(t)
+	before := treeSnapshot(t, base)
+	got, err := workspace.Initialize(workspace.Options{WorkspacePath: filepath.Join(base, "workspace"), DataRoot: filepath.Join(base, "data")})
+	if windows.GetCurrentProcessToken().IsElevated() {
+		if !errors.Is(err, userlevel.ErrElevatedProcess) || got.WorkspaceID != "" || !reflect.DeepEqual(before, treeSnapshot(t, base)) {
+			t.Fatalf("elevated initialization did not refuse before effects: %+v %v", got, err)
+		}
+		t.Log("actual elevated host initialization refused without filesystem effects")
+		return
+	}
+	if err != nil || got.State != "initialized" {
+		t.Fatalf("ordinary initialization failed: %+v %v", got, err)
+	}
+}
+
+func TestWindowsUnsafeHomeAdmissionRefused(t *testing.T) {
+	base := physicalTempDir(t)
+	prod, home := filepath.Join(base, "product"), filepath.Join(base, "owner")
+	for _, path := range []string{prod, home} {
+		privateFixtureDirectory(t, path)
+	}
+	user, err := winprivate.CurrentUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	windowsFixtureDACL(t, home, "D:P(A;OICI;FA;;;"+user.String()+")(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;;FR;;;WD)")
+	before := treeSnapshot(t, base)
+	security, err := windows.GetNamedSecurityInfo(home, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lookup := func(string) (string, bool) { return "", false }
+	state, err := datahome.InitializeFresh(datahome.Options{ProductRoot: prod, UserHome: home, LookupEnv: lookup})
+	if err == nil || state.Writable || state.Diagnostic != "user-home-invalid" {
+		t.Fatalf("unsafe Windows home admitted: %+v %v", state, err)
+	}
+	if _, err := product.Open(product.Options{ProductRoot: prod, UserHome: home, WorkspacePath: filepath.Join(base, "workspace"), LookupEnv: lookup}); err == nil {
+		t.Fatal("unsafe Windows product store admitted")
+	}
+	afterSecurity, err := windows.GetNamedSecurityInfo(home, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+	if err != nil || security.String() != afterSecurity.String() || !reflect.DeepEqual(before, treeSnapshot(t, base)) {
+		t.Fatal("refused Windows admission changed existing bytes, modes or native security", err)
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".maestro")); !os.IsNotExist(err) {
+		t.Fatal("refused bootstrap created state")
+	}
+}
 
 func windowsPrivateOrdinaryUser(t *testing.T) *windows.SID {
 	t.Helper()

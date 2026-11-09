@@ -36,9 +36,7 @@ func newMethodQueryFixture(t *testing.T) methodQueryFixture {
 	root := physicalTempDir(t)
 	prod, owner, work := filepath.Join(root, "product"), filepath.Join(root, "owner"), filepath.Join(root, "workspace")
 	for _, path := range []string{prod, owner} {
-		if err := os.Mkdir(path, 0700); err != nil {
-			t.Fatal(err)
-		}
+		privateFixtureDirectory(t, path)
 	}
 	lookup := func(string) (string, bool) { return "", false }
 	home, err := datahome.InitializeFresh(datahome.Options{ProductRoot: prod, UserHome: owner, LookupEnv: lookup})
@@ -422,10 +420,7 @@ func TestMethodContractsRejectInvalidDeclarations(t *testing.T) {
 
 func TestMethodQueryPacketRestartContinuation(t *testing.T) {
 	f := newMethodQueryFixture(t)
-	binaryName := "maestro-mcp"
-	if runtime.GOOS == "windows" {
-		binaryName += ".exe"
-	}
+	binaryName := productTestBinaryName()
 	binary := filepath.Join(f.root, binaryName)
 	if out, err := exec.Command("go", "build", "-o", binary, "./cmd/maestro-mcp").CombinedOutput(); err != nil {
 		t.Fatalf("build: %s: %v", out, err)
