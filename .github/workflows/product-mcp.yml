@@ -16,6 +16,7 @@ on:
       - 'internal/atlasops/**'
       - 'internal/maintenance/**'
       - 'internal/maintenancecatalog/**'
+      - 'internal/privatewiki/**'
       - 'internal/processidentity/**'
       - 'internal/scheduler/**'
       - 'internal/skillsindex/**'
@@ -40,6 +41,7 @@ on:
       - 'internal/atlasops/**'
       - 'internal/maintenance/**'
       - 'internal/maintenancecatalog/**'
+      - 'internal/privatewiki/**'
       - 'internal/processidentity/**'
       - 'internal/scheduler/**'
       - 'internal/skillsindex/**'
@@ -105,10 +107,10 @@ jobs:
           $stagedBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           "GOCACHE=$freshCache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Canonical ledger, HOME, owner, memory and atlas contracts
-        run: go test ./internal/execution ./internal/datahome ./internal/ownerctx ./internal/privatelock ./internal/memory ./internal/atlasops -timeout=300s
+        run: go test ./internal/execution ./internal/datahome ./internal/ownerctx ./internal/privatelock ./internal/memory ./internal/atlasops ./internal/privatewiki -timeout=300s
       - name: Maintenance lifecycle and process identity on admitted Unix runners
         if: runner.os != 'Windows'
-        run: go test ./internal/maintenance ./internal/processidentity ./internal/skillsindex ./internal/scheduler -timeout=300s
+        run: go test ./internal/maintenance ./internal/processidentity ./internal/skillsindex ./internal/scheduler -skip '^TestProductWiki' -timeout=300s
       - name: Canonical workspace initialization contracts on admitted Unix runners
         if: runner.os != 'Windows'
         run: go test ./internal/workspace -timeout=180s
@@ -130,3 +132,56 @@ jobs:
             echo 'A product executable cannot depend on development packages.' >&2
             exit 1
           fi
+
+  wiki-maintenance-contracts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Select physical macOS temporary directory
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          physical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          printf 'TMPDIR=%s\n' "$physical_temp" >> "$GITHUB_ENV"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: adapters/mcp/go.mod
+      - name: Finite wiki maintenance families and exact terminal recovery
+        shell: bash
+        run: |
+          python3 - <<'PYCODE'
+          import json, os, pathlib, re, subprocess
+          package = "./internal/maintenance"
+          listed = subprocess.check_output(["go", "test", package, "-list", "^TestProductWiki"], text=True)
+          names = [line for line in listed.splitlines() if re.fullmatch(r"TestProductWiki[A-Za-z0-9_]+", line)]
+          required = {
+              "TestProductWikiStaleReviewAndClockOnlyNoopCannotQualify",
+              "TestProductWikiCadenceEnrollmentAndReplay",
+              "TestProductWikiLiveFencesBeforePointer",
+              "TestProductWikiTerminalFencesAfterActualEffect",
+              "TestProductWikiDiagnosticPointerHonorsDeniedPublication",
+              "TestProductWikiEventOnlyControlAndReceiptRefuseTampering",
+              "TestProductWikiEventRecoveryAfterPartialEffect",
+              "TestProductWikiEventClosureAfterReconcile",
+              "TestProductWikiEventClosureRetainsRecoveryEvidence",
+          }
+          assert required <= set(names) and len(names) == len(set(names)), "wiki family selection is incomplete"
+          # Prior slowest original family:89.90s. The expanded exact-event
+          # evidence/recovery family measured115.09s, so receives240s; other
+          # families receive180s. Failed360s combined runs are not reused as PASS.
+          for name in names:
+              evidence = pathlib.Path(os.environ["RUNNER_TEMP"]) / (name + ".jsonl")
+              deadline = "240s" if name == "TestProductWikiEventClosureAfterReconcile" else "180s"
+              with evidence.open("w") as output:
+                  result = subprocess.run(["go", "test", package, "-run", "^" + name + "$", "-count=1", "-json", "-timeout=" + deadline], stdout=output)
+              print(evidence.read_text(), flush=True)
+              assert result.returncode == 0, "wiki family failed: " + name
+              events = [json.loads(line) for line in evidence.read_text().splitlines()]
+              assert any(e.get("Action") == "pass" and e.get("Test") == name for e in events), "wiki family skipped or missing: " + name
+              assert not any(e.get("Action") == "skip" for e in events), "wiki family contains skipped coverage: " + name
+          PYCODE

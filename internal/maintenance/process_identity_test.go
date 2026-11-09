@@ -1,6 +1,7 @@
 package maintenance
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -26,7 +27,7 @@ func TestProductExecutableReplacementFencesServicesAndPublication(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, phase := range []string{"services", "diagnostic"} {
+	for _, phase := range []string{"services", "pointer", "diagnostic", "terminal"} {
 		t.Run(phase, func(t *testing.T) {
 			binary := filepath.Join(t.TempDir(), "retained-product-process")
 			if err := os.WriteFile(binary, body, 0700); err != nil {
@@ -59,6 +60,7 @@ func replaceActualProductTestImage() error {
 }
 
 func productImageFenceChild(t *testing.T, phase string) {
+	ctx := context.Background()
 	if phase == "services" {
 		s := productFixture(t)
 		before := productSnapshot(t, s.home)
@@ -71,8 +73,36 @@ func productImageFenceChild(t *testing.T, phase string) {
 		if _, err := NewService(s.options); !errors.Is(err, processidentity.ErrChanged) {
 			t.Fatalf("new Service adopted replacement: %v", err)
 		}
+		guard := &productExecution{service: s, jobID: MemoryLightDreamJobID}
+		if err := guard.guard(func() error { t.Fatal("changed process entered publication"); return nil }); !errors.Is(err, processidentity.ErrChanged) {
+			t.Fatalf("changed process touched unprepared control authority: %v", err)
+		}
+		if _, err := s.engine.InspectPrivateWikiMaintenance(s.workspaceID); !errors.Is(err, processidentity.ErrChanged) {
+			t.Fatalf("inspection invented current producer: %v", err)
+		}
+		if _, err := s.engine.CompilePrivateWiki(ctx, s.workspaceID, ""); !errors.Is(err, processidentity.ErrChanged) {
+			t.Fatalf("changed image entered owning preparation: %v", err)
+		}
 		if !reflect.DeepEqual(before, productSnapshot(t, s.home)) {
 			t.Fatal("identity refusal changed owner state")
+		}
+		return
+	}
+	if phase == "pointer" {
+		s := productFixture(t)
+		productWikiCommit(t, s, "private-wiki-body: BEFORE_IMAGE_REPLACEMENT")
+		s.engine.FaultPoint = func(point string) error {
+			if point == "wiki_before_pointer" {
+				return replaceActualProductTestImage()
+			}
+			return nil
+		}
+		if _, err := s.engine.CompilePrivateWiki(ctx, s.workspaceID, ""); !errors.Is(err, processidentity.ErrChanged) {
+			t.Fatalf("replacement at pointer was accepted: %v", err)
+		}
+		pointer := filepath.Join(s.engine.Root, "workspaces", s.workspaceID, ".private-wiki", "current.json")
+		if _, err := os.Lstat(pointer); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("replacement activated a private graph")
 		}
 		return
 	}
@@ -112,5 +142,40 @@ func productImageFenceChild(t *testing.T, phase string) {
 		}
 		return
 	}
-	t.Fatalf("unknown image-fence phase: %s", phase)
+	s, active := activeProductWiki(t)
+	pending, err := s.engine.InspectPrivateWikiMaintenance(s.workspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &productExecution{service: s, jobID: WikiIncrementalJobID, revision: active.Revision, source: pending.SourceIdentity}
+	worker := s.worker(p)
+	worker.Jobs = nil
+	worker.LocalQualification = map[string]string{WikiIncrementalJobID: active.Qualification.ID}
+	worker.ActivatedJobs = []string{WikiIncrementalJobID}
+	actual := worker.Handlers[WikiIncrementalJobID].(Handler)
+	worker.Handlers[WikiIncrementalJobID] = HandlerFunc(func(ctx context.Context, command Command, grant ExecutionGrant) (HandlerResult, error) {
+		out, err := actual.ExecuteAuthorized(ctx, command, grant)
+		if err != nil || out.State != ReceiptSucceeded {
+			return out, err
+		}
+		return out, replaceActualProductTestImage()
+	})
+	out, err := worker.Run(ctx, WakeRequest{WorkspaceID: s.workspaceID, Trigger: TriggerEvent, EventID: pending.EventID, Now: s.now(), OwnerID: "changed-image-terminal", Preauthorized: true, IdleState: IdleConfirmed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, receipt := range out.Receipts {
+		if receipt.JobID == WikiIncrementalJobID && receipt.State == ReceiptSucceeded {
+			t.Fatal("changed image published terminal success")
+		}
+	}
+	receipts, err := s.receipts.Receipts(s.workspaceID, WikiIncrementalJobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, receipt := range receipts {
+		if receipt.EventID == pending.EventID && receipt.State == ReceiptSucceeded {
+			t.Fatal("changed image persisted terminal success")
+		}
+	}
 }

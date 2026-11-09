@@ -15,7 +15,7 @@ status: stable
 x-maestro-profile-version: "1"
 x-maestro-stable-id: managed/content-navigation
 x-maestro-scope: managed
-x-maestro-source-fingerprint: 469d86c2e5ded2775bff1d6da8aebd7e3cb080ef9a1142e729650deff375b13a
+x-maestro-source-fingerprint: cf9684f71fa2e509d87944a36d5ea0ccb00f952d5b4ff433250d23b2be0acc7b
 x-maestro-freshness: fresh
 x-maestro-status: active
 x-maestro-generator-version: maestro-managed-wiki/0.2

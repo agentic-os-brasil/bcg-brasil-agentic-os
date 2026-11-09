@@ -124,6 +124,12 @@ func TestOwnedMemoryCheckpointCapacityReservesRemoval(t *testing.T) {
 	}
 	b.Revision = 2
 	b.Generation = 2
+	// The fixture advances authoritative denial state directly, so keep its
+	// current cohort event consistent without changing capacity assertions.
+	if b.PrivateWiki != nil {
+		event := e.newPrivateWikiEvent("case-a", "access_revoked", "", 2, day, false)
+		b.PrivateWiki.DenialEvent = &event
+	}
 	for n := 1; n < maximumVisibilityIdentities; n++ {
 		b.Denied[fmt.Sprintf("%032x", n)] = 1
 	}

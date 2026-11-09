@@ -65,4 +65,8 @@ Windows qualification, organizational signing, release and rollout remain separa
 
 ## Reviewed maintenance lifecycle
 
-`maintenance.status` and `maintenance.report` are read-only. `maintenance.qualify`, `maintenance.enroll`, `maintenance.pause`, `maintenance.resume` and `maintenance.revoke` require trusted exact review and the current revision. `maintenance.run` dispatches enrolled due work; it neither installs a service nor attests host wake support. See [the owning guide](../../docs/product-mcp-maintenance.md) for the finite eight-job catalog and local stdin fallback. Private wiki queries are not registered in this slice.
+`maintenance.status` and `maintenance.report` are read-only. `maintenance.qualify`, `maintenance.enroll`, `maintenance.pause`, `maintenance.resume` and `maintenance.revoke` require trusted exact review and the current revision. `maintenance.run` dispatches enrolled due work; it neither installs a service nor attests host wake support. See [the owning guide](../../docs/product-mcp-maintenance.md) for the finite eight-job catalog and local stdin fallback. Private wiki queries use the separate source-owned navigation journey below.
+
+## Private workspace-memory navigation
+
+`wiki.status`, `wiki.read` and `wiki.source` are bounded read-only variants of `maestro_query`. Use the exact returned generation and references; queries never compile or repair. Reviewed maintenance qualifies and enrolls `wiki-incremental-sync`, `wiki-reconcile` and `wiki-integrity-check` separately. See [the owning guide](../../docs/product-mcp-wiki.md) for source eligibility, revocation and recovery. Native Windows private wiki remains unavailable.

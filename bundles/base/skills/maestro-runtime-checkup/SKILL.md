@@ -47,13 +47,18 @@ no transition; reread current status before reconciling a conflict.
 
 Use only the implemented jobs: `memory-light-dream`, `memory-checkpoint`,
 `memory-deep-dream`, `memory-retention-check`, `skills-index-refresh`,
-`runtime-health-check`, `capability-recheck` and `runtime-drift-check`. Other
+`runtime-health-check`, `capability-recheck`, `runtime-drift-check`,
+`wiki-incremental-sync`, `wiki-reconcile` and `wiki-integrity-check`. Other
 catalog entries retain their unavailable reasons. The catalog does not activate
 jobs. Enrollment requires current qualification; changed build/configuration
 requires fresh qualification. Use the owner's timezone; resolve an ambiguous
 choice before enrollment. The service selects cadence, not a model-supplied
-schedule: light dream/checkpoint every three hours, deep dream weekly on Sunday,
-and the remaining implemented jobs daily, each with bounded catch-up.
+schedule: light dream/checkpoint every three hours, deep dream and wiki reconcile
+weekly on Sunday, wiki incremental only for an eligible committed-source event,
+and the remaining implemented jobs daily, each with bounded catch-up. Incremental
+sync never invents a calendar occurrence. Reconcile qualification requires an
+actual current-build compilation; a verified no-op can run normally but cannot
+mint qualification. Integrity checks the entire current graph without repair.
 
 Run the foreground due pass only for an explicit request. It cannot select an
 inactive job, perform arbitrary repair, install a native wake task, download an
@@ -65,7 +70,11 @@ in [dream-memory](../dream-memory/SKILL.md).
 
 `maintenance.report` supports `memory-deep-dream`, `memory-retention-check`,
 `skills-index-refresh`, `runtime-health-check`, `capability-recheck` and
-`runtime-drift-check`. Light dream/checkpoint qualification metadata and domain
+`runtime-drift-check`, `wiki-incremental-sync`, `wiki-reconcile` and
+`wiki-integrity-check`. Wiki reports contain source/graph identities and counts,
+never private concept or capture bodies. A historical report does not establish
+current graph readability. Inspect `wiki.status` for the current view; reads and
+status do not compile, enroll or recover anything. Light dream/checkpoint qualification metadata and domain
 references are in `maintenance.status`; do not invent unsupported report IDs.
 
 Keep `inactive`, `active`, `paused` and `revoked` separate from qualification
