@@ -115,7 +115,7 @@ func BuildBundle(root string, allowlist Allowlist, output io.Writer) error {
 			}
 			if entry.Source == "LICENSE.md" && declared != 0644 {
 				file.Close()
-				return closeArchive(tarWriter, gzipWriter, errors.New("root license role must be data"))
+				return closeArchive(tarWriter, gzipWriter, errors.New("root license must be nonexecutable data"))
 			}
 			if runtime.GOOS != "windows" && declared != mode {
 				file.Close()

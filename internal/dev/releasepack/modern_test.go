@@ -41,7 +41,7 @@ func TestRootLicenseExceptionRemainsExactAndNonexecutable(t *testing.T) {
 		t.Fatal(err)
 	}
 	var output bytes.Buffer
-	if err := BuildBundle(root, Allowlist{SchemaVersion: 1, Files: []BundleFile{{Source: "LICENSE.md", Path: "LICENSE.md"}}}, &output); err == nil || !strings.Contains(err.Error(), "nonexecutable") {
+	if err := BuildBundle(root, Allowlist{SchemaVersion: 1, Files: []BundleFile{{Source: "LICENSE.md", Path: "LICENSE.md", Role: "executable"}}}, &output); err == nil || !strings.Contains(err.Error(), "nonexecutable") {
 		t.Fatalf("executable root license accepted: %v", err)
 	}
 	if err := BuildBundle(root, Allowlist{SchemaVersion: 1, Files: []BundleFile{{Source: "other/LICENSE.md", Path: "LICENSE.md"}}}, &output); err == nil {
