@@ -1308,3 +1308,15 @@ Expose the eight existing owning maintenance jobs through the admitted MCP bindi
 - Consequences: Source/output budgets and unknown security metadata fail closed. Any changed committed source or denial hides the entire old view; raw capture append alone does not. Denial retires derived historical bodies and failed cleanup remains unavailable and visibly incomplete. Legacy source recovery is labelled reconciliation; old strict writers refuse the protected new checkpoint. No enterprise identity, raw-capture synthesis, external model/provider, cross-owner composition or authored/owner-global source is implied. Three actual maintenance bindings and bounded product readback complete this delivery; native/platform/release evidence stays separate.
 - Refs: specs/008-wiki-update-okf.md; docs/plans/2026-11-03-private-memory-wiki.md; internal/memory; internal/privatewiki; WIKI; OKFW; ATLS; https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/782c937447bc1a822cb5330142c37fb629a59adb/okf/SPEC.md
 - Supersedes: none
+
+
+## RPKT - Emit portable managed MCP packets without a private binding
+
+- Date: 2026-11-09
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Current product builders capture the admitted builder's owner/workspace paths and the MCPB omits managed method/runtime files. That output cannot be handed to a different participant as a self-contained managed product.
+- Decision: Reuse the admitted builders and canonical embedded payload to emit an unbound native server, complete method resources, six runtime/memory configuration files and a closed exact inventory. Code plugin userConfig and MCPB user_config independently request external directory selections through each client's documented MCP argv substitutions. Explicit init prepares selected state; generated serve/inspect use existing verbs and read-only startup. The bounded --packet gate checks the current complete canonical payload and actual executable bytes/modes before init/serve/inspect, without changing legacy invocations.
+- Consequences: This changes the E1 local packet's captured binding behavior only; owner/memory/filesystem authority is unchanged. Managed packet integrity is a diagnostic, never publisher identity, native-client qualification, host capability or owner approval. Build-time admission grants no private export; only an independently pinned public registry may be carried. Fresh staging and exclusive publication preserve existing/newer destinations, and runtime use never writes managed assets. Offline packs, agents/hooks assembly, actual client installation, organizational signing and distribution retain their owning gates. Native Windows private-state authority follows its qualified owning profile; portable-packet and client acceptance remain separate proof.
+- Refs: #492; specs/057-product-mcp-execution.md; docs/product-runnable-packets.md; adapters/mcp/packaging; https://code.claude.com/docs/en/plugins-reference; https://github.com/modelcontextprotocol/mcpb/blob/main/MANIFEST.md
+- Supersedes: none

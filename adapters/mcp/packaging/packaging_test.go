@@ -218,9 +218,9 @@ func TestCompleteMethodPackets(t *testing.T) {
 	if err != nil || json.Unmarshal(body, &pluginConfig) != nil {
 		t.Fatal("plugin server config missing")
 	}
-	wantArgs := []string{"serve", "--product-root", prod, "--user-home", home, "--workspace", ws}
+	wantArgs := []string{"serve", "--packet", "--product-root", "${CLAUDE_PLUGIN_ROOT}", "--user-home", "${user_config.user_home}", "--workspace", "${user_config.workspace}"}
 	if !reflect.DeepEqual(pluginConfig.Servers["maestro"].Args, wantArgs) {
-		t.Fatal("plugin binding changed")
+		t.Fatal("plugin runtime selection contract changed")
 	}
 	serverBytes, err := os.ReadFile(server)
 	if err != nil {
@@ -246,9 +246,10 @@ func TestCompleteMethodPackets(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer archive.Close()
-	if len(archive.File) != 2 {
-		t.Fatalf("MCPB must contain only manifest/server: %d", len(archive.File))
+	if len(archive.File) < 250 {
+		t.Fatalf("MCPB managed payload is incomplete: %d", len(archive.File))
 	}
+	wantArgs[3] = "${__dirname}"
 	for _, f := range archive.File {
 		r, err := f.Open()
 		if err != nil {
@@ -270,7 +271,7 @@ func TestCompleteMethodPackets(t *testing.T) {
 			if json.Unmarshal(content, &manifest) != nil || !reflect.DeepEqual(manifest.Server.Config.Args, wantArgs) {
 				t.Fatal("MCPB binding changed")
 			}
-		} else {
+		} else if f.Name == "server/maestro-mcp" {
 			binary, err := os.ReadFile(server)
 			if err != nil || !bytes.Equal(binary, content) {
 				t.Fatal("MCPB server differs from selected shared executable")

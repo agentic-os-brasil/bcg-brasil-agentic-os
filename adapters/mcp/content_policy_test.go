@@ -1,7 +1,6 @@
 package product_test
 
 import (
-	"archive/zip"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -10,7 +9,6 @@ import (
 	"image"
 	"image/color"
 	"image/png"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -733,33 +731,12 @@ func policyMCPB(t *testing.T, f ownerFixture, binary, root, id, packSHA string) 
 	if err := packaging.BuildExtension(packet); err != nil {
 		t.Fatal(err)
 	}
-	archive, err := zip.OpenReader(packet.Destination)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer archive.Close()
 	desktop := filepath.Join(root, "mcpb-packet")
-	for _, entry := range archive.File {
-		if entry.Name != "manifest.json" && entry.Name != "server/maestro-mcp" && entry.Name != "managed/trust/release-authority-registry.json" {
-			t.Fatal("unexpected MCPB file", entry.Name)
-		}
-		reader, err := entry.Open()
-		if err != nil {
-			t.Fatal(err)
-		}
-		body, err := io.ReadAll(reader)
-		reader.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
-		putContentFile(t, filepath.Join(desktop, entry.Name), body)
-		if err = os.Chmod(filepath.Join(desktop, entry.Name), entry.Mode()); err != nil {
-			t.Fatal(err)
-		}
-	}
+	extractProductPacketFixture(t, packet.Destination, desktop)
+	var err error
 	before := contentTree(t, desktop, true)
 	f.binary = filepath.Join(desktop, "server/maestro-mcp")
-	client := connectContent(t, f, nil, "")
+	client := connectContentMCPB(t, f, desktop)
 	status := contentCall(t, client, "maestro_query", map[string]any{"operation": "content.status"}, false)
 	assertPolicyCoverage(t, status, "ready", "")
 	if status["pack_sha256"] != packSHA {
@@ -768,7 +745,7 @@ func policyMCPB(t *testing.T, f ownerFixture, binary, root, id, packSHA string) 
 	policyResources(t, client)
 	contentCall(t, client, "maestro_query", map[string]any{"operation": "content.read", "artifact_id": id, "format": "document", "max_bytes": 97}, false)
 	client.Close()
-	restarted := connectContent(t, f, nil, "")
+	restarted := connectContentMCPB(t, f, desktop)
 	collected := contentCall(t, restarted, "maestro_query", map[string]any{"operation": "knowledge.collect", "purpose": "MCPB restarted readback", "pages": []string{"knowledge/policy/txt.md"}}, false)
 	pages := collected["pages"].([]any)
 	var expected map[string]any

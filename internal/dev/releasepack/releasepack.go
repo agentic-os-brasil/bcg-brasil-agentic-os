@@ -98,9 +98,13 @@ func BuildBundle(root string, allowlist Allowlist, output io.Writer) error {
 		if err != nil {
 			return closeArchive(tarWriter, gzipWriter, err)
 		}
+		mode := int64(0o644)
+		if info.Mode().Perm()&0o111 != 0 {
+			mode = 0o755
+		}
 		header := &tar.Header{
 			Name:       entry.Path,
-			Mode:       0o644,
+			Mode:       mode,
 			Size:       info.Size(),
 			ModTime:    time.Unix(0, 0).UTC(),
 			AccessTime: time.Unix(0, 0).UTC(),

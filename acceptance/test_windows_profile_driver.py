@@ -407,7 +407,10 @@ $values|ConvertTo-Json -Depth 4 -Compress
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         ledger = json.loads(result.stdout)
         self.assertEqual(len(ledger["$adapterParents"]), 51)
-        self.assertEqual(len(ledger["$adapterAssertions"]), 143)
+        self.assertEqual(len(ledger["$adapterAssertions"]), 147)
+        for version in ("0_1_0", "0_1_1"):
+            for format in ("plugin", "mcpb"):
+                self.assertIn(f"TestCompiledStdioWorkflowAndPackets/portable_{format}_{version}", ledger["$adapterAssertions"])
         self.assertEqual(len(ledger["$adapterCommandParents"]), 1)
         for name in ("TestMethodPlansResolveMaintenanceKeepWikiUnavailable", "TestMethodPlansResolveRegisteredMaintenanceAndWiki"):
             self.assertIn(name, ledger["$adapterParents"])
