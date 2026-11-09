@@ -72,8 +72,7 @@ func (synthesizer DeterministicWeeklySynthesizer) Synthesize(ctx context.Context
 }
 
 func weeklySourceRank(target, sourceID string) int {
-	// When rolling L3 has a tight context budget, retain the prior L3 first so
-	// continuity is visible to the named lifetime eligibility policy.
+	// Retain prior rolling continuity first when the L3 content budget is tight.
 	if target == "L3" && strings.HasPrefix(sourceID, "L3/") {
 		return 0
 	}
@@ -115,9 +114,8 @@ func truncateWeeklyRunes(value string, limit int) string {
 	return string(runes[:limit-1]) + "…"
 }
 
-// DeterministicLifetimeEligibility requires the current L3 rollup to carry
-// two weekly L3 generations. It therefore cannot promote on the first weekly
-// pass and records why a candidate was retained for further continuity.
+// DeterministicLifetimeEligibility consumes only candidate-bound generation
+// evidence supplied by the engine from committed L3 provenance.
 type DeterministicLifetimeEligibility struct {
 	MinL3Generations int
 }
@@ -130,9 +128,12 @@ func (policy DeterministicLifetimeEligibility) Evaluate(_ context.Context, artif
 	if minimum < 2 {
 		minimum = 2
 	}
-	generations := strings.Count(artifact.Content, "# L3 rolling continuity ·")
-	if generations < minimum {
-		return false, fmt.Sprintf("requires %d weekly L3 generations; observed %d", minimum, generations), nil
+	generations, err := validateL3CandidateEvidence(artifact)
+	if err != nil {
+		return false, "", err
 	}
-	return true, fmt.Sprintf("eligible after %d weekly L3 generations", generations), nil
+	if generations < minimum {
+		return false, fmt.Sprintf("requires %d canonical L3 generations; observed %d", minimum, generations), nil
+	}
+	return true, fmt.Sprintf("eligible after %d canonical L3 generations", generations), nil
 }
