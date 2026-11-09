@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	baseagents "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/agents"
@@ -30,14 +31,107 @@ type definition struct {
 }
 
 var managed = []definition{
-	{ID: "client-account-agent", Description: "Client account strategic framing and stakeholder validation. Invoke only when Maestro selects the account route.", Tools: "[]", PermissionMode: "plan"},
 	{ID: "case-agent", Description: "Executes one Maestro-authorized case packet inside its exact workspace scope; never delegates.", Tools: "Read, Write, Edit, Glob, Grep", PermissionMode: "default"},
-	{ID: "yoda", Description: "Calm owner-self proxy and senior refiner for high-leverage outputs selected by Maestro.", Tools: "[]", PermissionMode: "plan"},
+	{ID: "client-account-agent", Description: "Client account strategic framing and stakeholder validation. Invoke only when Maestro selects the account route.", Tools: "[]", PermissionMode: "plan"},
 	{ID: "darwin", Description: "Maestro system-health and bounded-housekeeping specialist; never handles client work.", Tools: "[]", PermissionMode: "plan"},
+	{ID: "gamma-guardian", Description: "Tool-free analysis of one Maestro-supplied bounded quality packet; inspection and longitudinal custody are unavailable.", Tools: "[]", PermissionMode: "plan"},
 	{ID: "pa-expert", Description: "Read-only functional or industrial PA Expert consulted only through Maestro.", Tools: "[]", PermissionMode: "plan"},
+	{ID: "yoda", Description: "Calm owner-self proxy and senior refiner for high-leverage outputs selected by Maestro.", Tools: "[]", PermissionMode: "plan"},
+}
+
+const PluginNamespace = "maestro-product"
+
+// Projection is inert native content; generating it never installs or admits a host.
+type Projection struct {
+	ID   string
+	Name string
+	Path string
+	Body []byte
+}
+
+// NativeAgentID maps only the admitted plugin namespace and known specialists.
+func NativeAgentID(id, namespace string) (string, error) {
+	if namespace != "" && namespace != PluginNamespace {
+		return "", errors.New("unsupported native agent namespace")
+	}
+	if !managedAgentTypes[id] {
+		return "", errors.New("unknown native specialist")
+	}
+	if namespace == "" {
+		return id, nil
+	}
+	return namespace + ":" + id, nil
+}
+
+// CanonicalAgentID recognizes exact workspace or product specialist names.
+// It does not normalize arbitrary prefixes, whitespace, aliases or unknown IDs.
+func CanonicalAgentID(name string) (string, bool) {
+	id := strings.TrimPrefix(name, PluginNamespace+":")
+	if !managedAgentTypes[id] {
+		return "", false
+	}
+	return id, true
+}
+
+// Project is the deterministic shared workspace/plugin projection. Maestro
+// stays the main-session hub. Namespace changes invocations, never identity data.
+func Project(namespace string) ([]Projection, error) {
+	if namespace != "" && namespace != PluginNamespace {
+		return nil, errors.New("unsupported native agent namespace")
+	}
+	result := make([]Projection, 0, len(managed))
+	for _, item := range managed {
+		name, err := NativeAgentID(item.ID, namespace)
+		if err != nil {
+			return nil, err
+		}
+		body, err := render(item)
+		if err != nil {
+			return nil, err
+		}
+		body, err = ProjectAgentInvocations(body, namespace)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, Projection{ID: item.ID, Name: name, Path: "agents/" + item.ID + ".md", Body: body})
+	}
+	return result, nil
+}
+
+var executableAgentReference = regexp.MustCompile("(Agent\\(\\s*subagent_type\\s*=\\s*[\"']|Agent\\s+tool,\\s*`subagent_type:\\s*[\"'])([^\"'\\r\\n]+)([\"'])")
+
+// ProjectAgentInvocations rewrites explicit Agent calls and the bundled methods'
+// "Agent tool, `subagent_type: ...`" instruction. Canonical JSON, paths and
+// skill references remain byte-identical.
+func ProjectAgentInvocations(body []byte, namespace string) ([]byte, error) {
+	if namespace != "" && namespace != PluginNamespace {
+		return nil, errors.New("unsupported native agent namespace")
+	}
+	var projectionErr error
+	projected := executableAgentReference.ReplaceAllFunc(body, func(call []byte) []byte {
+		parts := executableAgentReference.FindSubmatch(call)
+		id, ok := CanonicalAgentID(string(parts[2]))
+		if !ok {
+			if strings.HasPrefix(string(parts[2]), PluginNamespace+":") {
+				projectionErr = errors.New("unknown product native specialist")
+			}
+			return call
+		}
+		name, err := NativeAgentID(id, namespace)
+		if err != nil {
+			projectionErr = err
+			return call
+		}
+		return []byte(string(parts[1]) + name + string(parts[3]))
+	})
+	return projected, projectionErr
 }
 
 func Install(workspace string) (Status, error) {
+	projections, err := Project("")
+	if err != nil {
+		return Status{}, err
+	}
 	root, rootPath, err := openAgentRoot(workspace, true)
 	if err != nil {
 		return Status{}, err
@@ -47,11 +141,8 @@ func Install(workspace string) (Status, error) {
 		return Status{}, err
 	}
 	status := Status{State: "installed", Path: rootPath}
-	for _, item := range managed {
-		body, err := render(item)
-		if err != nil {
-			return Status{}, err
-		}
+	for _, item := range projections {
+		body := item.Body
 		name := item.ID + ".md"
 		current, readErr := readRegular(root, name)
 		if readErr == nil && bytes.Equal(current, body) {
@@ -81,6 +172,10 @@ func ValidateInstall(workspace string) error {
 }
 
 func Inspect(workspace string) (Status, error) {
+	projections, err := Project("")
+	if err != nil {
+		return Status{}, err
+	}
 	root, rootPath, err := openAgentRoot(workspace, false)
 	status := Status{State: "installed", Path: rootPath}
 	if errors.Is(err, os.ErrNotExist) {
@@ -94,11 +189,8 @@ func Inspect(workspace string) (Status, error) {
 	if err := validateManaged(root, "inspect"); err != nil {
 		return Status{}, err
 	}
-	for _, item := range managed {
-		expected, err := render(item)
-		if err != nil {
-			return Status{}, err
-		}
+	for _, item := range projections {
+		expected := item.Body
 		body, err := readRegular(root, item.ID+".md")
 		if errors.Is(err, os.ErrNotExist) {
 			status.State = "absent"
@@ -137,7 +229,7 @@ func Uninstall(workspace string) (Status, error) {
 		if err != nil {
 			return Status{}, err
 		}
-		if !bytes.HasPrefix(body, []byte(managedMarker)) {
+		if !owned(body, item) {
 			return Status{}, fmt.Errorf("Claude agent path %s is user-owned; refusing to remove it", filepath.Join(rootPath, name))
 		}
 		if err := root.Remove(name); err != nil {
@@ -164,8 +256,41 @@ func render(item definition) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	header := managedMarker + "---\nname: " + item.ID + "\ndescription: " + item.Description + "\ntools: " + item.Tools + "\npermissionMode: " + item.PermissionMode + "\n---\n\n"
-	return append([]byte(header), contract...), nil
+	header := nativeHeader(item) + managedMarker + "\n"
+	profile := "## Active native projection\n\nThis projection uses the bounded sequential maestro_planner profile: Maestro is the main-session hub, one specialist at a time, no child delegation. native_advisory is unavailable. The canonical contract below describes additional capabilities and historical adapters; their mention grants no authority in this profile. Use only the tools explicitly listed in frontmatter and the bounded packet supplied by Maestro. Native stop events do not verify a delivered artifact, review verdict or completed execution contract.\n\n"
+	if item.ID == "gamma-guardian" {
+		profile += "Gamma is tool-free bounded packet analysis only. Workspace/source-head inspection grants and longitudinal custody are unavailable (Spec043 remains partially unimplemented). Return UNAVAILABLE/BLOCKED for evidence requiring inspection; never invent source verification, signed DoneContract satisfaction or durable custody.\n\n"
+		template, err := baseagents.Template("quality_guardian")
+		if err != nil {
+			return nil, err
+		}
+		profile += string(template) + "\n\n"
+	}
+	return append([]byte(header+profile), contract...), nil
+}
+
+func nativeHeader(item definition) string {
+	return "---\nname: " + item.ID + "\ndescription: " + item.Description + "\ntools: " + item.Tools + "\npermissionMode: " + item.PermissionMode + "\n---\n\n"
+}
+
+func owned(body []byte, item definition) bool {
+	current, err := render(item)
+	if err != nil {
+		return false
+	}
+	if bytes.Equal(body, current) {
+		return true
+	}
+	// Only the five original specialists had the marker-before-frontmatter layout.
+	if item.ID == "gamma-guardian" {
+		return false
+	}
+	contract, err := baseagents.Definition(item.ID)
+	if err != nil {
+		return false
+	}
+	legacy := append([]byte(managedMarker+nativeHeader(item)), contract...)
+	return bytes.Equal(body, legacy)
 }
 
 func writeAtomic(root *os.Root, name string, body []byte) error {
@@ -276,7 +401,7 @@ func validateManaged(root *os.Root, action string) error {
 		if err != nil {
 			return err
 		}
-		if !bytes.HasPrefix(body, []byte(managedMarker)) {
+		if !owned(body, item) {
 			return fmt.Errorf("Claude agent path %s is user-owned; refusing to %s it", name, action)
 		}
 	}
@@ -285,19 +410,21 @@ func validateManaged(root *os.Root, action string) error {
 
 var managedAgentTypes = map[string]bool{
 	"case-agent": true, "client-account-agent": true, "yoda": true,
-	"darwin": true, "pa-expert": true,
+	"darwin": true, "pa-expert": true, "gamma-guardian": true,
 }
 
-func Managed(agentType string) bool { return managedAgentTypes[agentType] }
+func Managed(agentType string) bool { _, ok := CanonicalAgentID(agentType); return ok }
 
 // GuardTool enforces the beta native-agent boundary independently of prompt
 // instructions. No-tool specialists can never call a tool. Case Agent receives
 // only local file tools and every explicit path is resolved inside the exact
 // installed workspace, including existing symlink targets.
 func GuardTool(agentType, toolName string, raw json.RawMessage, cwd, workspace string) (string, bool) {
-	if !managedAgentTypes[agentType] {
+	canonical, ok := CanonicalAgentID(agentType)
+	if !ok {
 		return "", false
 	}
+	agentType = canonical
 	if agentType != "case-agent" {
 		return "this Maestro specialist is tool-free; return only the bounded typed result to Maestro", true
 	}

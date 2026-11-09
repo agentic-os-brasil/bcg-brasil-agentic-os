@@ -112,6 +112,7 @@ func runMethodDiscovery(t *testing.T, stdio bool) {
 		}
 		listed[r.URI] = true
 	}
+	assertCanonicalAgentResources(t, cs, resources.Resources, secret)
 	read := func(uri string) string {
 		t.Helper()
 		if !listed[uri] {
@@ -140,7 +141,7 @@ func runMethodDiscovery(t *testing.T, stdio bool) {
 	if index.SchemaVersion != 1 || len(index.Methods) != 92 {
 		t.Fatalf("invalid index: %+v", index)
 	}
-	expectedResources := 6
+	expectedResources := 6 + 14 // method metadata plus fixed canonical agent resources
 	for _, method := range index.Methods {
 		files, err := baseskills.Files(method.ID)
 		if err != nil {
