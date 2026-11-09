@@ -16,7 +16,7 @@ Ordinary startup, status and review do not bootstrap or repair private state.
 
 Call `maestro_query` with `{"operation":"maintenance.status"}`. The response
 lists job IDs, revision, state, schedule, write set and qualification metadata.
-The closed catalog has eighteen jobs; this product binding executes these eight:
+The closed catalog has eighteen jobs; this product binding supports eleven job IDs on admitted Unix memory:
 
 | Job | Cadence after separate enrollment | Actual result or prerequisite |
 | --- | --- | --- |
@@ -28,6 +28,9 @@ The closed catalog has eighteen jobs; this product binding executes these eight:
 | `runtime-health-check` | Daily | Durable report of actual available and missing runtime observations |
 | `capability-recheck` | Daily | Durable capability diagnosis; missing native evidence remains unavailable |
 | `runtime-drift-check` | Daily | Durable comparison with actual admitted projection and installed state |
+| `wiki-incremental-sync` | Durable source event only | Compile eligible committed memory and close its exact event once |
+| `wiki-reconcile` | Weekly/presence | Reconcile actual source/view and recover missing historical events |
+| `wiki-integrity-check` | Daily | Persist body-free current graph diagnosis; no repair |
 
 All schedules have bounded catch-up of at most one occurrence. Enrollment sets
 a per-job no-backfill boundary. Memory consolidation needs eligible reviewed
@@ -35,13 +38,13 @@ captures and ancestry; an empty source or a successful no-op cannot qualify it.
 Skills indexing needs verified installed assets, not an arbitrary product
 directory. A diagnostic can qualify its real execution while its finding is
 missing or unavailable. That qualification does not qualify the reported native
-capability. The remaining ten catalog entries retain explicit unavailable
+capability. The remaining seven catalog entries retain explicit unavailable
 reasons until their complete execution journeys exist.
 
 The public surface has eight operation variants: `maintenance.status`,
 `maintenance.report`, `maintenance.qualify`, `maintenance.enroll`,
 `maintenance.pause`, `maintenance.resume`, `maintenance.revoke` and
-`maintenance.run`. These operation names are separate from the eight supported
+`maintenance.run`. These operation names are separate from the eleven supported
 job IDs listed above and the full eighteen-entry catalog.
 
 ## Review, qualify and enroll
@@ -163,3 +166,5 @@ when reached from a native client. These results establish neither idle OS
 wake behavior nor native Code/Desktop capability. Hosted CI, native forms,
 ordinary-user Windows admission, organizational signing, distribution and team
 pilot acceptance remain separate gates.
+
+Private wiki source/readback follows [the private wiki contract](product-mcp-wiki.md). Native Windows private-memory admission remains unavailable; a registered operation is not host qualification.

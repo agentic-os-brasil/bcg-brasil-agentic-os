@@ -14,13 +14,14 @@ import (
 
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func maintenanceQueries() []any {
-	return []any{variant("maintenance.status", map[string]any{}), variant("maintenance.report", map[string]any{"job_id": map[string]any{"type": "string", "enum": []string{maintenance.MemoryDeepDreamJobID, "memory-retention-check", "skills-index-refresh", "runtime-health-check", "capability-recheck", "runtime-drift-check"}}}, "job_id")}
+	return []any{variant("maintenance.status", map[string]any{}), variant("maintenance.report", map[string]any{"job_id": map[string]any{"type": "string", "enum": []string{maintenance.MemoryDeepDreamJobID, "memory-retention-check", "skills-index-refresh", "runtime-health-check", "capability-recheck", "runtime-drift-check", maintenance.WikiIncrementalJobID, maintenance.WikiReconcileJobID, maintenance.WikiIntegrityJobID}}}, "job_id")}
 }
 
 func maintenanceTransitions() []any {
@@ -260,6 +261,8 @@ func maintenanceResult(value any, err error) *mcp.CallToolResult {
 	}
 	code := "maintenance_rejected"
 	switch {
+	case errors.Is(err, processidentity.ErrChanged):
+		code = "restart_required"
 	case errors.Is(err, errConfirmationUnavailable):
 		code = "confirmation_unavailable"
 	case errors.Is(err, errConfirmationDeclined):

@@ -626,22 +626,28 @@ func writeJSONFile(path string, value any) error {
 }
 
 func (engine *Engine) readArtifact(path string) (Artifact, error) {
+	artifact, _, err := engine.readArtifactPayload(path)
+	return artifact, err
+}
+
+// readArtifactPayload keeps decoded content and evidence bytes from one held read.
+func (engine *Engine) readArtifactPayload(path string) (Artifact, []byte, error) {
 	body, err := memoryReadFile(path, 1<<20)
 	if err != nil {
-		return Artifact{}, err
+		return Artifact{}, nil, err
 	}
 	var artifact Artifact
 	if err := decodeMemoryJSON(body, &artifact); err != nil {
-		return Artifact{}, err
+		return Artifact{}, nil, err
 	}
 	barrier, err := engine.readVisibility(artifact.WorkspaceID)
 	if err != nil {
-		return Artifact{}, err
+		return Artifact{}, nil, err
 	}
 	if artifact.VisibilityRevision != barrier.Generation {
-		return Artifact{}, os.ErrNotExist
+		return Artifact{}, nil, os.ErrNotExist
 	}
-	return artifact, nil
+	return artifact, body, nil
 }
 
 func (engine *Engine) AssembleContext(workspaceID string) (ContextBundle, error) {

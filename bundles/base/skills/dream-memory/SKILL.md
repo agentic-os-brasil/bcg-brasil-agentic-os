@@ -1,6 +1,6 @@
 ---
 name: dream-memory
-description: Inspect or consolidate reviewed professional memory, or manage its recurring upkeep. Use for daily closure, weekly dreaming, memory status, lifetime promotion questions, missed cycles, or requests such as "consolide a memória", "fecha o dia" and "fecha a semana".
+description: Inspect or consolidate reviewed professional memory, navigate its private wiki, or manage recurring upkeep. Use for daily closure, weekly dreaming, remembered concepts and sources, memory status, lifetime promotion questions, or missed cycles.
 ---
 
 # Dream Memory
@@ -45,8 +45,9 @@ Keep the admitted workspace and the user's selected text as the scope.
    `confirmation_declined`. Report those layers separately from lifetime status.
 4. For recurring upkeep, follow the reviewed
    [maintenance workflow](../maestro-runtime-checkup/SKILL.md). The relevant jobs
-   are `memory-light-dream`, `memory-deep-dream`, `memory-checkpoint` and
-   `memory-retention-check`. Qualification executes once; enrollment is separate.
+   are `memory-light-dream`, `memory-deep-dream`, `memory-checkpoint`,
+   `memory-retention-check`, `wiki-incremental-sync`, `wiki-reconcile` and
+   `wiki-integrity-check`. Qualification executes once; enrollment is separate.
    Bootstrap checkpoint qualification with a real reviewed capture and qualified
    light dream. A retention diagnostic never deletes captures. Deep-dream job
    enrollment authorizes its L2/L3 schedule, never future lifetime text.
@@ -54,6 +55,18 @@ Keep the admitted workspace and the user's selected text as the scope.
    or retention, `maintenance.report` with the exact `job_id` exposes the domain
    result. Status is not proof that a new synthesis or background wake occurred.
    Report the requested period, activated layers and any actual limitation.
+6. For concept navigation, query `wiki.status` first. Read `wiki.read` with the
+   exact returned `generation` and a registered `reference` such as `index.md`;
+   follow only concept/layer/backlink references actually returned by that graph.
+   Resolve a returned source reference with `wiki.source` and the same generation.
+   Pages accept `offset` and `max_bytes` from 4 to 4096; preserve `next_offset`.
+   Source changes, correction, deletion or pending retirement can make every old
+   page unavailable. Reread status; never browse private filesystem paths or use
+   raw captures to reconstruct a denied view. Querying never builds the wiki.
+   An explicitly requested, reviewed `wiki-incremental-sync` qualification uses
+   a real pending source event; `wiki-reconcile` builds current committed memory.
+   `wiki-integrity-check` checks the current graph and persists a body-free report.
+   Historical readable content or a no-op does not qualify a new compiler build.
 
 If capture/correct/delete/retention review is unavailable, the explicit local
 operator uses the exact request JSON on stdin:
