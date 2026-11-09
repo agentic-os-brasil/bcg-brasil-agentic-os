@@ -406,20 +406,40 @@ $values|ConvertTo-Json -Depth 4 -Compress
         result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(parser), str(DRIVER), str(ROOT / "acceptance/windows-engine-check.ps1")], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         ledger = json.loads(result.stdout)
-        self.assertEqual(len(ledger["$adapterParents"]), 53)
-        self.assertEqual(len(ledger["$adapterAssertions"]), 149)
+        self.assertEqual(len(ledger["$adapterParents"]), 54)
+        self.assertEqual(len(ledger["$adapterAssertions"]), 162)
         for version in ("0_1_0", "0_1_1"):
             for format in ("plugin", "mcpb"):
                 self.assertIn(f"TestCompiledStdioWorkflowAndPackets/portable_{format}_{version}", ledger["$adapterAssertions"])
         self.assertEqual(len(ledger["$adapterCommandParents"]), 1)
-        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]), 150)
-        for name in ("TestMethodPlansResolveMaintenanceKeepWikiUnavailable", "TestMethodPlansResolveRegisteredMaintenanceAndWiki", "TestAgentResourceCallbacksRevalidateBinding", "TestCanonicalAgentResourceDiscovery"):
+        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]), 163)
+        for name in ("TestMethodPlansResolveMaintenanceKeepWikiUnavailable", "TestMethodPlansResolveRegisteredMaintenanceAndWiki", "TestAgentResourceCallbacksRevalidateBinding"):
             self.assertIn(name, ledger["$adapterParents"])
             self.assertIn(name, ledger["$adapterAssertions"])
         source = "\n".join(p.read_text() for p in (ROOT / "adapters/mcp").glob("*_test.go"))
         for name in ledger["$adapterParents"]:
             self.assertIn(f"func {name}(", source)
-        self.assertNotIn("TestCompiledClaudeHook", ledger["$adapterParents"])
+        # These are compiled adapter contracts under the existing ordinary-user
+        # source proof, not native-client or host-enforcement qualification.
+        self.assertIn("TestCompiledClaudeHook", ledger["$adapterParents"])
+        hook_outcomes = {
+            'TestCompiledClaudeHook',
+            'TestCompiledClaudeHook/root_removal_and_allowed_control',
+            'TestCompiledClaudeHook/startup_read_only_and_current_context',
+            'TestCompiledClaudeHook/malformed_event_and_size_fail_closed',
+            'TestCompiledClaudeHook/paths_glob_regex_and_cross_case',
+            'TestCompiledClaudeHook/namespace_and_predispatch',
+            'TestCompiledClaudeHook/observations_retries_and_body_privacy',
+            'TestCompiledClaudeHook/optional_prompt_identity_never_resets',
+            'TestCompiledClaudeHook/concurrent_reservations_choose_one',
+            'TestCompiledClaudeHook/private_alias_and_changed_binding',
+            'TestCompiledClaudeHook/failed_observation_grants_no_child_authority',
+            'TestCompiledClaudeHook/truncated_state_never_reinitializes',
+            'TestCompiledClaudeHook/stop_recursion_has_no_completion_effect',
+        }
+        self.assertEqual({name for name in ledger["$adapterAssertions"]
+                          if name == "TestCompiledClaudeHook" or name.startswith("TestCompiledClaudeHook/")},
+                         hook_outcomes)
         self.assertNotIn("TestContentDesktopPacketOracle", ledger["$adapterParents"])
         command = "\n".join(p.read_text() for p in (ROOT / "adapters/mcp/cmd/maestro-mcp").glob("*_test.go"))
         for name in ledger["$adapterCommandParents"]:

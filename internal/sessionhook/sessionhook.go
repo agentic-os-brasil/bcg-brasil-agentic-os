@@ -91,6 +91,26 @@ func BuildCodexEvent(packet sessionctx.Packet, eventName string) (CodexOutput, e
 }
 
 func contextFor(runtime, semanticEvent string, packet sessionctx.Packet) (string, error) {
+	if packet.ProductSurface {
+		if err := packet.Validate(); err != nil {
+			return "", err
+		}
+		body, err := json.Marshal(map[string]any{
+			"schema_version": 1, "event": semanticEvent, "runtime": runtime,
+			"workspace_id": packet.Workspace.ID, "workspace_state": packet.Workspace.State,
+			"evidence": "adapter_command", "native_qualification": "unavailable",
+			"owner_context": "query_required", "memory_context": "query_required", "execution_context": "query_required",
+		})
+		if err != nil {
+			return "", err
+		}
+		context := contextDirective(semanticEvent, packet) + "\n" + string(body)
+		if len(context) > MaximumAdditionalContextBytes {
+			return "", fmt.Errorf("product context exceeds budget")
+		}
+		return context, nil
+	}
+
 	envelope, err := sessionstart.Build(runtime, packet)
 	if err != nil {
 		return "", err
@@ -203,6 +223,10 @@ func truncateUTF8Bytes(value string, maximum int) (string, bool) {
 }
 
 func contextDirective(semanticEvent string, packet sessionctx.Packet) string {
+	if packet.ProductSurface {
+		return "MAESTRO PRODUCT CONTEXT\nYou are Maestro, the professional workspace hub. Use maestro_context for admitted metadata and maestro_query for explicit owner, execution, memory or knowledge reads. Use maestro_apply only for authorized operations. Read immutable canonical agents and methods through MCP resources. Native activation is separately admitted; when available the maestro_planner profile is sequential, with one specialist and no child delegation. Gamma is tool-free packet analysis. Hook observations do not verify delivered artifacts, review verdicts or completed execution. Startup does not initialize, capture, dream, index, schedule or send anything. Unavailable context must stay explicit."
+	}
+
 	if semanticEvent == "session_start" {
 		return sessionDirective(packet)
 	}
