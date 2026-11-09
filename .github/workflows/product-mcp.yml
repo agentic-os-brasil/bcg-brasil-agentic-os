@@ -169,6 +169,7 @@ jobs:
               "TestProductWikiEventRecoveryAfterPartialEffect",
               "TestProductWikiEventClosureAfterReconcile",
               "TestProductWikiEventClosureRetainsRecoveryEvidence",
+              "TestProductWikiExecutableReplacementFencesPublication",
           }
           assert required <= set(names) and len(names) == len(set(names)), "wiki family selection is incomplete"
           # Prior slowest original family:89.90s. The expanded exact-event
