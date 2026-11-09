@@ -13,7 +13,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlasops"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest/docling"
@@ -142,6 +141,9 @@ func (b *Bound) publishContent(ctx context.Context, source string, conversion do
 	return id, nil
 }
 func (b *Bound) validateContent(a contentArtifact) error {
+	if err := b.workspacePath(a.SourcePath); err != nil {
+		return err
+	}
 	if a.Scope != b.home || a.WorkspaceID != b.workspaceID || a.WorkspacePath != b.options.WorkspacePath || artifactPath(a.SourcePath) != nil || a.Result.WorkspaceID != b.workspaceID || a.Result.Status != ingest.StatusUsable || a.Result.Adapter != "docling" || !a.Provenance.NetworkDenied || !validContentDigest(a.Result.SourceSHA256) || !validContentDigest(a.Provenance.PackSHA256) || !validContentDigest(a.Provenance.ManifestSHA256) || !validContentDigest(a.Provenance.LockSHA256) || a.Provenance.MarkdownSHA256 != contentDigest(a.Markdown) || a.Provenance.DocumentSHA256 != contentDigest(a.Document) || !utf8.Valid(a.Markdown) || !utf8.Valid(a.Document) || !json.Valid(a.Document) || len(a.Markdown) == 0 || int64(len(a.Markdown)+len(a.Document)) > ingest.DefaultPolicy().MaxOutputBytes || a.Result.OutputBytes != int64(len(a.Markdown)+len(a.Document)) {
 		return errors.New("artifact_unavailable")
 	}
@@ -171,26 +173,27 @@ func (b *Bound) readContent(id string) (contentArtifact, error) {
 	return a, b.validateContent(a)
 }
 func (b *Bound) checkContentSource(ctx context.Context, a contentArtifact) error {
+	return b.checkSelectedContentSource(ctx, a.SourcePath, a.Result.SourceSHA256)
+}
+func (b *Bound) checkSelectedContentSource(ctx context.Context, source, digest string) error {
 	if err := b.validate(); err != nil {
 		return err
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if artifactPath(a.SourcePath) != nil {
-		return errors.New("source_changed")
+	if err := b.workspacePath(source); err != nil {
+		return err
 	}
-	if err := b.DoclingRuntime().RevalidateSource(ctx, ingest.Request{SourcePath: a.SourcePath, WorkspacePath: b.options.WorkspacePath}, b.workspaceID, a.Result.SourceSHA256); err != nil {
+	if err := b.DoclingRuntime().RevalidateSource(ctx, ingest.Request{SourcePath: source, WorkspacePath: b.options.WorkspacePath}, b.workspaceID, digest); err != nil {
+		return err
+	}
+	if err := b.workspacePath(source); err != nil {
 		return err
 	}
 	return b.validate()
 }
-func (b *Bound) knowledgeEngine() (*atlasops.Engine, error) {
-	if err := b.validate(); err != nil {
-		return nil, err
-	}
-	return atlasops.OpenWorkspace(atlas.Options{DataRoot: filepath.Join(b.home, "state"), WorkspacePath: b.options.WorkspacePath, WorkspaceID: b.workspaceID})
-}
+func (b *Bound) knowledgeEngine() (*atlasops.Engine, error) { return b.workspaceEngine(nil) }
 
 type KnowledgeReview struct {
 	Scope        string                   `json:"scope"`
@@ -218,6 +221,9 @@ func (b *Bound) knowledgeReview(ctx context.Context, in KnowledgeMutation) (Know
 	}
 	if artifactPath(in.Page) != nil || !strings.HasSuffix(in.Page, ".md") || !utf8.ValidString(in.Text) || strings.ContainsRune(in.Text, 0) || strings.TrimSpace(in.Text) == "" || len(in.Text) > 256<<10 || in.Operation == "knowledge.append" && (len(in.Text) > 8<<10 || !validContentDigest(in.ExpectedPageRevision) || !strings.HasPrefix(in.Section, "#")) {
 		return r, errors.New("knowledge_invalid_input")
+	}
+	if err := b.workspacePage(in.Page); err != nil {
+		return r, err
 	}
 	a, err := b.readContent(in.ArtifactID)
 	if err != nil {
@@ -263,7 +269,7 @@ func (b *Bound) applyKnowledgeReview(ctx context.Context, in KnowledgeMutation, 
 	if digest == "" || digest != r.ReviewDigest {
 		return atlasops.Result{}, errOwnerReviewChanged
 	}
-	engine, err := b.knowledgeEngine()
+	engine, err := b.workspaceEngine(func() error { return b.checkSelectedContentSource(ctx, r.SourcePath, r.SourceSHA256) })
 	if err != nil {
 		return atlasops.Result{}, err
 	}
@@ -295,6 +301,9 @@ func (b *Bound) handleContent(ctx context.Context, req *mcp.CallToolRequest, in 
 		case "content.status":
 			value = b.contentStatus(ctx)
 		case "content.convert":
+			if err = b.workspacePath(in.SourcePath); err != nil {
+				break
+			}
 			contentProgress(ctx, req, 0, "Verifying the local runtime and converting the selected document")
 			var conversion docling.Conversion
 			conversion, err = b.DoclingRuntime().Convert(ctx, ingest.Request{SourcePath: in.SourcePath, WorkspacePath: b.options.WorkspacePath, Policy: ingest.DefaultPolicy()}, b.workspaceID)

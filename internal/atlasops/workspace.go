@@ -22,9 +22,23 @@ type workspaceScope struct {
 	WorkspaceID   string `json:"workspace_id"`
 }
 
-// OpenWorkspace opens only the brain of the exact registered workspace. It
-// neither bootstraps pages nor substitutes the owner's corpus.
+// WorkspacePolicy is supplied by the admitted host, never by a page/tool
+// argument. Metadata validation remains a separate authoring concern.
+type WorkspacePolicy struct {
+	AdmitPage      func(string) error
+	BeforeMutation func() error
+}
+
+// OpenWorkspace opens only the exact registered workspace brain without pages
+// or a host policy, preserving intentional legacy kernel callers.
 func OpenWorkspace(options atlas.Options) (*Engine, error) {
+	return OpenWorkspaceWithPolicy(options, WorkspacePolicy{})
+}
+
+// OpenWorkspaceWithPolicy binds current page/source authority to the owning
+// reader and serialized mutation boundary. The original constructor remains
+// unchanged for intentional legacy kernel/owner callers.
+func OpenWorkspaceWithPolicy(options atlas.Options, policy WorkspacePolicy) (*Engine, error) {
 	if err := validateAtlasText(options.DataRoot, options.WorkspacePath, options.WorkspaceID); err != nil {
 		return nil, err
 	}
@@ -46,13 +60,13 @@ func OpenWorkspace(options atlas.Options) (*Engine, error) {
 	if now == nil {
 		now = time.Now
 	}
-	engine := &Engine{root: filepath.Join(workspacePath, "brain"), dataRoot: dataRoot, now: now,
+	engine := &Engine{root: filepath.Join(workspacePath, "brain"), dataRoot: dataRoot, now: now, workspacePolicy: policy,
 		workspace: &workspaceScope{DataRoot: dataRoot, WorkspacePath: workspacePath, WorkspaceID: options.WorkspaceID}}
 	if err := engine.validateBinding(); err != nil {
 		return nil, err
 	}
 	for _, path := range []string{dataRoot, workspacePath, engine.root} {
-		info, err := os.Lstat(path)
+		info, err := boundAtlasDirectory(path)
 		if err != nil {
 			return nil, err
 		}
@@ -71,7 +85,7 @@ func (engine *Engine) validateBinding() error {
 			return err
 		}
 		if len(engine.boundDirectories) != 0 {
-			info, err := os.Lstat(path)
+			info, err := boundAtlasDirectory(path)
 			if err != nil || !os.SameFile(engine.boundDirectories[index], info) {
 				return errors.New("workspace atlas directory binding changed")
 			}
@@ -114,4 +128,15 @@ func (engine *Engine) pointer(page string) string {
 		return "bcgos://atlas/workspace/" + engine.workspace.WorkspaceID + "/" + page
 	}
 	return "bcgos://atlas/owner/" + page
+}
+
+// WorkspaceMutationReady reports the owning platform gate without touching
+// state. Binding admission and actual mutation checks still run separately.
+func WorkspaceMutationReady() bool { return workspaceMutationAvailable() == nil }
+
+func (engine *Engine) admitWorkspacePage(page string) error {
+	if engine.workspacePolicy.AdmitPage != nil {
+		return engine.workspacePolicy.AdmitPage(page)
+	}
+	return nil
 }

@@ -51,6 +51,9 @@ func (r *Runtime) Convert(ctx context.Context, source ingest.Request, workspaceI
 		return fail(ingest.StatusUnavailable, "format_unsupported")
 	}
 	body, opened, err := readFile(source.SourcePath, source.Policy.MaxInputBytes)
+	if errors.Is(err, errFileReadUnavailable) && opened != nil && os.SameFile(info, opened) && r.boundWorkspace(source.WorkspacePath, workspaceID) {
+		return fail(ingest.StatusUnavailable, "platform_unavailable")
+	}
 	if err != nil || !os.SameFile(info, opened) || !r.boundWorkspace(source.WorkspacePath, workspaceID) {
 		return fail(ingest.StatusBlocked, "source_changed_or_unsafe")
 	}

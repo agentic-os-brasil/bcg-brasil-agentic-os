@@ -121,7 +121,7 @@ func (b *Bound) HandleClaudeHook(event string, in io.Reader, out io.Writer) erro
 			if !recognized || reason != "" {
 				return deny()
 			}
-		} else if flow.CheckMain(input.SessionID, input.PromptID) != nil {
+		} else if input.ToolName != "Agent" && input.ToolName != "Task" && flow.CheckMain(input.SessionID, input.PromptID) != nil {
 			return deny()
 		}
 		if workspacepolicy.Tool(root, input.CWD, input.ToolName, input.ToolInputJSON()) != nil {
@@ -135,6 +135,8 @@ func (b *Bound) HandleClaudeHook(event string, in io.Reader, out io.Writer) erro
 			return emit(guard)
 		}
 		if input.ToolName == "Agent" || input.ToolName == "Task" {
+			// Admit permits only the original tool ID and canonical target to
+			// retry a pending dispatch; no general hub tools bypass its fence.
 			target, ok := claudeagents.CanonicalAgentID(input.ToolInput.SubagentType)
 			if !ok || input.AgentID != "" || flow.Admit(input.SessionID, input.PromptID, input.ToolUseID, target) != nil {
 				return deny()
