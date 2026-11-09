@@ -224,8 +224,8 @@ func runWorkflow(t *testing.T, stdio bool) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(string(manifest), home) || !strings.Contains(string(manifest), ws) {
-				t.Fatal("plugin lost binding")
+			if strings.Contains(string(manifest), home) || strings.Contains(string(manifest), ws) || !strings.Contains(string(manifest), "${user_config.workspace}") {
+				t.Fatal("plugin exports a binding or lost external runtime selection")
 			}
 			if runtime.GOOS == "darwin" {
 				packet.Destination = filepath.Join(base, "maestro-"+version+".mcpb")
@@ -236,8 +236,8 @@ func runWorkflow(t *testing.T, stdio bool) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if len(archive.File) != 2 {
-					t.Fatal("MCPB must contain only manifest and executable")
+				if len(archive.File) < 250 {
+					t.Fatal("MCPB lost its complete managed payload")
 				}
 				archive.Close()
 			}

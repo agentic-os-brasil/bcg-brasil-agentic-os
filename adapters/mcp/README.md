@@ -41,19 +41,22 @@ Pending, incomplete or tampered migrations and unverified Windows
 ownership/storage remain unavailable. Use the
 [migration runbook](../../docs/external-state-migration.md) for explicit migration.
 
-Use `plugin` or `mcpb` instead of `serve` with the same three binding flags, plus
-`--server /absolute/path/maestro-mcp --destination /new/local/packet --version 0.1.0`.
-For MCPB, the destination ends in `.mcpb`. Both packets bind the same owner locator
-and workspace. Build version N+1 to a new destination; external state is neither
-copied nor overwritten. Local packets contain participant paths and stay local.
-The shared source has no participant state. The builders do not install or change
-host profiles, authentication, model settings or credentials.
+Use `plugin` or `mcpb` instead of `serve` with an admitted build-time binding,
+plus `--server /absolute/path/maestro-mcp --destination /new/local/packet --version 0.1.0`.
+For MCPB the destination ends in `.mcpb`. Both builders emit portable, unbound
+managed assets: the builder's owner, workspace, locator, memory and credentials
+are neither included nor captured in server arguments. Client configuration asks
+for Owner directory and Workspace; each participant chooses their own external
+paths. See [portable packet preparation](../../docs/product-runnable-packets.md)
+for exact emitted commands, integrity checks and the client qualification boundary.
+Build N+1 to a new destination; existing/newer packets and external state survive.
+Builders do not install or change host profiles, authentication or model settings.
 
 The Code plugin includes all 92 canonical methods and two operator/resume aliases.
-MCP exposes 92 prompts and 247 immutable method/policy/provenance/license resources.
+MCP exposes 92 prompts and 248 immutable method/policy/provenance/license resources.
 Method availability is distinct from functional/native parity; check the adapter
-policy and actual operations before use. The Desktop MCPB contains a native executable and
-manifest; it does not install Skills. The recipes preserve host authority and owner
+policy and actual operations before use. Both formats carry the native executable, six canonical runtime/memory files and
+complete method resources. The Desktop MCPB does not install native Skills. The recipes preserve host authority and owner
 scope. Execution evidence uses artifact snapshots. Private profile text reaches
 only trusted host forms or an explicit local operator. No model-supplied approval
 flag, producer credential, root selection or process execution is accepted.

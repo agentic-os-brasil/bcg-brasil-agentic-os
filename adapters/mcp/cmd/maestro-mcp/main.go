@@ -51,7 +51,8 @@ func run() error {
 	var o product.Options
 	var destination, server, version string
 	var proposalID, reviewDigest, track string
-	var confirmed bool
+	var confirmed, packet bool
+	flags.BoolVar(&packet, "packet", false, "validate the complete managed packet before runtime use")
 	flags.StringVar(&destination, "destination", "", "new packet destination")
 	flags.StringVar(&server, "server", "", "compiled native server binary")
 	flags.StringVar(&version, "version", "", "packet semantic version")
@@ -75,6 +76,16 @@ func run() error {
 	}
 	if err := flags.Parse(os.Args[2:]); err != nil {
 		return err
+	}
+	if packet {
+		switch os.Args[1] {
+		case "init", "serve", "inspect":
+			if _, err := packaging.ValidatePacket(o.ProductRoot); err != nil {
+				return err
+			}
+		default:
+			return errors.New("packet validation is available only for init, serve and inspect")
+		}
 	}
 	seedDoclingAuthority(&o)
 	if flags.NArg() != 0 {

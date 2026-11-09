@@ -522,7 +522,41 @@ func TestMethodQueryPacketRestartContinuation(t *testing.T) {
 		t.Fatal(err)
 	}
 	shipping := filepath.Join(packet, "scripts", binaryName)
-	client := f.connect(t, shipping)
+	// Read emitted argv and supply only the two documented external selections.
+	// This is packet executable proof; actual client substitution is qualified separately.
+	connectPacket := func() *mcp.ClientSession {
+		t.Helper()
+		body, err := os.ReadFile(filepath.Join(packet, ".mcp.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var cfg struct {
+			Servers map[string]struct {
+				Command string   `json:"command"`
+				Args    []string `json:"args"`
+			} `json:"mcpServers"`
+		}
+		if err := json.Unmarshal(body, &cfg); err != nil {
+			t.Fatal(err)
+		}
+		selected := cfg.Servers["maestro"]
+		replace := strings.NewReplacer("${CLAUDE_PLUGIN_ROOT}", packet, "${user_config.user_home}", f.options.UserHome, "${user_config.workspace}", f.options.WorkspacePath)
+		for i := range selected.Args {
+			selected.Args[i] = replace.Replace(selected.Args[i])
+		}
+		command := replace.Replace(selected.Command)
+		if command != shipping {
+			t.Fatal("packet selected a different server")
+		}
+		transport := &mcp.CommandTransport{Command: exec.Command(command, selected.Args...), TerminateDuration: time.Second}
+		client, err := mcp.NewClient(&mcp.Implementation{Name: "packet-restart-oracle", Version: "1"}, nil).Connect(context.Background(), transport, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { client.Close() })
+		return client
+	}
+	client := connectPacket()
 	before := methodTreeSnapshot(t, f.root)
 	assertMethodQueries(t, client)
 	if !reflect.DeepEqual(before, methodTreeSnapshot(t, f.root)) {
@@ -561,7 +595,7 @@ func TestMethodQueryPacketRestartContinuation(t *testing.T) {
 	if err := client.Close(); err != nil {
 		t.Fatal(err)
 	}
-	restarted := f.connect(t, shipping)
+	restarted := connectPacket()
 	next := call(restarted, "maestro_query", map[string]any{"operation": "execution.next", "item_id": id})
 	if next["summary"] != "SK1_PACKET_RESTART" || next["next_step"] != "Read the same reviewed output after restart" {
 		t.Fatalf("lost checkpoint: %+v", next)

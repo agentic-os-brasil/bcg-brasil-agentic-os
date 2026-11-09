@@ -51,7 +51,11 @@ func extractBundle(reader io.Reader, target string) error {
 			if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 				return err
 			}
-			file, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+			mode := os.FileMode(0o644)
+			if header.Mode&0o111 != 0 {
+				mode = 0o755
+			}
+			file, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
 			if err != nil {
 				return err
 			}

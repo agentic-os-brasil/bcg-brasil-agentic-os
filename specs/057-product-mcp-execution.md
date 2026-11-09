@@ -69,8 +69,11 @@ Fixtures live in private temporary directories under Developer; tests invoke no 
    Init rejects overlapping or symlinked bindings before creating owner/workspace
    state. A fresh process learns artifact criterion IDs and relative paths solely
    from MCP responses before collecting evidence.
-6. Plugin and MCPB point to the same participant binding and contain no factory
-   fixture, credentials, real client content or new authority.
+6. Portable plugin and MCPB request an external participant binding at runtime;
+   neither captures the builder's private binding. Both carry the complete closed
+   managed payload and an exact file/hash/mode inventory, with real emitted-path
+   preparation, server and inspect checks. They contain no factory fixture, private
+   state, credentials, real client content or new authority.
 7. Focused deterministic tests and independent reviews pass before source integration.
    Model invocation, platform qualification, signed release and rollout are separate.
 
