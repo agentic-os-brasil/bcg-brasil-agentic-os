@@ -1270,3 +1270,15 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Sensitive profile review goes only to the trusted client/operator, not ordinary model tool output. Clients without elicitation require a local fallback and separate native qualification. Correction/deletion/retention can temporarily invalidate unrelated generated summaries in the same workspace; this trades recomputation for a smaller complete no-resurrection rule. Source completion does not grant native, provider, signing or publication acceptance.
 - Refs: specs/060-product-owner-memory.md; specs/006-memory-persistence.md; docs/plans/2026-11-01-product-owner-memory.md; internal/ownerctx; internal/memory; adapters/mcp
 - Supersedes: none
+
+
+## MQRY - Expose immutable method requirements through closed MCP queries
+
+- Date: 2026-11-06
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Canonical methods are packaged as resources and prompts, while some clients expose only ordinary MCP tools. File presence and prose references do not establish executable domain effects or missing host dependencies.
+- Decision: Reuse PackagedMethods behind bounded methods.list, exact-whitelist methods.read and manually selected methods.plan query variants. Maintain one canonical requirement declaration covering every method with actual registered operation names, effects, output kinds and named dependencies. Keep instructions, implemented operations, unobserved host capabilities and functional client acceptance distinct.
+- Consequences: No generic skill runner, filesystem dispatcher, lexical selection of explicit-only methods, caller approval flag or hidden legacy fallback is introduced. Existing method resources/prompts and Code projection consume the same package. Unsupported dependencies remain actionable unavailable. A domain dependency may name finite fulfillment_operations that are resolved against the actual registered schemas; this cannot attest host, connector, provider or runtime admission. Public SDK and restarted compiled-packet tests prove discovery and a genuine continuation journey, not all-method native execution.
+- Refs: specs/065-product-method-discovery.md; specs/056-pocock-product-skillset.md; adapters/mcp/methods.go; #460; #463
+- Supersedes: none
