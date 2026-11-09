@@ -12,10 +12,13 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 )
+
+var errFileReadUnavailable = errors.New("file_read_unavailable")
 
 func digest(body []byte) string { s := sha256.Sum256(body); return hex.EncodeToString(s[:]) }
 func relativeName(name string) bool {
@@ -49,7 +52,15 @@ func readOpenedFile(f *os.File, maximum int64) ([]byte, os.FileInfo, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	if !before.Mode().IsRegular() || !singleLink(before) || before.Size() < 0 || before.Size() > maximum {
+	if !before.Mode().IsRegular() || before.Size() < 0 || before.Size() > maximum {
+		return nil, nil, errors.New("file_not_bounded_single_link")
+	}
+	// Unsupported link inspection cannot establish safe source bytes. Preserve
+	// the opened identity for the caller's scope check without reading content.
+	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
+		return nil, before, errFileReadUnavailable
+	}
+	if !singleLink(before) {
 		return nil, nil, errors.New("file_not_bounded_single_link")
 	}
 	body, err := io.ReadAll(io.LimitReader(f, maximum+1))

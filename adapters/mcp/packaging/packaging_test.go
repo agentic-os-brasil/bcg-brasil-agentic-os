@@ -60,6 +60,7 @@ func TestCompleteMethodPackets(t *testing.T) {
 	if err := packaging.BuildPlugin(opts); err != nil {
 		t.Fatal(err)
 	}
+	assertAuthoredBrainOperatorResource(t, opts)
 	oracle, err := os.ReadFile("testdata/method-ids.txt")
 	if err != nil {
 		t.Fatal(err)
