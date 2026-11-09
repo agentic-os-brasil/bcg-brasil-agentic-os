@@ -56,6 +56,16 @@ its four required format/version outcomes remain separate from real client loadi
 Build N+1 to a new destination; existing/newer packets and external state survive.
 Builders do not install or change host profiles, authentication or model settings.
 
+Complete carriers also include diagnostic canonical-resource/native provenance
+in `maestro-packet.json`; the original `packet-inventory.json` remains the sole
+closed file inventory. Code's seven native hook vectors are emitted only by the
+explicit participant-local attended qualification producer. The existing hook
+command checks an optional selected owner/workspace digest after packet
+validation and before effects; that equality check grants no admission.
+Read [native review and qualification](../../docs/product-native-plugin.md) for
+the supported instruction closure, provider/context disclosure and engineering
+versus actual-host evidence boundaries. MCPB carries no Code hooks or children.
+
 The Code plugin includes all 92 canonical methods and two operator/resume aliases.
 MCP exposes 92 prompts and 248 immutable method/policy/provenance/license resources.
 Method availability is distinct from functional/native parity; check the adapter

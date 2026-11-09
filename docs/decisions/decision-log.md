@@ -1320,3 +1320,25 @@ Expose the eight existing owning maintenance jobs through the admitted MCP bindi
 - Consequences: This changes the E1 local packet's captured binding behavior only; owner/memory/filesystem authority is unchanged. Managed packet integrity is a diagnostic, never publisher identity, native-client qualification, host capability or owner approval. Build-time admission grants no private export; only an independently pinned public registry may be carried. Fresh staging and exclusive publication preserve existing/newer destinations, and runtime use never writes managed assets. Offline packs, agents/hooks assembly, actual client installation, organizational signing and distribution retain their owning gates. Native Windows private-state authority follows its qualified owning profile; portable-packet and client acceptance remain separate proof.
 - Refs: #492; specs/057-product-mcp-execution.md; docs/product-runnable-packets.md; adapters/mcp/packaging; https://code.claude.com/docs/en/plugins-reference; https://github.com/modelcontextprotocol/mcpb/blob/main/MANIFEST.md
 - Supersedes: none
+
+## NPHK - Bind native hooks to attended host and target qualification
+
+- Date: 2026-11-09
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Complete portable carriers already expose canonical methods and six inert specialist projections, but source hooks and projected instructions alone do not establish host enforcement or target-local qualification.
+- Decision: Reuse the existing admitted MCP executable and hook adapter with the bounded sequential maestro_planner profile. Only an attended producer observing the selected executable, supported local instruction closure and synthetic guard/failure controls may create opaque process-local NativeHost admission and consume it immediately in a new Code build. Code >=2.1.295 supplies documented direct exec-form argv and onFailure:block enforcement; unsupported hosts keep ordinary MCP use available without active hooks. Native hook vectors retain portable selections and check a digest of the exact reviewed owner/workspace identity before effects; that digest is equality checking, never another admission authority.
+- Consequences: The sole closed file inventory remains packet-inventory.json. Additional native/resource provenance is diagnostic and cannot authorize another build. Private qualified outputs remain participant/target scoped, while plain redistributables stay unbound. Source fixtures remain engineering evidence; native stop events never certify artifacts, review custody or execution completion. Windows native admission, real client loading, organization signing and distribution require separate evidence.
+- Refs: #495; RPKT; specs/063-product-native-plugin.md; docs/product-native-plugin.md; https://code.claude.com/docs/en/hooks
+- Supersedes: none
+
+## NOBS - Distinguish local native observation from managed device authority
+
+- Date: 2026-11-09
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The supported local host protocol exposes settings and instruction inputs but does not expose complete remote or OS-delivered managed-policy closure.
+- Decision: Bind supported local settings, recursive rules/imports and missing-file membership, and disclose an explicit digest-bound UNATTESTED managed-policy boundary, provider/context usage, bounded synthetic writes and descendant-cleanup limits before attended execution. Preserve the owner's profile and authentication. Known unsupported local inputs refuse; unknown external policy remains unattested rather than an inferred absence.
+- Consequences: Existing local autoMemoryEnabled:false and operator confirmation do not establish enterprise policy or production rollout authority. A timeout or failed control cannot mint admission. No credential-file read, profile repair, model acquisition, registration or service activation follows from source qualification.
+- Refs: #495; NPHK; specs/063-product-native-plugin.md; docs/product-native-plugin.md
+- Supersedes: none

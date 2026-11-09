@@ -176,7 +176,7 @@ func TestPortableProductPacketDoesNotExportPrivateBinding(t *testing.T) {
 		}
 	})
 	t.Run("inventory_rejects_self_consistent_missing_or_extra_assets", func(t *testing.T) {
-		for _, path := range []string{"managed/runtime/capabilities.json", "managed/agents/catalog.json", "agents/gamma-guardian.md"} {
+		for _, path := range []string{"managed/runtime/capabilities.json", "managed/agents/catalog.json", "agents/gamma-guardian.md", "maestro-packet.json"} {
 			exercisePacketInventory(t, destination, path)
 		}
 	})

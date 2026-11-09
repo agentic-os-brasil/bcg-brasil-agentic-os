@@ -3,7 +3,9 @@ package product_test
 import (
 	"archive/zip"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
@@ -223,9 +225,15 @@ func runWorkflow(t *testing.T, stdio bool) {
 		portableWorkspaceID := ""
 		for _, version := range []string{"0.1.0", "0.1.1"} {
 			packet := packaging.Options{Destination: filepath.Join(base, "plugin [space] $() & "+version), Server: binary, Version: version, Binding: o}
-			if err := packaging.BuildPlugin(packet); err != nil {
+			buildArgs := []string{"plugin", "--destination", packet.Destination, "--server", binary, "--version", version, "--product-root", o.ProductRoot, "--user-home", o.UserHome, "--workspace", o.WorkspacePath}
+			if output, err := exec.Command(binary, buildArgs...).CombinedOutput(); err != nil {
+				t.Fatalf("actual plugin builder: %s %v", output, err)
+			}
+			relocated := filepath.Join(base, "relocated plugin [space] $() & "+version)
+			if err := os.Rename(packet.Destination, relocated); err != nil {
 				t.Fatal(err)
 			}
+			packet.Destination = relocated
 			for _, skill := range []string{"operator", "resume", "interaction-profile", "pocock-tdd"} {
 				if _, err := os.Stat(filepath.Join(packet.Destination, "skills", skill, "SKILL.md")); err != nil {
 					t.Fatal(err)
@@ -261,8 +269,9 @@ func runWorkflow(t *testing.T, stdio bool) {
 			}
 			if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 				packet.Destination = filepath.Join(base, "maestro [space] $() & "+version+".mcpb")
-				if err := packaging.BuildExtension(packet); err != nil {
-					t.Fatal(err)
+				buildArgs[0], buildArgs[2] = "mcpb", packet.Destination
+				if output, err := exec.Command(binary, buildArgs...).CombinedOutput(); err != nil {
+					t.Fatalf("actual MCPB builder: %s %v", output, err)
 				}
 				archive, err := zip.OpenReader(packet.Destination)
 				if err != nil {
@@ -557,6 +566,12 @@ func runPortableProductPacket(t *testing.T, root, format, owner, selected, expec
 		if err := os.WriteFile(filepath.Join(selected, "authored-preserved.synthetic.md"), []byte("PRESERVE_PORTABLE_AUTHORED_WORK"), 0600); err != nil {
 			t.Fatal(err)
 		}
+		if err := os.MkdirAll(filepath.Join(selected, "brain", "knowledge"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(selected, "brain", "knowledge", "packet.md"), []byte("# Authored packet evidence\n\nPRESERVE_AUTHORED_PAGE_495\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -587,6 +602,48 @@ func runPortableProductPacket(t *testing.T, root, format, owner, selected, expec
 	if err := json.Unmarshal([]byte(text.Text), &contextResult); err != nil || contextResult.WorkspaceID != initialized.WorkspaceID {
 		t.Fatal("emitted server bound another workspace", err)
 	}
+	// Compare the entire fixed public resource set and exact canonical bytes,
+	// independently from the projected native definitions inside the packet.
+	var provenance struct {
+		Resources []struct {
+			URI, SHA256 string
+			Bytes       int
+		} `json:"embedded_resources"`
+	}
+	provenanceBody, err := os.ReadFile(filepath.Join(root, "maestro-packet.json"))
+	if err != nil || json.Unmarshal(provenanceBody, &provenance) != nil {
+		t.Fatal("packet resource provenance missing", err)
+	}
+	resources, err := client.ListResources(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resources.Resources) != len(provenance.Resources) {
+		t.Fatal("packet and actual transport resource inventory differ")
+	}
+	listed := map[string]*mcp.Resource{}
+	for _, resource := range resources.Resources {
+		listed[resource.URI] = resource
+	}
+	for _, resource := range provenance.Resources {
+		listedResource := listed[resource.URI]
+		if listedResource == nil {
+			t.Fatal("packet public resource omitted", resource.URI)
+		}
+		read, err := client.ReadResource(ctx, &mcp.ReadResourceParams{URI: resource.URI})
+		if err != nil || len(read.Contents) != 1 {
+			t.Fatal("packet resource unavailable", resource.URI, err)
+		}
+		body := []byte(read.Contents[0].Text)
+		if len(body) != resource.Bytes || fmt.Sprintf("%x", sha256.Sum256(body)) != resource.SHA256 || listedResource.Size != int64(len(body)) {
+			t.Fatal("packet canonical resource bytes changed", resource.URI)
+		}
+	}
+	collected := contentCall(t, client, "maestro_query", map[string]any{"operation": "knowledge.collect", "purpose": "Read the owner's authored page through the actual carrier", "pages": []string{"knowledge/packet.md"}}, false)
+	pages, ok := collected["pages"].([]any)
+	if !ok || len(pages) != 1 || pages[0].(map[string]any)["content"] != "# Authored packet evidence\n\nPRESERVE_AUTHORED_PAGE_495\n" {
+		t.Fatal("carrier lost authored knowledge readback", collected)
+	}
 	if expectedID == "" {
 		captured := memoryCall(t, client, "memory.capture", map[string]any{"text": historyText}, false)
 		if captured["eligible"] != true || captured["revision"] != float64(1) || reviewed != 1 {
@@ -613,7 +670,48 @@ func runPortableProductPacket(t *testing.T, root, format, owner, selected, expec
 	if err != nil || string(authored) != "PRESERVE_PORTABLE_AUTHORED_WORK" {
 		t.Fatal("existing authored workspace canary was not preserved", err)
 	}
+	call := func(c *mcp.ClientSession, tool string, args map[string]any, fail bool) map[string]any {
+		return contentCall(t, c, tool, args, fail)
+	}
+	const summary = "PORTABLE_CHECKPOINT_495"
+	const nextStep = "Resume the same reviewed packet work"
+	items := call(client, "maestro_query", map[string]any{"operation": "execution.list", "limit": 32}, false)["items"].([]any)
+	var itemID string
+	if expectedID == "" {
+		created := call(client, "maestro_apply", map[string]any{"operation": "execution.create", "objective": "Continue the same work across emitted Code and MCPB carriers", "next_step": "Prepare packet evidence", "artifacts": []string{"authored-preserved.synthetic.md"}}, false)
+		itemID = created["item_id"].(string)
+		started := call(client, "maestro_apply", map[string]any{"operation": "execution.start", "item_id": itemID, "expected_revision": created["state_revision"]}, false)
+		checkpoint := call(client, "maestro_apply", map[string]any{"operation": "execution.checkpoint", "item_id": itemID, "expected_revision": started["state_revision"], "attempt_id": started["attempt_id"], "summary": summary, "next_step": nextStep}, false)
+		call(client, "maestro_apply", map[string]any{"operation": "execution.pause", "item_id": itemID, "expected_revision": checkpoint["state_revision"], "attempt_id": started["attempt_id"]}, false)
+	} else {
+		if len(items) != 1 {
+			t.Fatal("carrier continuation is missing or ambiguous", items)
+		}
+		itemID = items[0].(map[string]any)["item_id"].(string)
+	}
+	prior := call(client, "maestro_query", map[string]any{"operation": "execution.next", "item_id": itemID}, false)
+	if prior["state"] != "paused" || prior["summary"] != summary || prior["next_step"] != nextStep || prior["attempt_id"] == "" {
+		t.Fatal("carrier changed checkpoint revision, attempt or summary", prior)
+	}
 	if err := client.Close(); err != nil {
+		t.Fatal(err)
+	}
+	restarted, err := mcp.NewClient(&mcp.Implementation{Name: "restarted-emitted-packet", Version: "1"}, nil).Connect(ctx, &mcp.CommandTransport{Command: exec.CommandContext(ctx, command, args...), TerminateDuration: time.Second}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayed := call(restarted, "maestro_query", map[string]any{"operation": "execution.next", "item_id": itemID}, false)
+	if !reflect.DeepEqual(prior, replayed) {
+		t.Fatal("same-carrier restart changed continuation", prior, replayed)
+	}
+	resumed := call(restarted, "maestro_apply", map[string]any{"operation": "execution.resume", "item_id": itemID, "expected_revision": prior["state_revision"]}, false)
+	if resumed["attempt_id"] == "" || resumed["attempt_id"] == prior["attempt_id"] {
+		t.Fatal("carrier restart reused attempt identity")
+	}
+	call(restarted, "maestro_apply", map[string]any{"operation": "execution.checkpoint", "item_id": itemID, "expected_revision": prior["state_revision"], "attempt_id": resumed["attempt_id"], "summary": "stale revision", "next_step": "must refuse"}, true)
+	call(restarted, "maestro_apply", map[string]any{"operation": "execution.checkpoint", "item_id": itemID, "expected_revision": resumed["state_revision"], "attempt_id": prior["attempt_id"], "summary": "stale attempt", "next_step": "must refuse"}, true)
+	call(restarted, "maestro_apply", map[string]any{"operation": "execution.pause", "item_id": itemID, "expected_revision": resumed["state_revision"], "attempt_id": resumed["attempt_id"]}, false)
+	if err := restarted.Close(); err != nil {
 		t.Fatal(err)
 	}
 	// Fresh setup intentionally added the reviewed canary. Every later first

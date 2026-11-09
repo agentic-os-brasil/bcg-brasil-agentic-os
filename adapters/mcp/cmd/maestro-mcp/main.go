@@ -50,6 +50,8 @@ func run() error {
 	flags := flag.NewFlagSet("maestro-mcp", flag.ContinueOnError)
 	var o product.Options
 	var destination, server, version string
+	var nativeExecutable, nativeScratch, nativeChallenge, nativeNonce, nativeFault, scopeDirectory, scopeOutside string
+	var nativeBudget float64
 	var proposalID, reviewDigest, track string
 	var confirmed, packet bool
 	flags.BoolVar(&packet, "packet", false, "validate the complete managed packet before runtime use")
@@ -59,16 +61,32 @@ func run() error {
 	flags.StringVar(&o.ProductRoot, "product-root", "", "existing installed product directory")
 	flags.StringVar(&o.UserHome, "user-home", "", "existing owner directory")
 	flags.StringVar(&o.WorkspacePath, "workspace", "", "explicit selected workspace directory")
+	if os.Args[1] == "native-review" || os.Args[1] == "native-qualify-and-build" {
+		flags.StringVar(&nativeExecutable, "native-executable", "", "explicit installed Code executable")
+		flags.StringVar(&nativeScratch, "native-scratch-root", "", "existing private owner scratch directory")
+		flags.StringVar(&nativeChallenge, "native-challenge-directory", "", "new exact synthetic challenge directory inside the selected workspace")
+		flags.Float64Var(&nativeBudget, "max-budget-usd", 0, "reviewed estimated per-call limit, greater than zero and at most one USD")
+	}
+	if os.Args[1] == "native-startup-check" || os.Args[1] == "native-qualification-hook" {
+		flags.StringVar(&nativeNonce, "nonce", "", "qualification startup nonce")
+	}
+	if os.Args[1] == "native-scope-guard" {
+		flags.StringVar(&scopeDirectory, "challenge-directory", "", "exact qualification control directory")
+		flags.StringVar(&scopeOutside, "outside-probe-path", "", "exact reviewed public outside read")
+	}
+	if os.Args[1] == "native-fault" {
+		flags.StringVar(&nativeFault, "fault", "", "fixed qualification fault")
+	}
 	switch os.Args[1] {
 	case "owner-review", "owner-apply":
 		flags.StringVar(&proposalID, "proposal-id", "", "exact owner proposal ID")
 	}
 	switch os.Args[1] {
-	case "owner-apply", "owner-confirm-onboarding", "memory-apply", "knowledge-apply", "maintenance-apply":
+	case "owner-apply", "owner-confirm-onboarding", "memory-apply", "knowledge-apply", "maintenance-apply", "native-qualify-and-build":
 		flags.StringVar(&reviewDigest, "review-digest", "", "exact SHA-256 digest from the full local review")
 	}
 	switch os.Args[1] {
-	case "owner-apply", "owner-confirm-onboarding", "owner-track", "memory-apply", "knowledge-apply", "maintenance-apply":
+	case "owner-apply", "owner-confirm-onboarding", "owner-track", "memory-apply", "knowledge-apply", "maintenance-apply", "native-qualify-and-build":
 		flags.BoolVar(&confirmed, "confirm", false, "local operator confirms the reviewed operation")
 	}
 	if os.Args[1] == "owner-track" {
@@ -79,7 +97,7 @@ func run() error {
 	}
 	if packet {
 		switch os.Args[1] {
-		case "init", "serve", "inspect":
+		case "init", "serve", "inspect", "native-startup-check", "native-qualification-hook", "native-scope-guard":
 			if _, err := packaging.ValidatePacket(o.ProductRoot); err != nil {
 				return err
 			}
@@ -92,6 +110,32 @@ func run() error {
 		return errors.New("unexpected_arguments")
 	}
 	switch os.Args[1] {
+	case "native-review", "native-qualify-and-build":
+		request := packaging.NativeOptions{Packet: packaging.Options{Destination: destination, Server: server, Version: version, Binding: o}, Executable: nativeExecutable, ScratchRoot: nativeScratch, ChallengeDirectory: nativeChallenge, MaxBudgetUSD: nativeBudget}
+		var value any
+		var err error
+		if os.Args[1] == "native-review" {
+			value, err = packaging.ReviewNative(context.Background(), request)
+		} else {
+			value, err = packaging.QualifyAndBuildNative(context.Background(), request, reviewDigest, confirmed)
+		}
+		if err != nil {
+			if partial, ok := value.(packaging.NativeResult); ok && partial.ScratchDirectory != "" {
+				_ = json.NewEncoder(os.Stdout).Encode(partial)
+			}
+			return err
+		}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(value)
+	case "native-qualification-hook":
+		return packaging.QualificationHook(o, nativeNonce, os.Stdin, os.Stdout)
+	case "native-scope-guard":
+		return packaging.QualificationScopeGuard(o, scopeDirectory, scopeOutside, os.Stdin, os.Stdout)
+	case "native-startup-check":
+		return packaging.CheckNativeStartup(o, nativeNonce, os.Stdin, os.Stdout)
+	case "native-fault":
+		return packaging.NativeFault(context.Background(), nativeFault)
 	case "plugin":
 		return packaging.BuildPlugin(packaging.Options{Destination: destination, Server: server, Version: version, Binding: o})
 	case "mcpb":
