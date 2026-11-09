@@ -133,3 +133,23 @@ func ValidateSingleLink(file *os.File) error {
 // OpenDirectory transfers an existing no-follow directory handle to the caller.
 // It is read-only, never creates entries or changes permissions; the caller closes it.
 func OpenDirectory(path string) (*os.File, error) { return openDirectoryFile(path) }
+
+// ValidatePrivateFile inspects the caller's already-open descriptor without
+// creating, repairing or reopening a path. The two closed roles are private
+// data and private executables; Windows uses its existing held-handle ACL owner.
+func ValidatePrivateFile(file *os.File, mode os.FileMode) error {
+	if file == nil || (mode != 0600 && mode != 0700) {
+		return errors.New("private file role unavailable")
+	}
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 || (runtime.GOOS != "windows" && info.Mode().Perm() != mode) {
+		return errors.New("private file role or mode differs")
+	}
+	if err := ValidateSingleLink(file); err != nil {
+		return err
+	}
+	return validatePrivateUpdateIdentity(file)
+}

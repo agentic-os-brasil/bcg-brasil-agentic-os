@@ -366,6 +366,73 @@ jobs:
           assert not skipped, "actual publication/read-only proof has skipped cases: " + repr(skipped)
           PYCODE
 
+  modern-client-registration:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - name: Bind physical local client evidence paths
+        shell: bash
+        run: |
+          python3 - <<'PYTHON'
+          import os, pathlib, tempfile
+          root = pathlib.Path(os.environ["RUNNER_TEMP"]).resolve(strict=True)
+          temporary = tempfile.mkdtemp(prefix="maestro-clients-", dir=root)
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as environment:
+              environment.write(f"TMPDIR={temporary}\nGOTMPDIR={temporary}\n")
+              environment.write(f"MAESTRO_CLIENT_REGISTRATION_BASELINE={root / 'maestro-client-registration-baseline'}\n")
+              environment.write(f"MAESTRO_CLIENT_REGISTRATION_TEST_ROOT={root / 'maestro-client-registration'}\n")
+          PYTHON
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: adapters/mcp/go.mod
+      - name: Materialize exact pre-carrier actual server source
+        shell: bash
+        run: |
+          git fetch --no-tags origin f398d32478c19259932c8ecdaebdc4bcf1380cb9
+          mkdir "$MAESTRO_CLIENT_REGISTRATION_BASELINE"
+          git archive --format=tar f398d32478c19259932c8ecdaebdc4bcf1380cb9 -o "$RUNNER_TEMP/maestro-client-registration-baseline.tar"
+          tar -xf "$RUNNER_TEMP/maestro-client-registration-baseline.tar" -C "$MAESTRO_CLIENT_REGISTRATION_BASELINE"
+      # Real current-server generation, installed launch and SDK/stdio; supported
+      # client-process witnesses are engineering evidence, not native loading.
+      - name: Exact materialization registration recovery and update lifecycle
+        working-directory: adapters/mcp
+        shell: bash
+        run: |
+          evidence="$RUNNER_TEMP/maestro-client-registration.jsonl"
+          if ! go test ./setup -run '^TestModernClientRegistrationLifecycle$' -count=1 -json -timeout=900s > "$evidence"; then
+            cat "$evidence"
+            exit 1
+          fi
+          cat "$evidence"
+          python3 - "$evidence" <<'PYCODE'
+          import json, pathlib, sys
+          events = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+          family = "TestModernClientRegistrationLifecycle"
+          assert any(e.get("Action") == "pass" and e.get("Test") == family for e in events), "actual client lifecycle missing or skipped"
+          skipped = [e.get("Test") for e in events if e.get("Action") == "skip" and (e.get("Test") == family or e.get("Test", "").startswith(family + "/"))]
+          assert not skipped, "actual client lifecycle skipped proof: " + repr(skipped)
+          PYCODE
+
+      - name: Actual shipping client paths preserve native Self admission
+        working-directory: adapters/mcp
+        shell: bash
+        run: |
+          evidence="$RUNNER_TEMP/maestro-client-shipping-refusal.jsonl"
+          if ! go test ./setup -run '^TestCurrentClientShippingNativeRefusal$' -count=1 -json -timeout=120s > "$evidence"; then
+            cat "$evidence"
+            exit 1
+          fi
+          cat "$evidence"
+          python3 - "$evidence" <<'PYCODE'
+          import json, pathlib, sys
+          events = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+          family = "TestCurrentClientShippingNativeRefusal"
+          assert any(e.get("Action") == "pass" and e.get("Test") == family for e in events), "actual shipping native refusal missing or skipped"
+          skipped = [e.get("Test") for e in events if e.get("Action") == "skip" and (e.get("Test") == family or e.get("Test", "").startswith(family + "/"))]
+          assert not skipped, "shipping refusal skipped proof: " + repr(skipped)
+          PYCODE
+
   wiki-maintenance-contracts:
     strategy:
       fail-fast: false

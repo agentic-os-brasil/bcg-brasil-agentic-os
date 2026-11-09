@@ -59,6 +59,20 @@ owner-local file and does not grant filesystem access.
    health, infer version/path facts absent from the supported response, or show
    private paths, raw JSON or receipts unless the owner asks for a technical view.
 
+For an explicitly supplied operator `clients-status` readback, distinguish current
+local materialization, supported Code registration, session loading and functional
+operation. Missing/stale packets remain pending after activation or rollback until
+checked regeneration through the installed Manage Maestro launcher. A metadata-only
+refresh does not invalidate unchanged immutable client inputs. Desktop bundle_ready,
+open_requested, awaiting_user_install, user_confirmed_install, connection and
+functional_check are distinct; operator testimony never becomes observed native
+qualification. Stable Desktop external-launcher reuse requires native qualification.
+Manual MCPB installation retains that same external-launcher contract; a client
+policy rejecting it makes the stable carrier unavailable. An ordinary unmanaged
+MCPB is a separate profile. Do not invent an MCP clients query, invoke a client,
+refresh source, reclaim a lock or repair as a diagnostic. Existing host observations
+remain historical without a fresh explicitly requested supported readback.
+
 Keep healthy ordinary work available. Installation, repair, native enrollment,
 interpreter acquisition and provider access require their own supported action;
 a diagnostic result never supplies that authority.

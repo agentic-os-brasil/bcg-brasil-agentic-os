@@ -530,6 +530,24 @@ func GuardQualifiedCurrent(managedRoot, dataRoot string, expected ReleaseBinding
 	return publish()
 }
 
+// GuardQualifiedReconciliationCurrent is used only by an explicitly reviewed
+// client reconciliation. Reuse the canonical dead-owner/live-owner checks;
+// ordinary startup, launch, publication and status never reclaim a lock.
+func GuardQualifiedReconciliationCurrent(managedRoot, dataRoot string, expected ReleaseBinding, now time.Time, publish func() error) error {
+	if publish == nil {
+		return errors.New("reconciliation callback required")
+	}
+	unlock, err := acquireReconciliationLock(managedRoot)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if _, err = ValidateQualifiedLaunch(managedRoot, dataRoot, expected, now); err != nil {
+		return err
+	}
+	return publish()
+}
+
 func releaseEligible(source *SourceControl, release string, b ReleaseBinding) error {
 	if source == nil || source.MinimumReaderContract != releasecontract.SyncedSourceContract {
 		return errors.New("source-aware execution floor unavailable")

@@ -42,6 +42,12 @@ func run() error {
 	}
 	root := filepath.Dir(executable)
 	registryPath := filepath.Join(root, "trust", "release-authority-registry.json")
+	if os.Args[1] == "client-capabilities" {
+		if len(os.Args) != 2 || Version == "" || AuthorityRegistrySHA256 == "" {
+			return errors.New("installer capabilities unavailable")
+		}
+		return json.NewEncoder(os.Stdout).Encode(installer.StableClientCapabilities("installer", Version, AuthorityRegistrySHA256))
+	}
 	if os.Args[1] == "seed-status" {
 		if len(os.Args) != 2 || Version == "" || AuthorityRegistrySHA256 == "" {
 			return errors.New("installer seed unavailable")
@@ -63,11 +69,21 @@ func run() error {
 	flags.StringVar(&launch.ManifestSHA256, "installed-manifest", "", "fixed carrier signed manifest digest")
 	flags.StringVar(&launch.ClientInputsSHA256, "installed-client-inputs", "", "fixed carrier immutable client digest")
 	flags.StringVar(&launch.PlanID, "plan-id", "", "exact reviewed pending plan identifier")
+	flags.StringVar(&launch.CarrierID, "carrier-id", "", "fixed admitted stable carrier ID")
+	flags.StringVar(&launch.PackageSHA256, "package-sha256", "", "exact Desktop package shown during native installation")
+	flags.StringVar(&launch.NativeContractSHA256, "native-contract-sha256", "", "exact Desktop native-facing contract")
+	flags.StringVar(&launch.ClientCodeRoot, "client-code-root", "", "fixed generated operator launcher Code destination")
+	flags.StringVar(&launch.ClientDesktopPath, "client-desktop-path", "", "fixed generated operator launcher Desktop destination")
+	flags.StringVar(&launch.ClientCodeExecutable, "client-code-executable", "", "fixed generated operator launcher Code executable")
+	flags.StringVar(&launch.ClientScope, "client-scope", "", "fixed generated operator launcher Code scope")
 	if err = flags.Parse(os.Args[2:]); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
 		return errors.New("unexpected positional arguments")
+	}
+	if handled, err := runClients(context.Background(), os.Args[1], executable, launch, *digest, *confirm); handled {
+		return err
 	}
 	if handled, err := runLifecycle(context.Background(), os.Args[1], executable, registryPath, launch, *digest, *confirm); handled {
 		return err

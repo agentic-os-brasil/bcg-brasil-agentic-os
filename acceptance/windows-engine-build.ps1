@@ -90,8 +90,21 @@ try {
   & $sdkGo test -c ./setup -o $setupBinary
   if ($LASTEXITCODE -ne 0) { throw 'First-install setup test compilation failed.' }
   $setupInventory = @(& $setupBinary '-test.list' '^(Test|Example)')
-  if ($LASTEXITCODE -ne 0 -or $setupInventory.Count -ne 4 -or
-      @((Compare-Object @('TestModernFactoryFirstInstallAndRestart', 'TestDirectInnerInstallRequiresProductionAuthority', 'TestModernSyncedSourceLifecycle', 'TestSyncedPublicationInterleavingAndReadOnlyReviews') ($setupInventory | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) { throw 'Setup full inventory must contain the four existing actual-process parents.' }
+  # Complete compiled inventory is distinct from the four selected native setup parents.
+  $expectedSetupInventory = @(
+    'TestModernFactoryFirstInstallAndRestart',
+    'TestDirectInnerInstallRequiresProductionAuthority',
+    'TestModernSyncedSourceLifecycle',
+    'TestSyncedPublicationInterleavingAndReadOnlyReviews',
+    'TestCodeRegistrationPreservesDisabledAndRefusesForeignSource',
+    'TestCodeRegistrationWithUnrelatedCachedPlugin',
+    'TestCodeRegistrationDoesNotTrustExitAcknowledgement',
+    'TestCodeReadbackRequiresExplicitEnabledState',
+    'TestCurrentClientShippingNativeRefusal',
+    'TestModernClientRegistrationLifecycle'
+  )
+  if ($LASTEXITCODE -ne 0 -or $setupInventory.Count -ne 10 -or
+      @((Compare-Object $expectedSetupInventory ($setupInventory | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) { throw 'Setup full inventory must contain the ten existing first-install, source and client parents.' }
   & $sdkGo build -o $server ./cmd/maestro-mcp
   if ($LASTEXITCODE -ne 0) { throw 'Shipping MCP compilation failed.' }
   $inventory = @(& $testBinary '-test.list' '^(Test|Example)')
