@@ -13,6 +13,12 @@ daily/weekly consolidation and revision-aware correction/deletion/retention.
 Read the [memory journey and local fallback guide](../../docs/product-mcp-memory.md).
 Explicit `init` prepares its fixed authority; queries/startup never bootstrap it.
 
+Local document operations add runtime status, explicit conversion and bounded artifact
+readback. Knowledge creation and append require exact trusted review against that
+artifact; named collection remains bounded. See the
+[document knowledge guide](../../docs/product-document-knowledge.md) for the closed
+operations, local operator fallback and qualification boundaries.
+
 Build from this directory with `go build -o /absolute/local/path/maestro-mcp ./cmd/maestro-mcp`.
 The installed product directory and owner directory must already exist. Choose a
 new workspace path outside the product and private state. Run the binary explicitly:

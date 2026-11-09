@@ -8,26 +8,30 @@ on:
       - 'internal/releasecontract/**'
       - 'internal/releaseverify/**'
       - 'cmd/maestro-docling-pack/**'
-      - 'adapters/mcp/docling.go'
-      - 'adapters/mcp/cmd/maestro-mcp/docling_seed.go'
+      - 'adapters/mcp/**'
+      - 'internal/atlasops/**'
+      - 'internal/workspace/**'
       - 'go.mod'
       - 'go.sum'
       - 'docs/product-offline-runtime.md'
+      - 'docs/product-document-knowledge.md'
       - 'specs/010-local-ingestion-runtime.md'
       - '.github/workflows/authenticated-offline-runtime.yml'
   push:
-    branches: [main, 'codex/integration/maestro-main-authenticated-runtime']
+    branches: [main, 'codex/integration/maestro-main-authenticated-runtime', 'codex/integration/maestro-main-document-knowledge']
     paths:
       - 'internal/ingest/**'
       - 'internal/scheduler/**'
       - 'internal/releasecontract/**'
       - 'internal/releaseverify/**'
       - 'cmd/maestro-docling-pack/**'
-      - 'adapters/mcp/docling.go'
-      - 'adapters/mcp/cmd/maestro-mcp/docling_seed.go'
+      - 'adapters/mcp/**'
+      - 'internal/atlasops/**'
+      - 'internal/workspace/**'
       - 'go.mod'
       - 'go.sum'
       - 'docs/product-offline-runtime.md'
+      - 'docs/product-document-knowledge.md'
       - 'specs/010-local-ingestion-runtime.md'
       - '.github/workflows/authenticated-offline-runtime.yml'
 
@@ -124,6 +128,46 @@ jobs:
           assert required <= passed, "required native conversion cases did not run: " + repr(required - passed)
           assert not any(e.get("Action") == "skip" for e in events), "native converter coverage was skipped"
           PYCODE
+      - name: Prove reviewed document knowledge through SDK and compiled stdio
+        working-directory: adapters/mcp
+        shell: bash
+        run: |
+          python3 - "$MAESTRO_DOCLING_TEST_ROOT" "$RUNNER_TEMP/maestro-content-tests.jsonl" <<'PYCODE'
+          import hashlib, json, os, pathlib, signal, subprocess, sys
+          retained, evidence = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+          authority = retained / "authority.json"
+          assert 0 < authority.stat().st_size <= 1 << 20
+          environment = dict(os.environ, MAESTRO_DOCLING_RETAINED_ROOT=str(retained),
+                             MAESTRO_DOCLING_RETAINED_SEED=hashlib.sha256(authority.read_bytes()).hexdigest())
+          command = ["go", "test", "-mod=readonly", ".", "-run", "^TestContentRealJourneys$",
+                     "-count=1", "-json", "-timeout=600s"]
+          # Bound only evidence output; converter inputs and compiled binaries keep their normal budgets.
+          with evidence.open("xb") as output:
+              process = subprocess.Popen(command, env=environment, stdout=subprocess.PIPE,
+                                         stderr=None, start_new_session=True)
+              count = 0
+              try:
+                  while chunk := process.stdout.read(64 << 10):
+                      count += len(chunk)
+                      if count > 8 << 20:
+                          os.killpg(process.pid, signal.SIGKILL)
+                          raise RuntimeError("content evidence exceeds its retained bound")
+                      output.write(chunk)
+                      sys.stdout.buffer.write(chunk)
+                  status = process.wait()
+              finally:
+                  process.stdout.close()
+                  if process.poll() is None:
+                      os.killpg(process.pid, signal.SIGKILL)
+                      process.wait()
+          assert status == 0, "real SDK/stdio test command failed: " + str(status)
+          assert 0 < evidence.stat().st_size <= 8 << 20
+          events = [json.loads(line) for line in evidence.read_text().splitlines()]
+          passed = {e.get("Test") for e in events if e.get("Action") == "pass"}
+          required = {"TestContentRealJourneys", "TestContentRealJourneys/sdk", "TestContentRealJourneys/compiled_stdio"}
+          assert required <= passed, "real SDK/stdio journeys did not pass: " + repr(required - passed)
+          assert not any(e.get("Action") in ("skip", "fail") for e in events), "real SDK/stdio coverage skipped or failed"
+          PYCODE
       - name: Retain bounded synthetic conversion evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -132,5 +176,6 @@ jobs:
           path: |
             ${{ runner.temp }}/maestro-docling-tests.jsonl
             ${{ runner.temp }}/maestro-docling-evidence.json
+            ${{ runner.temp }}/maestro-content-tests.jsonl
           if-no-files-found: warn
           retention-days: 7

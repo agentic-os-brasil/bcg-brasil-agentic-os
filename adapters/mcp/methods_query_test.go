@@ -473,20 +473,31 @@ func TestMethodPlansKeepUnregisteredDomainsUnavailable(t *testing.T) {
 			Missing     []string `json:"missing_operations"`
 		} `json:"dependencies"`
 	}
-	methodQueryDecode(t, client, "maestro_query", map[string]any{"operation": "methods.plan", "method_id": "maestro-doctor"}, &plan)
+	methodQueryDecode(t, client, "maestro_query", map[string]any{"operation": "methods.plan", "method_id": "dream-memory"}, &plan)
 	if plan.State != "requirements_unavailable" || plan.Execution != "not_executed" {
 		t.Fatalf("missing domain operations were presented as available: %+v", plan)
 	}
 	want := map[string][]string{
-		"domain.document_conversion_operations": {"content.status"},
-		"domain.maintenance_lifecycle":          {"maintenance.report", "maintenance.status"},
+		"domain.maintenance_lifecycle": {"maintenance.enroll", "maintenance.pause", "maintenance.qualify", "maintenance.report", "maintenance.resume", "maintenance.revoke", "maintenance.run", "maintenance.status"},
+		"domain.workspace_navigation":  {"wiki.read", "wiki.source", "wiki.status"},
 	}
+	unattested := map[string]bool{"host.trusted_review": true, "host.background_wake": true}
 	for _, dependency := range plan.Dependencies {
+		if unattested[dependency.ID] {
+			if dependency.State != "unavailable" || dependency.Reason != "dependency_not_attested_by_method_selection" || len(dependency.Fulfillment) != 0 || len(dependency.Missing) != 0 {
+				t.Fatalf("method selection attested host capability: %+v", dependency)
+			}
+			delete(unattested, dependency.ID)
+			continue
+		}
 		operations, ok := want[dependency.ID]
 		if !ok || dependency.State != "unavailable" || dependency.Reason != "owning_operations_not_registered" || !reflect.DeepEqual(dependency.Fulfillment, operations) || !reflect.DeepEqual(dependency.Missing, operations) {
 			t.Fatalf("missing dependency lost its exact owning requirements: %+v", dependency)
 		}
 		delete(want, dependency.ID)
+	}
+	if len(unattested) != 0 {
+		t.Fatalf("unattested host dependencies were omitted: %v", unattested)
 	}
 	if len(want) != 0 {
 		t.Fatalf("missing dependencies were omitted: %v", want)
@@ -683,5 +694,73 @@ func TestMethodQueryArchitectureRecipeRequirementsSDK(t *testing.T) {
 	}
 	if !reflect.DeepEqual(before, methodTreeSnapshot(t, f.root)) {
 		t.Fatal("architecture requirements executed host effects")
+	}
+}
+
+func TestMethodPlansReflectRegisteredContentWithoutRuntimeAuthority(t *testing.T) {
+	f := newMethodQueryFixture(t)
+	client := f.connect(t, "")
+	before := methodTreeSnapshot(t, f.root)
+	var plan struct {
+		State        string `json:"state"`
+		Execution    string `json:"execution_state"`
+		Dependencies []struct {
+			ID          string   `json:"id"`
+			State       string   `json:"state"`
+			Reason      string   `json:"reason"`
+			Action      string   `json:"next_action"`
+			Fulfillment []string `json:"fulfillment_operations"`
+			Missing     []string `json:"missing_operations"`
+		} `json:"dependencies"`
+	}
+	methodQueryDecode(t, client, "maestro_query", map[string]any{"operation": "methods.plan", "method_id": "ingest-content"}, &plan)
+	if plan.State != "requirements_unavailable" || plan.Execution != "not_executed" {
+		t.Fatalf("registered content operations granted runtime or effect authority: %+v", plan)
+	}
+	registered := map[string][]string{
+		"domain.document_conversion_operations": {"content.convert", "content.read", "content.status"},
+		"domain.workspace_knowledge_operations": {"knowledge.append", "knowledge.collect", "knowledge.create"},
+	}
+	unattested := map[string]bool{"runtime.document_conversion": true, "domain.owner_knowledge_pages": true, "host.trusted_review": true}
+	for _, dependency := range plan.Dependencies {
+		if operations, ok := registered[dependency.ID]; ok {
+			if dependency.State != "available" || dependency.Reason != "owning_operations_registered" || !reflect.DeepEqual(dependency.Fulfillment, operations) || len(dependency.Missing) != 0 || dependency.Action == "" {
+				t.Fatalf("registered domain lost its exact owning operations: %+v", dependency)
+			}
+			delete(registered, dependency.ID)
+			continue
+		}
+		if !unattested[dependency.ID] || dependency.State != "unavailable" || dependency.Reason != "dependency_not_attested_by_method_selection" || dependency.Action == "" {
+			t.Fatalf("registered content attested another dependency: %+v", dependency)
+		}
+		delete(unattested, dependency.ID)
+	}
+	if len(registered) != 0 || len(unattested) != 0 {
+		t.Fatalf("content plan omitted dependencies: registered=%v unattested=%v", registered, unattested)
+	}
+	var status struct {
+		State string `json:"state"`
+	}
+	methodQueryDecode(t, client, "maestro_query", map[string]any{"operation": "content.status"}, &status)
+	if status.State != "unavailable" {
+		t.Fatalf("method planning installed or admitted the unseeded runtime: %+v", status)
+	}
+	plan.Dependencies = nil
+	methodQueryDecode(t, client, "maestro_query", map[string]any{"operation": "methods.plan", "method_id": "yoda"}, &plan)
+	provider := map[string]bool{"provider.senior_review_model": true, "domain.review_dispatch": true}
+	if plan.State != "requirements_unavailable" || plan.Execution != "not_executed" {
+		t.Fatalf("content registration granted provider execution: %+v", plan)
+	}
+	for _, dependency := range plan.Dependencies {
+		if !provider[dependency.ID] || dependency.State != "unavailable" || dependency.Reason != "dependency_not_attested_by_method_selection" || dependency.Action == "" {
+			t.Fatalf("content registration attested provider or review dispatch: %+v", dependency)
+		}
+		delete(provider, dependency.ID)
+	}
+	if len(provider) != 0 {
+		t.Fatalf("provider prerequisites were omitted: %v", provider)
+	}
+	if !reflect.DeepEqual(before, methodTreeSnapshot(t, f.root)) {
+		t.Fatal("content dependency planning changed owner/workspace/product state")
 	}
 }

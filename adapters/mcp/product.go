@@ -107,8 +107,8 @@ func (b *Bound) Server() *mcp.Server {
 	empty := map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
 	s.AddTool(&mcp.Tool{Name: "maestro_context", Description: "Read admitted binding metadata and memory capability hints; inspect maestro_query and maestro_apply schemas for operations. No content export.", InputSchema: empty, Annotations: readonly}, b.handle("context", empty))
 	query := productQuerySchema()
-	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read immutable methods and requirements, owner metadata/questions, execution continuation, or eligible workspace memory through bounded pages. Private owner/legacy text requires trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
-	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Apply reviewed owner or memory changes; consolidate local deterministic memory. Execution changes require revision/attempt checks and artifact snapshot criteria.", InputSchema: productApplySchema()}, b.handle("apply", productApplySchema()))
+	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read immutable methods and requirements, owner metadata/questions, execution continuation, eligible memory, converted content or named workspace knowledge through bounded pages. Private owner/legacy text requires trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
+	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Convert local documents and apply reviewed workspace knowledge, owner or memory changes; consolidate local deterministic memory. Execution changes require revision/attempt checks and artifact snapshot criteria.", InputSchema: productApplySchema()}, b.handle("apply", productApplySchema()))
 	b.registerMethods(s)
 	return s
 }
@@ -119,7 +119,7 @@ func productQuerySchema() map[string]any {
 		variant("execution.next", map[string]any{"item_id": strSchema(96)}, "item_id"),
 		variant("execution.contract", map[string]any{"item_id": strSchema(96)}, "item_id"),
 	}
-	for _, group := range [][]any{ownerQueries(), memoryQueries(), methodsQueries()} {
+	for _, group := range [][]any{ownerQueries(), memoryQueries(), methodsQueries(), contentQueries()} {
 		variants = append(variants, group...)
 	}
 	return map[string]any{"type": "object", "oneOf": variants}
@@ -128,6 +128,14 @@ func productQuerySchema() map[string]any {
 type input struct {
 	MethodID                   string   `json:"method_id"`
 	ResourceURI                string   `json:"resource_uri"`
+	SourcePath                 string   `json:"source_path"`
+	ArtifactID                 string   `json:"artifact_id"`
+	Format                     string   `json:"format"`
+	Page                       string   `json:"page"`
+	Section                    string   `json:"section"`
+	ExpectedPageRevision       string   `json:"expected_page_revision"`
+	Purpose                    string   `json:"purpose"`
+	Pages                      []string `json:"pages"`
 	Text                       string   `json:"text"`
 	CaptureID                  string   `json:"capture_id"`
 	Query                      string   `json:"query"`
@@ -183,7 +191,7 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		panic(err)
 	}
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		if len(req.Params.Arguments) > 128<<10 {
+		if len(req.Params.Arguments) > 2<<20 {
 			return result(nil, errors.New("input_size")), nil
 		}
 		var raw any
@@ -205,7 +213,10 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		if d.Decode(new(any)) != io.EOF {
 			return result(nil, errors.New("trailing_input")), nil
 		}
-		if len(req.Params.Arguments) > 16<<10 && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" {
+		if len(req.Params.Arguments) > 128<<10 && in.Operation != "knowledge.create" {
+			return result(nil, errors.New("input_size")), nil
+		}
+		if len(req.Params.Arguments) > 16<<10 && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" && in.Operation != "knowledge.create" && in.Operation != "knowledge.append" {
 			return result(nil, errors.New("input_size")), nil
 		}
 		if kind == "context" {
@@ -213,6 +224,9 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		}
 		if strings.HasPrefix(in.Operation, "methods.") {
 			return b.handleMethods(in), nil
+		}
+		if strings.HasPrefix(in.Operation, "content.") || strings.HasPrefix(in.Operation, "knowledge.") {
+			return b.handleContent(ctx, req, in), nil
 		}
 		if strings.HasPrefix(in.Operation, "memory.") {
 			return b.handleMemory(ctx, req, in), nil
