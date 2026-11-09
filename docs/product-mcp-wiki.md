@@ -145,8 +145,11 @@ belongs to `wiki-incremental-sync`, `wiki-reconcile` and `wiki-integrity-check`
 through the existing reviewed maintenance lifecycle. There is no private-wiki
 search RPC in this source delivery.
 
-Native Windows wiki admission has an independent explicit refusal, even if
-ordinary owned-memory confinement later becomes available. Unprotected memory
-keeps its existing schema without wiki events; an already protected derivative
-cannot be silently reclassified. That native gate changes only after the owning
-wiki publication/readback/retirement qualification is established.
+Private wiki admission retains an explicit gate: the current owner must admit
+the existing workspace and its supported pinned-namespace operation must
+succeed. Windows retains that namespace through source snapshot, graph
+publication/readback and retirement. Ordinary-memory admission alone, a
+serialized flag or a prior successful check grants no wiki effect. An unavailable
+operation preserves the existing unprotected-memory behavior and cannot downgrade
+a protected derivative. See the [native Windows contract](product-windows-private-wiki.md)
+for custody, retained construction staging and exact-source evidence boundaries.
