@@ -18,6 +18,7 @@ import (
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 type hookFixture struct {
@@ -30,7 +31,7 @@ func newHookFixture(t *testing.T, binary string) hookFixture {
 	base := physicalTempDir(t)
 	f := hookFixture{binary: binary, base: base, prod: filepath.Join(base, "product"), owner: filepath.Join(base, "owner"), work: filepath.Join(base, "work")}
 	for _, p := range []string{f.prod, f.owner} {
-		if err := os.Mkdir(p, 0700); err != nil {
+		if err := scheduler.EnsurePrivateDirectory(p); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -182,7 +183,7 @@ func TestCompiledClaudeHook(t *testing.T) {
 			g := newHookFixture(t, binary)
 			if missing == "fresh" {
 				g.owner = filepath.Join(g.base, "fresh-owner")
-				if err := os.Mkdir(g.owner, 0700); err != nil {
+				if err := scheduler.EnsurePrivateDirectory(g.owner); err != nil {
 					t.Fatal(err)
 				}
 			} else if err := os.RemoveAll(filepath.Join(g.home, "state")); err != nil {
@@ -240,8 +241,10 @@ func TestCompiledClaudeHook(t *testing.T) {
 	t.Run("paths_glob_regex_and_cross_case", func(t *testing.T) {
 		f := newHookFixture(t, binary)
 		outside := filepath.Join(f.base, "outside")
-		os.Mkdir(outside, 0700)
-		os.Symlink(outside, filepath.Join(f.work, "alias"))
+		if err := os.Mkdir(outside, 0700); err != nil {
+			t.Fatal(err)
+		}
+		hookDirectoryAlias(t, filepath.Join(f.work, "alias"), outside)
 		fields := toolFields("Read", "cross-cwd", map[string]any{"file_path": "safe.md"})
 		fields["cwd"] = outside
 		out, _, code := f.call("PreToolUse", fields)
@@ -254,14 +257,22 @@ func TestCompiledClaudeHook(t *testing.T) {
 		}
 		hookDeny(t, f, toolFields("Write", "outside", map[string]any{"file_path": filepath.Join(outside, "new.md")}))
 		hookDeny(t, f, toolFields("Write", "secondary", map[string]any{"file_path": "safe.md", "path": outside}))
-		os.Remove(filepath.Join(f.work, "alias"))
+		if err := os.Remove(filepath.Join(f.work, "alias")); err != nil {
+			t.Fatal(err)
+		}
 		nested := filepath.Join(f.work, "nested")
-		os.Mkdir(nested, 0700)
-		os.Symlink(outside, filepath.Join(nested, "escape"))
-		os.Symlink(nested, filepath.Join(f.work, "internal-alias"))
+		if err := os.Mkdir(nested, 0700); err != nil {
+			t.Fatal(err)
+		}
+		hookDirectoryAlias(t, filepath.Join(nested, "escape"), outside)
+		hookDirectoryAlias(t, filepath.Join(f.work, "internal-alias"), nested)
 		hookDeny(t, f, toolFields("Glob", "nested-alias", map[string]any{"pattern": "internal-alias/**/*.md"}))
-		os.Remove(filepath.Join(nested, "escape"))
-		os.Remove(filepath.Join(f.work, "internal-alias"))
+		if err := os.Remove(filepath.Join(nested, "escape")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(filepath.Join(f.work, "internal-alias")); err != nil {
+			t.Fatal(err)
+		}
 
 		hookAllow(t, f, toolFields("Glob", "local", map[string]any{"pattern": "*.md"}))
 		hookAllow(t, f, toolFields("Grep", "regex", map[string]any{"pattern": `../../[A-Z]+/.*`}))
@@ -279,9 +290,15 @@ func TestCompiledClaudeHook(t *testing.T) {
 		}
 
 		accounts := filepath.Join(f.work, "brain/accounts")
-		os.MkdirAll(filepath.Join(accounts, "acme/cases/one"), 0700)
-		os.MkdirAll(filepath.Join(accounts, "acme/cases/two"), 0700)
-		os.WriteFile(filepath.Join(accounts, ".active"), []byte("acme/one"), 0600)
+		if err := os.MkdirAll(filepath.Join(accounts, "acme/cases/one"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(accounts, "acme/cases/two"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(accounts, ".active"), []byte("acme/one"), 0600); err != nil {
+			t.Fatal(err)
+		}
 		hookAllow(t, f, toolFields("Write", "active", map[string]any{"file_path": "brain/accounts/acme/cases/one/new.md"}))
 		hookDeny(t, f, toolFields("Write", "foreign", map[string]any{"file_path": "brain/accounts/acme/cases/two/new.md"}))
 	})
@@ -358,15 +375,20 @@ func TestCompiledClaudeHook(t *testing.T) {
 		hookDeny(t, f, dispatchFields("dispatch-case", "maestro-product:case-agent"))
 		hookOK(t, f, "UserPromptSubmit", map[string]any{"prompt_id": "prompt-2"})
 		hookDeny(t, f, map[string]any{"prompt_id": "prompt-1", "tool_name": "Agent", "tool_use_id": "stale", "tool_input": map[string]any{"subagent_type": "maestro-product:case-agent"}})
-		filepath.WalkDir(f.home, func(path string, d fs.DirEntry, err error) error {
+		if err := filepath.WalkDir(f.home, func(path string, d fs.DirEntry, err error) error {
 			if err == nil && !d.IsDir() {
-				body, _ := os.ReadFile(path)
+				body, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
 				if strings.Contains(string(body), "PRIVATE_") {
 					t.Errorf("private body persisted at %s", path)
 				}
 			}
 			return err
-		})
+		}); err != nil {
+			t.Fatal(err)
+		}
 	})
 	t.Run("optional_prompt_identity_never_resets", func(t *testing.T) {
 		f := newHookFixture(t, binary)
@@ -418,8 +440,10 @@ func TestCompiledClaudeHook(t *testing.T) {
 	t.Run("private_alias_and_changed_binding", func(t *testing.T) {
 		f := newHookFixture(t, binary)
 		outside := filepath.Join(f.base, "outside")
-		os.Mkdir(outside, 0700)
-		os.Symlink(outside, filepath.Join(f.home, "state/native-agent-flow"))
+		if err := os.Mkdir(outside, 0700); err != nil {
+			t.Fatal(err)
+		}
+		hookDirectoryAlias(t, filepath.Join(f.home, "state/native-agent-flow"), outside)
 		before := treeSnapshot(t, outside)
 		_, _, code := f.call("UserPromptSubmit", nil)
 		if code != 2 {
@@ -451,8 +475,10 @@ func TestCompiledClaudeHook(t *testing.T) {
 		hookOK(t, f, "UserPromptSubmit", nil)
 		hookAllow(t, f, dispatchFields("case", "case-agent"))
 		outside := filepath.Join(f.base, "receipt-outside")
-		os.Mkdir(outside, 0700)
-		os.Symlink(outside, filepath.Join(f.home, "state/runtime"))
+		if err := os.Mkdir(outside, 0700); err != nil {
+			t.Fatal(err)
+		}
+		hookDirectoryAlias(t, filepath.Join(f.home, "state/runtime"), outside)
 		_, _, code := f.call("SubagentStart", agentFields("case", "case-agent"))
 		if code != 1 {
 			t.Fatal("receipt alias was not refused")
@@ -461,7 +487,10 @@ func TestCompiledClaudeHook(t *testing.T) {
 		fields["agent_id"] = "case"
 		fields["agent_type"] = "case-agent"
 		hookDeny(t, f, fields)
-		entries, _ := os.ReadDir(outside)
+		entries, err := os.ReadDir(outside)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(entries) != 0 {
 			t.Fatal("receipt alias wrote outside")
 		}
@@ -472,9 +501,7 @@ func TestCompiledClaudeHook(t *testing.T) {
 		if err := os.Rename(runtimeState, runtimeState+"-saved"); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.Symlink(outside, runtimeState); err != nil {
-			t.Fatal(err)
-		}
+		hookDirectoryAlias(t, runtimeState, outside)
 		_, _, code = g.call("SubagentStop", agentFields("active", "case-agent"))
 		if code != 2 {
 			t.Fatal("failed stop receipt admitted")
@@ -506,7 +533,10 @@ func TestCompiledClaudeHook(t *testing.T) {
 		if code != 2 {
 			t.Fatal("truncated state reinitialized")
 		}
-		body, _ := os.ReadFile(state)
+		body, err := os.ReadFile(state)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(body) != 0 {
 			t.Fatal("corrupt state overwritten")
 		}
