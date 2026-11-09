@@ -25,18 +25,18 @@ if ($LASTEXITCODE -ne 0 -or $revision -cnotmatch '^[0-9a-f]{40}$' -or $manifest.
 $expected = @('execution', 'datahome', 'ownerctx', 'memory', 'scheduler', 'processidentity', 'winprivate', 'zipmigration')
 if (@($report.packages).Count -ne 8 -or
     @((Compare-Object ($expected | Sort-Object -CaseSensitive) (@($report.packages.name) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0 -or
-    @($report.public_families.required_tests).Count -ne 4 -or @($report.public_families.required_assertions).Count -ne 21 -or
+    @($report.public_families.required_tests).Count -ne 6 -or @($report.public_families.required_assertions).Count -ne 24 -or
     @($report.public_families.outcomes | Where-Object { $_.outcome -cne 'PASS' }).Count -ne 0 -or
     @($report.public_families.observed_skips).Count -ne 0 -or @($report.unclassified_skips).Count -ne 0 -or
     @($report.original_assertions).Count -ne 39 -or
     @($report.original_assertions | Where-Object { $_.disposition -cnotin @('executed_pass', 'classified_platform_nonapplicability') }).Count -ne 0) {
     throw 'Closed native owner/public assertion coverage is incomplete.'
 }
-foreach ($entry in @($report.packages) + @($report.adapter_packages)) {
-    $sealed = @(@($manifest.packages) + @($manifest.adapter_packages) | Where-Object { $_.name -ceq $entry.name })
+foreach ($entry in @($report.packages) + @($report.adapter_packages) + @($report.authored_brain)) {
+    $sealed = @(@($manifest.packages) + @($manifest.adapter_packages) + @($manifest.authored_package) | Where-Object { $_.name -ceq $entry.name })
     if ($sealed.Count -ne 1 -or $entry.sha256 -cne $sealed[0].sha256 -or $entry.package -cne $sealed[0].package -or
         $entry.exit_code -ne 0 -or $entry.inventory_complete -ne $true -or
-        $entry.log -cnotmatch '^(engine-(execution|datahome|ownerctx|memory|scheduler|processidentity|winprivate|zipmigration)|adapter-(mcp|mcp-command))\.log$') {
+        $entry.log -cnotmatch '^(engine-(execution|datahome|ownerctx|memory|scheduler|processidentity|winprivate|zipmigration)|adapter-(mcp|mcp-command)|authored-atlas)\.log$') {
         throw 'Owning/adapter report differs from its exact sealed executable inventory.'
     }
     $log = Get-Item -LiteralPath (Join-Path $proofRoot $entry.log) -Force
@@ -81,7 +81,7 @@ $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile($driver, [ref]$null, [ref]$errors)
 if ($errors.Count) { throw 'Host exclusion source could not be parsed.' }
 $closed = @{}
-foreach ($variable in @('$adapterParents', '$adapterAssertions', '$adapterCommandParents')) {
+foreach ($variable in @('$adapterParents', '$adapterAssertions', '$adapterCommandParents', '$authoredAtlasParents', '$authoredAtlasAssertions')) {
     $assignments = @($ast.FindAll({param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -ceq $variable}, $true))
     if ($assignments.Count -ne 1) { throw 'Expected one literal current adapter assertion source.' }
     $closed[$variable] = @(Read-EngineLiteralArray $assignments[0])
@@ -96,6 +96,14 @@ foreach ($entry in $report.adapter_packages) {
         @($entry.proof.outcomes | Where-Object { $_.outcome -cne 'PASS' }).Count -ne 0) {
         throw 'Every exact selected adapter assertion must actually pass without skips or duplicates.'
     }
+}
+$authored = $report.authored_brain
+if ($authored.name -cne 'atlasops' -or $authored.qualified -ne $true -or $authored.copied_binary_custody -ne $true -or $authored.proof.qualified -ne $true -or
+    @((Compare-Object ($closed['$authoredAtlasParents'] | Sort-Object -CaseSensitive) (@($authored.proof.required_tests) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0 -or
+    @((Compare-Object ($closed['$authoredAtlasAssertions'] | Sort-Object -CaseSensitive) (@($authored.proof.outcomes.test) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0 -or
+    @($authored.proof.outcomes.test | Sort-Object -CaseSensitive -Unique).Count -ne $closed['$authoredAtlasAssertions'].Count -or
+    @($authored.proof.outcomes | Where-Object { $_.outcome -cne 'PASS' }).Count -ne 0 -or @($authored.proof.observed_skips).Count -ne 0) {
+    throw 'Both exact authored Atlas families and all custody/recovery assertions must actually pass.'
 }
 $exclusions = @($closed['$adapterParents']) + @($closed['$adapterCommandParents'])
 if (@($exclusions | Where-Object { $_ -cnotmatch '^Test[A-Za-z0-9_]+$' }).Count -ne 0) { throw 'Unsafe host exclusion name.' }

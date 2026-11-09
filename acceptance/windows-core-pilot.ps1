@@ -43,7 +43,7 @@ if ($withManifest) {
     $expectedPackages = @('execution', 'datahome', 'ownerctx', 'memory', 'privatewiki', 'processidentity')
     if ($withEngine) {
         $manifestFields = @('schema_version', 'qualification_profile', 'source_revision', 'source_root', 'source_archive_sha256',
-            'sdk_root', 'sdk_go', 'sdk_go_sha256', 'vendor_files', 'packages', 'public_test_binary_sha256', 'public_server_sha256', 'adapter_profile', 'adapter_packages')
+            'sdk_root', 'sdk_go', 'sdk_go_sha256', 'vendor_files', 'packages', 'public_test_binary_sha256', 'public_server_sha256', 'adapter_profile', 'adapter_packages', 'authored_package')
         $actualFields = @($canonical.PSObject.Properties.Name)
         if ($actualFields.Count -ne $manifestFields.Count -or @($actualFields | Where-Object { $_ -cnotin $manifestFields }).Count -ne 0) {
             throw 'Engine qualification requires the exact sealed manifest fields.'
@@ -154,6 +154,27 @@ if ($withManifest) {
             $entry | Add-Member -NotePropertyName required_tests -NotePropertyValue @($required) -Force
             $entry | Add-Member -NotePropertyName required_assertions -NotePropertyValue @($assertions) -Force
         }
+    }
+    if ($withEngine) {
+        $authoredAtlasParents = @('TestWindowsAtlasPublicationKernel', 'TestWindowsAtlasJournalKernel')
+        $authoredAtlasAssertions = @('TestWindowsAtlasPublicationKernel', 'TestWindowsAtlasPublicationKernel/held_binding_journal_and_lock_custody', 'TestWindowsAtlasPublicationKernel/legacy_lock_bytes_and_custody_survive_refusal', 'TestWindowsAtlasPublicationKernel/aliases_and_unsafe_acl_preserve_outside_bytes', 'TestWindowsAtlasPublicationKernel/eager_binding_and_retargeted_journal', 'TestWindowsAtlasJournalKernel', 'TestWindowsAtlasJournalKernel/append', 'TestWindowsAtlasJournalKernel/update')
+        $entry = $canonical.authored_package
+        $entryFields = @('name', 'package', 'binary', 'sha256', 'working_directory', 'tests')
+        $fields = @($entry.PSObject.Properties.Name)
+        if (-not $AuthoredBrain -or -not $AtlasTestBinary -or $entry.name -cne 'atlasops' -or
+            $fields.Count -ne $entryFields.Count -or @($fields | Where-Object { $_ -cnotin $entryFields }).Count -ne 0 -or
+            $entry.package -cne './internal/atlasops' -or $entry.working_directory -cne (Join-Path $canonical.source_root 'internal/atlasops') -or
+            $entry.binary -cne $AtlasTestBinary -or $entry.sha256 -cnotmatch '^[0-9a-f]{64}$' -or
+            @($entry.tests).Count -eq 0 -or @($entry.tests | Sort-Object -CaseSensitive -Unique).Count -ne @($entry.tests).Count -or
+            @($entry.tests | Where-Object { $_ -cnotmatch '^(Test|Example)[A-Za-z0-9_]*$' }).Count -ne 0 -or
+            (Get-FileHash -LiteralPath $AtlasTestBinary -Algorithm SHA256).Hash.ToLowerInvariant() -cne $entry.sha256) {
+            throw 'Engine authored qualification requires the exact sealed Atlas companion and both authored public families.'
+        }
+        foreach ($test in $authoredAtlasParents) {
+            if (@($entry.tests | Where-Object { $_ -ceq $test }).Count -ne 1) { throw 'Authored Atlas inventory omits a required native family.' }
+        }
+        $entry | Add-Member -NotePropertyName required_tests -NotePropertyValue $authoredAtlasParents -Force
+        $entry | Add-Member -NotePropertyName required_assertions -NotePropertyValue $authoredAtlasAssertions -Force
     }
     if ($withEngine) {
         $canonicalRequired = @{
@@ -270,6 +291,10 @@ try {
     if ($AtlasTestBinary) {
         $nativeAtlasTest = Join-Path $payload 'windows-atlas.test.exe'
         Copy-Item -LiteralPath $AtlasTestBinary -Destination $nativeAtlasTest
+        if ($withEngine) {
+            if ((Get-FileHash -LiteralPath $nativeAtlasTest -Algorithm SHA256).Hash.ToLowerInvariant() -cne $canonical.authored_package.sha256) { throw 'Copied authored Atlas differs from its sealed source.' }
+            $canonical.authored_package.binary = $nativeAtlasTest
+        }
     }
     if ($DoclingTestBinary) {
         $nativeDoclingTest = Join-Path $payload 'windows-docling.test.exe'
@@ -403,6 +428,8 @@ try {
         $atlasExit = $LASTEXITCODE
         $atlasOutput | Write-Output
         $atlasLog = $atlasOutput -join "`n"
+        if ([Text.Encoding]::UTF8.GetByteCount($atlasLog) -gt 2097152) { throw 'Authored Atlas output exceeds bounded synthetic log contract.' }
+        [IO.File]::WriteAllText((Join-Path $ProofRoot 'authored-atlas.log'), $atlasLog + "`n", (New-Object Text.UTF8Encoding($false)))
         if ($atlasExit -ne 0 -or $atlasLog -match '--- SKIP:') {
             throw 'The actual ordinary-account atlas publication kernel did not pass completely.'
         }
@@ -663,8 +690,17 @@ try {
             }
         }
         if ($engineProfile) {
-            $publicProof = Get-EnginePublicProof @{required_tests=@('TestWindowsCorePilot', 'TestWindowsDirectoryDurabilityPilot', 'TestWindowsPrivateStatePilot', 'TestWindowsOwnerReviewPilot'); required_assertions=@('TestWindowsCorePilot', 'TestWindowsDirectoryDurabilityPilot', 'TestWindowsPrivateStatePilot', 'TestWindowsOwnerReviewPilot', 'TestWindowsPrivateStatePilot/creation_has_actual_protected_owner_acl', 'TestWindowsPrivateStatePilot/unc_and_device_names_refuse_before_native_open', 'TestWindowsPrivateStatePilot/unowned_read_seam_does_not_grant_private_admission', 'TestWindowsPrivateStatePilot/world_read_directory_is_not_repaired', 'TestWindowsPrivateStatePilot/hardlink_and_nonregular_refuse_before_truncation', 'TestWindowsPrivateStatePilot/offline_leaf_refuses_without_recall', 'TestWindowsPrivateStatePilot/junction_never_redirects_private_read_or_creation', 'TestWindowsPrivateStatePilot/renamed_ancestor_cannot_redirect_held_publication', 'TestWindowsPrivateStatePilot/exclusive_cas_and_exact_absence_compensation', 'TestWindowsPrivateStatePilot/native_sharing_refusal_preserves_old_bytes_and_retry', 'TestWindowsPrivateStatePilot/live_lock_name_custody_prevents_replacement_writer', 'TestWindowsPrivateStatePilot/native_lock_contention_preserves_one_writer', 'TestWindowsPrivateStatePilot/world-read', 'TestWindowsPrivateStatePilot/null', 'TestWindowsPrivateStatePilot/unknown-effective-ace', 'TestWindowsOwnerReviewPilot/quick', 'TestWindowsOwnerReviewPilot/complete')} $coreLog 0
-            $qualificationComplete = $publicProof.qualified -and @($results | Where-Object { -not $_.canonical_contract_proof.qualified }).Count -eq 0 -and
+            $publicProof = Get-EnginePublicProof @{required_tests=@('TestWindowsCorePilot', 'TestWindowsDirectoryDurabilityPilot', 'TestWindowsPrivateStatePilot', 'TestWindowsOwnerReviewPilot', 'TestWindowsAuthoredBrainPilot', 'TestWindowsAuthoredBrainPartialPreparationPilot'); required_assertions=@('TestWindowsCorePilot', 'TestWindowsDirectoryDurabilityPilot', 'TestWindowsPrivateStatePilot', 'TestWindowsOwnerReviewPilot', 'TestWindowsPrivateStatePilot/creation_has_actual_protected_owner_acl', 'TestWindowsPrivateStatePilot/unc_and_device_names_refuse_before_native_open', 'TestWindowsPrivateStatePilot/unowned_read_seam_does_not_grant_private_admission', 'TestWindowsPrivateStatePilot/world_read_directory_is_not_repaired', 'TestWindowsPrivateStatePilot/hardlink_and_nonregular_refuse_before_truncation', 'TestWindowsPrivateStatePilot/offline_leaf_refuses_without_recall', 'TestWindowsPrivateStatePilot/junction_never_redirects_private_read_or_creation', 'TestWindowsPrivateStatePilot/renamed_ancestor_cannot_redirect_held_publication', 'TestWindowsPrivateStatePilot/exclusive_cas_and_exact_absence_compensation', 'TestWindowsPrivateStatePilot/native_sharing_refusal_preserves_old_bytes_and_retry', 'TestWindowsPrivateStatePilot/live_lock_name_custody_prevents_replacement_writer', 'TestWindowsPrivateStatePilot/native_lock_contention_preserves_one_writer', 'TestWindowsPrivateStatePilot/world-read', 'TestWindowsPrivateStatePilot/null', 'TestWindowsPrivateStatePilot/unknown-effective-ace', 'TestWindowsOwnerReviewPilot/quick', 'TestWindowsOwnerReviewPilot/complete', 'TestWindowsAuthoredBrainPilot', 'TestWindowsAuthoredBrainPilot/eager_registered_brain_identity', 'TestWindowsAuthoredBrainPartialPreparationPilot')} $coreLog 0
+            $entry = $manifest.authored_package
+            $listed = @(& $entry.binary '-test.list' '^(Test|Example)')
+            $complete = $LASTEXITCODE -eq 0 -and @($listed | Sort-Object -CaseSensitive -Unique).Count -eq $listed.Count -and
+                @((Compare-Object ($entry.tests | Sort-Object -CaseSensitive) ($listed | Sort-Object -CaseSensitive) -CaseSensitive)).Count -eq 0
+            $proof = Get-EnginePublicProof $entry $atlasLog $atlasExit
+            $custody = (Get-FileHash -LiteralPath $entry.binary -Algorithm SHA256).Hash.ToLowerInvariant() -ceq $entry.sha256
+            $authoredResult = [ordered]@{name=$entry.name; package=$entry.package; sha256=$entry.sha256; exit_code=$atlasExit
+                inventory_complete=$complete; copied_binary_custody=$custody; qualified=($complete -and $custody -and $proof.qualified)
+                proof=$proof; log='authored-atlas.log'; log_sha256=(Get-FileHash -LiteralPath (Join-Path $ProofRoot 'authored-atlas.log') -Algorithm SHA256).Hash.ToLowerInvariant()}
+            $qualificationComplete = $publicProof.qualified -and $authoredResult.qualified -and @($results | Where-Object { -not $_.canonical_contract_proof.qualified }).Count -eq 0 -and
                 $adapterResults.Count -eq 2 -and @($adapterResults | Where-Object { -not $_.qualified }).Count -eq 0
         }
         $report = [ordered]@{
@@ -680,10 +716,11 @@ try {
             $report.public_families = $publicProof
             $report.adapter_profile = 'windows_private_engine_adapters_v1'
             $report.adapter_packages = $adapterResults
+            $report.authored_brain = $authoredResult
             $report.original_assertions = @($results | ForEach-Object { $_.canonical_contract_proof.original_assertions })
             $report.classified_skips = @($results | ForEach-Object { $_.canonical_contract_proof.classified_skips })
             $report.unclassified_skips = @($results | ForEach-Object { $_.canonical_contract_proof.unclassified_skips })
-            $report.native_coverage = 'Eight exact owning packages and four public families; client loading remains separate.'
+            $report.native_coverage = 'Eight exact owning packages, six public families and two authored Atlas families; client loading remains separate.'
         }
         if ($Inspection) {
             $report.elevated = $false; $report.admin_member = $false
@@ -805,7 +842,7 @@ try {
     if ($log -notmatch 'native_windows_environment private_current_user_temp=true' -or $log -notmatch 'native_windows_token elevated=false admin_member=false' -or $log -notmatch '--- PASS: TestWindowsCorePilot' -or $log -notmatch '--- PASS: TestWindowsDirectoryDurabilityPilot' -or $log -notmatch '--- PASS: TestWindowsPrivateStatePilot' -or $log -notmatch '--- PASS: TestWindowsOwnerReviewPilot' -or $log -match '--- SKIP:') {
         throw 'The standard-user native proof did not run completely.'
     }
-    if ($AuthoredBrain -and $log -notmatch '(?m)^--- PASS: TestWindowsAuthoredBrainPilot ') {
+    if ($AuthoredBrain -and ($log -notmatch '(?m)^--- PASS: TestWindowsAuthoredBrainPilot ' -or $log -notmatch '(?m)^--- PASS: TestWindowsAuthoredBrainPartialPreparationPilot ')) {
         throw 'The authored-brain native family did not pass under the ordinary account.'
     }
     if ($PrivateWiki -and $log -notmatch '(?m)^--- PASS: TestWindowsPrivateWikiPilot ') {

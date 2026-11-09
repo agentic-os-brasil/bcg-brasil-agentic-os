@@ -286,7 +286,7 @@ class WindowsEngineProfile(unittest.TestCase):
         digest = hashlib.sha256(b"unexecuted public executable fixture").hexdigest()
         document.update(qualification_profile="windows_private_engine_v1",
                         public_test_binary_sha256=digest, public_server_sha256=digest,
-                        adapter_profile="windows_private_engine_adapters_v1", adapter_packages=[])
+                        adapter_profile="windows_private_engine_adapters_v1", adapter_packages=[], authored_package={})
         return document
 
     def test_engine_unknown_profile_refuses_before_account(self):
@@ -472,3 +472,50 @@ $canonicalRequired|ConvertTo-Json -Depth 4 -Compress
                 declarations.extend(re.findall(r"^func (Test[A-Za-z0-9_]+)\(", (Path(package["Dir"])/filename).read_text(),re.M))
             for parent in {assertion.split("/")[0] for assertion in assertions}:
                 self.assertEqual(declarations.count(parent),1,f"{name}/{parent} is missing or duplicated in actual Windows-selected source")
+
+    def test_authored_profile_requires_partial_and_legacy_custody_outcomes(self):
+        script = self.root / "authored-proof.ps1"
+        script.write_text(r'''$ErrorActionPreference='Stop'
+$tokens=$null; $errors=$null
+$outer=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$tokens,[ref]$errors)
+if($errors.Count){throw ($errors | Out-String)}
+$launcher=@($tokens | Where-Object {$_.Kind -eq 'HereStringLiteral'})
+if($launcher.Count -ne 1){throw 'Expected the actual shared launcher'}
+$inner=[Management.Automation.Language.Parser]::ParseInput($launcher[0].Value,[ref]$null,[ref]$errors)
+$helper=@($inner.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Get-EnginePublicProof'},$true))
+if($helper.Count -ne 1){throw 'Expected actual public evidence parser'}
+Invoke-Expression $helper[0].Extent.Text
+$assignment=@($inner.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq '$publicProof'},$true))
+if($assignment.Count -ne 1){throw 'Expected one actual closed public family contract'}
+$literal=@($assignment[0].Right.FindAll({param($n) $n -is [Management.Automation.Language.HashtableAst]},$true))
+if($literal.Count -ne 1){throw 'Public contract must remain one literal hashtable'}
+$public=$literal[0].SafeGetValue()
+if($public.required_tests.Count -ne 6 -or $public.required_assertions.Count -ne 24 -or
+ 'TestWindowsAuthoredBrainPilot' -cnotin $public.required_tests -or
+ 'TestWindowsAuthoredBrainPartialPreparationPilot' -cnotin $public.required_tests){throw 'Both authored families must extend the original4/21 contract'}
+$checker=[Management.Automation.Language.Parser]::ParseFile($args[1],[ref]$null,[ref]$errors)
+$reader=@($checker.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Read-EngineLiteralArray'},$true))
+Invoke-Expression $reader[0].Extent.Text
+$atlas=@{}
+foreach($binding in @(@{variable='$authoredAtlasParents'; field='required_tests'},@{variable='$authoredAtlasAssertions'; field='required_assertions'})){
+ $variable=$binding.variable
+ $found=@($outer.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq $variable},$true))
+ if($found.Count -ne 1){throw 'Expected one closed actual authored Atlas declaration'}
+ $atlas[$binding.field]=@(Read-EngineLiteralArray $found[0])
+}
+if($atlas.required_tests.Count -ne 2 -or $atlas.required_assertions.Count -ne 8){throw 'Exact Atlas publication and journal assertions required'}
+foreach($case in @(@{entry=$public; missing='TestWindowsAuthoredBrainPartialPreparationPilot'},
+                  @{entry=$atlas; missing='TestWindowsAtlasPublicationKernel/legacy_lock_bytes_and_custody_survive_refusal'})){
+ $body=($case.entry.required_assertions | ForEach-Object {'--- PASS: '+$_+' (0.00s)'}) -join "`n"
+ $body+="`n"
+ if(-not (Get-EnginePublicProof $case.entry $body 0).qualified){throw 'Exact complete authored evidence refused'}
+ $missing=($case.entry.required_assertions | Where-Object {$_ -cne $case.missing} | ForEach-Object {'--- PASS: '+$_+' (0.00s)'}) -join "`n"
+ foreach($bad in @($missing, $body.Replace('PASS: '+$case.missing,'SKIP: '+$case.missing), $body.Replace('PASS: '+$case.missing,'FAIL: '+$case.missing), ($body+'--- PASS: '+$case.missing+" (0.00s)`n"), ($body+"--- PASS: TestUnknown (0.00s)`n"))){
+  if((Get-EnginePublicProof $case.entry $bad 0).qualified){throw 'Missing/skipped/failed/duplicated/unknown authored evidence qualified'}
+ }
+ if((Get-EnginePublicProof $case.entry $body 1).qualified){throw 'Nonzero authored process qualified'}
+}
+''', encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER),
+                                 str(ROOT / "acceptance/windows-engine-check.ps1")], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

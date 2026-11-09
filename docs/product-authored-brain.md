@@ -33,6 +33,14 @@ foundation tracked in #504 before Windows qualification. Historical native
 observations do not attest this new composition; fresh owning and shipping-server
 proof is required. Native Code/Desktop loading remains a separate gate.
 
+The canonical Windows native-engine workflow now selects both authored public
+families explicitly and seals a separate Atlas test companion in its source/SDK
+manifest. Qualification requires six public families with24 exact outcomes and
+two Atlas families with8 outcomes, including legacy-lock preservation and
+partial preparation. The existing eight owning packages, original39 assertions
+and both current adapter companions remain required. Only retained passing
+ordinary-account evidence from the composed revision qualifies this slice.
+
 ## Available operations
 
 The current MCP schemas are the authority for accepted fields and limits.
