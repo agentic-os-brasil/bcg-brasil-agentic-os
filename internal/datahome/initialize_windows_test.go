@@ -104,3 +104,9 @@ func initializeSecuritySnapshot(t *testing.T, path string) string {
 	}
 	return sd.String()
 }
+
+func initializeDirectoryIdentity(t *testing.T, path string) [3]uint64 {
+	t.Helper()
+	value := resolveDirectoryIdentity(t, path)
+	return [3]uint64{uint64(value[0]), uint64(value[1]), uint64(value[2])}
+}

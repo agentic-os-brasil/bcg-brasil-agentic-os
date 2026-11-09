@@ -3,17 +3,12 @@ package zipmigration
 import (
 	"os"
 	"path/filepath"
-	"runtime"
-	"strings"
 	"testing"
 )
 
 func TestCommittedTargetSafetyAndRecovery(t *testing.T) {
 	for _, change := range []string{"file_symlink", "ancestor_symlink", "directory_type", "unreadable_file", "unreadable_directory", "new_symlink_after_edit"} {
 		t.Run(change, func(t *testing.T) {
-			if runtime.GOOS == "windows" && strings.HasPrefix(change, "unreadable") {
-				t.Skip("native Windows ACL acceptance required")
-			}
 			root := t.TempDir()
 			put(t, root, "data/owner/a.md", "original a")
 			put(t, root, "data/owner/z/note.md", "original z")
@@ -58,15 +53,9 @@ func TestCommittedTargetSafetyAndRecovery(t *testing.T) {
 				put(t, root, "brain/owner/z", "not a directory")
 				restore = func() { os.Remove(directory); os.Rename(saved, directory) }
 			case "unreadable_file":
-				if err := os.Chmod(target, 0000); err != nil {
-					t.Fatal(err)
-				}
-				restore = func() { os.Chmod(target, 0600) }
+				restore = migrationDenyRead(t, target, false)
 			case "unreadable_directory":
-				if err := os.Chmod(directory, 0000); err != nil {
-					t.Fatal(err)
-				}
-				restore = func() { os.Chmod(directory, 0700) }
+				restore = migrationDenyRead(t, directory, true)
 			case "new_symlink_after_edit":
 				target = filepath.Join(root, "brain/zz-new-link")
 				if err := os.Symlink(outside, target); err != nil {

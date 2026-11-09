@@ -2,7 +2,7 @@
 
 The Windows product-contracts job reuses the native standard-account driver and
 retains exact source, SDK, executable and test-inventory evidence. Its current
-`windows_public_external_migration_v1` profile runs eight owning package binaries:
+`windows_canonical_contracts_v1` profile runs eight owning package binaries:
 execution, datahome, ownerctx, memory, privatewiki, processidentity, winprivate and
 zipmigration. The ordinary account may read the sealed public source/SDK fixtures;
 its temporary files and Go caches stay in its own private root. Native core and
@@ -15,7 +15,8 @@ atlas acceptance retain their existing no-skip contract.
 | No qualification_profile | Original six canonical packages; no migration public qualification claim. |
 | quarantined_windows_migration_primitives_v1 | Rejected historical profile; never silently upgraded. |
 | quarantined_windows_migration_primitives_v2 | Eight packages; exactly 12 kernel and 13 adapter prerequisite cases. Reporting stays primitive/quarantined, with public transaction and resolver qualification false. |
-| windows_public_external_migration_v1 | The same 25 prerequisites plus the three exported transaction tests, reviewed-digest negative and sealed-source canonical resolver listed below. |
+| windows_public_external_migration_v1 | The same 25 prerequisites plus the three exported transaction tests, reviewed-digest negative and sealed-source canonical resolver listed below. Every observed skip still leaves this historical profile incomplete. |
+| windows_canonical_contracts_v1 | All 30 public/prerequisite cases, the fixed 31 original skipped assertions, explicit native counterparts and preserved nested assertion matrices. Only five exact original platform branches may classify as nonapplicable with actual passing native evidence. |
 
 Unknown profile names, package substitutions, missing/extra/duplicate native
 prerequisite cases, an altered public-family inventory or a missing public/resolver
@@ -48,13 +49,64 @@ public cases and both prerequisite proofs. `canonical_resolution_qualified` also
 requires the actual resolver case. Per-package records retain their exact required
 names, observations, exit codes and log hashes.
 
-## Subset proof and full coverage
+## Final canonical contract proof
+
+The workflow selects `windows_canonical_contracts_v1`. Its fixed original ledger
+contains one execution assertion, four HOME assertions, one process-identity
+assertion and twenty-five migration assertions. Twenty-six formerly skipped
+assertions now execute directly using native junction, DACL and private-profile
+fixtures. Their original names and named child matrices remain mandatory.
+
+The remaining five original branches retain their observed SKIP outcome:
+
+| Original source assertion | Required observed contract |
+| --- | --- |
+| execution `TestStoreRejectsSymlinkParent` | `TestWindowsConfinedStoreRejectsJunctionAndPrivateHardlink`, including `junction-parent` and `private-contract-hardlink`. |
+| processidentity `TestPinnedFileNeverAdoptsAReplacement` | `TestPinnedWindowsFileBlocksReplacement`. |
+| datahome `TestResolveCaseDistinctNondefaultCannotBypassLocator` | Its own `same-object-case-contract` child, exercising the same selected HOME and counterpart paths. |
+| datahome `TestResolveCaseDistinctLocatorCannotAuthorizeDifferentHome` | Its own `same-object-case-contract` child, exercising the same selected HOME and counterpart paths. |
+| zipmigration `TestExternalDistinctCaseSensitiveRootRemainsSupported` | Its own `same-object-source-overlap` child, exercising the same selected source and counterpart paths. |
+
+Each classification requires the exact original skip reason and one actual PASS
+for the exact paired contract with no descendant skip. The three case-sensitive
+branches must emit one `case_pair_evidence=` JSON record in their own paired child
+scope. The strict seven-field record binds the exact child, absolute case-variant
+paths, equal measured native directory identities and `same_object: true`. Identity
+words are parsed as exact unsigned 32-bit integers, preserving the full native
+volume and high/low file index without floating-point conversion. Duplicate keys,
+wrong scope, generic volume labels, another directory's PASS, malformed identities
+or absent evidence cannot close the original source branch. On actual distinct
+objects the original assertion must execute and PASS instead.
+
+All eight packages must exit zero with complete closed top-level inventories and
+unique observed outcomes. Every fixed original/native/nested requirement must
+PASS, or meet one of those five exact original-source policies. Unknown or nested
+skips, duplicate observations, missing assertions and failed required descendants
+remain incomplete. No synthetic PASS events are emitted. The two standalone native
+case-capability parents provide additional coverage; neither substitutes for the
+three original-bound child proofs.
+
+The final aggregate independently requires all 30 prior cases, genuine compatible
+producer and unchanged historical-library witness execution, copied executable
+custody and exactly the eight owning package results. `canonical_contracts` reports
+original assertions executed, source branches classified and unresolved coverage
+separately. A fixture with 26 original PASS and five supported nonapplicable source
+branches may qualify the admitted canonical profile while
+`all_original_source_assertions_executed` remains false. All actual source SKIP
+outcomes and counterpart names remain in the per-package proof and bounded logs.
+
+This is qualification of the sealed source under the observed account, selected
+directories and native capabilities. It does not qualify every Windows filesystem,
+native Code/Desktop installation, distribution, signing or strong same-user
+filesystem isolation. Those require their own evidence.
+
+## Historical subset proof and full coverage
 
 All eight packages run even if an earlier package fails. Bounded individual logs
 and canonical-contract-results.json preserve every outcome. The public/resolver
 subset flags may be true while overall `qualification_complete` remains false.
-Every legacy skip, including a nested skip beneath an otherwise passing parent,
-remains missing coverage. The final incomplete-coverage failure is preserved; a
+In the historical public profile, every legacy skip, including a nested skip
+beneath an otherwise passing parent, remains missing coverage. The final incomplete-coverage failure is preserved; a
 passing public subset does not turn the full Windows job green.
 
 The compatible producer and unchanged historical-library witness retain independent

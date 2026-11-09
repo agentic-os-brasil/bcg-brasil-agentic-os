@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
@@ -68,3 +69,16 @@ func initializePublicDirectory(t *testing.T, path string) {
 	}
 }
 func initializeSecuritySnapshot(t *testing.T, path string) string { t.Helper(); return "" }
+
+func initializeDirectoryIdentity(t *testing.T, path string) [3]uint64 {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	native, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		t.Fatal("actual directory identity unavailable")
+	}
+	return [3]uint64{uint64(native.Dev), uint64(native.Ino) >> 32, uint64(native.Ino) & 0xffffffff}
+}

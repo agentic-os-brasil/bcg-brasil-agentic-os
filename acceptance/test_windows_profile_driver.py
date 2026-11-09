@@ -579,6 +579,193 @@ if ($report.Count -ne 0) { throw 'Migration profile changed the default report' 
         document["packages"][1]["tests"].append("TestResolveCommittedMigrationUsesSealedSourceIdentity")
         return document
 
+    def canonical_contract_manifest(self):
+        document = self.public_migration_manifest()
+        document["qualification_profile"] = "windows_canonical_contracts_v1"
+        required = {
+            "execution": ["TestStoreRejectsSymlinkParent", "TestWindowsConfinedStoreRejectsJunctionAndPrivateHardlink"],
+            "processidentity": ["TestPinnedFileNeverAdoptsAReplacement", "TestPinnedWindowsFileBlocksReplacement"],
+            "memory": ["TestPrivateWikiCompatibleProducerAcrossActualBinaries", "TestPrivateWikiOldCohortProcessCannotReadCaptureOrDelete"],
+            "datahome": ["TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator", "TestResolveCaseDistinctNondefaultCannotBypassLocator", "TestResolveCaseDistinctLocatorCannotAuthorizeDifferentHome", "TestWindowsResolveCaseAliasesRespectLocatorAuthority"],
+            "zipmigration": ["TestCommittedTargetSafetyAndRecovery", "TestCopyFailureRetriesAfterPermissionRecovery", "TestReadOnlyDestinationReportsFailureWithoutSuccessMarker", "TestWindowsExternalCaseCapabilityPreservesOverlapGuards",
+                "TestExternalOwnerAuthorityRequiresFreshEnrollment", "TestExternalOwnerControlsPreserveAuthoredNeighbors", "TestExternalOwnerObservationsRequireFreshAttestation", "TestExternalCurrentBrainSurvivesLegacyEvolution", "TestExternalReviewedPlanCannotOmitOrRedirectSource", "TestExternalControlStagingNeverWritesInsideSource", "TestExternalPhysicalWriteSetAliasesRefuseBeforeEffects", "TestExternalPrivateControlDirectoriesRefuseWithoutRepair", "TestExternalHomeCannotOverlapProfilePublication", "TestExternalMissingReservedProfileAliasesRefuseBeforeEffects", "TestExternalDistinctCaseSensitiveRootRemainsSupported", "TestExternalRollbackRetainedPathsUseArchive", "TestExternalReservedAuthorityAliasesAreInactive", "TestExternalProofIsSelfContainedAndStrict", "TestExternalForeignLocatorDoesNotRevokeOrMoveHome", "TestExternalPreflightConflictsHaveNoProfileOrSourceEffects", "TestExternalConflictingPartialAndConcurrentAttemptStayOwned", "TestExternalRetirementIsFixedDenyOnlyAndInterruptedRollbackResumes", "TestExternalCaseAuthorityIsArchivedOutsideActiveReaders", "TestExternalInterruptionAndRollbackRetainNewWork", "TestExternalLegacyAuthoredStateAndInactiveAuthority"],
+        }
+        for entry in document["packages"]:
+            entry["tests"] += required.get(entry["name"], [])
+        return document
+
+    def test_canonical_profile_requires_closed_original_and_native_inventory(self):
+        document = self.canonical_contract_manifest()
+        self.canonical_admission(document, "Canonical public source and SDK inputs")
+        for package, name in [("execution", "TestStoreRejectsSymlinkParent"), ("execution", "TestWindowsConfinedStoreRejectsJunctionAndPrivateHardlink"),
+                              ("processidentity", "TestPinnedWindowsFileBlocksReplacement"), ("datahome", "TestResolveCaseDistinctLocatorCannotAuthorizeDifferentHome"),
+                              ("datahome", "TestWindowsResolveCaseAliasesRespectLocatorAuthority"), ("zipmigration", "TestCommittedTargetSafetyAndRecovery"),
+                              ("zipmigration", "TestExternalReviewedPlanCannotOmitOrRedirectSource"), ("memory", "TestPrivateWikiOldCohortProcessCannotReadCaptureOrDelete")]:
+            with self.subTest(package=package, missing=name):
+                changed = json.loads(json.dumps(document))
+                entry = next(item for item in changed["packages"] if item["name"] == package)
+                entry["tests"].remove(name)
+                self.canonical_admission(changed, "Canonical Windows inventory differs from its closed contract")
+
+    def canonical_fragment_check(self, assertions):
+        document = self.canonical_contract_manifest()
+        self.manifest.write_text(json.dumps(document), encoding="utf-8")
+        self.launcher_fragment_check(r"""
+$outer=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$null)
+$declaration=@($outer.FindAll({param($n) $n -is [Management.Automation.Language.IfStatementAst] -and $n.Clauses[0].Item1.Extent.Text -ceq '$withCanonicalContracts'},$true))
+if($declaration.Count -ne 1){throw 'Expected closed canonical declarations'}
+$canonical=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'inspection.json') -Raw | ConvertFrom-Json
+$withCanonicalContracts=$true
+Invoke-Expression $declaration[0].Extent.Text
+foreach($name in @('Get-CanonicalLogRecords','Test-CanonicalObservedPass','Test-CanonicalCasePair','Get-CanonicalPackageProof')) {
+ $fn=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq $name},$true))
+ if($fn.Count -ne 1){throw ('Expected actual canonical proof function: '+$name)}
+ Invoke-Expression $fn[0].Extent.Text
+}
+function New-CanonicalObservedBody($entry) {
+ $lines=@()
+ $policyNames=@($entry.canonical_skip_policy | ForEach-Object {$_.test})
+ foreach($name in @(@($entry.tests)+@($entry.canonical_required_tests)+@($entry.canonical_original_assertions) | Sort-Object -Unique)) {
+  if($name -cnotin $policyNames){$lines+='--- PASS: '+$name+' (0.01s)'}
+ }
+ foreach($policy in @($entry.canonical_skip_policy)) {
+  $lines+='=== RUN   '+$policy.test
+  if($policy.kind -ceq 'selected-directory-case-pair') {
+   $lines+='=== RUN   '+$policy.paired
+   $evidence=[ordered]@{kind='selected-directory-case-pair-v1';scope=$policy.paired;selected=(Join-Path $PSScriptRoot 'fixture/.maestro');counterpart=(Join-Path $PSScriptRoot 'fixture/.MAESTRO');selected_identity=@(123,4,5);counterpart_identity=@(123,4,5);same_object=$true}
+   $lines+='    fixture_test.go:12: case_pair_evidence='+($evidence | ConvertTo-Json -Depth 4 -Compress)
+   $lines+='--- PASS: '+$policy.paired+' (0.01s)'
+   $lines+='=== NAME  '+$policy.test
+  }
+  $lines+='    fixture_test.go:13: '+$policy.reason
+  $lines+='--- SKIP: '+$policy.test+' (0.01s)'
+ }
+ return ($lines -join "`n")
+}
+""" + assertions)
+
+    def test_canonical_package_requires_actual_ports_and_exact_counterparts(self):
+        self.canonical_fragment_check(r"""
+foreach($name in @('execution','processidentity','zipmigration','memory')) {
+ $entry=@($canonical.packages | Where-Object {$_.name -ceq $name})[0]
+ $body=New-CanonicalObservedBody $entry
+ $proof=Get-CanonicalPackageProof $entry $body 0 $true
+ if(-not $proof.qualified -or $proof.original_assertions.Count -ne $entry.canonical_original_assertions.Count){throw ('Actual original/native coverage refused: '+$name)}
+ foreach($mode in @('missing','duplicate','nested-duplicate','fail','skip','nested-skip','unknown-skip','exit','partial','wrong-reason')) {
+  if($mode -ceq 'wrong-reason' -and $entry.canonical_skip_policy.Count -eq 0){continue}
+  $altered=$body; $code=0; $complete=$true; $required=$entry.canonical_required_tests[0]
+  switch($mode) {
+   'missing' {$altered=$altered.Replace(('--- PASS: '+$required+' (0.01s)'), '')}
+   'duplicate' {$altered+="`n--- PASS: "+$required+' (0.01s)'}
+   'nested-duplicate' {$altered+="`n    --- PASS: "+$required+'/hidden (0.01s)'+"`n    --- PASS: "+$required+'/hidden (0.01s)'}
+   'fail' {$altered=$altered.Replace(('--- PASS: '+$required+' (0.01s)'), ('--- FAIL: '+$required+' (0.01s)'))}
+   'skip' {$altered=$altered.Replace(('--- PASS: '+$required+' (0.01s)'), ('--- SKIP: '+$required+' (0.01s)'))}
+   'nested-skip' {$altered+="`n    --- SKIP: "+$required+'/hidden (0.01s)'}
+   'unknown-skip' {$altered+="`n--- SKIP: TestUnknown/hidden (0.01s)"}
+   'exit' {$code=1}
+   'partial' {$complete=$false}
+   'wrong-reason' {$altered=$altered.Replace($entry.canonical_skip_policy[0].reason, 'arbitrary unavailable')}
+  }
+  if((Get-CanonicalPackageProof $entry $altered $code $complete).qualified){throw ('Unobserved native coverage accepted: '+$name+'/'+$mode)}
+ }
+}
+""")
+
+    def test_canonical_case_classification_binds_original_directory_and_child(self):
+        self.canonical_fragment_check(r"""
+$entry=@($canonical.packages | Where-Object {$_.name -ceq 'datahome'})[0]
+$original=New-CanonicalObservedBody $entry
+if(-not (Get-CanonicalPackageProof $entry $original 0 $true).qualified){throw 'Actual paired directory proof refused'}
+$policy=$entry.canonical_skip_policy[0]
+$maxBody=$original.Replace('[123,4,5]', '[4294967295,4294967295,4294967294]')
+if(-not (Get-CanonicalPackageProof $entry $maxBody 0 $true).qualified){throw 'Exact maximum uint32 identity words were lost'}
+$highMismatch=$maxBody.Replace('"counterpart_identity":[4294967295,4294967295,4294967294]', '"counterpart_identity":[4294967295,4294967294,4294967294]')
+if((Get-CanonicalPackageProof $entry $highMismatch 0 $true).qualified){throw 'High file index identity mismatch was rounded or accepted'}
+foreach($mode in @('missing-marker','wrong-scope','unrelated-emitter','duplicate-marker','unknown-key','duplicate-key','wrong-kind','string-boolean','false-boolean','zero-id','different-id','overflow-id','fraction-id','quoted-id','exponent-id','large-uint64-id','wrong-path','missing-child','child-skip','wrong-reason','unknown-child')) {
+ $lines=@($original -split "`n"); $index=0
+ for($i=0;$i -lt $lines.Count;$i++){if($lines[$i] -match 'case_pair_evidence='){$index=$i;break}}
+ $line=$lines[$index]; $json=$line.Substring($line.IndexOf('case_pair_evidence=')+'case_pair_evidence='.Length)
+ $record=$json | ConvertFrom-Json -AsHashtable
+ switch($mode) {
+  'missing-marker' {$lines[$index]=''}
+  'wrong-scope' {$record.scope='TestOther/same-object-case-contract'}
+  'unrelated-emitter' {$lines[$index-1]='=== RUN   TestOther/same-object-case-contract'}
+  'duplicate-marker' {$lines[$index]+="`n"+$line}
+  'unknown-key' {$record.unapproved=$true}
+  'duplicate-key' {$lines[$index]=$line.Replace('{','{"same_object":true,')}
+  'wrong-kind' {$record.kind='volume-name-only'}
+  'string-boolean' {$record.same_object='true'}
+  'false-boolean' {$record.same_object=$false}
+  'zero-id' {$record.selected_identity=@(123,0,0);$record.counterpart_identity=@(123,0,0)}
+  'different-id' {$record.counterpart_identity=@(123,4,6)}
+  'overflow-id' {$record.selected_identity=@(123,4294967296,5);$record.counterpart_identity=@(123,4294967296,5)}
+  'fraction-id' {$record.selected_identity=@(123,4.5,5);$record.counterpart_identity=@(123,4.5,5)}
+  'quoted-id' {$record.selected_identity=@(123,'4',5);$record.counterpart_identity=@(123,'4',5)}
+  'exponent-id' {$lines[$index]=$line.Replace('[123,4,5]', '[123,4e0,5]')}
+  'large-uint64-id' {$lines[$index]=$line.Replace('[123,4,5]', '[123,18446744073709551615,5]')}
+  'wrong-path' {$record.counterpart=Join-Path $PSScriptRoot 'unrelated/other'}
+  'missing-child' {$lines=@($lines | Where-Object {$_ -cne ('--- PASS: '+$policy.paired+' (0.01s)')})}
+  'child-skip' {$lines+=('    --- SKIP: '+$policy.paired+'/hidden (0.01s)')}
+  'wrong-reason' {$lines=@($lines | ForEach-Object {$_.Replace($policy.reason,'unrelated skip reason')})}
+  'unknown-child' {$lines+=('    --- SKIP: '+$policy.test+'/unknown (0.01s)')}
+ }
+ if($mode -cin @('wrong-scope','unknown-key','wrong-kind','string-boolean','false-boolean','zero-id','different-id','overflow-id','fraction-id','quoted-id','wrong-path')){$lines[$index]='    fixture_test.go:12: case_pair_evidence='+($record | ConvertTo-Json -Depth 4 -Compress)}
+ if((Get-CanonicalPackageProof $entry ($lines -join "`n") 0 $true).qualified){throw ('Invalid original-directory classification accepted: '+$mode)}
+}
+""")
+
+    def test_canonical_aggregate_keeps_witnesses_prerequisites_and_every_package(self):
+        self.canonical_fragment_check(r"""
+$gate=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.IfStatementAst] -and $n.Clauses[0].Item1.Extent.Text -ceq '$canonicalProfile' -and $n.Extent.Text -match '\$canonicalQualified\s*='},$true))
+$wire=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.IfStatementAst] -and $n.Clauses[0].Item1.Extent.Text -ceq '$canonicalProfile' -and $n.Extent.Text -match '\$results\[-1\].canonical_contract_proof'},$true))
+if($gate.Count -ne 1 -or $wire.Count -ne 1){throw 'Expected actual canonical aggregate and package wiring'}
+$canonicalProfile=$true
+foreach($mode in @('pass','missing','duplicate','bad-package','exit','partial','backend','public','resolver','producer','history','producer-absent','history-absent','original-count')) {
+ $manifest=[pscustomobject]@{compatible_producer=@{sealed=$true};historical_witness=@{sealed=$true}}
+ $results=@()
+ foreach($entry in $canonical.packages){
+  $body=New-CanonicalObservedBody $entry;$code=0;$complete=$true;$results+=@{name=$entry.name;exit_code=0;inventory_complete=$true}
+  Invoke-Expression $wire[0].Extent.Text
+  $results[-1].compatible_producer_proof=@{actual_compatibility_test_passed=$true;copied_pe_custody=$true}
+  $results[-1].historical_witness_proof=@{actual_historical_test_passed=$true;copied_pe_custody=$true}
+ }
+ $migrationPrimitivesPassed=$true;$publicMigrationPassed=$true;$canonicalResolutionQualified=$true;$qualificationComplete=$false
+ switch($mode){
+  'missing' {$results=@($results | Select-Object -Skip 1)}
+  'duplicate' {$results[1].name=$results[0].name}
+  'bad-package' {$results[0].canonical_contract_proof.qualified=$false}
+  'exit' {$results[0].exit_code=1}
+  'partial' {$results[0].inventory_complete=$false}
+  'backend' {$migrationPrimitivesPassed=$false}
+  'public' {$publicMigrationPassed=$false}
+  'resolver' {$canonicalResolutionQualified=$false}
+  'producer' {$results[3].compatible_producer_proof.actual_compatibility_test_passed=$false}
+  'history' {$results[3].historical_witness_proof.copied_pe_custody=$false}
+  'producer-absent' {$manifest.compatible_producer=$null}
+  'history-absent' {$manifest.historical_witness=$null}
+  'original-count' {$results[0].canonical_contract_proof.original_assertions=@()}
+ }
+ Invoke-Expression $gate[0].Extent.Text
+ if($qualificationComplete -ne ($mode -ceq 'pass')){throw ('Canonical aggregate ignored prerequisite: '+$mode)}
+}
+""")
+
+    def test_canonical_report_preserves_actual_source_skips_and_workflow_profile(self):
+        self.assertIn("qualification_profile='windows_canonical_contracts_v1'", (ROOT / ".github/workflows/product-mcp.yml").read_text())
+        self.canonical_fragment_check(r"""
+$block=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.IfStatementAst] -and $n.Clauses[0].Item1.Extent.Text -ceq '$canonicalProfile' -and $n.Extent.Text -match '\$report.canonical_contracts'},$true))
+if($block.Count -ne 1){throw 'Expected actual final canonical report'}
+$canonicalProfile=$true;$canonicalQualified=$true;$results=@()
+foreach($entry in $canonical.packages){$body=New-CanonicalObservedBody $entry;$results+=@{canonical_contract_proof=(Get-CanonicalPackageProof $entry $body 0 $true)}}
+$report=[ordered]@{public_external_migration=@{}}
+Invoke-Expression $block[0].Extent.Text
+if($report.qualification_profile -cne 'windows_canonical_contracts_v1' -or $report.canonical_contracts.original_assertions_count -ne 31 -or
+ $report.canonical_contracts.executed_original_assertions_count -ne 26 -or $report.canonical_contracts.classified_original_assertions_count -ne 5 -or
+ $report.canonical_contracts.all_original_source_assertions_executed -ne $false -or $report.canonical_contracts.classified_skips.Count -ne 5 -or
+ @($report.canonical_contracts.classified_skips | Where-Object {$_.original_outcome -cne 'SKIP' -or $_.paired_outcome -cne 'PASS'}).Count -ne 0 -or
+ $report.canonical_contracts.all_admitted_windows_contracts_qualified -ne $true){throw 'Canonical report lost actual skip or observed counterpart provenance'}
+""")
+
     def test_public_migration_profile_requires_exact_public_and_resolver_inventory(self):
         document = self.public_migration_manifest()
         self.canonical_admission(document, "Canonical public source and SDK inputs")
@@ -649,9 +836,7 @@ Invoke-Expression $reportBlock[0].Extent.Text
 if($report.Count -ne 0){throw 'Public qualification fields changed a historical profile'}
 """)
 
-    def test_public_profile_keeps_incomplete_coverage_failure_and_workflow_selection(self):
-        self.assertIn("qualification_profile='windows_public_external_migration_v1'",
-                      (ROOT / ".github/workflows/product-mcp.yml").read_text())
+    def test_public_profile_keeps_incomplete_coverage_failure(self):
         self.launcher_fragment_check(r"""
 $failure=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -ceq '-not $qualificationComplete' -and $node.Extent.Text -match 'Canonical public migration coverage remains incomplete'},$true))
 if($failure.Count -ne 1){throw 'Expected preserved final incomplete coverage failure'}

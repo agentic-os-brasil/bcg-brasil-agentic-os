@@ -19,9 +19,6 @@ import (
 )
 
 func TestExternalOwnerAuthorityRequiresFreshEnrollment(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	o := externalFixture(t, "0.2.0")
 	sourceBrain := filepath.Join(o.SourceRoot, "brain")
 	if _, err := ownerctx.Initialize(sourceBrain); err != nil {
@@ -144,9 +141,6 @@ func TestExternalOwnerAuthorityRequiresFreshEnrollment(t *testing.T) {
 }
 
 func TestExternalOwnerControlsPreserveAuthoredNeighbors(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	for _, spelling := range []string{"canonical", "portable-case"} {
 		t.Run(spelling, func(t *testing.T) {
 			o := externalFixture(t, "0.2.0")
@@ -207,9 +201,6 @@ func TestExternalOwnerControlsPreserveAuthoredNeighbors(t *testing.T) {
 }
 
 func TestExternalOwnerObservationsRequireFreshAttestation(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	o := externalFixture(t, "0.2.0")
 	sourceBrain := filepath.Join(o.SourceRoot, "brain")
 	if _, err := ownerctx.Initialize(sourceBrain); err != nil {
@@ -280,9 +271,6 @@ func TestExternalOwnerObservationsRequireFreshAttestation(t *testing.T) {
 }
 
 func TestExternalCurrentBrainSurvivesLegacyEvolution(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	o := externalFixture(t, "0.2.0")
 	externalPut(t, o.SourceRoot, "data/profile/a.md", "old a")
 	externalPut(t, o.SourceRoot, "data/profile/b.md", "deleted b")
@@ -317,9 +305,6 @@ func TestExternalCurrentBrainSurvivesLegacyEvolution(t *testing.T) {
 }
 
 func TestExternalReviewedPlanCannotOmitOrRedirectSource(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	for _, change := range []string{"omit", "redirect"} {
 		t.Run(change, func(t *testing.T) {
 			o := externalFixture(t, "0.1.12")
@@ -344,9 +329,6 @@ func TestExternalReviewedPlanCannotOmitOrRedirectSource(t *testing.T) {
 }
 
 func TestExternalControlStagingNeverWritesInsideSource(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	o := externalFixture(t, "0.1.12")
 	o.SourceRoot = filepath.Join(o.UserHome, "brain")
 	o.ProductRoot = o.SourceRoot
@@ -376,9 +358,6 @@ func TestExternalControlStagingNeverWritesInsideSource(t *testing.T) {
 }
 
 func TestExternalPhysicalWriteSetAliasesRefuseBeforeEffects(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	for _, target := range []string{"home", "profile-control"} {
 		t.Run(target, func(t *testing.T) {
 			o := externalFixture(t, "0.1.12")
@@ -436,9 +415,6 @@ func TestExternalPhysicalWriteSetAliasesRefuseBeforeEffects(t *testing.T) {
 }
 
 func TestExternalPrivateControlDirectoriesRefuseWithoutRepair(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	for _, directory := range []string{"control", "attempt", "locator-staging"} {
 		t.Run(directory, func(t *testing.T) {
 			o := externalFixture(t, "0.1.12")
@@ -456,22 +432,14 @@ func TestExternalPrivateControlDirectoriesRefuseWithoutRepair(t *testing.T) {
 			if err = os.MkdirAll(name, 0700); err != nil {
 				t.Fatal(err)
 			}
-			if err = os.Chmod(o.UserHome, 0755); err != nil {
-				t.Fatal(err)
-			}
-			if err = os.Chmod(name, 0777); err != nil {
-				t.Fatal(err)
-			}
+			assertPublic := externalPublicControl(t, o.UserHome, name)
 			if _, err = zipmigration.PlanExternal(o); err == nil && directory != "attempt" {
 				t.Error("plan admitted nonprivate controls")
 			}
 			if status, err := zipmigration.ApplyExternal(p, externalDigest(t, p), nil); err == nil || status.Current {
 				t.Errorf("apply admitted nonprivate controls: %+v %v", status, err)
 			}
-			info, err := os.Stat(name)
-			if err != nil || info.Mode().Perm() != 0777 {
-				t.Fatal("unsafe control was repaired", err)
-			}
+			assertPublic()
 			for _, leaf := range []string{o.Home, filepath.Join(o.UserHome, ".maestro-home.json"), filepath.Join(o.UserHome, ".maestro-external-migration/apply.lock")} {
 				if _, err := os.Stat(leaf); !os.IsNotExist(err) {
 					t.Error("unsafe controls allowed first effect", leaf)
@@ -482,9 +450,6 @@ func TestExternalPrivateControlDirectoriesRefuseWithoutRepair(t *testing.T) {
 }
 
 func TestExternalHomeCannotOverlapProfilePublication(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	o := externalFixture(t, "0.1.12")
 	externalPut(t, o.SourceRoot, "data/profile/identity.md", "original")
 	p, err := zipmigration.PlanExternal(o)
@@ -506,9 +471,6 @@ func TestExternalHomeCannotOverlapProfilePublication(t *testing.T) {
 }
 
 func TestExternalMissingReservedProfileAliasesRefuseBeforeEffects(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	for _, reserved := range []string{".MAESTRO-EXTERNAL-MIGRATION", ".MAESTRO-HOME.JSON"} {
 		t.Run(reserved, func(t *testing.T) {
 			o := externalFixture(t, "0.1.12")
@@ -535,13 +497,15 @@ func TestExternalMissingReservedProfileAliasesRefuseBeforeEffects(t *testing.T) 
 }
 
 func TestExternalDistinctCaseSensitiveRootRemainsSupported(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	o := externalFixture(t, "0.1.12")
 	externalPut(t, o.SourceRoot, "data/profile/identity.md", "original")
 	o.Home = filepath.Join(filepath.Dir(o.SourceRoot), "SOURCE")
-	if _, err := os.Stat(o.Home); err == nil {
+	if alias, err := os.Stat(o.Home); err == nil {
+		source, sourceErr := os.Stat(o.SourceRoot)
+		if sourceErr != nil || !os.SameFile(alias, source) {
+			t.Fatal("case alias identity was not established", sourceErr)
+		}
+		t.Run("same-object-source-overlap", func(t *testing.T) { externalCaseAliasContract(t, o) })
 		t.Skip("filesystem aliases the source spelling")
 	} else if !os.IsNotExist(err) {
 		t.Fatal(err)
@@ -556,9 +520,6 @@ func TestExternalDistinctCaseSensitiveRootRemainsSupported(t *testing.T) {
 }
 
 func TestExternalRollbackRetainedPathsUseArchive(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	o := externalFixture(t, "0.1.12")
 	externalPut(t, o.SourceRoot, "data/workspaces/project/note.md", "retained namespace")
 	p, err := zipmigration.PlanExternal(o)
@@ -601,9 +562,6 @@ func TestExternalRollbackRetainedPathsUseArchive(t *testing.T) {
 }
 
 func TestExternalReservedAuthorityAliasesAreInactive(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	o := externalFixture(t, "0.2.0")
 	names := []string{"memory/workspaces/a/.ATTESTATION/capture-v2.key", "memory/.DREAM-REQUESTED", "ACCOUNTS/a/CASES/c/OWNER/MAESTRO/dispatch/current.json"}
 	for _, name := range names {
@@ -628,9 +586,6 @@ func TestExternalReservedAuthorityAliasesAreInactive(t *testing.T) {
 }
 
 func TestExternalProofIsSelfContainedAndStrict(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	o := externalFixture(t, "0.2.0")
 	externalPut(t, o.SourceRoot, "brain/owner/identity.md", "owner")
 	p, err := zipmigration.PlanExternal(o)
@@ -649,12 +604,8 @@ func TestExternalProofIsSelfContainedAndStrict(t *testing.T) {
 	}
 	// Retired roots can change independently after commit; inspection must not
 	// acquire identity or permission facts from either historical pathname.
-	if err = os.Symlink(o.SourceRoot+"-offline", o.SourceRoot); err != nil {
-		t.Fatal(err)
-	}
-	if err = os.Symlink(o.ProductRoot+"-offline", o.ProductRoot); err != nil {
-		t.Fatal(err)
-	}
+	externalDirectoryAlias(t, o.SourceRoot, o.SourceRoot+"-offline")
+	externalDirectoryAlias(t, o.ProductRoot, o.ProductRoot+"-offline")
 	status, err := zipmigration.InspectExternal(o.Home, p.AttemptID, digest)
 	if err != nil || !status.Current {
 		t.Fatalf("proof depends on original: %+v %v", status, err)
@@ -704,9 +655,6 @@ func TestExternalProofIsSelfContainedAndStrict(t *testing.T) {
 }
 
 func TestExternalForeignLocatorDoesNotRevokeOrMoveHome(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	o := externalFixture(t, "0.1.12")
 	externalPut(t, o.SourceRoot, "data/profile/note.md", "preserve")
 	p, err := zipmigration.PlanExternal(o)
@@ -740,9 +688,6 @@ func TestExternalForeignLocatorDoesNotRevokeOrMoveHome(t *testing.T) {
 }
 
 func TestExternalPreflightConflictsHaveNoProfileOrSourceEffects(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	for _, conflict := range []string{"populated", "foreign-locator", "hardlink-source", "alias-home", "stale-source", "intent-overlap"} {
 		t.Run(conflict, func(t *testing.T) {
 			o := externalFixture(t, "0.1.12")
@@ -779,9 +724,7 @@ func TestExternalPreflightConflictsHaveNoProfileOrSourceEffects(t *testing.T) {
 			case "foreign-locator":
 				externalPut(t, o.UserHome, ".maestro-home.json", "foreign selection")
 			case "alias-home":
-				if err = os.Symlink(o.SourceRoot, o.Home); err != nil {
-					t.Fatal(err)
-				}
+				externalDirectoryAlias(t, o.Home, o.SourceRoot)
 			case "stale-source":
 				externalPut(t, o.SourceRoot, "data/profile/identity.md", "new source revision")
 			}
@@ -804,9 +747,6 @@ func TestExternalPreflightConflictsHaveNoProfileOrSourceEffects(t *testing.T) {
 }
 
 func TestExternalConflictingPartialAndConcurrentAttemptStayOwned(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	o := externalFixture(t, "0.1.11")
 	externalPut(t, o.SourceRoot, "data/profile/note.md", "source")
 	p, err := zipmigration.PlanExternal(o)
@@ -864,9 +804,6 @@ func TestExternalWindowsUnreviewedDigestRefusesBeforeEffects(t *testing.T) {
 }
 
 func TestExternalRetirementIsFixedDenyOnlyAndInterruptedRollbackResumes(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	o := externalFixture(t, "0.1.12")
 	externalPut(t, o.SourceRoot, "data/profile/identity.md", "preserve")
 	if retired, err := zipmigration.RetiredExternalHome(o.UserHome, o.Home); err != nil || retired {
@@ -914,9 +851,6 @@ func TestExternalRetirementIsFixedDenyOnlyAndInterruptedRollbackResumes(t *testi
 }
 
 func TestExternalCaseAuthorityIsArchivedOutsideActiveReaders(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	o := externalFixture(t, "0.2.0")
 	for _, name := range []string{"accounts/a/cases/c/.maestro/daily-generation", "accounts/a/cases/c/memory/.dream-requested", "accounts/a/cases/c/owner/maestro/dispatch/current.json", "memory/workspaces/id/.attestation/capture-v2.key"} {
 		externalPut(t, o.SourceRoot, "brain/"+name, "historical authority")
@@ -945,9 +879,6 @@ func TestExternalCaseAuthorityIsArchivedOutsideActiveReaders(t *testing.T) {
 }
 
 func TestExternalInterruptionAndRollbackRetainNewWork(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	for _, phase := range []string{"prepared", "pending", "copying", "copied", "committed"} {
 		t.Run(phase, func(t *testing.T) {
 			o := externalFixture(t, "0.1.11")
@@ -1004,6 +935,7 @@ func TestExternalInterruptionAndRollbackRetainNewWork(t *testing.T) {
 
 func externalFixture(t *testing.T, version string) zipmigration.ExternalOptions {
 	t.Helper()
+	externalPlatformAccount(t)
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -1029,9 +961,6 @@ func externalDigest(t *testing.T, p zipmigration.ExternalPlan) string {
 }
 
 func TestExternalLegacyAuthoredStateAndInactiveAuthority(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
-	}
 	o := externalFixture(t, "0.1.12")
 	externalPut(t, o.SourceRoot, "data/profile/identity.md", "original identity\n")
 	externalPut(t, o.SourceRoot, "data/workspaces/project/note.md", "retained namespace\n")
@@ -1081,4 +1010,63 @@ func externalPut(t *testing.T, root, name, body string) {
 	if err := os.WriteFile(p, []byte(body), 0600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func externalCaseAliasContract(t *testing.T, options zipmigration.ExternalOptions) {
+	t.Helper()
+	selectedID, counterpartID := externalPlatformIdentity(t, options.Home), externalPlatformIdentity(t, options.SourceRoot)
+	if selectedID != counterpartID || options.Home == options.SourceRoot {
+		t.Fatal("selected source alias identity was not established")
+	}
+	sourceInfo, err := os.Stat(options.SourceRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity := filepath.Join(options.SourceRoot, "data/profile/identity.md")
+	beforeBody, err := os.ReadFile(identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeEntries, err := os.ReadDir(options.SourceRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseline := options
+	baseline.Home = filepath.Join(options.UserHome, ".maestro")
+	reviewed, err := zipmigration.PlanExternal(baseline)
+	if err != nil {
+		t.Fatal("ordinary migration positive control failed", err)
+	}
+	if plan, err := zipmigration.PlanExternal(options); err == nil {
+		if status, applyErr := zipmigration.ApplyExternal(plan, externalDigest(t, plan), nil); applyErr == nil || status.Current {
+			t.Error("case alias acquired source authority", applyErr)
+		}
+		t.Error("plan admitted physical source overlap")
+	}
+	reviewed.ExternalOptions = options
+	reviewed.ArchiveRoot = filepath.Join(filepath.Dir(options.Home), ".maestro-rollback-"+reviewed.AttemptID)
+	if status, err := zipmigration.ApplyExternal(reviewed, externalDigest(t, reviewed), nil); err == nil || status.Current {
+		t.Error("imported alias acquired source authority", err)
+	}
+	afterBody, err := os.ReadFile(identity)
+	if err != nil || !bytes.Equal(beforeBody, afterBody) {
+		t.Fatal("source alias refusal changed original bytes", err)
+	}
+	afterEntries, err := os.ReadDir(options.SourceRoot)
+	if err != nil || len(beforeEntries) != len(afterEntries) {
+		t.Fatal("source alias refusal changed original namespace", err)
+	}
+	afterInfo, err := os.Stat(options.SourceRoot)
+	if err != nil || !os.SameFile(sourceInfo, afterInfo) || externalPlatformIdentity(t, options.SourceRoot) != counterpartID {
+		t.Fatal("source alias refusal changed selected identity", err)
+	}
+	profile, err := os.ReadDir(options.UserHome)
+	if err != nil || len(profile) != 0 {
+		t.Fatal("source alias refusal changed the owner profile", err)
+	}
+	body, err := json.Marshal(map[string]any{"kind": "selected-directory-case-pair-v1", "scope": t.Name(), "selected": options.Home, "counterpart": options.SourceRoot, "selected_identity": selectedID, "counterpart_identity": counterpartID, "same_object": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("case_pair_evidence=%s", body)
 }
