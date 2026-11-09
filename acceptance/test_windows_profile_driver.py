@@ -665,6 +665,33 @@ if(-not $refused){throw 'Unsafe adapter admission accepted'}
                 changed["adapter_packages"][0][field] = replacement
                 check(changed, reason)
 
+    def test_adapter_desktop_children_are_closed_and_observed(self):
+        expected = ["unknown_private_file", "unknown_json_replaces_metadata", "missing_metadata", "duplicate_entry", "changed_mode", "changed_server", "changed_registry", "changed_binding", "inventory_hash", "inventory_extra_entry", "resource_identity", "noncanonical_metadata", "native_promotion", "wrong_target", "duplicate_json_key"]
+        source = (ROOT / "adapters/mcp/content_qualified_test.go").read_text().split("func TestContentDesktopPacketOracle(", 1)[1].split("\nfunc ", 1)[0]
+        self.assertEqual(re.findall(r'\{"([a-z_]+)", func', source), expected)
+        self.launcher_fragment_check(r"""
+$outer=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$null)
+$guard=@($outer.FindAll({param($n) $n -is [Management.Automation.Language.IfStatementAst] -and $n.Clauses[0].Item1.Extent.Text -ceq '$withAdapters' -and $n.Extent.Text -match 'Unknown adapter qualification profile'},$true))
+$requiredDeclaration=@($guard[0].FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq '$adapterRequired'},$true))
+Invoke-Expression $requiredDeclaration[0].Extent.Text
+$entry=[pscustomobject]@{name='mcp';required_tests=$adapterRequired.mcp;required_assertions=@()}
+$required=@($entry.required_tests); $assertions=@($required)
+$children=@($guard[0].FindAll({param($n) $n -is [Management.Automation.Language.IfStatementAst] -and $n.Clauses[0].Item1.Extent.Text -ceq '$entry.name -ceq ''mcp''' -and $n.Extent.Text -match 'TestCompiledClaudeHook/'},$true))
+if($children.Count -ne 1){throw 'Expected the actual closed adapter child declarations'}
+Invoke-Expression $children[0].Extent.Text
+$entry.required_assertions=$assertions
+""" + "$desktop=ConvertFrom-Json '" + json.dumps(expected) + "'\n" + r"""
+$actual=@($assertions|Where-Object{$_.StartsWith('TestContentDesktopPacketOracle/',[StringComparison]::Ordinal)}|ForEach-Object{$_.Substring('TestContentDesktopPacketOracle/'.Length)})
+if($actual.Count -ne 15 -or @((Compare-Object ($desktop|Sort-Object) ($actual|Sort-Object))).Count -ne 0 -or $assertions.Count -ne 36){throw 'Actual Desktop tamper children missing from the closed ledger'}
+$fn=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Get-AdapterPackageProof'},$true))
+Invoke-Expression $fn[0].Extent.Text
+$body=(@($assertions|ForEach-Object{'--- PASS: '+$_+' (0.01s)'}) -join "`n")
+if(-not (Get-AdapterPackageProof $entry $body 0).qualified){throw 'All actual Desktop and hook assertions were refused'}
+foreach($bad in @($body.Replace('--- PASS: TestContentDesktopPacketOracle/unknown_private_file (0.01s)',''),$body.Replace('TestContentDesktopPacketOracle/unknown_private_file','TestContentDesktopPacketOracle/new_unreviewed_child'),$body.Replace('TestContentDesktopPacketOracle/unknown_private_file','TestContentDesktopPacketOracle/Unknown_private_file'),$body.Replace('--- PASS: TestContentDesktopPacketOracle/unknown_private_file','--- SKIP: TestContentDesktopPacketOracle/unknown_private_file'),($body+"`n--- PASS: TestContentDesktopPacketOracle/unknown_private_file (0.01s)"))){
+ if((Get-AdapterPackageProof $entry $bad 0).qualified){throw 'Missing unknown skipped or duplicate Desktop child accepted'}
+}
+""")
+
     def test_adapter_host_exclusions_are_exact_and_covered_by_ordinary_manifest(self):
         workflow = (ROOT / ".github/workflows/product-mcp.yml").read_text()
         script = self.root / "adapter-host-skip.ps1"

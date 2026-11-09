@@ -193,6 +193,7 @@ if ($withManifest) {
             $assertions = @($required)
             if ($entry.name -ceq 'mcp') {
                 $assertions += @('root_removal_and_allowed_control', 'startup_read_only_and_current_context', 'malformed_event_and_size_fail_closed', 'paths_glob_regex_and_cross_case', 'namespace_and_predispatch', 'observations_retries_and_body_privacy', 'optional_prompt_identity_never_resets', 'concurrent_reservations_choose_one', 'private_alias_and_changed_binding', 'failed_observation_grants_no_child_authority', 'truncated_state_never_reinitializes', 'stop_recursion_has_no_completion_effect') | ForEach-Object { 'TestCompiledClaudeHook/' + $_ }
+                $assertions += @('unknown_private_file', 'unknown_json_replaces_metadata', 'missing_metadata', 'duplicate_entry', 'changed_mode', 'changed_server', 'changed_registry', 'changed_binding', 'inventory_hash', 'inventory_extra_entry', 'resource_identity', 'noncanonical_metadata', 'native_promotion', 'wrong_target', 'duplicate_json_key') | ForEach-Object { 'TestContentDesktopPacketOracle/' + $_ }
             }
             $entry | Add-Member -NotePropertyName required_assertions -NotePropertyValue $assertions -Force
         }
@@ -711,10 +712,10 @@ try {
             $required = @($Entry.required_tests)
             $assertions = @($Entry.required_assertions)
             $qualified = $ExitCode -eq 0 -and $required.Count -gt 0 -and $tops.Count -eq $required.Count -and
-                $assertions.Count -eq $observed.Count -and @((Compare-Object ($assertions | Sort-Object) ($observed.test | Sort-Object))).Count -eq 0 -and
+                $assertions.Count -eq $observed.Count -and @((Compare-Object ($assertions | Sort-Object) ($observed.test | Sort-Object) -CaseSensitive)).Count -eq 0 -and
                 @($observed.test | Sort-Object -Unique).Count -eq $observed.Count -and
                 @($observed | Where-Object { $_.outcome -cne 'PASS' -or $_.test.Split('/')[0] -cnotin $required }).Count -eq 0 -and
-                @((Compare-Object ($required | Sort-Object) ($tops.test | Sort-Object))).Count -eq 0
+                @((Compare-Object ($required | Sort-Object) ($tops.test | Sort-Object) -CaseSensitive)).Count -eq 0
             return [ordered]@{qualified=$qualified; required_tests=$required; required_assertions=$assertions; outcomes=$observed; observed_skips=@($observed | Where-Object { $_.outcome -ceq 'SKIP' } | ForEach-Object { $_.test })}
         }
         $manifest = Get-Content -LiteralPath $CanonicalManifest -Raw -Encoding UTF8 | ConvertFrom-Json

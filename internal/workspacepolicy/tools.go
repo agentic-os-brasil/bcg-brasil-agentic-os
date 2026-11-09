@@ -157,11 +157,11 @@ func checkGlob(root, base, pattern string) error {
 	if i := strings.IndexAny(prefix, "*?"); i >= 0 {
 		prefix = filepath.Dir(prefix[:i])
 	}
-	if err := checkPath(root, base, prefix); err != nil {
+	if err := checkPath(root, base, filepath.ToSlash(prefix)); err != nil {
 		return err
 	}
 	if !strings.ContainsAny(pattern, "*?") {
-		return checkPath(root, base, joined)
+		return checkPath(root, base, filepath.ToSlash(joined))
 	}
 	return searchTree(root, prefix)
 }
@@ -171,7 +171,7 @@ func checkGlob(root, base, pattern string) error {
 func searchTree(root, prefix string) error {
 	resolved, err := filepath.EvalSymlinks(prefix)
 	if errors.Is(err, os.ErrNotExist) {
-		return checkPath(root, root, prefix)
+		return checkPath(root, root, filepath.ToSlash(prefix))
 	}
 	if err != nil || !Within(root, resolved) {
 		return errors.New("search_scope_unavailable")
@@ -193,7 +193,7 @@ func searchTree(root, prefix string) error {
 		if count > 4096 {
 			return errors.New("glob_scope_too_large")
 		}
-		return checkPath(root, prefix, path)
+		return checkPath(root, prefix, filepath.ToSlash(path))
 	})
 	if errors.Is(err, os.ErrNotExist) {
 		return nil

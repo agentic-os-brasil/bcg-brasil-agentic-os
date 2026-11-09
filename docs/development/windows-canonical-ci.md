@@ -126,7 +126,8 @@ is excluded from the distributed product.
 eight-package canonical profile. It binds the complete inventories and hashes of
 the MCP adapter and command test executables, then runs eleven named positive
 SDK, compiled-server, packet, hook and initialization journeys under the same
-actual non-elevated account. Each required parent and every observed child must
+actual non-elevated account. The closed ledger has38 assertions: eleven parents,
+twelve hook children and fifteen Desktop tamper children. Each assertion must
 PASS exactly once; missing, duplicate, unknown, failed or skipped outcomes refuse
 this companion qualification. The canonical31-row ledger,30 prerequisites and
 independent compatibility witnesses retain their original meanings.

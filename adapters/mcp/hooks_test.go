@@ -35,6 +35,16 @@ func hookDirectoryAlias(t *testing.T, alias, target string) {
 	}
 }
 
+func removeHookDirectoryAlias(t *testing.T, alias string) {
+	t.Helper()
+	if err := os.Remove(alias); err != nil {
+		t.Fatal("remove synthetic directory alias", err)
+	}
+	if _, err := os.Lstat(alias); !os.IsNotExist(err) {
+		t.Fatal("synthetic directory alias remains after removal", err)
+	}
+}
+
 func newHookFixture(t *testing.T, binary string) hookFixture {
 	t.Helper()
 	base := physicalTempDir(t)
@@ -214,17 +224,20 @@ func TestCompiledClaudeHook(t *testing.T) {
 		}
 		hookDeny(t, f, toolFields("Write", "outside", map[string]any{"file_path": filepath.Join(outside, "new.md")}))
 		hookDeny(t, f, toolFields("Write", "secondary", map[string]any{"file_path": "safe.md", "path": outside}))
-		os.Remove(filepath.Join(f.work, "alias"))
+		removeHookDirectoryAlias(t, filepath.Join(f.work, "alias"))
 		nested := filepath.Join(f.work, "nested")
 		os.Mkdir(nested, 0700)
 		hookDirectoryAlias(t, filepath.Join(nested, "escape"), outside)
 		hookDirectoryAlias(t, filepath.Join(f.work, "internal-alias"), nested)
 		hookDeny(t, f, toolFields("Glob", "nested-alias", map[string]any{"pattern": "internal-alias/**/*.md"}))
-		os.Remove(filepath.Join(nested, "escape"))
-		os.Remove(filepath.Join(f.work, "internal-alias"))
+		removeHookDirectoryAlias(t, filepath.Join(nested, "escape"))
+		removeHookDirectoryAlias(t, filepath.Join(f.work, "internal-alias"))
 
 		hookAllow(t, f, toolFields("Glob", "local", map[string]any{"pattern": "*.md"}))
 		hookAllow(t, f, toolFields("Grep", "regex", map[string]any{"pattern": `../../[A-Z]+/.*`}))
+		hookDeny(t, f, toolFields("Glob", "raw-backslash", map[string]any{"pattern": `nested\*.md`}))
+		hookDeny(t, f, toolFields("Read", "raw-read-backslash", map[string]any{"file_path": `nested\note.md`}))
+		hookDeny(t, f, toolFields("Grep", "raw-search-backslash", map[string]any{"pattern": "text", "path": `nested\child`}))
 
 		accounts := filepath.Join(f.work, "brain/accounts")
 		os.MkdirAll(filepath.Join(accounts, "acme/cases/one"), 0700)
