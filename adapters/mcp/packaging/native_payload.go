@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -12,7 +11,6 @@ import (
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	baseagents "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/agents"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
@@ -178,14 +176,13 @@ func buildNativeCandidate(o Options, c NativeCapability, hooks []byte) error {
 // Preserve the original closed inventory and bind the additional native bytes.
 // Candidate instrumentation is local engineering input, never native authority.
 func nativeRequiredFiles(root, format string, target Target) (map[string][]byte, error) {
-	f, err := scheduler.OpenRegularFile(filepath.Join(root, nativeManifestName))
+	return nativeRequiredPayload(directoryPacketSource(root).read, format, target)
+}
+
+func nativeRequiredPayload(read func(string, int64) ([]byte, error), format string, target Target) (map[string][]byte, error) {
+	body, err := read(nativeManifestName, 1<<20)
 	if err != nil {
 		return nil, err
-	}
-	body, readErr := io.ReadAll(io.LimitReader(f, (1<<20)+1))
-	closeErr := f.Close()
-	if readErr != nil || closeErr != nil {
-		return nil, errors.Join(readErr, closeErr)
 	}
 	if len(body) > 1<<20 || packetJSON(body) != nil {
 		return nil, errors.New("native diagnostic bound or schema")
@@ -241,13 +238,8 @@ func nativeRequiredFiles(root, format string, target Target) (map[string][]byte,
 		}
 		files[nativeManifestName] = body
 	} else {
-		hook, err := scheduler.OpenRegularFile(filepath.Join(root, "hooks/hooks.json"))
-		if err != nil {
-			return nil, err
-		}
-		hooks, re := io.ReadAll(io.LimitReader(hook, (64<<10)+1))
-		ce := hook.Close()
-		if re != nil || ce != nil || len(hooks) > 64<<10 || packetJSON(hooks) != nil || digest(hooks) != p.HooksSHA256 {
+		hooks, err := read("hooks/hooks.json", 64<<10)
+		if err != nil || packetJSON(hooks) != nil || digest(hooks) != p.HooksSHA256 {
 			return nil, errors.New("candidate hook profile changed")
 		}
 		files["hooks/hooks.json"] = hooks

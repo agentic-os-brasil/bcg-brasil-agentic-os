@@ -28,16 +28,18 @@ var (
 )
 
 type Manifest struct {
-	SchemaVersion int             `json:"schema_version"`
-	Product       string          `json:"product"`
-	Release       string          `json:"release"`
-	Channel       string          `json:"channel"`
-	Issuer        Issuer          `json:"issuer"`
-	CLI           CLIComponent    `json:"cli"`
-	Bundle        BundleComponent `json:"bundle"`
-	Artifacts     []Artifact      `json:"artifacts"`
-	Migrations    []Migration     `json:"migrations"`
-	ReleaseNotes  ReleaseNotes    `json:"release_notes"`
+	SchemaVersion int               `json:"schema_version"`
+	Product       string            `json:"product"`
+	Release       string            `json:"release"`
+	Channel       string            `json:"channel"`
+	Issuer        Issuer            `json:"issuer"`
+	CLI           CLIComponent      `json:"cli"`
+	Server        ServerComponent   `json:"server,omitempty"`
+	Delivery      DeliveryComponent `json:"delivery,omitempty"`
+	Bundle        BundleComponent   `json:"bundle"`
+	Artifacts     []Artifact        `json:"artifacts"`
+	Migrations    []Migration       `json:"migrations"`
+	ReleaseNotes  ReleaseNotes      `json:"release_notes"`
 }
 
 type Issuer struct {
@@ -51,12 +53,14 @@ type CLIComponent struct {
 }
 
 type BundleComponent struct {
-	Version       string `json:"version"`
-	CompatibleCLI string `json:"compatible_cli"`
+	Version          string `json:"version"`
+	CompatibleCLI    string `json:"compatible_cli,omitempty"`
+	CompatibleServer string `json:"compatible_server,omitempty"`
 }
 
 type Artifact struct {
 	Kind         string `json:"kind"`
+	Adapter      string `json:"adapter,omitempty"`
 	OS           string `json:"os"`
 	Arch         string `json:"arch"`
 	Name         string `json:"name"`
@@ -107,6 +111,9 @@ func Parse(reader io.Reader) (Manifest, error) {
 			return Manifest{}, errors.New("decode release manifest: multiple JSON values")
 		}
 		return Manifest{}, fmt.Errorf("decode release manifest trailing content: %w", err)
+	}
+	if err := validateWireFields(body, manifest.SchemaVersion); err != nil {
+		return Manifest{}, err
 	}
 	if err := manifest.Validate(); err != nil {
 		return Manifest{}, err
@@ -212,7 +219,8 @@ func ValidateSchemaFile(path string) error {
 	if schema["$schema"] != "https://json-schema.org/draft/2020-12/schema" {
 		return errors.New("release manifest schema must use JSON Schema draft 2020-12")
 	}
-	if schema["$id"] != "urn:bcg-brasil-agentic-os:schema:release-manifest:v1" {
+	modernSchema := schema["$id"] == "urn:bcg-brasil-agentic-os:schema:release-manifest:v2"
+	if schema["$id"] != "urn:bcg-brasil-agentic-os:schema:release-manifest:v1" && !modernSchema {
 		return errors.New("release manifest schema has an unexpected identifier")
 	}
 	if schema["type"] != "object" || schema["additionalProperties"] != false {
@@ -223,6 +231,9 @@ func ValidateSchemaFile(path string) error {
 		return errors.New("release manifest schema must declare required fields")
 	}
 	expected := []string{"schema_version", "product", "release", "channel", "issuer", "cli", "bundle", "artifacts", "migrations", "release_notes"}
+	if modernSchema {
+		expected = []string{"schema_version", "product", "release", "channel", "issuer", "bundle", "artifacts", "migrations", "release_notes", "server", "delivery"}
+	}
 	if len(required) != len(expected) {
 		return errors.New("release manifest schema required fields are incomplete")
 	}
@@ -301,7 +312,7 @@ func ensureSingleJSONValue(decoder *json.Decoder) error {
 }
 
 func (manifest Manifest) Validate() error {
-	if manifest.SchemaVersion != 1 {
+	if manifest.SchemaVersion != 1 && manifest.SchemaVersion != 2 {
 		return fmt.Errorf("unsupported release manifest schema version %d", manifest.SchemaVersion)
 	}
 	if manifest.Product != "maestro" {
@@ -316,7 +327,7 @@ func (manifest Manifest) Validate() error {
 	if !identifierPattern.MatchString(manifest.Issuer.ID) || !identifierPattern.MatchString(manifest.Issuer.KeyID) {
 		return errors.New("issuer id and key_id must be bounded identifiers")
 	}
-	if err := validateComponents(manifest.CLI, manifest.Bundle); err != nil {
+	if err := manifest.validateComponents(); err != nil {
 		return err
 	}
 	if err := validateArtifacts(manifest); err != nil {
@@ -369,8 +380,20 @@ func validateArtifacts(manifest Manifest) error {
 	platforms := map[string]bool{}
 	bundleCount := 0
 	for _, artifact := range manifest.Artifacts {
-		if artifact.Kind != "cli" && artifact.Kind != "bundle" && artifact.Kind != "runtime_pack" {
+		if (manifest.Modern() && artifact.Kind != "mcp_server" && artifact.Kind != "bundle" && artifact.Kind != "runtime_pack") ||
+			(!manifest.Modern() && artifact.Kind != "cli" && artifact.Kind != "bundle" && artifact.Kind != "runtime_pack") {
 			return fmt.Errorf("unsupported artifact kind %q", artifact.Kind)
+		}
+		if manifest.Modern() {
+			if artifact.Kind == "runtime_pack" {
+				if artifact.Adapter != "docling" || artifact.OS == "any" || artifact.Arch == "any" {
+					return errors.New("modern runtime requires docling and an exact target")
+				}
+			} else if artifact.Adapter != "" {
+				return errors.New("adapter only belongs to runtime_pack")
+			}
+		} else if artifact.Adapter != "" {
+			return errors.New("legacy artifact cannot carry adapter")
 		}
 		if err := validateArtifactPlatform(artifact); err != nil {
 			return err
@@ -398,6 +421,10 @@ func validateArtifacts(manifest Manifest) error {
 		signatures[artifact.SignatureRef] = true
 		platforms[platform] = true
 		switch artifact.Kind {
+		case "mcp_server":
+			if !strings.Contains(artifact.Name, manifest.Server.Version) {
+				return errors.New("server artifact name must contain server version")
+			}
 		case "cli":
 			if !strings.Contains(artifact.Name, manifest.CLI.Version) {
 				return errors.New("CLI artifact name must contain the CLI version")
@@ -407,6 +434,21 @@ func validateArtifacts(manifest Manifest) error {
 			if !strings.Contains(artifact.Name, manifest.Bundle.Version) {
 				return errors.New("bundle artifact name must contain the bundle version")
 			}
+		}
+	}
+	if manifest.Modern() {
+		servers := 0
+		for _, a := range manifest.Artifacts {
+			if a.Kind == "mcp_server" {
+				servers++
+			}
+		}
+		if servers == 0 {
+			return errors.New("modern release requires a real MCP server artifact")
+		}
+		digest, err := manifest.ClientInputsDigest()
+		if err != nil || digest != manifest.Delivery.ClientInputsSHA256 {
+			return errors.New("modern client input digest mismatch")
 		}
 	}
 	if bundleCount != 1 {
@@ -448,7 +490,15 @@ func validateMigrations(manifest Manifest) error {
 		seen[migration.ID] = true
 		var target string
 		switch migration.Component {
+		case "mcp_server":
+			if !manifest.Modern() {
+				return errors.New("legacy migration cannot target mcp_server")
+			}
+			target = manifest.Server.Version
 		case "cli":
+			if manifest.Modern() {
+				return errors.New("modern migration cannot target cli")
+			}
 			target = manifest.CLI.Version
 		case "bundle":
 			target = manifest.Bundle.Version

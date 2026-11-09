@@ -40,9 +40,46 @@ type packetInventory struct {
 
 // PacketStatus is integrity evidence only, never publisher or owner authority.
 type PacketStatus struct {
-	Files   int    `json:"files"`
-	Format  string `json:"format"`
-	Version string `json:"version"`
+	Files           int    `json:"files"`
+	Format          string `json:"format"`
+	Version         string `json:"version"`
+	Target          Target `json:"target"`
+	ServerSHA256    string `json:"server_sha256"`
+	RegistrySHA256  string `json:"registry_sha256,omitempty"`
+	InventorySHA256 string `json:"inventory_sha256"`
+	NativeMode      string `json:"native_mode"`
+}
+
+type packetSource struct {
+	read       func(string, int64) ([]byte, error)
+	scan       func() ([]packetFile, error)
+	exactModes bool
+}
+
+func directoryPacketSource(root string) packetSource {
+	return packetSource{
+		read: func(name string, limit int64) ([]byte, error) {
+			file, err := scheduler.OpenRegularFile(filepath.Join(root, filepath.FromSlash(name)))
+			if err != nil {
+				return nil, err
+			}
+			if err := scheduler.ValidateSingleLink(file); err != nil {
+				file.Close()
+				return nil, err
+			}
+			body, readErr := io.ReadAll(io.LimitReader(file, limit+1))
+			closeErr := file.Close()
+			if readErr != nil || closeErr != nil {
+				return nil, errors.Join(readErr, closeErr)
+			}
+			if int64(len(body)) > limit {
+				return nil, errors.New("packet read bound")
+			}
+			return body, nil
+		},
+		scan:       func() ([]packetFile, error) { return scanPacket(root) },
+		exactModes: runtime.GOOS != "windows",
+	}
 }
 
 func packetPath(name string) bool {
@@ -82,6 +119,10 @@ func scanPacket(root string) ([]packetFile, error) {
 		}
 		file, err := scheduler.OpenRegularFile(path)
 		if err != nil {
+			return err
+		}
+		if err := scheduler.ValidateSingleLink(file); err != nil {
+			file.Close()
 			return err
 		}
 		info, err := file.Stat()
@@ -146,18 +187,14 @@ func writeInventory(root, format, version, platform, server string) error {
 // ValidatePacket reads the complete emitted file set without initialization or
 // repair. The inventory excludes itself; it is not a signed trust root.
 func ValidatePacket(root string) (PacketStatus, error) {
+	return validatePacket(directoryPacketSource(root))
+}
+
+func validatePacket(source packetSource) (PacketStatus, error) {
 	var status PacketStatus
-	manifest, err := scheduler.OpenRegularFile(filepath.Join(root, InventoryName))
+	body, err := source.read(InventoryName, 1<<20)
 	if err != nil {
 		return status, err
-	}
-	body, readErr := io.ReadAll(io.LimitReader(manifest, (1<<20)+1))
-	closeErr := manifest.Close()
-	if readErr != nil || closeErr != nil {
-		return status, errors.Join(readErr, closeErr)
-	}
-	if len(body) > 1<<20 {
-		return status, errors.New("packet inventory bound")
 	}
 	if err := packetJSON(body); err != nil {
 		return status, err
@@ -194,11 +231,15 @@ func ValidatePacket(root string) (PacketStatus, error) {
 	if err != nil {
 		return status, err
 	}
-	_, target, err := readNativeBinary(filepath.Join(root, filepath.FromSlash(server)))
+	serverBody, err := source.read(server, 128<<20)
+	if err != nil {
+		return status, err
+	}
+	_, target, err := inspectNativeBinary(serverBody)
 	if err != nil || target.Platform() != inventory.Platform {
 		return status, errors.New("packet executable target changed")
 	}
-	native, err := nativeRequiredFiles(root, inventory.Format, target)
+	native, err := nativeRequiredPayload(source.read, inventory.Format, target)
 	if err != nil {
 		return status, err
 	}
@@ -224,7 +265,7 @@ func ValidatePacket(root string) (PacketStatus, error) {
 			}
 		}
 	}
-	actual, err := scanPacket(root)
+	actual, err := source.scan()
 	if err != nil {
 		return status, err
 	}
@@ -233,11 +274,20 @@ func ValidatePacket(root string) (PacketStatus, error) {
 	}
 	for _, file := range actual {
 		want, ok := expected[file.Path]
-		if !ok || want.SHA256 != file.SHA256 || want.Bytes != file.Bytes || (runtime.GOOS != "windows" && want.Mode != file.Mode) {
+		if !ok || want.SHA256 != file.SHA256 || want.Bytes != file.Bytes || (source.exactModes && want.Mode != file.Mode) {
 			return status, fmt.Errorf("packet asset changed: %s", file.Path)
 		}
 	}
-	return PacketStatus{Files: len(actual), Format: inventory.Format, Version: inventory.Version}, nil
+	status = PacketStatus{Files: len(actual), Format: inventory.Format, Version: inventory.Version, Target: target, ServerSHA256: digest(serverBody), InventorySHA256: digest(body)}
+	var diagnostic nativePacketManifest
+	if err := json.Unmarshal(native[nativeManifestName], &diagnostic); err != nil {
+		return PacketStatus{}, err
+	}
+	status.NativeMode = diagnostic.Mode
+	if registry, found := expected["managed/trust/release-authority-registry.json"]; found {
+		status.RegistrySHA256 = registry.SHA256
+	}
+	return status, nil
 }
 
 // Reject ambiguous inventory objects before the typed closed-schema decode.

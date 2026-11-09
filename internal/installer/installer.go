@@ -23,7 +23,10 @@ import (
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processwait"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/userlevel"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
@@ -88,6 +91,7 @@ type LocalBetaPins struct {
 // come from the same immutable release package. AuthorityRegistry is the
 // public registry that the seeded bootstrapper is compiled to pin.
 type Options struct {
+	UserHome           string
 	ReleaseDir         string
 	Bootstrapper       string
 	AuthorityRegistry  string
@@ -106,23 +110,30 @@ type Options struct {
 // Plan is the result shown by the wizard before it allows the one install
 // confirmation. No filesystem mutation happens while producing a Plan.
 type Plan struct {
-	Release             string `json:"release"`
-	Channel             string `json:"channel"`
-	TargetOS            string `json:"target_os"`
-	TargetArch          string `json:"target_arch"`
-	ManagedRoot         string `json:"managed_root"`
-	DataRoot            string `json:"data_root"`
-	ReleaseDir          string `json:"release_dir"`
-	Bootstrapper        string `json:"bootstrapper"`
-	AuthorityRegistry   string `json:"authority_registry"`
-	ManifestSHA256      string `json:"manifest_sha256"`
-	RegistrySHA256      string `json:"registry_sha256"`
-	BootstrapperSHA256  string `json:"bootstrapper_sha256"`
-	BootstrapperVersion string `json:"bootstrapper_version"`
-	ReleaseIssuer       string `json:"release_issuer"`
-	ReleaseKeyID        string `json:"release_key_id"`
-	NativeTrustMode     string `json:"native_trust_mode"`
-	PlanDigest          string `json:"plan_digest"`
+	UserHome             string                        `json:"user_home,omitempty"`
+	Server               *installtx.ExecutableIdentity `json:"server,omitempty"`
+	Profile              string                        `json:"profile,omitempty"`
+	ServerVersion        string                        `json:"server_version,omitempty"`
+	InstallerProtocol    string                        `json:"installer_protocol,omitempty"`
+	ClientInputsSHA256   string                        `json:"client_inputs_sha256,omitempty"`
+	EmbeddedInputsSHA256 string                        `json:"embedded_inputs_sha256,omitempty"`
+	Release              string                        `json:"release"`
+	Channel              string                        `json:"channel"`
+	TargetOS             string                        `json:"target_os"`
+	TargetArch           string                        `json:"target_arch"`
+	ManagedRoot          string                        `json:"managed_root"`
+	DataRoot             string                        `json:"data_root"`
+	ReleaseDir           string                        `json:"release_dir"`
+	Bootstrapper         string                        `json:"bootstrapper"`
+	AuthorityRegistry    string                        `json:"authority_registry"`
+	ManifestSHA256       string                        `json:"manifest_sha256"`
+	RegistrySHA256       string                        `json:"registry_sha256"`
+	BootstrapperSHA256   string                        `json:"bootstrapper_sha256"`
+	BootstrapperVersion  string                        `json:"bootstrapper_version"`
+	ReleaseIssuer        string                        `json:"release_issuer"`
+	ReleaseKeyID         string                        `json:"release_key_id"`
+	NativeTrustMode      string                        `json:"native_trust_mode"`
+	PlanDigest           string                        `json:"plan_digest"`
 }
 
 // Result is the durable handoff summary returned after bootstrapper success.
@@ -159,6 +170,9 @@ type recoveryRecord struct {
 }
 
 type seedStatus struct {
+	Component               string `json:"component,omitempty"`
+	Protocol                string `json:"protocol,omitempty"`
+	InstallerVersion        string `json:"installer_version,omitempty"`
 	SchemaVersion           int    `json:"schema_version"`
 	Product                 string `json:"product"`
 	BootstrapperVersion     string `json:"bootstrapper_version"`
@@ -226,7 +240,21 @@ func Prepare(options Options) (Plan, releaseverify.VerifiedRelease, error) {
 	if err != nil {
 		return Plan{}, releaseverify.VerifiedRelease{}, fmt.Errorf("verify signed release: %w", err)
 	}
-	if err := validateBootstrapperName(options.Bootstrapper, verified.Manifest.Release, options.TargetOS, options.TargetArch); err != nil {
+	if verified.Manifest.Modern() {
+		if err := validateModernCustody(options); err != nil {
+			return Plan{}, releaseverify.VerifiedRelease{}, err
+		}
+		found := false
+		for _, artifact := range verified.Manifest.Artifacts {
+			if artifact.Kind == "mcp_server" && artifact.OS == options.TargetOS && artifact.Arch == options.TargetArch {
+				found = true
+			}
+		}
+		if !found {
+			return Plan{}, releaseverify.VerifiedRelease{}, errors.New("modern release does not support this exact target")
+		}
+	}
+	if err := validateSeedName(options.Bootstrapper, verified.Manifest, options.TargetOS, options.TargetArch); err != nil {
 		return Plan{}, releaseverify.VerifiedRelease{}, err
 	}
 	if err := validateRegular(options.Bootstrapper, maxBootstrapperBytes); err != nil {
@@ -255,10 +283,13 @@ func Prepare(options Options) (Plan, releaseverify.VerifiedRelease, error) {
 		if seedErr != nil {
 			return Plan{}, releaseverify.VerifiedRelease{}, seedErr
 		}
-		if !seedStatusMatches(status, verified.Manifest.Release, registryDigest) {
+		if !seedMatchesManifest(status, verified.Manifest, registryDigest) {
 			return Plan{}, releaseverify.VerifiedRelease{}, errors.New("bootstrapper seed does not bind this release and authority registry")
 		}
 		bootstrapperVersion = status.BootstrapperVersion
+		if verified.Manifest.Modern() {
+			bootstrapperVersion = status.InstallerVersion
+		}
 	}
 	plan := Plan{
 		Release:             verified.Manifest.Release,
@@ -278,6 +309,19 @@ func Prepare(options Options) (Plan, releaseverify.VerifiedRelease, error) {
 		ReleaseKeyID:        verified.Manifest.Issuer.KeyID,
 		NativeTrustMode:     string(options.NativeTrustMode),
 	}
+	if verified.Manifest.Modern() {
+		plan.UserHome = options.UserHome
+		plan.Profile = verified.Manifest.Delivery.Profile
+		for _, a := range verified.Manifest.Artifacts {
+			if a.Kind == "mcp_server" && a.OS == options.TargetOS && a.Arch == options.TargetArch {
+				plan.Server = &installtx.ExecutableIdentity{Version: verified.Manifest.Server.Version, Protocol: verified.Manifest.Server.Protocol, CompatibleBundle: verified.Manifest.Server.CompatibleBundle, CompatibleServer: verified.Manifest.Bundle.CompatibleServer, EmbeddedInputsSHA256: verified.Manifest.Server.EmbeddedInputsSHA256, ArtifactName: a.Name, SHA256: a.SHA256, Size: a.Size}
+			}
+		}
+		plan.ServerVersion = verified.Manifest.Server.Version
+		plan.InstallerProtocol = verified.Manifest.Delivery.InstallerProtocol
+		plan.ClientInputsSHA256 = verified.Manifest.Delivery.ClientInputsSHA256
+		plan.EmbeddedInputsSHA256 = verified.Manifest.Server.EmbeddedInputsSHA256
+	}
 	plan.PlanDigest = PlanDigest(plan)
 	return plan, verified, nil
 }
@@ -294,6 +338,9 @@ func Install(ctx context.Context, options Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	if plan.Profile != "" && options.ExpectedPlanDigest == "" {
+		return Result{}, errors.New("modern installation requires exact review confirmation")
+	}
 	if options.ExpectedPlanDigest != "" && options.ExpectedPlanDigest != plan.PlanDigest {
 		return Result{}, errors.New("verified release changed since confirmation")
 	}
@@ -304,21 +351,71 @@ func Install(ctx context.Context, options Options) (Result, error) {
 	if preparation.Existing != nil {
 		return *preparation.Existing, nil
 	}
-	created := false
-	cleanup := func() {
-		if created {
-			_ = os.RemoveAll(plan.ManagedRoot)
+	// Claim a new root exclusively. An existing empty destination is preserved;
+	// a concurrent installer cannot inherit this invocation's cleanup authority.
+	if err := os.MkdirAll(filepath.Dir(plan.ManagedRoot), 0700); err != nil {
+		return Result{}, err
+	}
+	if err := os.Mkdir(plan.ManagedRoot, 0700); err != nil {
+		return Result{}, fmt.Errorf("managed root was concurrently claimed or already exists; preserved: %w", err)
+	}
+	rootIdentity, err := os.Lstat(plan.ManagedRoot)
+	if err != nil {
+		return Result{}, err
+	}
+	if err := scheduler.EnsurePrivateDirectory(plan.ManagedRoot); err != nil {
+		_ = os.Remove(plan.ManagedRoot)
+		return Result{}, err
+	}
+	owner := installationOwner{SchemaVersion: 1, PID: os.Getpid(), PlanDigest: plan.PlanDigest}
+	ownerBody, err := json.Marshal(owner)
+	if err != nil {
+		return Result{}, err
+	}
+	ownerPath := filepath.Join(plan.ManagedRoot, installationOwnerName)
+	if err := scheduler.WriteNewPrivateFile(ownerPath, ownerBody); err != nil {
+		return Result{}, err
+	}
+	defer func() {
+		if current, err := os.Lstat(plan.ManagedRoot); err != nil || !os.SameFile(rootIdentity, current) {
+			return
 		}
+		if current, err := scheduler.ReadPrivateStateFile(ownerPath, 1024); err == nil && bytes.Equal(current, ownerBody) {
+			_ = os.Remove(ownerPath)
+		}
+		_ = os.Remove(plan.ManagedRoot) // only an empty directory can be removed
+	}()
+	copied := map[string]os.FileInfo{}
+	cleanup := func() {
+		if current, err := os.Lstat(plan.ManagedRoot); err != nil || !os.SameFile(rootIdentity, current) {
+			return
+		}
+		removeExact := func(path, expected string) {
+			original := copied[path]
+			current, err := os.Lstat(path)
+			if original == nil || err != nil || !os.SameFile(original, current) || !current.Mode().IsRegular() {
+				return
+			}
+			if actual, err := fileSHA256(path); err == nil && actual == expected {
+				_ = os.Remove(path)
+			}
+		}
+		removeExact(seedPath(plan.ManagedRoot, plan.TargetOS, plan.Profile), plan.BootstrapperSHA256)
+		removeExact(filepath.Join(plan.ManagedRoot, "trust", "release-authority-registry.json"), plan.RegistrySHA256)
+		_ = os.Remove(filepath.Join(plan.ManagedRoot, "trust"))
 	}
 	if err := os.MkdirAll(filepath.Join(plan.ManagedRoot, "trust"), 0o700); err != nil {
 		return Result{}, err
 	}
-	created = true
 	if err := copyRegular(plan.AuthorityRegistry, filepath.Join(plan.ManagedRoot, "trust", "release-authority-registry.json"), 0o600); err != nil {
 		cleanup()
 		return Result{}, err
 	}
+	copied[filepath.Join(plan.ManagedRoot, "trust", "release-authority-registry.json")], _ = os.Lstat(filepath.Join(plan.ManagedRoot, "trust", "release-authority-registry.json"))
 	bootstrapperName := "bcgos-bootstrap"
+	if plan.Profile != "" {
+		bootstrapperName = "maestro-install"
+	}
 	if plan.TargetOS == "windows" {
 		bootstrapperName += ".exe"
 	}
@@ -327,6 +424,7 @@ func Install(ctx context.Context, options Options) (Result, error) {
 		cleanup()
 		return Result{}, err
 	}
+	copied[installedBootstrapper], _ = os.Lstat(installedBootstrapper)
 	installedRegistry := filepath.Join(plan.ManagedRoot, "trust", "release-authority-registry.json")
 	installedDigest, err := fileSHA256(installedRegistry)
 	if err != nil || installedDigest != plan.RegistrySHA256 {
@@ -349,18 +447,26 @@ func Install(ctx context.Context, options Options) (Result, error) {
 		return Result{}, fmt.Errorf("installed bootstrapper trust check: %w", err)
 	}
 	status, err := readSeedStatus(ctx, installedBootstrapper, runCommand(options.Run))
-	if err != nil || !seedStatusMatches(status, plan.Release, plan.RegistrySHA256) {
+	if err != nil || !seedMatchesPlan(status, plan) {
 		cleanup()
-		if err == nil {
-			err = errors.New("installed bootstrapper seed binding changed during staging")
+		if err != nil {
+			return Result{}, fmt.Errorf("installed bootstrapper seed binding changed during staging: %w", err)
 		}
-		return Result{}, err
+		return Result{}, errors.New("installed bootstrapper seed binding changed during staging")
 	}
 	run := options.Run
 	if run == nil {
 		run = execCommand
 	}
-	output, err := run(ctx, installedBootstrapper, "install", "--verified-directory", plan.ReleaseDir, "--data-root", plan.DataRoot)
+	arguments := []string{"install", "--verified-directory", plan.ReleaseDir, "--data-root", plan.DataRoot}
+	if plan.Profile != "" {
+		body, err := json.Marshal(plan)
+		if err != nil {
+			return Result{}, err
+		}
+		arguments = []string{"install", "--confirmed-plan", string(body), "--review-digest", plan.PlanDigest, "--confirm"}
+	}
+	output, err := run(ctx, installedBootstrapper, arguments...)
 	if err != nil {
 		if stateExists(plan.DataRoot) {
 			recovery, recoveryErr := quarantineInterruptedInstall(plan, "bootstrapper_failed_after_state", true)
@@ -373,15 +479,15 @@ func Install(ctx context.Context, options Options) (Result, error) {
 		return Result{}, fmt.Errorf("bootstrapper installation failed: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	cliName := "bcgos"
+	if plan.Profile != "" {
+		cliName = "maestro-mcp"
+	}
 	if plan.TargetOS == "windows" {
 		cliName += ".exe"
 	}
 	cliPath := filepath.Join(plan.ManagedRoot, "bin", cliName)
-	versionOutput, err := run(ctx, cliPath, "version")
-	if err != nil || strings.TrimSpace(string(versionOutput)) != "bcgos "+plan.Release {
-		if err == nil {
-			err = errors.New("installed CLI reported an unexpected version")
-		}
+	err = checkInstalledExecutable(ctx, run, plan, cliPath)
+	if err != nil {
 		recovery, recoveryErr := quarantineInterruptedInstall(plan, "post_activation_diagnostic_failed", true)
 		if recoveryErr != nil {
 			return Result{}, fmt.Errorf("installed CLI final diagnostic failed after activation; coherent installation preserved at %s and was not reported ready: %w (automatic quarantine failed: %v)", plan.ManagedRoot, err, recoveryErr)
@@ -415,6 +521,11 @@ func prepareManagedRoot(ctx context.Context, plan Plan, options Options) (manage
 	if rootExists && !rootInfo.IsDir() {
 		return managedRootPreparation{}, errors.New("managed root already exists and is not a directory")
 	}
+	if rootExists {
+		if err := inspectInstallationOwner(plan); err != nil {
+			return managedRootPreparation{}, err
+		}
+	}
 	statePath := installStatePath(plan.DataRoot)
 	if err := ensureNoSymlinkComponents(plan.DataRoot, statePath); err != nil {
 		return managedRootPreparation{}, fmt.Errorf("install state path is unsafe; preserved without replacement: %w", err)
@@ -434,6 +545,9 @@ func prepareManagedRoot(ctx context.Context, plan Plan, options Options) (manage
 		state, err = installtx.ReadStateForManagedRoot(plan.DataRoot, plan.ManagedRoot)
 		if err != nil {
 			return managedRootPreparation{}, fmt.Errorf("existing install state is invalid; preserved without replacement: %w", err)
+		}
+		if state.Profile != plan.Profile {
+			return managedRootPreparation{}, errors.New("installation profile mismatch; existing installation preserved without probing or recovery")
 		}
 	}
 	if !rootExists && !statePresent {
@@ -455,14 +569,20 @@ func prepareManagedRoot(ctx context.Context, plan Plan, options Options) (manage
 		return managedRootPreparation{}, nil
 	}
 	if statePresent {
-		cliPath := installedCLIPath(plan.ManagedRoot, state.TargetOS)
+		cliPath := installedExecutablePath(plan.ManagedRoot, state.TargetOS, state.Profile)
 		if cliPath != "" && installationStructureComplete(plan.ManagedRoot, state) == nil {
-			output, checkErr := run(ctx, cliPath, "version")
-			if checkErr == nil && strings.TrimSpace(string(output)) == "bcgos "+state.CLIVersion {
+			checkErr := checkInstalledExecutable(ctx, run, plan, cliPath)
+			if checkErr != nil && plan.Profile != "" {
+				return managedRootPreparation{}, fmt.Errorf("existing modern server authentication/identity check failed; installation preserved without automatic recovery: %w", checkErr)
+			}
+			if checkErr == nil {
 				if state.Release != plan.Release || state.TargetOS != plan.TargetOS || state.TargetArch != plan.TargetArch {
 					return managedRootPreparation{}, fmt.Errorf("a healthy Maestro %s installation already exists at %s; use the signed update flow instead of first install", state.Release, plan.ManagedRoot)
 				}
 				if err := verifyExistingInstallTrust(ctx, plan, options); err != nil {
+					if plan.Profile != "" {
+						return managedRootPreparation{}, fmt.Errorf("existing modern installer/registry identity changed; preserved without recovery: %w", err)
+					}
 					recovery, recoveryErr := quarantineInterruptedInstall(plan, "existing_install_trust_failed", true)
 					if recoveryErr != nil {
 						return managedRootPreparation{}, fmt.Errorf("existing installation trust check failed and was preserved without replacement: %w (automatic quarantine failed: %v)", err, recoveryErr)
@@ -493,8 +613,42 @@ func prepareManagedRoot(ctx context.Context, plan Plan, options Options) (manage
 	return managedRootPreparation{Recovery: recovery}, nil
 }
 
+const installationOwnerName = ".installation-owner.json"
+
+type installationOwner struct {
+	SchemaVersion int    `json:"schema_version"`
+	PID           int    `json:"pid"`
+	PlanDigest    string `json:"plan_digest"`
+}
+
+// This transient marker records custody of a newly claimed root. It grants no
+// activation authority and cannot replace the canonical transaction or receipt.
+func inspectInstallationOwner(plan Plan) error {
+	body, err := scheduler.ReadPrivateStateFile(filepath.Join(plan.ManagedRoot, installationOwnerName), 1024)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("installation owner marker is unsafe; preserved: %w", err)
+	}
+	var owner installationOwner
+	if err := releasecontract.DecodeStrictJSON(body, &owner); err != nil {
+		return err
+	}
+	if owner.SchemaVersion != 1 || owner.PID <= 0 || owner.PlanDigest != plan.PlanDigest {
+		return errors.New("installation owner marker differs from the exact reviewed plan; preserved")
+	}
+	if owner.PID == os.Getpid() {
+		return errors.New("another first installation is already running; root preserved")
+	}
+	if err := processwait.UntilExit(owner.PID, 100*time.Millisecond); err != nil {
+		return errors.New("another first installation may still be running; root preserved")
+	}
+	return nil
+}
+
 func verifyExistingInstallTrust(ctx context.Context, plan Plan, options Options) error {
-	bootstrapper := installedBootstrapperPath(plan.ManagedRoot, plan.TargetOS)
+	bootstrapper := seedPath(plan.ManagedRoot, plan.TargetOS, plan.Profile)
 	bootstrapperDigest, err := fileSHA256(bootstrapper)
 	if err != nil {
 		return fmt.Errorf("hash installed bootstrapper: %w", err)
@@ -517,7 +671,7 @@ func verifyExistingInstallTrust(ctx context.Context, plan Plan, options Options)
 	if err != nil {
 		return err
 	}
-	if !seedStatusMatches(status, plan.Release, plan.RegistrySHA256) {
+	if !seedMatchesPlan(status, plan) {
 		return errors.New("installed bootstrapper seed does not match the confirmed release package")
 	}
 	return nil
@@ -535,11 +689,11 @@ func validateCommittedInstallation(plan Plan) error {
 }
 
 func installationStructureComplete(managedRoot string, state installtx.State) error {
-	cliPath := installedCLIPath(managedRoot, state.TargetOS)
+	cliPath := installedExecutablePath(managedRoot, state.TargetOS, state.Profile)
 	if cliPath == "" {
 		return errors.New("installed CLI is missing or unsafe")
 	}
-	bootstrapper := installedBootstrapperPath(managedRoot, state.TargetOS)
+	bootstrapper := seedPath(managedRoot, state.TargetOS, state.Profile)
 	for label, path := range map[string]string{
 		"bootstrapper":       bootstrapper,
 		"authority registry": filepath.Join(managedRoot, "trust", "release-authority-registry.json"),
@@ -617,7 +771,8 @@ func ensureNoSymlinkComponents(root, target string) error {
 func installerOwnedTopLevel(name, targetOS string) bool {
 	allowed := map[string]bool{
 		"trust": true, "bin": true, "bundles": true, "recovery": true,
-		".activation.lock": true, "bcgos-bootstrap": true,
+		".activation.lock": true, "bcgos-bootstrap": true, "maestro-install": true, "maestro-install.exe": true,
+		installationOwnerName: true,
 	}
 	if targetOS == "windows" {
 		allowed["bcgos-bootstrap.exe"] = true
@@ -843,6 +998,9 @@ func withDefaults(options Options) Options {
 }
 
 func validateNativeTrustPolicy(options Options, verified releaseverify.VerifiedRelease, registryDigest, bootstrapperDigest string) error {
+	if verified.Manifest.Modern() && options.NativeTrustMode != NativeTrustStrict {
+		return errors.New("modern installation requires independent strict native trust")
+	}
 	switch options.NativeTrustMode {
 	case NativeTrustStrict:
 		if !emptyLocalBetaPins(options.LocalBetaPins) {
@@ -933,24 +1091,44 @@ func hasBetaAuthorityMarker(value string) bool {
 }
 
 func seedStatusMatches(status seedStatus, release, registryDigest string) bool {
-	return status.SchemaVersion == 1 && status.Product == "maestro" &&
+	return status.SchemaVersion == 1 && status.Component == "" && status.Protocol == "" && status.InstallerVersion == "" && status.Product == "maestro" &&
 		status.BootstrapperVersion == release && status.AuthorityRegistrySHA256 == registryDigest
 }
 
 func readSeedStatus(ctx context.Context, path string, run commandRunner) (seedStatus, error) {
-	body, err := run(ctx, path, "seed-status")
+	bounded, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	body, err := run(bounded, path, "seed-status")
 	if err != nil {
 		return seedStatus{}, fmt.Errorf("read bootstrapper seed status: %w", err)
 	}
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.DisallowUnknownFields()
-	var status seedStatus
-	if err := decoder.Decode(&status); err != nil {
-		return seedStatus{}, fmt.Errorf("decode bootstrapper seed status: %w", err)
+	if len(body) > 1<<20 {
+		return seedStatus{}, errors.New("seed status exceeds 1 MiB")
 	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return seedStatus{}, errors.New("bootstrapper seed status contains multiple JSON values")
+	var status seedStatus
+	if err := releasecontract.DecodeStrictJSON(body, &status); err != nil {
+		return seedStatus{}, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return seedStatus{}, err
+	}
+	var required []string
+	switch status.SchemaVersion {
+	case 1:
+		required = []string{"schema_version", "product", "bootstrapper_version", "authority_registry_sha256"}
+	case 2:
+		required = []string{"schema_version", "product", "component", "protocol", "installer_version", "authority_registry_sha256"}
+	default:
+		return seedStatus{}, errors.New("unsupported installer seed-status version")
+	}
+	if len(fields) != len(required) {
+		return seedStatus{}, errors.New("seed status contains mixed or incomplete version fields")
+	}
+	for _, name := range required {
+		if _, present := fields[name]; !present {
+			return seedStatus{}, errors.New("seed status is missing a required version field")
+		}
 	}
 	return status, nil
 }
@@ -967,6 +1145,12 @@ func nativeSignatureCheck(ctx context.Context, path string, mode NativeTrustMode
 		}
 		if err != nil {
 			return errors.New("codesign rejected the bootstrapper")
+		}
+		if mode == NativeTrustStrict {
+			output, err := exec.CommandContext(ctx, "codesign", "-d", "--verbose=4", path).CombinedOutput()
+			if err != nil || !bytes.Contains(output, []byte("Authority=Developer ID Application:")) || bytes.Contains(output, []byte("Signature=adhoc")) {
+				return errors.New("strict native trust requires a Developer ID Application signature")
+			}
 		}
 		return nil
 	case "windows":
@@ -1003,7 +1187,13 @@ func validateAuthenticodeStatus(output []byte, mode NativeTrustMode) error {
 }
 
 func execCommand(ctx context.Context, path string, args ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, path, args...).CombinedOutput()
+	command := exec.CommandContext(ctx, path, args...)
+	command.WaitDelay = time.Second
+	var output boundedCommandOutput
+	command.Stdout = &output
+	command.Stderr = &output
+	err := command.Run()
+	return output.Bytes(), err
 }
 
 func validateBootstrapperName(path, version, platform, arch string) error {
@@ -1018,7 +1208,15 @@ func validateBootstrapperName(path, version, platform, arch string) error {
 }
 
 func validateRegular(path string, maximum int64) error {
-	info, err := os.Lstat(path)
+	file, err := scheduler.OpenRegularFile(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	if err := scheduler.ValidateSingleLink(file); err != nil {
+		return err
+	}
+	info, err := file.Stat()
 	if err != nil {
 		return err
 	}
@@ -1029,11 +1227,14 @@ func validateRegular(path string, maximum int64) error {
 }
 
 func fileSHA256(path string) (string, error) {
-	file, err := os.Open(path)
+	file, err := scheduler.OpenRegularFile(path)
 	if err != nil {
 		return "", err
 	}
 	defer file.Close()
+	if err := scheduler.ValidateSingleLink(file); err != nil {
+		return "", err
+	}
 	hash := sha256.New()
 	if _, err := io.Copy(hash, file); err != nil {
 		return "", err
@@ -1042,11 +1243,14 @@ func fileSHA256(path string) (string, error) {
 }
 
 func copyRegular(source, target string, mode os.FileMode) error {
-	input, err := os.Open(source)
+	input, err := scheduler.OpenRegularFile(source)
 	if err != nil {
 		return err
 	}
 	defer input.Close()
+	if err := scheduler.ValidateSingleLink(input); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
 		return err
 	}
@@ -1055,12 +1259,14 @@ func copyRegular(source, target string, mode os.FileMode) error {
 		return err
 	}
 	_, copyErr := io.Copy(output, input)
+	modeErr := output.Chmod(mode)
+	syncErr := output.Sync()
 	closeErr := output.Close()
-	if copyErr != nil {
+	if copyErr != nil || modeErr != nil || syncErr != nil || closeErr != nil {
 		_ = os.Remove(target)
-		return copyErr
+		return errors.Join(copyErr, modeErr, syncErr, closeErr)
 	}
-	return closeErr
+	return nil
 }
 
 func ensureFreshManagedRoot(path string) error {
@@ -1148,4 +1354,13 @@ func samePhysicalPath(left, right string) bool {
 func within(root, candidate string) bool {
 	relative, err := filepath.Rel(filepath.Clean(root), filepath.Clean(candidate))
 	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
+}
+
+type boundedCommandOutput struct{ bytes.Buffer }
+
+func (b *boundedCommandOutput) Write(body []byte) (int, error) {
+	if b.Len()+len(body) > 1<<20 {
+		return 0, errors.New("installer process output exceeds 1 MiB")
+	}
+	return b.Buffer.Write(body)
 }

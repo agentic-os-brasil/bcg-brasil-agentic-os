@@ -37,18 +37,20 @@ The release provider is an adapter. GitHub private Releases is the pilot
 provider, but provider responses cannot add, replace or rename artifacts after
 manifest verification.
 
-## Components
+## Historical v1 components
 
 - The stable bootstrapper owns installation and activation. It is not
   self-updated by the first release contract.
-- The `bcgos` CLI is a platform-specific executable with its own version and
-  compatible bundle range.
+- V1 CLI component metadata describes the historical `bcgos` executable and
+  its compatible bundle range. The removed executable is not a modern product
+  entrypoint; the modern profile below declares the actual MCP server.
 - The base bundle is one platform-neutral, immutable archive containing only
   reviewed managed product content.
-- Optional runtime packs remain a separately versioned future extension.
-  Manifest v1 intentionally excludes them until their identity, compatibility
-  and migration model is specified. Docling belongs in that future runtime
-  pack rather than the thin CLI or base bundle.
+- V1 currently recognizes optional `runtime_pack` artifacts. Their authenticated
+  adapter compatibility and placement remain separately specified; Spec061 and
+  DIPK govern the supported Docling input closure. Presence alone does not make
+  a runtime available, and the modern profile below uses typed adapter/target
+  selection rather than the legacy single-runtime placement.
 
 CLI and bundle versions are independent. A release is valid only when the
 declared current versions accept each other. Update planning must also prove
@@ -63,7 +65,9 @@ JSON Schema cannot express:
 - exact canonical `MAJOR.MINOR.PATCH` versions;
 - closed-open compatibility ranges using `>=A.B.C <X.Y.Z`;
 - mutual compatibility of the current CLI and bundle;
-- at least one CLI artifact and exactly one platform-neutral base bundle;
+- valid CLI component metadata and exactly one platform-neutral base bundle;
+  the current v1 implementation permits no CLI artifact, which does not prove
+  that such a release is installable;
 - unique artifact names, signature references and kind/platform tuples;
 - basename-only references with no traversal, mutable `latest` aliases or
   local/workspace paths;
@@ -76,7 +80,7 @@ JSON Schema cannot express:
 
 Strict parsing rejects unknown fields, duplicate object keys, oversized input
 and trailing JSON values. CLI and bundle artifact names contain their component
-version. V1 has no silent compatibility fallback and no runtime-pack entries.
+version. V1 has no silent compatibility fallback.
 
 The manifest wire files are exactly `release-manifest.json` and
 `release-manifest.json.sig`. The signature is a raw 64-byte Ed25519 signature
@@ -196,3 +200,138 @@ roles and IDs fail closed. Install state carries the migration identity and
 every preparation/activation path enforces the same source range. Rollback
 refuses to reactivate a legacy authority without a canonical PA Expert binding,
 including from later canonical states that legitimately omit the migration ID.
+
+## Modern MCP local delivery — MPDI construction contract
+
+This section is the accepted modern construction contract. It does not assert
+implementation, production signing or participant-installation acceptance.
+Preserve historical v1 parsing, signed bytes, state and migration meanings.
+Legacy portable ZIP and last-ZIP migration retain their bounded contracts;
+they do not establish this profile's executable or installation identity.
+
+### Authenticated modern components
+
+Manifest schema version 2 uses the closed profile `mcp-local-v1`. It retains
+product/release/channel/issuer, signed artifacts, migrations and release notes,
+and requires these discriminated components:
+
+- `server`: version, compatible_bundle, protocol `maestro-mcp-identity-v1` and
+  embedded_inputs_sha256. It declares the real `mcp_server`, with one artifact
+  per supported concrete target, rather than a legacy CLI.
+- `bundle`: version and compatible_server, checked mutually against the server.
+- `delivery`: profile, independent installer_version, installer_protocol
+  `maestro-install-seed-v1` and client_inputs_sha256.
+- Exactly one any/any base bundle and optional runtime_pack artifacts with
+  adapter `docling` and an exact separately qualified target. Adapter fields on
+  other artifact kinds and mixed/duplicate runtime identities refuse.
+
+Reject unknown fields, mixed v1/v2 component fields, partial profiles and
+unsupported protocols. Artifact names bind actual component versions. Preserve
+one canonical exact-byte verifier; dispatch strict wire versions only after
+signature authentication. The installer trust root is independently seeded and
+is not self-updated by this contract.
+
+The real server has a bounded read-only identity command reporting product,
+component, protocol, actual linked version/range, public registry pin and the
+complete sorted public embedded-resource inventory/digest. Bound output to
+1 MiB and execution to a finite deadline. Include all methods, fourteen agent
+assets, policies, licenses and provenance; exclude the executable's own hash
+from its embedded inventory. Verify the actual executable file separately
+against its authenticated artifact. Identity needs no home/workspace admission.
+
+Use one documented canonical UTF-8 JSON representation with lexicographic object
+keys, no insignificant whitespace and explicit required fields for inventories
+and digest vectors. Sort artifact arrays by kind/OS/architecture/name. Compute
+client_inputs_sha256 over profile/protocols/installer version, server artifact
+identities and embedded digests, base bundle identity and sorted optional runtime
+identities, excluding that digest itself. Factory and consumer independently
+recompute it; a later feed can bind it without a circular archive hash.
+
+### One transaction and real first installation
+
+Build actual maestro-mcp and maestro-install entrypoints from the existing MCP
+module on the actual target runner. Compose the existing verifier, installer,
+installtx, home/workspace admission and packet builders. No renamed legacy
+binary, absent command, alternate transaction or injected healthy checker can
+establish modern activation.
+
+The stable installer reports strict seed-status v2 with product, installer
+component/protocol, actual installer version and linked registry digest. Its
+versioned artifact is maestro-install_VERSION_OS_ARCH; installed name is
+maestro-install. Legacy seed-status and names remain confined to v1.
+
+Modern activation plan/state use schema version 3; activation receipts use
+schema version 2, carrying authenticated profile and typed server identity/compatibility.
+Current and Previous snapshots retain their own profile. Prepare, prepared-plan
+validation, activation, payload/receipt validation, reconciliation, backup and
+rollback select the same canonical built-in protocol. Prove an unchanged old
+strict reader/writer refuses modern state. Preserve role/catalog/policy migration
+checks; never infer modern authority from a filename or callback.
+
+Review is read-only and binds signed release/seed, exact target, managed root,
+private installation-state root, proposed admitted home, workspace, packet
+destinations and all effects. Explicit confirmation recomputes the same digest
+before canonical staging/activation. A narrow canonical home-address preview
+shares Resolve's selection/origin/locator logic without requiring a pre-existing
+managed payload or creating an origin, key, locator, directory or authority.
+Apply resolves the actual installed root again and refuses selection drift.
+
+An existing complete plain-MCP packet may be preserved only after the original
+closed packet validator proves its exact server, registry, version, target and
+canonical contents. Directory and MCPB inputs share that validator; ZIP review
+does not extract or initialize. Bind the preservation disposition and exact
+inventory digest into review. Changed, linked or unknown destinations refuse
+without replacement. Repeated explicit setup preserves admitted owner, memory,
+authored workspace data and client registrations.
+
+First-install directory custody is an exclusive claim with a transient private
+PID/plan marker. A live claimant refuses a concurrent invocation; stale custody
+can reconcile only the same exact plan after the original process has exited.
+Cleanup may remove only the original copied objects with unchanged expected
+bytes and an empty owned directory; it may not recursively erase another
+writer's files. Existing empty destinations and ambiguous state are preserved.
+
+Modern installtx DataRoot is the reviewed private UserHome/.maestro-install,
+outside both ManagedRoot and admitted Home. It contains only installation
+state/updates/receipts and grants no home authority. Preserve it through rollback.
+After activation, perform genuine canonical home/workspace/owner/memory admission,
+then materialize both participant-local packets from the verified installed
+server. Reuse already admitted state; ambiguous existing homes refuse. On later
+admission/packet failure preserve coherent activated payload and existing owner
+data, report setup pending and permit honest recovery. No ready acknowledgement
+substitutes for completed admission/readback.
+
+Installed bin/maestro-mcp loads ManagedRoot/trust/release-authority-registry.json.
+Code scripts and MCPB server layouts load packetRoot/managed/trust from their
+recognized fixed layouts. Every public registry must match the compiled pin;
+do not scan arbitrary ancestors or accept model-supplied seed paths. SDK identity
+and converter client compatibility use the actual linked server version, with
+no independent 0.1.0 default. Unseeded development builds invent no release trust.
+
+### Complete public closure and acceptance
+
+Keep an exact factory allowlist with every required canonical agent/method,
+policy, template, notice and provenance input. Any root LICENSE.md source
+exception is exact and nonexecutable. Release kits contain immutable public
+inputs and an independently admitted installer/registry; bound packets and
+private owner/workspace data are materialized locally. Optional authenticated
+Docling inputs reach their owning admitted-home location with signed metadata,
+archive, actual client compatibility and exact target intact. No pack means
+explicit unavailable content support, without ambient installation/acquisition.
+
+The allowlist has an optional closed `role` of `data` or `executable`; omission
+retains historical source-mode normalization. Modern factory inputs all declare
+a role. Declared roles map only to archive 0644/0755 and must agree with admitted
+POSIX source roles when those bits exist. Windows-native factories consume the
+declared roles directly. The root license can only be data. The same authenticated
+extractor enforces installed roles; no second archive inventory is introduced.
+
+The focused first-install proof uses actual built binaries and engineering
+signatures: factory, independent seed, exact review/confirmation, canonical
+activation, genuine admission, complete Code/MCPB materialization, installed and
+carrier identity/registry checks, then real MCP stdio continuation across restart.
+Production native trust has no engineering bypass flag. Signing/device/client
+registration/pilot remain separate evidence. Modern standard update stays
+unavailable until its owning signed-source/pending/recompute path is implemented.
+The cohesive delivery also requires signed synced generations/update/rollback/
+recall and registration/recovery tasks; a schema-only PR does not complete it.

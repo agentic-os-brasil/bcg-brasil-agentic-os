@@ -120,6 +120,16 @@ func OpenRegularFile(path string) (*os.File, error) {
 	return openUnownedRegularFile(path)
 }
 
+// ValidateSingleLink checks the held regular-file descriptor without changing
+// permissions, reopening a path or granting private ownership. Callers opt in
+// when an authenticated artifact or immutable inventory rejects hardlink aliases.
+func ValidateSingleLink(file *os.File) error {
+	if file == nil {
+		return errors.New("held regular file required")
+	}
+	return validateSingleLink(file)
+}
+
 // OpenDirectory transfers an existing no-follow directory handle to the caller.
 // It is read-only, never creates entries or changes permissions; the caller closes it.
 func OpenDirectory(path string) (*os.File, error) { return openDirectoryFile(path) }

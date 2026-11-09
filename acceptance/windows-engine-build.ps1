@@ -73,6 +73,12 @@ try {
   $commandInventory = @(& $commandBinary '-test.list' '^(Test|Example)')
   if ($LASTEXITCODE -ne 0 -or $commandInventory.Count -eq 0 -or @($commandInventory | Sort-Object -CaseSensitive -Unique).Count -ne $commandInventory.Count -or
       @($commandInventory | Where-Object { $_ -cnotmatch '^(Test|Example)[A-Za-z0-9_]*$' }).Count -ne 0) { throw 'Command full inventory must be closed and unique.' }
+  $setupBinary = Join-Path $binaryRoot 'setup.test.exe'
+  & $sdkGo test -c ./setup -o $setupBinary
+  if ($LASTEXITCODE -ne 0) { throw 'First-install setup test compilation failed.' }
+  $setupInventory = @(& $setupBinary '-test.list' '^(Test|Example)')
+  if ($LASTEXITCODE -ne 0 -or $setupInventory.Count -ne 2 -or
+      @((Compare-Object @('TestModernFactoryFirstInstallAndRestart', 'TestDirectInnerInstallRequiresProductionAuthority') ($setupInventory | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) { throw 'Setup full inventory must contain the two existing actual-process parents.' }
   & $sdkGo build -o $server ./cmd/maestro-mcp
   if ($LASTEXITCODE -ne 0) { throw 'Shipping MCP compilation failed.' }
   $inventory = @(& $testBinary '-test.list' '^(Test|Example)')
@@ -90,19 +96,27 @@ $vendorFiles = @(Get-ChildItem -LiteralPath $vendorRoot -Recurse -File | Sort-Ob
   if (($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Vendored dependency cannot be a reparse file.' }
   [ordered]@{path=$_.FullName.Substring($vendorRoot.Length + 1).Replace('\','/'); sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}
 })
+$adapterVendorRoot = Join-Path $sourceRoot 'adapters/mcp/vendor'
+$adapterVendorFiles = @(Get-ChildItem -LiteralPath $adapterVendorRoot -Recurse -File | Sort-Object FullName | ForEach-Object {
+  if (($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'MCP vendored dependency cannot be a reparse file.' }
+  [ordered]@{path=$_.FullName.Substring($adapterVendorRoot.Length + 1).Replace('\','/'); sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}
+})
 $adapterEntries = @(
   [ordered]@{name='mcp'; package='./adapters/mcp'; binary=$testBinary
     sha256=(Get-FileHash -LiteralPath $testBinary -Algorithm SHA256).Hash.ToLowerInvariant()
     working_directory=(Join-Path $sourceRoot 'adapters/mcp'); tests=$inventory},
   [ordered]@{name='mcp-command'; package='./adapters/mcp/cmd/maestro-mcp'; binary=$commandBinary
     sha256=(Get-FileHash -LiteralPath $commandBinary -Algorithm SHA256).Hash.ToLowerInvariant()
-    working_directory=(Join-Path $sourceRoot 'adapters/mcp/cmd/maestro-mcp'); tests=$commandInventory}
+    working_directory=(Join-Path $sourceRoot 'adapters/mcp/cmd/maestro-mcp'); tests=$commandInventory},
+  [ordered]@{name='setup'; package='./adapters/mcp/setup'; binary=$setupBinary
+    sha256=(Get-FileHash -LiteralPath $setupBinary -Algorithm SHA256).Hash.ToLowerInvariant()
+    working_directory=(Join-Path $sourceRoot 'adapters/mcp/setup'); tests=$setupInventory}
 )
 $manifest = [ordered]@{
   schema_version=1; qualification_profile='windows_private_engine_v1'; source_revision=$revision; source_root=$sourceRoot
   source_archive_sha256=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
   sdk_root=$sdkRoot; sdk_go=$sdkGo; sdk_go_sha256=(Get-FileHash -LiteralPath $sdkGo -Algorithm SHA256).Hash.ToLowerInvariant()
-  vendor_files=$vendorFiles; packages=$entries
+  vendor_files=$vendorFiles; adapter_vendor_files=$adapterVendorFiles; packages=$entries
   adapter_profile='windows_private_engine_adapters_v1'; adapter_packages=$adapterEntries
   public_test_binary_sha256=(Get-FileHash -LiteralPath $testBinary -Algorithm SHA256).Hash.ToLowerInvariant()
   public_server_sha256=(Get-FileHash -LiteralPath $server -Algorithm SHA256).Hash.ToLowerInvariant()

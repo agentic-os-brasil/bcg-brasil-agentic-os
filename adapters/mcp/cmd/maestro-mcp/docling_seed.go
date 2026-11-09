@@ -10,7 +10,7 @@ import (
 )
 
 func seedDoclingAuthority(options *product.Options) {
-	options.CLIVersion = "0.1.0"
+	options.CLIVersion = Version
 	if AuthorityRegistrySHA256 == "" {
 		return
 	}
@@ -18,7 +18,17 @@ func seedDoclingAuthority(options *product.Options) {
 	if err != nil {
 		return
 	}
-	registry := filepath.Join(filepath.Dir(filepath.Dir(executable)), "managed", "trust", "release-authority-registry.json")
+	directory := filepath.Dir(executable)
+	root := filepath.Dir(directory)
+	var registry string
+	switch filepath.Base(directory) {
+	case "bin":
+		registry = filepath.Join(root, "trust", "release-authority-registry.json")
+	case "scripts", "server":
+		registry = filepath.Join(root, "managed", "trust", "release-authority-registry.json")
+	default:
+		return
+	}
 	if err := scheduler.ValidateDirectory(filepath.Dir(registry)); err != nil {
 		return
 	}

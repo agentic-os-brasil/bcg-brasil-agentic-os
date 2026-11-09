@@ -18,6 +18,17 @@ func validatePrivateUpdateIdentity(file *os.File) error {
 	}
 	return nil
 }
+
+func validateSingleLink(file *os.File) error {
+	var stat unix.Stat_t
+	if err := unix.Fstat(int(file.Fd()), &stat); err != nil {
+		return err
+	}
+	if stat.Mode&unix.S_IFMT != unix.S_IFREG || stat.Nlink != 1 {
+		return errors.New("regular file must have exactly one link")
+	}
+	return nil
+}
 func (directory *secureDirectory) publishReplacement(source, target string) error {
 	if err := unix.Renameat(directory.fd, source, directory.fd, target); err != nil {
 		return err

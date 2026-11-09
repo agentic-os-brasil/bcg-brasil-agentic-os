@@ -48,6 +48,9 @@ type CheckResult struct {
 }
 
 func Check(ctx context.Context, options CheckOptions) (CheckResult, error) {
+	if options.Current.Profile != "" {
+		return CheckResult{}, errors.New("modern standard update unavailable until authenticated synced-source support is installed")
+	}
 	if options.Provider == nil || options.Registry == nil {
 		return CheckResult{}, errors.New("update provider and release-key registry are required")
 	}

@@ -1342,3 +1342,14 @@ Expose the eight existing owning maintenance jobs through the admitted MCP bindi
 - Consequences: Existing local autoMemoryEnabled:false and operator confirmation do not establish enterprise policy or production rollout authority. A timeout or failed control cannot mint admission. No credential-file read, profile repair, model acquisition, registration or service activation follows from source qualification.
 - Refs: #495; NPHK; specs/063-product-native-plugin.md; docs/product-native-plugin.md
 - Supersedes: none
+
+## MPDI - Build the real MCP product through canonical signed installation
+
+- Date: 2026-11-03
+- Status: accepted
+- Owner: Maestro
+- Context: The reviewed product has real MCP packets and native qualification, but the legacy factory rejects its removed CLI and names an absent bootstrapper. A complete participant install must activate the actual server and preserve private home authority.
+- Decision: Add the closed manifest-v2 mcp-local-v1 profile with an actual versioned mcp_server identity/inventory, independent maestro-install seed protocol and strict plan/state-v3 and receipt-v2 variants inside the existing canonical verifier/installer/installtx owners. Build both actual entrypoints in the MCP module. Review exact effects before confirmation; keep private installation custody separate from admitted Home, then perform genuine home/workspace admission and local Code/MCPB materialization. Bind real SDK/converter versions and fixed installed/carrier registry layouts. Preserve legacy signed bytes, semantics, migration fences and strict old-writer refusal.
+- Consequences: One functional delivery must prove actual factory-to-installed-and-packaged MCP continuation with engineering fixtures, then signed synced updates/rollback/recall and registration recovery. Production authority/native signing, devices and clients remain external evidence; no unsigned operator bypass or scaffolding PR establishes completion. A canonical read-only home-address preview grants no admission.
+- Refs: specs/020-release-distribution.md; docs/plans/2026-11-03-synced-product-distribution.md; internal/releasecontract; internal/installer; internal/installtx; adapters/mcp
+- Supersedes: none

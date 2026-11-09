@@ -686,6 +686,50 @@ func TestInstallRefusesToReplaceAnAmbiguousManagedRoot(t *testing.T) {
 	if body, readErr := os.ReadFile(filepath.Join(fixture.managedRoot, "owner-note.txt")); readErr != nil || string(body) != "preserve me" {
 		t.Fatalf("ambiguous root changed: body=%q err=%v", body, readErr)
 	}
+	t.Run("preserve independent writer after staging", func(t *testing.T) {
+		fixture := newInstallerRecoveryFixture(t)
+		options := fixture.options(fixture.runner(t, func() error { return fmt.Errorf("must not activate") }, func() ([]byte, error) { return nil, fmt.Errorf("must not execute") }))
+		options.VerifyNative = func(_ context.Context, path string) error {
+			if filepath.Dir(path) == fixture.managedRoot {
+				if err := os.WriteFile(filepath.Join(fixture.managedRoot, "independent-owner.txt"), []byte("PRESERVE_INDEPENDENT_WRITER_496"), 0600); err != nil {
+					return err
+				}
+				return fmt.Errorf("injected bounded native staging interruption")
+			}
+			return nil
+		}
+		if _, err := Install(context.Background(), options); err == nil {
+			t.Fatal("interrupted staging reported success")
+		}
+		if body, err := os.ReadFile(filepath.Join(fixture.managedRoot, "independent-owner.txt")); err != nil || string(body) != "PRESERVE_INDEPENDENT_WRITER_496" {
+			t.Fatal("failed staging erased independent writer", err)
+		}
+	})
+	t.Run("concurrent installer cannot quarantine active root", func(t *testing.T) {
+		fixture := newInstallerRecoveryFixture(t)
+		options := fixture.options(fixture.runner(t, func() error { return fmt.Errorf("injected activation interruption") }, func() ([]byte, error) { return nil, fmt.Errorf("must not execute") }))
+		entered := false
+		options.VerifyNative = func(_ context.Context, path string) error {
+			if filepath.Dir(path) == fixture.managedRoot && !entered {
+				entered = true
+				original, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				if _, err := Install(context.Background(), options); err == nil || !strings.Contains(err.Error(), "installation is already running") {
+					return fmt.Errorf("concurrent invocation did not refuse active custody: %v", err)
+				}
+				current, err := os.ReadFile(path)
+				if err != nil || string(original) != string(current) {
+					return fmt.Errorf("concurrent loser moved the active root: %v", err)
+				}
+			}
+			return nil
+		}
+		if _, err := Install(context.Background(), options); err == nil || !entered {
+			t.Fatal("expected bounded interruption after observed concurrent refusal", err)
+		}
+	})
 }
 
 type installerRecoveryFixture struct {

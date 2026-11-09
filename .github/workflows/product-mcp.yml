@@ -34,6 +34,16 @@ on:
       - 'internal/maintenancecatalog/**'
       - 'internal/privatewiki/**'
       - 'internal/skillsindex/**'
+      - 'internal/releasecontract/**'
+      - 'internal/installer/**'
+      - 'internal/installtx/**'
+      - 'internal/updateplan/**'
+      - 'internal/updateservice/**'
+      - 'dev/release/**'
+      - 'internal/releaseverify/**'
+      - 'internal/dev/releasepack/**'
+      - 'cmd/maestro-docling-pack/**'
+      - 'schemas/release-manifest-v2.schema.json'
       - 'schemas/memory-artifact.schema.json'
       - 'schemas/memory-commit.schema.json'
       - 'bundles/**'
@@ -76,6 +86,16 @@ on:
       - 'internal/maintenancecatalog/**'
       - 'internal/privatewiki/**'
       - 'internal/skillsindex/**'
+      - 'internal/releasecontract/**'
+      - 'internal/installer/**'
+      - 'internal/installtx/**'
+      - 'internal/updateplan/**'
+      - 'internal/updateservice/**'
+      - 'dev/release/**'
+      - 'internal/releaseverify/**'
+      - 'internal/dev/releasepack/**'
+      - 'cmd/maestro-docling-pack/**'
+      - 'schemas/release-manifest-v2.schema.json'
       - 'schemas/memory-artifact.schema.json'
       - 'schemas/memory-commit.schema.json'
       - 'bundles/**'
@@ -210,6 +230,47 @@ jobs:
           path: ${{ runner.temp }}/native-engine-evidence/
           if-no-files-found: error
           retention-days: 7
+
+  modern-first-install:
+    runs-on: macos-15
+    timeout-minutes: 20
+    env:
+      MAESTRO_MODERN_BASELINE: ${{ runner.temp }}/maestro-modern-baseline
+      MAESTRO_MODERN_TEST_ROOT: ${{ runner.temp }}/maestro-modern-first-install
+      MAESTRO_MODERN_AUTHORITY_ROOT: ${{ runner.temp }}/maestro-modern-authority
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: adapters/mcp/go.mod
+      - name: Materialize the immutable pre-modern reader and writer
+        shell: bash
+        run: |
+          git fetch --no-tags origin 62d7758b18b0e9deb616ceacc7c241a34f5b68ce
+          mkdir "$MAESTRO_MODERN_BASELINE"
+          git archive --format=tar 62d7758b18b0e9deb616ceacc7c241a34f5b68ce -o "$RUNNER_TEMP/maestro-modern-baseline.tar"
+          tar -xf "$RUNNER_TEMP/maestro-modern-baseline.tar" -C "$MAESTRO_MODERN_BASELINE"
+      - name: Modern signed contracts, review and legacy-provider refusal
+        run: go test ./internal/installer ./internal/installtx ./internal/datahome ./internal/releasecontract ./internal/releaseverify ./internal/dev/releasepack ./internal/updateservice -run '^(TestModern|TestInstallationPreviewSharesSelectionWithoutGrantingAuthority|TestCheckModernStateRefusesBeforeProviderAccess|TestLegacySeededBuilderStillRefusesRemovedCLI|TestRootLicenseExceptionRemainsExactAndNonexecutable)' -count=1 -timeout=300s
+      # Real factory/server/stdio processes; successful inner native admission
+      # uses a controlled in-process fixture. No native client/model is invoked.
+      - name: Actual modern factory, authority refusal, packets and restarted work
+        working-directory: adapters/mcp
+        shell: bash
+        run: |
+          evidence="$RUNNER_TEMP/maestro-modern-install.jsonl"
+          if ! go test ./setup -run '^(TestModernFactoryFirstInstallAndRestart|TestDirectInnerInstallRequiresProductionAuthority)$' -count=1 -json -timeout=600s > "$evidence"; then
+            cat "$evidence"
+            exit 1
+          fi
+          cat "$evidence"
+          python3 - "$evidence" <<'PYCODE'
+          import json, pathlib, sys
+          events = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+          passed = {e.get("Test") for e in events if e.get("Action") == "pass"}
+          required = {"TestModernFactoryFirstInstallAndRestart", "TestDirectInnerInstallRequiresProductionAuthority"}
+          assert required <= passed, "modern actual-process evidence missing: " + repr(required - passed)
+          PYCODE
 
   wiki-maintenance-contracts:
     strategy:

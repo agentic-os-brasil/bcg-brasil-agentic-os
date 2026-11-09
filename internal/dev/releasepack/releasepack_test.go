@@ -13,8 +13,33 @@ import (
 )
 
 func TestBuildBundleNormalizesExecutableModes(t *testing.T) {
+	for _, role := range []string{"data", "executable"} {
+		t.Run("declared_"+role, func(t *testing.T) {
+			root := t.TempDir()
+			const source = "bundles/base/runtime/role-fixture"
+			writeFile(t, root, source, "declared role fixture\n")
+			want := int64(0644)
+			if role == "executable" {
+				want = 0755
+			}
+			if err := os.Chmod(filepath.Join(root, source), os.FileMode(want)); err != nil {
+				t.Fatal(err)
+			}
+			var archive bytes.Buffer
+			if err := BuildBundle(root, Allowlist{SchemaVersion: 1, Files: []BundleFile{{Source: source, Path: "runtime/role-fixture", Role: role}}}, &archive); err != nil {
+				t.Fatal(err)
+			}
+			_, modes := archiveEntries(t, archive.Bytes())
+			if len(modes) != 1 || modes[0] != want {
+				t.Fatalf("declared role %s produced %o", role, modes)
+			}
+		})
+	}
 	if runtime.GOOS == "windows" {
-		t.Skip("Windows does not expose POSIX executable permissions")
+		t.Run("POSIX_source_mode_nonapplicability", func(t *testing.T) {
+			t.Skip("Windows source uses declared roles rather than unavailable POSIX executable bits")
+		})
+		return
 	}
 	for _, test := range []struct {
 		name string

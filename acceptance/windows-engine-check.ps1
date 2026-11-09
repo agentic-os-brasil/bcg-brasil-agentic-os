@@ -36,7 +36,7 @@ foreach ($entry in @($report.packages) + @($report.adapter_packages)) {
     $sealed = @(@($manifest.packages) + @($manifest.adapter_packages) | Where-Object { $_.name -ceq $entry.name })
     if ($sealed.Count -ne 1 -or $entry.sha256 -cne $sealed[0].sha256 -or $entry.package -cne $sealed[0].package -or
         $entry.exit_code -ne 0 -or $entry.inventory_complete -ne $true -or
-        $entry.log -cnotmatch '^(engine-(execution|datahome|ownerctx|memory|scheduler|processidentity|winprivate|zipmigration)|adapter-(mcp|mcp-command))\.log$') {
+        $entry.log -cnotmatch '^(engine-(execution|datahome|ownerctx|memory|scheduler|processidentity|winprivate|zipmigration)|adapter-(mcp|mcp-command|setup))\.log$') {
         throw 'Owning/adapter report differs from its exact sealed executable inventory.'
     }
     $log = Get-Item -LiteralPath (Join-Path $proofRoot $entry.log) -Force
@@ -54,9 +54,9 @@ foreach ($entry in @($report.packages) + @($report.adapter_packages)) {
         }
     }
 }
-if ($report.adapter_profile -cne 'windows_private_engine_adapters_v1' -or @($report.adapter_packages).Count -ne 2 -or
-    @((Compare-Object @('mcp', 'mcp-command') (@($report.adapter_packages.name) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) {
-    throw 'Both exact current adapter companions must qualify before host exclusions.'
+if ($report.adapter_profile -cne 'windows_private_engine_adapters_v1' -or @($report.adapter_packages).Count -ne 3 -or
+    @((Compare-Object @('mcp', 'mcp-command', 'setup') (@($report.adapter_packages.name) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) {
+    throw 'All three exact current adapter companions must qualify before host exclusions.'
 }
 $driver = Join-Path $PSScriptRoot 'windows-core-pilot.ps1'
 $sealedDriver = Join-Path $manifest.source_root 'acceptance/windows-core-pilot.ps1'
@@ -81,14 +81,14 @@ $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile($driver, [ref]$null, [ref]$errors)
 if ($errors.Count) { throw 'Host exclusion source could not be parsed.' }
 $closed = @{}
-foreach ($variable in @('$adapterParents', '$adapterAssertions', '$adapterCommandParents')) {
+foreach ($variable in @('$adapterParents', '$adapterAssertions', '$adapterCommandParents', '$adapterSetupParents', '$adapterSetupAssertions')) {
     $assignments = @($ast.FindAll({param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -ceq $variable}, $true))
     if ($assignments.Count -ne 1) { throw 'Expected one literal current adapter assertion source.' }
     $closed[$variable] = @(Read-EngineLiteralArray $assignments[0])
 }
 foreach ($entry in $report.adapter_packages) {
-    $parents = if ($entry.name -ceq 'mcp') { $closed['$adapterParents'] } else { $closed['$adapterCommandParents'] }
-    $assertions = if ($entry.name -ceq 'mcp') { $closed['$adapterAssertions'] } else { $parents }
+    $parents = switch -CaseSensitive ($entry.name) { 'mcp' { $closed['$adapterParents'] }; 'mcp-command' { $closed['$adapterCommandParents'] }; 'setup' { $closed['$adapterSetupParents'] } }
+    $assertions = switch -CaseSensitive ($entry.name) { 'mcp' { $closed['$adapterAssertions'] }; 'mcp-command' { $parents }; 'setup' { $closed['$adapterSetupAssertions'] } }
     if ($entry.qualified -ne $true -or $entry.copied_binary_custody -ne $true -or $entry.proof.qualified -ne $true -or
         @((Compare-Object ($parents | Sort-Object -CaseSensitive) (@($entry.proof.required_tests) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0 -or
         @((Compare-Object ($assertions | Sort-Object -CaseSensitive) (@($entry.proof.outcomes.test) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0 -or
@@ -97,7 +97,7 @@ foreach ($entry in $report.adapter_packages) {
         throw 'Every exact selected adapter assertion must actually pass without skips or duplicates.'
     }
 }
-$exclusions = @($closed['$adapterParents']) + @($closed['$adapterCommandParents'])
+$exclusions = @($closed['$adapterParents']) + @($closed['$adapterCommandParents']) + @($closed['$adapterSetupParents'])
 if (@($exclusions | Where-Object { $_ -cnotmatch '^Test[A-Za-z0-9_]+$' }).Count -ne 0) { throw 'Unsafe host exclusion name.' }
 $pattern = '^(' + (($exclusions | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')$'
 if ($env:GITHUB_OUTPUT) { ('host_exclusions=' + $pattern) | Out-File -LiteralPath $env:GITHUB_OUTPUT -Encoding utf8 -Append }

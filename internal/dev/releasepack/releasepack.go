@@ -14,6 +14,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -27,6 +28,7 @@ type Allowlist struct {
 type BundleFile struct {
 	Source string `json:"source"`
 	Path   string `json:"path"`
+	Role   string `json:"role,omitempty"`
 }
 
 func LoadAllowlist(path string) (Allowlist, error) {
@@ -99,8 +101,27 @@ func BuildBundle(root string, allowlist Allowlist, output io.Writer) error {
 			return closeArchive(tarWriter, gzipWriter, err)
 		}
 		mode := int64(0o644)
+		if entry.Source == "LICENSE.md" && info.Mode().Perm()&0o111 != 0 {
+			file.Close()
+			return closeArchive(tarWriter, gzipWriter, errors.New("root license must be nonexecutable"))
+		}
 		if info.Mode().Perm()&0o111 != 0 {
 			mode = 0o755
+		}
+		if entry.Role != "" {
+			declared := int64(0644)
+			if entry.Role == "executable" {
+				declared = 0755
+			}
+			if entry.Source == "LICENSE.md" && declared != 0644 {
+				file.Close()
+				return closeArchive(tarWriter, gzipWriter, errors.New("root license role must be data"))
+			}
+			if runtime.GOOS != "windows" && declared != mode {
+				file.Close()
+				return closeArchive(tarWriter, gzipWriter, errors.New("declared bundle role differs from admitted source mode"))
+			}
+			mode = declared
 		}
 		header := &tar.Header{
 			Name:       entry.Path,
@@ -161,10 +182,13 @@ func validateAllowlist(allowlist Allowlist) error {
 	sources := map[string]bool{}
 	targets := map[string]bool{}
 	for _, entry := range allowlist.Files {
+		if entry.Role != "" && entry.Role != "data" && entry.Role != "executable" {
+			return errors.New("bundle role must be data or executable")
+		}
 		if !safeRelative(entry.Source) || !safeRelative(entry.Path) {
 			return fmt.Errorf("unsafe distribution path %q -> %q", entry.Source, entry.Path)
 		}
-		if !strings.HasPrefix(entry.Source, "bundles/base/") && !strings.HasPrefix(entry.Source, "bundles/tech-core/") && !strings.HasPrefix(entry.Source, "schemas/") {
+		if entry.Source != "LICENSE.md" && !strings.HasPrefix(entry.Source, "bundles/base/") && !strings.HasPrefix(entry.Source, "bundles/tech-core/") && !strings.HasPrefix(entry.Source, "schemas/") {
 			return fmt.Errorf("distribution source is outside approved roots: %s", entry.Source)
 		}
 		if strings.HasSuffix(entry.Source, ".go") || entry.Source == "bundles/base/.gitkeep" {
