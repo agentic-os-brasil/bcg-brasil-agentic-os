@@ -61,37 +61,27 @@ if [[ -e "$ROOT" ]]; then
 fi
 mkdir "$ROOT"
 (set -o noclobber; printf '%s\n' "$KIT_ID" > "$ROOT/.maestro-pilot-owned") || fail 'Outra preparação já reivindicou o destino.'
+set -o noclobber
 mkdir "$ROOT/product" "$ROOT/owner" "$ROOT/exports" "$ROOT/launchers" "$ROOT/client" "$ROOT/client/code"
 cp -n "$KIT/bin/maestro-mcp-$TARGET" "$ROOT/product/maestro-mcp"
 expected_binary="$(awk -v target="./bin/maestro-mcp-$TARGET" '$2==target { print $1 }' "$KIT/SHA256SUMS")"
 actual_binary="$(shasum -a 256 "$ROOT/product/maestro-mcp")"
 [[ "$expected_binary" =~ ^[0-9a-f]{64}$ && "${actual_binary%% *}" == "$expected_binary" ]] || fail 'O executável copiado mudou; preserve o ensaio.'
-chmod 700 "$ROOT/product/maestro-mcp"
 BIN="$ROOT/product/maestro-mcp"
-"$BIN" init --product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" | tee "$ROOT/preparation.json"
+"$BIN" init --product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" | cat > "$ROOT/preparation.json"
+cat "$ROOT/preparation.json"
 "$BIN" inspect --product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace"
 build_code() { "$BIN" plugin --product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" --server "$BIN" --destination "$ROOT/exports/code" --version 0.0.0 "$@"; }
 case "$(cat "$KIT/LIFECYCLE-CONTEXT.txt")" in enabled) build_code --lifecycle-context;; disabled) build_code;; *) fail 'Seleção de contexto desconhecida.';; esac
 "$BIN" mcpb --product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" --server "$BIN" --destination "$ROOT/exports/maestro-product.mcpb" --version 0.0.0
-cat > "$ROOT/launchers/Abrir Code.command" <<'CODE'
-#!/bin/bash
-set -euo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-"$ROOT/exports/code/scripts/maestro-mcp" inspect --packet --product-root "$ROOT/exports/code" --user-home "$ROOT/owner" --workspace "$ROOT/workspace"
-CODE="$(command -v claude || true)"
-[[ -n "$CODE" ]] || { echo 'Disponibilize o comando claude pelo fluxo normal do Code.' >&2; exit 1; }
-export CLAUDE_CONFIG_DIR="$ROOT/client/code"
-cd "$ROOT/workspace"
-exec "$CODE" --plugin-dir "$ROOT/exports/code"
-CODE
-cat > "$ROOT/launchers/Abrir Desktop.command" <<'DESKTOP'
-#!/bin/bash
-set -euo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-printf 'Confirme a extensão somente se ela não substituir outro ensaio Maestro. Use owner e workspace de COMECE-AQUI.md.\n'
-open "$ROOT/exports/maestro-product.mcpb"
-DESKTOP
-chmod 700 "$ROOT/launchers/"*.command
+cp -n "$KIT/templates/open-code-macos.command" "$ROOT/launchers/Abrir Code.command"
+cp -n "$KIT/templates/open-desktop-macos.command" "$ROOT/launchers/Abrir Desktop.command"
+for pair in 'open-code-macos.command|Abrir Code.command' 'open-desktop-macos.command|Abrir Desktop.command'; do
+  source_name="${pair%%|*}"; target_name="${pair#*|}"
+  expected="$(awk -v target="./templates/$source_name" '$2==target { print $1 }' "$KIT/SHA256SUMS")"
+  observed="$(shasum -a 256 "$ROOT/launchers/$target_name")"
+  [[ "$expected" =~ ^[0-9a-f]{64}$ && "${observed%% *}" == "$expected" ]] || fail 'Launcher ocupado ou alterado; preserve o ensaio.'
+done
 {
   printf '# Maestro — ensaio local\n\nAbra launchers/Abrir Code.command. O perfil Code é separado e pode pedir login normal. Ao habilitar o plugin, preencha os campos com estes valores literais:\n\nOwner directory:\n\n    %s/owner\n\nWorkspace:\n\n    %s/workspace\n\n' "$ROOT" "$ROOT"
   printf 'Depois abra launchers/Abrir Desktop.command e confirme os mesmos campos na extensão. Se já houver outra extensão maestro-product, pare antes de substituir.\n\nO workspace_id esperado vem desta criação real:\n\n'
