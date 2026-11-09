@@ -15,7 +15,9 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/zipmigration"
 )
 
-func TestProductInitCreatesAndPreservesLifecycleFilesystem(t *testing.T) {
+// Fresh preparation shares the existing ordinary-account command admission.
+func assertFreshLifecycleFilesystem(t *testing.T) {
+	t.Helper()
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -28,7 +30,7 @@ func TestProductInitCreatesAndPreservesLifecycleFilesystem(t *testing.T) {
 	}
 	t.Setenv("MAESTRO_HOME", filepath.Join(user, ".maestro"))
 	prior := os.Args
-	t.Cleanup(func() { os.Args = prior })
+	defer func() { os.Args = prior }()
 	os.Args = []string{"maestro-mcp", "init", "--product-root", productRoot, "--user-home", user, "--workspace", work}
 	if err := run(); err != nil {
 		t.Fatal(err)
@@ -97,6 +99,7 @@ func TestMigratedHomePublicMCPInit(t *testing.T) {
 	if runtime.GOOS == "windows" && os.Getenv("MAESTRO_WINDOWS_CORE_PROOF") != "1" {
 		t.Skip("dedicated ordinary-account Windows external migration proof required")
 	}
+	assertFreshLifecycleFilesystem(t)
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
