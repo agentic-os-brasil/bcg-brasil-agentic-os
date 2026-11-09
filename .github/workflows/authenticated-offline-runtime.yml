@@ -144,7 +144,7 @@ jobs:
           # Bound only evidence output; converter inputs and compiled binaries keep their normal budgets.
           with evidence.open("xb") as output:
               process = subprocess.Popen(command, env=environment, stdout=subprocess.PIPE,
-                                         stderr=subprocess.STDOUT, start_new_session=True)
+                                         stderr=None, start_new_session=True)
               count = 0
               try:
                   while chunk := process.stdout.read(64 << 10):
