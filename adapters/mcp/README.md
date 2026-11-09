@@ -35,6 +35,12 @@ operations, local operator fallback and qualification boundaries.
 
 Stable client registration and checked recovery are described in [the client guide](../../docs/product-clients.md); native loading remains separately observed.
 
+Ordinary authored workspace pages use the nine closed `brain.*` operations without
+a converted-document artifact. Fixed-template preparation and create/append/update/
+field/link changes require exact trusted review and canonical page revisions.
+Read the [authored workspace guide](../../docs/product-authored-brain.md); method
+selection does not qualify native Windows, host, provider or index compilation.
+
 Build from this directory with `go build -o /absolute/local/path/maestro-mcp ./cmd/maestro-mcp`.
 The installed product directory and owner directory must already exist. Choose a
 new workspace path outside the product and private state. Run the binary explicitly:

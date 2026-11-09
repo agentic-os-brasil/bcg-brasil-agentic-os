@@ -6,7 +6,7 @@
 > registration/recovery are delivered by the separately reviewed client unit.
 > Existing #497 remains open until both units and their required evidence pass.
 
-# Distribute signed Maestro generations through a synced folder
+# Distribute signed Maestro generations through an ordinary local mirror
 
 This guide covers the signed-source publisher, participant update and compatible
 rollback interfaces. Local engineering evidence, independent source review,
@@ -20,7 +20,15 @@ to checked current regeneration, scoped Code registration and Desktop's explicit
 native flow. An activated server alone does not prove current client loading.
 
 The publisher places immutable signed releases and generation records in a
-folder. SharePoint/OneDrive replicates those bytes. Each participant's admitted
+folder. SharePoint may host the distribution. Participants download and extract
+the signed generation into an ordinary local directory before using it. Direct
+Windows OneDrive/Files On-Demand source folders are unavailable in this pilot:
+Windows source confinement refuses every reparse point, including hydrated Cloud
+Files. Hydration alone does not make such a path admissible. A browser or approved
+OS download may produce ordinary local files; their actual metadata must pass the
+same source checks. Automated cloud synchronization remains unqualified.
+
+Each participant's admitted
 local installer authenticates the source, copies a complete release into private
 local staging, and runs the canonical reviewed installation transaction. The
 MCP remains a local stdio process; this distribution path creates no network MCP
@@ -107,7 +115,7 @@ own bounds.
 
 ## Keep participant authority local
 
-The participant enrolls an exact source tuple and local synced-folder locator
+The participant enrolls an exact source tuple and ordinary local mirror locator
 through a trusted operator action. A URL, an authenticated OneDrive account or
 the model's choice of a directory cannot enroll a source. No SharePoint library
 or endpoint has been selected for the team yet. The local implementation must

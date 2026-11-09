@@ -34,7 +34,7 @@ import (
 // process guard. Only its trusted constructor LookupEnv synchronizes execution;
 // the shipping CLI has no hook, flag, approval or identity override for it.
 func TestSyncedPublicationInterleavingAndReadOnlyReviews(t *testing.T) {
-	if runtime.GOOS != "darwin" {
+	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
 		t.Skip("actual admitted-home engineering runner required")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
@@ -61,10 +61,12 @@ func TestSyncedPublicationInterleavingAndReadOnlyReviews(t *testing.T) {
 	}
 	n := build("0.1.42")
 	n1 := build("0.1.43")
-	process := filepath.Join(root, "controlled-publication-n")
+	process := filepath.Join(root, sourceTestExecutable("controlled-publication-n"))
 	pkg := "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/cmd/maestro-mcp"
 	ldflags := "-X " + pkg + ".Version=0.1.42 -X '" + pkg + ".CompatibleBundle=" + n.Manifest.Server.CompatibleBundle + "' -X " + pkg + ".AuthorityRegistrySHA256=" + pin
-	command := exec.CommandContext(ctx, "go", "test", "-mod=readonly", "-c", "-ldflags", ldflags, "-o", process, "./cmd/maestro-mcp")
+	moduleMode, err := releasepack.ReadOnlyModuleMode(filepath.Join(source, "adapters", "mcp"))
+	must(t, err)
+	command := exec.CommandContext(ctx, "go", "test", moduleMode, "-c", "-ldflags", ldflags, "-o", process, "./cmd/maestro-mcp")
 	command.Dir = filepath.Join(source, "adapters/mcp")
 	if output, e := command.CombinedOutput(); e != nil {
 		t.Fatalf("build real controlled test process: %s: %v", output, e)
@@ -150,7 +152,7 @@ func TestSyncedPublicationInterleavingAndReadOnlyReviews(t *testing.T) {
 			installed, e := setup.Apply(ctx, request, config, review.Digest, true)
 			must(t, e)
 			dataRoot := filepath.Join(user, ".maestro-install")
-			seed := installer.SeededOperationOptions{Self: filepath.Join(request.ManagedRoot, "maestro-install"), Version: "0.3.7", AuthorityRegistrySHA256: pin, UserHome: user, ManagedRoot: request.ManagedRoot, DataRoot: dataRoot, VerifyNative: config.VerifyNative}
+			seed := installer.SeededOperationOptions{Self: filepath.Join(request.ManagedRoot, sourceTestExecutable("maestro-install")), Version: "0.3.7", AuthorityRegistrySHA256: pin, UserHome: user, ManagedRoot: request.ManagedRoot, DataRoot: dataRoot, VerifyNative: config.VerifyNative}
 			synced := filepath.Join(caseRoot, "synced")
 			tuple := releasecontract.SourceTuple{SourceID: "r1-" + name, Channel: "canary", OS: runtime.GOOS, Arch: runtime.GOARCH}
 			now := time.Now().UTC().Truncate(time.Second)

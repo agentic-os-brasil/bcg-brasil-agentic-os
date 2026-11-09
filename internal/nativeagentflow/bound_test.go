@@ -36,6 +36,12 @@ func TestBoundReservationCorrelationAndObservation(t *testing.T) {
 	if err := s.Admit("session", "p1", "tool", "case-agent"); err != nil {
 		t.Fatal(err)
 	}
+	if s.CheckMain("session", "p1") == nil {
+		t.Fatal("pending reservation admitted unidentified main tools")
+	}
+	if err := s.Admit("session", "p1", "tool", "case-agent"); err != nil {
+		t.Fatalf("exact pending dispatch retry refused: %v", err)
+	}
 	if s.Correlate("session", "p1", "agent", "pa-expert") == nil {
 		t.Fatal("wrong target admitted")
 	}

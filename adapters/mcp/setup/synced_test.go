@@ -35,11 +35,11 @@ import (
 // The native verifier is explicitly an engineering byte-bound composition;
 // production-default CLI refusal remains a required independent negative.
 func TestModernSyncedSourceLifecycle(t *testing.T) {
-	if runtime.GOOS != "darwin" {
+	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
 		t.Skip("actual admitted-home engineering runner required")
 	}
 	baseline := os.Getenv("MAESTRO_SYNCED_UPDATE_BASELINE")
-	if baseline == "" {
+	if baseline == "" && runtime.GOOS != "windows" {
 		t.Skip("explicit immutable old-modern baseline required for the complete Task2 gate")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
@@ -77,63 +77,67 @@ func TestModernSyncedSourceLifecycle(t *testing.T) {
 	n := build("0.1.42")
 	next := build("0.1.43")
 	recovery := build("0.1.45")
-	oldHelper := os.Getenv("MAESTRO_SYNCED_OLD_HELPER")
-	if oldHelper == "" {
-		helperRoot := filepath.Join(root, "old-helper-build")
-		must(t, os.Mkdir(helperRoot, 0700))
-		module := strings.Replace(string(read(t, filepath.Join(baseline, "go.mod"))), "module github.com/agentic-os-brasil/bcg-brasil-agentic-os", "module github.com/agentic-os-brasil/bcg-brasil-agentic-os/oldpublicprobe", 1)
-		module += "\nrequire github.com/agentic-os-brasil/bcg-brasil-agentic-os v0.0.0\nreplace github.com/agentic-os-brasil/bcg-brasil-agentic-os => " + fmt.Sprintf("%q", baseline) + "\n"
-		must(t, os.WriteFile(filepath.Join(helperRoot, "go.mod"), []byte(module), 0600))
-		must(t, os.WriteFile(filepath.Join(helperRoot, "go.sum"), read(t, filepath.Join(baseline, "go.sum")), 0600))
-		must(t, os.WriteFile(filepath.Join(helperRoot, "main.go"), read(t, filepath.Join(source, "internal/installer/testdata/synced-old-public/main.go")), 0600))
-		oldHelper = filepath.Join(helperRoot, "old-public-helper")
-		command := exec.CommandContext(ctx, "go", "build", "-mod=readonly", "-buildvcs=false", "-o", oldHelper, ".")
-		command.Dir = helperRoot
-		if output, e := command.CombinedOutput(); e != nil {
-			t.Fatalf("compile immutable old public owner: %s: %v", output, e)
-		}
-	}
-	factoryInput := filepath.Join(root, "old-factory-input.json")
-	factoryRequest, _ := json.Marshal(map[string]string{"Baseline": baseline, "Registry": registryPath, "Output": filepath.Join(root, "old-factory"), "Version": "0.1.44", "InstallerVersion": "0.3.7"})
-	must(t, os.WriteFile(factoryInput, factoryRequest, 0600))
-	oldOutput, err := exec.CommandContext(ctx, oldHelper, "factory", factoryInput).CombinedOutput()
-	if err != nil {
-		t.Fatalf("build unchanged Task1 server and seed: %s: %v", oldOutput, err)
-	}
+	var oldHelper, oldSigned string
 	var oldFactory releasepack.ModernCandidate
-	must(t, json.Unmarshal(oldOutput, &oldFactory))
-	oldSigned := filepath.Join(root, "old-signed")
-	_, err = releasepack.SignCandidate(releasepack.SignCandidateOptions{Candidate: oldFactory.Directory, Output: oldSigned, Registry: registryPath, Issuer: "engineering-fixture", KeyID: "ephemeral", PrivateKey: private})
-	must(t, err)
-	spoof := filepath.Join(root, "old-server-claimed-capability")
-	must(t, os.Mkdir(spoof, 0700))
-	entries, err := os.ReadDir(oldFactory.Directory)
-	must(t, err)
-	for _, entry := range entries {
-		if !entry.Type().IsRegular() {
-			t.Fatal("old candidate contains unexpected directory")
+	historicalCompatibility := runtime.GOOS != "windows"
+	if historicalCompatibility {
+		oldHelper = os.Getenv("MAESTRO_SYNCED_OLD_HELPER")
+		if oldHelper == "" {
+			helperRoot := filepath.Join(root, "old-helper-build")
+			must(t, os.Mkdir(helperRoot, 0700))
+			module := strings.Replace(string(read(t, filepath.Join(baseline, "go.mod"))), "module github.com/agentic-os-brasil/bcg-brasil-agentic-os", "module github.com/agentic-os-brasil/bcg-brasil-agentic-os/oldpublicprobe", 1)
+			module += "\nrequire github.com/agentic-os-brasil/bcg-brasil-agentic-os v0.0.0\nreplace github.com/agentic-os-brasil/bcg-brasil-agentic-os => " + fmt.Sprintf("%q", baseline) + "\n"
+			must(t, os.WriteFile(filepath.Join(helperRoot, "go.mod"), []byte(module), 0600))
+			must(t, os.WriteFile(filepath.Join(helperRoot, "go.sum"), read(t, filepath.Join(baseline, "go.sum")), 0600))
+			must(t, os.WriteFile(filepath.Join(helperRoot, "main.go"), read(t, filepath.Join(source, "internal/installer/testdata/synced-old-public/main.go")), 0600))
+			oldHelper = filepath.Join(helperRoot, "old-public-helper")
+			command := exec.CommandContext(ctx, "go", "build", "-mod=readonly", "-buildvcs=false", "-o", oldHelper, ".")
+			command.Dir = helperRoot
+			if output, e := command.CombinedOutput(); e != nil {
+				t.Fatalf("compile immutable old public owner: %s: %v", output, e)
+			}
 		}
-		info, e := entry.Info()
-		must(t, e)
-		must(t, os.WriteFile(filepath.Join(spoof, entry.Name()), read(t, filepath.Join(oldFactory.Directory, entry.Name())), info.Mode().Perm()))
-	}
-	spoofManifest := oldFactory.Manifest
-	spoofManifest.Server.ExecutionContract = releasecontract.SyncedSourceContract
-	spoofManifest.Delivery.ClientInputsSHA256, err = spoofManifest.ClientInputsDigest()
-	must(t, err)
-	spoofJSON, err := json.MarshalIndent(spoofManifest, "", "  ")
-	must(t, err)
-	must(t, os.WriteFile(filepath.Join(spoof, "release-manifest.json"), append(spoofJSON, '\n'), 0600))
-	spoofSigned := filepath.Join(root, "old-server-claimed-capability-signed")
-	_, err = releasepack.SignCandidate(releasepack.SignCandidateOptions{Candidate: spoof, Output: spoofSigned, Registry: registryPath, Issuer: "engineering-fixture", KeyID: "ephemeral", PrivateKey: private})
-	must(t, err)
-	spoofVerified, err := releaseverify.VerifyDirectory(spoofSigned, registry)
-	must(t, err)
-	negativeUser := filepath.Join(root, "old-server-negative-owner")
-	must(t, os.Mkdir(negativeUser, 0700))
-	_, err = installtx.Prepare(spoofVerified, installtx.PrepareOptions{UserHome: negativeUser, Transition: "install", ManagedRoot: filepath.Join(root, "old-server-negative-managed"), DataRoot: filepath.Join(negativeUser, ".maestro-install"), TargetOS: runtime.GOOS, TargetArch: runtime.GOARCH})
-	if err == nil || !strings.Contains(err.Error(), "actual server source-aware identity") {
-		t.Fatalf("actual Task1 server gained capability from signed declaration: %v", err)
+		factoryInput := filepath.Join(root, "old-factory-input.json")
+		factoryRequest, _ := json.Marshal(map[string]string{"Baseline": baseline, "Registry": registryPath, "Output": filepath.Join(root, "old-factory"), "Version": "0.1.44", "InstallerVersion": "0.3.7"})
+		must(t, os.WriteFile(factoryInput, factoryRequest, 0600))
+		oldOutput, err := exec.CommandContext(ctx, oldHelper, "factory", factoryInput).CombinedOutput()
+		if err != nil {
+			t.Fatalf("build unchanged Task1 server and seed: %s: %v", oldOutput, err)
+		}
+		must(t, json.Unmarshal(oldOutput, &oldFactory))
+		oldSigned = filepath.Join(root, "old-signed")
+		_, err = releasepack.SignCandidate(releasepack.SignCandidateOptions{Candidate: oldFactory.Directory, Output: oldSigned, Registry: registryPath, Issuer: "engineering-fixture", KeyID: "ephemeral", PrivateKey: private})
+		must(t, err)
+		spoof := filepath.Join(root, "old-server-claimed-capability")
+		must(t, os.Mkdir(spoof, 0700))
+		entries, err := os.ReadDir(oldFactory.Directory)
+		must(t, err)
+		for _, entry := range entries {
+			if !entry.Type().IsRegular() {
+				t.Fatal("old candidate contains unexpected directory")
+			}
+			info, e := entry.Info()
+			must(t, e)
+			must(t, os.WriteFile(filepath.Join(spoof, entry.Name()), read(t, filepath.Join(oldFactory.Directory, entry.Name())), info.Mode().Perm()))
+		}
+		spoofManifest := oldFactory.Manifest
+		spoofManifest.Server.ExecutionContract = releasecontract.SyncedSourceContract
+		spoofManifest.Delivery.ClientInputsSHA256, err = spoofManifest.ClientInputsDigest()
+		must(t, err)
+		spoofJSON, err := json.MarshalIndent(spoofManifest, "", "  ")
+		must(t, err)
+		must(t, os.WriteFile(filepath.Join(spoof, "release-manifest.json"), append(spoofJSON, '\n'), 0600))
+		spoofSigned := filepath.Join(root, "old-server-claimed-capability-signed")
+		_, err = releasepack.SignCandidate(releasepack.SignCandidateOptions{Candidate: spoof, Output: spoofSigned, Registry: registryPath, Issuer: "engineering-fixture", KeyID: "ephemeral", PrivateKey: private})
+		must(t, err)
+		spoofVerified, err := releaseverify.VerifyDirectory(spoofSigned, registry)
+		must(t, err)
+		negativeUser := filepath.Join(root, "old-server-negative-owner")
+		must(t, os.Mkdir(negativeUser, 0700))
+		_, err = installtx.Prepare(spoofVerified, installtx.PrepareOptions{UserHome: negativeUser, Transition: "install", ManagedRoot: filepath.Join(root, "old-server-negative-managed"), DataRoot: filepath.Join(negativeUser, ".maestro-install"), TargetOS: runtime.GOOS, TargetArch: runtime.GOARCH})
+		if err == nil || !strings.Contains(err.Error(), "actual server source-aware identity") {
+			t.Fatalf("actual Task1 server gained capability from signed declaration: %v", err)
+		}
 	}
 	if n.manifest.Server.ExecutionContract != "maestro-synced-source-v1" || next.manifest.Server.ExecutionContract != n.manifest.Server.ExecutionContract {
 		t.Fatal("factory did not bind real source execution capability")
@@ -185,7 +189,7 @@ func TestModernSyncedSourceLifecycle(t *testing.T) {
 	installed, err := setup.Apply(ctx, r, config, review.Digest, true)
 	must(t, err)
 	dataRoot := filepath.Join(user, ".maestro-install")
-	seed := installer.SeededOperationOptions{Self: filepath.Join(r.ManagedRoot, "maestro-install"), Version: "0.3.7", AuthorityRegistrySHA256: sum(registryBody), UserHome: user, ManagedRoot: r.ManagedRoot, DataRoot: dataRoot, VerifyNative: config.VerifyNative}
+	seed := installer.SeededOperationOptions{Self: filepath.Join(r.ManagedRoot, sourceTestExecutable("maestro-install")), Version: "0.3.7", AuthorityRegistrySHA256: sum(registryBody), UserHome: user, ManagedRoot: r.ManagedRoot, DataRoot: dataRoot, VerifyNative: config.VerifyNative}
 	current, err := installtx.ReadStateForManagedRoot(dataRoot, r.ManagedRoot)
 	must(t, err)
 	if current.SchemaVersion != 4 || current.Source != nil || current.Binding.ManifestSHA256 != n.verified.ManifestSHA256 {
@@ -236,11 +240,30 @@ func TestModernSyncedSourceLifecycle(t *testing.T) {
 	}
 	must(t, os.Rename(installed.Installation.CLIPath+".held", installed.Installation.CLIPath))
 	current = missingCheck.Current
-	oldProofInput := filepath.Join(root, "old-public-input.json")
-	oldProofBody, _ := json.Marshal(map[string]string{"UserHome": user, "ManagedRoot": r.ManagedRoot, "DataRoot": dataRoot, "ReleaseDir": oldSigned, "Installer": oldFactory.Installer, "Registry": registryPath, "Baseline": baseline, "Output": filepath.Join(root, "old-public-proof.json")})
-	must(t, os.WriteFile(oldProofInput, oldProofBody, 0600))
-	if output, e := exec.CommandContext(ctx, oldHelper, oldProofInput).CombinedOutput(); e != nil {
-		t.Fatalf("unchanged old public owner failed refusal proof: %s: %v", output, e)
+	if historicalCompatibility {
+		oldProofInput := filepath.Join(root, "old-public-input.json")
+		oldProofBody, _ := json.Marshal(map[string]string{"UserHome": user, "ManagedRoot": r.ManagedRoot, "DataRoot": dataRoot, "ReleaseDir": oldSigned, "Installer": oldFactory.Installer, "Registry": registryPath, "Baseline": baseline, "Output": filepath.Join(root, "old-public-proof.json")})
+		must(t, os.WriteFile(oldProofInput, oldProofBody, 0600))
+		if output, e := exec.CommandContext(ctx, oldHelper, oldProofInput).CombinedOutput(); e != nil {
+			t.Fatalf("unchanged old public owner failed refusal proof: %s: %v", output, e)
+		}
+	} else {
+		// There was no admitted ordinary Windows predecessor for this source
+		// profile. Prove the actual current public downgrade fence instead;
+		// never relabel an unsupported old Windows binary as a positive.
+		before := read(t, filepath.Join(dataRoot, "config", "install-state.json"))
+		downgrade := current
+		downgrade.SchemaVersion = 3
+		downgrade.Source = nil
+		downgrade.Binding = installtx.ReleaseBinding{}
+		if err := installtx.WriteState(dataRoot, downgrade); err == nil {
+			t.Fatal("current public writer erased protected source custody")
+		}
+		if !bytes.Equal(before, read(t, filepath.Join(dataRoot, "config", "install-state.json"))) {
+			t.Fatal("current public downgrade refusal mutated source custody")
+		}
+		proof, _ := json.Marshal(map[string]any{"platform": "windows", "current_public_downgrade": "refused_without_effects", "historical_predecessor": "unavailable_not_claimed"})
+		must(t, os.WriteFile(filepath.Join(root, "current-public-source-fence.json"), proof, 0600))
 	}
 	qualified, err := installer.PrepareQualifiedLaunch(ctx, installer.QualifiedLaunchOptions{SeededOperationOptions: seed, ExpectedBinding: current.Binding, Workspace: ws})
 	must(t, err)
@@ -396,8 +419,10 @@ func TestModernSyncedSourceLifecycle(t *testing.T) {
 	must(t, e)
 	crashBinary := os.Getenv("MAESTRO_SYNCED_CRASH_HELPER")
 	if crashBinary == "" {
-		crashBinary = filepath.Join(root, "installtx-crash.test")
-		command := exec.CommandContext(ctx, "go", "test", "-mod=readonly", "-c", "-o", crashBinary, "./internal/installtx")
+		crashBinary = filepath.Join(root, sourceTestExecutable("installtx-crash.test"))
+		moduleMode, e := releasepack.ReadOnlyModuleMode(source)
+		must(t, e)
+		command := exec.CommandContext(ctx, "go", "test", moduleMode, "-c", "-o", crashBinary, "./internal/installtx")
 		command.Dir = source
 		if output, e := command.CombinedOutput(); e != nil {
 			t.Fatalf("compile focused crash witness: %s: %v", output, e)
@@ -566,7 +591,7 @@ func TestModernSyncedSourceLifecycle(t *testing.T) {
 	if e == nil || !bytes.Equal(stickyBytes, read(t, filepath.Join(dataRoot, "config/install-state.json"))) {
 		t.Fatal("older fresh replay cleared capacity denial")
 	}
-	proof := map[string]any{"state": "real_signed_source_update_rollback_expired_recall_recovery_capacity_denial_passed", "native_admission": "controlled_in_process_engineering_seed_verifier_only", "real_stdio": true, "trusted_forms": forms, "resource_count": len(identity.Resources), "source_sequence": 15, "recall_capacity_exhausted": true, "recovered_at_sequence": 12, "retained_expired_denial_sequence": 11, "recovered_release": recovered.Release, "n_manifest": n.verified.ManifestSHA256, "n1_manifest": next.verified.ManifestSHA256, "owner_workspace_bytes": "preserved", "native_clients": "not_exercised", "hosted_ci": "not_exercised", "publication": "not_exercised"}
+	proof := map[string]any{"state": "real_signed_source_update_rollback_expired_recall_recovery_capacity_denial_passed", "native_admission": "controlled_in_process_engineering_seed_verifier_only", "real_stdio": true, "trusted_forms": forms, "resource_count": len(identity.Resources), "source_sequence": 15, "recall_capacity_exhausted": true, "recovered_at_sequence": 12, "retained_expired_denial_sequence": 11, "recovered_release": recovered.Release, "n_manifest": n.verified.ManifestSHA256, "n1_manifest": next.verified.ManifestSHA256, "owner_workspace_bytes": "preserved", "native_clients": "not_exercised", "hosted_ci": "not_exercised", "publication": "not_exercised", "historical_predecessor_exercised": historicalCompatibility}
 	proofBody, _ := json.MarshalIndent(proof, "", "  ")
 	must(t, os.WriteFile(filepath.Join(root, "synced-lifecycle-evidence.json"), append(proofBody, '\n'), 0600))
 	t.Log(string(proofBody))
@@ -584,4 +609,11 @@ func connectQualifiedSource(t *testing.T, ctx context.Context, seed installer.Se
 	session, err := client.Connect(ctx, &mcp.CommandTransport{Command: command}, nil)
 	must(t, err)
 	return session
+}
+
+func sourceTestExecutable(name string) string {
+	if runtime.GOOS == "windows" {
+		return name + ".exe"
+	}
+	return name
 }

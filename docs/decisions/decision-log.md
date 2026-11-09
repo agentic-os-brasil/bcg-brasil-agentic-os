@@ -1298,6 +1298,34 @@ Expose the eight existing owning maintenance jobs through the admitted MCP bindi
 - Refs: DOCL; MIDO; DIPK; specs/010-local-ingestion-runtime.md; specs/061-product-local-content.md; docs/plans/2026-11-02-policy-format-ingestion.md; internal/ingest
 - Supersedes: none
 
+## BRPG - Author reviewed workspace pages through the canonical atlas engine
+
+- Date: 2026-11-06
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The product can write converted document knowledge, but an ordinary attended brief has no conversion artifact. The existing atlas engine already owns authored pages, scoped provenance, revision fences and interrupted-effect recovery; skills cannot replace that missing product invocation route with direct filesystem authority.
+- Decision: Add closed authored-brain query and reviewed mutation variants to the existing three-tool MCP interface. Derive the registered workspace brain from the product binding and reuse atlasops for page creation, declared-section/field changes, links and whole-page replacement. Prepare only fixed workspace templates explicitly. Bind exact reviewed text and current page revisions with truthful attended provenance, without manufacturing conversion or memory authority. Extend the authored frontmatter scope vocabulary with the exact registered workspace identity and preserve legacy pages with diagnostics.
+- Consequences: This is bounded professional Markdown authoring, not arbitrary filesystem RPC, owner-global promotion, memory capture, indexing or background activation. Windows publication must use actual held native directory/lock custody and receive ordinary-user evidence; a permissive capability flip is insufficient. Source, public SDK/compiled acceptance, package and actual client delivery remain distinct. Existing owner/knowledge journal compatibility and user edits are preserved.
+- Refs: specs/064-product-authored-brain.md; specs/014-human-atlas-bootstrap.md; specs/061-product-local-content.md; WATL; AJRC; https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/461; https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/460
+- Supersedes: none
+
+
+### BRPG review correction — shared workspace boundary
+
+Date: 2026-11-06. Status: accepted for issue #461 correction before integration.
+
+Independent review of frozen `0e42a0d2` found a reachable sibling
+`knowledge.collect` case/private-scope bypass and a link-target authority gap while
+waiting for the corpus lock. Public SDK and compiled RED reproduced the former.
+Move path admission into one workspace policy bound to the atlasops instance,
+reuse it for converted sources/destinations without imposing authored metadata,
+and recheck both reviewed link endpoints under effect/replay custody. Bind the
+reviewed target revision as private canonical request data. Preserve the early
+source revision fence, explicit review, nil-policy owner compatibility and the
+existing prepared journal. Tests use synthetic, held-lock schedules and no
+runtime/model authority switches. This refines BRPG; it creates no arbitrary
+filesystem surface or stronger marker-transaction claim.
+
 ## PWKC - Compile source-owned private memory navigation under local authority
 
 - Date: 2026-11-03

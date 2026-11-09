@@ -370,8 +370,13 @@ expiry or add recalls. It cannot redefine that version's artifact identity.
 
 ### 2. Explicit local source enrollment and private snapshots
 
-Trusted operator review selects one source ID/channel/target and local hydrated
+Trusted operator review selects one source ID/channel/target and an ordinary local
 folder locator for the real installation. The path supplies transport, not trust.
+For the current Windows pilot, direct OneDrive/Files On-Demand source paths are
+unavailable: confinement rejects every reparse point, including hydrated Cloud
+Files. Download and extract a signed generation from SharePoint into an ordinary
+local mirror, then apply the same confinement checks. Hydration is insufficient;
+direct synchronization needs separate native qualification and is not claimed.
 Later metadata cannot silently rebind that tuple or its independently pinned
 registry. No SharePoint destination, endpoint or account is guessed.
 
