@@ -8,6 +8,11 @@ track/proposal/apply/onboarding operations use the same admitted binding. See
 the [owner journey and local fallback guide](../../docs/product-mcp-owner.md)
 for exact operations. Roots and workspace identity are selected locally.
 
+Reviewed memory adds capture, paged discovery/search/readback, bounded context,
+daily/weekly consolidation and revision-aware correction/deletion/retention.
+Read the [memory journey and local fallback guide](../../docs/product-mcp-memory.md).
+Explicit `init` prepares its fixed authority; queries/startup never bootstrap it.
+
 Build from this directory with `go build -o /absolute/local/path/maestro-mcp ./cmd/maestro-mcp`.
 The installed product directory and owner directory must already exist. Choose a
 new workspace path outside the product and private state. Run the binary explicitly:

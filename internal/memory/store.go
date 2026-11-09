@@ -1,7 +1,6 @@
 package memory
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -12,12 +11,13 @@ import (
 )
 
 type CommitManifest struct {
-	SchemaVersion int               `json:"schema_version"`
-	WorkspaceID   string            `json:"workspace_id"`
-	TransactionID string            `json:"transaction_id"`
-	ParentCommit  string            `json:"parent_commit,omitempty"`
-	CommittedAt   time.Time         `json:"committed_at"`
-	Artifacts     map[string]string `json:"artifacts"`
+	VisibilityRevision uint64            `json:"visibility_revision,omitempty"`
+	SchemaVersion      int               `json:"schema_version"`
+	WorkspaceID        string            `json:"workspace_id"`
+	TransactionID      string            `json:"transaction_id"`
+	ParentCommit       string            `json:"parent_commit,omitempty"`
+	CommittedAt        time.Time         `json:"committed_at"`
+	Artifacts          map[string]string `json:"artifacts"`
 }
 
 var ErrNoValidCommit = errors.New("memory commits exist but none is valid")
@@ -42,8 +42,15 @@ func (engine *Engine) activate(workspaceID string, artifacts []Artifact) error {
 	if err := validateWorkspaceID(workspaceID); err != nil {
 		return err
 	}
+	barrier, err := engine.readVisibility(workspaceID)
+	if err != nil {
+		return err
+	}
 	seen := make(map[string]bool)
 	for _, artifact := range artifacts {
+		if artifact.VisibilityRevision != barrier.Generation {
+			return ErrCaptureConflict
+		}
 		if artifact.WorkspaceID != workspaceID {
 			return errors.New("artifact workspace does not match activation workspace")
 		}
@@ -59,14 +66,14 @@ func (engine *Engine) activate(workspaceID string, artifacts []Artifact) error {
 
 	workspaceRoot := engine.workspaceRoot(workspaceID)
 	stagingRoot := filepath.Join(workspaceRoot, ".transactions")
-	if err := os.MkdirAll(stagingRoot, 0o700); err != nil {
+	if err := memoryMkdirAll(stagingRoot, 0o700); err != nil {
 		return err
 	}
-	staging, err := os.MkdirTemp(stagingRoot, "dream-")
+	staging, err := memoryMkdirTemp(stagingRoot, "dream-")
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(staging)
+	defer memoryRemoveAll(staging)
 	transactionID := filepath.Base(staging)
 
 	artifactPaths := make(map[string]string, len(artifacts))
@@ -83,11 +90,11 @@ func (engine *Engine) activate(workspaceID string, artifacts []Artifact) error {
 	}
 
 	versionsRoot := filepath.Join(workspaceRoot, "versions")
-	if err := os.MkdirAll(versionsRoot, 0o700); err != nil {
+	if err := memoryMkdirAll(versionsRoot, 0o700); err != nil {
 		return err
 	}
 	versionDir := filepath.Join(versionsRoot, transactionID)
-	if err := durableRename(staging, versionDir); err != nil {
+	if err := memoryRename(staging, versionDir); err != nil {
 		return err
 	}
 	if err := engine.fault("after_publish_version"); err != nil {
@@ -111,13 +118,13 @@ func (engine *Engine) activate(workspaceID string, artifacts []Artifact) error {
 	if err == nil && !committedAt.After(parent.CommittedAt) {
 		committedAt = parent.CommittedAt.Add(time.Nanosecond)
 	}
-	manifest := CommitManifest{SchemaVersion: 1, WorkspaceID: workspaceID, TransactionID: transactionID, ParentCommit: parentName, CommittedAt: committedAt, Artifacts: entries}
+	manifest := CommitManifest{SchemaVersion: 1, VisibilityRevision: barrier.Generation, WorkspaceID: workspaceID, TransactionID: transactionID, ParentCommit: parentName, CommittedAt: committedAt, Artifacts: entries}
 	if err := engine.validateManifest(workspaceID, manifest); err != nil {
 		return err
 	}
 
 	commitsRoot := filepath.Join(workspaceRoot, "commits")
-	if err := os.MkdirAll(commitsRoot, 0o700); err != nil {
+	if err := memoryMkdirAll(commitsRoot, 0o700); err != nil {
 		return err
 	}
 	pending := filepath.Join(commitsRoot, ".pending-"+transactionID+".json")
@@ -128,7 +135,14 @@ func (engine *Engine) activate(workspaceID string, artifacts []Artifact) error {
 		return err
 	}
 	commitName := committedAt.Format("20060102T150405.000000000Z") + "-" + transactionID + ".json"
-	if err := durableRename(pending, filepath.Join(commitsRoot, commitName)); err != nil {
+	after, err := engine.readVisibility(workspaceID)
+	if err != nil {
+		return err
+	}
+	if after.Generation != barrier.Generation {
+		return ErrCaptureConflict
+	}
+	if err := memoryRename(pending, filepath.Join(commitsRoot, commitName)); err != nil {
 		return err
 	}
 	if err := engine.fault("after_commit"); err != nil {
@@ -150,9 +164,19 @@ func safeName(value string) string {
 }
 
 func (engine *Engine) latestManifest(workspaceID string) (CommitManifest, string, error) {
-	commitsRoot := filepath.Join(engine.workspaceRoot(workspaceID), "commits")
-	entries, err := os.ReadDir(commitsRoot)
+	if err := validateWorkspaceID(workspaceID); err != nil {
+		return CommitManifest{}, "", err
+	}
+	barrier, err := engine.readVisibility(workspaceID)
 	if err != nil {
+		return CommitManifest{}, "", err
+	}
+	commitsRoot := filepath.Join(engine.workspaceRoot(workspaceID), "commits")
+	entries, err := memoryReadDir(commitsRoot)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) && barrier.Generation > 0 {
+			return emptyVisibleManifest(workspaceID, barrier.Generation), "", nil
+		}
 		return CommitManifest{}, "", err
 	}
 	var names []string
@@ -164,9 +188,19 @@ func (engine *Engine) latestManifest(workspaceID string) (CommitManifest, string
 	sort.Sort(sort.Reverse(sort.StringSlice(names)))
 	for _, name := range names {
 		manifest, decodeErr := engine.readManifest(filepath.Join(commitsRoot, name))
-		if decodeErr == nil && engine.validateManifest(workspaceID, manifest) == nil {
+		if decodeErr == nil && manifest.VisibilityRevision == barrier.Generation && engine.validateManifest(workspaceID, manifest) == nil {
+			after, err := engine.readVisibility(workspaceID)
+			if err != nil {
+				return CommitManifest{}, "", err
+			}
+			if after.Generation != barrier.Generation {
+				return CommitManifest{}, "", ErrCaptureConflict
+			}
 			return manifest, name, nil
 		}
+	}
+	if barrier.Generation > 0 {
+		return emptyVisibleManifest(workspaceID, barrier.Generation), "", nil
 	}
 	if len(names) > 0 {
 		return CommitManifest{}, "", ErrNoValidCommit
@@ -175,31 +209,32 @@ func (engine *Engine) latestManifest(workspaceID string) (CommitManifest, string
 }
 
 func (engine *Engine) readManifest(path string) (CommitManifest, error) {
-	file, err := os.Open(path)
+	body, err := memoryReadFile(path, 1<<20)
 	if err != nil {
 		return CommitManifest{}, err
 	}
-	defer file.Close()
-	decoder := json.NewDecoder(file)
-	decoder.DisallowUnknownFields()
 	var manifest CommitManifest
-	if err := decoder.Decode(&manifest); err != nil {
-		return CommitManifest{}, err
-	}
-	if err := ensureJSONEOF(decoder); err != nil {
+	if err := decodeMemoryJSON(body, &manifest); err != nil {
 		return CommitManifest{}, err
 	}
 	return manifest, nil
 }
 
 func (engine *Engine) validateManifest(workspaceID string, manifest CommitManifest) error {
-	if manifest.SchemaVersion != 1 || manifest.WorkspaceID != workspaceID || manifest.TransactionID == "" || manifest.CommittedAt.IsZero() || len(manifest.Artifacts) == 0 {
+	if manifest.SchemaVersion != 1 || manifest.WorkspaceID != workspaceID || manifest.TransactionID == "" || manifest.CommittedAt.IsZero() || (len(manifest.Artifacts) == 0 && manifest.VisibilityRevision == 0) || len(manifest.Artifacts) > 128 {
 		return errors.New("invalid memory commit manifest")
+	}
+	barrier, err := engine.readVisibility(workspaceID)
+	if err != nil {
+		return err
+	}
+	if manifest.VisibilityRevision != barrier.Generation {
+		return ErrCaptureConflict
 	}
 	workspaceRoot := engine.workspaceRoot(workspaceID)
 	for key, relative := range manifest.Artifacts {
 		clean := filepath.Clean(filepath.FromSlash(relative))
-		if clean == "." || filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		if clean == "." || filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || !strings.HasPrefix(filepath.ToSlash(clean), "versions/") {
 			return fmt.Errorf("manifest artifact %s escapes workspace root", key)
 		}
 		path := filepath.Join(workspaceRoot, clean)
@@ -220,13 +255,43 @@ func (engine *Engine) readArtifactByKey(workspaceID, key string) (Artifact, stri
 }
 
 func (engine *Engine) readArtifactFromManifest(workspaceID string, manifest CommitManifest, key string) (Artifact, string, error) {
+	if manifest.WorkspaceID != workspaceID {
+		return Artifact{}, "", errors.New("manifest workspace mismatch")
+	}
+	barrier, err := engine.readVisibility(workspaceID)
+	if err != nil {
+		return Artifact{}, "", err
+	}
+	if manifest.VisibilityRevision != barrier.Generation {
+		return Artifact{}, "", os.ErrNotExist
+	}
 	relative, ok := manifest.Artifacts[key]
 	if !ok {
 		return Artifact{}, "", os.ErrNotExist
 	}
+	clean := filepath.Clean(filepath.FromSlash(relative))
+	if filepath.IsAbs(clean) || !strings.HasPrefix(filepath.ToSlash(clean), "versions/") {
+		return Artifact{}, "", errors.New("artifact path escapes memory versions")
+	}
 	path := filepath.Join(engine.workspaceRoot(workspaceID), filepath.FromSlash(relative))
 	artifact, err := engine.readArtifact(path)
+	if err == nil {
+		if artifact.WorkspaceID != workspaceID || artifactKey(artifact) != key || artifact.VisibilityRevision != manifest.VisibilityRevision {
+			return Artifact{}, "", errors.New("artifact does not match selected manifest")
+		}
+		after, e := engine.readVisibility(workspaceID)
+		if e != nil {
+			return Artifact{}, "", e
+		}
+		if after.Generation != manifest.VisibilityRevision {
+			return Artifact{}, "", os.ErrNotExist
+		}
+	}
 	return artifact, path, err
+}
+
+func emptyVisibleManifest(workspaceID string, revision uint64) CommitManifest {
+	return CommitManifest{SchemaVersion: 1, WorkspaceID: workspaceID, VisibilityRevision: revision, TransactionID: fmt.Sprintf("dream-visibility%d", revision), CommittedAt: time.Unix(0, 0).UTC(), Artifacts: map[string]string{}}
 }
 
 func latestArtifactKeyInManifest(manifest CommitManifest, prefix string) (string, error) {

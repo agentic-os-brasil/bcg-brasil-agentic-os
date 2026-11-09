@@ -2,6 +2,7 @@ package memory
 
 import (
 	"errors"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,23 +27,51 @@ func (engine *Engine) Status(workspaceID string) (StatusReport, error) {
 	if err := validateWorkspaceID(workspaceID); err != nil {
 		return StatusReport{}, err
 	}
+	barrier, err := engine.readVisibility(workspaceID)
+	if err != nil {
+		return StatusReport{}, err
+	}
 	report := StatusReport{WorkspaceID: workspaceID, State: "empty", Layers: make(map[string]string)}
-	captures, err := filepath.Glob(filepath.Join(engine.workspaceRoot(workspaceID), "l1", "captures", "*.jsonl"))
+	for _, directory := range []string{"captures", "attested-captures"} {
+		paths, err := engine.journalPaths(workspaceID, directory)
+		if err != nil {
+			return StatusReport{}, err
+		}
+		for _, path := range paths {
+			body, err := memoryReadFile(path, 1<<20)
+			if err != nil {
+				return StatusReport{}, err
+			}
+			visible, _, err := engine.filterJournal(workspaceID, body, directory == "attested-captures", barrier)
+			if err != nil {
+				return StatusReport{}, err
+			}
+			if len(visible) > 0 {
+				report.CaptureFiles++
+				if directory == "attested-captures" {
+					report.AttestedCaptureFiles++
+				}
+			}
+		}
+	}
+	owned, err := engine.ownedCaptures(workspaceID)
 	if err != nil {
 		return StatusReport{}, err
 	}
-	report.CaptureFiles = len(captures)
-	attested, err := filepath.Glob(filepath.Join(engine.workspaceRoot(workspaceID), "l1", "attested-captures", "*.jsonl"))
-	if err != nil {
-		return StatusReport{}, err
+	for _, c := range owned {
+		if c.Revision > barrier.Denied[c.ID] {
+			report.CaptureFiles++
+			report.AttestedCaptureFiles++
+		}
 	}
-	report.AttestedCaptureFiles = len(attested)
-	report.CaptureFiles += report.AttestedCaptureFiles
 	if report.CaptureFiles > 0 {
 		report.State = "captured"
 	}
-	lockPath := filepath.Join(engine.workspaceRoot(workspaceID), ".locks", "activation.lock")
-	if _, err := os.Stat(lockPath); err == nil {
+	lockPath, err := scheduler.CanonicalPrivatePath(filepath.Join(engine.workspaceRoot(workspaceID), ".locks", "activation.lock"))
+	if err != nil {
+		return StatusReport{}, err
+	}
+	if err := scheduler.ValidateDirectory(lockPath); err == nil {
 		report.ActivationLocked = true
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return StatusReport{}, err
@@ -58,7 +87,9 @@ func (engine *Engine) Status(workspaceID string) (StatusReport, error) {
 	if err != nil {
 		return StatusReport{}, err
 	}
-	report.State = "ready"
+	if len(manifest.Artifacts) > 0 {
+		report.State = "ready"
+	}
 	report.TransactionID = manifest.TransactionID
 	report.CommittedAt = manifest.CommittedAt
 	for key := range manifest.Artifacts {
@@ -69,6 +100,13 @@ func (engine *Engine) Status(workspaceID string) (StatusReport, error) {
 		if current := report.Layers[artifact.Layer]; artifact.Period > current {
 			report.Layers[artifact.Layer] = artifact.Period
 		}
+	}
+	after, err := engine.readVisibility(workspaceID)
+	if err != nil {
+		return StatusReport{}, err
+	}
+	if after.Revision != barrier.Revision {
+		return StatusReport{}, ErrCaptureConflict
 	}
 	return report, nil
 }

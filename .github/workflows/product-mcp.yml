@@ -12,6 +12,9 @@ on:
       - 'go.sum'
       - 'internal/workspace/**'
       - 'internal/ownerctx/**'
+      - 'internal/memory/**'
+      - 'schemas/memory-artifact.schema.json'
+      - 'schemas/memory-commit.schema.json'
       - 'bundles/**'
       - 'LICENSE.md'
       - '.github/workflows/product-mcp.yml'
@@ -27,6 +30,9 @@ on:
       - 'go.sum'
       - 'internal/workspace/**'
       - 'internal/ownerctx/**'
+      - 'internal/memory/**'
+      - 'schemas/memory-artifact.schema.json'
+      - 'schemas/memory-commit.schema.json'
       - 'bundles/**'
       - 'LICENSE.md'
       - '.github/workflows/product-mcp.yml'
@@ -75,8 +81,8 @@ jobs:
           }
           $stagedBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           "GOCACHE=$freshCache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-      - name: Canonical ledger, HOME and owner contracts
-        run: go test ./internal/execution ./internal/datahome ./internal/ownerctx ./internal/privatelock -timeout=300s
+      - name: Canonical ledger, HOME, owner and memory contracts
+        run: go test ./internal/execution ./internal/datahome ./internal/ownerctx ./internal/privatelock ./internal/memory -timeout=300s
       - name: Canonical workspace initialization contracts on admitted Unix runners
         if: runner.os != 'Windows'
         run: go test ./internal/workspace -timeout=180s

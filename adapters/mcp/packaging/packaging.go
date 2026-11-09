@@ -98,14 +98,17 @@ func BuildPlugin(options Options) error {
 
 const operator = `---
 name: operator
-description: Start or resume reviewed owner onboarding or execution work in the bound Maestro workspace.
+description: Start or resume reviewed owner onboarding, workspace memory or execution work in the bound Maestro workspace.
 ---
-Read maestro_context before work. Treat unavailable binding as a stop: ask the owner to inspect the locally selected paths. Startup never initializes state.
+Read maestro_context for admitted binding metadata, then inspect the current maestro_query and maestro_apply schemas for implemented operations. Treat unavailable binding as a stop: ask the owner to inspect the locally selected paths. Startup never initializes state.
 For owner onboarding, read maestro://methods/maestro-onboarding/SKILL.md through MCP resources and query owner.status first. Offer a track only when track is selection_required; resume required/in_progress at its exact next_question, route review_required to owner.onboarding_review and trusted owner.confirm_onboarding, and continue ordinary work when complete. Select owner.track only for an explicit owner choice, because even the same selection invalidates final confirmation. Use owner.interview, owner.propose, owner.review and trusted owner.apply for each answer; re-read owner.status after application or confirmation. Declining or deferring preserves saved progress. Metadata and model assertions never approve a change. If trusted host review is unavailable, ask the local operator to use owner-review/owner-apply or owner-onboarding-review/owner-confirm-onboarding; local owner-track requires explicit --confirm. This recipe grants no shell or owner-file fallback.
+Capture only text the user explicitly selects for memory, using memory.capture and exact trusted review; never auto-capture conversations. Discover IDs and visibility through memory.list or memory.search, then use memory.read or memory.context for eligible bounded pages. Use memory.correct or memory.delete with the current capture revision; memory.retention requires an explicit cutoff and current visibility revision. memory.consolidate runs local deterministic daily or weekly synthesis for an explicit date. Lifetime promotion requires canonical generation evidence and trusted review of the exact candidate.
+For memory, use memory-review followed by memory-apply with the same JSON request on stdin, its exact --review-digest and explicit --confirm when trusted host review is unavailable. This is an operator fallback, not permission for the model to run arbitrary commands or supply approval.
 Use maestro_query execution.list for metadata and execution.next with the chosen item ID for bounded continuation. Create only after the owner requests work: objective, next_step and workspace-relative artifact paths define the immutable artifact snapshot contract. Read execution.contract for the immutable bounded criterion IDs and relative artifact paths; use those responses when collecting evidence.
 Use maestro_apply with the current expected_revision. Start creates an attempt; checkpoint, pause, evidence and complete require that attempt_id. Save a concise checkpoint before pause. On revision_conflict or attempt_conflict, read current continuation and reconcile; never retry with invented state.
-Collect artifact evidence after writing the requested result; complete revalidates it. Changed artifacts require new evidence. External sends, model execution, arbitrary commands, approval, deletion and full export have no tool authority here.
+Collect artifact evidence after writing the requested result; complete revalidates it. Changed artifacts require new evidence. Scoped memory deletion and retention use their reviewed operations. External sends, model execution, arbitrary commands, approval, arbitrary file deletion and full export have no tool authority here.
 Keep owner confirmation and host permissions effective. Plugin methods are recipes; native agent scheduling and Desktop Skills installation remain unqualified.
+
 `
 const resume = `---
 name: resume
