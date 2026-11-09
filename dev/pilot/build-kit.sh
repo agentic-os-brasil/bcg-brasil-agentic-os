@@ -28,7 +28,7 @@ cp "$SOURCE/dev/pilot/open-code-macos.command" "$OUT/templates/open-code-macos.c
 cp "$SOURCE/dev/pilot/open-desktop-macos.command" "$OUT/templates/open-desktop-macos.command"
 chmod 700 "$OUT/templates/"*.command
 python3 -c 'from pathlib import Path; import sys; Path(sys.argv[2]).write_text(Path(sys.argv[1]).read_text(), encoding="utf-8-sig")' "$SOURCE/dev/pilot/setup-windows.ps1" "$OUT/Preparar Maestro.ps1"
-cp "$SOURCE/dev/pilot/prepare-windows.cmd" "$OUT/Preparar Maestro.cmd"
+python3 -c 'from pathlib import Path; import sys; Path(sys.argv[2]).write_bytes(Path(sys.argv[1]).read_text().replace("\n", "\r\n").encode("ascii"))' "$SOURCE/dev/pilot/prepare-windows.cmd" "$OUT/Preparar Maestro.cmd"
 printf 'disabled\n' > "$OUT/LIFECYCLE-CONTEXT.txt"
 if [[ "${2:-}" == --lifecycle-context ]]; then
   help="$("$OUT/bin/maestro-mcp-darwin-$( [[ "$(uname -m)" == arm64 ]] && printf arm64 || printf amd64 )" plugin --help 2>&1 || true)"
