@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -20,7 +21,7 @@ import (
 // owning admitted home. It never acquires a dependency or modifies an existing
 // different pack/metadata. Runtime.Status remains the independent availability
 // authority, including the signed client range and qualified input closure.
-func PlaceVerified(ctx context.Context, o Options, release releaseverify.VerifiedRelease) error {
+func PlaceVerified(ctx context.Context, o Options, release releaseverify.VerifiedRelease) (placementErr error) {
 	registry, err := releaseverify.LoadPinnedAuthorityRegistry(o.AuthorityRegistryPath, o.AuthorityRegistrySHA256, time.Now)
 	if err != nil {
 		return err
@@ -78,14 +79,11 @@ func PlaceVerified(ctx context.Context, o Options, release releaseverify.Verifie
 		if err != nil {
 			return err
 		}
+		published := false
 		defer func() {
-			_ = filepath.WalkDir(stage, func(path string, d os.DirEntry, e error) error {
-				if e == nil && d.IsDir() {
-					_ = os.Chmod(path, 0700)
-				}
-				return e
-			})
-			_ = os.RemoveAll(stage)
+			if placementErr != nil && !published {
+				placementErr = fmt.Errorf("converter staging preserved for inspection at %s; no failure cleanup was attempted: %w", stage, placementErr)
+			}
 		}()
 		handle, err := os.OpenRoot(stage)
 		if err != nil {
@@ -119,7 +117,7 @@ func PlaceVerified(ctx context.Context, o Options, release releaseverify.Verifie
 			}
 		}
 		var directories []string
-		if err = filepath.WalkDir(stage, func(path string, d os.DirEntry, e error) error {
+		if err = fs.WalkDir(handle.FS(), ".", func(path string, d fs.DirEntry, e error) error {
 			if e != nil {
 				return e
 			}
@@ -132,13 +130,14 @@ func PlaceVerified(ctx context.Context, o Options, release releaseverify.Verifie
 		}
 		sort.Sort(sort.Reverse(sort.StringSlice(directories)))
 		for _, directory := range directories {
-			if err = os.Chmod(directory, 0555); err != nil {
+			if err = handle.Chmod(directory, 0555); err != nil {
 				return err
 			}
 		}
 		if err = os.Rename(stage, installed); err != nil {
 			return err
 		}
+		published = true
 	} else if err != nil {
 		return err
 	}

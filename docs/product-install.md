@@ -116,12 +116,23 @@ homes and overlapping paths refuse.
 
 The installer claims a new managed directory exclusively. An existing empty
 directory is preserved and refuses installation; healthy matching installations
-remain idempotent. A transient private PID/plan marker prevents a concurrent
-first installer from quarantining an active writer. A dead process can be
-reconciled only with the same exact plan. Failure cleanup checks the original
-root and copied-file identities and exact bytes; independent or newer files
-remain untouched. This marker grants no activation authority and never replaces
-the canonical transaction or its receipts.
+remain idempotent. An immutable private PID/plan marker records the original
+claim and is retained, including after success. Incomplete roots require that
+claimant process to exit before canonical same-plan recovery. A verified healthy
+committed installation ignores the historical marker only after exact server,
+seed and registry checks, so repeated setup and post-activation recovery remain
+idempotent. Failed staging reports `installation_pending` and preserves all
+staged material, later file edits and successor markers for inspection. It does
+not delete objects through path-based cleanup. Inspect the reported phase and
+retry the exact plan after the original process exits; ambiguous retained bytes
+refuse automatic recovery. The marker grants no activation authority and never
+replaces the canonical transaction or its receipts.
+
+Optional converter placement also preserves an unsuccessful staging directory
+for inspection. It performs no deferred recursive deletion or permission repair
+through a staging pathname that another writer could recreate. Intended build
+permissions are applied through the existing held staging-root handle before
+publication; a failed placement reports the retained stage explicitly.
 
 Factory allowlist entries declare only `data` or `executable` roles. The modern
 factory requires those roles for every input, including a data-only root license.
