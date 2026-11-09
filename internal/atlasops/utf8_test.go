@@ -66,6 +66,14 @@ func TestAtlasPublicRejectsMalformedUTF8BeforeEffects(t *testing.T) {
 			_, err := e.CreatePage(CreatePageRequest{Page: "knowledge/new.md", Body: "# " + bad, Provenance: attended("same-create")})
 			return err
 		}},
+		{"update body", func(e *Engine, bad string) error {
+			current, err := e.read("knowledge/notes.md")
+			if err != nil {
+				return err
+			}
+			_, err = e.UpdatePage(UpdatePageRequest{Page: "knowledge/notes.md", Body: "# " + bad, ExpectedRevision: revision(current), Provenance: attended("same-update")})
+			return err
+		}},
 		{"append entry", func(e *Engine, bad string) error {
 			_, err := e.AppendEntry(AppendEntryRequest{Page: "knowledge/notes.md", Section: "## Evidence", Entry: "- " + bad, Provenance: attended("same-append")})
 			return err

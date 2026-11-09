@@ -1,4 +1,4 @@
 interface:
   display_name: "Preparar Ambiente Maestro"
-  short_description: "Prepara workspace, runtime e manutenção local"
-  default_prompt: "Use $maestro-environment-setup para preparar meu ambiente Maestro e deixar o runtime pronto para trabalhar."
+  short_description: "Prepara o uso do produto e as escolhas de manutenção"
+  default_prompt: "Use $maestro-environment-setup para conferir o ambiente admitido, iniciar o onboarding e escolher a manutenção."

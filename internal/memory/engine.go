@@ -92,18 +92,22 @@ func (function EligibilityFunc) Evaluate(ctx context.Context, artifact Artifact)
 }
 
 type Engine struct {
-	Root                string
-	Policy              Policy
-	Budgets             map[string]int
-	Freshness           map[string]time.Duration
-	Synthesizer         Synthesizer
-	SynthesizerID       string
-	Eligibility         Eligibility
-	EligibilityPolicyID string
-	Now                 func() time.Time
-	FaultPoint          func(string) error
-	MaxSourceBytes      int
-	contextReadPoint    func(string) error
+	ExpectedDailyFingerprint string
+	// PublicationGuard fences the visible commit; the activation lock is already held.
+	PublicationGuard          func(func() error) error
+	ExpectedWeeklyFingerprint string
+	Root                      string
+	Policy                    Policy
+	Budgets                   map[string]int
+	Freshness                 map[string]time.Duration
+	Synthesizer               Synthesizer
+	SynthesizerID             string
+	Eligibility               Eligibility
+	EligibilityPolicyID       string
+	Now                       func() time.Time
+	FaultPoint                func(string) error
+	MaxSourceBytes            int
+	contextReadPoint          func(string) error
 }
 
 type DreamResult struct {
@@ -248,25 +252,7 @@ func (engine *Engine) dreamDaily(ctx context.Context, workspaceID string, day ti
 		return DreamResult{}, err
 	}
 	defer release()
-	capturePath := engine.currentPath(workspaceID, "l1", filepath.Join(captureDirectory, period+".jsonl"))
-	paths := []string{capturePath}
-	if captureDirectory == "attested-captures" {
-		if _, err := memoryReadFile(capturePath, 1<<20); errors.Is(err, os.ErrNotExist) {
-			paths = nil
-		} else if err != nil {
-			return DreamResult{}, err
-		}
-		captures, err := engine.ownedCaptures(workspaceID)
-		if err != nil {
-			return DreamResult{}, err
-		}
-		for _, capture := range captures {
-			if capture.RecordedAt.UTC().Format("2006-01-02") == period {
-				paths = append(paths, engine.ownedPath(workspaceID, capture.ID))
-			}
-		}
-	}
-	sources, err := engine.readSources(workspaceID, paths)
+	sources, err := engine.dailySources(workspaceID, period, captureDirectory)
 	if err != nil {
 		return DreamResult{}, err
 	}
@@ -281,6 +267,9 @@ func (engine *Engine) dreamDaily(ctx context.Context, workspaceID string, day ti
 		return DreamResult{}, ErrNoLiveCaptures
 	}
 	fingerprint := engine.sourceFingerprint("daily", sources)
+	if engine.ExpectedDailyFingerprint != "" && engine.ExpectedDailyFingerprint != fingerprint {
+		return DreamResult{}, ErrCaptureConflict
+	}
 	if existing, _, err := engine.readArtifactByKey(workspaceID, "L1/"+period); err == nil && engine.validateArtifact(existing) == nil && existing.WorkspaceID == workspaceID && existing.Layer == "L1" && existing.Period == period && existing.SourceFingerprint == fingerprint && existing.SynthesizerID == engine.SynthesizerID {
 		return DreamResult{Cycle: "daily", Period: period, SourceFingerprint: fingerprint, Skipped: true}, nil
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -309,6 +298,15 @@ func (engine *Engine) DreamWeekly(ctx context.Context, workspaceID string, anyDa
 		return DreamResult{}, err
 	}
 	defer release()
+	if engine.ExpectedWeeklyFingerprint != "" {
+		actual, err := engine.WeeklyInputIdentity(workspaceID, anyDay)
+		if err != nil {
+			return DreamResult{}, err
+		}
+		if actual != engine.ExpectedWeeklyFingerprint {
+			return DreamResult{}, ErrCaptureConflict
+		}
+	}
 	var l1Sources []SourceDocument
 	for offset := 0; offset < 7; offset++ {
 		date := monday.AddDate(0, 0, offset).Format("2006-01-02")
@@ -736,4 +734,26 @@ func truncateRunes(value string, limit int) (string, bool) {
 		return value, false
 	}
 	return string(runes[:limit]), true
+}
+
+func (engine *Engine) dailySources(workspaceID, period, captureDirectory string) ([]SourceDocument, error) {
+	capturePath := engine.currentPath(workspaceID, "l1", filepath.Join(captureDirectory, period+".jsonl"))
+	paths := []string{capturePath}
+	if captureDirectory == "attested-captures" {
+		if _, err := memoryReadFile(capturePath, 1<<20); errors.Is(err, os.ErrNotExist) {
+			paths = nil
+		} else if err != nil {
+			return nil, err
+		}
+		captures, err := engine.ownedCaptures(workspaceID)
+		if err != nil {
+			return nil, err
+		}
+		for _, capture := range captures {
+			if capture.RecordedAt.UTC().Format("2006-01-02") == period {
+				paths = append(paths, engine.ownedPath(workspaceID, capture.ID))
+			}
+		}
+	}
+	return engine.readSources(workspaceID, paths)
 }

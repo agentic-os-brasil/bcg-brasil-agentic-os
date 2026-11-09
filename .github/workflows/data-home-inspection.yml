@@ -121,7 +121,8 @@ jobs:
               @{test='TestSecurePathWalkSurvivesAncestorRenameToSymlink'; reason='Unix descriptor-relative walk.'},
               @{test='TestSecureLeafIOSurvivesAncestorSwapForEnrollmentReceiptAndLease'; reason='Unix adversarial swap fixture.'},
               @{test='TestSecureLeafReadAndRemoveSurviveAncestorSwap'; reason='Unix adversarial swap fixture.'},
-              @{test='TestLeaseTransactionPinsGuardAndStateToOneDirectory'; reason='Unix rename-semantics fixture.'}
+              @{test='TestLeaseTransactionPinsGuardAndStateToOneDirectory'; reason='Unix rename-semantics fixture.'},
+              @{test='TestPrivateAtomicUpdateSerializesAndRejectsStaleBytes'; reason='Private atomic update is unavailable on Windows; native serialization coverage is missing.'}
             )
             zipruntime = @(
               @{test='TestMigratedPathsAcceptPhysicalSourceCaseIdentity'; reason='External HOME mutation is unavailable on Windows; native migration coverage is missing.'},

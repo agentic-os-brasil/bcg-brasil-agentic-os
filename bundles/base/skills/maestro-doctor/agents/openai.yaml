@@ -1,4 +1,4 @@
 interface:
   display_name: "Diagnóstico do Maestro"
-  short_description: "Faz um diagnóstico da instalação do Maestro em linguagem simples"
-  default_prompt: "Use $maestro-doctor para verificar se minha instalação do Maestro está saudável e me dizer o que fazer com cada problema."
+  short_description: "Diagnostica o produto e seus relatórios sem alterar estado"
+  default_prompt: "Use $maestro-doctor para inspecionar a instalação admitida e os relatórios existentes, com um próximo passo seguro."

@@ -10,8 +10,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -30,6 +32,7 @@ type Bound struct {
 	// Deterministic test seams; neither is exposed as runtime configuration or tool authority.
 	afterBrainPrepareEffect    func() error
 	observeWorkspaceTransition func(stage, page string)
+	maintenanceClock           func() time.Time
 }
 
 func Open(o Options) (*Bound, error) {
@@ -40,6 +43,9 @@ func Open(o Options) (*Bound, error) {
 	return b, nil
 }
 func (b *Bound) validate() error {
+	if _, err := processidentity.Current(); err != nil {
+		return err
+	}
 	h, err := resolveBinding(b.options)
 	if err != nil || !h.Writable {
 		return errors.New("home_unavailable")
@@ -110,8 +116,8 @@ func (b *Bound) Server() *mcp.Server {
 	empty := map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
 	s.AddTool(&mcp.Tool{Name: "maestro_context", Description: "Read admitted binding metadata and memory capability hints; inspect maestro_query and maestro_apply schemas for operations. No content export.", InputSchema: empty, Annotations: readonly}, b.handle("context", empty))
 	query := productQuerySchema()
-	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read immutable methods and requirements, owner metadata/questions, execution continuation, eligible memory, authored pages, converted content or named workspace knowledge through bounded pages. Private owner/legacy text requires trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
-	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Author reviewed workspace pages, convert local documents and apply reviewed workspace knowledge, owner or memory changes; consolidate local deterministic memory. Execution changes require revision/attempt checks and artifact snapshot criteria.", InputSchema: productApplySchema()}, b.handle("apply", productApplySchema()))
+	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read immutable methods and requirements, owner metadata/questions, execution continuation, eligible memory, authored pages, converted content, named workspace knowledge or maintenance status through bounded pages. Private owner/legacy text requires trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
+	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Author reviewed workspace pages, convert documents, apply reviewed owner/knowledge/memory changes, and qualify, enroll or run exact maintenance jobs with trusted review. Execution changes require revision/attempt checks and artifact snapshot criteria.", InputSchema: productApplySchema()}, b.handle("apply", productApplySchema()))
 	b.registerMethods(s)
 	return s
 }
@@ -122,13 +128,15 @@ func productQuerySchema() map[string]any {
 		variant("execution.next", map[string]any{"item_id": strSchema(96)}, "item_id"),
 		variant("execution.contract", map[string]any{"item_id": strSchema(96)}, "item_id"),
 	}
-	for _, group := range [][]any{ownerQueries(), memoryQueries(), methodsQueries(), contentQueries(), brainQueries()} {
+	for _, group := range [][]any{ownerQueries(), memoryQueries(), methodsQueries(), contentQueries(), brainQueries(), maintenanceQueries()} {
 		variants = append(variants, group...)
 	}
 	return map[string]any{"type": "object", "oneOf": variants}
 }
 
 type input struct {
+	JobID                      string   `json:"job_id"`
+	Timezone                   string   `json:"timezone"`
 	MethodID                   string   `json:"method_id"`
 	ResourceURI                string   `json:"resource_uri"`
 	SourcePath                 string   `json:"source_path"`
@@ -231,6 +239,9 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		}
 		if strings.HasPrefix(in.Operation, "brain.") {
 			return b.handleBrain(ctx, req, in), nil
+		}
+		if strings.HasPrefix(in.Operation, "maintenance.") {
+			return b.handleMaintenance(ctx, req, in), nil
 		}
 		if strings.HasPrefix(in.Operation, "methods.") {
 			return b.handleMethods(in), nil
