@@ -15,7 +15,7 @@ status: stable
 x-maestro-profile-version: "1"
 x-maestro-stable-id: managed/wiki-okf
 x-maestro-scope: managed
-x-maestro-source-fingerprint: 600f153de5f818d6e27b41c172d968024faa678fcea22f33d3c0dd3f79b892c7
+x-maestro-source-fingerprint: 9fda72e034942cbf770b598b7112e019fd7fe7dd9b7689fb0991e7cbbb597171
 x-maestro-freshness: fresh
 x-maestro-status: active
 x-maestro-generator-version: maestro-managed-wiki/0.2
@@ -459,10 +459,11 @@ remain read-only. Fixed metadata failure codes disclose no private error body.
 
 ### Native availability is independent of ordinary memory
 
-The private-wiki native gate remains closed on Windows until its own qualified
-publication/readback/retirement contract lands. Enabling ordinary memory does
-not upgrade a wiki cohort or emit wiki events. Unprotected ordinary memory keeps
-schema1; existing protected wiki state or an undeclared derivative refuses
-mutation instead of being downgraded. Public wiki queries return the distinct
-native-unavailable error before source access. This boundary is separate from
-any future ordinary-memory provider or filesystem admission.
+The private-wiki native gate admits the actual registered owner/workspace only
+when its supported retained-namespace operation succeeds. On Windows, complete
+source, staging/version and pointer custody supplements ordinary private-memory
+admission; the operation retains those handles through its effects. Unavailable
+custody returns the distinct native-unavailable error before source access and
+cannot downgrade a protected cohort. Current-platform execution, native host
+loading and distribution remain independently evidenced; no imported flag or
+prior startup observation can authorize publication or retirement.
