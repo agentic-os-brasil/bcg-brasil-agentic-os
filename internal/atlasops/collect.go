@@ -62,6 +62,9 @@ type Projection struct {
 // does not exist becomes an omission rather than an error, so a caller can act
 // on what is there and still see honestly what was not.
 func (engine *Engine) Collect(request CollectRequest) (Projection, error) {
+	if err := validateAtlasText(request.Purpose); err != nil {
+		return Projection{}, err
+	}
 	if err := engine.validateBinding(); err != nil {
 		return Projection{}, err
 	}

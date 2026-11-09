@@ -21,6 +21,6 @@ func publishAtlasFile(path string, body []byte, exclusive, _ bool) error {
 	return scheduler.ReplacePrivateFile(path, body)
 }
 
-func readAtlasFile(path string, maximum int64, _ bool) ([]byte, error) {
+func readAtlasBytes(path string, maximum int64, _ bool) ([]byte, error) {
 	return scheduler.ReadPrivateFile(path, maximum)
 }

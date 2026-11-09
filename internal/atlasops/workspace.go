@@ -22,6 +22,9 @@ type workspaceScope struct {
 // OpenWorkspace opens only the brain of the exact registered workspace. It
 // neither bootstraps pages nor substitutes the owner's corpus.
 func OpenWorkspace(options atlas.Options) (*Engine, error) {
+	if err := validateAtlasText(options.DataRoot, options.WorkspacePath, options.WorkspaceID); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(options.DataRoot) == "" || strings.TrimSpace(options.WorkspacePath) == "" || strings.TrimSpace(options.WorkspaceID) == "" {
 		return nil, errors.New("workspace atlas requires data root, registered workspace path and workspace id")
 	}

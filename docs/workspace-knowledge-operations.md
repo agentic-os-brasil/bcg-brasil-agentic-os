@@ -34,6 +34,12 @@ filesystem roots. `Root()` is local API metadata, not a grant to read a corpus.
 Writes return `written`, `unchanged` or a reviewable `proposed` result. When an
 adapter is applying previously reviewed content, carry the returned revision in
 `ExpectedRevision`; a changed body produces a proposal instead of replacement.
+Request text, page identities and provenance must be valid UTF-8 before any
+mutation or request digest is produced. Existing page and control bytes are
+validated before parsing or projection; malformed files are refused intact,
+without normalization or repair. Valid request digests and legacy replay remain
+unchanged.
+
 Every write carries a stable idempotency key and attended session provenance or
 an existing standing-grant occurrence. Model assertions do not establish the
 attended request or standing authority.

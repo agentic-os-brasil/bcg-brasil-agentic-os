@@ -91,6 +91,9 @@ var grantableOperations = map[string]bool{
 // operations and how often is not inspectable, and an authority the owner
 // cannot inspect is one they cannot meaningfully revoke.
 func (engine *Engine) CreateGrant(request GrantRequest) (Grant, error) {
+	if err := validateAtlasText(request.Ritual, request.RitualVersion, request.Segment, request.Cadence, request.CatchUp, string(request.Reader), request.Retention); err != nil {
+		return Grant{}, err
+	}
 	segment, err := normalizeSegment(request.Segment)
 	if err != nil {
 		return Grant{}, err

@@ -39,6 +39,9 @@ const maximumFieldBytes = 4 << 10
 // templates use, so a field is legible to a reader and addressable to the
 // command layer without either needing a parser for the whole page.
 func (engine *Engine) SetField(request SetFieldRequest) (Result, error) {
+	if err := validateAtlasText(request.Field, request.Value, request.ExpectedRevision); err != nil {
+		return Result{}, err
+	}
 	relative, err := engine.resolve(request.Page)
 	if err != nil {
 		return Result{}, err
@@ -100,6 +103,9 @@ func (engine *Engine) SetField(request SetFieldRequest) (Result, error) {
 // already declares. Repeating the same target is a no-op, so a ritual that
 // re-runs does not accumulate duplicate edges.
 func (engine *Engine) Link(request LinkRequest) (Result, error) {
+	if err := validateAtlasText(request.Section, request.Label, request.ExpectedRevision); err != nil {
+		return Result{}, err
+	}
 	relative, err := engine.resolve(request.Page)
 	if err != nil {
 		return Result{}, err

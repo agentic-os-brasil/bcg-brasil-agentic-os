@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
@@ -57,6 +58,9 @@ type Provenance struct {
 }
 
 func (provenance Provenance) validate() error {
+	if err := validateAtlasText(provenance.Origin, provenance.SessionID, provenance.GrantID, provenance.Ritual, provenance.OccurrenceID, provenance.IdempotencyKey); err != nil {
+		return err
+	}
 	if strings.TrimSpace(provenance.IdempotencyKey) == "" {
 		return errors.New("owner atlas write requires an idempotency key")
 	}
@@ -121,6 +125,9 @@ type Engine struct {
 // Open resolves the owner atlas root and makes sure it is reachable through
 // the no-follow boundary. It creates no page.
 func Open(dataRoot string, now func() time.Time) (*Engine, error) {
+	if err := validateAtlasText(dataRoot); err != nil {
+		return nil, err
+	}
 	root, err := atlas.OwnerRoot(dataRoot)
 	if err != nil {
 		return nil, err
@@ -162,6 +169,9 @@ func (engine *Engine) Root() string { return engine.root }
 // creation never replaces content, so a repeated bootstrap or a re-run of a
 // ritual cannot discard what the owner wrote.
 func (engine *Engine) CreatePage(request CreatePageRequest) (Result, error) {
+	if err := validateAtlasText(request.Body); err != nil {
+		return Result{}, err
+	}
 	relative, err := engine.resolve(request.Page)
 	if err != nil {
 		return Result{}, err
@@ -256,6 +266,9 @@ func (engine *Engine) CreatePage(request CreatePageRequest) (Result, error) {
 // never creates the section, never touches another section, and never
 // overwrites a page that changed underneath the caller.
 func (engine *Engine) AppendEntry(request AppendEntryRequest) (Result, error) {
+	if err := validateAtlasText(request.Section, request.Entry, request.ExpectedRevision); err != nil {
+		return Result{}, err
+	}
 	relative, err := engine.resolve(request.Page)
 	if err != nil {
 		return Result{}, err
@@ -357,6 +370,9 @@ func insertUnderSection(body, section, entry string) (string, error) {
 
 // resolve rejects anything that is not a plain relative page inside the root.
 func (engine *Engine) resolve(page string) (string, error) {
+	if err := validateAtlasText(page); err != nil {
+		return "", err
+	}
 	if err := engine.validateBinding(); err != nil {
 		return "", err
 	}
@@ -484,6 +500,26 @@ type journalRecord struct {
 type preparedEdit struct {
 	BeforeRevision string `json:"before_revision"`
 	AfterRevision  string `json:"after_revision"`
+}
+
+func validateAtlasText(values ...string) error {
+	for _, value := range values {
+		if !utf8.ValidString(value) {
+			return errors.New("atlas text must be valid UTF-8")
+		}
+	}
+	return nil
+}
+
+func readAtlasFile(path string, maximum int64, privateParent bool) ([]byte, error) {
+	body, err := readAtlasBytes(path, maximum, privateParent)
+	if err != nil {
+		return nil, err
+	}
+	if !utf8.Valid(body) {
+		return nil, errors.New("atlas file must contain valid UTF-8")
+	}
+	return body, nil
 }
 
 func digestRequest(request any) (string, error) {

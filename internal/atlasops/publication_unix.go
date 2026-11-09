@@ -72,7 +72,7 @@ func atlasOpenAt(directory *os.File, name string, flags int) (*os.File, error) {
 	return file, nil
 }
 
-func readAtlasFile(path string, maximum int64, privateParent bool) ([]byte, error) {
+func readAtlasBytes(path string, maximum int64, privateParent bool) ([]byte, error) {
 	directory, err := atlasDirectory(filepath.Dir(path), privateParent)
 	if err != nil {
 		return nil, err
