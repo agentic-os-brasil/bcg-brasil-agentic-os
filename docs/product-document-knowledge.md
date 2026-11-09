@@ -11,7 +11,8 @@ workflow and grants no additional authority.
    Conversion requires an already admitted authenticated runtime; an unavailable
    result is a stop for conversion, with unrelated Maestro operations preserved.
 2. Apply `content.convert` with a workspace-relative `source_path`. The current
-   runtime admits DOCX on Apple Silicon macOS. It converts locally under network
+   model-free profile admits the [eleven-format matrix](product-mcp-content.md)
+   on Apple Silicon macOS only after the exact runtime verifies. It converts locally under network
    denial and returns a scoped immutable artifact ID plus source/runtime provenance.
 3. Query `content.read` with that `artifact_id` and `format: markdown` or `document`.
    Use `next_offset` while `has_more` is true. Each response contains at most 16 KiB
