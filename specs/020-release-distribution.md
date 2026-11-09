@@ -284,12 +284,15 @@ inventory digest into review. Changed, linked or unknown destinations refuse
 without replacement. Repeated explicit setup preserves admitted owner, memory,
 authored workspace data and client registrations.
 
-First-install directory custody is an exclusive claim with a transient private
-PID/plan marker. A live claimant refuses a concurrent invocation; stale custody
-can reconcile only the same exact plan after the original process has exited.
-Cleanup may remove only the original copied objects with unchanged expected
-bytes and an empty owned directory; it may not recursively erase another
-writer's files. Existing empty destinations and ambiguous state are preserved.
+First-install directory custody is an exclusive claim with an immutable private
+PID/plan marker, retained even after success. Incomplete roots refuse a live
+claimant and can reconcile only the same exact plan after that process exits.
+A healthy committed installation ignores the historical marker only after
+exact server, seed and registry validation. Failed staging reports pending
+installation and preserves staged files, later edits and successor markers;
+there is no path-based destructive failure cleanup. Existing empty destinations
+and ambiguous state are preserved. The marker is historical custody evidence,
+never activation authority or permission to delete another object.
 
 Modern installtx DataRoot is the reviewed private UserHome/.maestro-install,
 outside both ManagedRoot and admitted Home. It contains only installation
@@ -318,6 +321,12 @@ private owner/workspace data are materialized locally. Optional authenticated
 Docling inputs reach their owning admitted-home location with signed metadata,
 archive, actual client compatibility and exact target intact. No pack means
 explicit unavailable content support, without ambient installation/acquisition.
+
+Optional runtime placement retains failed staging for explicit inspection.
+Successful publication does not authorize cleanup or permission changes at the
+former staging pathname. Intentional pre-publication mode changes use the held
+staging root; failure handling neither walks nor recursively deletes a path that
+could now name another writer's tree.
 
 The allowlist has an optional closed `role` of `data` or `executable`; omission
 retains historical source-mode normalization. Modern factory inputs all declare

@@ -694,15 +694,29 @@ func TestInstallRefusesToReplaceAnAmbiguousManagedRoot(t *testing.T) {
 				if err := os.WriteFile(filepath.Join(fixture.managedRoot, "independent-owner.txt"), []byte("PRESERVE_INDEPENDENT_WRITER_496"), 0600); err != nil {
 					return err
 				}
+				if err := os.WriteFile(path, []byte("PRESERVE_NEWER_SAME_INODE_SEED_496"), 0600); err != nil {
+					return err
+				}
+				if err := os.WriteFile(filepath.Join(fixture.managedRoot, installationOwnerName), []byte("PRESERVE_LATER_MARKER_496"), 0600); err != nil {
+					return err
+				}
 				return fmt.Errorf("injected bounded native staging interruption")
 			}
 			return nil
 		}
-		if _, err := Install(context.Background(), options); err == nil {
-			t.Fatal("interrupted staging reported success")
+		if result, err := Install(context.Background(), options); err == nil || result.Disposition != "installation_pending" || !strings.Contains(err.Error(), "after this process exits") {
+			t.Fatal("interrupted staging did not report retained pending material", result, err)
 		}
 		if body, err := os.ReadFile(filepath.Join(fixture.managedRoot, "independent-owner.txt")); err != nil || string(body) != "PRESERVE_INDEPENDENT_WRITER_496" {
 			t.Fatal("failed staging erased independent writer", err)
+		}
+		for path, expected := range map[string]string{
+			filepath.Join(fixture.managedRoot, "bcgos-bootstrap"):     "PRESERVE_NEWER_SAME_INODE_SEED_496",
+			filepath.Join(fixture.managedRoot, installationOwnerName): "PRESERVE_LATER_MARKER_496",
+		} {
+			if body, err := os.ReadFile(path); err != nil || string(body) != expected {
+				t.Fatal("failed staging changed later bytes", path, err)
+			}
 		}
 	})
 	t.Run("concurrent installer cannot quarantine active root", func(t *testing.T) {

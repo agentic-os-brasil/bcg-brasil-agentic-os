@@ -327,8 +327,8 @@ func Prepare(options Options) (Plan, releaseverify.VerifiedRelease, error) {
 }
 
 // Install performs a first install after Prepare's complete verification. It
-// refuses to replace an existing managed installation and removes only the
-// newly-created managed root if the bootstrapper fails before activation.
+// refuses to replace an existing managed installation. Failed staging and its
+// immutable claimant marker remain available for explicit inspection/recovery.
 func Install(ctx context.Context, options Options) (Result, error) {
 	if err := userlevel.EnsureNotElevated(); err != nil {
 		return Result{}, err
@@ -359,59 +359,27 @@ func Install(ctx context.Context, options Options) (Result, error) {
 	if err := os.Mkdir(plan.ManagedRoot, 0700); err != nil {
 		return Result{}, fmt.Errorf("managed root was concurrently claimed or already exists; preserved: %w", err)
 	}
-	rootIdentity, err := os.Lstat(plan.ManagedRoot)
-	if err != nil {
-		return Result{}, err
+	pending := func(cause error) (Result, error) {
+		return Result{Plan: plan, Disposition: "installation_pending"}, fmt.Errorf("first installation did not complete; staged material is preserved for inspection at %s; retry the exact reviewed plan after this process exits: %w", plan.ManagedRoot, cause)
 	}
 	if err := scheduler.EnsurePrivateDirectory(plan.ManagedRoot); err != nil {
-		_ = os.Remove(plan.ManagedRoot)
-		return Result{}, err
+		return pending(err)
 	}
 	owner := installationOwner{SchemaVersion: 1, PID: os.Getpid(), PlanDigest: plan.PlanDigest}
 	ownerBody, err := json.Marshal(owner)
 	if err != nil {
-		return Result{}, err
+		return pending(err)
 	}
 	ownerPath := filepath.Join(plan.ManagedRoot, installationOwnerName)
 	if err := scheduler.WriteNewPrivateFile(ownerPath, ownerBody); err != nil {
-		return Result{}, err
-	}
-	defer func() {
-		if current, err := os.Lstat(plan.ManagedRoot); err != nil || !os.SameFile(rootIdentity, current) {
-			return
-		}
-		if current, err := scheduler.ReadPrivateStateFile(ownerPath, 1024); err == nil && bytes.Equal(current, ownerBody) {
-			_ = os.Remove(ownerPath)
-		}
-		_ = os.Remove(plan.ManagedRoot) // only an empty directory can be removed
-	}()
-	copied := map[string]os.FileInfo{}
-	cleanup := func() {
-		if current, err := os.Lstat(plan.ManagedRoot); err != nil || !os.SameFile(rootIdentity, current) {
-			return
-		}
-		removeExact := func(path, expected string) {
-			original := copied[path]
-			current, err := os.Lstat(path)
-			if original == nil || err != nil || !os.SameFile(original, current) || !current.Mode().IsRegular() {
-				return
-			}
-			if actual, err := fileSHA256(path); err == nil && actual == expected {
-				_ = os.Remove(path)
-			}
-		}
-		removeExact(seedPath(plan.ManagedRoot, plan.TargetOS, plan.Profile), plan.BootstrapperSHA256)
-		removeExact(filepath.Join(plan.ManagedRoot, "trust", "release-authority-registry.json"), plan.RegistrySHA256)
-		_ = os.Remove(filepath.Join(plan.ManagedRoot, "trust"))
+		return pending(err)
 	}
 	if err := os.MkdirAll(filepath.Join(plan.ManagedRoot, "trust"), 0o700); err != nil {
-		return Result{}, err
+		return pending(err)
 	}
 	if err := copyRegular(plan.AuthorityRegistry, filepath.Join(plan.ManagedRoot, "trust", "release-authority-registry.json"), 0o600); err != nil {
-		cleanup()
-		return Result{}, err
+		return pending(err)
 	}
-	copied[filepath.Join(plan.ManagedRoot, "trust", "release-authority-registry.json")], _ = os.Lstat(filepath.Join(plan.ManagedRoot, "trust", "release-authority-registry.json"))
 	bootstrapperName := "bcgos-bootstrap"
 	if plan.Profile != "" {
 		bootstrapperName = "maestro-install"
@@ -421,38 +389,32 @@ func Install(ctx context.Context, options Options) (Result, error) {
 	}
 	installedBootstrapper := filepath.Join(plan.ManagedRoot, bootstrapperName)
 	if err := copyRegular(plan.Bootstrapper, installedBootstrapper, 0o700); err != nil {
-		cleanup()
-		return Result{}, err
+		return pending(err)
 	}
-	copied[installedBootstrapper], _ = os.Lstat(installedBootstrapper)
 	installedRegistry := filepath.Join(plan.ManagedRoot, "trust", "release-authority-registry.json")
 	installedDigest, err := fileSHA256(installedRegistry)
 	if err != nil || installedDigest != plan.RegistrySHA256 {
-		cleanup()
 		if err == nil {
 			err = errors.New("installed authority registry changed during staging")
 		}
-		return Result{}, err
+		return pending(err)
 	}
 	installedBootstrapperDigest, err := fileSHA256(installedBootstrapper)
 	if err != nil || installedBootstrapperDigest != plan.BootstrapperSHA256 {
-		cleanup()
 		if err == nil {
 			err = errors.New("installed bootstrapper changed during staging")
 		}
-		return Result{}, err
+		return pending(err)
 	}
 	if err := options.VerifyNative(ctx, installedBootstrapper); err != nil {
-		cleanup()
-		return Result{}, fmt.Errorf("installed bootstrapper trust check: %w", err)
+		return pending(fmt.Errorf("installed bootstrapper trust check: %w", err))
 	}
 	status, err := readSeedStatus(ctx, installedBootstrapper, runCommand(options.Run))
 	if err != nil || !seedMatchesPlan(status, plan) {
-		cleanup()
 		if err != nil {
-			return Result{}, fmt.Errorf("installed bootstrapper seed binding changed during staging: %w", err)
+			return pending(fmt.Errorf("installed bootstrapper seed binding changed during staging: %w", err))
 		}
-		return Result{}, errors.New("installed bootstrapper seed binding changed during staging")
+		return pending(errors.New("installed bootstrapper seed binding changed during staging"))
 	}
 	run := options.Run
 	if run == nil {
@@ -462,7 +424,7 @@ func Install(ctx context.Context, options Options) (Result, error) {
 	if plan.Profile != "" {
 		body, err := json.Marshal(plan)
 		if err != nil {
-			return Result{}, err
+			return pending(err)
 		}
 		arguments = []string{"install", "--confirmed-plan", string(body), "--review-digest", plan.PlanDigest, "--confirm"}
 	}
@@ -475,8 +437,7 @@ func Install(ctx context.Context, options Options) (Result, error) {
 			}
 			return Result{}, fmt.Errorf("bootstrapper installation failed after durable state; incomplete installation quarantined at %s: %w: %s", recovery.ManagedRootBackup, err, strings.TrimSpace(string(output)))
 		}
-		cleanup()
-		return Result{}, fmt.Errorf("bootstrapper installation failed: %w: %s", err, strings.TrimSpace(string(output)))
+		return pending(fmt.Errorf("bootstrapper installation failed: %w: %s", err, strings.TrimSpace(string(output))))
 	}
 	cliName := "bcgos"
 	if plan.Profile != "" {
@@ -520,11 +481,6 @@ func prepareManagedRoot(ctx context.Context, plan Plan, options Options) (manage
 	}
 	if rootExists && !rootInfo.IsDir() {
 		return managedRootPreparation{}, errors.New("managed root already exists and is not a directory")
-	}
-	if rootExists {
-		if err := inspectInstallationOwner(plan); err != nil {
-			return managedRootPreparation{}, err
-		}
 	}
 	statePath := installStatePath(plan.DataRoot)
 	if err := ensureNoSymlinkComponents(plan.DataRoot, statePath); err != nil {
@@ -583,6 +539,9 @@ func prepareManagedRoot(ctx context.Context, plan Plan, options Options) (manage
 					if plan.Profile != "" {
 						return managedRootPreparation{}, fmt.Errorf("existing modern installer/registry identity changed; preserved without recovery: %w", err)
 					}
+					if err := inspectInstallationOwner(plan); err != nil {
+						return managedRootPreparation{}, err
+					}
 					recovery, recoveryErr := quarantineInterruptedInstall(plan, "existing_install_trust_failed", true)
 					if recoveryErr != nil {
 						return managedRootPreparation{}, fmt.Errorf("existing installation trust check failed and was preserved without replacement: %w (automatic quarantine failed: %v)", err, recoveryErr)
@@ -595,11 +554,17 @@ func prepareManagedRoot(ctx context.Context, plan Plan, options Options) (manage
 				}}, nil
 			}
 		}
+		if err := inspectInstallationOwner(plan); err != nil {
+			return managedRootPreparation{}, err
+		}
 		recovery, err := quarantineInterruptedInstall(plan, "stale_bound_installation", true)
 		if err != nil {
 			return managedRootPreparation{}, err
 		}
 		return managedRootPreparation{Recovery: recovery}, nil
+	}
+	if err := inspectInstallationOwner(plan); err != nil {
+		return managedRootPreparation{}, err
 	}
 	for _, entry := range entries {
 		if !installerOwnedTopLevel(entry.Name(), plan.TargetOS) {
@@ -621,8 +586,9 @@ type installationOwner struct {
 	PlanDigest    string `json:"plan_digest"`
 }
 
-// This transient marker records custody of a newly claimed root. It grants no
-// activation authority and cannot replace the canonical transaction or receipt.
+// The immutable marker records the original process/plan claim and is retained
+// rather than unlinked through a path. A verified committed installation needs
+// no recovery claim; incomplete roots require the claimant to have exited.
 func inspectInstallationOwner(plan Plan) error {
 	body, err := scheduler.ReadPrivateStateFile(filepath.Join(plan.ManagedRoot, installationOwnerName), 1024)
 	if errors.Is(err, os.ErrNotExist) {
@@ -1263,7 +1229,6 @@ func copyRegular(source, target string, mode os.FileMode) error {
 	syncErr := output.Sync()
 	closeErr := output.Close()
 	if copyErr != nil || modeErr != nil || syncErr != nil || closeErr != nil {
-		_ = os.Remove(target)
 		return errors.Join(copyErr, modeErr, syncErr, closeErr)
 	}
 	return nil
