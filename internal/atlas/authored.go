@@ -89,12 +89,14 @@ func ValidateAuthoredPage(page, workspaceID, text string) (map[string]string, er
 		return fail("authored_frontmatter_invalid")
 	}
 	fields := map[string]string{}
+	seen := map[string]bool{}
 	nodes := document.Content[0].Content
 	for i := 0; i+1 < len(nodes); i += 2 {
 		key, value := nodes[i], nodes[i+1]
-		if _, exists := fields[key.Value]; exists {
+		if seen[key.Value] {
 			return fail("authored_frontmatter_duplicate")
 		}
+		seen[key.Value] = true
 		if value.Kind == yaml.ScalarNode {
 			fields[key.Value] = value.Value
 		}
