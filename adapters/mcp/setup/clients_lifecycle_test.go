@@ -80,7 +80,10 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 		must(t, e)
 		must(t, os.WriteFile(oldCopy, read(t, oldPath), info.Mode().Perm()))
 	} else {
-		command := exec.CommandContext(ctx, "go", "build", "-mod=readonly", "-buildvcs=false", "-o", oldCopy, "./cmd/maestro-mcp")
+		// The archived executable requires the real reviewed release tuple at link time.
+		// Its historical code and missing client capability remain unchanged.
+		ldflags := fmt.Sprintf("-X main.Version=%s -X 'main.CompatibleBundle=%s' -X main.AuthorityRegistrySHA256=%s", n.verified.Manifest.Server.Version, n.verified.Manifest.Server.CompatibleBundle, sum(registryBody))
+		command := exec.CommandContext(ctx, "go", "build", "-mod=readonly", "-buildvcs=false", "-ldflags", ldflags, "-o", oldCopy, "./cmd/maestro-mcp")
 		command.Dir = filepath.Join(os.Getenv("MAESTRO_CLIENT_REGISTRATION_BASELINE"), "adapters/mcp")
 		if output, e := command.CombinedOutput(); e != nil {
 			t.Fatalf("read-only archived baseline build: %s %v", output, e)

@@ -188,7 +188,7 @@ func TestSyncedPublicationInterleavingAndReadOnlyReviews(t *testing.T) {
 			if withPins {
 				args = append(args, "--installed-manifest", initialBinding.ManifestSHA256, "--installed-client-inputs", initialBinding.ClientInputsSHA256)
 			}
-			copied := filepath.Join(request.CodePacket, "scripts", "maestro-mcp")
+			copied := filepath.Join(request.CodePacket, "scripts", sourceTestExecutable("maestro-mcp"))
 			child := exec.CommandContext(ctx, copied, args...)
 			child.Env = append(os.Environ(), "MAESTRO_SYNCED_R1_PUBLICATION_BARRIER="+barrier)
 			literal := "R1 real copied N capture " + name
