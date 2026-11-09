@@ -519,3 +519,42 @@ foreach($case in @(@{entry=$public; missing='TestWindowsAuthoredBrainPartialPrep
         result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER),
                                  str(ROOT / "acceptance/windows-engine-check.ps1")], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_all_sealed_engine_workflow_callers_supply_authored_inputs(self):
+        parser = self.root / "sealed-callers.ps1"
+        parser.write_text(r'''$e=$null
+$ast=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$e)
+if($e.Count){throw ($e | Out-String)}
+$calls=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.CommandAst] -and
+ $n.GetCommandName() -like '*windows-core-pilot.ps1'},$true))
+$sealed=0
+foreach($call in $calls){
+ $parameters=@($call.CommandElements | Where-Object {$_ -is [Management.Automation.Language.CommandParameterAst]} | ForEach-Object {$_.ParameterName})
+ if('CanonicalManifest' -cnotin $parameters){continue}
+ $sealed++
+ if('AuthoredBrain' -cnotin $parameters -or 'AtlasTestBinary' -cnotin $parameters){throw 'Sealed engine caller omits mandatory authored family or Atlas companion'}
+}
+if($sealed -eq 0){throw 'Expected an actual sealed-engine caller'}
+''', encoding="utf-8")
+        selected = 0
+        for workflow in sorted((ROOT / ".github/workflows").glob("*.yml")):
+            lines = workflow.read_text().splitlines()
+            for index, line in enumerate(lines):
+                if line.strip() != "run: |":
+                    continue
+                indent = len(line) - len(line.lstrip()) + 2
+                body = []
+                for child in lines[index + 1:]:
+                    if child and len(child) - len(child.lstrip()) < indent:
+                        break
+                    body.append(child)
+                text = textwrap.dedent("\n".join(body))
+                if "windows-core-pilot.ps1" not in text or "CanonicalManifest" not in text:
+                    continue
+                selected += 1
+                source = self.root / f"sealed-caller-{selected}.ps1"
+                source.write_text(text, encoding="utf-8")
+                result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(parser), str(source)],
+                                        capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, f"{workflow.name}: {result.stdout}{result.stderr}")
+        self.assertGreater(selected, 0, "No actual sealed-engine workflow callers were checked")

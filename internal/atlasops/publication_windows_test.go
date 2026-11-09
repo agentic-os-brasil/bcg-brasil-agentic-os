@@ -174,20 +174,38 @@ func TestWindowsAtlasPublicationKernel(t *testing.T) {
 		if err != nil {
 			t.Fatal("native acquire after legacy owner's release failed", err)
 		}
-		first, statErr := os.Stat(path)
-		if err = errors.Join(statErr, release()); err != nil {
+		first := nativeAtlasIdentitySnapshot(t, path)
+		if err = release(); err != nil {
 			t.Fatal(err)
 		}
 		release, err = engine.acquireCorpusLock()
 		if err != nil {
 			t.Fatal("native guard could not be reacquired", err)
 		}
-		second, statErr := os.Stat(path)
-		if err = errors.Join(statErr, release()); err != nil {
+		second := nativeAtlasIdentitySnapshot(t, path)
+		if err = release(); err != nil {
 			t.Fatal(err)
 		}
 		if first.Size() != 0 || second.Size() != 0 || !os.SameFile(first, second) {
 			t.Fatal("native release replaced or filled its persistent empty guard")
+		}
+		// Preallocate a distinct same-byte object. The closed snapshot must
+		// neither block replacement nor lazily adopt that replacement's ID.
+		control, replacement := filepath.Join(engine.root, "identity-control"), filepath.Join(engine.root, "identity-replacement")
+		for _, target := range []string{control, replacement} {
+			if err := scheduler.WriteNewPrivateFile(target, []byte("same-native-identity-bytes")); err != nil {
+				t.Fatal(err)
+			}
+		}
+		beforeReplacement := nativeAtlasIdentitySnapshot(t, control)
+		if err := os.Rename(replacement, control); err != nil {
+			t.Fatal("closed identity snapshot blocked same-byte replacement", err)
+		}
+		if os.SameFile(beforeReplacement, nativeAtlasIdentitySnapshot(t, control)) {
+			t.Fatal("native identity oracle accepted a distinct same-byte replacement")
+		}
+		if got, err := scheduler.ReadPrivateFile(control, 64); err != nil || string(got) != "same-native-identity-bytes" {
+			t.Fatal("identity replacement control changed bytes", err)
 		}
 		t.Log("native_atlas_legacy_lock distinct_refusal=true token_preserved=true page_journal_grant_unchanged=true security_unchanged=true legacy_owner_released=true native_reacquired_same_empty_guard=true")
 	})
@@ -332,4 +350,19 @@ func TestWindowsAtlasJournalKernel(t *testing.T) {
 func nativeAtlasJunction(alias, target string) error {
 	command := exec.Command(filepath.Join(os.Getenv("SystemRoot"), "System32", "cmd.exe"), "/c", "mklink", "/J", alias, target)
 	return command.Run()
+}
+
+// File.Stat eagerly captures the opened Windows object ID. Close before the
+// next transition so this oracle adds no custody or delayed pathname lookup.
+func nativeAtlasIdentitySnapshot(t *testing.T, path string) os.FileInfo {
+	t.Helper()
+	file, err := scheduler.OpenRegularFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, statErr := file.Stat()
+	if err := errors.Join(statErr, file.Close()); err != nil {
+		t.Fatal(err)
+	}
+	return info
 }
