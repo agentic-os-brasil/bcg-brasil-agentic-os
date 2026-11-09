@@ -26,6 +26,35 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+func methodTreeSnapshot(t *testing.T, root string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(root, path)
+		value := info.Mode().String()
+		if info.Mode().IsRegular() {
+			body, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			value += fmt.Sprintf(":%x", sha256.Sum256(body))
+		}
+		out[rel] = value
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
 type methodQueryFixture struct {
 	root    string
 	options product.Options
@@ -283,9 +312,9 @@ utf8Checked:
 func TestMethodQueryDiscoverySDK(t *testing.T) {
 	f := newMethodQueryFixture(t)
 	client := f.connect(t, "")
-	before := treeSnapshot(t, f.root)
+	before := methodTreeSnapshot(t, f.root)
 	assertMethodQueries(t, client)
-	if !reflect.DeepEqual(before, treeSnapshot(t, f.root)) {
+	if !reflect.DeepEqual(before, methodTreeSnapshot(t, f.root)) {
 		t.Fatal("method queries changed owner/workspace/product state")
 	}
 }
@@ -293,7 +322,7 @@ func TestMethodQueryDiscoverySDK(t *testing.T) {
 func TestMethodQueryPlanSDK(t *testing.T) {
 	f := newMethodQueryFixture(t)
 	client := f.connect(t, "")
-	before := treeSnapshot(t, f.root)
+	before := methodTreeSnapshot(t, f.root)
 	var continuation struct {
 		ID         string `json:"method_id"`
 		State      string `json:"state"`
@@ -353,7 +382,7 @@ func TestMethodQueryPlanSDK(t *testing.T) {
 	if !methodQueryCall(t, client, "maestro_query", map[string]any{"operation": "methods.plan", "method_id": "pocock-implement", "approved": true}).IsError {
 		t.Fatal("caller supplied selection authority")
 	}
-	if !reflect.DeepEqual(before, treeSnapshot(t, f.root)) {
+	if !reflect.DeepEqual(before, methodTreeSnapshot(t, f.root)) {
 		t.Fatal("method plan executed or changed state")
 	}
 }
@@ -432,7 +461,7 @@ func TestMethodContractsRejectInvalidDeclarations(t *testing.T) {
 func TestMethodPlansKeepUnregisteredDomainsUnavailable(t *testing.T) {
 	f := newMethodQueryFixture(t)
 	client := f.connect(t, "")
-	before := treeSnapshot(t, f.root)
+	before := methodTreeSnapshot(t, f.root)
 	var plan struct {
 		State        string `json:"state"`
 		Execution    string `json:"execution_state"`
@@ -462,7 +491,7 @@ func TestMethodPlansKeepUnregisteredDomainsUnavailable(t *testing.T) {
 	if len(want) != 0 {
 		t.Fatalf("missing dependencies were omitted: %v", want)
 	}
-	if !reflect.DeepEqual(before, treeSnapshot(t, f.root)) {
+	if !reflect.DeepEqual(before, methodTreeSnapshot(t, f.root)) {
 		t.Fatal("dependency planning changed owner/workspace state")
 	}
 }
@@ -483,9 +512,9 @@ func TestMethodQueryPacketRestartContinuation(t *testing.T) {
 	}
 	shipping := filepath.Join(packet, "scripts", binaryName)
 	client := f.connect(t, shipping)
-	before := treeSnapshot(t, f.root)
+	before := methodTreeSnapshot(t, f.root)
 	assertMethodQueries(t, client)
-	if !reflect.DeepEqual(before, treeSnapshot(t, f.root)) {
+	if !reflect.DeepEqual(before, methodTreeSnapshot(t, f.root)) {
 		t.Fatal("compiled method queries changed state")
 	}
 	var plan struct {
@@ -533,7 +562,7 @@ func TestMethodQueryPacketRestartContinuation(t *testing.T) {
 	if !methodQueryCall(t, restarted, "maestro_apply", map[string]any{"operation": "execution.checkpoint", "item_id": id, "expected_revision": resumed["state_revision"], "attempt_id": attempt, "summary": "stale", "next_step": "must refuse"}).IsError {
 		t.Fatal("stale attempt admitted")
 	}
-	if !reflect.DeepEqual(before[filepath.Join("plugin", "scripts", binaryName)], treeSnapshot(t, f.root)[filepath.Join("plugin", "scripts", binaryName)]) {
+	if !reflect.DeepEqual(before[filepath.Join("plugin", "scripts", binaryName)], methodTreeSnapshot(t, f.root)[filepath.Join("plugin", "scripts", binaryName)]) {
 		t.Fatal("packet binary changed during continuation")
 	}
 }
@@ -541,7 +570,7 @@ func TestMethodQueryPacketRestartContinuation(t *testing.T) {
 func TestMethodQueryArchitectureRecipeRequirementsSDK(t *testing.T) {
 	f := newMethodQueryFixture(t)
 	client := f.connect(t, "")
-	before := treeSnapshot(t, f.root)
+	before := methodTreeSnapshot(t, f.root)
 	var plan struct {
 		State       string   `json:"state"`
 		Execution   string   `json:"execution_state"`
@@ -610,7 +639,7 @@ func TestMethodQueryArchitectureRecipeRequirementsSDK(t *testing.T) {
 			t.Fatal("conditional repository write was made mandatory")
 		}
 	}
-	if !reflect.DeepEqual(before, treeSnapshot(t, f.root)) {
+	if !reflect.DeepEqual(before, methodTreeSnapshot(t, f.root)) {
 		t.Fatal("architecture requirements executed host effects")
 	}
 }
