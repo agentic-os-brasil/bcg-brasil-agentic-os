@@ -92,8 +92,12 @@ SharePoint publication, platform signing or real client acceptance.
 The landed Windows private engine has its own ordinary-user qualification. Packet
 qualification additionally requires the existing compiled public workflow to run
 both emitted formats at versions 0.1.0 and 0.1.1 under that actual ordinary account.
-The closed companion inventory requires all four portable child outcomes; missing,
-skipped, duplicate or failed outcomes cannot grant elevated-host exclusions. These
+The same closed companion inventory also requires the canonical agent callback
+journey to refuse a stale binding without repairing owner/workspace state. It
+contains 52 MCP parents and 148 MCP outcomes, plus one command outcome; the
+previous 51 parents, 147 outcomes and all four portable children remain required.
+Missing, skipped, duplicate or failed outcomes cannot grant elevated-host
+exclusions. These
 cases run the real emitted executable through init, inspect and stdio context,
 preserve the same external workspace identity across formats/versions, repeat
 preparation, and refuse overlapping state without private or managed mutation.
