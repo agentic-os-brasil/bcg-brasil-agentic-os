@@ -1,4 +1,4 @@
 interface:
   display_name: "Ingestão de Conteúdo"
-  short_description: "Extrai documentos profissionais localmente e com segurança"
-  default_prompt: "Use $ingest-content para processar esta fonte profissional pela rota local de ingestão aprovada."
+  short_description: "Converte formatos locais verificados em conhecimento revisado"
+  default_prompt: "Use $ingest-content para verificar a cobertura instalada, converter esta fonte local e registrar o conhecimento por revisão exata e leitura nominal."

@@ -126,7 +126,7 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 		}
 		seen[file.Path] = true
 	}
-	if !bytes.Equal(entries["bridge.py"].body, bridge) || !bytes.Equal(entries["pylock.toml"].body, rawLock) || !bytes.Equal(entries["inputs.json"].body, lockedInputs) {
+	if !bytes.Equal(entries["bridge.py"].body, bridge) || !bytes.Equal(entries["pylock.toml"].body, rawLock) || !bytes.Equal(entries["inputs.json"].body, lockedInputs) || !bytes.Equal(entries["parser-licenses.json"].body, parserLicenses) {
 		return empty, "pack_untrusted"
 	}
 	installed := filepath.Join(base, "installed", selected.SHA256)

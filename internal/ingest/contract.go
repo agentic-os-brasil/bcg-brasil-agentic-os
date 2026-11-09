@@ -65,18 +65,20 @@ type Request struct {
 }
 
 type Result struct {
-	SchemaVersion int      `json:"schema_version"`
-	Adapter       string   `json:"adapter"`
-	Route         string   `json:"route"`
-	Status        Status   `json:"status"`
-	Fidelity      Fidelity `json:"fidelity"`
-	SourceName    string   `json:"source_name"`
-	SourceSHA256  string   `json:"source_sha256"`
-	Format        string   `json:"format"`
-	WorkspaceID   string   `json:"workspace_id"`
-	OutputBytes   int64    `json:"output_bytes"`
-	Warnings      []string `json:"warnings,omitempty"`
-	ArtifactRef   string   `json:"artifact_ref,omitempty"`
+	SchemaVersion  int      `json:"schema_version"`
+	Adapter        string   `json:"adapter"`
+	Route          string   `json:"route"`
+	Parser         string   `json:"parser,omitempty"`
+	FallbackReason string   `json:"fallback_reason,omitempty"`
+	Status         Status   `json:"status"`
+	Fidelity       Fidelity `json:"fidelity"`
+	SourceName     string   `json:"source_name"`
+	SourceSHA256   string   `json:"source_sha256"`
+	Format         string   `json:"format"`
+	WorkspaceID    string   `json:"workspace_id"`
+	OutputBytes    int64    `json:"output_bytes"`
+	Warnings       []string `json:"warnings,omitempty"`
+	ArtifactRef    string   `json:"artifact_ref,omitempty"`
 }
 
 func (r Request) Validate() (os.FileInfo, error) {

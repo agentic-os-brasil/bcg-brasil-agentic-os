@@ -41,7 +41,7 @@ permissions:
 jobs:
   authenticated-docling:
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Select physical macOS temporary directory
         if: runner.os == 'macOS'
@@ -86,7 +86,7 @@ jobs:
           tag = constant("PythonVersion").split("+")[1]
           assert re.fullmatch(r"[0-9]{8}", tag)
           inputs = json.loads(pathlib.Path("internal/ingest/docling/runtime/inputs.json").read_text())
-          assert len(inputs) == 45 and len({x["filename"] for x in inputs}) == 45
+          assert len(inputs) == 51 and len({x["filename"] for x in inputs}) == 51
           assert sum(x["size"] for x in inputs) <= 512 << 20
           for item in inputs:
               parsed = urllib.parse.urlsplit(item["url"])
@@ -138,9 +138,12 @@ jobs:
           authority = retained / "authority.json"
           assert 0 < authority.stat().st_size <= 1 << 20
           environment = dict(os.environ, MAESTRO_DOCLING_RETAINED_ROOT=str(retained),
-                             MAESTRO_DOCLING_RETAINED_SEED=hashlib.sha256(authority.read_bytes()).hexdigest())
-          command = ["go", "test", "-mod=readonly", ".", "-run", "^TestContentRealJourneys$",
-                     "-count=1", "-json", "-timeout=600s"]
+                             MAESTRO_DOCLING_RETAINED_SEED=hashlib.sha256(authority.read_bytes()).hexdigest(),
+                             MAESTRO_POLICY_PUBLIC_ROOT=str(retained.parent / "maestro-policy-public"))
+          command = ["go", "test", "-p", "1", "-mod=readonly", ".",
+                     "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest/docling",
+                     "-run", "^(TestContentRealJourneys|TestContentPolicyRealJourneys|TestRetainedPolicyWorkbookContent|TestRetainedXLSXNativeLimits)$",
+                     "-count=1", "-json", "-timeout=45m"]
           # Bound only evidence output; converter inputs and compiled binaries keep their normal budgets.
           with evidence.open("xb") as output:
               process = subprocess.Popen(command, env=environment, stdout=subprocess.PIPE,
@@ -165,7 +168,14 @@ jobs:
           events = [json.loads(line) for line in evidence.read_text().splitlines()]
           passed = {e.get("Test") for e in events if e.get("Action") == "pass"}
           required = {"TestContentRealJourneys", "TestContentRealJourneys/sdk", "TestContentRealJourneys/compiled_stdio"}
-          assert required <= passed, "real SDK/stdio journeys did not pass: " + repr(required - passed)
+          prefix = "TestContentPolicyRealJourneys"
+          cases = ("csv", "docx", "epub", "htm", "html", "json", "md", "txt", "xls", "xlsx", "xml",
+                   "validated_export", "controls", "partial", "parser_tamper")
+          required |= {prefix + "/" + transport + "/" + case
+                       for transport in ("sdk", "compiled_stdio") for case in cases}
+          required |= {prefix, prefix + "/sdk", prefix + "/compiled_stdio", prefix + "/compiled_stdio/mcpb_readback",
+                       "TestRetainedPolicyWorkbookContent", "TestRetainedXLSXNativeLimits"}
+          assert required <= passed, "real SDK/stdio journeys did not pass: " + repr(sorted(required - passed))
           assert not any(e.get("Action") in ("skip", "fail") for e in events), "real SDK/stdio coverage skipped or failed"
           PYCODE
       - name: Retain bounded synthetic conversion evidence
