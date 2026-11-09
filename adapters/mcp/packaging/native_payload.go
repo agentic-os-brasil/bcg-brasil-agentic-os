@@ -87,13 +87,13 @@ func nativeManifest(target Target, c NativeCapability) (nativePacketManifest, er
 
 // Keep the normal portable selection protocol; admission is bound to equality
 // with one local owner/workspace, while managed packet relocation stays possible.
-func nativeHookArguments(platform, binding, event string) []string {
+func nativeHookArguments(binding, event string) []string {
 	return append([]string{"hook", "--event", event, "--binding-sha256", binding}, portableArgs("${CLAUDE_PLUGIN_ROOT}", "serve")[1:]...)
 }
 func nativeProfilePayload(platform, binding string) (map[string][]byte, error) {
 	hooks := map[string]any{}
 	for _, event := range []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "SubagentStart", "SubagentStop", "Stop"} {
-		command := map[string]any{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/" + binaryName(platform), "args": nativeHookArguments(platform, binding, event), "timeout": 5}
+		command := map[string]any{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/" + binaryName(platform), "args": nativeHookArguments(binding, event), "timeout": 5}
 		if event == "PreToolUse" || event == "UserPromptSubmit" {
 			command["onFailure"] = "block"
 		}

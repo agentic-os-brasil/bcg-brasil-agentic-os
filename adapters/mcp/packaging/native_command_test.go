@@ -94,6 +94,11 @@ func TestNativePacketExecutesSelectedHookArgumentVectors(t *testing.T) {
 	if err := BuildPlugin(in.Packet); err != nil {
 		t.Fatal(err)
 	}
+	relocated := filepath.Join(filepath.Dir(in.Packet.Destination), "relocated native [space] $() &")
+	if err := os.Rename(in.Packet.Destination, relocated); err != nil {
+		t.Fatal(err)
+	}
+	in.Packet.Destination = relocated
 	var config struct {
 		Hooks map[string][]struct {
 			Hooks []struct {
@@ -198,6 +203,32 @@ func TestNativePacketExecutesSelectedHookArgumentVectors(t *testing.T) {
 				t.Fatalf("packaged guard did not deny: %s %s %v", out, stderr, err)
 			}
 		})
+	}
+	// A complete admitted second workspace cannot consume the first target's
+	// native selection, even though the same packet can serve plain MCP there.
+	home, err := datahome.Resolve(datahome.Options{ProductRoot: in.Packet.Binding.ProductRoot, UserHome: in.Packet.Binding.UserHome, LookupEnv: in.Packet.Binding.LookupEnv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	alternate := filepath.Join(filepath.Dir(in.Packet.Binding.WorkspacePath), "other valid native target")
+	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: alternate, DataRoot: filepath.Join(home.Home, "state")}); err != nil {
+		t.Fatal(err)
+	}
+	beforeAlternate, err := startupSnapshot(in.Packet.Binding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherArgs := append([]string(nil), config.Hooks["PreToolUse"][0].Hooks[0].Args...)
+	otherArgs[len(otherArgs)-1] = alternate
+	otherInput, _ := json.Marshal(map[string]any{"hook_event_name": "PreToolUse", "session_id": "other-target", "cwd": alternate, "tool_name": "Read", "tool_use_id": "other-read", "tool_input": map[string]any{"file_path": filepath.Join(alternate, "README.md")}})
+	otherCommand := exec.Command(filepath.Join(in.Packet.Destination, "scripts", "maestro-mcp"), otherArgs...)
+	otherCommand.Stdin = bytes.NewReader(otherInput)
+	if err := otherCommand.Run(); err == nil {
+		t.Fatal("qualified selection transferred to another admitted workspace")
+	}
+	afterAlternate, err := startupSnapshot(in.Packet.Binding)
+	if err != nil || beforeAlternate != afterAlternate {
+		t.Fatal("refused alternate selection changed owner/flow state", err)
 	}
 	command := filepath.Join(in.Packet.Destination, "scripts", "maestro-mcp")
 	cmd := exec.Command(command, config.Hooks["PreToolUse"][0].Hooks[0].Args...)

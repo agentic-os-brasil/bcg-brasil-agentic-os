@@ -223,6 +223,7 @@ func runWorkflow(t *testing.T, stdio bool) {
 			}
 		}
 		portableWorkspaceID := ""
+		var portableContinuation map[string]any
 		for _, version := range []string{"0.1.0", "0.1.1"} {
 			packet := packaging.Options{Destination: filepath.Join(base, "plugin [space] $() & "+version), Server: binary, Version: version, Binding: o}
 			buildArgs := []string{"plugin", "--destination", packet.Destination, "--server", binary, "--version", version, "--product-root", o.ProductRoot, "--user-home", o.UserHome, "--workspace", o.WorkspacePath}
@@ -263,7 +264,7 @@ func runWorkflow(t *testing.T, stdio bool) {
 				t.Fatal("plugin lost its exact decoded executable or external selection arguments")
 			}
 			if !t.Run("portable_plugin_"+strings.ReplaceAll(version, ".", "_"), func(t *testing.T) {
-				portableWorkspaceID = runPortableProductPacket(t, packet.Destination, "plugin", portableOwner, portableWorkspace, portableWorkspaceID)
+				portableWorkspaceID, portableContinuation = runPortableProductPacket(t, packet.Destination, "plugin", portableOwner, portableWorkspace, portableWorkspaceID, portableContinuation)
 			}) {
 				t.FailNow()
 			}
@@ -284,7 +285,7 @@ func runWorkflow(t *testing.T, stdio bool) {
 				if !t.Run("portable_mcpb_"+strings.ReplaceAll(version, ".", "_"), func(t *testing.T) {
 					extracted := filepath.Join(base, "extension [space] $() & "+version)
 					extractProductPacketFixture(t, packet.Destination, extracted)
-					portableWorkspaceID = runPortableProductPacket(t, extracted, "mcpb", portableOwner, portableWorkspace, portableWorkspaceID)
+					portableWorkspaceID, portableContinuation = runPortableProductPacket(t, extracted, "mcpb", portableOwner, portableWorkspace, portableWorkspaceID, portableContinuation)
 				}) {
 					t.FailNow()
 				}
@@ -440,7 +441,7 @@ func productTestBinaryName() string {
 
 // Exercise only the actual emitted product's fixed preparation/diagnostic/server
 // journey. Expanding the two documented argv selections is not client-loader proof.
-func runPortableProductPacket(t *testing.T, root, format, owner, selected, expectedID string) string {
+func runPortableProductPacket(t *testing.T, root, format, owner, selected, expectedID string, expectedContinuation map[string]any) (string, map[string]any) {
 	t.Helper()
 	if status, err := packaging.ValidatePacket(root); err != nil || status.Format != format {
 		t.Fatalf("complete emitted %s packet unavailable: %+v %v", format, status, err)
@@ -693,6 +694,9 @@ func runPortableProductPacket(t *testing.T, root, format, owner, selected, expec
 	if prior["state"] != "paused" || prior["summary"] != summary || prior["next_step"] != nextStep || prior["attempt_id"] == "" {
 		t.Fatal("carrier changed checkpoint revision, attempt or summary", prior)
 	}
+	if expectedContinuation != nil && !reflect.DeepEqual(prior, expectedContinuation) {
+		t.Fatal("cross-carrier continuation changed revision, attempt or checkpoint", expectedContinuation, prior)
+	}
 	if err := client.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -710,7 +714,9 @@ func runPortableProductPacket(t *testing.T, root, format, owner, selected, expec
 	}
 	call(restarted, "maestro_apply", map[string]any{"operation": "execution.checkpoint", "item_id": itemID, "expected_revision": prior["state_revision"], "attempt_id": resumed["attempt_id"], "summary": "stale revision", "next_step": "must refuse"}, true)
 	call(restarted, "maestro_apply", map[string]any{"operation": "execution.checkpoint", "item_id": itemID, "expected_revision": resumed["state_revision"], "attempt_id": prior["attempt_id"], "summary": "stale attempt", "next_step": "must refuse"}, true)
-	call(restarted, "maestro_apply", map[string]any{"operation": "execution.pause", "item_id": itemID, "expected_revision": resumed["state_revision"], "attempt_id": resumed["attempt_id"]}, false)
+	checkpoint := call(restarted, "maestro_apply", map[string]any{"operation": "execution.checkpoint", "item_id": itemID, "expected_revision": resumed["state_revision"], "attempt_id": resumed["attempt_id"], "summary": summary, "next_step": nextStep}, false)
+	call(restarted, "maestro_apply", map[string]any{"operation": "execution.pause", "item_id": itemID, "expected_revision": checkpoint["state_revision"], "attempt_id": resumed["attempt_id"]}, false)
+	continuation := call(restarted, "maestro_query", map[string]any{"operation": "execution.next", "item_id": itemID}, false)
 	if err := restarted.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -739,7 +745,7 @@ func runPortableProductPacket(t *testing.T, root, format, owner, selected, expec
 			t.Fatal("private neighbour not preserved", name, err)
 		}
 	}
-	return initialized.WorkspaceID
+	return initialized.WorkspaceID, continuation
 }
 
 // Unpack only the real builder's bounded ordinary files into an exclusive test
