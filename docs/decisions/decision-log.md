@@ -1425,3 +1425,14 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: An attended execution is separate from recurring opt-in; monthly remains attended-only and structurally inert. Status never initializes or repairs. New external observations are bound independently by every attempt; historical qualification attests its actual producer/configuration and receipt. No arbitrary command, generic filesystem repair, service, provider or native qualification follows.
 - Refs: #498; #462; #488; specs/037-darwin-lifecycle-cadence.md; specs/062-product-maintenance-service.md; docs/product-mcp-maintenance.md; internal/darwin; internal/maintenance; internal/scheduler
 - Supersedes: none
+
+## PHLC - Separate passive lifecycle context from native enforcement
+
+- Date: 2026-11-06
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The participant's MCP-only packet has no hooks, while the installed Code version predates the full native enforcement profile. Existing explicit setup already owns filesystem creation, and product startup currently omits governed generated-memory bodies. Context delivery must not fabricate native enforcement qualification.
+- Decision: Add an explicitly selected mcp_lifecycle Code packet mode with only SessionStart, UserPromptSubmit and Stop. Seal participant-local owner/workspace selections in the sole canonical packet inventory; source-enrolled clients opt in through the existing exact client review and finite current-owner stable-hook launch path. Its separate lifecycle capability reports configured delivery and unavailable enforcement; it projects no specialists or pre-tool guards. Preserve plain MCP-only packets and the complete qualified maestro_planner gate. Reuse the same admitted executable, binding, canonical serializers and confined metadata owners. SessionStart may read bounded eligible generated memory through the same visibility-checked reader as memory.context, framed as historical data; prompt and stop events never repeat those bodies. Explicit setup remains the sole creation path for owner, workspace and memory authority. Missing or corrupt state is reported without hook initialization or repair.
+- Consequences: These command hooks are non-enforcing and retain host permissions and source/process validation. Stop records observation only, respects recursion and cannot certify work, capture conversations, dream, index, run maintenance or enroll jobs. Packet configuration, actual client delivery, native enforcement, Windows client execution and release acceptance remain separate evidence. Context delivery is validated by a real synthetic client session; it does not qualify the full native profile or complete the second-brain migration.
+- Refs: NPHK; NOBS; specs/063-product-native-plugin.md; specs/019-nonblocking-hook-execution.md; specs/006-memory-persistence.md; specs/060-product-owner-memory.md
+- Supersedes: none

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
@@ -25,7 +26,9 @@ func nativeHostIdentity(path string) (string, Target, error) {
 	}
 	defer f.Close()
 	before, err := f.Stat()
-	if err != nil || !before.Mode().IsRegular() || before.Mode().Perm()&0111 == 0 || before.Size() <= 0 || before.Size() > maximumNativeHostBytes {
+	// Windows file modes do not encode executable permission. Its actual PE
+	// executable header is checked below; the supported CLI probe must still run.
+	if err != nil || !before.Mode().IsRegular() || (runtime.GOOS != "windows" && before.Mode().Perm()&0111 == 0) || before.Size() <= 0 || before.Size() > maximumNativeHostBytes {
 		return "", Target{}, errors.New("bounded executable native host required")
 	}
 	// Native loaders describe the format in bounded headers. Refuse unusual

@@ -43,7 +43,11 @@ func inspectCurrentPacket(ctx context.Context, path, format string, o installer.
 		return packaging.PacketStatus{}, err
 	}
 	expected := stableCarrier(o.Request.CarrierID)
-	if status.Stable == nil || *status.Stable != expected || status.Format != format || status.ServerSHA256 != serverSHA || status.Version != identity.Version || status.EmbeddedInputsSHA256 != identity.EmbeddedInputsSHA256 || status.RegistrySHA256 != identity.AuthorityRegistrySHA256 || status.NativeMode != "mcp_only" {
+	expectedMode := "mcp_only"
+	if format == "plugin" && o.Request.LifecycleContext {
+		expectedMode = "mcp_lifecycle"
+	}
+	if status.Stable == nil || *status.Stable != expected || status.Format != format || status.ServerSHA256 != serverSHA || status.Version != identity.Version || status.EmbeddedInputsSHA256 != identity.EmbeddedInputsSHA256 || status.RegistrySHA256 != identity.AuthorityRegistrySHA256 || status.NativeMode != expectedMode {
 		return packaging.PacketStatus{}, errors.New("actual current packet verification differs")
 	}
 	return status, nil

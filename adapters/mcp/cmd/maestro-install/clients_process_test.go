@@ -87,6 +87,18 @@ func TestMain(m *testing.M) {
 				return m, nil
 			})
 		} else {
+			if len(os.Args) == 4 {
+				// The same shipping dispatcher/flags run with the existing byte-pinned
+				// engineering native verifier; no fixture path exists in shipping builds.
+				Version, AuthorityRegistrySHA256 = f.Version, f.Pin
+				selected := lifecycleFlags{ManagedRoot: f.ManagedRoot, UserHome: f.UserHome, Workspace: f.Workspace, CarrierID: os.Args[2], HookEvent: os.Args[3]}
+				_, err = runClientsWithNativeVerifier(context.Background(), "stable-hook", f.Self, selected, "", false, o.VerifyNative)
+				if err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					os.Exit(1)
+				}
+				os.Exit(0)
+			}
 			if len(os.Args) != 3 {
 				os.Exit(2)
 			}

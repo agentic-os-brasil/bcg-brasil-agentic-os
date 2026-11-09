@@ -27,6 +27,10 @@ var CompatibleBundle string
 
 func main() {
 	if err := run(); err != nil {
+		if len(os.Args) > 1 && os.Args[1] == "lifecycle-hook" {
+			fmt.Fprintln(os.Stderr, "maestro: lifecycle context unavailable; inspect the selected binding and explicit preparation")
+			os.Exit(1)
+		}
 		if len(os.Args) > 1 && os.Args[1] == "hook" {
 			event := ""
 			for i, arg := range os.Args {
@@ -75,6 +79,12 @@ func run() error {
 		}
 		return json.NewEncoder(os.Stdout).Encode(identity)
 	}
+	if os.Args[1] == "lifecycle-capabilities" {
+		if len(os.Args) != 2 || Version == "" || AuthorityRegistrySHA256 == "" {
+			return errors.New("lifecycle protocol unavailable")
+		}
+		return json.NewEncoder(os.Stdout).Encode(installer.LifecycleClientCapabilities("server", Version, AuthorityRegistrySHA256))
+	}
 	if os.Args[1] == "client-capabilities" {
 		if len(os.Args) != 2 {
 			return errors.New("unexpected_arguments")
@@ -82,7 +92,7 @@ func run() error {
 		return json.NewEncoder(os.Stdout).Encode(installer.StableClientCapabilities("server", Version, AuthorityRegistrySHA256))
 	}
 	flags := flag.NewFlagSet("maestro-mcp", flag.ContinueOnError)
-	if os.Args[1] == "hook" {
+	if os.Args[1] == "hook" || os.Args[1] == "lifecycle-hook" {
 		flags.SetOutput(io.Discard)
 	}
 	var o product.Options
@@ -100,7 +110,10 @@ func run() error {
 	}
 	var hookEvent, nativeBinding string
 	var proposalID, reviewDigest, track string
-	var confirmed, packet bool
+	var confirmed, packet, lifecycleContext bool
+	if os.Args[1] == "plugin" {
+		flags.BoolVar(&lifecycleContext, "lifecycle-context", false, "include explicitly selected passive lifecycle context hooks")
+	}
 	flags.BoolVar(&packet, "packet", false, "validate the complete managed packet before runtime use")
 	flags.StringVar(&destination, "destination", "", "new packet destination")
 	flags.StringVar(&server, "server", "", "compiled native server binary")
@@ -126,7 +139,7 @@ func run() error {
 	if os.Args[1] == "native-fault" {
 		flags.StringVar(&nativeFault, "fault", "", "fixed qualification fault")
 	}
-	if os.Args[1] == "hook" {
+	if os.Args[1] == "hook" || os.Args[1] == "lifecycle-hook" {
 		flags.StringVar(&hookEvent, "event", "", "native hook event")
 		flags.StringVar(&nativeBinding, "binding-sha256", "", "optional reviewed local selection equality check; not qualification authority")
 	}
@@ -150,7 +163,7 @@ func run() error {
 	}
 	if packet {
 		switch os.Args[1] {
-		case "init", "serve", "inspect", "hook", "native-startup-check", "native-qualification-hook", "native-scope-guard":
+		case "init", "serve", "inspect", "hook", "lifecycle-hook", "native-startup-check", "native-qualification-hook", "native-scope-guard":
 			if _, err := packaging.ValidatePacket(o.ProductRoot); err != nil {
 				return err
 			}
@@ -211,7 +224,7 @@ func run() error {
 		return packaging.CheckNativeStartup(o, nativeNonce, os.Stdin, os.Stdout)
 	case "native-fault":
 		return packaging.NativeFault(context.Background(), nativeFault)
-	case "hook":
+	case "hook", "lifecycle-hook":
 		if nativeBinding != "" {
 			if !packet {
 				return errors.New("native selection requires packet validation")
@@ -224,9 +237,12 @@ func run() error {
 		if err != nil {
 			return err
 		}
+		if os.Args[1] == "lifecycle-hook" {
+			return bound.HandleClaudeLifecycleHook(hookEvent, os.Stdin, os.Stdout)
+		}
 		return bound.HandleClaudeHook(hookEvent, os.Stdin, os.Stdout)
 	case "plugin":
-		return packaging.BuildPlugin(packaging.Options{Destination: destination, Server: server, Version: version, Binding: o, Carrier: carrier})
+		return packaging.BuildPlugin(packaging.Options{Destination: destination, Server: server, Version: version, Binding: o, Carrier: carrier, LifecycleContext: lifecycleContext})
 	case "mcpb":
 		return packaging.BuildExtension(packaging.Options{Destination: destination, Server: server, Version: version, Binding: o, Carrier: carrier})
 	case "inspect":

@@ -97,6 +97,9 @@ func reviewNative(ctx context.Context, in NativeOptions, run nativeCommand) (Nat
 }
 func reviewNativeAt(ctx context.Context, in NativeOptions, run nativeCommand, challengeCreated bool) (NativeReview, error) {
 	var out NativeReview
+	if in.Packet.LifecycleContext {
+		return out, errors.New("lifecycle context and native enforcement profiles are mutually exclusive")
+	}
 	if math.IsNaN(in.MaxBudgetUSD) || math.IsInf(in.MaxBudgetUSD, 0) || in.MaxBudgetUSD <= 0 || in.MaxBudgetUSD > 1 {
 		return out, errors.New("explicit max-budget-usd in (0,1] required")
 	}
