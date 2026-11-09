@@ -293,7 +293,7 @@ func (b *Bound) handleContent(ctx context.Context, req *mcp.CallToolRequest, in 
 	if err = ctx.Err(); err == nil {
 		switch in.Operation {
 		case "content.status":
-			value = b.DoclingRuntime().Status(ctx)
+			value = b.contentStatus(ctx)
 		case "content.convert":
 			contentProgress(ctx, req, 0, "Verifying the local runtime and converting the selected document")
 			var conversion docling.Conversion

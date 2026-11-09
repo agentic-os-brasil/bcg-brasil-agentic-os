@@ -1,6 +1,6 @@
 # Authenticated offline document runtime
 
-**Current source capability:** assemble and execute the pinned, authenticated DOCX
+**Current source capability:** assemble and execute the pinned, authenticated model-free format
 pack on Apple Silicon macOS. Runtime construction, genuine converter execution,
 CI, installed clients and distribution each require separate evidence. Windows,
 Intel macOS and Linux conversion remain unavailable in this profile; a successful
@@ -13,7 +13,7 @@ qualifying conversion. Source policy and fallback rules remain in
 ## Prepare exact inputs and construct the pack
 
 The maintainer supplies an already acquired directory containing the Python
-archive and all 45 wheels named by `internal/ingest/docling/runtime/inputs.json`.
+archive and all 51 wheels named by `internal/ingest/docling/runtime/inputs.json`.
 `assemble.go` binds the interpreter and lock digests. Assembly checks every raw
 input before creating its destination, then constructs a deterministic archive,
 complete file inventory and read-only installed tree. It downloads nothing and
@@ -42,7 +42,7 @@ compatibility, archive signature/hash, the canonical interpreter/lock/input
 closure and every installed regular single-link file. Missing, extra, linked,
 altered or foreign inputs refuse; checking status does not install or repair them.
 
-`Convert` requires a canonical workspace-relative DOCX source bound to the exact
+`Convert` requires a canonical workspace-relative source in the [closed format matrix](product-mcp-content.md) bound to the exact
 registered workspace. It bounds compressed input and expanded ZIP contents,
 revalidates the source and executes a fresh private snapshot. The pinned Python
 runs isolated, without site packages or bytecode writes, under native network
