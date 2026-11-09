@@ -8,13 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/memory"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -47,27 +47,14 @@ func memoryMutations() []any {
 }
 func productApplySchema() map[string]any {
 	s := applySchema()
-	s["oneOf"] = append(s["oneOf"].([]any), append(memoryMutations(), contentMutations()...)...)
+	s["oneOf"] = append(s["oneOf"].([]any), append(append(memoryMutations(), contentMutations()...), maintenanceMutations()...)...)
 	return s
 }
 func (b *Bound) memoryEngine() (*memory.Engine, basememory.RuntimeConfig, error) {
 	if err := b.validate(); err != nil {
 		return nil, basememory.RuntimeConfig{}, err
 	}
-	policy, err := basememory.Policy()
-	if err != nil {
-		return nil, basememory.RuntimeConfig{}, err
-	}
-	cfg, err := basememory.Runtime()
-	if err != nil {
-		return nil, cfg, err
-	}
-	root := filepath.Join(b.home, "brain", "memory")
-	budgets := cfg.ContextBudgets()
-	budgets["L1"] = cfg.L1MaxRunes
-	daily := memory.DeterministicL1Synthesizer{MaxRunes: cfg.L1MaxRunes, MaxEntries: cfg.L1MaxEntries, MaxInputBytes: cfg.L1MaxInputBytes, MaxInputEntries: cfg.L1MaxInputEntries, Attestor: memory.CaptureAttestor{Root: root}}
-	e := &memory.Engine{Root: root, Policy: policy, Budgets: budgets, MaxSourceBytes: cfg.L1MaxInputBytes, Synthesizer: daily, SynthesizerID: memory.DeterministicL1SynthesizerID}
-	return e, cfg, nil
+	return maintenance.NewProductMemoryEngine(b.home)
 }
 
 // InitializeMemory is explicit operator setup; reads never prepare a producer key.

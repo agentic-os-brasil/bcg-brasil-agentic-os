@@ -1,9 +1,60 @@
 ---
 name: maestro-environment-setup
-description: Prepare a post-install Maestro workspace conversationally. Use after the Maestro installer has completed, when an owner wants to prepare a workspace, connect Claude or Codex, or make sure the local working environment is ready without following technical setup steps.
+description: Prepare a post-install Maestro workspace conversation from admitted product state. Use when connecting a client, beginning onboarding or choosing recurring upkeep; keep optional capabilities and native scheduling separate from ordinary readiness.
 ---
 
 # Maestro Environment Setup
+
+## Select the installed route
+
+Use the admitted MCP product route first: read `maestro_context` and inspect the
+current `maestro_query` / `maestro_apply` schemas. Product operations derive the
+owner and workspace binding; model arguments cannot choose filesystem roots or
+supply approval. A missing tool, rejected binding or failed call stays
+unavailable and keeps the requested operation pending. It never selects legacy.
+
+Use the legacy section only after the installed runtime is positively identified
+as the ZIP distribution by its installation metadata and verified managed helper.
+A product conversation stops after its product workflow below. Recipe selection
+and diagnostic findings grant no shell, repair, installation, provider access,
+native scheduling or new enrollment authority.
+
+## MCP product preparation
+
+Resolve [interaction-profile](../interaction-profile/SKILL.md) for presentation.
+Prepare the conversation from admitted product state, without assuming Code
+hooks, a shell, a Python interpreter or filesystem access on Desktop.
+
+1. Read `maestro_context` to verify the selected binding. If it is unavailable,
+   report the concrete setup limitation and route explicit local initialization
+   to the operator's product setup instructions. Startup and status never
+   initialize owner/workspace state or migrate another installation.
+2. Query `owner.status` for onboarding state and `maintenance.status` for actual
+   upkeep state. Continue the requested work when its own capability is healthy.
+   Offer [maestro-onboarding](../maestro-onboarding/SKILL.md) when the owner
+   wants to establish or refine the profile; its trusted review owns changes.
+3. If the owner wants recurring upkeep, follow the exact
+   [maintenance workflow](../maestro-runtime-checkup/SKILL.md). Qualify the named
+   job once, then separately review enrollment against its current revision,
+   timezone, schedule and writes. Installation and general setup agreement do
+   not enroll all jobs or authorize native OS scheduling. Local review/apply
+   fallback remains an explicit operator operation.
+4. For optional document conversion, inspect the actual `content.status` result.
+   Missing document support affects only conversion. Do not install interpreters,
+   runtime packs or dependencies or acquire provider access to finish setup.
+5. Report **pronto**, **pronto com um detalhe para concluir depois** or **preciso
+   de uma escolha sua**, stating the useful next action. Keep domain readiness,
+   local job qualification and native/background evidence separate.
+
+After the product workflow, continue naturally with the owner's requested task.
+Any projection repair, native enrollment or installer change is a separately
+requested operation through its owning supported workflow.
+
+## Legacy ZIP only — explicit runtime scope
+
+Everything below applies only to the positively identified legacy ZIP runtime.
+It is not an MCP recovery path. Use its verified installed helpers and existing
+legacy authority; product operations above never fall through to these steps.
 
 Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
 

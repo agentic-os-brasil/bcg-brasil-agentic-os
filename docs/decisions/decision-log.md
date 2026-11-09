@@ -1283,6 +1283,10 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: specs/065-product-method-discovery.md; specs/056-pocock-product-skillset.md; adapters/mcp/methods.go; #460; #463
 - Supersedes: none
 
+### 2026-11-09 — Reviewed finite maintenance lifecycle (#505)
+
+Expose the eight existing owning maintenance jobs through the admitted MCP binding. Persist qualification and enrollment separately, require exact trusted review for lifecycle changes, and fence effects by current revision, executable identity, lease and source. Host wake/service installation and private wiki navigation remain separate deliveries.
+
 ## PFMT - Complete the admitted model-free format matrix with truthful local routes
 
 - Date: 2026-11-02

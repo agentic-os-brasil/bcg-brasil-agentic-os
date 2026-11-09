@@ -19,6 +19,11 @@ on:
       - 'internal/ownerctx/**'
       - 'internal/memory/**'
       - 'internal/atlasops/**'
+      - 'internal/maintenance/**'
+      - 'internal/maintenancecatalog/**'
+      - 'internal/processidentity/**'
+      - 'internal/scheduler/**'
+      - 'internal/skillsindex/**'
       - 'schemas/memory-artifact.schema.json'
       - 'schemas/memory-commit.schema.json'
       - 'bundles/**'
@@ -46,6 +51,11 @@ on:
       - 'internal/ownerctx/**'
       - 'internal/memory/**'
       - 'internal/atlasops/**'
+      - 'internal/maintenance/**'
+      - 'internal/maintenancecatalog/**'
+      - 'internal/processidentity/**'
+      - 'internal/scheduler/**'
+      - 'internal/skillsindex/**'
       - 'schemas/memory-artifact.schema.json'
       - 'schemas/memory-commit.schema.json'
       - 'bundles/**'
@@ -71,6 +81,17 @@ jobs:
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: adapters/mcp/go.mod
+      - name: Select physical temporary root on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          python3 - <<'PYTHON'
+          import os, pathlib, tempfile
+          root = pathlib.Path(os.environ["RUNNER_TEMP"]).resolve(strict=True)
+          temporary = tempfile.mkdtemp(prefix="maestro-product-", dir=root)
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as environment:
+              environment.write(f"TMPDIR={temporary}\nGOTMPDIR={temporary}\n")
+          PYTHON
       # shortcut: runner toolcache paths fail Go canonicalization; remove when unchanged witness tests pass there.
       # Related upstream report: https://github.com/golang/go/issues/82447
       - name: Stage Windows SDK for canonical command evidence
@@ -121,6 +142,9 @@ jobs:
       - name: Remaining canonical host contracts after native qualification
         if: runner.os == 'Windows'
         run: go test ./internal/privatelock ./internal/atlasops -timeout=300s
+      - name: Maintenance lifecycle and process identity on admitted Unix runners
+        if: runner.os != 'Windows'
+        run: go test ./internal/maintenance ./internal/processidentity ./internal/skillsindex ./internal/scheduler -timeout=300s
       - name: Canonical workspace initialization contracts on admitted Unix runners
         if: runner.os != 'Windows'
         run: go test ./internal/workspace -timeout=180s
