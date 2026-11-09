@@ -281,12 +281,15 @@ class WindowsEngineProfile(unittest.TestCase):
 
     def engine_document(self):
         document = self.closed_manifest()
+        adapter_vendor = Path(document["source_root"]) / "adapters/mcp/vendor/modules.txt"
+        adapter_vendor.parent.mkdir(parents=True)
+        adapter_vendor.write_text("sealed fixture", encoding="utf-8")
         for entry in document["packages"]:
             entry.pop("skip_policy")
         digest = hashlib.sha256(b"unexecuted public executable fixture").hexdigest()
         document.update(qualification_profile="windows_private_engine_v1",
                         public_test_binary_sha256=digest, public_server_sha256=digest,
-                        adapter_profile="windows_private_engine_adapters_v1", adapter_packages=[], authored_package={})
+                        adapter_profile="windows_private_engine_adapters_v1", adapter_packages=[], adapter_vendor_files=document["vendor_files"], authored_package={})
         return document
 
     def test_engine_unknown_profile_refuses_before_account(self):
@@ -389,7 +392,7 @@ $helper=@($helperAST.FindAll({param($n) $n -is [Management.Automation.Language.F
 if($helper.Count -ne 1){throw 'Expected actual source literal reader'}
 Invoke-Expression $helper[0].Extent.Text
 $values=@{}
-foreach($name in @('$adapterParents','$adapterAssertions','$adapterCommandParents')) {
+foreach($name in @('$adapterParents','$adapterAssertions','$adapterCommandParents','$adapterSetupParents','$adapterSetupAssertions')) {
  $assignment=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq $name},$true))
  if($assignment.Count -ne 1){throw 'Expected one closed actual source declaration'}
  $values[$name]=@(Read-EngineLiteralArray $assignment[0])
@@ -413,6 +416,15 @@ $values|ConvertTo-Json -Depth 4 -Compress
                 self.assertIn(f"TestCompiledStdioWorkflowAndPackets/portable_{format}_{version}", ledger["$adapterAssertions"])
         self.assertEqual(len(ledger["$adapterCommandParents"]), 1)
         self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]), 163)
+        self.assertEqual(ledger["$adapterSetupParents"], ["TestModernFactoryFirstInstallAndRestart", "TestDirectInnerInstallRequiresProductionAuthority"])
+        self.assertEqual(len(ledger["$adapterSetupAssertions"]), 6)
+        self.assertEqual(len(set(ledger["$adapterSetupAssertions"])), 6)
+        for assertion in ledger["$adapterSetupAssertions"]:
+            self.assertIn(assertion.split("/")[0], ledger["$adapterSetupParents"])
+        setup_source = (ROOT / "adapters/mcp/setup/setup_test.go").read_text()
+        for parent in ledger["$adapterSetupParents"]:
+            self.assertIn(f"func {parent}(", setup_source)
+        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]) + len(ledger["$adapterSetupAssertions"]), 169)
         for name in ("TestMethodPlansResolveMaintenanceKeepWikiUnavailable", "TestMethodPlansResolveRegisteredMaintenanceAndWiki", "TestAgentResourceCallbacksRevalidateBinding"):
             self.assertIn(name, ledger["$adapterParents"])
             self.assertIn(name, ledger["$adapterAssertions"])
@@ -453,13 +465,14 @@ $values|ConvertTo-Json -Depth 4 -Compress
         parser = self.root / "required-parents.ps1"
         parser.write_text(r'''$ErrorActionPreference='Stop'
 $ast=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$null)
-$assignments=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -cin @('$canonicalRequired','$originalAssertions','$adapterParents','$adapterCommandParents','$authoredAdapterParents','$authoredAtlasParents')},$true))
-if($assignments.Count -ne 6){throw 'Expected actual owning and both companion source contracts'}
+$assignments=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -cin @('$canonicalRequired','$originalAssertions','$adapterParents','$adapterCommandParents','$authoredAdapterParents','$authoredAtlasParents','$adapterSetupParents')},$true))
+if($assignments.Count -ne 7){throw 'Expected actual owning and both companion source contracts'}
 foreach($assignment in $assignments){Invoke-Expression $assignment.Extent.Text}
 foreach($name in $originalAssertions.Keys){$canonicalRequired[$name]=@($canonicalRequired[$name]) + @($originalAssertions[$name])}
 $canonicalRequired['mcp']=@($adapterParents)+@($authoredAdapterParents)
 $canonicalRequired['atlasops']=$authoredAtlasParents
 $canonicalRequired['mcp-command']=$adapterCommandParents
+$canonicalRequired['setup']=$adapterSetupParents
 $canonicalRequired|ConvertTo-Json -Depth 4 -Compress
 ''', encoding="utf-8")
         required = subprocess.run([self.pwsh,"-NoProfile","-File",str(parser),str(DRIVER)],capture_output=True,text=True,timeout=30)
@@ -471,11 +484,11 @@ $canonicalRequired|ConvertTo-Json -Depth 4 -Compress
                            GOPROXY="off", GOSUMDB="off", GOFLAGS="-mod=readonly -buildvcs=false",
                            GOCACHE=str(self.root / "go-cache"), GOPATH=str(self.root / "go-path"),
                            GOMODCACHE=str(self.root / "go-path/pkg/mod"), GOTMPDIR=str(temporary), TMPDIR=str(temporary))
-        owning = sorted(set(required)-{"mcp","mcp-command"})
+        owning = sorted(set(required)-{"mcp","mcp-command","setup"})
         selected = {}
         decoder = json.JSONDecoder()
         for working, packages in ((ROOT,["./internal/"+name for name in owning]),
-                                  (ROOT/"adapters/mcp",[".","./cmd/maestro-mcp"])):
+                                  (ROOT/"adapters/mcp",[".","./cmd/maestro-mcp","./setup"])):
             result = subprocess.run([go,"list","-e","-find","-json",*packages],cwd=working,env=environment,
                                     capture_output=True,text=True,timeout=60)
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)

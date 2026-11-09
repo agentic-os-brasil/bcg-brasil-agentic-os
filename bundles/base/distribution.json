@@ -2,1312 +2,1689 @@
   "schema_version": 1,
   "files": [
     {
+      "source": "LICENSE.md",
+      "path": "LICENSE.md",
+      "role": "data"
+    },
+    {
+      "source": "bundles/base/agents/activation-policy.json",
+      "path": "agents/activation-policy.json",
+      "role": "data"
+    },
+    {
       "source": "bundles/base/agents/case-agent/AGENT.md",
-      "path": "agents/case-agent/AGENT.md"
+      "path": "agents/case-agent/AGENT.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/agents/catalog.json",
-      "path": "agents/catalog.json"
+      "path": "agents/catalog.json",
+      "role": "data"
     },
     {
       "source": "bundles/base/agents/client-account-agent/AGENT.md",
-      "path": "agents/client-account-agent/AGENT.md"
+      "path": "agents/client-account-agent/AGENT.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/agents/darwin/AGENT.md",
-      "path": "agents/darwin/AGENT.md"
+      "path": "agents/darwin/AGENT.md",
+      "role": "data"
+    },
+    {
+      "source": "bundles/base/agents/gamma-guardian/AGENT.md",
+      "path": "agents/gamma-guardian/AGENT.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/agents/maestro/AGENT.md",
-      "path": "agents/maestro/AGENT.md"
+      "path": "agents/maestro/AGENT.md",
+      "role": "data"
+    },
+    {
+      "source": "bundles/base/agents/pa-expert-registry.json",
+      "path": "agents/pa-expert-registry.json",
+      "role": "data"
     },
     {
       "source": "bundles/base/agents/pa-expert/AGENT.md",
-      "path": "agents/pa-expert/AGENT.md"
+      "path": "agents/pa-expert/AGENT.md",
+      "role": "data"
+    },
+    {
+      "source": "bundles/base/agents/templates/case_agent/AGENT.md",
+      "path": "agents/templates/case_agent/AGENT.md",
+      "role": "data"
+    },
+    {
+      "source": "bundles/base/agents/templates/client_account_agent/AGENT.md",
+      "path": "agents/templates/client_account_agent/AGENT.md",
+      "role": "data"
+    },
+    {
+      "source": "bundles/base/agents/templates/pa_expert/AGENT.md",
+      "path": "agents/templates/pa_expert/AGENT.md",
+      "role": "data"
+    },
+    {
+      "source": "bundles/base/agents/templates/quality_guardian/AGENT.md",
+      "path": "agents/templates/quality_guardian/AGENT.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/agents/yoda/AGENT.md",
-      "path": "agents/yoda/AGENT.md"
+      "path": "agents/yoda/AGENT.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/atlas/managed/backlinks.json",
-      "path": "atlas/managed/backlinks.json"
+      "path": "atlas/managed/backlinks.json",
+      "role": "data"
     },
     {
       "source": "bundles/base/atlas/managed/concepts/content-navigation.md",
-      "path": "atlas/managed/concepts/content-navigation.md"
+      "path": "atlas/managed/concepts/content-navigation.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/atlas/managed/concepts/darwin-lifecycle-cadence.md",
-      "path": "atlas/managed/concepts/darwin-lifecycle-cadence.md"
+      "path": "atlas/managed/concepts/darwin-lifecycle-cadence.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/atlas/managed/concepts/human-atlas-bootstrap.md",
-      "path": "atlas/managed/concepts/human-atlas-bootstrap.md"
+      "path": "atlas/managed/concepts/human-atlas-bootstrap.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/atlas/managed/concepts/install-update.md",
-      "path": "atlas/managed/concepts/install-update.md"
+      "path": "atlas/managed/concepts/install-update.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/atlas/managed/concepts/model-backed-maintenance-activation.md",
-      "path": "atlas/managed/concepts/model-backed-maintenance-activation.md"
+      "path": "atlas/managed/concepts/model-backed-maintenance-activation.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/atlas/managed/concepts/release-distribution.md",
-      "path": "atlas/managed/concepts/release-distribution.md"
+      "path": "atlas/managed/concepts/release-distribution.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/atlas/managed/concepts/wiki-entrypoint.md",
-      "path": "atlas/managed/concepts/wiki-entrypoint.md"
+      "path": "atlas/managed/concepts/wiki-entrypoint.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/atlas/managed/concepts/wiki-okf.md",
-      "path": "atlas/managed/concepts/wiki-okf.md"
+      "path": "atlas/managed/concepts/wiki-okf.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/atlas/managed/diagnostics.json",
-      "path": "atlas/managed/diagnostics.json"
+      "path": "atlas/managed/diagnostics.json",
+      "role": "data"
     },
     {
       "source": "bundles/base/atlas/managed/index.md",
-      "path": "atlas/managed/index.md"
+      "path": "atlas/managed/index.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/atlas/managed/log.md",
-      "path": "atlas/managed/log.md"
+      "path": "atlas/managed/log.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/brain-contract.md",
-      "path": "brain-contract.md"
+      "path": "brain-contract.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/INDEX.md",
-      "path": "bundles/tech-core/skills/INDEX.md"
+      "path": "bundles/tech-core/skills/INDEX.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/catalog.json",
-      "path": "bundles/tech-core/skills/catalog.json"
+      "path": "bundles/tech-core/skills/catalog.json",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/coverage-diagnose/SKILL.md",
-      "path": "bundles/tech-core/skills/coverage-diagnose/SKILL.md"
+      "path": "bundles/tech-core/skills/coverage-diagnose/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/coverage-diagnose/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/coverage-diagnose/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/coverage-diagnose/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/data-pipeline-quality/SKILL.md",
-      "path": "bundles/tech-core/skills/data-pipeline-quality/SKILL.md"
+      "path": "bundles/tech-core/skills/data-pipeline-quality/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/data-pipeline-quality/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/data-pipeline-quality/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/data-pipeline-quality/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/data-science-evaluation/SKILL.md",
-      "path": "bundles/tech-core/skills/data-science-evaluation/SKILL.md"
+      "path": "bundles/tech-core/skills/data-science-evaluation/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/data-science-evaluation/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/data-science-evaluation/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/data-science-evaluation/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/decision-log-entry/SKILL.md",
-      "path": "bundles/tech-core/skills/decision-log-entry/SKILL.md"
+      "path": "bundles/tech-core/skills/decision-log-entry/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/decision-log-entry/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/decision-log-entry/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/decision-log-entry/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-ask-matt/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-ask-matt/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-ask-matt/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-ask-matt/PHASE-BOUNDARIES.md",
-      "path": "bundles/tech-core/skills/pocock-ask-matt/PHASE-BOUNDARIES.md"
+      "path": "bundles/tech-core/skills/pocock-ask-matt/PHASE-BOUNDARIES.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-ask-matt/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-ask-matt/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-ask-matt/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-ask-matt/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-ask-matt/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-ask-matt/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-code-review/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-code-review/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-code-review/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-code-review/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-code-review/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-code-review/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-code-review/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-code-review/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-code-review/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-codebase-design/DEEPENING.md",
-      "path": "bundles/tech-core/skills/pocock-codebase-design/DEEPENING.md"
+      "path": "bundles/tech-core/skills/pocock-codebase-design/DEEPENING.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-codebase-design/DESIGN-IT-TWICE.md",
-      "path": "bundles/tech-core/skills/pocock-codebase-design/DESIGN-IT-TWICE.md"
+      "path": "bundles/tech-core/skills/pocock-codebase-design/DESIGN-IT-TWICE.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-codebase-design/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-codebase-design/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-codebase-design/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-codebase-design/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-codebase-design/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-codebase-design/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-codebase-design/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-codebase-design/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-codebase-design/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-diagnosing-bugs/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-diagnosing-bugs/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-diagnosing-bugs/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-diagnosing-bugs/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-diagnosing-bugs/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-diagnosing-bugs/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-diagnosing-bugs/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-diagnosing-bugs/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-diagnosing-bugs/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-diagnosing-bugs/scripts/hitl-loop.template.sh",
-      "path": "bundles/tech-core/skills/pocock-diagnosing-bugs/scripts/hitl-loop.template.sh"
+      "path": "bundles/tech-core/skills/pocock-diagnosing-bugs/scripts/hitl-loop.template.sh",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-domain-modeling/ADR-FORMAT.md",
-      "path": "bundles/tech-core/skills/pocock-domain-modeling/ADR-FORMAT.md"
+      "path": "bundles/tech-core/skills/pocock-domain-modeling/ADR-FORMAT.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-domain-modeling/GLOSSARY-FORMAT.md",
-      "path": "bundles/tech-core/skills/pocock-domain-modeling/GLOSSARY-FORMAT.md"
+      "path": "bundles/tech-core/skills/pocock-domain-modeling/GLOSSARY-FORMAT.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-domain-modeling/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-domain-modeling/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-domain-modeling/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-domain-modeling/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-domain-modeling/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-domain-modeling/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-domain-modeling/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-domain-modeling/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-domain-modeling/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-grill-me/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-grill-me/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-grill-me/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-grill-me/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-grill-me/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-grill-me/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-grill-me/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-grill-me/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-grill-me/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-grill-with-docs/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-grill-with-docs/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-grill-with-docs/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-grill-with-docs/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-grill-with-docs/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-grill-with-docs/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-grill-with-docs/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-grill-with-docs/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-grill-with-docs/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-grilling/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-grilling/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-grilling/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-grilling/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-grilling/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-grilling/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-grilling/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-grilling/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-grilling/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-handoff/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-handoff/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-handoff/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-handoff/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-handoff/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-handoff/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-handoff/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-handoff/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-handoff/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-implement-spec/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-implement-spec/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-implement-spec/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-implement-spec/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-implement-spec/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-implement-spec/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-implement-spec/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-implement-spec/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-implement-spec/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-implement/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-implement/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-implement/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-implement/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-implement/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-implement/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-implement/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-implement/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-implement/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-improve-codebase-architecture/HTML-REPORT.md",
-      "path": "bundles/tech-core/skills/pocock-improve-codebase-architecture/HTML-REPORT.md"
+      "path": "bundles/tech-core/skills/pocock-improve-codebase-architecture/HTML-REPORT.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-improve-codebase-architecture/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-improve-codebase-architecture/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-improve-codebase-architecture/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-improve-codebase-architecture/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-improve-codebase-architecture/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-improve-codebase-architecture/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-improve-codebase-architecture/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-improve-codebase-architecture/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-improve-codebase-architecture/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-pr/CREDITS.md",
-      "path": "bundles/tech-core/skills/pocock-pr/CREDITS.md"
+      "path": "bundles/tech-core/skills/pocock-pr/CREDITS.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-pr/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-pr/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-pr/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-pr/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-pr/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-pr/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-pr/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-pr/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-pr/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-prototype/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-prototype/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-prototype/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-prototype/LOGIC.md",
-      "path": "bundles/tech-core/skills/pocock-prototype/LOGIC.md"
+      "path": "bundles/tech-core/skills/pocock-prototype/LOGIC.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-prototype/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-prototype/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-prototype/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-prototype/UI.md",
-      "path": "bundles/tech-core/skills/pocock-prototype/UI.md"
+      "path": "bundles/tech-core/skills/pocock-prototype/UI.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-prototype/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-prototype/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-prototype/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-research/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-research/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-research/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-research/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-research/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-research/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-research/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-research/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-research/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-retro/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-retro/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-retro/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-retro/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-retro/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-retro/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-retro/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-retro/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-retro/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/domain.md",
-      "path": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/domain.md"
+      "path": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/domain.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/issue-tracker-github.md",
-      "path": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/issue-tracker-github.md"
+      "path": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/issue-tracker-github.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/issue-tracker-gitlab.md",
-      "path": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/issue-tracker-gitlab.md"
+      "path": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/issue-tracker-gitlab.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/issue-tracker-local.md",
-      "path": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/issue-tracker-local.md"
+      "path": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/issue-tracker-local.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/triage-labels.md",
-      "path": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/triage-labels.md"
+      "path": "bundles/tech-core/skills/pocock-setup-matt-pocock-skills/triage-labels.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-tdd/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-tdd/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-tdd/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-tdd/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-tdd/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-tdd/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-tdd/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-tdd/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-tdd/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-tdd/mocking.md",
-      "path": "bundles/tech-core/skills/pocock-tdd/mocking.md"
+      "path": "bundles/tech-core/skills/pocock-tdd/mocking.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-tdd/tests.md",
-      "path": "bundles/tech-core/skills/pocock-tdd/tests.md"
+      "path": "bundles/tech-core/skills/pocock-tdd/tests.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-teach/GLOSSARY-FORMAT.md",
-      "path": "bundles/tech-core/skills/pocock-teach/GLOSSARY-FORMAT.md"
+      "path": "bundles/tech-core/skills/pocock-teach/GLOSSARY-FORMAT.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-teach/LEARNING-RECORD-FORMAT.md",
-      "path": "bundles/tech-core/skills/pocock-teach/LEARNING-RECORD-FORMAT.md"
+      "path": "bundles/tech-core/skills/pocock-teach/LEARNING-RECORD-FORMAT.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-teach/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-teach/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-teach/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-teach/MISSION-FORMAT.md",
-      "path": "bundles/tech-core/skills/pocock-teach/MISSION-FORMAT.md"
+      "path": "bundles/tech-core/skills/pocock-teach/MISSION-FORMAT.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-teach/RESOURCES-FORMAT.md",
-      "path": "bundles/tech-core/skills/pocock-teach/RESOURCES-FORMAT.md"
+      "path": "bundles/tech-core/skills/pocock-teach/RESOURCES-FORMAT.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-teach/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-teach/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-teach/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-teach/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-teach/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-teach/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-to-questionnaire/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-to-questionnaire/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-to-questionnaire/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-to-questionnaire/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-to-questionnaire/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-to-questionnaire/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-to-questionnaire/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-to-questionnaire/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-to-questionnaire/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-to-spec/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-to-spec/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-to-spec/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-to-spec/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-to-spec/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-to-spec/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-to-spec/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-to-spec/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-to-spec/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-to-tickets/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-to-tickets/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-to-tickets/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-to-tickets/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-to-tickets/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-to-tickets/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-to-tickets/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-to-tickets/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-to-tickets/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-triage/AGENT-BRIEF.md",
-      "path": "bundles/tech-core/skills/pocock-triage/AGENT-BRIEF.md"
+      "path": "bundles/tech-core/skills/pocock-triage/AGENT-BRIEF.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-triage/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-triage/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-triage/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-triage/OUT-OF-SCOPE.md",
-      "path": "bundles/tech-core/skills/pocock-triage/OUT-OF-SCOPE.md"
+      "path": "bundles/tech-core/skills/pocock-triage/OUT-OF-SCOPE.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-triage/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-triage/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-triage/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-triage/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-triage/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-triage/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-upstream.json",
-      "path": "bundles/tech-core/skills/pocock-upstream.json"
+      "path": "bundles/tech-core/skills/pocock-upstream.json",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-wait-what/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-wait-what/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-wait-what/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-wait-what/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-wait-what/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-wait-what/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-wait-what/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-wait-what/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-wait-what/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-wayfinder/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-wayfinder/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-wayfinder/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-wayfinder/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-wayfinder/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-wayfinder/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-wayfinder/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-wayfinder/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-wayfinder/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-wizard/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-wizard/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-wizard/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-wizard/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-wizard/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-wizard/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-wizard/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-wizard/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-wizard/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-wizard/template.sh",
-      "path": "bundles/tech-core/skills/pocock-wizard/template.sh"
+      "path": "bundles/tech-core/skills/pocock-wizard/template.sh",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-writing-for-agents/LICENSE",
-      "path": "bundles/tech-core/skills/pocock-writing-for-agents/LICENSE"
+      "path": "bundles/tech-core/skills/pocock-writing-for-agents/LICENSE",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-writing-for-agents/SKILL-MECHANICS.md",
-      "path": "bundles/tech-core/skills/pocock-writing-for-agents/SKILL-MECHANICS.md"
+      "path": "bundles/tech-core/skills/pocock-writing-for-agents/SKILL-MECHANICS.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-writing-for-agents/SKILL.md",
-      "path": "bundles/tech-core/skills/pocock-writing-for-agents/SKILL.md"
+      "path": "bundles/tech-core/skills/pocock-writing-for-agents/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pocock-writing-for-agents/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pocock-writing-for-agents/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pocock-writing-for-agents/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pr-quality-loop/SKILL.md",
-      "path": "bundles/tech-core/skills/pr-quality-loop/SKILL.md"
+      "path": "bundles/tech-core/skills/pr-quality-loop/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pr-quality-loop/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pr-quality-loop/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pr-quality-loop/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pr-review/SKILL.md",
-      "path": "bundles/tech-core/skills/pr-review/SKILL.md"
+      "path": "bundles/tech-core/skills/pr-review/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/pr-review/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/pr-review/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/pr-review/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/reproducible-data-run/SKILL.md",
-      "path": "bundles/tech-core/skills/reproducible-data-run/SKILL.md"
+      "path": "bundles/tech-core/skills/reproducible-data-run/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/reproducible-data-run/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/reproducible-data-run/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/reproducible-data-run/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/review-explain-change/SKILL.md",
-      "path": "bundles/tech-core/skills/review-explain-change/SKILL.md"
+      "path": "bundles/tech-core/skills/review-explain-change/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/review-explain-change/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/review-explain-change/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/review-explain-change/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/spec-driven-delivery/SKILL.md",
-      "path": "bundles/tech-core/skills/spec-driven-delivery/SKILL.md"
+      "path": "bundles/tech-core/skills/spec-driven-delivery/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/spec-driven-delivery/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/spec-driven-delivery/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/spec-driven-delivery/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/test-and-evidence/SKILL.md",
-      "path": "bundles/tech-core/skills/test-and-evidence/SKILL.md"
+      "path": "bundles/tech-core/skills/test-and-evidence/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/test-and-evidence/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/test-and-evidence/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/test-and-evidence/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/unit-test-wave/SKILL.md",
-      "path": "bundles/tech-core/skills/unit-test-wave/SKILL.md"
+      "path": "bundles/tech-core/skills/unit-test-wave/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/unit-test-wave/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/unit-test-wave/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/unit-test-wave/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/xfail-bug-capture/SKILL.md",
-      "path": "bundles/tech-core/skills/xfail-bug-capture/SKILL.md"
+      "path": "bundles/tech-core/skills/xfail-bug-capture/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/tech-core/skills/xfail-bug-capture/agents/openai.yaml",
-      "path": "bundles/tech-core/skills/xfail-bug-capture/agents/openai.yaml"
+      "path": "bundles/tech-core/skills/xfail-bug-capture/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/manifest.json",
-      "path": "manifest.json"
+      "path": "manifest.json",
+      "role": "data"
     },
     {
       "source": "bundles/base/memory/policy.json",
-      "path": "memory/policy.json"
+      "path": "memory/policy.json",
+      "role": "data"
     },
     {
       "source": "bundles/base/profile/policy.json",
-      "path": "profile/policy.json"
+      "path": "profile/policy.json",
+      "role": "data"
     },
     {
       "source": "bundles/base/release/provider.json",
-      "path": "release/provider.json"
+      "path": "release/provider.json",
+      "role": "data"
     },
     {
       "source": "bundles/base/runtime/capabilities.json",
-      "path": "runtime/capabilities.json"
+      "path": "runtime/capabilities.json",
+      "role": "data"
     },
     {
       "source": "bundles/base/runtime/maintenance.json",
-      "path": "runtime/maintenance.json"
+      "path": "runtime/maintenance.json",
+      "role": "data"
     },
     {
       "source": "bundles/base/runtime/orientation.md.tmpl",
-      "path": "runtime/orientation.md.tmpl"
+      "path": "runtime/orientation.md.tmpl",
+      "role": "data"
     },
     {
       "source": "schemas/advancement-proposal.schema.json",
-      "path": "schemas/advancement-proposal.schema.json"
+      "path": "schemas/advancement-proposal.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/canary-receipt.schema.json",
-      "path": "schemas/canary-receipt.schema.json"
+      "path": "schemas/canary-receipt.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/canary-report.schema.json",
-      "path": "schemas/canary-report.schema.json"
+      "path": "schemas/canary-report.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/darwin-evidence.schema.json",
-      "path": "schemas/darwin-evidence.schema.json"
+      "path": "schemas/darwin-evidence.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/darwin-evolution.schema.json",
-      "path": "schemas/darwin-evolution.schema.json"
+      "path": "schemas/darwin-evolution.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/darwin-scorecard.schema.json",
-      "path": "schemas/darwin-scorecard.schema.json"
+      "path": "schemas/darwin-scorecard.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/execution-state.schema.json",
-      "path": "schemas/execution-state.schema.json"
+      "path": "schemas/execution-state.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/federation-batch.schema.json",
-      "path": "schemas/federation-batch.schema.json"
+      "path": "schemas/federation-batch.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/federation-export-state.schema.json",
-      "path": "schemas/federation-export-state.schema.json"
+      "path": "schemas/federation-export-state.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/ingestion-result.schema.json",
-      "path": "schemas/ingestion-result.schema.json"
+      "path": "schemas/ingestion-result.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/ingestion-runtime-pack.schema.json",
-      "path": "schemas/ingestion-runtime-pack.schema.json"
+      "path": "schemas/ingestion-runtime-pack.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/intent-review-packet.schema.json",
-      "path": "schemas/intent-review-packet.schema.json"
+      "path": "schemas/intent-review-packet.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/interaction-observation.schema.json",
-      "path": "schemas/interaction-observation.schema.json"
+      "path": "schemas/interaction-observation.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/interaction-profile.schema.json",
-      "path": "schemas/interaction-profile.schema.json"
+      "path": "schemas/interaction-profile.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/maestro-dispatch-input.schema.json",
-      "path": "schemas/maestro-dispatch-input.schema.json"
+      "path": "schemas/maestro-dispatch-input.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/maestro-input.schema.json",
-      "path": "schemas/maestro-input.schema.json"
+      "path": "schemas/maestro-input.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/maestro-plan.schema.json",
-      "path": "schemas/maestro-plan.schema.json"
+      "path": "schemas/maestro-plan.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/maintenance-command.schema.json",
-      "path": "schemas/maintenance-command.schema.json"
+      "path": "schemas/maintenance-command.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/maintenance-jobs.schema.json",
-      "path": "schemas/maintenance-jobs.schema.json"
+      "path": "schemas/maintenance-jobs.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/maintenance-receipt.schema.json",
-      "path": "schemas/maintenance-receipt.schema.json"
+      "path": "schemas/maintenance-receipt.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/memory-artifact.schema.json",
-      "path": "schemas/memory-artifact.schema.json"
+      "path": "schemas/memory-artifact.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/memory-checkpoint.schema.json",
-      "path": "schemas/memory-checkpoint.schema.json"
+      "path": "schemas/memory-checkpoint.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/memory-commit.schema.json",
-      "path": "schemas/memory-commit.schema.json"
+      "path": "schemas/memory-commit.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/memory-policy.schema.json",
-      "path": "schemas/memory-policy.schema.json"
+      "path": "schemas/memory-policy.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/portable-skill-manifest.schema.json",
-      "path": "schemas/portable-skill-manifest.schema.json"
+      "path": "schemas/portable-skill-manifest.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/prompt-history.schema.json",
-      "path": "schemas/prompt-history.schema.json"
+      "path": "schemas/prompt-history.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/release-authority-registry.schema.json",
-      "path": "schemas/release-authority-registry.schema.json"
+      "path": "schemas/release-authority-registry.schema.json",
+      "role": "data"
+    },
+    {
+      "source": "schemas/release-manifest-v2.schema.json",
+      "path": "schemas/release-manifest-v2.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/release-manifest.schema.json",
-      "path": "schemas/release-manifest.schema.json"
+      "path": "schemas/release-manifest.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/release-provider.schema.json",
-      "path": "schemas/release-provider.schema.json"
+      "path": "schemas/release-provider.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/runtime-capabilities.schema.json",
-      "path": "schemas/runtime-capabilities.schema.json"
+      "path": "schemas/runtime-capabilities.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/scheduler-state.schema.json",
-      "path": "schemas/scheduler-state.schema.json"
+      "path": "schemas/scheduler-state.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/sharepoint-project-source-selection.schema.json",
-      "path": "schemas/sharepoint-project-source-selection.schema.json"
+      "path": "schemas/sharepoint-project-source-selection.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/sharepoint-work-catalog.schema.json",
-      "path": "schemas/sharepoint-work-catalog.schema.json"
+      "path": "schemas/sharepoint-work-catalog.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/sharepoint-work-enrollment.schema.json",
-      "path": "schemas/sharepoint-work-enrollment.schema.json"
+      "path": "schemas/sharepoint-work-enrollment.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/sharepoint-work-import-receipt.schema.json",
-      "path": "schemas/sharepoint-work-import-receipt.schema.json"
+      "path": "schemas/sharepoint-work-import-receipt.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/user-self-snapshot.schema.json",
-      "path": "schemas/user-self-snapshot.schema.json"
+      "path": "schemas/user-self-snapshot.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/workspace-import-approval.schema.json",
-      "path": "schemas/workspace-import-approval.schema.json"
+      "path": "schemas/workspace-import-approval.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/workspace-import-inspection.schema.json",
-      "path": "schemas/workspace-import-inspection.schema.json"
+      "path": "schemas/workspace-import-inspection.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/workspace-import-journal.schema.json",
-      "path": "schemas/workspace-import-journal.schema.json"
+      "path": "schemas/workspace-import-journal.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/workspace-import-plan.schema.json",
-      "path": "schemas/workspace-import-plan.schema.json"
+      "path": "schemas/workspace-import-plan.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/workspace-import-receipt.schema.json",
-      "path": "schemas/workspace-import-receipt.schema.json"
+      "path": "schemas/workspace-import-receipt.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/yoda-review.schema.json",
-      "path": "schemas/yoda-review.schema.json"
+      "path": "schemas/yoda-review.schema.json",
+      "role": "data"
     },
     {
       "source": "schemas/yoda-self-review.schema.json",
-      "path": "schemas/yoda-self-review.schema.json"
+      "path": "schemas/yoda-self-review.schema.json",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/INDEX.md",
-      "path": "skills/INDEX.md"
+      "path": "skills/INDEX.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/account-case-setup/SKILL.md",
-      "path": "skills/account-case-setup/SKILL.md"
+      "path": "skills/account-case-setup/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/account-case-setup/agents/openai.yaml",
-      "path": "skills/account-case-setup/agents/openai.yaml"
+      "path": "skills/account-case-setup/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/agent-identity-setup/SKILL.md",
-      "path": "skills/agent-identity-setup/SKILL.md"
+      "path": "skills/agent-identity-setup/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/agent-identity-setup/agents/openai.yaml",
-      "path": "skills/agent-identity-setup/agents/openai.yaml"
+      "path": "skills/agent-identity-setup/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/agent-skill-policy.json",
-      "path": "skills/agent-skill-policy.json"
+      "path": "skills/agent-skill-policy.json",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/bcg-case-kickoff/SKILL.md",
-      "path": "skills/bcg-case-kickoff/SKILL.md"
+      "path": "skills/bcg-case-kickoff/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/bcg-case-kickoff/agents/openai.yaml",
-      "path": "skills/bcg-case-kickoff/agents/openai.yaml"
+      "path": "skills/bcg-case-kickoff/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/bcg-deck/SKILL.md",
-      "path": "skills/bcg-deck/SKILL.md"
+      "path": "skills/bcg-deck/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/bcg-deck/agents/openai.yaml",
-      "path": "skills/bcg-deck/agents/openai.yaml"
+      "path": "skills/bcg-deck/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/brain-index/SKILL.md",
-      "path": "skills/brain-index/SKILL.md"
+      "path": "skills/brain-index/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/brain-index/agents/openai.yaml",
-      "path": "skills/brain-index/agents/openai.yaml"
+      "path": "skills/brain-index/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/case-agent-setup/SKILL.md",
-      "path": "skills/case-agent-setup/SKILL.md"
+      "path": "skills/case-agent-setup/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/case-agent-setup/agents/openai.yaml",
-      "path": "skills/case-agent-setup/agents/openai.yaml"
+      "path": "skills/case-agent-setup/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/case-canon-ingest/SKILL.md",
-      "path": "skills/case-canon-ingest/SKILL.md"
+      "path": "skills/case-canon-ingest/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/case-canon-ingest/agents/openai.yaml",
-      "path": "skills/case-canon-ingest/agents/openai.yaml"
+      "path": "skills/case-canon-ingest/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/case-decision-log-entry/SKILL.md",
-      "path": "skills/case-decision-log-entry/SKILL.md"
+      "path": "skills/case-decision-log-entry/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/case-decision-log-entry/agents/openai.yaml",
-      "path": "skills/case-decision-log-entry/agents/openai.yaml"
+      "path": "skills/case-decision-log-entry/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/case-sharepoint-ingest/SKILL.md",
-      "path": "skills/case-sharepoint-ingest/SKILL.md"
+      "path": "skills/case-sharepoint-ingest/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/case-sharepoint-ingest/agents/openai.yaml",
-      "path": "skills/case-sharepoint-ingest/agents/openai.yaml"
+      "path": "skills/case-sharepoint-ingest/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/case-sharepoint-map/SKILL.md",
-      "path": "skills/case-sharepoint-map/SKILL.md"
+      "path": "skills/case-sharepoint-map/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/case-sharepoint-map/agents/openai.yaml",
-      "path": "skills/case-sharepoint-map/agents/openai.yaml"
+      "path": "skills/case-sharepoint-map/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/caseos-connect/SKILL.md",
-      "path": "skills/caseos-connect/SKILL.md"
+      "path": "skills/caseos-connect/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/caseos-connect/agents/openai.yaml",
-      "path": "skills/caseos-connect/agents/openai.yaml"
+      "path": "skills/caseos-connect/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/caseos-connect/references/native-setup.md",
-      "path": "skills/caseos-connect/references/native-setup.md"
+      "path": "skills/caseos-connect/references/native-setup.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/caseos-prepare-enrichment/SKILL.md",
-      "path": "skills/caseos-prepare-enrichment/SKILL.md"
+      "path": "skills/caseos-prepare-enrichment/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/caseos-prepare-enrichment/agents/openai.yaml",
-      "path": "skills/caseos-prepare-enrichment/agents/openai.yaml"
+      "path": "skills/caseos-prepare-enrichment/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/caseos-prepare-ingest/SKILL.md",
-      "path": "skills/caseos-prepare-ingest/SKILL.md"
+      "path": "skills/caseos-prepare-ingest/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/caseos-prepare-ingest/agents/openai.yaml",
-      "path": "skills/caseos-prepare-ingest/agents/openai.yaml"
+      "path": "skills/caseos-prepare-ingest/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/caseos-tutorial/SKILL.md",
-      "path": "skills/caseos-tutorial/SKILL.md"
+      "path": "skills/caseos-tutorial/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/caseos-tutorial/agents/openai.yaml",
-      "path": "skills/caseos-tutorial/agents/openai.yaml"
+      "path": "skills/caseos-tutorial/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/caseos-tutorial/references/guide.md",
-      "path": "skills/caseos-tutorial/references/guide.md"
+      "path": "skills/caseos-tutorial/references/guide.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/catalog.json",
-      "path": "skills/catalog.json"
+      "path": "skills/catalog.json",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/client-delivery-gate/SKILL.md",
-      "path": "skills/client-delivery-gate/SKILL.md"
+      "path": "skills/client-delivery-gate/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/client-delivery-gate/agents/openai.yaml",
-      "path": "skills/client-delivery-gate/agents/openai.yaml"
+      "path": "skills/client-delivery-gate/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/craft-update/SKILL.md",
-      "path": "skills/craft-update/SKILL.md"
+      "path": "skills/craft-update/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/craft-update/agents/openai.yaml",
-      "path": "skills/craft-update/agents/openai.yaml"
+      "path": "skills/craft-update/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/deck-drill/SKILL.md",
-      "path": "skills/deck-drill/SKILL.md"
+      "path": "skills/deck-drill/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/deck-drill/agents/openai.yaml",
-      "path": "skills/deck-drill/agents/openai.yaml"
+      "path": "skills/deck-drill/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/deck-review/SKILL.md",
-      "path": "skills/deck-review/SKILL.md"
+      "path": "skills/deck-review/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/deck-review/agents/openai.yaml",
-      "path": "skills/deck-review/agents/openai.yaml"
+      "path": "skills/deck-review/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/dream-memory/SKILL.md",
-      "path": "skills/dream-memory/SKILL.md"
+      "path": "skills/dream-memory/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/dream-memory/agents/openai.yaml",
-      "path": "skills/dream-memory/agents/openai.yaml"
+      "path": "skills/dream-memory/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/eod/SKILL.md",
-      "path": "skills/eod/SKILL.md"
+      "path": "skills/eod/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/eod/agents/openai.yaml",
-      "path": "skills/eod/agents/openai.yaml"
+      "path": "skills/eod/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/excel-financial-model/SKILL.md",
-      "path": "skills/excel-financial-model/SKILL.md"
+      "path": "skills/excel-financial-model/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/excel-financial-model/agents/openai.yaml",
-      "path": "skills/excel-financial-model/agents/openai.yaml"
+      "path": "skills/excel-financial-model/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/execution-continuity/SKILL.md",
-      "path": "skills/execution-continuity/SKILL.md"
+      "path": "skills/execution-continuity/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/execution-continuity/agents/openai.yaml",
-      "path": "skills/execution-continuity/agents/openai.yaml"
+      "path": "skills/execution-continuity/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/expert-interview-guide/SKILL.md",
-      "path": "skills/expert-interview-guide/SKILL.md"
+      "path": "skills/expert-interview-guide/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/expert-interview-guide/agents/openai.yaml",
-      "path": "skills/expert-interview-guide/agents/openai.yaml"
+      "path": "skills/expert-interview-guide/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/feedback-capture/SKILL.md",
-      "path": "skills/feedback-capture/SKILL.md"
+      "path": "skills/feedback-capture/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/feedback-capture/agents/openai.yaml",
-      "path": "skills/feedback-capture/agents/openai.yaml"
+      "path": "skills/feedback-capture/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/find-prior-work/SKILL.md",
-      "path": "skills/find-prior-work/SKILL.md"
+      "path": "skills/find-prior-work/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/find-prior-work/agents/openai.yaml",
-      "path": "skills/find-prior-work/agents/openai.yaml"
+      "path": "skills/find-prior-work/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/fodais-performance-review/SKILL.md",
-      "path": "skills/fodais-performance-review/SKILL.md"
+      "path": "skills/fodais-performance-review/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/fodais-performance-review/agents/openai.yaml",
-      "path": "skills/fodais-performance-review/agents/openai.yaml"
+      "path": "skills/fodais-performance-review/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/ingest-content/SKILL.md",
-      "path": "skills/ingest-content/SKILL.md"
+      "path": "skills/ingest-content/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/ingest-content/agents/openai.yaml",
-      "path": "skills/ingest-content/agents/openai.yaml"
+      "path": "skills/ingest-content/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/interaction-profile/SKILL.md",
-      "path": "skills/interaction-profile/SKILL.md"
+      "path": "skills/interaction-profile/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/interaction-profile/agents/openai.yaml",
-      "path": "skills/interaction-profile/agents/openai.yaml"
+      "path": "skills/interaction-profile/agents/openai.yaml",
+      "role": "data"
+    },
+    {
+      "source": "bundles/base/skills/interaction-profile/resources/owner-paths.md",
+      "path": "skills/interaction-profile/resources/owner-paths.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/investigate/SKILL.md",
-      "path": "skills/investigate/SKILL.md"
+      "path": "skills/investigate/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/investigate/agents/openai.yaml",
-      "path": "skills/investigate/agents/openai.yaml"
+      "path": "skills/investigate/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/learn-from-logs/SKILL.md",
-      "path": "skills/learn-from-logs/SKILL.md"
+      "path": "skills/learn-from-logs/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/learn-from-logs/agents/openai.yaml",
-      "path": "skills/learn-from-logs/agents/openai.yaml"
+      "path": "skills/learn-from-logs/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/learn-from-logs/references/extraction-and-mapping.md",
-      "path": "skills/learn-from-logs/references/extraction-and-mapping.md"
+      "path": "skills/learn-from-logs/references/extraction-and-mapping.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/learn-from-logs/references/provenance.md",
-      "path": "skills/learn-from-logs/references/provenance.md"
+      "path": "skills/learn-from-logs/references/provenance.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/learn-from-logs/references/validation.md",
-      "path": "skills/learn-from-logs/references/validation.md"
+      "path": "skills/learn-from-logs/references/validation.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/learnings-bridge/SKILL.md",
-      "path": "skills/learnings-bridge/SKILL.md"
+      "path": "skills/learnings-bridge/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/learnings-bridge/agents/openai.yaml",
-      "path": "skills/learnings-bridge/agents/openai.yaml"
+      "path": "skills/learnings-bridge/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/maestro-doctor/SKILL.md",
-      "path": "skills/maestro-doctor/SKILL.md"
+      "path": "skills/maestro-doctor/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/maestro-doctor/agents/openai.yaml",
-      "path": "skills/maestro-doctor/agents/openai.yaml"
+      "path": "skills/maestro-doctor/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/maestro-environment-setup/SKILL.md",
-      "path": "skills/maestro-environment-setup/SKILL.md"
+      "path": "skills/maestro-environment-setup/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/maestro-environment-setup/agents/openai.yaml",
-      "path": "skills/maestro-environment-setup/agents/openai.yaml"
+      "path": "skills/maestro-environment-setup/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/maestro-knowledge-pill/SKILL.md",
-      "path": "skills/maestro-knowledge-pill/SKILL.md"
+      "path": "skills/maestro-knowledge-pill/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/maestro-knowledge-pill/agents/openai.yaml",
-      "path": "skills/maestro-knowledge-pill/agents/openai.yaml"
+      "path": "skills/maestro-knowledge-pill/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/maestro-onboarding/SKILL.md",
-      "path": "skills/maestro-onboarding/SKILL.md"
+      "path": "skills/maestro-onboarding/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/maestro-onboarding/agents/openai.yaml",
-      "path": "skills/maestro-onboarding/agents/openai.yaml"
+      "path": "skills/maestro-onboarding/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/maestro-operator/SKILL.md",
-      "path": "skills/maestro-operator/SKILL.md"
+      "path": "skills/maestro-operator/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/maestro-operator/agents/openai.yaml",
-      "path": "skills/maestro-operator/agents/openai.yaml"
+      "path": "skills/maestro-operator/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/maestro-operator/resources/authored-brain.md",
-      "path": "skills/maestro-operator/resources/authored-brain.md"
+      "path": "skills/maestro-operator/resources/authored-brain.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/maestro-runtime-checkup/SKILL.md",
-      "path": "skills/maestro-runtime-checkup/SKILL.md"
+      "path": "skills/maestro-runtime-checkup/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/maestro-runtime-checkup/agents/openai.yaml",
-      "path": "skills/maestro-runtime-checkup/agents/openai.yaml"
+      "path": "skills/maestro-runtime-checkup/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/maestro-setup-update/SKILL.md",
-      "path": "skills/maestro-setup-update/SKILL.md"
+      "path": "skills/maestro-setup-update/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/maestro-setup-update/agents/openai.yaml",
-      "path": "skills/maestro-setup-update/agents/openai.yaml"
+      "path": "skills/maestro-setup-update/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/meeting-close/SKILL.md",
-      "path": "skills/meeting-close/SKILL.md"
+      "path": "skills/meeting-close/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/meeting-close/agents/openai.yaml",
-      "path": "skills/meeting-close/agents/openai.yaml"
+      "path": "skills/meeting-close/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/meeting-to-work-items/SKILL.md",
-      "path": "skills/meeting-to-work-items/SKILL.md"
+      "path": "skills/meeting-to-work-items/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/meeting-to-work-items/agents/openai.yaml",
-      "path": "skills/meeting-to-work-items/agents/openai.yaml"
+      "path": "skills/meeting-to-work-items/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/owner-background/SKILL.md",
-      "path": "skills/owner-background/SKILL.md"
+      "path": "skills/owner-background/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/owner-background/agents/openai.yaml",
-      "path": "skills/owner-background/agents/openai.yaml"
+      "path": "skills/owner-background/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/qa-gate/SKILL.md",
-      "path": "skills/qa-gate/SKILL.md"
+      "path": "skills/qa-gate/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/qa-gate/agents/openai.yaml",
-      "path": "skills/qa-gate/agents/openai.yaml"
+      "path": "skills/qa-gate/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/qualitative-analysis/SKILL.md",
-      "path": "skills/qualitative-analysis/SKILL.md"
+      "path": "skills/qualitative-analysis/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/qualitative-analysis/agents/openai.yaml",
-      "path": "skills/qualitative-analysis/agents/openai.yaml"
+      "path": "skills/qualitative-analysis/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/quantitative-analysis/SKILL.md",
-      "path": "skills/quantitative-analysis/SKILL.md"
+      "path": "skills/quantitative-analysis/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/quantitative-analysis/agents/openai.yaml",
-      "path": "skills/quantitative-analysis/agents/openai.yaml"
+      "path": "skills/quantitative-analysis/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/retro/SKILL.md",
-      "path": "skills/retro/SKILL.md"
+      "path": "skills/retro/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/retro/agents/openai.yaml",
-      "path": "skills/retro/agents/openai.yaml"
+      "path": "skills/retro/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/sharepoint-ingest/SKILL.md",
-      "path": "skills/sharepoint-ingest/SKILL.md"
+      "path": "skills/sharepoint-ingest/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/sharepoint-ingest/agents/openai.yaml",
-      "path": "skills/sharepoint-ingest/agents/openai.yaml"
+      "path": "skills/sharepoint-ingest/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/slide-summary/SKILL.md",
-      "path": "skills/slide-summary/SKILL.md"
+      "path": "skills/slide-summary/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/slide-summary/agents/openai.yaml",
-      "path": "skills/slide-summary/agents/openai.yaml"
+      "path": "skills/slide-summary/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/start-day/SKILL.md",
-      "path": "skills/start-day/SKILL.md"
+      "path": "skills/start-day/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/start-day/agents/openai.yaml",
-      "path": "skills/start-day/agents/openai.yaml"
+      "path": "skills/start-day/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/upward-feedback/SKILL.md",
-      "path": "skills/upward-feedback/SKILL.md"
+      "path": "skills/upward-feedback/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/upward-feedback/agents/openai.yaml",
-      "path": "skills/upward-feedback/agents/openai.yaml"
+      "path": "skills/upward-feedback/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/wayfinder/SKILL.md",
-      "path": "skills/wayfinder/SKILL.md"
+      "path": "skills/wayfinder/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/wayfinder/agents/openai.yaml",
-      "path": "skills/wayfinder/agents/openai.yaml"
+      "path": "skills/wayfinder/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/workspace-agent-setup/SKILL.md",
-      "path": "skills/workspace-agent-setup/SKILL.md"
+      "path": "skills/workspace-agent-setup/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/workspace-agent-setup/agents/openai.yaml",
-      "path": "skills/workspace-agent-setup/agents/openai.yaml"
+      "path": "skills/workspace-agent-setup/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/writing-tighten/SKILL.md",
-      "path": "skills/writing-tighten/SKILL.md"
+      "path": "skills/writing-tighten/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/writing-tighten/agents/openai.yaml",
-      "path": "skills/writing-tighten/agents/openai.yaml"
+      "path": "skills/writing-tighten/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/yoda/SKILL.md",
-      "path": "skills/yoda/SKILL.md"
+      "path": "skills/yoda/SKILL.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/skills/yoda/agents/openai.yaml",
-      "path": "skills/yoda/agents/openai.yaml"
+      "path": "skills/yoda/agents/openai.yaml",
+      "role": "data"
     },
     {
       "source": "bundles/base/tools/INDEX.md",
-      "path": "tools/INDEX.md"
+      "path": "tools/INDEX.md",
+      "role": "data"
     },
     {
       "source": "bundles/base/tools/agent-route.py",
-      "path": "tools/agent-route.py"
+      "path": "tools/agent-route.py",
+      "role": "data"
     },
     {
       "source": "bundles/base/tools/brain-index.py",
-      "path": "tools/brain-index.py"
+      "path": "tools/brain-index.py",
+      "role": "data"
     },
     {
       "source": "bundles/base/tools/brain-route.py",
-      "path": "tools/brain-route.py"
+      "path": "tools/brain-route.py",
+      "role": "data"
     },
     {
       "source": "bundles/base/tools/log-selection.py",
-      "path": "tools/log-selection.py"
+      "path": "tools/log-selection.py",
+      "role": "data"
     },
     {
       "source": "bundles/base/tools/migrate-data-to-brain.py",
-      "path": "tools/migrate-data-to-brain.py"
+      "path": "tools/migrate-data-to-brain.py",
+      "role": "data"
     },
     {
       "source": "bundles/base/tools/paths-check.py",
-      "path": "tools/paths-check.py"
+      "path": "tools/paths-check.py",
+      "role": "data"
     },
     {
       "source": "bundles/base/tools/session-memory-emit.py",
-      "path": "tools/session-memory-emit.py"
+      "path": "tools/session-memory-emit.py",
+      "role": "data"
     },
     {
       "source": "bundles/base/tools/skill-route.py",
-      "path": "tools/skill-route.py"
+      "path": "tools/skill-route.py",
+      "role": "data"
     }
   ]
 }

@@ -57,7 +57,7 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 	if err != nil {
 		return empty, "pack_untrusted"
 	}
-	compatibility, err := releasecontract.ParseVersionRange(manifest.Bundle.CompatibleCLI)
+	compatibility, err := releasecontract.ParseVersionRange(manifest.CompatibleExecutable())
 	if err != nil {
 		return empty, "pack_incompatible"
 	}

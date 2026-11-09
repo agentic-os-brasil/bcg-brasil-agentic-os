@@ -111,6 +111,9 @@ func readNativeBinary(path string) ([]byte, Target, error) {
 		return nil, Target{}, err
 	}
 	defer f.Close()
+	if err := scheduler.ValidateSingleLink(f); err != nil {
+		return nil, Target{}, err
+	}
 	info, err := f.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > 128<<20 {
 		return nil, Target{}, errors.New("bounded native executable required")
@@ -122,6 +125,13 @@ func readNativeBinary(path string) ([]byte, Target, error) {
 	after, err := f.Stat()
 	if err != nil || int64(len(body)) != info.Size() || !sameHostMetadata(info, after) {
 		return nil, Target{}, errors.New("native executable changed while reading")
+	}
+	return inspectNativeBinary(body)
+}
+
+func inspectNativeBinary(body []byte) ([]byte, Target, error) {
+	if len(body) == 0 || len(body) > 128<<20 {
+		return nil, Target{}, errors.New("bounded native executable required")
 	}
 	r := bytes.NewReader(body)
 	if m, err := macho.NewFile(r); err == nil && m.Type == macho.TypeExec {
