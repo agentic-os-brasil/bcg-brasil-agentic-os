@@ -254,7 +254,7 @@ if ($AuthoredBrain -and -not $AtlasTestBinary) {
 if ($PrivateWiki -and -not $AuthoredBrain) {
     throw 'Private wiki qualification also requires the held-publication authored-brain profile.'
 }
-if ($CanonicalManifest -and -not $PrivateWiki) {
+if ($withEngine -and -not $PrivateWiki) {
     throw 'Canonical native engine qualification requires the current private wiki family.'
 }
 if ($withKit) {
