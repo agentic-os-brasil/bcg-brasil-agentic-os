@@ -41,19 +41,62 @@ func TestWindowsWorkspaceInitializationMatchesElevation(t *testing.T) {
 
 func TestWindowsUnsafeHomeAdmissionRefused(t *testing.T) {
 	base := physicalTempDir(t)
-	prod, home := filepath.Join(base, "product"), filepath.Join(base, "owner")
-	for _, path := range []string{prod, home} {
-		privateFixtureDirectory(t, path)
-	}
 	user, err := winprivate.CurrentUser()
 	if err != nil {
 		t.Fatal(err)
+	}
+	// Elevated Windows temp directories may default to the Administrators owner.
+	windowsFixtureDACL(t, base, "D:P(A;OICI;FA;;;"+user.String()+")(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)")
+	if err := windows.SetNamedSecurityInfo(base, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION, user, nil, nil, nil); err != nil {
+		t.Fatal("assign current owner to synthetic fixture base", err)
+	}
+	baseSecurity, err := windows.GetNamedSecurityInfo(base, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseOwner, _, err := baseSecurity.Owner()
+	if err != nil || baseOwner == nil || !baseOwner.Equals(user) {
+		t.Fatal("synthetic fixture base has the wrong native owner", err)
+	}
+	baseControl, _, err := baseSecurity.Control()
+	if err != nil || baseControl&windows.SE_DACL_PROTECTED == 0 {
+		t.Fatal("synthetic fixture base lacks a protected native DACL", err)
+	}
+	prod, home := filepath.Join(base, "product"), filepath.Join(base, "owner")
+	for _, path := range []string{prod, home} {
+		privateFixtureDirectory(t, path)
 	}
 	windowsFixtureDACL(t, home, "D:P(A;OICI;FA;;;"+user.String()+")(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;;FR;;;WD)")
 	before := treeSnapshot(t, base)
 	security, err := windows.GetNamedSecurityInfo(home, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
 	if err != nil {
 		t.Fatal(err)
+	}
+	owner, _, err := security.Owner()
+	if err != nil || owner == nil || !owner.Equals(user) {
+		t.Fatal("unsafe-DACL fixture has the wrong native owner", err)
+	}
+	control, _, err := security.Control()
+	if err != nil || control&windows.SE_DACL_PROTECTED == 0 {
+		t.Fatal("unsafe-DACL fixture lacks native protection", err)
+	}
+	acl, _, err := security.DACL()
+	if err != nil || acl == nil {
+		t.Fatal("unsafe-DACL fixture is unavailable", err)
+	}
+	worldRead := false
+	for index := uint16(0); index < acl.AceCount; index++ {
+		var ace *windows.ACCESS_ALLOWED_ACE
+		if err := windows.GetAce(acl, uint32(index), &ace); err != nil || ace == nil {
+			t.Fatal("inspect unsafe-DACL fixture ACE", err)
+		}
+		if ace.Header.AceType == windows.ACCESS_ALLOWED_ACE_TYPE && ace.Header.AceFlags&windows.INHERIT_ONLY_ACE == 0 && ace.Mask&windows.FILE_GENERIC_READ == windows.FILE_GENERIC_READ {
+			principal := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
+			worldRead = worldRead || principal.IsWellKnown(windows.WinWorldSid)
+		}
+	}
+	if !worldRead {
+		t.Fatal("unsafe-DACL fixture omitted the unapproved world-read grant")
 	}
 	lookup := func(string) (string, bool) { return "", false }
 	state, err := datahome.InitializeFresh(datahome.Options{ProductRoot: prod, UserHome: home, LookupEnv: lookup})
