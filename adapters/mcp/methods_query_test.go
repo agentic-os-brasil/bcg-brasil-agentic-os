@@ -544,7 +544,10 @@ func TestMethodQueryPacketRestartContinuation(t *testing.T) {
 		for i := range selected.Args {
 			selected.Args[i] = replace.Replace(selected.Args[i])
 		}
-		command := replace.Replace(selected.Command)
+		if selected.Command != "${CLAUDE_PLUGIN_ROOT}/scripts/"+binaryName {
+			t.Fatal("packet changed the exact emitted command template")
+		}
+		command := filepath.FromSlash(replace.Replace(selected.Command))
 		if command != shipping {
 			t.Fatal("packet selected a different server")
 		}

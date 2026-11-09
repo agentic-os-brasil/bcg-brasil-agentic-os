@@ -499,6 +499,10 @@ func runPortableProductPacket(t *testing.T, root, format, owner, selected, expec
 	}
 	managedBefore := methodTreeSnapshot(t, root)
 	ownerBefore := methodTreeSnapshot(t, owner)
+	var workspaceBefore map[string]string
+	if expectedID != "" {
+		workspaceBefore = methodTreeSnapshot(t, selected)
+	}
 	run := func(verb string, wantError bool) []byte {
 		t.Helper()
 		argv := append([]string(nil), args...)
@@ -539,18 +543,33 @@ func runPortableProductPacket(t *testing.T, root, format, owner, selected, expec
 	if err := json.Unmarshal(run("init", false), &initialized); err != nil || initialized.State != "ready" || initialized.WorkspaceID == "" {
 		t.Fatalf("emitted preparation: %+v %v", initialized, err)
 	}
-	if expectedID != "" && initialized.WorkspaceID != expectedID {
-		t.Fatal("new packet changed the existing workspace identity")
+	if expectedID != "" {
+		if initialized.WorkspaceID != expectedID {
+			t.Fatal("new packet changed the existing workspace identity")
+		}
+		// Compare the pre-existing complete state before adopting any post-init
+		// baseline. A first setup by a new packet must not erase old private data.
+		if !reflect.DeepEqual(ownerBefore, methodTreeSnapshot(t, owner)) || !reflect.DeepEqual(workspaceBefore, methodTreeSnapshot(t, selected)) {
+			t.Fatal("first init by new packet changed existing private owner or workspace state")
+		}
 	}
 	if expectedID == "" {
 		if err := os.WriteFile(filepath.Join(selected, "authored-preserved.synthetic.md"), []byte("PRESERVE_PORTABLE_AUTHORED_WORK"), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	preparedOwner, preparedWorkspace := methodTreeSnapshot(t, owner), methodTreeSnapshot(t, selected)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	client, err := mcp.NewClient(&mcp.Implementation{Name: "emitted-product-packet", Version: "1"}, nil).Connect(ctx, &mcp.CommandTransport{Command: exec.CommandContext(ctx, command, args...), TerminateDuration: time.Second}, nil)
+	const historyText = "PORTABLE_REVIEWED_PRIVATE_HISTORY_492"
+	reviewed := 0
+	trustedReview := func(_ context.Context, request *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		if request == nil || request.Params == nil || !strings.Contains(request.Params.Message, historyText) {
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		}
+		reviewed++
+		return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"approved": true}}, nil
+	}
+	client, err := mcp.NewClient(&mcp.Implementation{Name: "emitted-product-packet", Version: "1"}, &mcp.ClientOptions{ElicitationHandler: trustedReview}).Connect(ctx, &mcp.CommandTransport{Command: exec.CommandContext(ctx, command, args...), TerminateDuration: time.Second}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -568,9 +587,38 @@ func runPortableProductPacket(t *testing.T, root, format, owner, selected, expec
 	if err := json.Unmarshal([]byte(text.Text), &contextResult); err != nil || contextResult.WorkspaceID != initialized.WorkspaceID {
 		t.Fatal("emitted server bound another workspace", err)
 	}
+	if expectedID == "" {
+		captured := memoryCall(t, client, "memory.capture", map[string]any{"text": historyText}, false)
+		if captured["eligible"] != true || captured["revision"] != float64(1) || reviewed != 1 {
+			t.Fatal("canonical private canary did not receive exact trusted review")
+		}
+	} else if reviewed != 0 {
+		t.Fatal("ordinary packet readback unexpectedly requested memory mutation")
+	}
+	page := memoryCall(t, client, "memory.list", map[string]any{"limit": 2}, false)
+	captures, ok := page["captures"].([]any)
+	if !ok || len(captures) != 1 {
+		t.Fatal("canonical reviewed private history missing after packet setup")
+	}
+	capture, ok := captures[0].(map[string]any)
+	if !ok || capture["id"] == nil {
+		t.Fatal("private history has no canonical identity")
+	}
+	read := memoryCall(t, client, "memory.read", map[string]any{"capture_id": capture["id"]}, false)
+	readCapture, ok := read["capture"].(map[string]any)
+	if !ok || read["text"] != historyText || readCapture["id"] != capture["id"] || readCapture["revision"] != float64(1) || readCapture["eligible"] != true {
+		t.Fatal("canonical private history changed across packet setup")
+	}
+	authored, err := os.ReadFile(filepath.Join(selected, "authored-preserved.synthetic.md"))
+	if err != nil || string(authored) != "PRESERVE_PORTABLE_AUTHORED_WORK" {
+		t.Fatal("existing authored workspace canary was not preserved", err)
+	}
 	if err := client.Close(); err != nil {
 		t.Fatal(err)
 	}
+	// Fresh setup intentionally added the reviewed canary. Every later first
+	// init was already checked against its complete pre-init state above.
+	preparedOwner, preparedWorkspace := methodTreeSnapshot(t, owner), methodTreeSnapshot(t, selected)
 	if err := json.Unmarshal(run("inspect", false), &inspection); err != nil || !inspection.Writable || inspection.Diagnostic != "ready" {
 		t.Fatalf("ready emitted doctor: %+v %v", inspection, err)
 	}
