@@ -610,7 +610,7 @@ func assertEmittedAgentResources(t *testing.T, ctx context.Context, client *mcp.
 		seen[list.NextCursor] = true
 		params.Cursor = list.NextCursor
 	}
-	if agents != 14 || methods != 248 {
+	if agents != 14 || methods != 249 {
 		t.Fatalf("emitted discovery: agents=%d methods=%d", agents, methods)
 	}
 	for _, uri := range []string{"maestro://agents/../private.md", "maestro://agents/%2e%2e/private.md", "maestro://agents/maestro/AGENT.md?owner=true", "maestro://agents/brain/owner/self.md"} {

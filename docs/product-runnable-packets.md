@@ -9,7 +9,7 @@ external paths. Building does not install anything or contact a model/provider.
 ## Managed payload and integrity
 
 Both formats contain the selected executable; all 92 canonical methods and their
-248 recipe/policy/provenance/license assets; the operator/resume aliases; and six
+249 recipe/policy/provenance/license assets; the operator/resume aliases; and six
 raw canonical runtime/memory files. Both also include fourteen immutable agent
 assets under `managed/agents/`: three JSON policy/catalog files, seven canonical
 definitions and four scaffolding templates. The emitted MCP server exposes the
@@ -102,10 +102,10 @@ SharePoint publication, platform signing or real client acceptance.
 The landed Windows private engine has its own ordinary-user qualification. Packet
 qualification additionally requires the existing compiled public workflow to run
 both emitted formats at versions 0.1.0 and 0.1.1 under that actual ordinary account.
-The same closed companion inventory also requires the canonical agent callback
+The same closed companion inventory also requires canonical agent resource discovery and the callback
 journey to refuse a stale binding without repairing owner/workspace state. It
-contains 52 MCP parents and 148 MCP outcomes, plus one command outcome; the
-previous 51 parents, 147 outcomes and all four portable children remain required.
+contains 53 MCP parents and 149 MCP outcomes, plus one command outcome; the
+previous 52 parents, 148 outcomes and all four portable children remain required.
 Missing, skipped, duplicate or failed outcomes cannot grant elevated-host
 exclusions. These
 cases run the real emitted executable through init, inspect and stdio context,

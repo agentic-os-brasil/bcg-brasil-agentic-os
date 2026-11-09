@@ -289,7 +289,7 @@ class WindowsEngineProfile(unittest.TestCase):
         digest = hashlib.sha256(b"unexecuted public executable fixture").hexdigest()
         document.update(qualification_profile="windows_private_engine_v1",
                         public_test_binary_sha256=digest, public_server_sha256=digest,
-                        adapter_profile="windows_private_engine_adapters_v1", adapter_packages=[], adapter_vendor_files=document["vendor_files"])
+                        adapter_profile="windows_private_engine_adapters_v1", adapter_packages=[], adapter_vendor_files=document["vendor_files"], authored_package={})
         return document
 
     def test_engine_unknown_profile_refuses_before_account(self):
@@ -409,13 +409,13 @@ $values|ConvertTo-Json -Depth 4 -Compress
         result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(parser), str(DRIVER), str(ROOT / "acceptance/windows-engine-check.ps1")], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         ledger = json.loads(result.stdout)
-        self.assertEqual(len(ledger["$adapterParents"]), 53)
-        self.assertEqual(len(ledger["$adapterAssertions"]), 161)
+        self.assertEqual(len(ledger["$adapterParents"]), 54)
+        self.assertEqual(len(ledger["$adapterAssertions"]), 162)
         for version in ("0_1_0", "0_1_1"):
             for format in ("plugin", "mcpb"):
                 self.assertIn(f"TestCompiledStdioWorkflowAndPackets/portable_{format}_{version}", ledger["$adapterAssertions"])
         self.assertEqual(len(ledger["$adapterCommandParents"]), 1)
-        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]), 162)
+        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]), 163)
         self.assertEqual(ledger["$adapterSetupParents"], ["TestModernFactoryFirstInstallAndRestart", "TestDirectInnerInstallRequiresProductionAuthority"])
         self.assertEqual(len(ledger["$adapterSetupAssertions"]), 6)
         self.assertEqual(len(set(ledger["$adapterSetupAssertions"])), 6)
@@ -424,6 +424,7 @@ $values|ConvertTo-Json -Depth 4 -Compress
         setup_source = (ROOT / "adapters/mcp/setup/setup_test.go").read_text()
         for parent in ledger["$adapterSetupParents"]:
             self.assertIn(f"func {parent}(", setup_source)
+        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]) + len(ledger["$adapterSetupAssertions"]), 169)
         for name in ("TestMethodPlansResolveMaintenanceKeepWikiUnavailable", "TestMethodPlansResolveRegisteredMaintenanceAndWiki", "TestAgentResourceCallbacksRevalidateBinding"):
             self.assertIn(name, ledger["$adapterParents"])
             self.assertIn(name, ledger["$adapterAssertions"])
@@ -464,11 +465,12 @@ $values|ConvertTo-Json -Depth 4 -Compress
         parser = self.root / "required-parents.ps1"
         parser.write_text(r'''$ErrorActionPreference='Stop'
 $ast=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$null)
-$assignments=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -cin @('$canonicalRequired','$originalAssertions','$adapterParents','$adapterCommandParents','$adapterSetupParents')},$true))
-if($assignments.Count -ne 5){throw 'Expected actual owning and companion source contracts'}
+$assignments=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -cin @('$canonicalRequired','$originalAssertions','$adapterParents','$adapterCommandParents','$authoredAdapterParents','$authoredAtlasParents','$adapterSetupParents')},$true))
+if($assignments.Count -ne 7){throw 'Expected actual owning and both companion source contracts'}
 foreach($assignment in $assignments){Invoke-Expression $assignment.Extent.Text}
 foreach($name in $originalAssertions.Keys){$canonicalRequired[$name]=@($canonicalRequired[$name]) + @($originalAssertions[$name])}
-$canonicalRequired['mcp']=$adapterParents
+$canonicalRequired['mcp']=@($adapterParents)+@($authoredAdapterParents)
+$canonicalRequired['atlasops']=$authoredAtlasParents
 $canonicalRequired['mcp-command']=$adapterCommandParents
 $canonicalRequired['setup']=$adapterSetupParents
 $canonicalRequired|ConvertTo-Json -Depth 4 -Compress
@@ -508,3 +510,131 @@ $canonicalRequired|ConvertTo-Json -Depth 4 -Compress
                 declarations.extend(re.findall(r"^func (Test[A-Za-z0-9_]+)\(", (Path(package["Dir"])/filename).read_text(),re.M))
             for parent in {assertion.split("/")[0] for assertion in assertions}:
                 self.assertEqual(declarations.count(parent),1,f"{name}/{parent} is missing or duplicated in actual Windows-selected source")
+
+    def test_authored_profile_requires_partial_and_legacy_custody_outcomes(self):
+        script = self.root / "authored-proof.ps1"
+        script.write_text(r'''$ErrorActionPreference='Stop'
+$tokens=$null; $errors=$null
+$outer=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$tokens,[ref]$errors)
+if($errors.Count){throw ($errors | Out-String)}
+$launcher=@($tokens | Where-Object {$_.Kind -eq 'HereStringLiteral'})
+if($launcher.Count -ne 1){throw 'Expected the actual shared launcher'}
+$inner=[Management.Automation.Language.Parser]::ParseInput($launcher[0].Value,[ref]$null,[ref]$errors)
+$helper=@($inner.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Get-EnginePublicProof'},$true))
+if($helper.Count -ne 1){throw 'Expected actual public evidence parser'}
+Invoke-Expression $helper[0].Extent.Text
+$assignment=@($inner.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq '$publicProof'},$true))
+if($assignment.Count -ne 1){throw 'Expected one actual closed public family contract'}
+$literal=@($assignment[0].Right.FindAll({param($n) $n -is [Management.Automation.Language.HashtableAst]},$true))
+if($literal.Count -ne 1){throw 'Public contract must remain one literal hashtable'}
+$public=$literal[0].SafeGetValue()
+if($public.required_tests.Count -ne 6 -or $public.required_assertions.Count -ne 24 -or
+ 'TestWindowsAuthoredBrainPilot' -cnotin $public.required_tests -or
+ 'TestWindowsAuthoredBrainPartialPreparationPilot' -cnotin $public.required_tests){throw 'Both authored families must extend the original4/21 contract'}
+$checker=[Management.Automation.Language.Parser]::ParseFile($args[1],[ref]$null,[ref]$errors)
+$reader=@($checker.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Read-EngineLiteralArray'},$true))
+Invoke-Expression $reader[0].Extent.Text
+$atlas=@{}
+foreach($binding in @(@{variable='$authoredAtlasParents'; field='required_tests'},@{variable='$authoredAtlasAssertions'; field='required_assertions'})){
+ $variable=$binding.variable
+ $found=@($outer.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq $variable},$true))
+ if($found.Count -ne 1){throw 'Expected one closed actual authored Atlas declaration'}
+ $atlas[$binding.field]=@(Read-EngineLiteralArray $found[0])
+}
+if($atlas.required_tests.Count -ne 2 -or $atlas.required_assertions.Count -ne 8){throw 'Exact Atlas publication and journal assertions required'}
+foreach($case in @(@{entry=$public; missing='TestWindowsAuthoredBrainPartialPreparationPilot'},
+                  @{entry=$atlas; missing='TestWindowsAtlasPublicationKernel/legacy_lock_bytes_and_custody_survive_refusal'})){
+ $body=($case.entry.required_assertions | ForEach-Object {'--- PASS: '+$_+' (0.00s)'}) -join "`n"
+ $body+="`n"
+ if(-not (Get-EnginePublicProof $case.entry $body 0).qualified){throw 'Exact complete authored evidence refused'}
+ $missing=($case.entry.required_assertions | Where-Object {$_ -cne $case.missing} | ForEach-Object {'--- PASS: '+$_+' (0.00s)'}) -join "`n"
+ foreach($bad in @($missing, $body.Replace('PASS: '+$case.missing,'SKIP: '+$case.missing), $body.Replace('PASS: '+$case.missing,'FAIL: '+$case.missing), ($body+'--- PASS: '+$case.missing+" (0.00s)`n"), ($body+"--- PASS: TestUnknown (0.00s)`n"))){
+  if((Get-EnginePublicProof $case.entry $bad 0).qualified){throw 'Missing/skipped/failed/duplicated/unknown authored evidence qualified'}
+ }
+ if((Get-EnginePublicProof $case.entry $body 1).qualified){throw 'Nonzero authored process qualified'}
+}
+''', encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER),
+                                 str(ROOT / "acceptance/windows-engine-check.ps1")], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_all_sealed_engine_workflow_callers_supply_authored_inputs(self):
+        parser = self.root / "sealed-callers.ps1"
+        parser.write_text(r'''$e=$null
+$ast=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$e)
+if($e.Count){throw ($e | Out-String)}
+$calls=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.CommandAst] -and
+ $n.GetCommandName() -like '*windows-core-pilot.ps1'},$true))
+$sealed=0
+foreach($call in $calls){
+ $parameters=@($call.CommandElements | Where-Object {$_ -is [Management.Automation.Language.CommandParameterAst]} | ForEach-Object {$_.ParameterName})
+ if('CanonicalManifest' -cnotin $parameters){continue}
+ $sealed++
+ if('AuthoredBrain' -cnotin $parameters -or 'AtlasTestBinary' -cnotin $parameters){throw 'Sealed engine caller omits mandatory authored family or Atlas companion'}
+}
+if($sealed -eq 0){throw 'Expected an actual sealed-engine caller'}
+''', encoding="utf-8")
+        selected = 0
+        for workflow in sorted((ROOT / ".github/workflows").glob("*.yml")):
+            lines = workflow.read_text().splitlines()
+            for index, line in enumerate(lines):
+                if line.strip() != "run: |":
+                    continue
+                indent = len(line) - len(line.lstrip()) + 2
+                body = []
+                for child in lines[index + 1:]:
+                    if child and len(child) - len(child.lstrip()) < indent:
+                        break
+                    body.append(child)
+                text = textwrap.dedent("\n".join(body))
+                if "windows-core-pilot.ps1" not in text or "CanonicalManifest" not in text:
+                    continue
+                selected += 1
+                source = self.root / f"sealed-caller-{selected}.ps1"
+                source.write_text(text, encoding="utf-8")
+                result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(parser), str(source)],
+                                        capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, f"{workflow.name}: {result.stdout}{result.stderr}")
+        self.assertGreater(selected, 0, "No actual sealed-engine workflow callers were checked")
+
+    def test_authored_same_binary_companion_is_closed_before_host_exclusion(self):
+        script = self.root / "authored-adapter-proof.ps1"
+        script.write_text(r'''$ErrorActionPreference='Stop'
+$tokens=$null; $e=$null
+$outer=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$tokens,[ref]$e)
+if($e.Count){throw ($e | Out-String)}
+$checker=[Management.Automation.Language.Parser]::ParseFile($args[1],[ref]$null,[ref]$e)
+$reader=@($checker.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Read-EngineLiteralArray'},$true))
+Invoke-Expression $reader[0].Extent.Text
+$entry=@{}
+foreach($binding in @(@{name='$authoredAdapterParents';field='required_tests'},@{name='$authoredAdapterAssertions';field='required_assertions'})){
+ $name=$binding.name
+ $assignment=@($outer.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq $name},$true))
+ if($assignment.Count -ne 1){throw 'Expected one closed authored adapter ledger'}
+ $entry[$binding.field]=@(Read-EngineLiteralArray $assignment[0])
+}
+if($entry.required_tests.Count -ne 13 -or $entry.required_assertions.Count -ne 41 -or
+ @($entry.required_assertions|Sort-Object -CaseSensitive -Unique).Count -ne 41){throw 'Exact13-parent/41-outcome authored cohort required'}
+foreach($test in $entry.required_assertions){if($test.Split('/')[0] -cnotin $entry.required_tests){throw 'Unowned authored assertion'}}
+$launcher=@($tokens | Where-Object {$_.Kind -eq 'HereStringLiteral'})
+$inner=[Management.Automation.Language.Parser]::ParseInput($launcher[0].Value,[ref]$null,[ref]$e)
+$parser=@($inner.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Get-EnginePublicProof'},$true))
+Invoke-Expression $parser[0].Extent.Text
+$body=($entry.required_assertions|ForEach-Object {'--- PASS: '+$_+' (0.00s)'}) -join "`n"
+$body+="`n"
+if(-not (Get-EnginePublicProof $entry $body 0).qualified){throw 'Exact authored adapter outcomes refused'}
+$missing='TestAuthoredBrainSDKCreatesPageWithoutConversionArtifact'
+$partial=($entry.required_assertions|Where-Object {$_ -cne $missing}|ForEach-Object {'--- PASS: '+$_+' (0.00s)'}) -join "`n"
+foreach($bad in @($partial,$body.Replace('PASS: '+$missing,'SKIP: '+$missing),$body.Replace('PASS: '+$missing,'FAIL: '+$missing),($body+'--- PASS: '+$missing+" (0.00s)`n"),($body+"--- PASS: TestUnowned (0.00s)`n"))){
+ if((Get-EnginePublicProof $entry $bad 0).qualified){throw 'Missing/skipped/failed/duplicated/unknown authored companion qualified'}
+}
+if((Get-EnginePublicProof $entry $body 1).qualified){throw 'Failed authored companion process qualified'}
+$guard=@($checker.FindAll({param($n) $n -is [Management.Automation.Language.IfStatementAst] -and
+ $n.Extent.Text.Contains("Every authored positive adapter assertion must pass under the ordinary account before its host exclusion.")},$true))
+$exclusion=@($checker.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq '$exclusions'},$true))
+if($guard.Count -ne 1 -or $exclusion.Count -ne 1 -or $guard[0].Extent.EndOffset -ge $exclusion[0].Extent.StartOffset -or
+ -not $exclusion[0].Right.Extent.Text.Contains('$authoredAdapterParents')){throw 'Authored host exclusion must follow its exact ordinary-account evidence guard'}
+''', encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER),
+                                 str(ROOT / "acceptance/windows-engine-check.ps1")], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
