@@ -205,4 +205,4 @@ wake behavior nor native Code/Desktop capability. Hosted CI, native forms,
 ordinary-user Windows admission, organizational signing, distribution and team
 pilot acceptance remain separate gates.
 
-Private wiki source/readback follows [the private wiki contract](product-mcp-wiki.md). Native Windows private-memory admission remains unavailable; a registered operation is not host qualification.
+Private wiki source/readback follows [the private wiki contract](product-mcp-wiki.md). Windows wiki requires actual owner and retained-namespace admission; a registered operation does not establish native or host qualification.

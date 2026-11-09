@@ -1,6 +1,6 @@
 # Spec 062 - Product maintenance service
 
-Status: the maintenance, wiki and signed-source owners provide twelve source bindings. Issue #498 adds three closed Darwin health/cache/proposal jobs on the same lifecycle. Source construction, focused local proof, hosted qualification and installed-client acceptance are separate. Native wake remains unavailable; Darwin private publication on Windows remains unavailable until its own native qualification. See the [operator workflow](../docs/product-mcp-maintenance.md).
+Status: The landed maintenance and wiki owners retain their existing lifecycle. Signed-source checks and the three closed Darwin health/cache/proposal jobs use that same lifecycle and catalog. Windows private wiki uses retained-namespace admission; Darwin private publication on Windows and background wake remain unavailable. Source construction, focused local proof, hosted qualification and installed-client acceptance remain separate. See the [operator workflow](../docs/product-mcp-maintenance.md).
 
 ## Outcome
 

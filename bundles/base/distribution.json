@@ -1472,6 +1472,11 @@
       "role": "data"
     },
     {
+      "source": "bundles/base/skills/maestro-operator/resources/authored-brain.md",
+      "path": "skills/maestro-operator/resources/authored-brain.md",
+      "role": "data"
+    },
+    {
       "source": "bundles/base/skills/maestro-runtime-checkup/SKILL.md",
       "path": "skills/maestro-runtime-checkup/SKILL.md",
       "role": "data"

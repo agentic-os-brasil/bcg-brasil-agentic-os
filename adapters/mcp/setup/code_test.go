@@ -24,19 +24,27 @@ func TestCodeRegistrationWithUnrelatedCachedPlugin(t *testing.T) {
 
 func testCodeInventory(t *testing.T, mixed bool) {
 	t.Helper()
-	executable, err := os.Executable()
+	originalExecutable, err := os.Executable()
 	must(t, err)
+	originalBody := read(t, originalExecutable)
+	executable := filepath.Join(t.TempDir(), "controlled-code")
+	must(t, os.WriteFile(executable, originalBody, 0700))
 	id := "0123456789abcdef0123456789abcdef"
 	root := filepath.Join(t.TempDir(), "marketplace")
 	record := installer.ClientRecord{Binding: installer.ClientBinding{Workspace: t.TempDir()}, Materialization: installer.ClientMaterialization{CodeRoot: root, Release: "0.1.43"}, Code: installer.CodeObservation{Executable: executable, Marketplace: "maestro-local-" + id, PluginID: "maestro-product@maestro-local-" + id, Scope: "user"}}
 	foreign, enabled, current := false, false, false
+	version, fault, versionCalls := "2.1.295", "", 0
 	var mutations [][]string
 	run := func(_ context.Context, path string, args []string, cwd string) ([]byte, error) {
 		if path != executable || cwd != record.Binding.Workspace {
 			t.Fatal("Code selection drift")
 		}
 		if reflect.DeepEqual(args, []string{"--version"}) {
-			return []byte("2.1.295 (Claude Code)\n"), nil
+			versionCalls++
+			if fault == "before_version" && versionCalls == 3 {
+				version = "2.1.296"
+			}
+			return []byte(version + " (Claude Code)\n"), nil
 		}
 		if args[len(args)-1] == "--help" {
 			return []byte("--json --scope\n"), nil
@@ -70,6 +78,13 @@ func testCodeInventory(t *testing.T, mixed bool) {
 		default:
 			return nil, errors.New("unexpected mutation")
 		}
+		if len(mutations) == 1 && strings.HasPrefix(fault, "after_first_") || len(mutations) == 3 && strings.HasPrefix(fault, "after_final_") {
+			if strings.HasSuffix(fault, "version") {
+				version = "2.1.296"
+			} else {
+				must(t, os.WriteFile(executable, append(append([]byte{}, originalBody...), 1), 0700))
+			}
+		}
 		return []byte("{\"command\":\"controlled-process-witness\",\"outcome\":\"success\"}\n"), nil
 	}
 	review, err := setup.ReviewCodeRegistration(context.Background(), record, run)
@@ -87,6 +102,29 @@ func testCodeInventory(t *testing.T, mixed bool) {
 	mutations = nil
 	if _, err = setup.ReviewCodeRegistration(context.Background(), record, run); err == nil || len(mutations) > 0 {
 		t.Fatal("foreign marketplace admitted/mutated")
+	}
+	// Exercise identity drift inside these existing registration families. These
+	// are observations around supported CLI effects, not atomic exec-by-FD proof.
+	for _, scenario := range []string{"before_version", "after_first_version", "after_final_version", "after_first_hash", "after_final_hash"} {
+		foreign, enabled, current = false, false, false
+		version, fault, versionCalls = "2.1.295", scenario, 0
+		mutations = nil
+		must(t, os.WriteFile(executable, originalBody, 0700))
+		driftReview, e := setup.ReviewCodeRegistration(context.Background(), record, run)
+		must(t, e)
+		observed, e := setup.ApplyCodeRegistration(context.Background(), record, run, driftReview.Digest, true)
+		if e == nil || observed.State == "registered" {
+			t.Fatalf("%s drift accepted as registered: %+v %v", scenario, observed, e)
+		}
+		expected := 1
+		if scenario == "before_version" {
+			expected = 0
+		} else if strings.HasPrefix(scenario, "after_final_") {
+			expected = 3
+		}
+		if len(mutations) != expected {
+			t.Fatalf("%s continued effects after observable identity drift: got %d want %d", scenario, len(mutations), expected)
+		}
 	}
 }
 

@@ -50,7 +50,7 @@ func BuildModernCandidate(ctx context.Context, o ModernOptions) (ModernCandidate
 	if o.Channel != "canary" && o.Channel != "beta" && o.Channel != "stable" {
 		return ModernCandidate{}, errors.New("unsupported modern release channel")
 	}
-	moduleMode, err := modernModuleMode(filepath.Join(o.Root, "adapters", "mcp"))
+	moduleMode, err := ReadOnlyModuleMode(filepath.Join(o.Root, "adapters", "mcp"))
 	if err != nil {
 		return ModernCandidate{}, err
 	}
@@ -191,9 +191,10 @@ func BuildModernCandidate(ctx context.Context, o ModernOptions) (ModernCandidate
 	return ModernCandidate{Directory: filepath.Join(o.Output, "candidate"), Installer: filepath.Join(o.Output, "seed", installerName), AuthorityRegistry: filepath.Join(o.Output, "seed", "trust", "release-authority-registry.json"), Manifest: m}, nil
 }
 
-// The existing ordinary-account launcher supplies a sealed read-only vendor
-// closure. An invalid present closure refuses; it never falls back to download.
-func modernModuleMode(module string) (string, error) {
+// ReadOnlyModuleMode selects the sealed read-only vendor closure supplied by
+// the existing ordinary-account launcher. Invalid present vendor inputs refuse;
+// factory and current fixture compilers never fall back to downloading.
+func ReadOnlyModuleMode(module string) (string, error) {
 	root := filepath.Join(module, "vendor")
 	if _, err := os.Lstat(root); errors.Is(err, os.ErrNotExist) {
 		return "-mod=readonly", nil

@@ -96,6 +96,17 @@ func TestSupportedSourceWriterPreservesHighWaterRecallAndEnrollment(t *testing.T
 	if err != nil || readback.Source.Sequence != 11 || len(readback.Source.Recalls) != 1 {
 		t.Fatalf("monotonic supported write/readback failed: %#v %v", readback.Source, err)
 	}
+	// A public caller may supply either launch flag independently. Neither
+	// incomplete pair can silently drop an explicit current or stale pin.
+	for _, pins := range []ReleaseBinding{
+		{ClientInputsSHA256: strings.Repeat("f", 64)},
+		{ClientInputsSHA256: readback.Binding.ClientInputsSHA256},
+		{ManifestSHA256: readback.Binding.ManifestSHA256},
+	} {
+		if _, err := ValidateQualifiedLaunch(managed, data, pins, now); err == nil || !strings.Contains(err.Error(), "incomplete carrier release binding") {
+			t.Fatalf("partial public launch pin was ignored or reached executable admission: %v", err)
+		}
+	}
 	// Even a later otherwise valid supported write cannot clear a durable
 	// capacity denial. A fresh process must read it and refuse before execution.
 	exhausted := readback

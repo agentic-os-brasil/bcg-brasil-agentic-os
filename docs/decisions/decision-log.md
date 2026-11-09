@@ -1298,6 +1298,34 @@ Expose the eight existing owning maintenance jobs through the admitted MCP bindi
 - Refs: DOCL; MIDO; DIPK; specs/010-local-ingestion-runtime.md; specs/061-product-local-content.md; docs/plans/2026-11-02-policy-format-ingestion.md; internal/ingest
 - Supersedes: none
 
+## BRPG - Author reviewed workspace pages through the canonical atlas engine
+
+- Date: 2026-11-06
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The product can write converted document knowledge, but an ordinary attended brief has no conversion artifact. The existing atlas engine already owns authored pages, scoped provenance, revision fences and interrupted-effect recovery; skills cannot replace that missing product invocation route with direct filesystem authority.
+- Decision: Add closed authored-brain query and reviewed mutation variants to the existing three-tool MCP interface. Derive the registered workspace brain from the product binding and reuse atlasops for page creation, declared-section/field changes, links and whole-page replacement. Prepare only fixed workspace templates explicitly. Bind exact reviewed text and current page revisions with truthful attended provenance, without manufacturing conversion or memory authority. Extend the authored frontmatter scope vocabulary with the exact registered workspace identity and preserve legacy pages with diagnostics.
+- Consequences: This is bounded professional Markdown authoring, not arbitrary filesystem RPC, owner-global promotion, memory capture, indexing or background activation. Windows publication must use actual held native directory/lock custody and receive ordinary-user evidence; a permissive capability flip is insufficient. Source, public SDK/compiled acceptance, package and actual client delivery remain distinct. Existing owner/knowledge journal compatibility and user edits are preserved.
+- Refs: specs/064-product-authored-brain.md; specs/014-human-atlas-bootstrap.md; specs/061-product-local-content.md; WATL; AJRC; https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/461; https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/460
+- Supersedes: none
+
+
+### BRPG review correction — shared workspace boundary
+
+Date: 2026-11-06. Status: accepted for issue #461 correction before integration.
+
+Independent review of frozen `0e42a0d2` found a reachable sibling
+`knowledge.collect` case/private-scope bypass and a link-target authority gap while
+waiting for the corpus lock. Public SDK and compiled RED reproduced the former.
+Move path admission into one workspace policy bound to the atlasops instance,
+reuse it for converted sources/destinations without imposing authored metadata,
+and recheck both reviewed link endpoints under effect/replay custody. Bind the
+reviewed target revision as private canonical request data. Preserve the early
+source revision fence, explicit review, nil-policy owner compatibility and the
+existing prepared journal. Tests use synthetic, held-lock schedules and no
+runtime/model authority switches. This refines BRPG; it creates no arbitrary
+filesystem surface or stronger marker-transaction claim.
+
 ## PWKC - Compile source-owned private memory navigation under local authority
 
 - Date: 2026-11-03
@@ -1363,6 +1391,16 @@ Expose the eight existing owning maintenance jobs through the admitted MCP bindi
 - Decision: Use one exact-byte signed generation/pointer through the existing admitted registry/verifier, explicit source/channel/target enrollment, private authenticated snapshots and typed modern update variants through the existing installer/transaction. Keep current monotonic source control outside rollback snapshots. Confirmed authentic higher metadata preserves sequence/recalls even when expired or payload-incomplete; only later freshness/capability admission permits launch/activation. Bind maestro-synced-source-v1 to the real executable identity and authenticated component at admission/activation/launch/rollback. Require exact review, actual compatible rollback and declared attended-only update-check custody/diagnosis effects. Preserve legacy contracts and truthful old-copy/blind-writer limits.
 - Consequences: Qualified cached offline execution is bounded by explicit signed expiry and known recall/floor, with a supported engineering TTL ceiling of 30 days and a seven-day example rather than an organization SLA. Startup/status remains read-only; independent trusted installer recovery remains usable when MCP is blocked. One actual real-binary N-to-N+1/rollback/recall proof must precede acceptance; production signing, clients/devices, hosted CI and publication stay separate. No feed can replace its own trust root or erase source history through rollback.
 - Refs: specs/020-release-distribution.md; specs/062-product-maintenance-service.md; docs/plans/2026-11-03-synced-product-distribution.md; internal/releasecontract; internal/releaseverify; internal/releaseprovider; internal/updateplan; internal/updateservice; internal/installtx; internal/installer; adapters/mcp
+
+## PWKW - Retain admitted Windows wiki namespaces through effects
+
+- Date: 2026-11-09
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Accepted for issue #468 source integration; native execution remains independently qualified. The current Windows private-state owner already implements finite pinned-tree admission and deletion. Wiki snapshot, publication, readback and retirement still need their complete effect to retain that namespace rather than infer support from ordinary-memory availability.
+- Decision: Preserve the explicit wiki gate and make it validate the actual existing owned workspace and supported pinned namespace. Retain admitted workspace, staging/version parents and pointer custody through each owning effect. Use the current native kernel unchanged, and preserve source/cohort/event, denial, exact-parent and immutable readback rules. Never deserialize native authority or replace admission with a platform constant.
+- Consequences: Missing, unsafe or occupied custody remains unavailable without initialization or repair. Windows retains construction staging after leaf custody ends rather than reopening the old name for cleanup; the existing denial-before-whole-wiki-retirement operation owns removal. Unix cleanup ordering remains unchanged. Current native SDK/stdio, custody, sharing and hardlink controls must execute through the existing ordinary-account profile. Historical pre-wiki Windows owned memory is unsupported; actual old-consumer/compatible-producer positives stay on their admitted Mac/Linux platforms. No client installation, service, model, provider, source signing or distribution is activated.
+- Refs: #468; PWKC; specs/008-wiki-update-okf.md; docs/product-windows-private-wiki.md; internal/memory/private_wiki_native.go
 - Supersedes: none
 
 ## SCAR - Resolve stable client carriers through checked current installation
@@ -1372,7 +1410,7 @@ Expose the eight existing owning maintenance jobs through the admitted MCP bindi
 - Owner: Maestro product maintainers
 - Context: Signed-source update is independently approved and locally integrated at f398d32478c19259932c8ecdaebdc4bcf1380cb9. Release-bound packets correctly refuse after activation, but requiring private Desktop bundle replacement for every server-only update impedes participant distribution. The stable installer also contains older embedded methods and cannot generate future packets from its own linked assets.
 - Decision: Add explicit stable-local-v1 / maestro-stable-carrier-v1 carriers beside unchanged release-bound packets. The independently admitted installer resolves one finite private current materialization record per opaque carrier ID under existing installation serialization, authenticating current source, actual server, immutable client inputs and exact packet/native contract. Generate new packets through the authenticated current server. Use supported scoped Code commands/readback while preserving disabled state; keep Desktop handoff, operator confirmation, connection and functional evidence distinct. Reuse an unchanged Desktop package only across a compatible unchanged native contract after checked current regeneration.
-- Consequences: Activation or compatible rollback leaves an old record unusable until regeneration; source custody and Previous are never restored from packet backups. Startup/status are nonmigrating read-only operations. Missing/unsafe state refuses. Controlled process witnesses and engineering native-admission composition establish construction only; actual Desktop external-launcher compatibility, native client loading, signing, hosted CI, publication and pilot remain separate. Manual updated-MCPB fallback remains supported.
+- Consequences: Activation or compatible rollback leaves an old record unusable until regeneration; source custody and Previous are never restored from packet backups. Startup/status are nonmigrating read-only operations. Missing/unsafe state refuses. Controlled process witnesses and engineering native-admission composition establish construction only; actual Desktop external-launcher compatibility, native client loading, signing, hosted CI, publication and pilot remain separate. Manual updated-MCPB installation retains the same stable external-launcher contract and cannot bypass a rejecting client policy; that policy leaves the stable source-managed carrier unavailable.
 - Refs: specs/020-release-distribution.md; docs/plans/2026-11-03-synced-product-distribution.md; internal/installer; internal/installtx; adapters/mcp/setup; adapters/mcp/packaging
 - Supersedes: none
 

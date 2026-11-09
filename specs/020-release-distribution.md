@@ -370,8 +370,13 @@ expiry or add recalls. It cannot redefine that version's artifact identity.
 
 ### 2. Explicit local source enrollment and private snapshots
 
-Trusted operator review selects one source ID/channel/target and local hydrated
+Trusted operator review selects one source ID/channel/target and an ordinary local
 folder locator for the real installation. The path supplies transport, not trust.
+For the current Windows pilot, direct OneDrive/Files On-Demand source paths are
+unavailable: confinement rejects every reparse point, including hydrated Cloud
+Files. Download and extract a signed generation from SharePoint into an ordinary
+local mirror, then apply the same confinement checks. Hydration is insufficient;
+direct synchronization needs separate native qualification and is not claimed.
 Later metadata cannot silently rebind that tuple or its independently pinned
 registry. No SharePoint destination, endpoint or account is guessed.
 
@@ -684,8 +689,11 @@ Only deliberately inert packaged-server/inventory provenance can be excluded
 from that native-contract comparison. Live resources come from the external
 current server; old bundled provenance stays historical. Any native-contract
 change requires manual installation. External absolute launch/reuse is a
-candidate requiring actual Desktop qualification; retain manual updated-MCPB
-fallback and never claim MCPB automatic updating.
+candidate requiring actual Desktop qualification. Manual updated-MCPB
+installation retains this same carrier/absolute-launch contract; it cannot
+bypass a rejecting client policy. In that policy the stable source-managed
+carrier is unavailable. An ordinary unmanaged MCPB is a separate profile,
+not a source-managed fallback. Never claim MCPB automatic updating.
 
 ### Construction acceptance
 

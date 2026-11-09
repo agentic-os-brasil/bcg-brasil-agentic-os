@@ -66,8 +66,10 @@ checked regeneration through the installed Manage Maestro launcher. A metadata-o
 refresh does not invalidate unchanged immutable client inputs. Desktop bundle_ready,
 open_requested, awaiting_user_install, user_confirmed_install, connection and
 functional_check are distinct; operator testimony never becomes observed native
-qualification. Stable Desktop external-launcher reuse is still a candidate, with
-manual updated-MCPB fallback. Do not invent an MCP clients query, invoke a client,
+qualification. Stable Desktop external-launcher reuse requires native qualification.
+Manual MCPB installation retains that same external-launcher contract; a client
+policy rejecting it makes the stable carrier unavailable. An ordinary unmanaged
+MCPB is a separate profile. Do not invent an MCP clients query, invoke a client,
 refresh source, reclaim a lock or repair as a diagnostic. Existing host observations
 remain historical without a fresh explicitly requested supported readback.
 

@@ -179,7 +179,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          ./acceptance/windows-core-pilot.ps1 -TestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/mcp.test.exe') -Server (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/maestro-mcp.exe') -CanonicalManifest (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'engine-build-manifest.json') -OutputRoot (Join-Path $env:RUNNER_TEMP 'native-engine-proof')
+          ./acceptance/windows-core-pilot.ps1 -TestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/mcp.test.exe') -Server (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/maestro-mcp.exe') -AuthoredBrain -PrivateWiki -AtlasTestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/atlasops.test.exe') -CanonicalManifest (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'engine-build-manifest.json') -OutputRoot (Join-Path $env:RUNNER_TEMP 'native-engine-proof')
       - name: Verify exact-source ordinary proof before host-positive exclusions
         id: windows_engine_proof
         if: runner.os == 'Windows'
@@ -244,11 +244,22 @@ jobs:
   modern-first-install:
     runs-on: macos-15
     timeout-minutes: 20
-    env:
-      MAESTRO_MODERN_BASELINE: ${{ runner.temp }}/maestro-modern-baseline
-      MAESTRO_MODERN_TEST_ROOT: ${{ runner.temp }}/maestro-modern-first-install
-      MAESTRO_MODERN_AUTHORITY_ROOT: ${{ runner.temp }}/maestro-modern-authority
     steps:
+      - name: Select physical macOS temporary directory
+        shell: bash
+        run: |
+          physical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          printf 'TMPDIR=%s\nGOTMPDIR=%s\n' "$physical_temp" "$physical_temp" >> "$GITHUB_ENV"
+      - name: Bind modern fixture paths to the assigned runner
+        shell: bash
+        env:
+          MAESTRO_MODERN_BASELINE: ${{ runner.temp }}/maestro-modern-baseline
+          MAESTRO_MODERN_TEST_ROOT: ${{ runner.temp }}/maestro-modern-first-install
+          MAESTRO_MODERN_AUTHORITY_ROOT: ${{ runner.temp }}/maestro-modern-authority
+        run: |
+          printf '%s\n' "MAESTRO_MODERN_BASELINE=$MAESTRO_MODERN_BASELINE" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_MODERN_TEST_ROOT=$MAESTRO_MODERN_TEST_ROOT" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_MODERN_AUTHORITY_ROOT=$MAESTRO_MODERN_AUTHORITY_ROOT" >> "$GITHUB_ENV"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -285,11 +296,22 @@ jobs:
   modern-synced-update:
     runs-on: macos-15
     timeout-minutes: 30
-    env:
-      MAESTRO_SYNCED_UPDATE_BASELINE: ${{ runner.temp }}/maestro-synced-update-baseline
-      MAESTRO_SYNCED_TEST_ROOT: ${{ runner.temp }}/maestro-synced-update
-      MAESTRO_SYNCED_R1_TEST_ROOT: ${{ runner.temp }}/maestro-synced-publication
     steps:
+      - name: Select physical macOS temporary directory
+        shell: bash
+        run: |
+          physical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          printf 'TMPDIR=%s\nGOTMPDIR=%s\n' "$physical_temp" "$physical_temp" >> "$GITHUB_ENV"
+      - name: Bind source lifecycle fixture paths to the assigned runner
+        shell: bash
+        env:
+          MAESTRO_SYNCED_UPDATE_BASELINE: ${{ runner.temp }}/maestro-synced-update-baseline
+          MAESTRO_SYNCED_TEST_ROOT: ${{ runner.temp }}/maestro-synced-update
+          MAESTRO_SYNCED_R1_TEST_ROOT: ${{ runner.temp }}/maestro-synced-publication
+        run: |
+          printf '%s\n' "MAESTRO_SYNCED_UPDATE_BASELINE=$MAESTRO_SYNCED_UPDATE_BASELINE" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_SYNCED_TEST_ROOT=$MAESTRO_SYNCED_TEST_ROOT" >> "$GITHUB_ENV"
+          printf '%s\n' "MAESTRO_SYNCED_R1_TEST_ROOT=$MAESTRO_SYNCED_R1_TEST_ROOT" >> "$GITHUB_ENV"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -349,10 +371,19 @@ jobs:
   modern-client-registration:
     runs-on: macos-15
     timeout-minutes: 25
-    env:
-      MAESTRO_CLIENT_REGISTRATION_BASELINE: ${{ runner.temp }}/maestro-client-registration-baseline
-      MAESTRO_CLIENT_REGISTRATION_TEST_ROOT: ${{ runner.temp }}/maestro-client-registration
     steps:
+      - name: Bind physical local client evidence paths
+        shell: bash
+        run: |
+          python3 - <<'PYTHON'
+          import os, pathlib, tempfile
+          root = pathlib.Path(os.environ["RUNNER_TEMP"]).resolve(strict=True)
+          temporary = tempfile.mkdtemp(prefix="maestro-clients-", dir=root)
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as environment:
+              environment.write(f"TMPDIR={temporary}\nGOTMPDIR={temporary}\n")
+              environment.write(f"MAESTRO_CLIENT_REGISTRATION_BASELINE={root / 'maestro-client-registration-baseline'}\n")
+              environment.write(f"MAESTRO_CLIENT_REGISTRATION_TEST_ROOT={root / 'maestro-client-registration'}\n")
+          PYTHON
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:

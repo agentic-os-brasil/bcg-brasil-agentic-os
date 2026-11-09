@@ -15,15 +15,22 @@ construction contract; implementation and its acceptance remain separately gated
 
 ## Outcome
 
-An owner consumes an authenticated release from a synced SharePoint/OneDrive
-folder, completes one explicit reviewed setup, and receives participant-local
+An owner consumes an authenticated release downloaded and extracted from
+SharePoint into an ordinary local mirror, completes one explicit reviewed setup,
+and receives participant-local
 Code and Desktop packets using the same admitted private state. The explicit
 update path verifies N+1, preserves owner/workspace state, refreshes local
 packets/registration, recovers interruptions and supports managed rollback
 without resetting replay, recall or writer-floor fences. No Git checkout is
 required from participants.
 
-SharePoint is an untrusted replicated transport. Local presence, a checksum or
+Direct Windows OneDrive/Files On-Demand source folders are unavailable in the
+current pilot, including hydrated Cloud Files: source confinement refuses all
+reparse points. Automated sync remains unqualified; ordinary local downloaded
+files must pass the existing source checks. The concrete SharePoint library is
+still pending selection.
+
+SharePoint is an untrusted distribution transport. Local presence, a checksum or
 an authenticated sync account cannot establish artifact authority. The
 independently admitted native installer and pinned public authority seed remain
 the trust root. This delivery contains no cloud deployment or new network MCP
@@ -136,7 +143,9 @@ SCAR and Spec020's stable-current-client section are the exact accepted contract
 Generate packets through the authenticated current server; keep release-bound
 packets unchanged and stable carriers explicitly typed. The finite installer
 record is outside source custody/Previous. Compatible unchanged Desktop reuse
-is a candidate requiring native qualification, with manual updated-MCPB fallback.
+requires native qualification. Regenerating or manually installing the MCPB keeps
+the same external-launcher contract; a client policy rejecting it makes the stable
+carrier unavailable. An ordinary unmanaged MCPB is a separate profile.
 
 Fresh owner after Task2 gate. Own the exact Code registration/update adapter,
 Desktop confirmation handoff, package-generation/activation receipts, crash
