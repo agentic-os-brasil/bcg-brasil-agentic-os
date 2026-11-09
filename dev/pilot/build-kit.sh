@@ -38,7 +38,7 @@ python3 -c 'from pathlib import Path; import sys; Path(sys.argv[2]).write_bytes(
 printf 'disabled\n' > "$OUT/LIFECYCLE-CONTEXT.txt"
 if [[ "${2:-}" == --lifecycle-context ]]; then
   help="$("$OUT/bin/maestro-mcp-darwin-$( [[ "$(uname -m)" == arm64 ]] && printf arm64 || printf amd64 )" plugin --help 2>&1 || true)"
-  [[ "$help" == *--lifecycle-context* ]] || { echo 'O servidor atual não oferece o contexto passivo; preserve este artefato parcial.' >&2; exit 1; }
+  [[ "$help" == *-lifecycle-context* ]] || { echo 'O servidor atual não oferece o contexto passivo; preserve este artefato parcial.' >&2; exit 1; }
   printf 'enabled\n' > "$OUT/LIFECYCLE-CONTEXT.txt"
 fi
 cp "$SOURCE/dev/pilot/LEIA-ME.md" "$OUT/LEIA-ME.md"
