@@ -1286,3 +1286,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 ### 2026-11-09 — Reviewed finite maintenance lifecycle (#505)
 
 Expose the eight existing owning maintenance jobs through the admitted MCP binding. Persist qualification and enrollment separately, require exact trusted review for lifecycle changes, and fence effects by current revision, executable identity, lease and source. Host wake/service installation and private wiki navigation remain separate deliveries.
+
+## PFMT - Complete the admitted model-free format matrix with truthful local routes
+
+- Date: 2026-11-02
+- Status: accepted
+- Owner: Maestro
+- Context: DefaultPolicy admits eleven extensions while the authenticated product converter currently executes only DOCX. Generic JSON is not necessarily a DoclingDocument export, generic XML is not a domain-specific XML document, and the native XLS route requires an unbundled LibreOffice executable. Format admission needs real bounded offline conversion rather than library-presence or metadata-only claims.
+- Decision: Complete the existing policy matrix without adding extensions. Keep explicit local Docling parsing first for DOCX, CSV, HTML/HTM, EPUB, Markdown and XLSX, with rendering and external-resource fetching disabled. Approve versioned first-party deterministic fallbacks for literal UTF-8 TXT/generic JSON/generic XML and BIFF XLS cells, executed inside the same authenticated model-free pack. Preserve literal content in genuine DoclingDocument objects and report textual fidelity instead of domain interpretation. Use an exactly pinned, licensed xlrd closure for XLS cached cell values and dates; never invoke ambient LibreOffice, evaluate formulas or run macros. Core policy selects the route and records its reason/fidelity; ordinary model arguments do not choose an arbitrary parser. Genuine validated Docling JSON exports retain their native route. MIDO remains an independently selected optional adapter and is not silently activated.
+- Consequences: Acquire and authenticate only the missing parser wheels and complete transitives, with primary-source hashes/provenance/licenses and an explicit empty model inventory. Preserve source confinement, network/plugin denial, current budgets, immutable artifacts and reviewed workspace knowledge publication. Prove all eleven extensions through the real verified runtime and restarted public journeys. PDF, images and PPTX need separate admission/evidence; this decision does not qualify native clients, Windows, organizational signing, installation or distribution.
+- Refs: DOCL; MIDO; DIPK; specs/010-local-ingestion-runtime.md; specs/061-product-local-content.md; docs/plans/2026-11-02-policy-format-ingestion.md; internal/ingest
+- Supersedes: none

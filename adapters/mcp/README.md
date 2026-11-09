@@ -13,8 +13,10 @@ daily/weekly consolidation and revision-aware correction/deletion/retention.
 Read the [memory journey and local fallback guide](../../docs/product-mcp-memory.md).
 Explicit `init` prepares its fixed authority; queries/startup never bootstrap it.
 
-Local document operations add runtime status, explicit conversion and bounded artifact
-readback. Knowledge creation and append require exact trusted review against that
+Local document operations add verified per-format coverage, explicit conversion and bounded artifact
+readback. The model-free Apple Silicon profile admits eleven existing policy
+extensions only after its exact 51-input pack verifies; old/unseeded/unsupported
+profiles remain unavailable. See the [format matrix](../../docs/product-mcp-content.md). Knowledge creation and append require exact trusted review against that
 artifact; named collection remains bounded. See the
 [document knowledge guide](../../docs/product-document-knowledge.md) for the closed
 operations, local operator fallback and qualification boundaries.
