@@ -270,6 +270,12 @@ func waitR1File(t *testing.T, ctx context.Context, path string) {
 			t.Fatalf("controlled test synchronization did not reach %s", path)
 		case <-ticker.C:
 			if _, err := os.Stat(path); err == nil {
+				if filepath.Ext(path) == ".json" {
+					body, err := os.ReadFile(path)
+					if err != nil || !json.Valid(body) {
+						continue // Creation precedes the controlled writer's JSON body.
+					}
+				}
 				return
 			}
 		}

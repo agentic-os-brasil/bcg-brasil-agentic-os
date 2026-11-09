@@ -32,7 +32,10 @@ func admitOperationSeed(ctx context.Context, o SeededOperationOptions) (releasev
 	if o.UserHome == "" || o.DataRoot != filepath.Join(o.UserHome, ".maestro-install") || filepath.Clean(o.Self) != seedPath(o.ManagedRoot, runtime.GOOS, releasecontract.ModernProfile) {
 		return releaseverify.AuthorityRegistry{}, errors.New("operation must use independently admitted installed installer and fixed private custody")
 	}
-	if err := validateModernCustody(Options{UserHome: o.UserHome, ManagedRoot: o.ManagedRoot, DataRoot: o.DataRoot}); err != nil {
+	if err := validateModernCustodyRoots(Options{UserHome: o.UserHome, ManagedRoot: o.ManagedRoot, DataRoot: o.DataRoot}); err != nil {
+		return releaseverify.AuthorityRegistry{}, err
+	}
+	if err := validateModernInputFiles([]string{o.Self, filepath.Join(o.ManagedRoot, "trust", "release-authority-registry.json")}); err != nil {
 		return releaseverify.AuthorityRegistry{}, err
 	}
 	verifyNative := o.VerifyNative

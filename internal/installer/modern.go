@@ -88,6 +88,24 @@ func checkInstalledExecutable(ctx context.Context, run commandRunner, plan Plan,
 }
 
 func validateModernCustody(o Options) error {
+	if err := validateModernCustodyRoots(o); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(o.ReleaseDir)
+	if err != nil {
+		return err
+	}
+	paths := []string{o.Bootstrapper, o.AuthorityRegistry}
+	for _, entry := range entries {
+		paths = append(paths, filepath.Join(o.ReleaseDir, entry.Name()))
+	}
+	return validateModernInputFiles(paths)
+}
+
+// Source review reuses installation-root admission after activation, when no
+// provisional release directory exists. Initial installation also validates its
+// complete reviewed release input set through validateModernInputFiles.
+func validateModernCustodyRoots(o Options) error {
 	if o.UserHome == "" || !filepath.IsAbs(o.UserHome) || filepath.Clean(o.UserHome) != o.UserHome || o.DataRoot != filepath.Join(o.UserHome, ".maestro-install") {
 		return errors.New("modern installation state must be the reviewed private UserHome/.maestro-install")
 	}
@@ -98,14 +116,10 @@ func validateModernCustody(o Options) error {
 	if within(home.Home, o.DataRoot) || within(o.DataRoot, home.Home) {
 		return errors.New("installation custody overlaps admitted home")
 	}
-	entries, err := os.ReadDir(o.ReleaseDir)
-	if err != nil {
-		return err
-	}
-	paths := []string{o.Bootstrapper, o.AuthorityRegistry}
-	for _, entry := range entries {
-		paths = append(paths, filepath.Join(o.ReleaseDir, entry.Name()))
-	}
+	return nil
+}
+
+func validateModernInputFiles(paths []string) error {
 	for _, path := range paths {
 		file, err := scheduler.OpenRegularFile(path)
 		if err != nil {

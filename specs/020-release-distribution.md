@@ -492,6 +492,23 @@ registration. Carrier currency binds the active installed release and immutable
 client inputs; a metadata-only observation updates source control without
 automatically changing that release identity.
 
+Enrollment follows the canonical installation state, rather than the presence of
+an optional launch flag or the capability advertised by a binary. A new healthy
+schema4 first installation with no enrolled Source keeps its prior plain-MCP
+behavior, while qualified source launch remains unavailable. Ordinary unbound
+portable packets retain that distinct profile and provide no installed-source
+eligibility. Source-bound complete carriers and stable client registrations are
+a separate reviewed client unit.
+
+A recognized installed bin process pins its actual managed root through the
+process-start executable identity and refuses a different root selection. Once
+that installation is enrolled, all affected callbacks and existing publication
+guards enforce its current source custody even with optional carrier pins omitted.
+Missing/downgraded installed state cannot become an unenrolled first installation
+through a launch flag. Explicit immutable carrier pins always require qualified
+source admission. These checks protect the admitted installed execution path;
+ordinary unbound copies are not silently relabelled as qualified source clients.
+
 New running servers revalidate their actual installation/source binding at request
 admission and existing long-running publication guards. A failure reports restart/
 refresh/recovery required; it does not relabel copied packet bytes as current.
