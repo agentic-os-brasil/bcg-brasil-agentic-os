@@ -200,6 +200,14 @@ func TestLifecycleAndNativeProfilesAreMutuallyExclusive(t *testing.T) {
 		t.Fatal("conflicting profiles created a packet")
 	}
 	o.NativeHost = nil
+	o.Binding.InstalledManifestSHA256 = strings.Repeat("a", 64)
+	if err := packaging.BuildPlugin(o); err == nil || !strings.Contains(err.Error(), "stable client owner") {
+		t.Fatal("source-bound lifecycle profile bypassed the stable client owner")
+	}
+	if _, err := os.Lstat(o.Destination); !os.IsNotExist(err) {
+		t.Fatal("source-bound profile refusal created a packet")
+	}
+	o.Binding.InstalledManifestSHA256 = ""
 	if _, err := packaging.ReviewNative(context.Background(), packaging.NativeOptions{Packet: o, MaxBudgetUSD: .25}); err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
 		t.Fatal("native review accepted the passive profile")
 	}

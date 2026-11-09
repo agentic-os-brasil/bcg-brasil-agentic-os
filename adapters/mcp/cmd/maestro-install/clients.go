@@ -29,12 +29,17 @@ type clientRequest struct {
 }
 
 func runClients(ctx context.Context, command, self string, f lifecycleFlags, digest string, confirmed bool) (bool, error) {
+	return runClientsWithNativeVerifier(ctx, command, self, f, digest, confirmed, nil)
+}
+
+// The trusted native-verifier seam is process composition, never a CLI field.
+func runClientsWithNativeVerifier(ctx context.Context, command, self string, f lifecycleFlags, digest string, confirmed bool, verifyNative func(context.Context, string) error) (bool, error) {
 	switch command {
 	case "clients-review", "clients-apply", "clients-reconcile", "clients-status", "code-review", "code-apply", "desktop-confirm", "stable-launch", "stable-hook", "manage":
 	default:
 		return false, nil
 	}
-	o := installer.ClientOptions{SeededOperationOptions: installer.SeededOperationOptions{Self: self, Version: Version, AuthorityRegistrySHA256: AuthorityRegistrySHA256, ManagedRoot: f.ManagedRoot, UserHome: f.UserHome, DataRoot: filepath.Join(f.UserHome, ".maestro-install")}, Request: installer.ClientRequest{CarrierID: f.CarrierID, Workspace: f.Workspace}}
+	o := installer.ClientOptions{SeededOperationOptions: installer.SeededOperationOptions{Self: self, Version: Version, AuthorityRegistrySHA256: AuthorityRegistrySHA256, ManagedRoot: f.ManagedRoot, UserHome: f.UserHome, DataRoot: filepath.Join(f.UserHome, ".maestro-install"), VerifyNative: verifyNative}, Request: installer.ClientRequest{CarrierID: f.CarrierID, Workspace: f.Workspace}}
 	if command == "manage" {
 		o.Request.CodeRoot = f.ClientCodeRoot
 		o.Request.DesktopPath = f.ClientDesktopPath

@@ -43,7 +43,9 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
 	defer cancel()
-	root := t.TempDir()
+	// The general test scratch directory is not an admitted private client parent.
+	root := filepath.Join(t.TempDir(), "participant")
+	must(t, os.Mkdir(root, 0700))
 	if retained := os.Getenv("MAESTRO_CLIENT_REGISTRATION_TEST_ROOT"); retained != "" {
 		must(t, os.Mkdir(retained, 0700))
 		root = retained
@@ -362,10 +364,10 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 		if launch.Executable != filepath.Join(seed.ManagedRoot, "bin", "maestro-mcp") || len(launch.Args) < 3 || launch.Args[0] != "lifecycle-hook" || launch.Args[1] != "--event" || launch.Args[2] != event {
 			t.Fatalf("stable hook bypassed canonical current launcher: %+v", launch)
 		}
-		body, _ := json.Marshal(map[string]any{"session_id": "stable-passive-proof", "prompt_id": "stable-passive-turn", "cwd": ws, "hook_event_name": event, "prompt": "PRIVATE_PASSIVE_PROMPT", "last_assistant_message": "PRIVATE_PASSIVE_BODY"})
+		body, _ := json.Marshal(map[string]any{"session_id": "stable-passive-proof", "prompt_id": "stable-passive-turn", "cwd": ws, "hook_event_name": event, "stop_hook_active": false, "prompt": "PRIVATE_PASSIVE_PROMPT", "last_assistant_message": "PRIVATE_PASSIVE_BODY"})
 		beforeHook := snapshot(t, installed.Home)
 		beforeWorkspace := snapshot(t, ws)
-		hook := exec.CommandContext(ctx, launch.Executable, launch.Args...)
+		hook := exec.CommandContext(ctx, process, "test-client-launch", passiveID, event)
 		hook.Stdin = bytes.NewReader(body)
 		output, e := hook.CombinedOutput()
 		if e != nil {
@@ -390,7 +392,7 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 	passiveReceipt, e := claudeadapter.Receipt(lifecycle.StopFinalize, claudeadapter.NativeInput{SessionID: "stable-passive-proof"})
 	must(t, e)
 	passiveReceipt.IdempotencyKey = lifecycle.IdempotencyKey(passiveReceipt.IdempotencyKey, "stable-passive-turn")
-	receiptBody := read(t, filepath.Join(installed.Home, "state", "runtime", "receipts", passiveRecord.Binding.WorkspaceID, passiveReceipt.IdempotencyKey+".json"))
+	receiptBody := read(t, filepath.Join(installed.Home, "state", "runtime", "receipts", passiveRecord.Binding.WorkspaceID, passiveReceipt.Event+"-"+passiveReceipt.IdempotencyKey+".json"))
 	var observedStop lifecycle.Receipt
 	must(t, json.Unmarshal(receiptBody, &observedStop))
 	if observedStop.Event != lifecycle.StopFinalize || observedStop.Provenance != lifecycle.AdapterCommand || observedStop.State != "observed" || bytes.Contains(receiptBody, []byte("PRIVATE_PASSIVE")) || bytes.Contains(receiptBody, []byte("stable-passive-proof")) {
@@ -924,6 +926,9 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 	if !reflect.DeepEqual(ownerBefore, snapshot(t, installed.Home)) || !reflect.DeepEqual(workspaceBefore, snapshot(t, ws)) {
 		t.Fatal("client reconciliation changed owner/workspace")
 	}
+	if _, e = installer.PrepareStableLifecycleHook(ctx, passiveOptions, "Stop"); e != nil {
+		t.Fatalf("passive source hook unavailable before authenticated recall: %v", e)
+	}
 	publish(4, n, []releasecontract.ReleaseRecall{{Release: n.verified.Manifest.Release, ManifestSHA256: n.verified.ManifestSHA256}})
 	_, recallErr := check()
 	if recallErr == nil {
@@ -931,6 +936,9 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 	}
 	if _, e = installer.PrepareStableLaunch(ctx, options); e == nil {
 		t.Fatal("current client record bypassed authenticated recall")
+	}
+	if _, e = installer.PrepareStableLifecycleHook(ctx, passiveOptions, "Stop"); e == nil {
+		t.Fatal("passive client bypassed authenticated recall")
 	}
 	proof, _ := json.MarshalIndent(map[string]any{"native_admission": "engineering process composition over exact real seed; shipping negative passed", "actual_clients": "unattested", "old_server_sha256": oldSHA, "n_artifacts": n.verified.Manifest.Artifacts, "next_artifacts": next.verified.Manifest.Artifacts, "actual_installer_sha256": seedSHA, "unused_future_factory_seed_sha256": sum(read(t, next.factory.Installer)), "original_doctor_sha256": sum(read(t, filepath.Join(source, "bundles/base/skills/maestro-doctor/SKILL.md"))), "future_doctor_sha256": sum(futureDoctor), "old_installer_lacks_future_marker": true, "next_release": "0.1.43", "stable_desktop_sha256": desktopSHA, "carrier_id": id, "source_sequence_after_rollback": finalState.Source.Sequence, "first_run": "actual console source review and generated ID", "code": "supported controlled process readback; disabled preserved", "sdk": "actual stable launcher process to real shipping server stdio continuation/memory/knowledge and exact changed future-method resource", "owner_workspace_preserved": true}, "", "  ")
 	must(t, os.WriteFile(filepath.Join(root, "client-lifecycle-proof.json"), append(proof, '\n'), 0600))
