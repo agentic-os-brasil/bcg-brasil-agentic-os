@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest/docling"
@@ -289,6 +290,35 @@ func TestAuthenticatedRealDocling(t *testing.T) {
 			t.Fatal(got.Result)
 		}
 	})
+
+	for _, stop := range []string{"cancelled", "expired deadline"} {
+		t.Run(stop, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			if stop == "expired deadline" {
+				cancel()
+				ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+			} else {
+				cancel()
+			}
+			defer cancel()
+			executions := filepath.Join(base, "executions")
+			before, err := os.ReadDir(executions)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := runtime.Convert(ctx, request, w.WorkspaceID)
+			if err != nil || got.Result.Status != ingest.StatusUnavailable || len(got.Markdown) != 0 || len(got.Document) != 0 || len(got.Result.Warnings) != 1 || got.Result.Warnings[0] != "conversion_cancelled" {
+				t.Fatalf("stopped conversion disclosed content or executed: %+v %v", got.Result, err)
+			}
+			after, err := os.ReadDir(executions)
+			if err != nil || len(before) != 0 || len(after) != 0 {
+				t.Fatalf("stopped conversion left private execution state: %v", err)
+			}
+		})
+	}
+	if !bytes.Equal(read(t, filepath.Join(space, "sample.docx")), fixture) || !bytes.Equal(read(t, assembled.ArchivePath), archive) {
+		t.Fatal("conversion or refusal changed source bytes or retained authenticated archive")
+	}
 	if destination := os.Getenv("MAESTRO_DOCLING_TEST_EVIDENCE"); destination != "" {
 		evidence, _ := json.MarshalIndent(map[string]any{"assembly": assembled, "result": converted.Result, "provenance": converted.Provenance, "authority": "ephemeral engineering fixture; not production", "oracle": "exact marker and 2x2 Item/Count/alpha/7 table"}, "", "  ")
 		put(t, destination, evidence)
