@@ -12,11 +12,11 @@ import (
 // Tool checks filesystem-bearing fields. Grep.pattern is text, never a path.
 // Ordinary commands still pass through the independent removal and host guards.
 func Tool(workspace, cwd, tool string, raw json.RawMessage) error {
-	root, err := filepath.EvalSymlinks(workspace)
+	root, err := resolveExistingPolicyPath(workspace)
 	if err != nil {
 		return errors.New("workspace_unavailable")
 	}
-	current, err := filepath.EvalSymlinks(cwd)
+	current, err := resolveExistingPolicyPath(cwd)
 	if err != nil || !filepath.IsAbs(cwd) || !Within(root, current) {
 		return errors.New("cwd_outside_workspace")
 	}
@@ -169,7 +169,7 @@ func checkGlob(root, base, pattern string) error {
 // Search paths may hide aliases or cross-case descendants even without a glob.
 // The bounded walk does not follow aliases and makes no post-check race claim.
 func searchTree(root, prefix string) error {
-	resolved, err := filepath.EvalSymlinks(prefix)
+	resolved, err := resolveExistingPolicyPath(prefix)
 	if errors.Is(err, os.ErrNotExist) {
 		return checkPath(root, root, filepath.ToSlash(prefix))
 	}

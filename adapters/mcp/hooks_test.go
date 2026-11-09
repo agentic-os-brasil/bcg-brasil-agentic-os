@@ -17,6 +17,7 @@ import (
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspacepolicy"
 )
 
 type hookFixture struct{ binary, base, prod, owner, work, home string }
@@ -28,6 +29,11 @@ func hookDirectoryAlias(t *testing.T, alias, target string) {
 		if out, err := exec.Command(shell, "/c", "mklink", "/J", alias, target).CombinedOutput(); err != nil {
 			t.Fatalf("required ordinary-user directory junction unavailable: %s %v", out, err)
 		}
+		info, err := os.Lstat(alias)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("synthetic directory junction mode=%s native=%#v", info.Mode(), info.Sys())
 		return
 	}
 	if err := os.Symlink(target, alias); err != nil {
@@ -108,7 +114,7 @@ func hookDeny(t *testing.T, f hookFixture, fields map[string]any) {
 	t.Helper()
 	out := hookOK(t, f, "PreToolUse", fields)
 	if !strings.Contains(out, `"permissionDecision":"deny"`) {
-		t.Fatalf("expected denial, got %s", out)
+		t.Fatalf("expected denial for tool=%v input=%v, got %s", fields["tool_name"], fields["tool_input"], out)
 	}
 }
 func hookAllow(t *testing.T, f hookFixture, fields map[string]any) {
@@ -222,6 +228,25 @@ func TestCompiledClaudeHook(t *testing.T) {
 		for _, input := range []map[string]any{{"pattern": "../outside/*"}, {"pattern": "alias/*"}, {"pattern": "**/*.md"}, {"pattern": "{safe,../outside}/*"}} {
 			hookDeny(t, f, toolFields("Glob", "glob", input))
 		}
+		hookDeny(t, f, toolFields("Glob", "literal-alias", map[string]any{"pattern": "alias"}))
+		hookDeny(t, f, toolFields("Grep", "grep-alias", map[string]any{"pattern": ".", "path": "alias"}))
+		hookDeny(t, f, toolFields("Read", "read-alias", map[string]any{"file_path": "alias"}))
+		hookDeny(t, f, toolFields("Write", "missing-alias-child", map[string]any{"file_path": "alias/new.md"}))
+		fields = toolFields("Read", "aliased-cwd", map[string]any{"file_path": "safe.md"})
+		fields["cwd"] = filepath.Join(f.work, "alias")
+		if out, _, code := f.call("PreToolUse", fields); code == 0 && strings.TrimSpace(out) == "{}" {
+			t.Fatal("aliased cwd admitted")
+		}
+		if runtime.GOOS == "windows" && workspacepolicy.Tool(filepath.Join(f.work, "alias"), filepath.Join(f.work, "alias"), "Read", json.RawMessage(`{"file_path":"safe.md"}`)) == nil {
+			t.Fatal("Windows junction root admitted by public policy")
+		}
+		if err := os.Remove(outside); err != nil {
+			t.Fatal(err)
+		}
+		hookDeny(t, f, toolFields("Glob", "broken-alias", map[string]any{"pattern": "alias/*"}))
+		if err := os.Mkdir(outside, 0700); err != nil {
+			t.Fatal(err)
+		}
 		hookDeny(t, f, toolFields("Write", "outside", map[string]any{"file_path": filepath.Join(outside, "new.md")}))
 		hookDeny(t, f, toolFields("Write", "secondary", map[string]any{"file_path": "safe.md", "path": outside}))
 		removeHookDirectoryAlias(t, filepath.Join(f.work, "alias"))
@@ -238,6 +263,18 @@ func TestCompiledClaudeHook(t *testing.T) {
 		hookDeny(t, f, toolFields("Glob", "raw-backslash", map[string]any{"pattern": `nested\*.md`}))
 		hookDeny(t, f, toolFields("Read", "raw-read-backslash", map[string]any{"file_path": `nested\note.md`}))
 		hookDeny(t, f, toolFields("Grep", "raw-search-backslash", map[string]any{"pattern": "text", "path": `nested\child`}))
+		for _, tc := range []struct {
+			tool  string
+			input json.RawMessage
+		}{
+			{"Glob", json.RawMessage(`{"pattern":"src/internal/filepathlite/*.go"}`)},
+			{"Grep", json.RawMessage(`{"pattern":"word\\b","path":"src/internal/filepathlite"}`)},
+			{"Read", json.RawMessage(`{"file_path":"src/internal/filepathlite/path.go"}`)},
+		} {
+			if err := workspacepolicy.Tool(runtime.GOROOT(), runtime.GOROOT(), tc.tool, tc.input); err != nil {
+				t.Fatalf("read-only public SDK policy input refused for %s: %v", tc.tool, err)
+			}
+		}
 
 		accounts := filepath.Join(f.work, "brain/accounts")
 		os.MkdirAll(filepath.Join(accounts, "acme/cases/one"), 0700)

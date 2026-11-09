@@ -145,6 +145,14 @@ production signing, colleague distribution or hostile same-user filesystem custo
 Nested Go rebuilds use the pinned SDK and source module checksums; this companion
 does not claim offline development dependency acquisition.
 
+Windows hook policy validates existing directory ancestors through the canonical
+read-only no-follow inspector before generic path resolution. Native directory
+attributes identify junctions even when Go reports ModeIrregular rather than
+ModeSymlink. This admits ordinary/read-only public directories without private
+owner or ACL requirements, refuses selected and ancestor directory reparses, and
+preserves Unix resolution. It is pre-tool admission, not custody against a later
+same-user namespace change.
+
 This routing correction has source/parser evidence until its exact native CI run
 is retained. Earlier canonical success and the later elevated-host fixture failure
 remain distinct observations and are preserved in the integration evidence.
