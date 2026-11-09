@@ -8,11 +8,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"unsafe"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/privatelock"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
@@ -112,6 +114,82 @@ func TestWindowsAtlasPublicationKernel(t *testing.T) {
 			t.Fatal("held native replacement lost complete bytes", err)
 		}
 		t.Log("native_atlas_custody bound_directories_pinned=true journal_pinned=true lock_leaf_pinned=true native_lock_exclusive=true occupied_target_preserved=true replacement_readback=true")
+	})
+	t.Run("legacy_lock_bytes_and_custody_survive_refusal", func(t *testing.T) {
+		engine, options := nativeAtlasEngine(t)
+		if _, err := engine.CreatePage(CreatePageRequest{Page: "preserved.md", Body: "# Preserve existing native page\n", Provenance: attended("legacy-lock-seed")}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := engine.CreateGrant(GrantRequest{Ritual: "legacy-lock-proof", RitualVersion: "1", Segment: "projects", Operations: []string{"create-page"}, Cadence: "manual", Reader: ReaderOwnerSession}); err != nil {
+			t.Fatal(err)
+		}
+		path := engine.journalDirPath("grants.lock")
+		const token = "0123456789abcdef0123456789abcdef"
+		journal, err := winprivate.OpenPinned(engine.journalDirPath(""))
+		if err != nil {
+			t.Fatal(err)
+		}
+		file, err := journal.OpenLock("grants.lock")
+		if err != nil {
+			_ = journal.Close()
+			t.Fatal(err)
+		}
+		_, writeErr := file.WriteString(token)
+		if err = errors.Join(writeErr, file.Close(), journal.Close()); err != nil {
+			t.Fatal(err)
+		}
+		security := func() string {
+			descriptor, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.GROUP_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return descriptor.String()
+		}
+		beforeSecurity := security()
+		beforeWorkspace, beforeData := snapshotAtlasText(t, options.WorkspacePath), snapshotAtlasText(t, options.DataRoot)
+		release, err := engine.acquireCorpusLock()
+		if release != nil {
+			if closeErr := release(); closeErr != nil {
+				t.Fatal(closeErr)
+			}
+		}
+		if err == nil || errors.Is(err, privatelock.ErrBusy) || !strings.Contains(err.Error(), "legacy or unexpected data") {
+			t.Error("legacy lock was not refused distinctly", err)
+		}
+		if _, err = engine.CreatePage(CreatePageRequest{Page: "must-not-land.md", Body: "# Must not land\n", Provenance: attended("refuse-legacy-lock")}); err == nil || errors.Is(err, privatelock.ErrBusy) || !strings.Contains(err.Error(), "legacy or unexpected data") {
+			t.Error("public mutation did not preserve legacy lock refusal", err)
+		}
+		if !reflect.DeepEqual(beforeWorkspace, snapshotAtlasText(t, options.WorkspacePath)) || !reflect.DeepEqual(beforeData, snapshotAtlasText(t, options.DataRoot)) || security() != beforeSecurity {
+			t.Fatal("legacy refusal changed page, journal, grant, token, mode or security descriptor")
+		}
+		// Only the legacy owner verifies and removes its exact token; native
+		// refusal must not retain a handle that blocks this owner release.
+		if got, err := os.ReadFile(path); err != nil || string(got) != token {
+			t.Fatal("legacy owner lost its token", err)
+		}
+		if err := os.Remove(path); err != nil {
+			t.Fatal("legacy owner could not release its own guard", err)
+		}
+		release, err = engine.acquireCorpusLock()
+		if err != nil {
+			t.Fatal("native acquire after legacy owner's release failed", err)
+		}
+		first, statErr := os.Stat(path)
+		if err = errors.Join(statErr, release()); err != nil {
+			t.Fatal(err)
+		}
+		release, err = engine.acquireCorpusLock()
+		if err != nil {
+			t.Fatal("native guard could not be reacquired", err)
+		}
+		second, statErr := os.Stat(path)
+		if err = errors.Join(statErr, release()); err != nil {
+			t.Fatal(err)
+		}
+		if first.Size() != 0 || second.Size() != 0 || !os.SameFile(first, second) {
+			t.Fatal("native release replaced or filled its persistent empty guard")
+		}
+		t.Log("native_atlas_legacy_lock distinct_refusal=true token_preserved=true page_journal_grant_unchanged=true security_unchanged=true legacy_owner_released=true native_reacquired_same_empty_guard=true")
 	})
 	t.Run("aliases_and_unsafe_acl_preserve_outside_bytes", func(t *testing.T) {
 		engine, _ := nativeAtlasEngine(t)
