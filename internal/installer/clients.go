@@ -78,6 +78,27 @@ type ClientBackup struct {
 	Path   string `json:"path"`
 	SHA256 string `json:"sha256"`
 }
+
+// ValidateBinding checks the finite recorded role/path before any backup IO.
+func (b ClientBackup) ValidateBinding(codeRoot, desktopPath string) error {
+	if !clientSHA.MatchString(b.SHA256) {
+		return errors.New("client backup digest missing")
+	}
+	var expected string
+	switch b.Kind {
+	case "code":
+		expected = codeRoot + ".previous-" + b.SHA256
+	case "desktop":
+		expected = desktopPath + ".previous-" + b.SHA256 + ".mcpb"
+	default:
+		return errors.New("unknown client backup role")
+	}
+	if b.Path != expected {
+		return errors.New("client backup path differs from its exact selected slot")
+	}
+	return nil
+}
+
 type ClientMaterialization struct {
 	Release                       string         `json:"release"`
 	ManifestSHA256                string         `json:"manifest_sha256"`
@@ -546,13 +567,23 @@ func writeClientRecord(o SeededOperationOptions, r ClientRecord) error {
 	}
 	return scheduler.WritePrivateFileAtomic(p, body)
 }
-func clientDigest(body []byte) string { return fmt.Sprintf("%x", sha256.Sum256(body)) }
-func ClientFileDigest(path string) (string, error) {
+func clientDigest(body []byte) string              { return fmt.Sprintf("%x", sha256.Sum256(body)) }
+func ClientFileDigest(path string) (string, error) { return clientFileDigest(path, false) }
+
+// ClientArchiveDigest observes the fixed private archive role through the same
+// descriptor used for hashing. It never changes mode, ACL, bytes or admission.
+func ClientArchiveDigest(path string) (string, error) { return clientFileDigest(path, true) }
+func clientFileDigest(path string, privateArchive bool) (string, error) {
 	f, err := scheduler.OpenRegularFile(path)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
+	if privateArchive {
+		if err = scheduler.ValidatePrivateFile(f, 0600); err != nil {
+			return "", err
+		}
+	}
 	if err = scheduler.ValidateSingleLink(f); err != nil {
 		return "", err
 	}
@@ -640,6 +671,9 @@ func validateClientFiles(m ClientMaterialization) error {
 	}
 	seen := map[string]bool{}
 	for _, b := range m.Backups {
+		if err := b.ValidateBinding(m.CodeRoot, m.DesktopPath); err != nil {
+			return err
+		}
 		if !clientSHA.MatchString(b.SHA256) || seen[b.Path] {
 			return errors.New("client backup inventory invalid")
 		}
@@ -652,7 +686,7 @@ func validateClientFiles(m ClientMaterialization) error {
 			actual, err = ClientTreeDigest(b.Path)
 		case "desktop":
 			expected = m.DesktopPath + ".previous-" + b.SHA256 + ".mcpb"
-			actual, err = ClientFileDigest(b.Path)
+			actual, err = ClientArchiveDigest(b.Path)
 		default:
 			return errors.New("unknown client backup role")
 		}
@@ -664,7 +698,7 @@ func validateClientFiles(m ClientMaterialization) error {
 	if e != nil {
 		return e
 	}
-	desktop, e := ClientFileDigest(m.DesktopPath)
+	desktop, e := ClientArchiveDigest(m.DesktopPath)
 	if e != nil {
 		return e
 	}

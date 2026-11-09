@@ -196,7 +196,7 @@ func InspectReusedStableExtension(path string, c StableCarrier, packageSHA, serv
 			return errors.New("recorded stable packet identity missing")
 		}
 	}
-	actual, err := installer.ClientFileDigest(path)
+	actual, err := installer.ClientArchiveDigest(path)
 	if err != nil {
 		return err
 	}

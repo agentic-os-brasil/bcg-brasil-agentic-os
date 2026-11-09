@@ -103,7 +103,7 @@ func CurrentClientMaterializer(o installer.ClientOptions) installer.ClientMateri
 		// whose swap completed before its finite current record was published.
 		adoptCurrent := false
 		if old != nil && o.Request.Reconcile {
-			sha, e := installer.ClientFileDigest(o.Request.DesktopPath)
+			sha, e := installer.ClientArchiveDigest(o.Request.DesktopPath)
 			if e == nil && sha != old.Materialization.DesktopSHA256 {
 				if e = inspectCurrentDesktopContract(ctx, o.Request.DesktopPath, o, identity, s.Server.SHA256, nativeContract); e != nil {
 					return material, e
@@ -157,7 +157,7 @@ func CurrentClientMaterializer(o installer.ClientOptions) installer.ClientMateri
 				material.DesktopBackupSHA256 = backup.SHA256
 			}
 		}
-		material.DesktopSHA256, err = installer.ClientFileDigest(material.DesktopPath)
+		material.DesktopSHA256, err = installer.ClientArchiveDigest(material.DesktopPath)
 		return material, err
 	}
 }
@@ -372,11 +372,11 @@ func preflightClientPublication(codeStage, desktopStage string, o installer.Clie
 	}
 	if !reuseDesktop {
 		if _, err := os.Lstat(o.Request.DesktopPath); err == nil {
-			current, e := installer.ClientFileDigest(o.Request.DesktopPath)
+			current, e := installer.ClientArchiveDigest(o.Request.DesktopPath)
 			if e != nil {
 				return e
 			}
-			candidate, e := installer.ClientFileDigest(desktopStage)
+			candidate, e := installer.ClientArchiveDigest(desktopStage)
 			if e != nil {
 				return e
 			}
@@ -423,13 +423,16 @@ func inspectClientBackupInventory(o installer.ClientOptions, old *installer.Clie
 	backups := append([]installer.ClientBackup{}, old.Materialization.Backups...)
 	seen := map[string]bool{}
 	inspect := func(b installer.ClientBackup) error {
+		if err := b.ValidateBinding(o.Request.CodeRoot, o.Request.DesktopPath); err != nil {
+			return err
+		}
 		var actual string
 		var err error
 		switch b.Kind {
 		case "code":
 			actual, err = installer.ClientTreeDigest(b.Path)
 		case "desktop":
-			actual, err = installer.ClientFileDigest(b.Path)
+			actual, err = installer.ClientArchiveDigest(b.Path)
 		default:
 			return errors.New("unknown client backup role")
 		}
@@ -574,11 +577,11 @@ func swapOwnedDesktop(ctx context.Context, stage string, o installer.ClientOptio
 		if err = inspectCurrentDesktopContract(ctx, destination, o, identity, identityServerSHA(o), nativeContract); err != nil {
 			return err
 		}
-		actual, err := installer.ClientFileDigest(destination)
+		actual, err := installer.ClientArchiveDigest(destination)
 		if err != nil {
 			return err
 		}
-		expected, err := installer.ClientFileDigest(stage)
+		expected, err := installer.ClientArchiveDigest(stage)
 		if err != nil {
 			return err
 		}
