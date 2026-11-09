@@ -15,6 +15,10 @@ separate gates, recorded by the delivery evidence. The
 [delivery plan](plans/2026-11-03-synced-product-distribution.md) and
 [release contract](../specs/020-release-distribution.md) define those boundaries.
 
+The [participant client guide](product-clients.md) connects this update workflow
+to checked current regeneration, scoped Code registration and Desktop's explicit
+native flow. An activated server alone does not prove current client loading.
+
 The publisher places immutable signed releases and generation records in a
 folder. SharePoint/OneDrive replicates those bytes. Each participant's admitted
 local installer authenticates the source, copies a complete release into private

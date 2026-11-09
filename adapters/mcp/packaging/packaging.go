@@ -14,6 +14,7 @@ import (
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeagents"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"io"
@@ -30,6 +31,8 @@ type Options struct {
 	Destination, Server, Version string
 	Binding                      product.Options
 	NativeHost                   *NativeHost
+	Carrier                      *StableCarrier
+	stableIdentity               releasecontract.ServerIdentity
 	serverBody                   []byte
 	target                       Target
 	native                       *NativeCapability
@@ -65,6 +68,11 @@ func prepare(o Options) (Options, string, error) {
 		return o, "", errors.New("regular native server required")
 	}
 	o.serverBody, o.target, err = readNativeBinary(o.Server)
+	if o.Carrier != nil {
+		if err := prepareStable(&o); err != nil {
+			return o, "", err
+		}
+	}
 	return o, o.target.Platform(), err
 }
 func BuildPlugin(options Options) error { return buildPortable(options, "plugin") }

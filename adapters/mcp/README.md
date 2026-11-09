@@ -15,7 +15,10 @@ evidence does not establish native signing, client registration/loading or the
 complete modern update lifecycle. The [signed-source guide](../../docs/product-synced-source.md)
 records the generation publisher, synced-folder layout and monotonic local
 custody contract. Delivery evidence tracks source review, hosted CI, actual
-client admission, signing and publication independently.
+client admission, signing and publication independently. The
+[participant client console](../../docs/product-clients.md) composes exact
+materialization, scoped Code registration, Desktop handoff and recovery; stable
+connector reuse remains subject to actual native compatibility qualification.
 
 Reviewed memory adds capture, paged discovery/search/readback, bounded context,
 daily/weekly consolidation and revision-aware correction/deletion/retention.
@@ -29,6 +32,8 @@ profiles remain unavailable. See the [format matrix](../../docs/product-mcp-cont
 artifact; named collection remains bounded. See the
 [document knowledge guide](../../docs/product-document-knowledge.md) for the closed
 operations, local operator fallback and qualification boundaries.
+
+Stable client registration and checked recovery are described in [the client guide](../../docs/product-clients.md); native loading remains separately observed.
 
 Build from this directory with `go build -o /absolute/local/path/maestro-mcp ./cmd/maestro-mcp`.
 The installed product directory and owner directory must already exist. Choose a

@@ -582,3 +582,128 @@ actual client/device/signing/pilot remain external gates. No full unrelated suit
 
 Root owns canonical docs/decision/schema/CI and Git. Source production starts only
 after this contract is accepted and the combined modern/Wiki baseline is saved.
+
+## Stable current client materialization (SCAR)
+
+Task2 is independently approved at tree b6f19c34fdb64e17445b58d206630937ca9f8ec1
+and integrated at f398d32478c19259932c8ecdaebdc4bcf1380cb9. Task3 may implement
+the following explicit profile; native compatibility remains separately evidenced.
+
+### Profile and finite owner
+
+Keep release-bound packet schema1 and its exact pins unchanged. Stable packets
+use separately recognized inventory schema2, profile stable-local-v1, protocol
+maestro-stable-carrier-v1, fixed random 32-lowercase-hex carrier ID and carrier
+version 1.0.0 independent of server release. Stable behavior never follows from
+omitted release pins. Preserve strict seed-status v2; discover the supported
+profile/protocol/version through a separate bounded client-capabilities command
+on the independently admitted installer and actual current server.
+
+The existing installer owns one strict private current record, at most 64 KiB,
+at UserHome/.maestro-install/clients/<id>.json. Derive this path from the fixed
+binding only. Bind profile/protocol/ID, admitted roots/workspace/registry,
+current release/manifest/client-input/server/embedded-input/bundle identities,
+exact Code tree and Desktop package/native-contract identities, and bounded
+separately classified host observations. Keep historical inert Desktop bootstrap
+provenance explicit. This record stays outside SourceControl and Previous; it
+cannot grant freshness, select another executable/key/root, reset source history
+or manufacture NativeHost qualification.
+
+### Checked construction and launch
+
+Under existing installation serialization, authenticate Current and source,
+invoke only the authenticated installed current server's plugin/mcpb generators,
+independently inspect complete packet inventories/resources and recheck binding
+before atomic record publication. The stable installer must not generate a new
+release using its own older embedded methods. Trusted in-process materializer
+composition grants no caller/model path or trust authority.
+
+Stable native argv fixes the installed maestro-install executable, stable-launch,
+product root, user home, workspace and carrier ID. Resolve only that finite record.
+Native-admit Self and revalidate current source expiry, known recall, writer
+floor, actual server, client inputs and exact packets before returning the same
+exact pinned server launch as release-bound mode. Existing startup/request/
+publication process-identity checks remain effective. All status/startup reads
+are nonmigrating, create nothing and never refresh source or invoke a client.
+
+Materialization currency binds immutable active inputs, not source-generation
+timestamps. Metadata-only refresh or repeated identical release needs no
+regeneration. Activation and compatible rollback invalidate mismatched records
+until checked regeneration, preserving advanced source custody. Failure reports
+activation-applied/client-materialization-pending rather than reversing source.
+Stage and inspect complete packets before publication; publish the current record
+last. First publication is exclusive and unchanged reconciliation performs no
+replacement. A differing existing Code tree or Desktop package must preserve
+both current and candidate bytes and return an explicit manual client step
+unless the actual deployment profile proves strong physical custody against an
+uncooperative concurrent writer. Hash-then-rename/unlink is insufficient. This
+construction does not claim that custody on ordinary shared client profiles.
+
+An operator-retained prior packet may be recorded only at the immutable same-
+parent path derived from its complete prior byte/mode digest. Retain the bounded
+complete Code/Desktop backup inventory, validate every recorded entry and never
+overwrite unknown bytes or garbage-collect earlier backups. Identical known
+backups are reused only after exact binding/full-byte checks. Reconciliation
+reauthenticates Current and actual package state and may finish an already
+operator-applied current publication without repeating replacement. Unknown,
+changed or aliased packets/backups remain preserved and refused. An exit status
+or saved approval cannot advance binding.
+An existing staged candidate is not binding authority merely because inspection
+succeeds. Verify its exact admitted native launch binding before using its
+contract as the reference; both adoption branches compare the destination's
+actual contract with that reference before swaps or record publication.
+Only explicit digest-bound client reconciliation may use the canonical
+dead-owner reconciliation lock after a real process interruption. It preserves
+live-owner refusal; launch/status and ordinary materialization do not reclaim
+locks or reset custody.
+
+### Supported client effects and evidence
+
+Code uses selected absolute executable/hash, bounded version/help admission and
+supported JSON semantics, with at least 2.1.289 in-place readback; the separate
+native planner minimum remains 2.1.295. Use fixed marketplace maestro-local-<id>,
+qualified maestro-product identity, relative local plugin source and explicit
+user/local/project scope. Read marketplace/plugin JSON before and after supported
+add/install/update operations. Refuse foreign same-name sources, ambiguous scope
+and duplicates. Preserve disabled state, auth and normal permissions; never
+update by uninstall/reinstall or raw profile editing. Registration readback is
+distinct from a loaded session and functional execution.
+Unrelated cached plugin rows need only their common inventory fields; strict
+local-in-place observations apply to the selected Maestro row. A participant
+who initially defers Code can select the first executable later through an
+exact reviewed same-carrier change. Fixed roots/scope remain bound, and an
+already selected executable is not silently replaced.
+
+Desktop state separates bundle_ready, open_requested, awaiting_user_install,
+user_confirmed_install, client_connection_observed and functional_check_passed,
+with operator-attested versus observed provenance. No undocumented headless
+private-install/inventory API is assumed. Reuse an old exact MCPB only when its
+complete native-facing launch/config/permission/compatibility contract and
+carrier version are unchanged, after independently verifying new current inputs.
+Only deliberately inert packaged-server/inventory provenance can be excluded
+from that native-contract comparison. Live resources come from the external
+current server; old bundled provenance stays historical. Any native-contract
+change requires manual installation. External absolute launch/reuse is a
+candidate requiring actual Desktop qualification; retain manual updated-MCPB
+fallback and never claim MCPB automatic updating.
+
+### Construction acceptance
+
+Provide exact reviewed clients-review/apply/status/reconcile, explicit
+desktop-confirm and stable-launch operations plus a small participant-local
+manage launcher composing existing source/update/rollback reviews. No persisted
+wizard engine or recurring activation authority is introduced.
+The first admitted participant can reach checked client materialization through
+that small console using explicit choices and a locally generated carrier ID;
+hand-written JSON or manual ID generation is not the required user journey.
+
+Prove first materialization/registration, current-server resources, disabled
+preservation, foreign-source refusal, N-to-N+1 refusal before regeneration and
+correct restarted SDK/stdio continuation afterward, exact unchanged compatible
+MCPB bytes, metadata-only/repeated-release currency, rollback regeneration,
+workspace isolation and interrupted swaps/registration/record publication.
+Preserve recall/expiry/floor, stale-process/release-bound and old capability
+refusals. Native-positive process composition is explicitly engineering-only;
+shipping unsigned native refusal remains real. Four final independent front
+lenses precede the cohesive PR. Actual clients, signing, hosted CI, SharePoint
+publication and participant acceptance remain separate gates.

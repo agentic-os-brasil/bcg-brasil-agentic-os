@@ -15,7 +15,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/updateservice"
 )
 
-type lifecycleFlags struct{ ManagedRoot, UserHome, Workspace, ManifestSHA256, ClientInputsSHA256, PlanID string }
+type lifecycleFlags struct{ ManagedRoot, UserHome, Workspace, ManifestSHA256, ClientInputsSHA256, PlanID, CarrierID, PackageSHA256, NativeContractSHA256, ClientCodeRoot, ClientDesktopPath, ClientCodeExecutable, ClientScope string }
 type lifecycleRequest struct {
 	ManagedRoot string                      `json:"managed_root"`
 	UserHome    string                      `json:"user_home"`

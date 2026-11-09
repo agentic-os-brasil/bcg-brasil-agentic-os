@@ -1,10 +1,12 @@
 # Deliver one complete synced-folder product install and update path
 
-Status: Task1 and reviewed Wiki/shared corrections are locally integrated at
-8c1ede63fef4b3a5a17d2d4471e4dc5b4f8c37fe, exact tested/reviewed tree
-b62905ad2137647cae4d8cebe3a8727a551ee9a2. MPDU/Spec020 settle Task2's accepted
-construction contract; implementation is separately released/gated. Task3 remains
-pending. No production release or native qualification is implied.
+Status: Tasks1/2 and reviewed Wiki/shared corrections are locally integrated at
+f398d32478c19259932c8ecdaebdc4bcf1380cb9, exact independently approved tree
+b6f19c34fdb64e17445b58d206630937ca9f8ec1. Task2 R1 closes the actual process
+publication race and nonmigrating reader findings. SCAR/Spec020 accept Task3's
+explicit stable-carrier, current-server generation and supported registration
+contract; implementation and final front acceptance remain separately gated.
+No production release or native qualification is implied.
 Front: `codex/integration/maestro-distribution`.
 Topic: `codex/maestro-synced-distribution`. The reviewed complete native/maintenance
 dependency is incorporated at 62d7758b18b0e9deb616ceacc7c241a34f5b68ce, preserving
@@ -129,6 +131,12 @@ same-sequence mutation, replay, expiry/recall and older-writer refusal. Recovery
 must recompute from signed source truth, not trust a stored approval boolean.
 
 ## Task 3 — Complete client registration, recovery and operator delivery
+
+SCAR and Spec020's stable-current-client section are the exact accepted contract.
+Generate packets through the authenticated current server; keep release-bound
+packets unchanged and stable carriers explicitly typed. The finite installer
+record is outside source custody/Previous. Compatible unchanged Desktop reuse
+is a candidate requiring native qualification, with manual updated-MCPB fallback.
 
 Fresh owner after Task2 gate. Own the exact Code registration/update adapter,
 Desktop confirmation handoff, package-generation/activation receipts, crash

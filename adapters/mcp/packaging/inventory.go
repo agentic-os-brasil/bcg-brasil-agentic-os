@@ -30,24 +30,28 @@ type packetFile struct {
 	Mode   uint32 `json:"mode"`
 }
 type packetInventory struct {
-	SchemaVersion int          `json:"schema_version"`
-	Format        string       `json:"format"`
-	Version       string       `json:"version"`
-	Platform      string       `json:"platform"`
-	Server        string       `json:"server"`
-	Files         []packetFile `json:"files"`
+	SchemaVersion int                  `json:"schema_version"`
+	Format        string               `json:"format"`
+	Version       string               `json:"version"`
+	Platform      string               `json:"platform"`
+	Server        string               `json:"server"`
+	Files         []packetFile         `json:"files"`
+	Stable        *stablePacketBinding `json:"stable,omitempty"`
 }
 
 // PacketStatus is integrity evidence only, never publisher or owner authority.
 type PacketStatus struct {
-	Files           int    `json:"files"`
-	Format          string `json:"format"`
-	Version         string `json:"version"`
-	Target          Target `json:"target"`
-	ServerSHA256    string `json:"server_sha256"`
-	RegistrySHA256  string `json:"registry_sha256,omitempty"`
-	InventorySHA256 string `json:"inventory_sha256"`
-	NativeMode      string `json:"native_mode"`
+	Files                int            `json:"files"`
+	Format               string         `json:"format"`
+	Version              string         `json:"version"`
+	Target               Target         `json:"target"`
+	ServerSHA256         string         `json:"server_sha256"`
+	RegistrySHA256       string         `json:"registry_sha256,omitempty"`
+	InventorySHA256      string         `json:"inventory_sha256"`
+	NativeMode           string         `json:"native_mode"`
+	Stable               *StableCarrier `json:"stable,omitempty"`
+	EmbeddedInputsSHA256 string         `json:"embedded_inputs_sha256,omitempty"`
+	NativeContractSHA256 string         `json:"native_contract_sha256,omitempty"`
 }
 
 type packetSource struct {
@@ -163,7 +167,7 @@ func scanPacket(root string) ([]packetFile, error) {
 	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
 	return result, err
 }
-func writeInventory(root, format, version, platform, server string) error {
+func writeInventory(root, format, version, platform, server string, stable *stablePacketBinding) error {
 	files, err := scanPacket(root)
 	if err != nil {
 		return err
@@ -173,7 +177,7 @@ func writeInventory(root, format, version, platform, server string) error {
 			files[i].Mode = 0755
 		}
 	}
-	body, err := json.MarshalIndent(packetInventory{1, format, version, platform, server, files}, "", "  ")
+	body, err := json.MarshalIndent(packetInventory{SchemaVersion: packetSchema(stable), Format: format, Version: version, Platform: platform, Server: server, Files: files, Stable: stable}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -208,11 +212,16 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
 		return status, errors.New("packet inventory trailing data")
 	}
-	if inventory.SchemaVersion != 1 || (inventory.Format != "plugin" && inventory.Format != "mcpb") || !regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`).MatchString(inventory.Version) || len(inventory.Files) < 1 || len(inventory.Files) > maximumPacketFiles || !packetPath(inventory.Server) {
+	if inventory.SchemaVersion != packetSchema(inventory.Stable) || (inventory.Format != "plugin" && inventory.Format != "mcpb") || !regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`).MatchString(inventory.Version) || len(inventory.Files) < 1 || len(inventory.Files) > maximumPacketFiles || !packetPath(inventory.Server) {
 		return status, errors.New("packet inventory unavailable")
 	}
 	if inventory.Platform != "darwin" && inventory.Platform != "win32" && inventory.Platform != "linux" {
 		return status, errors.New("packet platform unavailable")
+	}
+	if inventory.Stable != nil {
+		if err := inventory.Stable.validate(); err != nil {
+			return status, err
+		}
 	}
 	expected := map[string]packetFile{}
 	for _, file := range inventory.Files {
@@ -227,7 +236,7 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 	if file, found := expected[inventory.Server]; !found || file.Mode != 0755 {
 		return status, errors.New("packet server unavailable")
 	}
-	required, server, err := requiredPacketFiles(inventory.Format, inventory.Platform, inventory.Version)
+	required, server, err := requiredPacketFiles(inventory.Format, inventory.Platform, inventory.Version, inventory.Stable)
 	if err != nil {
 		return status, err
 	}
@@ -284,6 +293,21 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 		return PacketStatus{}, err
 	}
 	status.NativeMode = diagnostic.Mode
+	if inventory.Stable != nil {
+		if diagnostic.Mode != "mcp_only" || inventory.Stable.BootstrapServerSHA256 != status.ServerSHA256 {
+			return PacketStatus{}, errors.New("stable bootstrap identity changed")
+		}
+		embedded, err := packetEmbeddedDigest(diagnostic.Resources)
+		if err != nil || embedded != inventory.Stable.BootstrapEmbeddedInputsSHA256 {
+			return PacketStatus{}, errors.New("stable canonical resource identity changed")
+		}
+		carrier := inventory.Stable.Carrier
+		status.Stable = &carrier
+		status.EmbeddedInputsSHA256 = embedded
+		if inventory.Format == "mcpb" {
+			status.NativeContractSHA256 = expected["manifest.json"].SHA256
+		}
+	}
 	if registry, found := expected["managed/trust/release-authority-registry.json"]; found {
 		status.RegistrySHA256 = registry.SHA256
 	}
