@@ -221,6 +221,9 @@ type Omission struct {
 }
 
 type Packet struct {
+	// ProductSurface selects the admitted MCP directive; it grants no capability.
+	ProductSurface bool `json:"-"`
+
 	SchemaVersion      int                  `json:"schema_version"`
 	State              string               `json:"state"`
 	InteractionProfile InteractionProfile   `json:"interaction_profile"`
@@ -246,6 +249,14 @@ type Packet struct {
 	// OwnerContextRoot anchors onboarding/refinement commands to the canonical
 	// private data root. It is never serialized into the bounded packet.
 	OwnerContextRoot string `json:"-"`
+}
+
+// BuildProduct projects admitted metadata only; private source availability is
+// discovered through explicit MCP queries, not inferred from absent inputs.
+func BuildProduct(inspection workspace.Inspection) Packet {
+	packet := Build(Sources{Workspace: inspection, Profile: profile.State{Profile: "standard", Source: "product_default"}})
+	packet.ProductSurface = true
+	return packet
 }
 
 func Build(sources Sources) Packet {

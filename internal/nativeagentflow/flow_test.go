@@ -44,6 +44,19 @@ func TestStrategicRouteRequiresCaseAndAccountValidation(t *testing.T) {
 }
 
 func TestDirectCaseAndOptionalYodaCanFinish(t *testing.T) {
+	// Earlier schema-1 stop observations must retain their route fences when
+	// read by the current legacy API; schema-2 admission is a separate store path.
+	legacy, _ := New(t.TempDir(), "workspace-a")
+	if err := os.MkdirAll(legacy.root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	old := `{"schema_version":1,"workspace_id":"workspace-a","session_digest":"` + digest("legacy") + `","account_route":true,"account_framed":true,"case_completed":true,"account_validated":true,"transition_count":6}`
+	if err := os.WriteFile(legacy.statePath("legacy"), []byte(old), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := legacy.Start("legacy", "review", "yoda"); err != nil {
+		t.Fatalf("legacy observation route lost: %v", err)
+	}
 	store, _ := New(t.TempDir(), "workspace-a")
 	if err := store.BeginTurn("session-a"); err != nil {
 		t.Fatal(err)

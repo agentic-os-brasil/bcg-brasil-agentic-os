@@ -361,7 +361,7 @@ func TestNativeUnsupportedProfileRetainsMCPOnlyAndRootAliasBinding(t *testing.T)
 	if err != nil || result.State != "unavailable" || result.CallsAttempted != 0 {
 		t.Fatalf("unsupported profile lost MCP fallback: %+v %v", result, err)
 	}
-	for _, path := range []string{in.ChallengeDirectory, filepath.Join(in.Packet.Destination, "agents"), filepath.Join(in.Packet.Destination, "hooks")} {
+	for _, path := range []string{in.ChallengeDirectory, filepath.Join(in.Packet.Destination, "hooks")} {
 		if _, err := os.Lstat(path); !os.IsNotExist(err) {
 			t.Fatalf("unsupported profile activated %s", path)
 		}

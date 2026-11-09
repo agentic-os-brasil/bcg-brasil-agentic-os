@@ -81,3 +81,12 @@ Fixtures live in private temporary directories under Developer; tests invoke no 
 This spec does not silently close #433/#434, full memory/provider/agent parity or
 native client qualification. E2–E7 remain implementation work, not optional follow-up
 for missing parts of the E1 workflow.
+
+## Finite native hook composition (#494)
+
+The shared executable also exposes the finite seven-event adapter described in
+[the product hook contract](../docs/product-native-hooks.md). It reuses current
+admission, canonical specialist identities, confined private lifecycle storage
+and the shared workspace policy. Packet admission precedes every hook effect;
+plain MCP does not gain native hook authority. #495 owns complete carrier and
+attended qualification, with installed-client acceptance still separate.
