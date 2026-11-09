@@ -684,8 +684,11 @@ Only deliberately inert packaged-server/inventory provenance can be excluded
 from that native-contract comparison. Live resources come from the external
 current server; old bundled provenance stays historical. Any native-contract
 change requires manual installation. External absolute launch/reuse is a
-candidate requiring actual Desktop qualification; retain manual updated-MCPB
-fallback and never claim MCPB automatic updating.
+candidate requiring actual Desktop qualification. Manual updated-MCPB
+installation retains this same carrier/absolute-launch contract; it cannot
+bypass a rejecting client policy. In that policy the stable source-managed
+carrier is unavailable. An ordinary unmanaged MCPB is a separate profile,
+not a source-managed fallback. Never claim MCPB automatic updating.
 
 ### Construction acceptance
 

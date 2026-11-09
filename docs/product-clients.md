@@ -85,8 +85,11 @@ official [local MCP guide](https://support.claude.com/en/articles/10949351-getti
 
 The stable package is a candidate using an external absolute installed launcher.
 Actual Desktop compatibility must be tested on the supported client. If it
-rejects that configuration, use the explicit updated-MCPB manual fallback and
-retain that limitation in participant status.
+rejects that configuration, the stable source-managed carrier is unavailable
+under that client policy. `manual-desktop-update` regenerates the same stable
+carrier and cannot bypass that restriction. An ordinary unmanaged MCPB is a
+separate installation profile; it is not a source-managed fallback. Preserve
+this limitation in participant status until the actual client is qualified.
 
 ## Update the server and preserve the client binding
 

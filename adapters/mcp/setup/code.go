@@ -250,6 +250,38 @@ func ReviewCodeRegistration(ctx context.Context, r installer.ClientRecord, run C
 	review.Digest = fmt.Sprintf("%x", sha256.Sum256(body))
 	return review, nil
 }
+
+// checkReviewedCodeIdentity observes the selected executable around each
+// supported effect. It cannot make path-based process execution atomic; drift
+// observed after effects requires explicit reconciliation of actual client state.
+func checkReviewedCodeIdentity(ctx context.Context, reviewed installer.CodeObservation, run ClientCommand, cwd string) error {
+	hash, target, err := packaging.InspectNativeExecutable(reviewed.Executable)
+	if err != nil {
+		return err
+	}
+	if hash != reviewed.ExecutableSHA256 || target.OS != runtime.GOOS || target.Arch != runtime.GOARCH {
+		return errors.New("reviewed Code executable bytes changed")
+	}
+	body, err := run(ctx, reviewed.Executable, []string{"--version"}, cwd)
+	if err != nil {
+		return err
+	}
+	version, err := codeVersion(body)
+	if err != nil {
+		return err
+	}
+	if version != reviewed.Version {
+		return errors.New("reviewed Code executable version changed")
+	}
+	after, _, err := packaging.InspectNativeExecutable(reviewed.Executable)
+	if err != nil {
+		return err
+	}
+	if after != reviewed.ExecutableSHA256 {
+		return errors.New("reviewed Code executable changed during version observation")
+	}
+	return nil
+}
 func ApplyCodeRegistration(ctx context.Context, r installer.ClientRecord, run ClientCommand, digest string, confirmed bool) (installer.CodeObservation, error) {
 	if !confirmed {
 		return installer.CodeObservation{}, errors.New("explicit Code registration confirmation required")
@@ -265,8 +297,20 @@ func ApplyCodeRegistration(ctx context.Context, r installer.ClientRecord, run Cl
 	if execute == nil {
 		execute = clientCommand
 	}
+	effects := 0
+	drift := func(observation installer.CodeObservation, cause error) (installer.CodeObservation, error) {
+		observation.State = "registration_pending"
+		if effects > 0 {
+			return observation, fmt.Errorf("Code registration partial after %d supported command attempts; reconcile actual client state: %w", effects, cause)
+		}
+		return observation, fmt.Errorf("Code registration stopped before supported command attempts: %w", cause)
+	}
 	for _, args := range review.Actions {
+		if err := checkReviewedCodeIdentity(ctx, review.Observation, execute, r.Binding.Workspace); err != nil {
+			return drift(review.Observation, err)
+		}
 		body, e := execute(ctx, r.Code.Executable, args, r.Binding.Workspace)
+		effects++
 		// Result JSON is advisory. Actual supported list readback is the oracle,
 		// including documented nonzero already-disabled outcomes.
 		if e != nil && !(len(args) > 1 && args[1] == "disable") {
@@ -279,6 +323,12 @@ func ApplyCodeRegistration(ctx context.Context, r installer.ClientRecord, run Cl
 	observation, _, present, err := observeCode(ctx, r, run)
 	if err != nil {
 		return observation, err
+	}
+	if observation.ExecutableSHA256 != review.Observation.ExecutableSHA256 || observation.Version != review.Observation.Version {
+		return drift(observation, errors.New("final Code executable identity differs from reviewed hash/version"))
+	}
+	if err := checkReviewedCodeIdentity(ctx, review.Observation, execute, r.Binding.Workspace); err != nil {
+		return drift(observation, err)
 	}
 	if !present || observation.State != "registered" || review.BeforePresent && !review.BeforeEnabled && observation.Enabled {
 		return observation, errors.New("Code registration readback pending")
