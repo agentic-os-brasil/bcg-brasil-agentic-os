@@ -416,12 +416,12 @@ $values|ConvertTo-Json -Depth 4 -Compress
                 self.assertIn(f"TestCompiledStdioWorkflowAndPackets/portable_{format}_{version}", ledger["$adapterAssertions"])
         self.assertEqual(len(ledger["$adapterCommandParents"]), 1)
         self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]), 166)
-        self.assertEqual(ledger["$adapterSetupParents"], ["TestModernFactoryFirstInstallAndRestart", "TestDirectInnerInstallRequiresProductionAuthority"])
-        self.assertEqual(len(ledger["$adapterSetupAssertions"]), 6)
-        self.assertEqual(len(set(ledger["$adapterSetupAssertions"])), 6)
+        self.assertEqual(ledger["$adapterSetupParents"], ["TestModernFactoryFirstInstallAndRestart", "TestDirectInnerInstallRequiresProductionAuthority", "TestModernSyncedSourceLifecycle", "TestSyncedPublicationInterleavingAndReadOnlyReviews"])
+        self.assertEqual(len(ledger["$adapterSetupAssertions"]), 22)
+        self.assertEqual(len(set(ledger["$adapterSetupAssertions"])), 22)
         for assertion in ledger["$adapterSetupAssertions"]:
             self.assertIn(assertion.split("/")[0], ledger["$adapterSetupParents"])
-        setup_source = (ROOT / "adapters/mcp/setup/setup_test.go").read_text()
+        setup_source = "\n".join(p.read_text() for p in (ROOT / "adapters/mcp/setup").glob("*_test.go"))
         for parent in ledger["$adapterSetupParents"]:
             self.assertIn(f"func {parent}(", setup_source)
         for name in ("TestMethodPlansResolveMaintenanceKeepWikiUnavailable", "TestMethodPlansResolveRegisteredMaintenanceAndWiki", "TestAgentResourceCallbacksRevalidateBinding"):
