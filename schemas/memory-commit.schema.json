@@ -7,13 +7,15 @@
   "required": ["schema_version", "workspace_id", "transaction_id", "committed_at", "artifacts"],
   "properties": {
     "schema_version": {"const": 1},
+    "visibility_revision": {"type": "integer", "minimum": 0},
     "workspace_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"},
     "transaction_id": {"type": "string", "pattern": "^dream-[A-Za-z0-9]+$"},
     "parent_commit": {"type": "string", "minLength": 1},
     "committed_at": {"type": "string", "format": "date-time"},
     "artifacts": {
       "type": "object",
-      "minProperties": 1,
+      "minProperties": 0,
+      "maxProperties": 128,
       "propertyNames": {
         "pattern": "^(L1/[0-9]{4}-[0-9]{2}-[0-9]{2}|L2/[0-9]{4}-W[0-9]{2}|L3/current|lifetime/current)$"
       },
@@ -22,5 +24,6 @@
         "pattern": "^versions/dream-[A-Za-z0-9]+/[0-9]{2}-(l1|l2|l3|lifetime)-[^/]+[.]json$"
       }
     }
-  }
+  },
+  "allOf": [{"if": {"properties": {"artifacts": {"maxProperties": 0}}}, "then": {"required": ["visibility_revision"], "properties": {"visibility_revision": {"minimum": 1}}}}]
 }

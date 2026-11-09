@@ -7,10 +7,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -46,6 +44,9 @@ func (attestor CaptureAttestor) Seal(capture Capture) (Capture, error) {
 }
 
 func (attestor CaptureAttestor) Verify(capture Capture) error {
+	if capture.SchemaVersion == OwnedCaptureSchemaVersion {
+		return attestor.verifyOwned(capture)
+	}
 	if err := validateAttestedCaptureEnvelope(capture); err != nil {
 		return err
 	}
@@ -100,67 +101,27 @@ func (attestor CaptureAttestor) key(workspaceID string, create bool) ([]byte, er
 	}
 	directory := filepath.Join(attestor.Root, "workspaces", workspaceID, ".attestation")
 	if create {
-		if err := os.MkdirAll(directory, 0o700); err != nil {
+		if err := memoryMkdirAll(directory, 0700); err != nil {
 			return nil, err
 		}
-	}
-	if info, err := os.Lstat(directory); err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return nil, errors.New("capture attestation directory is not a private directory")
 	}
 	path := filepath.Join(directory, "capture-v2.key")
-	read := func() ([]byte, error) {
-		info, err := os.Lstat(path)
-		if err != nil {
-			return nil, err
-		}
-		// Unix mode bits are not an authority on Windows: Go synthesises FileMode
-		// from the read-only attribute, so a key written 0600 reports 0666 there.
-		// See internal/actionconfirmation/store.go (loadOrCreateKey) for the same
-		// guard and the fuller rationale.
-		permissive := runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0
-		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || permissive {
-			return nil, errors.New("capture attestation key is not a private regular file")
-		}
-		key, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
-		}
+	key, err := memoryReadFile(path, captureAttestationKeyBytes)
+	if err == nil {
 		if len(key) != captureAttestationKeyBytes {
 			return nil, errors.New("capture attestation key has an invalid length")
 		}
 		return key, nil
 	}
-	if key, err := read(); err == nil {
-		return key, nil
-	} else if !errors.Is(err, os.ErrNotExist) {
+	if !create || !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
-	if !create {
-		return nil, errors.New("capture attestation key is unavailable")
-	}
-	key := make([]byte, captureAttestationKeyBytes)
-	if _, err := rand.Read(key); err != nil {
+	key = make([]byte, captureAttestationKeyBytes)
+	if _, err = rand.Read(key); err != nil {
 		return nil, err
 	}
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if errors.Is(err, os.ErrExist) {
-		return read()
+	if err = memoryPublish(path, key, true); errors.Is(err, os.ErrExist) {
+		return attestor.key(workspaceID, false)
 	}
-	if err != nil {
-		return nil, err
-	}
-	if _, err = file.Write(key); err == nil {
-		err = file.Sync()
-	}
-	if closeErr := file.Close(); err == nil {
-		err = closeErr
-	}
-	if err != nil {
-		_ = os.Remove(path)
-		return nil, fmt.Errorf("persist capture attestation key: %w", err)
-	}
-	if syncErr := syncDirectory(directory); syncErr != nil {
-		return nil, fmt.Errorf("sync capture attestation directory: %w", syncErr)
-	}
-	return key, nil
+	return key, err
 }

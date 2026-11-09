@@ -105,35 +105,43 @@ func (b *Bound) Server() *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "maestro-product", Version: "0.1.0"}, nil)
 	readonly := &mcp.ToolAnnotations{ReadOnlyHint: true}
 	empty := map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
-	s.AddTool(&mcp.Tool{Name: "maestro_context", Description: "Read binding metadata and available operations; no content export.", InputSchema: empty, Annotations: readonly}, b.handle("context", empty))
+	s.AddTool(&mcp.Tool{Name: "maestro_context", Description: "Read admitted binding metadata and memory capability hints; inspect maestro_query and maestro_apply schemas for operations. No content export.", InputSchema: empty, Annotations: readonly}, b.handle("context", empty))
 	query := map[string]any{"type": "object", "oneOf": append([]any{
 		variant("execution.list", map[string]any{"offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 128}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 32}}),
 		variant("execution.next", map[string]any{"item_id": strSchema(96)}, "item_id"),
 		variant("execution.contract", map[string]any{"item_id": strSchema(96)}, "item_id"),
-	}, ownerQueries()...)}
-	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read owner metadata/interview questions or paged execution and bounded continuation. Private profile text is available only in trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
-	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Propose owner answers; changes require trusted client review. Mutate execution with revision/attempt checks and artifact snapshot criteria.", InputSchema: applySchema()}, b.handle("apply", applySchema()))
+	}, append(ownerQueries(), memoryQueries()...)...)}
+	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read owner metadata/questions, execution continuation, or eligible workspace memory through bounded pages. Private owner/legacy text requires trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
+	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Apply reviewed owner or memory changes; consolidate local deterministic memory. Execution changes require revision/attempt checks and artifact snapshot criteria.", InputSchema: productApplySchema()}, b.handle("apply", productApplySchema()))
 	b.registerMethods(s)
 	return s
 }
 
 type input struct {
-	Operation        string   `json:"operation"`
-	ItemID           string   `json:"item_id"`
-	ExpectedRevision int      `json:"expected_revision"`
-	AttemptID        string   `json:"attempt_id"`
-	Objective        string   `json:"objective"`
-	NextStep         string   `json:"next_step"`
-	Summary          string   `json:"summary"`
-	Artifacts        []string `json:"artifacts"`
-	CriterionID      string   `json:"criterion_id"`
-	Offset           int      `json:"offset"`
-	Limit            int      `json:"limit"`
-	Track            string   `json:"track"`
-	ProposalID       string   `json:"proposal_id"`
-	Facet            string   `json:"facet"`
-	Evidence         string   `json:"evidence"`
-	ProposedBody     string   `json:"proposed_body"`
+	Text                       string   `json:"text"`
+	CaptureID                  string   `json:"capture_id"`
+	Query                      string   `json:"query"`
+	Cycle                      string   `json:"cycle"`
+	Date                       string   `json:"date"`
+	Cutoff                     string   `json:"cutoff"`
+	ExpectedVisibilityRevision uint64   `json:"expected_visibility_revision"`
+	MaxBytes                   int      `json:"max_bytes"`
+	Operation                  string   `json:"operation"`
+	ItemID                     string   `json:"item_id"`
+	ExpectedRevision           int      `json:"expected_revision"`
+	AttemptID                  string   `json:"attempt_id"`
+	Objective                  string   `json:"objective"`
+	NextStep                   string   `json:"next_step"`
+	Summary                    string   `json:"summary"`
+	Artifacts                  []string `json:"artifacts"`
+	CriterionID                string   `json:"criterion_id"`
+	Offset                     int      `json:"offset"`
+	Limit                      int      `json:"limit"`
+	Track                      string   `json:"track"`
+	ProposalID                 string   `json:"proposal_id"`
+	Facet                      string   `json:"facet"`
+	Evidence                   string   `json:"evidence"`
+	ProposedBody               string   `json:"proposed_body"`
 }
 
 func result(value any, err error) *mcp.CallToolResult {
@@ -187,11 +195,14 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		if d.Decode(new(any)) != io.EOF {
 			return result(nil, errors.New("trailing_input")), nil
 		}
-		if len(req.Params.Arguments) > 16<<10 && in.Operation != "owner.propose" {
+		if len(req.Params.Arguments) > 16<<10 && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" {
 			return result(nil, errors.New("input_size")), nil
 		}
 		if kind == "context" {
-			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "next_max_bytes": 2048}, nil), nil
+			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "next_max_bytes": 2048, "memory": map[string]any{"context_operation": "memory.context", "max_page_bytes": 4096, "synthesis": "local_deterministic", "lifetime": "two_l3_generations_and_exact_owner_review"}}, nil), nil
+		}
+		if strings.HasPrefix(in.Operation, "memory.") {
+			return b.handleMemory(ctx, req, in), nil
 		}
 		if strings.HasPrefix(in.Operation, "owner.") {
 			return b.handleOwner(ctx, req, in), nil
