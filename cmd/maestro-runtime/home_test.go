@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +15,22 @@ import (
 )
 
 func TestHomePathsCompiledCLI(t *testing.T) {
+	// Same bytes at the same name must still expose an atomic replacement.
+	// This also proves the snapshot releases its handle before the transition.
+	controlRoot := homeTestDirectory(t)
+	control, replacement := filepath.Join(controlRoot, "origin"), filepath.Join(controlRoot, "replacement")
+	for _, path := range []string{control, replacement} {
+		if err := scheduler.WriteNewPrivateFile(path, []byte("identity-control")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	controlInfo := homeFileIdentitySnapshot(t, control)
+	if err := os.Rename(replacement, control); err != nil {
+		t.Fatal("closed identity snapshot prevented replacement control", err)
+	}
+	if os.SameFile(controlInfo, homeFileIdentitySnapshot(t, control)) {
+		t.Fatal("identity oracle accepted a same-byte replacement")
+	}
 	user, product, binaries := homeTestDirectory(t), homeTestDirectory(t), homeTestDirectory(t)
 	helper := filepath.Join(binaries, "maestro-runtime")
 	if runtime.GOOS == "windows" {
@@ -61,10 +78,7 @@ func TestHomePathsCompiledCLI(t *testing.T) {
 		t.Fatalf("init readiness: %d %s", code, body)
 	}
 	origin := filepath.Join(home, "brain", ".maestro", "origin.json")
-	beforeInfo, err := os.Stat(origin)
-	if err != nil {
-		t.Fatal(err)
-	}
+	beforeInfo := homeFileIdentitySnapshot(t, origin)
 	before, err := scheduler.ReadPrivateFile(origin, 16<<10)
 	if err != nil {
 		t.Fatal("ready origin lacks actual private admission", err)
@@ -77,10 +91,7 @@ func TestHomePathsCompiledCLI(t *testing.T) {
 	if code, body := invoke("init"); code != 0 {
 		t.Fatalf("idempotent compiled init: %d %s", code, body)
 	}
-	afterInfo, err := os.Stat(origin)
-	if err != nil {
-		t.Fatal(err)
-	}
+	afterInfo := homeFileIdentitySnapshot(t, origin)
 	after, err := scheduler.ReadPrivateFile(origin, 16<<10)
 	if err != nil || !os.SameFile(beforeInfo, afterInfo) || !bytes.Equal(before, after) {
 		t.Fatal("compiled restart/init replaced or changed private origin", err)
@@ -203,4 +214,19 @@ func TestHomeInspectBoundsDiagnostics(t *testing.T) {
 			t.Fatalf("unbounded error: code=%d stdout=%d stderr=%d", code, out.Len(), diagnostic.Len())
 		}
 	}
+}
+
+// File.Stat captures the held object's Windows ID eagerly; pathname Stat may
+// defer that lookup until SameFile. Close before init so the oracle adds no lock.
+func homeFileIdentitySnapshot(t *testing.T, path string) os.FileInfo {
+	t.Helper()
+	file, err := scheduler.OpenRegularFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, statErr := file.Stat()
+	if err := errors.Join(statErr, file.Close()); err != nil {
+		t.Fatal(err)
+	}
+	return info
 }
