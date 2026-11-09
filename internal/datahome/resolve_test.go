@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -49,15 +50,21 @@ func TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator(t *testing.T) {
 				}
 				selected = filepath.Join(opts.SourceRoot, "state")
 			case "linked-home", "linked-missing-ancestor":
-				if runtime.GOOS == "windows" {
-					t.Skip("native reparse tests remain separate")
+				if got, err := datahome.Resolve(opts); err != nil || got.Diagnostic != "fresh-unconfirmed" {
+					t.Fatalf("safe HOME control refused before alias fixture: %+v %v", got, err)
 				}
 				outside := filepath.Join(opts.UserHome, "outside")
 				if err := os.Mkdir(outside, 0700); err != nil {
 					t.Fatal(err)
 				}
-				if err := os.Symlink(outside, home); err != nil {
+				if err := os.WriteFile(filepath.Join(outside, "keep.txt"), []byte("untouched outside bytes"), 0600); err != nil {
 					t.Fatal(err)
+				}
+				initializeDirectoryAlias(t, home, outside)
+				aliasInfo, aliasErr := os.Stat(home)
+				outsideInfo, outsideErr := os.Stat(outside)
+				if aliasErr != nil || outsideErr != nil || !os.SameFile(aliasInfo, outsideInfo) {
+					t.Fatalf("required directory alias not established: %v %v", aliasErr, outsideErr)
 				}
 				if scenario == "linked-missing-ancestor" {
 					selected = filepath.Join(home, "absent")
@@ -75,9 +82,13 @@ func TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator(t *testing.T) {
 				confirm(t, selected)
 			}
 			opts.LookupEnv = func(string) (string, bool) { return selected, true }
+			before := homeSnapshot(t, opts.UserHome)
 			got, err := datahome.Resolve(opts)
 			if err == nil || got.Writable {
 				t.Fatalf("unsafe case accepted: %+v %v", got, err)
+			}
+			if after := homeSnapshot(t, opts.UserHome); !reflect.DeepEqual(before, after) {
+				t.Fatalf("unsafe HOME inspection changed the profile or outside tree: before=%v after=%v", before, after)
 			}
 			if scenario == "locator-missing" && got.Diagnostic != "marker-target-missing" {
 				t.Fatalf("missing marker target fell back: %+v", got)
@@ -153,20 +164,25 @@ func TestResolveMigrationRemainsUnverifiedAndRecordsMustAgree(t *testing.T) {
 }
 
 func TestResolveRejectsPubliclyWritableUserHome(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Unix permission contract")
-	}
 	opts := fixture(t)
-	if err := os.Chmod(opts.UserHome, 0777); err != nil {
+	if err := os.WriteFile(filepath.Join(opts.UserHome, "keep.txt"), []byte("preserve user home"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	if got, err := datahome.Resolve(opts); err != nil || got.Diagnostic != "fresh-unconfirmed" || got.Writable {
+		t.Fatalf("safe userhome fixture was not admitted read-only: %+v %v", got, err)
+	}
+	if runtime.GOOS == "windows" {
+		initializePublicDirectory(t, opts.UserHome)
+	} else if err := os.Chmod(opts.UserHome, 0777); err != nil {
+		t.Fatal(err)
+	}
+	before := homeSnapshot(t, opts.UserHome)
 	got, err := datahome.Resolve(opts)
 	if err == nil || got.Writable {
 		t.Fatalf("writable userhome accepted: %+v %v", got, err)
 	}
-	info, err := os.Stat(opts.UserHome)
-	if err != nil || info.Mode().Perm() != 0777 {
-		t.Fatalf("inspection repaired permissions: %v %v", info, err)
+	if !reflect.DeepEqual(before, homeSnapshot(t, opts.UserHome)) {
+		t.Fatal("unsafe-userhome inspection mutated content, metadata or permissions")
 	}
 }
 
@@ -177,26 +193,36 @@ func confirm(t *testing.T, home string) {
 func TestResolveRediscoversConfirmedNondefaultFromLocator(t *testing.T) {
 	opts := fixture(t)
 	home := filepath.Join(opts.UserHome, "state with spaces")
-	confirm(t, home)
-	record(t, filepath.Join(opts.UserHome, ".maestro-home.json"), map[string]any{"schema_version": 1, "home": home, "attempt_id": ""})
+	opts.LookupEnv = func(string) (string, bool) { return home, true }
+	if _, err := datahome.InitializeFresh(opts); err != nil {
+		t.Fatal(err)
+	}
+	opts.LookupEnv = func(string) (string, bool) { return "", false }
+	root := filepath.Dir(opts.UserHome)
+	before := homeSnapshot(t, root)
 	got, err := datahome.Resolve(opts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if runtime.GOOS == "windows" {
-		if got.Writable || got.Diagnostic != "ownership-unverified" {
-			t.Fatalf("unqualified Windows ownership: %+v", got)
-		}
-		return
-	}
 	if got.Home != home || got.SelectedBy != "marker" || got.Origin != "fresh-confirmed" || !got.Writable || got.Diagnostic != "ready" {
 		t.Fatalf("unexpected locator result: %+v", got)
+	}
+	metadata := filepath.Join(got.BrainRoot, ".maestro")
+	for _, path := range []string{home, got.BrainRoot, metadata, filepath.Join(metadata, "origin.json"), filepath.Join(opts.UserHome, ".maestro-home.json")} {
+		initializePrivateObject(t, path)
+	}
+	if after := homeSnapshot(t, root); !reflect.DeepEqual(before, after) {
+		t.Fatalf("read-only resolution changed original tree: before=%v after=%v", before, after)
 	}
 }
 
 func TestResolveCaseDistinctNondefaultCannotBypassLocator(t *testing.T) {
 	opts := fixture(t)
-	defaultHome, selected := caseDistinctHomes(t, opts.UserHome)
+	defaultHome, selected, distinct := caseDistinctHomes(t, opts.UserHome)
+	if !distinct {
+		t.Run("same-object-case-contract", func(t *testing.T) { assertCaseAliasLocatorContract(t, opts, defaultHome, selected) })
+		t.Skip("filesystem resolves case variants to the same object")
+	}
 	confirm(t, selected)
 	opts.LookupEnv = func(string) (string, bool) { return selected, true }
 	got, err := datahome.Resolve(opts)
@@ -207,7 +233,11 @@ func TestResolveCaseDistinctNondefaultCannotBypassLocator(t *testing.T) {
 
 func TestResolveCaseDistinctLocatorCannotAuthorizeDifferentHome(t *testing.T) {
 	opts := fixture(t)
-	markerHome, selected := caseDistinctHomes(t, opts.UserHome)
+	markerHome, selected, distinct := caseDistinctHomes(t, opts.UserHome)
+	if !distinct {
+		t.Run("same-object-case-contract", func(t *testing.T) { assertCaseAliasLocatorContract(t, opts, markerHome, selected) })
+		t.Skip("filesystem resolves case variants to the same object")
+	}
 	confirm(t, markerHome)
 	confirm(t, selected)
 	record(t, filepath.Join(opts.UserHome, ".maestro-home.json"), map[string]any{"schema_version": 1, "home": markerHome, "attempt_id": ""})
@@ -218,7 +248,7 @@ func TestResolveCaseDistinctLocatorCannotAuthorizeDifferentHome(t *testing.T) {
 	}
 }
 
-func caseDistinctHomes(t *testing.T, userHome string) (string, string) {
+func caseDistinctHomes(t *testing.T, userHome string) (string, string, bool) {
 	t.Helper()
 	lower, upper := filepath.Join(userHome, ".maestro"), filepath.Join(userHome, ".MAESTRO")
 	for _, path := range []string{lower, upper} {
@@ -234,10 +264,62 @@ func caseDistinctHomes(t *testing.T, userHome string) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if os.SameFile(lowerInfo, upperInfo) {
-		t.Skip("filesystem resolves case variants to the same object")
+	return lower, upper, !os.SameFile(lowerInfo, upperInfo)
+}
+
+func recordCasePairEvidence(t *testing.T, selected, counterpart string, same bool) {
+	t.Helper()
+	a, err := os.Stat(selected)
+	if err != nil {
+		t.Fatal(err)
 	}
-	return lower, upper
+	b, err := os.Stat(counterpart)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selectedID, counterpartID := initializeDirectoryIdentity(t, selected), initializeDirectoryIdentity(t, counterpart)
+	if selected == counterpart || !filepath.IsAbs(selected) || !filepath.IsAbs(counterpart) || os.SameFile(a, b) != same || (selectedID == counterpartID) != same {
+		t.Fatal("selected case-pair native identity was not established")
+	}
+	body, err := json.Marshal(map[string]any{"kind": "selected-directory-case-pair-v1", "scope": t.Name(), "selected": selected, "counterpart": counterpart, "selected_identity": selectedID, "counterpart_identity": counterpartID, "same_object": same})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("case_pair_evidence=%s", body)
+}
+
+func assertCaseAliasLocatorContract(t *testing.T, opts datahome.Options, lower, upper string) {
+	t.Helper()
+	if got, err := datahome.InitializeFresh(opts); err != nil || !got.Writable {
+		t.Fatalf("ordinary HOME positive control failed: %+v %v", got, err)
+	}
+	opts.LookupEnv = func(string) (string, bool) { return upper, true }
+	before := homeSnapshot(t, opts.UserHome)
+	if got, err := datahome.Resolve(opts); err != nil || !got.Writable || got.Diagnostic != "ready" || got.Home != upper {
+		t.Fatalf("same-object default case spelling lost authority: %+v %v", got, err)
+	}
+	if after := homeSnapshot(t, opts.UserHome); !reflect.DeepEqual(before, after) {
+		t.Fatal("case alias read changed HOME state")
+	}
+	record(t, filepath.Join(opts.UserHome, ".maestro-home.json"), map[string]any{"schema_version": 1, "home": lower, "attempt_id": ""})
+	before = homeSnapshot(t, opts.UserHome)
+	if got, err := datahome.Resolve(opts); err != nil || !got.Writable || got.Diagnostic != "ready" {
+		t.Fatalf("same-object locator spelling was not recognized: %+v %v", got, err)
+	}
+	if after := homeSnapshot(t, opts.UserHome); !reflect.DeepEqual(before, after) {
+		t.Fatal("case alias locator read changed HOME state")
+	}
+	other := filepath.Join(opts.UserHome, "different actual HOME")
+	confirm(t, other)
+	record(t, filepath.Join(opts.UserHome, ".maestro-home.json"), map[string]any{"schema_version": 1, "home": other, "attempt_id": ""})
+	before = homeSnapshot(t, opts.UserHome)
+	if got, err := datahome.Resolve(opts); err == nil || got.Writable || got.Diagnostic != "marker-conflict" {
+		t.Fatalf("locator authorized a different actual HOME: %+v %v", got, err)
+	}
+	if after := homeSnapshot(t, opts.UserHome); !reflect.DeepEqual(before, after) {
+		t.Fatal("conflicting locator refusal changed profile or HOME")
+	}
+	recordCasePairEvidence(t, upper, lower, true)
 }
 
 func fixture(t *testing.T) datahome.Options {

@@ -51,7 +51,7 @@ func externalRegular(info os.FileInfo, private bool) error {
 	return nil
 }
 
-func externalAcquire(e *engine, attempt string) (func(), error) {
+func externalAcquire(e *externalTree, attempt string) (func(), error) {
 	if err := externalProfileControls(e.project, attempt); err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func externalAcquire(e *engine, attempt string) (func(), error) {
 	if err := e.check(name); err != nil {
 		return nil, err
 	}
-	if err := externalMkdirAll(e, path.Dir(name)); err != nil {
+	if err := e.mkdir(path.Dir(name)); err != nil {
 		return nil, err
 	}
 	f, err := e.root.OpenFile(name, os.O_RDWR|os.O_CREATE|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0600)

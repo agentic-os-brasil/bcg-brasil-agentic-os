@@ -2,6 +2,7 @@ package ownerctx
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 const (
@@ -20,8 +23,14 @@ const (
 	maximumPromptBytes         = 64 << 10
 	maximumPromptEntries       = 10000
 	maximumPromptStoreBytes    = 8 << 20
-	maximumPromptPacketCount   = 8
-	maximumPromptPacketBytes   = 32 << 10
+	// Legal metadata is at most 975 bytes including JSON syntax and newline:
+	// five 128-byte nonescaping identifiers, SHA64, language17, fixed enums,
+	// RFC3339Nano35 and field names. Keep a 2 KiB envelope for those fields.
+	maximumPromptMetadataBytes        = 2 << 10
+	maximumPromptSerializedEntryBytes = 6*maximumPromptBytes + maximumPromptMetadataBytes
+	maximumPromptSerializedStoreBytes = 6*maximumPromptStoreBytes + maximumPromptEntries*maximumPromptMetadataBytes
+	maximumPromptPacketCount          = 8
+	maximumPromptPacketBytes          = 32 << 10
 )
 
 type PromptScopeKind string
@@ -149,15 +158,12 @@ func ConfigurePromptHistory(root string, config PromptHistoryConfig) error {
 }
 
 func LoadPromptHistoryConfig(root string) (PromptHistoryConfig, error) {
-	_, configPath, err := ensurePromptHistoryStore(root)
-	if err != nil {
-		return PromptHistoryConfig{}, err
-	}
-	return loadPromptHistoryConfig(configPath)
+	_, config, err := readPromptHistorySnapshot(root)
+	return config, err
 }
 
 func loadPromptHistoryConfig(configPath string) (PromptHistoryConfig, error) {
-	body, err := os.ReadFile(configPath)
+	body, err := readOwnerFile(configPath, 16<<10)
 	if err != nil {
 		return PromptHistoryConfig{}, err
 	}
@@ -219,77 +225,93 @@ func validPromptScope(kind PromptScopeKind, id string) bool {
 	}
 }
 
-func ensurePromptHistoryStore(root string) (string, string, error) {
+func promptHistoryPaths(root string) (string, string, error) {
 	if strings.TrimSpace(root) == "" {
 		return "", "", errors.New("prompt history root is required")
 	}
-	rootPath, err := filepath.Abs(root)
+	absolute, err := filepath.Abs(root)
 	if err != nil {
 		return "", "", err
 	}
-	if err := ensurePromptDirectory(rootPath, false); err != nil {
+	absolute, err = scheduler.CanonicalPrivatePath(absolute)
+	if err != nil {
 		return "", "", err
 	}
-	ownerPath := filepath.Join(rootPath, "owner")
-	if err := ensurePromptDirectory(ownerPath, true); err != nil {
-		return "", "", err
-	}
-	historyPath := filepath.Join(ownerPath, "prompt-history")
-	if err := ensurePromptDirectory(historyPath, true); err != nil {
-		return "", "", err
-	}
-	entriesPath := filepath.Join(historyPath, "entries.jsonl")
-	configPath := filepath.Join(historyPath, "config.json")
-	if err := ensurePromptFile(entriesPath); err != nil {
-		return "", "", err
-	}
-	if err := ensurePromptFile(configPath); err != nil {
-		return "", "", err
-	}
-	if info, err := os.Stat(configPath); err == nil && info.Size() == 0 {
-		if err := writePrivateJSON(configPath, DefaultPromptHistoryConfig()); err != nil {
-			return "", "", err
-		}
-	}
-	return entriesPath, configPath, nil
+	directory := filepath.Join(absolute, "owner", "prompt-history")
+	return filepath.Join(directory, "entries.jsonl"), filepath.Join(directory, "config.json"), nil
 }
 
-func ensurePromptDirectory(path string, private bool) error {
-	info, err := os.Lstat(path)
-	if errors.Is(err, os.ErrNotExist) {
-		if err := os.MkdirAll(path, 0o700); err != nil {
-			return err
-		}
-		info, err = os.Lstat(path)
-	}
+func ensurePromptHistoryStore(root string) (string, string, error) {
+	entries, config, err := promptHistoryPaths(root)
 	if err != nil {
-		return err
+		return "", "", err
 	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-		return fmt.Errorf("prompt history path is not a private directory: %s", path)
+	err = withPromptHistoryLock(root, func(string, string) error { return nil })
+	return entries, config, err
+}
+
+// Only a writer that observed the absent directory may initialize domain files.
+// An established partial store is evidence of interruption, never a fresh store.
+func initializePromptHistoryFiles(entries, config string, fresh bool) error {
+	_, entriesErr := os.Lstat(entries)
+	_, configErr := os.Lstat(config)
+	if fresh && errors.Is(entriesErr, os.ErrNotExist) && errors.Is(configErr, os.ErrNotExist) {
+		if err := publishOwnerFile(entries, nil, true); err != nil {
+			return fmt.Errorf("prompt history entries initialization: %w", err)
+		}
+		if err := writePrivateJSONIfAbsent(config, DefaultPromptHistoryConfig()); err != nil {
+			return fmt.Errorf("prompt history config initialization: %w", err)
+		}
+	} else if entriesErr != nil || configErr != nil {
+		return fmt.Errorf("prompt history incomplete store: %w", errors.Join(entriesErr, configErr))
 	}
-	if private {
-		return os.Chmod(path, 0o700)
+	if _, err := readPromptHistoryEntries(entries); err != nil {
+		return fmt.Errorf("prompt history entries admission: %w", err)
+	}
+	if _, err := loadPromptHistoryConfig(config); err != nil {
+		return fmt.Errorf("prompt history config admission: %w", err)
 	}
 	return nil
 }
 
-func ensurePromptFile(path string) error {
-	info, err := os.Lstat(path)
-	if errors.Is(err, os.ErrNotExist) {
-		file, createErr := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-		if createErr != nil {
-			return createErr
-		}
-		return file.Close()
-	}
+// No domain preparation or attribute repair is performed by a snapshot read.
+func readPromptHistorySnapshot(root string) ([]PromptHistoryEntry, PromptHistoryConfig, error) {
+	entries, config, err := promptHistoryPaths(root)
 	if err != nil {
-		return err
+		return nil, PromptHistoryConfig{}, err
 	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return fmt.Errorf("prompt history path is not a private regular file: %s", path)
+	directory := filepath.Dir(entries)
+	if _, err := os.Lstat(directory); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, PromptHistoryConfig{}, err
+		}
+		// Validate the closest existing ancestor without creating a missing one.
+		ancestor := filepath.Dir(directory)
+		for {
+			if _, err := os.Lstat(ancestor); err == nil {
+				if err := scheduler.ValidateDirectory(ancestor); err != nil {
+					return nil, PromptHistoryConfig{}, err
+				}
+				return []PromptHistoryEntry{}, DefaultPromptHistoryConfig(), nil
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return nil, PromptHistoryConfig{}, err
+			}
+			ancestor = filepath.Dir(ancestor)
+		}
 	}
-	return os.Chmod(path, 0o600)
+	if err := scheduler.ValidatePrivateDirectory(directory); err != nil {
+		return nil, PromptHistoryConfig{}, err
+	}
+	unlock, err := acquireExistingOwnerTransition(filepath.Join(directory, promptHistoryLockName))
+	if err != nil {
+		return nil, PromptHistoryConfig{}, fmt.Errorf("prompt history snapshot lock: %w", err)
+	}
+	configuration, configErr := loadPromptHistoryConfig(config)
+	records, readErr := readPromptHistoryEntries(entries)
+	if err := errors.Join(configErr, readErr, unlock()); err != nil {
+		return nil, PromptHistoryConfig{}, fmt.Errorf("prompt history snapshot: %w", err)
+	}
+	return records, configuration, nil
 }
 
 func RecordUserPrompt(root string, input PromptHistoryInput) (PromptHistoryReceipt, error) {
@@ -375,11 +397,7 @@ func RecordUserPrompt(root string, input PromptHistoryInput) (PromptHistoryRecei
 }
 
 func InspectPromptHistory(root string) ([]PromptHistoryReceipt, error) {
-	entriesPath, _, err := ensurePromptHistoryStore(root)
-	if err != nil {
-		return nil, err
-	}
-	entries, err := readPromptHistoryEntries(entriesPath)
+	entries, _, err := readPromptHistorySnapshot(root)
 	if err != nil {
 		return nil, err
 	}
@@ -398,29 +416,20 @@ func PromptHistoryOccurrenceExists(root, ownerID, occurrenceID string) (bool, er
 	if !observationIdentifier.MatchString(ownerID) || !observationIdentifier.MatchString(occurrenceID) {
 		return false, errors.New("prompt history occurrence identity is invalid")
 	}
-	found := false
-	err := withPromptHistoryLock(root, func(entriesPath, _ string) error {
-		entries, err := readPromptHistoryEntries(entriesPath)
-		if err != nil {
-			return err
+	entries, _, err := readPromptHistorySnapshot(root)
+	if err != nil {
+		return false, err
+	}
+	for _, entry := range entries {
+		if entry.OwnerID == ownerID && entry.OccurrenceID == occurrenceID {
+			return true, nil
 		}
-		for _, entry := range entries {
-			if entry.OwnerID == ownerID && entry.OccurrenceID == occurrenceID {
-				found = true
-				break
-			}
-		}
-		return nil
-	})
-	return found, err
+	}
+	return false, nil
 }
 
 func ExportPromptHistory(root string) ([]PromptHistoryEntry, error) {
-	entriesPath, _, err := ensurePromptHistoryStore(root)
-	if err != nil {
-		return nil, err
-	}
-	entries, err := readPromptHistoryEntries(entriesPath)
+	entries, _, err := readPromptHistorySnapshot(root)
 	if err != nil {
 		return nil, err
 	}
@@ -475,11 +484,7 @@ func SelectPromptHistory(root string, limits PromptHistorySelectionLimits, now t
 }
 
 func SelectRelevantPromptHistory(root string, limits PromptHistorySelectionLimits, now time.Time) ([]PromptHistorySelection, error) {
-	entriesPath, _, err := ensurePromptHistoryStore(root)
-	if err != nil {
-		return nil, err
-	}
-	config, err := LoadPromptHistoryConfig(root)
+	entries, config, err := readPromptHistorySnapshot(root)
 	if err != nil {
 		return nil, err
 	}
@@ -500,10 +505,6 @@ func SelectRelevantPromptHistory(root string, limits PromptHistorySelectionLimit
 	}
 	if !observationIdentifier.MatchString(limits.OwnerID) {
 		return nil, errors.New("prompt history selection owner is invalid")
-	}
-	entries, err := readPromptHistoryEntries(entriesPath)
-	if err != nil {
-		return nil, err
 	}
 	if config.OwnerID != "" && config.OwnerID != limits.OwnerID {
 		return nil, errors.New("prompt history selection owner does not match this store")
@@ -602,16 +603,12 @@ func retainPromptHistory(entries []PromptHistoryEntry, config PromptHistoryConfi
 }
 
 func readPromptHistoryEntries(path string) ([]PromptHistoryEntry, error) {
-	if err := ensurePromptFile(path); err != nil {
-		return nil, err
-	}
-	file, err := os.Open(path)
+	body, err := readOwnerFile(path, maximumPromptSerializedStoreBytes)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 4096), maximumPromptBytes+4096)
+	scanner := bufio.NewScanner(bytes.NewReader(body))
+	scanner.Buffer(make([]byte, 4096), maximumPromptSerializedEntryBytes)
 	entries := []PromptHistoryEntry{}
 	ownerID := ""
 	for scanner.Scan() {
@@ -636,19 +633,34 @@ func readPromptHistoryEntries(path string) ([]PromptHistoryEntry, error) {
 }
 
 func writePromptHistoryEntries(path string, entries []PromptHistoryEntry) error {
-	if err := ensurePromptFile(path); err != nil {
-		return err
-	}
 	var body strings.Builder
 	for _, entry := range entries {
+		if err := validatePromptHistoryEntry(entry); err != nil {
+			return err
+		}
+		metadata := entry
+		metadata.Prompt = ""
+		envelope, err := json.Marshal(metadata)
+		if err != nil {
+			return err
+		}
+		if len(envelope)+1 > maximumPromptMetadataBytes {
+			return errors.New("prompt history metadata exceeds its serialized envelope")
+		}
 		encoded, err := json.Marshal(entry)
 		if err != nil {
 			return err
 		}
+		if len(encoded)+1 > maximumPromptSerializedEntryBytes || body.Len()+len(encoded)+1 > maximumPromptSerializedStoreBytes {
+			return errors.New("prompt history exceeds its serialized envelope")
+		}
 		body.Write(encoded)
 		body.WriteByte('\n')
 	}
-	return atomicPrivateWrite(path, []byte(body.String()))
+	if err := atomicPrivateWrite(path, []byte(body.String())); err != nil {
+		return fmt.Errorf("prompt history entries publication: %w", err)
+	}
+	return nil
 }
 
 func validatePromptHistoryEntry(entry PromptHistoryEntry) error {
@@ -677,4 +689,24 @@ func minInt(left, right int) int {
 		return left
 	}
 	return right
+}
+
+func ensurePromptDirectory(path string, private bool) error {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			return err
+		}
+		info, err = os.Lstat(path)
+	}
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("prompt history path is not a private directory: %s", path)
+	}
+	if private {
+		return os.Chmod(path, 0o700)
+	}
+	return nil
 }

@@ -54,7 +54,7 @@ func runMethodDiscovery(t *testing.T, stdio bool) {
 	ctx := context.Background()
 	var transport mcp.Transport
 	if stdio {
-		binary := filepath.Join(base, "maestro-mcp")
+		binary := filepath.Join(base, productTestBinaryName())
 		if out, err := exec.Command("go", "build", "-o", binary, "./cmd/maestro-mcp").CombinedOutput(); err != nil {
 			t.Fatalf("build: %s: %v", out, err)
 		}
@@ -62,7 +62,7 @@ func runMethodDiscovery(t *testing.T, stdio bool) {
 		if err := packaging.BuildPlugin(packaging.Options{Destination: packet, Server: binary, Version: "0.2.0", Binding: options}); err != nil {
 			t.Fatal(err)
 		}
-		transport = &mcp.CommandTransport{Command: exec.Command(filepath.Join(packet, "scripts", "maestro-mcp"), "serve", "--product-root", prod, "--user-home", home, "--workspace", ws), TerminateDuration: time.Second}
+		transport = &mcp.CommandTransport{Command: exec.Command(filepath.Join(packet, "scripts", productTestBinaryName()), "serve", "--product-root", prod, "--user-home", home, "--workspace", ws), TerminateDuration: time.Second}
 	} else {
 		b, err := product.Open(options)
 		if err != nil {

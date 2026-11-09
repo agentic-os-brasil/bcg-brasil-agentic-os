@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -29,9 +28,6 @@ const ownerReviewFixtureSuffix = "\n\"Revisão autorizada\" <conteúdo> & colabo
 
 func newOwnerFixture(t *testing.T, stdio bool) ownerFixture {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("verified owner admission unavailable")
-	}
 	base := physicalTempDir(t)
 	f := ownerFixture{options: product.Options{ProductRoot: filepath.Join(base, "product"), UserHome: filepath.Join(base, "user"), WorkspacePath: filepath.Join(base, "workspace"), LookupEnv: func(string) (string, bool) { return "", false }}}
 	for _, p := range []string{f.options.ProductRoot, f.options.UserHome} {
@@ -43,7 +39,7 @@ func newOwnerFixture(t *testing.T, stdio bool) ownerFixture {
 		t.Fatal(err)
 	}
 	if stdio {
-		f.binary = filepath.Join(base, "maestro-mcp")
+		f.binary = filepath.Join(base, productTestBinaryName())
 		build := exec.Command("go", "build", "-o", f.binary, "./cmd/maestro-mcp")
 		if out, err := build.CombinedOutput(); err != nil {
 			t.Fatalf("build: %s %v", out, err)

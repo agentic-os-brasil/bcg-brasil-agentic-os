@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
@@ -39,4 +40,45 @@ func TestInitializeFreshPartialFailureNeverGrantsAuthorityOrErasesForeignState(t
 	if readErr != nil || string(body) != "foreign original" {
 		t.Fatalf("foreign data modified: %q %v", body, readErr)
 	}
+}
+
+func initializePrivateObject(t *testing.T, path string) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := os.FileMode(0600)
+	if info.IsDir() {
+		want = 0700
+	}
+	if info.Mode().Perm() != want {
+		t.Fatalf("private mode for %s = %04o, want %04o", path, info.Mode().Perm(), want)
+	}
+}
+func initializeDirectoryAlias(t *testing.T, alias, target string) {
+	t.Helper()
+	if err := os.Symlink(target, alias); err != nil {
+		t.Fatal(err)
+	}
+}
+func initializePublicDirectory(t *testing.T, path string) {
+	t.Helper()
+	if err := os.Chmod(path, 0755); err != nil {
+		t.Fatal(err)
+	}
+}
+func initializeSecuritySnapshot(t *testing.T, path string) string { t.Helper(); return "" }
+
+func initializeDirectoryIdentity(t *testing.T, path string) [3]uint64 {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	native, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		t.Fatal("actual directory identity unavailable")
+	}
+	return [3]uint64{uint64(native.Dev), uint64(native.Ino) >> 32, uint64(native.Ino) & 0xffffffff}
 }
