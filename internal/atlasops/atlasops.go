@@ -117,6 +117,7 @@ type Engine struct {
 	now              func() time.Time
 	workspace        *workspaceScope
 	boundDirectories []os.FileInfo
+	workspacePolicy  WorkspacePolicy
 	// afterPageEffect permits deterministic interruption tests without an
 	// exposed runtime option or model-controlled failure switch.
 	afterPageEffect func() error
@@ -147,6 +148,14 @@ func Open(dataRoot string, now func() time.Time) (*Engine, error) {
 // not revocation. Attended writes carry the owner's own request and need no
 // further authority.
 func (engine *Engine) authorize(provenance Provenance, operation, page string) error {
+	if err := engine.admitWorkspacePage(page); err != nil {
+		return err
+	}
+	if engine.workspacePolicy.BeforeMutation != nil {
+		if err := engine.workspacePolicy.BeforeMutation(); err != nil {
+			return err
+		}
+	}
 	if provenance.Origin != OriginGrant {
 		return nil
 	}
@@ -308,7 +317,7 @@ func (engine *Engine) AppendEntry(request AppendEntryRequest) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	updated, err := insertUnderSection(current, section, entry)
+	updated, err := PreviewAppend(current, section, entry)
 	if err != nil {
 		return Result{}, err
 	}
@@ -316,6 +325,17 @@ func (engine *Engine) AppendEntry(request AppendEntryRequest) (Result, error) {
 	return engine.commitEdit(commitRequest{operation: "append-entry", operationID: operationID,
 		page: relative, current: current, updated: updated, changed: true,
 		expectedRevision: request.ExpectedRevision, provenance: request.Provenance, requestDigest: requestDigest})
+}
+
+// PreviewAppend computes the exact section edit without acquiring authority or
+// touching disk. Attended adapters can present the same body the writer uses.
+func PreviewAppend(body, section, entry string) (string, error) {
+	section = strings.TrimRight(section, " \t\r")
+	entry = strings.TrimRight(entry, "\r\n")
+	if !strings.HasPrefix(section, "#") || strings.ContainsAny(section, "\r\n") || strings.TrimSpace(entry) == "" || len(entry) > maximumEntryBytes {
+		return "", errors.New("atlas append requires one existing heading and a bounded entry")
+	}
+	return insertUnderSection(body, section, entry)
 }
 
 // insertUnderSection places the entry at the end of the named section, leaving
@@ -326,7 +346,7 @@ func insertUnderSection(body, section, entry string) (string, error) {
 	start := -1
 	matches := 0
 	for index, line := range lines {
-		if strings.TrimRight(line, " \t") == section {
+		if strings.TrimRight(line, " \t\r") == section {
 			matches++
 			if start < 0 {
 				start = index
@@ -346,7 +366,7 @@ func insertUnderSection(body, section, entry string) (string, error) {
 	level := len(section) - len(strings.TrimLeft(section, "#"))
 	end := len(lines)
 	for index := start + 1; index < len(lines); index++ {
-		trimmed := strings.TrimRight(lines[index], " \t")
+		trimmed := strings.TrimRight(lines[index], " \t\r")
 		if !strings.HasPrefix(trimmed, "#") {
 			continue
 		}
@@ -361,9 +381,27 @@ func insertUnderSection(body, section, entry string) (string, error) {
 	for insert > start+1 && strings.TrimSpace(lines[insert-1]) == "" {
 		insert--
 	}
-	updated := make([]string, 0, len(lines)+1)
+	// Existing line strings retain their original CR bytes. Only the new entry
+	// adopts the selected heading's line ending; surrounding mixed/LF/CRLF
+	// source remains byte-for-byte unchanged.
+	crlf := strings.HasSuffix(lines[start], "\r")
+	if start == len(lines)-1 && start > 0 {
+		crlf = strings.HasSuffix(lines[start-1], "\r")
+	}
+	entries := strings.Split(strings.ReplaceAll(entry, "\r\n", "\n"), "\n")
+	if crlf {
+		if insert == len(lines) && insert > 0 && !strings.HasSuffix(lines[insert-1], "\r") {
+			lines[insert-1] += "\r"
+		}
+		for index := range entries {
+			if index < len(entries)-1 || insert < len(lines) {
+				entries[index] += "\r"
+			}
+		}
+	}
+	updated := make([]string, 0, len(lines)+len(entries))
 	updated = append(updated, lines[:insert]...)
-	updated = append(updated, entry)
+	updated = append(updated, entries...)
 	updated = append(updated, lines[insert:]...)
 	return strings.Join(updated, "\n"), nil
 }
@@ -374,6 +412,9 @@ func (engine *Engine) resolve(page string) (string, error) {
 		return "", err
 	}
 	if err := engine.validateBinding(); err != nil {
+		return "", err
+	}
+	if err := engine.admitWorkspacePage(page); err != nil {
 		return "", err
 	}
 	trimmed := strings.TrimSpace(page)
@@ -405,8 +446,14 @@ func (engine *Engine) read(relative string) (string, error) {
 	if err := engine.validateBinding(); err != nil {
 		return "", err
 	}
+	if err := engine.admitWorkspacePage(relative); err != nil {
+		return "", err
+	}
 	body, err := readAtlasFile(engine.pagePath(relative), maximumPageBytes, engine.workspace != nil)
 	if err != nil {
+		return "", err
+	}
+	if err = engine.admitWorkspacePage(relative); err != nil {
 		return "", err
 	}
 	return string(body), nil
@@ -419,6 +466,12 @@ func (engine *Engine) operationID(operation, page, key string) string {
 // recordedResult replays a completed operation instead of repeating it, so a
 // retry of the same idempotency key converges rather than duplicating.
 func (engine *Engine) recordedResult(operationID, requestDigest string) (Result, bool, error) {
+	return engine.recordedResultChecked(operationID, requestDigest, nil)
+}
+
+// A checked replay never finalizes or returns a receipt before the caller's
+// owning, locked endpoint authority has been revalidated.
+func (engine *Engine) recordedResultChecked(operationID, requestDigest string, validate func() error) (Result, bool, error) {
 	if err := engine.validateBinding(); err != nil {
 		return Result{}, false, err
 	}
@@ -467,6 +520,11 @@ func (engine *Engine) recordedResult(operationID, requestDigest string) (Result,
 		}
 		switch currentRevision {
 		case entry.Prepared.AfterRevision:
+			if validate != nil {
+				if err := validate(); err != nil {
+					return Result{}, false, err
+				}
+			}
 			if err := engine.record(entry.Result, requestDigest); err != nil {
 				return Result{}, false, err
 			}
@@ -480,6 +538,11 @@ func (engine *Engine) recordedResult(operationID, requestDigest string) (Result,
 		}
 	} else if entry.Prepared != nil {
 		return Result{}, false, errors.New("atlas completed journal contains pending state")
+	}
+	if validate != nil {
+		if err := validate(); err != nil {
+			return Result{}, false, err
+		}
 	}
 	replayed := entry.Result
 	if replayed.State == StateWritten {
