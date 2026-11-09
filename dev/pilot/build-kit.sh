@@ -12,10 +12,16 @@ DEV="$(cd "$HOME/Developer" && pwd -P)"
 PARENT="$(cd "$(dirname "$OUT")" && pwd -P)"
 case "$PARENT/" in "$DEV/"|"$DEV/"*) ;; *) echo 'O destino físico deve permanecer dentro de ~/Developer.' >&2; exit 1;; esac
 OUT="$PARENT/$(basename "$OUT")"
-[[ ! -e "$OUT.zip" ]] || { echo 'O ZIP já existe; preserve-o e escolha outro destino.' >&2; exit 1; }
+ZIP="$OUT.zip"
+[[ ! -e "$ZIP" && ! -L "$ZIP" ]] || { echo 'O ZIP já existe; preserve-o e escolha outro destino.' >&2; exit 1; }
+[[ ! -e "$ZIP.sha256" && ! -L "$ZIP.sha256" ]] || { echo 'O checksum já existe; preserve-o e escolha outro destino.' >&2; exit 1; }
 
 [[ -z "$(git -C "$SOURCE" status --porcelain --untracked-files=all)" ]] || { echo 'Use uma revisão commitada e limpa; preserve o trabalho local.' >&2; exit 1; }
-mkdir -p "$OUT/bin"
+if ! mkdir "$OUT"; then
+  echo 'O destino foi ocupado antes da reivindicação exclusiva; preserve o vencedor e escolha outra pasta.' >&2
+  exit 1
+fi
+mkdir "$OUT/bin"
 (cd "$SOURCE/adapters/mcp" && GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -o "$OUT/bin/maestro-mcp-darwin-arm64" ./cmd/maestro-mcp)
 (cd "$SOURCE/adapters/mcp" && GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o "$OUT/bin/maestro-mcp-darwin-amd64" ./cmd/maestro-mcp)
 (cd "$SOURCE/adapters/mcp" && GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o "$OUT/bin/maestro-mcp-windows-amd64.exe" ./cmd/maestro-mcp)
@@ -54,8 +60,38 @@ SOURCE_TREE="$(git -C "$SOURCE" rev-parse HEAD^{tree})"
 CONTENT_ID="$(shasum -a 256 "$OUT/SHA256SUMS")"
 printf '%s\n' "${CONTENT_ID%% *}" > "$OUT/KIT-ID.txt"
 (cd "$OUT" && shasum -a 256 -c SHA256SUMS)
-ZIP="${OUT%/}.zip"
-[[ ! -e "$ZIP" ]] || { echo 'O arquivo ZIP de destino já existe; preserve-o e use um destino novo.' >&2; exit 1; }
-COPYFILE_DISABLE=1 /usr/bin/ditto -c -k --norsrc --keepParent "$OUT" "$ZIP"
-(cd "$(dirname "$ZIP")" && shasum -a 256 "$(basename "$ZIP")") > "$ZIP.sha256"
+STAGE="$(mktemp -d "$PARENT/.maestro-pilot-archive.XXXXXXXX")"
+STAGED_ZIP="$STAGE/$(basename "$ZIP")"
+printf 'Staging de publicação retido para inspeção: %s\n' "$STAGE"
+COPYFILE_DISABLE=1 /usr/bin/ditto -c -k --norsrc --keepParent "$OUT" "$STAGED_ZIP"
+python3 - "$STAGED_ZIP" "$ZIP" "$ZIP.sha256" <<'PUBLISH_ARCHIVE_PY'
+import hashlib
+import os
+from pathlib import Path
+import sys
+
+staged, archive, sidecar = map(Path, sys.argv[1:])
+def digest(path):
+    value = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1 << 20), b""):
+            value.update(block)
+    return value.hexdigest()
+
+try:
+    expected = digest(staged)
+    checksum = expected + "  " + archive.name + "\n"
+    staged_sidecar = staged.parent / "checksum.sha256"
+    with staged_sidecar.open("x", encoding="utf-8", newline="\n") as stream:
+        stream.write(checksum)
+    # os.link has no directory-target fallback and never replaces an entry.
+    os.link(staged, archive, follow_symlinks=False)
+    os.link(staged_sidecar, sidecar, follow_symlinks=False)
+    if digest(archive) != expected or sidecar.read_text(encoding="utf-8") != checksum:
+        raise OSError("published bytes changed before readback")
+except OSError as error:
+    print("Publicação pendente: destinos existentes e bytes parciais foram preservados; escolha um destino novo. " + str(error), file=sys.stderr)
+    print("Staging retido: " + str(staged.parent), file=sys.stderr)
+    sys.exit(1)
+PUBLISH_ARCHIVE_PY
 printf '\nKit: %s\nChecksum do ZIP: %s.sha256\n' "$ZIP" "$ZIP"

@@ -19,7 +19,12 @@ The existing constructor produces Darwin arm64, Darwin amd64 and Windows amd64
 executables. It records the exact source commit/tree, target and trust class in
 ARTIFACT.txt, file hashes in SHA256SUMS, a checksum-bound KIT-ID, and the final ZIP
 digest. Cross-compilation is not native execution or platform signing. Failed
-assembly retains a partial directory and never replaces an existing artifact.
+assembly retains partial material and never replaces an existing artifact.
+The output directory is claimed exclusively. ZIP and checksum publication use
+no-replace hard links from private adjacent staging, which is retained for
+inspection. These are separate final leaves: if checksum publication refuses,
+the new ZIP may already exist. Preserve both results and choose a new output;
+there is no pathname-based failure cleanup.
 
 After the separately integrated passive-context implementation is available,
 the publisher can explicitly select it:
