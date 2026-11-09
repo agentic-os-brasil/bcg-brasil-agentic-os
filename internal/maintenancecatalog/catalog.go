@@ -11,6 +11,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strings"
 )
 
 const (
@@ -36,6 +37,7 @@ var (
 	validScopes     = map[string]bool{"owner": true, "workspace": true, "managed": true}
 	validUnattended = map[string]bool{"deterministic_only": true, "policy_gated": true, "never": true}
 	validWrites     = map[string]bool{
+		"derived_health_cache": true, "bounded_assessment": true,
 		"none": true, "memory_l1": true, "memory_rollups": true, "wiki_private": true,
 		"runtime_index": true, "owner_observation": true, "local_diagnostics": true, "memory_checkpoint": true,
 		"source_custody": true, "candidate_plan": true,
@@ -148,6 +150,9 @@ func (catalog Catalog) Validate() error {
 			}
 			writes[write] = true
 		}
+		if (writes["derived_health_cache"] || writes["bounded_assessment"]) && job.ID != "darwin-housekeeping-daily" && job.ID != "darwin-deep-weekly" && job.ID != "darwin-structural-evolution-proposal" {
+			return errors.New("Darwin effects belong only to the three closed Darwin jobs")
+		}
 		if writes["none"] && len(writes) != 1 {
 			return fmt.Errorf("maintenance job %q cannot combine none with concrete writes", job.ID)
 		}
@@ -168,6 +173,16 @@ func (catalog Catalog) Validate() error {
 
 func validateRequiredJobInvariant(job Job) error {
 	switch job.ID {
+	case "darwin-housekeeping-daily", "darwin-deep-weekly":
+		expected := []string{"local_diagnostics", "derived_health_cache"}
+		trigger := "daily_or_presence"
+		if job.ID == "darwin-deep-weekly" {
+			expected = append(expected, "bounded_assessment")
+			trigger = "weekly_or_presence"
+		}
+		if job.Category != "runtime" || job.Trigger != trigger || job.Executor != "local_adapter" || job.Scope != "managed" || job.Unattended != "policy_gated" || strings.Join(job.Writes, ",") != strings.Join(expected, ",") {
+			return errors.New("Darwin operational job requires exact bounded diagnosis/cache/assessment contract")
+		}
 	case "update-check":
 		if job.Category != "update" || job.Executor != "local_adapter" || job.Scope != "owner" || job.Unattended != "never" || len(job.Writes) != 3 || job.Writes[0] != "source_custody" || job.Writes[1] != "candidate_plan" || job.Writes[2] != "local_diagnostics" {
 			return errors.New("update-check requires an attended exact source-custody, candidate-plan and diagnosis contract")
@@ -191,6 +206,9 @@ func validateRequiredJobInvariant(job Job) error {
 	case "darwin-structural-evolution-proposal":
 		if job.Category != "runtime" || job.Trigger != "monthly_or_presence" || job.Executor != "local_adapter" || job.Scope != "managed" || job.DefaultEnabled || job.Unattended != "never" {
 			return errors.New("Darwin structural evolution has an unsafe maintenance contract")
+		}
+		if strings.Join(job.Writes, ",") != "local_diagnostics,bounded_assessment" {
+			return errors.New("Darwin monthly job cannot repair cache or structural authority")
 		}
 	}
 	return nil

@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/darwin"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
@@ -21,7 +22,7 @@ import (
 )
 
 func maintenanceQueries() []any {
-	return []any{variant("maintenance.status", map[string]any{}), variant("maintenance.report", map[string]any{"job_id": map[string]any{"type": "string", "enum": []string{maintenance.UpdateCheckJobID, maintenance.MemoryDeepDreamJobID, "memory-retention-check", "skills-index-refresh", "runtime-health-check", "capability-recheck", "runtime-drift-check", maintenance.WikiIncrementalJobID, maintenance.WikiReconcileJobID, maintenance.WikiIntegrityJobID}}}, "job_id")}
+	return []any{variant("maintenance.status", map[string]any{}), variant("maintenance.report", map[string]any{"job_id": map[string]any{"type": "string", "enum": []string{maintenance.DarwinDailyJobID, maintenance.DarwinWeeklyJobID, maintenance.DarwinMonthlyJobID, maintenance.UpdateCheckJobID, maintenance.MemoryDeepDreamJobID, "memory-retention-check", "skills-index-refresh", "runtime-health-check", "capability-recheck", "runtime-drift-check", maintenance.WikiIncrementalJobID, maintenance.WikiReconcileJobID, maintenance.WikiIntegrityJobID}}}, "job_id")}
 }
 
 func maintenanceTransitions() []any {
@@ -66,7 +67,7 @@ func (b *Bound) maintenanceService() (*maintenance.Service, error) {
 	return maintenance.NewService(maintenance.ServiceOptions{
 		ProductRoot: b.options.ProductRoot, UserHome: b.options.UserHome,
 		WorkspacePath: b.options.WorkspacePath, LookupEnv: b.options.LookupEnv,
-		Catalog: catalog, Adapter: "local", Now: b.maintenanceClock, CLIVersion: b.options.CLIVersion, InstalledGuard: b.guardPublication, AuthorityRegistryPath: b.options.AuthorityRegistryPath, AuthorityRegistrySHA256: b.options.AuthorityRegistrySHA256,
+		DarwinFactory: darwin.NewProductBinding, Catalog: catalog, Adapter: "local", Now: b.maintenanceClock, CLIVersion: b.options.CLIVersion, InstalledGuard: b.guardPublication, AuthorityRegistryPath: b.options.AuthorityRegistryPath, AuthorityRegistrySHA256: b.options.AuthorityRegistrySHA256,
 	})
 }
 
@@ -191,6 +192,7 @@ type maintenanceQualificationMetadata struct {
 }
 
 type maintenanceJobMetadataView struct {
+	Diagnosis          *maintenance.DarwinSource         `json:"diagnosis,omitempty"`
 	JobID              string                            `json:"job_id"`
 	Revision           uint64                            `json:"revision"`
 	State              string                            `json:"state"`
@@ -203,7 +205,7 @@ type maintenanceJobMetadataView struct {
 }
 
 func maintenanceJobMetadata(job maintenance.ProductJobStatus) maintenanceJobMetadataView {
-	out := maintenanceJobMetadataView{JobID: job.JobID, Revision: job.Revision, State: job.State, Schedule: job.Schedule, Boundary: job.Boundary, Writes: job.Writes, QualificationState: job.QualificationState, Reason: job.Reason}
+	out := maintenanceJobMetadataView{Diagnosis: job.Diagnosis, JobID: job.JobID, Revision: job.Revision, State: job.State, Schedule: job.Schedule, Boundary: job.Boundary, Writes: job.Writes, QualificationState: job.QualificationState, Reason: job.Reason}
 	if q := job.Qualification; q != nil {
 		out.Qualification = &maintenanceQualificationMetadata{ID: q.ID, Adapter: q.Adapter, Platform: q.Platform, Implementation: q.Implementation, Configuration: q.Configuration, ArtifactRef: q.Artifact, ArtifactSHA256: q.ArtifactSHA256, ScheduledFor: q.ScheduledFor, RequestedAt: q.RequestedAt, VerifiedAt: q.VerifiedAt}
 	}
@@ -252,6 +254,10 @@ func maintenancePresentation(review maintenance.ProductReview) any {
 	if review.Operation.JobID == maintenance.UpdateCheckJobID {
 		presentation["signed_source_review"] = review.SourceReview
 		presentation["scope"] = "One attended exact signed-source observation, private candidate staging and bounded diagnosis. No recurring enrollment, release activation, native health or rollout authority. Authenticated higher recalls persist even when expired or payload-incomplete."
+	}
+	if review.DarwinReview != nil {
+		presentation["darwin_review"] = review.DarwinReview
+		presentation["scope"] = "Review this exact cache state, parent and external source. Qualification performs only the shown initialization, exclusive first-cache creation or bounded assessment. Stale cache replacement requires a manual step. Daily/weekly enrollment is separate; monthly proposals never enroll or apply structural changes. Native health remains unobserved."
 	}
 	return presentation
 }

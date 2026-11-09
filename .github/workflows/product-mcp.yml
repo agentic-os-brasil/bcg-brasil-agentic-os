@@ -10,6 +10,7 @@ on:
       - 'internal/execution/**'
       - 'internal/datahome/**'
       - 'internal/scheduler/**'
+      - 'internal/darwin/**'
       - 'internal/winprivate/**'
       - 'internal/processidentity/**'
       - 'internal/privatelock/**'
@@ -66,6 +67,7 @@ on:
       - 'internal/execution/**'
       - 'internal/datahome/**'
       - 'internal/scheduler/**'
+      - 'internal/darwin/**'
       - 'internal/winprivate/**'
       - 'internal/processidentity/**'
       - 'internal/privatelock/**'
@@ -192,7 +194,7 @@ jobs:
         run: go test ./internal/privatelock ./internal/atlasops ./internal/privatewiki -timeout=300s
       - name: Maintenance lifecycle and process identity on admitted Unix runners
         if: runner.os != 'Windows'
-        run: go test ./internal/maintenance ./internal/processidentity ./internal/skillsindex ./internal/scheduler -skip '^TestProductWiki' -timeout=300s
+        run: go test ./internal/darwin ./internal/maintenance ./internal/processidentity ./internal/skillsindex ./internal/scheduler -skip '^TestProductWiki' -timeout=300s
       - name: Canonical workspace initialization contracts on admitted Unix runners
         if: runner.os != 'Windows'
         run: go test ./internal/workspace -timeout=180s

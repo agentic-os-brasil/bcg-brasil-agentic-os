@@ -1,6 +1,6 @@
 # Spec 062 - Product maintenance service
 
-Status: #505 maintenance is landed. Issue #506 composes three source-owned wiki jobs and three read-only queries on that same lifecycle, for eleven supported job IDs in the eighteen-entry catalog. Source/local/hosted/client qualification remains separately recorded. Windows private wiki now has its own retained-namespace admission and exact-source qualification requirement; background wake remains unavailable. See the [operator workflow](../docs/product-mcp-maintenance.md).
+Status: The landed maintenance and wiki owners retain their existing lifecycle. Signed-source checks and the three closed Darwin health/cache/proposal jobs use that same lifecycle and catalog. Windows private wiki uses retained-namespace admission; Darwin private publication on Windows and background wake remain unavailable. Source construction, focused local proof, hosted qualification and installed-client acceptance remain separate. See the [operator workflow](../docs/product-mcp-maintenance.md).
 
 ## Outcome
 
@@ -10,10 +10,11 @@ due work, inspect its domain result, and pause, resume or revoke it. Code,
 Desktop and the local operator use one canonical maintenance service. Existing
 Worker, scheduler leases/receipts and domain stores remain authoritative.
 
-Spec036 owns the eighteen job contracts. This delivery connects checkpoint,
+Spec036 owns the eighteen job contracts. Existing bindings connect checkpoint,
 light/deep dreaming, retention diagnosis, skills indexing, runtime health,
-capability diagnosis, drift diagnosis and the three source-owned wiki jobs described in [Spec 008](008-wiki-update-okf.md). Other catalog entries retain explicit
-unavailable reasons until their complete owning journeys are constructed.
+capability/drift diagnosis, the three source-owned wiki jobs described in [Spec 008](008-wiki-update-okf.md), and attended signed-source checking.
+Darwin adds three closed jobs below. Capture/observation and Yoda retain
+explicit unavailable reasons until their complete owning journeys are constructed.
 Catalog presence, a handler declaration and installation grant no activation.
 
 ## Identity and enrollment
@@ -190,3 +191,20 @@ artifact/receipt, or remains unqualified, and clears only its own one-shot under
 the live guard. It cannot mint a new qualification from that clock-only churn.
 Reports retain the stored plan identity as historical when stale; a separate
 bounded current-pending projection requires read-only canonical verification.
+
+### Closed Darwin local-health product binding (DHRP)
+
+Spec037 owns the finite diagnosis, exclusive first-cache creation and immutable
+assessment/proposal contract. One constructor and the existing Worker/opaque
+grant chain bind actual external provenance, exact reviewed parent and current
+source/control/lease authority. Status does not initialize or repair anything.
+
+Daily stale-cache replacement exposes `manual_refresh_required` and refuses
+before effects. Automatic refresh and compensation remain unavailable under
+#462/#488; preserve retained partial bytes and recovery evidence. Weekly can
+assess current external observations while retaining a stale cache. Monthly
+remains attended-only and structurally inert. Windows Darwin publication stays
+unavailable; no current native kernel or profile is replaced by old stubs.
+
+Issue #498 remains partial until its automatic preservation and native/hosted
+acceptance gates are met. Source preparation is not installed-client acceptance.

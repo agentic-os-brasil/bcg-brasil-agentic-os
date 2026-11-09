@@ -16,7 +16,7 @@ Ordinary startup, status and review do not bootstrap or repair private state.
 
 Call `maestro_query` with `{"operation":"maintenance.status"}`. The response
 lists job IDs, revision, state, schedule, write set and qualification metadata.
-The closed catalog has eighteen jobs; this product binding supports eleven job IDs on admitted Unix memory:
+The closed catalog has eighteen jobs; this binding implements fifteen, with attended-only jobs separated from recurring enrollment:
 
 | Job | Cadence after separate enrollment | Actual result or prerequisite |
 | --- | --- | --- |
@@ -31,6 +31,10 @@ The closed catalog has eighteen jobs; this product binding supports eleven job I
 | `wiki-incremental-sync` | Durable source event only | Compile eligible committed memory and close its exact event once |
 | `wiki-reconcile` | Weekly/presence | Reconcile actual source/view and recover missing historical events |
 | `wiki-integrity-check` | Daily | Persist body-free current graph diagnosis; no repair |
+| `update-check` | Attended only; never recurring | Authenticated source-custody observation, bounded candidate plan and diagnosis; never activation |
+| `darwin-housekeeping-daily` | Daily after separate opt-in | Finite actual local diagnosis and exclusive first health-cache creation; stale replacement unavailable |
+| `darwin-deep-weekly` | Weekly after separate opt-in | Bounded operational assessment/proposal; existing cache preserved; no authored-document rewrite |
+| `darwin-structural-evolution-proposal` | Attended monthly only; never recurring | Immutable bounded structural proposal/assessment; no application of structural changes |
 
 All schedules have bounded catch-up of at most one occurrence. Enrollment sets
 a per-job no-backfill boundary. Memory consolidation needs eligible reviewed
@@ -38,13 +42,46 @@ captures and ancestry; an empty source or a successful no-op cannot qualify it.
 Skills indexing needs verified installed assets, not an arbitrary product
 directory. A diagnostic can qualify its real execution while its finding is
 missing or unavailable. That qualification does not qualify the reported native
-capability. The remaining seven catalog entries retain explicit unavailable
-reasons until their complete execution journeys exist.
+capability. The remaining three entries (two capture/observation jobs and Yoda)
+retain explicit unavailable reasons until their complete execution journeys exist.
+
+### Darwin diagnosis, first cache and proposals
+
+Read status to distinguish absent/current/stale/corrupt/foreign/unsafe/unavailable
+cache state. Status and reports never initialize, repair or enroll anything.
+An attended first qualification may publish one cache exclusively after exact
+review and confirmation. Its inputs are actual workspace/configuration/process/
+projection/capability observations and bounded external scheduler receipts.
+Unavailable native/document coverage remains explicit.
+
+A stale daily cache exposes `manual_refresh_required`. Automatic replacement and
+compensation remain unavailable while physical preservation under #462/#488 is
+unresolved. Apply refuses that replacement before changing private controls or
+effects. Preserve the cache and any recovery evidence for explicit reconciliation;
+this operation supplies no delete/archive/command workaround. A failed readback
+after exclusive first creation retains its actual partial bytes.
+
+Weekly/monthly work can publish a bounded immutable assessment/proposal while
+retaining a stale cache. Unchanged replay cannot mint new qualification merely
+because time advances. Daily/weekly qualification remains separate from exact
+opt-in enrollment; monthly work is attended-only and never applies a structural
+change. Per-attempt publication rechecks current inputs and the existing signed
+installation, process, revision and lease guards.
+
+The three Darwin jobs currently require admitted Unix private publication.
+Windows reports `production_binding_unavailable`; its current native private
+kernel remains intact. Automatic repair, Windows Darwin, real client loading,
+production trust and colleague acceptance are separate open gates.
+
+Attended `update-check` may preserve authentic newer source denial even when its
+release is expired or payload-incomplete. This is a custody observation, not
+update eligibility or activation. A blocked server uses the independently
+admitted installer's [signed-source recovery route](product-synced-source.md).
 
 The public surface has eight operation variants: `maintenance.status`,
 `maintenance.report`, `maintenance.qualify`, `maintenance.enroll`,
 `maintenance.pause`, `maintenance.resume`, `maintenance.revoke` and
-`maintenance.run`. These operation names are separate from the eleven supported
+`maintenance.run`. These operation names are separate from the fifteen supported
 job IDs listed above and the full eighteen-entry catalog.
 
 ## Review, qualify and enroll
@@ -84,7 +121,8 @@ qualification, enrollment, dependency installation or model/provider call.
 The response contains bounded due/receipt metadata. A wake-up or a process exit
 alone is not proof of a committed domain result.
 
-For deep dream and the five diagnostic/index jobs, call `maestro_query` with
+For deep dream, diagnostic/index, Wiki, update-check and the three Darwin jobs,
+call `maestro_query` with
 `{"operation":"maintenance.report","job_id":"skills-index-refresh"}`,
 substituting the supported job ID. Reports expose bounded findings, coverage,
 counts, capability IDs and relative references. They do not return private

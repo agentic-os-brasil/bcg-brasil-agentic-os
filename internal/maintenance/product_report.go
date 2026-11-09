@@ -19,6 +19,7 @@ type SourceCoverage struct {
 	State  string `json:"state"`
 }
 type ProductDomainReport struct {
+	Darwin               *DarwinReport                `json:"darwin,omitempty"`
 	CurrentPending       *UpdatePendingReadback       `json:"current_pending,omitempty"`
 	Update               *UpdateDiagnosis             `json:"update,omitempty"`
 	Wiki                 *WikiDiagnostic              `json:"wiki,omitempty"`
@@ -44,6 +45,21 @@ func (s *Service) Report(job string) (ProductDomainReport, error) {
 		return out, err
 	}
 	switch {
+	case DarwinJob(job):
+		if s.darwin == nil {
+			return out, errors.New("Darwin product binding unavailable")
+		}
+		r, err := s.darwin.Report(job)
+		if err != nil {
+			return out, err
+		}
+		out.Darwin = &r
+		out.Finding = r.CacheState
+		out.NativeObservation = r.NativeObservation
+		out.Counts = r.Evidence.Counts
+		out.Sources = r.Evidence.Coverage
+		out.ObservedAt = r.Evidence.ObservedAt
+		return out, nil
 	case diagnosticJob(job):
 		report, _, err := (DiagnosticStore{Root: s.receipts.Root}).Load(s.workspaceID, job, "")
 		if err != nil {

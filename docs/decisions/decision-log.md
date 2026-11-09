@@ -1414,3 +1414,14 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: Activation or compatible rollback leaves an old record unusable until regeneration; source custody and Previous are never restored from packet backups. Startup/status are nonmigrating read-only operations. Missing/unsafe state refuses. Controlled process witnesses and engineering native-admission composition establish construction only; actual Desktop external-launcher compatibility, native client loading, signing, hosted CI, publication and pilot remain separate. Manual updated-MCPB installation retains the same stable external-launcher contract and cannot bypass a rejecting client policy; that policy leaves the stable source-managed carrier unavailable.
 - Refs: specs/020-release-distribution.md; docs/plans/2026-11-03-synced-product-distribution.md; internal/installer; internal/installtx; adapters/mcp/setup; adapters/mcp/packaging
 - Supersedes: none
+
+## DHRP - Bind finite Darwin diagnosis and proposals to admitted product owners
+
+- Date: 2026-11-09
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The three Darwin catalogue entries need actual product diagnosis and proposal ownership. Existing private-state guards do not establish physical custody for cache replacement against an uncooperative writer.
+- Decision: Reuse one maintenance Worker, opaque grant and current source/process/control/lease publication chain. Observe bounded actual external inputs, expose read-only cache states, review exact parent/source/effect, and permit only exclusive first-cache creation and immutable assessments/proposals. Retain failed partial bytes and original recovery provenance. Keep automatic cache replacement/compensation unavailable under the physical-preservation gate and Darwin Windows publication unavailable until qualified.
+- Consequences: An attended execution is separate from recurring opt-in; monthly remains attended-only and structurally inert. Status never initializes or repairs. New external observations are bound independently by every attempt; historical qualification attests its actual producer/configuration and receipt. No arbitrary command, generic filesystem repair, service, provider or native qualification follows.
+- Refs: #498; #462; #488; specs/037-darwin-lifecycle-cadence.md; specs/062-product-maintenance-service.md; docs/product-mcp-maintenance.md; internal/darwin; internal/maintenance; internal/scheduler
+- Supersedes: none
