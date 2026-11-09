@@ -648,3 +648,42 @@ func TestKnowledgeMutationCanonicalPageBudget(t *testing.T) {
 		t.Fatal("oversized page admitted")
 	}
 }
+
+func TestKnowledgeMutationRequiresClosedUTF8Request(t *testing.T) {
+	request := map[string]any{"operation": "knowledge.append", "artifact_id": strings.Repeat("a", 64), "page": "knowledge/review.md", "section": "## Evidence", "text": "Revisão: ação e evidência", "expected_page_revision": strings.Repeat("b", 64)}
+	body, _ := json.Marshal(request)
+	decoded, err := product.DecodeKnowledgeMutation(body)
+	if err != nil || decoded.Text != request["text"] {
+		t.Fatal("valid UTF-8 request changed or refused", err)
+	}
+	for _, field := range []string{"approved", "workspace_id", "source_path", "origin"} {
+		request[field] = "model-supplied"
+		body, _ := json.Marshal(request)
+		if _, err := product.DecodeKnowledgeMutation(body); err == nil {
+			t.Errorf("unowned %s admitted", field)
+		}
+		delete(request, field)
+	}
+	request["text"] = strings.Repeat("a", 8<<10)
+	body, _ = json.Marshal(request)
+	if _, err := product.DecodeKnowledgeMutation(body); err != nil {
+		t.Fatal("bounded append refused", err)
+	}
+	request["text"] = strings.Repeat("a", (8<<10)+1)
+	body, _ = json.Marshal(request)
+	if _, err := product.DecodeKnowledgeMutation(body); err == nil {
+		t.Fatal("oversized append admitted")
+	}
+	request["text"] = "selected-UTF8-marker"
+	body, _ = json.Marshal(request)
+	for _, malformed := range [][]byte{bytes.Replace(body, []byte("selected-UTF8-marker"), []byte{0xff}, 1), append(body, []byte("{}")...)} {
+		if _, err := product.DecodeKnowledgeMutation(malformed); err == nil {
+			t.Fatal("malformed UTF-8 or trailing JSON admitted")
+		}
+	}
+	delete(request, "expected_page_revision")
+	body, _ = json.Marshal(request)
+	if _, err := product.DecodeKnowledgeMutation(body); err == nil {
+		t.Fatal("unfenced append admitted")
+	}
+}

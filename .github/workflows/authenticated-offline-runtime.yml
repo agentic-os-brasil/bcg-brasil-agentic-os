@@ -132,27 +132,37 @@ jobs:
         working-directory: adapters/mcp
         shell: bash
         run: |
-          export MAESTRO_DOCLING_RETAINED_ROOT="$MAESTRO_DOCLING_TEST_ROOT"
-          export MAESTRO_DOCLING_RETAINED_SEED="$(python3 - <<'PYCODE'
-          import hashlib, os, pathlib
-          authority = pathlib.Path(os.environ["MAESTRO_DOCLING_RETAINED_ROOT"]) / "authority.json"
+          python3 - "$MAESTRO_DOCLING_TEST_ROOT" "$RUNNER_TEMP/maestro-content-tests.jsonl" <<'PYCODE'
+          import hashlib, json, os, pathlib, signal, subprocess, sys
+          retained, evidence = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+          authority = retained / "authority.json"
           assert 0 < authority.stat().st_size <= 1 << 20
-          print(hashlib.sha256(authority.read_bytes()).hexdigest())
-          PYCODE
-          )"
-          evidence="$RUNNER_TEMP/maestro-content-tests.jsonl"
-          # Bound the retained JSONL even if a future regression produces excess output.
-          ulimit -f 16384
-          if ! go test -mod=readonly . -run '^TestContentRealJourneys$' -count=1 -json -timeout=600s > "$evidence"; then
-            cat "$evidence"
-            exit 1
-          fi
-          cat "$evidence"
-          python3 - "$evidence" <<'PYCODE'
-          import json, pathlib, sys
-          path = pathlib.Path(sys.argv[1])
-          assert 0 < path.stat().st_size <= 8 << 20, "content evidence exceeds its retained bound"
-          events = [json.loads(line) for line in path.read_text().splitlines()]
+          environment = dict(os.environ, MAESTRO_DOCLING_RETAINED_ROOT=str(retained),
+                             MAESTRO_DOCLING_RETAINED_SEED=hashlib.sha256(authority.read_bytes()).hexdigest())
+          command = ["go", "test", "-mod=readonly", ".", "-run", "^TestContentRealJourneys$",
+                     "-count=1", "-json", "-timeout=600s"]
+          # Bound only evidence output; converter inputs and compiled binaries keep their normal budgets.
+          with evidence.open("xb") as output:
+              process = subprocess.Popen(command, env=environment, stdout=subprocess.PIPE,
+                                         stderr=subprocess.STDOUT, start_new_session=True)
+              count = 0
+              try:
+                  while chunk := process.stdout.read(64 << 10):
+                      count += len(chunk)
+                      if count > 8 << 20:
+                          os.killpg(process.pid, signal.SIGKILL)
+                          raise RuntimeError("content evidence exceeds its retained bound")
+                      output.write(chunk)
+                      sys.stdout.buffer.write(chunk)
+                  status = process.wait()
+              finally:
+                  process.stdout.close()
+                  if process.poll() is None:
+                      os.killpg(process.pid, signal.SIGKILL)
+                      process.wait()
+          assert status == 0, "real SDK/stdio test command failed: " + str(status)
+          assert 0 < evidence.stat().st_size <= 8 << 20
+          events = [json.loads(line) for line in evidence.read_text().splitlines()]
           passed = {e.get("Test") for e in events if e.get("Action") == "pass"}
           required = {"TestContentRealJourneys", "TestContentRealJourneys/sdk", "TestContentRealJourneys/compiled_stdio"}
           assert required <= passed, "real SDK/stdio journeys did not pass: " + repr(required - passed)
