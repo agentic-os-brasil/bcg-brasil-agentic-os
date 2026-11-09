@@ -9,7 +9,7 @@ external paths. Building does not install anything or contact a model/provider.
 ## Managed payload and integrity
 
 Both formats contain the selected executable; all 92 canonical methods and their
-248 recipe/policy/provenance/license assets; the operator/resume aliases; and six
+249 recipe/policy/provenance/license assets; the operator/resume aliases; and six
 raw canonical runtime/memory files. Both also include fourteen immutable agent
 assets under `managed/agents/`: three JSON policy/catalog files, seven canonical
 definitions and four scaffolding templates. The emitted MCP server exposes the

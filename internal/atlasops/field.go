@@ -29,8 +29,13 @@ type LinkRequest struct {
 	Target           string
 	Label            string
 	ExpectedRevision string
-	Provenance       Provenance
+	// Bound by the host's private review, not supplied through MCP arguments.
+	// Empty preserves intentional historical owner-corpus link semantics.
+	ExpectedTargetRevision string `json:",omitempty"`
+	Provenance             Provenance
 }
+
+var ErrReviewedTargetChanged = errors.New("atlas reviewed link target changed")
 
 const maximumFieldBytes = 4 << 10
 
@@ -81,7 +86,7 @@ func (engine *Engine) SetField(request SetFieldRequest) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	updated, changed, err := replaceField(current, field, value)
+	updated, changed, err := PreviewField(current, field, value)
 	if err != nil {
 		return Result{}, err
 	}
@@ -134,12 +139,21 @@ func (engine *Engine) Link(request LinkRequest) (Result, error) {
 		return Result{}, err
 	}
 
+	validateEndpoints := func() error {
+		if err := engine.authorize(request.Provenance, "link", relative); err != nil {
+			return err
+		}
+		return engine.validateLinkTarget(target, request.ExpectedTargetRevision)
+	}
+	if err := validateEndpoints(); err != nil {
+		return Result{}, err
+	}
 	operationID := engine.operationID("link", relative, request.Provenance.IdempotencyKey)
 	requestDigest, err := digestRequest(request)
 	if err != nil {
 		return Result{}, err
 	}
-	if recorded, found, err := engine.recordedResult(operationID, requestDigest); err != nil {
+	if recorded, found, err := engine.recordedResultChecked(operationID, requestDigest, validateEndpoints); err != nil {
 		return Result{}, err
 	} else if found {
 		return recorded, nil
@@ -152,15 +166,9 @@ func (engine *Engine) Link(request LinkRequest) (Result, error) {
 
 	// The relative form from this page to the target, so the written link
 	// resolves from the page itself rather than only from the root.
-	reference := relativeReference(relative, target)
-	updated := current
-	changed := false
-	if !strings.Contains(current, "("+reference+")") {
-		updated, err = insertUnderSection(current, section, "- ["+label+"]("+reference+")")
-		if err != nil {
-			return Result{}, err
-		}
-		changed = true
+	updated, changed, err := PreviewLink(current, relative, section, target, label)
+	if err != nil {
+		return Result{}, err
 	}
 	return engine.commitEdit(commitRequest{
 		operation:        "link",
@@ -173,7 +181,53 @@ func (engine *Engine) Link(request LinkRequest) (Result, error) {
 		expectedRevision: request.ExpectedRevision,
 		provenance:       request.Provenance,
 		requestDigest:    requestDigest,
+		validateEffect:   validateEndpoints,
 	})
+}
+
+func (engine *Engine) validateLinkTarget(target, expected string) error {
+	if err := engine.admitWorkspacePage(target); err != nil {
+		return err
+	}
+	if expected == "" {
+		return nil
+	}
+	if !validDigest(expected) {
+		return ErrReviewedTargetChanged
+	}
+	current, err := engine.read(target)
+	if err != nil {
+		return ErrReviewedTargetChanged
+	}
+	if digest(current) != expected {
+		return ErrReviewedTargetChanged
+	}
+	return nil
+}
+
+// PreviewField shares the writer's exact declared-field edit with attended
+// review. It grants no authority and neither reads nor writes a page.
+func PreviewField(body, field, value string) (string, bool, error) {
+	field, value = strings.TrimSpace(field), strings.TrimSpace(value)
+	if field == "" || strings.ContainsAny(field, "\r\n*") || strings.ContainsAny(value, "\r\n") || len(value) > maximumFieldBytes {
+		return "", false, errors.New("atlas field requires a declared label and bounded single-line value")
+	}
+	return replaceField(body, field, value)
+}
+
+// PreviewLink computes the same relative reference and duplicate handling used
+// by Link. Callers still resolve and authorize both page names independently.
+func PreviewLink(body, page, section, target, label string) (string, bool, error) {
+	section, label = strings.TrimRight(section, " \t\r"), strings.TrimSpace(label)
+	if !strings.HasPrefix(section, "#") || strings.ContainsAny(section, "\r\n") || label == "" || strings.ContainsAny(label, "\r\n[]") {
+		return "", false, errors.New("atlas link requires an existing heading and a plain label")
+	}
+	reference := relativeReference(page, target)
+	if strings.Contains(body, "("+reference+")") {
+		return body, false, nil
+	}
+	updated, err := insertUnderSection(body, section, "- ["+label+"]("+reference+")")
+	return updated, err == nil, err
 }
 
 // replaceField finds the single declared field and swaps its value.
@@ -202,6 +256,9 @@ func replaceField(body, field, value string) (string, bool, error) {
 	replacement := indent + prefix
 	if value != "" {
 		replacement += " " + value
+	}
+	if strings.HasSuffix(lines[index], "\r") {
+		replacement += "\r"
 	}
 	if lines[index] == replacement {
 		return body, false, nil
@@ -243,6 +300,7 @@ type commitRequest struct {
 	expectedRevision string
 	provenance       Provenance
 	requestDigest    string
+	validateEffect   func() error
 }
 
 func (engine *Engine) commitEdit(request commitRequest) (Result, error) {
@@ -255,6 +313,14 @@ func (engine *Engine) commitEdit(request commitRequest) (Result, error) {
 		Provenance:  request.provenance,
 	}
 
+	if err := engine.authorize(request.provenance, request.operation, request.page); err != nil {
+		return Result{}, err
+	}
+	if request.validateEffect != nil {
+		if err := request.validateEffect(); err != nil {
+			return Result{}, err
+		}
+	}
 	if expected := strings.TrimSpace(request.expectedRevision); expected != "" && expected != revision {
 		result.State = StateProposed
 		result.Revision = revision
@@ -289,6 +355,11 @@ func (engine *Engine) commitEdit(request commitRequest) (Result, error) {
 	}
 	if err := engine.authorize(request.provenance, request.operation, request.page); err != nil {
 		return Result{}, err
+	}
+	if request.validateEffect != nil {
+		if err := request.validateEffect(); err != nil {
+			return Result{}, err
+		}
 	}
 	if err := publishAtlasFile(engine.pagePath(request.page), []byte(request.updated), false, engine.workspace != nil); err != nil {
 		return Result{}, err

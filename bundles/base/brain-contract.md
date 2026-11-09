@@ -14,7 +14,7 @@ id: <caminho sem .md>              # estável; nunca muda depois de criado
 title: "<título humano>"           # o mesmo do H1 da página
 summary: "<uma linha>"             # o que o índice mostra; sem markdown, sem emoji
 type: <tipo>                       # ver vocabulário abaixo
-scope: <owner | account/<a> | account/<a>/case/<c>>
+scope: <owner | workspace/<workspace-id> | account/<a> | account/<a>/case/<c>>
 status: <active | closed | draft | superseded>
 sensitivity: <owner-private | client-confidential | internal>
 updated: <YYYY-MM-DD>
@@ -54,3 +54,23 @@ updated: <YYYY-MM-DD>
    separa do trabalho vivo.
 5. **`updated` é a data do conteúdo**, não do arquivo. Só use a data de modificação como
    último recurso.
+
+
+## Páginas autorais do workspace via MCP
+
+`brain.create` e `brain.update` usam os oito campos acima. Nas páginas gerais do
+workspace registrado, `scope` é `workspace/<workspace-id>` e `id` corresponde ao
+caminho relativo sem `.md`. Em `accounts/<a>/...` o escopo é `account/<a>`; em
+`accounts/<a>/cases/<c>/...`, `account/<a>/case/<c>`. A seleção de caso continua
+obrigatória quando a política do workspace a exigir. O caminho é relativo ao
+`brain/` daquele workspace, sem acesso a arquivos arbitrários ou ao brain privado.
+
+`brain.prepare` oferece os modelos fixos de cliente, projeto, pessoa e diário;
+a revisão explícita precede a criação e preserva arquivos existentes. Uma página
+legada sem metadados continua legível com diagnóstico e pode receber um append,
+um campo Markdown declarado ou uma referência sem reescrita automática.
+`brain.set_field` altera `- **Campo:** valor`, não o frontmatter. Para mudar
+metadados, envie o corpo completo em `brain.update`, com a revisão atual.
+Os tipos `owner-facet` e `memory-*` pertencem aos seus mecanismos privados e não
+podem ser criados como páginas autorais. A presença de frontmatter não publica
+memória, não ativa hooks e não equivale a um índice autoral recompilado.

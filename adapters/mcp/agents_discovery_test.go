@@ -48,7 +48,7 @@ func TestCanonicalAgentResourceDiscovery(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("canonical agent resources: got %d %v; want 14 %v", len(got), got, want)
 	}
-	if methodResources != 248 {
+	if methodResources != 249 {
 		t.Fatalf("method assets lost: %d resources", methodResources)
 	}
 }
