@@ -29,6 +29,11 @@ import (
 type Options struct {
 	Destination, Server, Version string
 	Binding                      product.Options
+	NativeHost                   *NativeHost
+	serverBody                   []byte
+	target                       Target
+	native                       *NativeCapability
+	hookOverride                 []byte
 }
 
 func prepare(o Options) (Options, string, error) {
@@ -59,8 +64,8 @@ func prepare(o Options) (Options, string, error) {
 	if err != nil || !info.Mode().IsRegular() {
 		return o, "", errors.New("regular native server required")
 	}
-	platform, err := binaryPlatform(o.Server)
-	return o, platform, err
+	o.serverBody, o.target, err = readNativeBinary(o.Server)
+	return o, o.target.Platform(), err
 }
 func BuildPlugin(options Options) error { return buildPortable(options, "plugin") }
 

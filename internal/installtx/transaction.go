@@ -21,6 +21,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/rolemigration"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 const (
@@ -33,6 +34,7 @@ var sha256Pattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 var confirmationPlanIDPattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
 
 type PrepareOptions struct {
+	UserHome           string
 	Transition         string
 	ConfirmationPlanID string
 	FromRelease        string
@@ -46,38 +48,41 @@ type PrepareOptions struct {
 }
 
 type ActivationPlan struct {
-	SchemaVersion           int    `json:"schema_version"`
-	TransactionID           string `json:"transaction_id"`
-	Transition              string `json:"transition"`
-	ConfirmationPlanID      string `json:"confirmation_plan_id"`
-	FromRelease             string `json:"from_release"`
-	FromChannel             string `json:"from_channel"`
-	FromCLIVersion          string `json:"from_cli_version"`
-	FromBundleVersion       string `json:"from_bundle_version"`
-	Release                 string `json:"release"`
-	Channel                 string `json:"channel"`
-	CLIVersion              string `json:"cli_version"`
-	BundleVersion           string `json:"bundle_version"`
-	TargetOS                string `json:"target_os"`
-	TargetArch              string `json:"target_arch"`
-	ManagedRoot             string `json:"managed_root"`
-	DataRoot                string `json:"data_root"`
-	ManifestSHA256          string `json:"manifest_sha256"`
-	CLIArtifactName         string `json:"cli_artifact_name"`
-	CLISHA256               string `json:"cli_sha256"`
-	CLISize                 int64  `json:"cli_size"`
-	BundleArtifactName      string `json:"bundle_artifact_name"`
-	BundleSHA256            string `json:"bundle_sha256"`
-	BundleSize              int64  `json:"bundle_size"`
-	RoleMigrationID         string `json:"role_migration_id,omitempty"`
-	CatalogSHA256           string `json:"catalog_sha256,omitempty"`
-	PolicySHA256            string `json:"policy_sha256,omitempty"`
-	StagedCLI               string `json:"staged_cli"`
-	StagedBundleArchive     string `json:"staged_bundle_archive"`
-	RuntimePackArtifactName string `json:"runtime_pack_artifact_name,omitempty"`
-	RuntimePackSHA256       string `json:"runtime_pack_sha256,omitempty"`
-	RuntimePackSize         int64  `json:"runtime_pack_size,omitempty"`
-	StagedRuntimePack       string `json:"staged_runtime_pack,omitempty"`
+	UserHome                string             `json:"user_home,omitempty"`
+	Profile                 string             `json:"profile,omitempty"`
+	Server                  ExecutableIdentity `json:"server,omitempty"`
+	SchemaVersion           int                `json:"schema_version"`
+	TransactionID           string             `json:"transaction_id"`
+	Transition              string             `json:"transition"`
+	ConfirmationPlanID      string             `json:"confirmation_plan_id"`
+	FromRelease             string             `json:"from_release"`
+	FromChannel             string             `json:"from_channel"`
+	FromCLIVersion          string             `json:"from_cli_version"`
+	FromBundleVersion       string             `json:"from_bundle_version"`
+	Release                 string             `json:"release"`
+	Channel                 string             `json:"channel"`
+	CLIVersion              string             `json:"cli_version"`
+	BundleVersion           string             `json:"bundle_version"`
+	TargetOS                string             `json:"target_os"`
+	TargetArch              string             `json:"target_arch"`
+	ManagedRoot             string             `json:"managed_root"`
+	DataRoot                string             `json:"data_root"`
+	ManifestSHA256          string             `json:"manifest_sha256"`
+	CLIArtifactName         string             `json:"cli_artifact_name"`
+	CLISHA256               string             `json:"cli_sha256"`
+	CLISize                 int64              `json:"cli_size"`
+	BundleArtifactName      string             `json:"bundle_artifact_name"`
+	BundleSHA256            string             `json:"bundle_sha256"`
+	BundleSize              int64              `json:"bundle_size"`
+	RoleMigrationID         string             `json:"role_migration_id,omitempty"`
+	CatalogSHA256           string             `json:"catalog_sha256,omitempty"`
+	PolicySHA256            string             `json:"policy_sha256,omitempty"`
+	StagedCLI               string             `json:"staged_cli"`
+	StagedBundleArchive     string             `json:"staged_bundle_archive"`
+	RuntimePackArtifactName string             `json:"runtime_pack_artifact_name,omitempty"`
+	RuntimePackSHA256       string             `json:"runtime_pack_sha256,omitempty"`
+	RuntimePackSize         int64              `json:"runtime_pack_size,omitempty"`
+	StagedRuntimePack       string             `json:"staged_runtime_pack,omitempty"`
 }
 
 type ActivateOptions struct {
@@ -88,75 +93,83 @@ type ActivateOptions struct {
 }
 
 type State struct {
-	SchemaVersion int       `json:"schema_version"`
-	ManagedRoot   string    `json:"managed_root"`
-	Release       string    `json:"release"`
-	Channel       string    `json:"channel"`
-	CLIVersion    string    `json:"cli_version"`
-	BundleVersion string    `json:"bundle_version"`
-	TargetOS      string    `json:"target_os"`
-	TargetArch    string    `json:"target_arch"`
-	RoleAuthority string    `json:"role_authority,omitempty"`
-	MigrationID   string    `json:"migration_id,omitempty"`
-	CatalogSHA256 string    `json:"catalog_sha256,omitempty"`
-	PolicySHA256  string    `json:"policy_sha256,omitempty"`
-	ActivatedAt   time.Time `json:"activated_at"`
-	Previous      *Snapshot `json:"previous,omitempty"`
+	Profile       string             `json:"profile,omitempty"`
+	Server        ExecutableIdentity `json:"server,omitempty"`
+	SchemaVersion int                `json:"schema_version"`
+	ManagedRoot   string             `json:"managed_root"`
+	Release       string             `json:"release"`
+	Channel       string             `json:"channel"`
+	CLIVersion    string             `json:"cli_version"`
+	BundleVersion string             `json:"bundle_version"`
+	TargetOS      string             `json:"target_os"`
+	TargetArch    string             `json:"target_arch"`
+	RoleAuthority string             `json:"role_authority,omitempty"`
+	MigrationID   string             `json:"migration_id,omitempty"`
+	CatalogSHA256 string             `json:"catalog_sha256,omitempty"`
+	PolicySHA256  string             `json:"policy_sha256,omitempty"`
+	ActivatedAt   time.Time          `json:"activated_at"`
+	Previous      *Snapshot          `json:"previous,omitempty"`
 }
 
 type ActivationReceipt struct {
-	SchemaVersion      int       `json:"schema_version"`
-	ConfirmationPlanID string    `json:"confirmation_plan_id"`
-	TransactionID      string    `json:"transaction_id"`
-	Release            string    `json:"release"`
-	Channel            string    `json:"channel"`
-	CLIVersion         string    `json:"cli_version"`
-	BundleVersion      string    `json:"bundle_version"`
-	TargetOS           string    `json:"target_os"`
-	TargetArch         string    `json:"target_arch"`
-	ManagedRoot        string    `json:"managed_root"`
-	DataRoot           string    `json:"data_root"`
-	ManifestSHA256     string    `json:"manifest_sha256"`
-	CLISHA256          string    `json:"cli_sha256"`
-	CLISize            int64     `json:"cli_size"`
-	BundleSHA256       string    `json:"bundle_sha256"`
-	BundleSize         int64     `json:"bundle_size"`
-	RoleMigrationID    string    `json:"role_migration_id,omitempty"`
-	CatalogSHA256      string    `json:"catalog_sha256,omitempty"`
-	PolicySHA256       string    `json:"policy_sha256,omitempty"`
-	SourceCLIBackup    string    `json:"source_cli_backup"`
-	CommittedAt        time.Time `json:"committed_at"`
+	Profile            string             `json:"profile,omitempty"`
+	Server             ExecutableIdentity `json:"server,omitempty"`
+	SchemaVersion      int                `json:"schema_version"`
+	ConfirmationPlanID string             `json:"confirmation_plan_id"`
+	TransactionID      string             `json:"transaction_id"`
+	Release            string             `json:"release"`
+	Channel            string             `json:"channel"`
+	CLIVersion         string             `json:"cli_version"`
+	BundleVersion      string             `json:"bundle_version"`
+	TargetOS           string             `json:"target_os"`
+	TargetArch         string             `json:"target_arch"`
+	ManagedRoot        string             `json:"managed_root"`
+	DataRoot           string             `json:"data_root"`
+	ManifestSHA256     string             `json:"manifest_sha256"`
+	CLISHA256          string             `json:"cli_sha256"`
+	CLISize            int64              `json:"cli_size"`
+	BundleSHA256       string             `json:"bundle_sha256"`
+	BundleSize         int64              `json:"bundle_size"`
+	RoleMigrationID    string             `json:"role_migration_id,omitempty"`
+	CatalogSHA256      string             `json:"catalog_sha256,omitempty"`
+	PolicySHA256       string             `json:"policy_sha256,omitempty"`
+	SourceCLIBackup    string             `json:"source_cli_backup"`
+	CommittedAt        time.Time          `json:"committed_at"`
 }
 
 type stateWire struct {
-	SchemaVersion int       `json:"schema_version"`
-	ManagedRoot   *string   `json:"managed_root,omitempty"`
-	Release       string    `json:"release"`
-	Channel       string    `json:"channel"`
-	CLIVersion    string    `json:"cli_version"`
-	BundleVersion string    `json:"bundle_version"`
-	TargetOS      string    `json:"target_os"`
-	TargetArch    string    `json:"target_arch"`
-	RoleAuthority string    `json:"role_authority,omitempty"`
-	MigrationID   string    `json:"migration_id,omitempty"`
-	CatalogSHA256 string    `json:"catalog_sha256,omitempty"`
-	PolicySHA256  string    `json:"policy_sha256,omitempty"`
-	ActivatedAt   time.Time `json:"activated_at"`
-	Previous      *Snapshot `json:"previous,omitempty"`
+	Profile       string             `json:"profile,omitempty"`
+	Server        ExecutableIdentity `json:"server,omitempty"`
+	SchemaVersion int                `json:"schema_version"`
+	ManagedRoot   *string            `json:"managed_root,omitempty"`
+	Release       string             `json:"release"`
+	Channel       string             `json:"channel"`
+	CLIVersion    string             `json:"cli_version"`
+	BundleVersion string             `json:"bundle_version"`
+	TargetOS      string             `json:"target_os"`
+	TargetArch    string             `json:"target_arch"`
+	RoleAuthority string             `json:"role_authority,omitempty"`
+	MigrationID   string             `json:"migration_id,omitempty"`
+	CatalogSHA256 string             `json:"catalog_sha256,omitempty"`
+	PolicySHA256  string             `json:"policy_sha256,omitempty"`
+	ActivatedAt   time.Time          `json:"activated_at"`
+	Previous      *Snapshot          `json:"previous,omitempty"`
 }
 
 type Snapshot struct {
-	Release       string `json:"release"`
-	Channel       string `json:"channel"`
-	CLIVersion    string `json:"cli_version"`
-	BundleVersion string `json:"bundle_version"`
-	TargetOS      string `json:"target_os"`
-	TargetArch    string `json:"target_arch"`
-	RoleAuthority string `json:"role_authority,omitempty"`
-	MigrationID   string `json:"migration_id,omitempty"`
-	CatalogSHA256 string `json:"catalog_sha256,omitempty"`
-	PolicySHA256  string `json:"policy_sha256,omitempty"`
-	CLIBackup     string `json:"cli_backup"`
+	Profile       string             `json:"profile,omitempty"`
+	Server        ExecutableIdentity `json:"server,omitempty"`
+	Release       string             `json:"release"`
+	Channel       string             `json:"channel"`
+	CLIVersion    string             `json:"cli_version"`
+	BundleVersion string             `json:"bundle_version"`
+	TargetOS      string             `json:"target_os"`
+	TargetArch    string             `json:"target_arch"`
+	RoleAuthority string             `json:"role_authority,omitempty"`
+	MigrationID   string             `json:"migration_id,omitempty"`
+	CatalogSHA256 string             `json:"catalog_sha256,omitempty"`
+	PolicySHA256  string             `json:"policy_sha256,omitempty"`
+	CLIBackup     string             `json:"cli_backup"`
 }
 
 func Prepare(verified releaseverify.VerifiedRelease, options PrepareOptions) (string, error) {
@@ -178,6 +191,23 @@ func Prepare(verified releaseverify.VerifiedRelease, options PrepareOptions) (st
 	if err != nil {
 		return "", err
 	}
+	profile := profileForManifest(verified.Manifest)
+	if profile != "" {
+		if err := validateModernRoots(managedRoot, dataRoot, options.UserHome); err != nil {
+			return "", err
+		}
+		if _, err := os.Lstat(dataRoot); err == nil {
+			if err := scheduler.ValidatePrivateDirectory(dataRoot); err != nil {
+				return "", err
+			}
+		} else if errors.Is(err, os.ErrNotExist) {
+			if err := scheduler.EnsurePrivateDirectory(dataRoot); err != nil {
+				return "", err
+			}
+		} else {
+			return "", err
+		}
+	}
 	updatesRoot := filepath.Join(dataRoot, "updates")
 	if err := os.MkdirAll(updatesRoot, 0o700); err != nil {
 		return "", err
@@ -192,7 +222,7 @@ func Prepare(verified releaseverify.VerifiedRelease, options PrepareOptions) (st
 			_ = os.RemoveAll(transaction)
 		}
 	}()
-	stagedCLI := filepath.Join(transaction, "bin", executableName(options.TargetOS))
+	stagedCLI := filepath.Join(transaction, "bin", executableForProfile(options.TargetOS, profile))
 	if err := copyVerifiedRegular(
 		filepath.Join(verified.Directory, cliArtifact.Name),
 		stagedCLI,
@@ -204,7 +234,11 @@ func Prepare(verified releaseverify.VerifiedRelease, options PrepareOptions) (st
 	}
 	stagedRuntimePack := ""
 	if runtimePack != nil {
-		stagedRuntimePack = filepath.Join(transaction, "markitdown-runtime.tar.gz")
+		runtimeName := "markitdown-runtime.tar.gz"
+		if profile != "" {
+			runtimeName = "docling-runtime.tar.gz"
+		}
+		stagedRuntimePack = filepath.Join(transaction, runtimeName)
 		if err := copyVerifiedRegular(filepath.Join(verified.Directory, runtimePack.Name), stagedRuntimePack, 0o600, runtimePack.Size, runtimePack.SHA256); err != nil {
 			return "", err
 		}
@@ -220,7 +254,9 @@ func Prepare(verified releaseverify.VerifiedRelease, options PrepareOptions) (st
 		return "", err
 	}
 	plan := ActivationPlan{
-		SchemaVersion:       2,
+		SchemaVersion: schemaForProfile(profile, 2),
+		Profile:       profile, UserHome: options.UserHome,
+		Server:              serverForManifest(verified.Manifest, *cliArtifact),
 		TransactionID:       filepath.Base(transaction),
 		Transition:          options.Transition,
 		ConfirmationPlanID:  options.ConfirmationPlanID,
@@ -230,7 +266,7 @@ func Prepare(verified releaseverify.VerifiedRelease, options PrepareOptions) (st
 		FromBundleVersion:   options.FromBundleVersion,
 		Release:             verified.Manifest.Release,
 		Channel:             verified.Manifest.Channel,
-		CLIVersion:          verified.Manifest.CLI.Version,
+		CLIVersion:          verified.Manifest.ExecutableVersion(),
 		BundleVersion:       verified.Manifest.Bundle.Version,
 		TargetOS:            options.TargetOS,
 		TargetArch:          options.TargetArch,
@@ -286,7 +322,8 @@ func ValidatePrepared(
 	if err != nil {
 		return ActivationPlan{}, err
 	}
-	if plan.Transition != options.Transition ||
+	if plan.UserHome != options.UserHome || plan.Profile != profileForManifest(verified.Manifest) || plan.Server != serverForManifest(verified.Manifest, *cliArtifact) ||
+		plan.Transition != options.Transition ||
 		plan.ConfirmationPlanID != options.ConfirmationPlanID ||
 		plan.FromRelease != options.FromRelease ||
 		plan.FromChannel != options.FromChannel ||
@@ -294,7 +331,7 @@ func ValidatePrepared(
 		plan.FromBundleVersion != options.FromBundleVersion ||
 		plan.Release != verified.Manifest.Release ||
 		plan.Channel != verified.Manifest.Channel ||
-		plan.CLIVersion != verified.Manifest.CLI.Version ||
+		plan.CLIVersion != verified.Manifest.ExecutableVersion() ||
 		plan.BundleVersion != verified.Manifest.Bundle.Version ||
 		plan.TargetOS != options.TargetOS ||
 		plan.TargetArch != options.TargetArch ||
@@ -355,7 +392,12 @@ func Activate(
 		return err
 	}
 	checker := options.CheckCLI
-	if checker == nil {
+	if plan.Profile == releasecontract.ModernProfile {
+		if options.CheckCLI != nil {
+			return errors.New("modern activation cannot use a caller-supplied legacy checker")
+		}
+		checker = func(path, _ string) error { return checkModernServer(path, plan.ManagedRoot, plan.Server) }
+	} else if checker == nil {
 		checker = commandSelfCheck
 	}
 	if plan.Transition == "install" {
@@ -377,10 +419,10 @@ func Activate(
 	}
 	defer unlock()
 
-	activeCLI := filepath.Join(plan.ManagedRoot, "bin", executableName(plan.TargetOS))
+	activeCLI := filepath.Join(plan.ManagedRoot, "bin", executableForProfile(plan.TargetOS, plan.Profile))
 	bundleTarget := filepath.Join(plan.ManagedRoot, "bundles", plan.BundleVersion)
 	runtimeTarget := ""
-	if plan.RuntimePackArtifactName != "" {
+	if plan.RuntimePackArtifactName != "" && plan.Profile == "" {
 		runtimeTarget = filepath.Join(plan.ManagedRoot, "runtimes", "markitdown", plan.Release)
 	}
 	if err := ensureSafePath(plan.ManagedRoot, activeCLI); err != nil {
@@ -415,7 +457,7 @@ func Activate(
 			return err
 		}
 	case "update":
-		if !hadState || !stateMatchesSource(current, plan) {
+		if !hadState || current.Profile != plan.Profile || !stateMatchesSource(current, plan) {
 			return errors.New("installed state changed after update confirmation")
 		}
 		info, err := os.Lstat(activeCLI)
@@ -429,7 +471,7 @@ func Activate(
 	activatedAt := time.Now().UTC()
 	receiptWritten := false
 	stateCommitted := false
-	if plan.Transition == "update" {
+	if plan.Transition == "update" || plan.Profile != "" {
 		if err := writeActivationReceipt(planPath, receiptForPlan(plan, activatedAt)); err != nil {
 			return fmt.Errorf("write activation intent: %w", err)
 		}
@@ -486,7 +528,7 @@ func Activate(
 
 	var backup string
 	if _, err := os.Stat(activeCLI); err == nil {
-		backup = filepath.Join(plan.ManagedRoot, "recovery", "cli", "unknown-"+plan.TransactionID, executableName(plan.TargetOS))
+		backup = filepath.Join(plan.ManagedRoot, "recovery", "cli", "unknown-"+plan.TransactionID, executableForProfile(plan.TargetOS, plan.Profile))
 		if plan.Transition == "update" {
 			backup = expectedSourceCLIBackup(plan)
 		}
@@ -531,7 +573,8 @@ func Activate(
 		options.afterPayload()
 	}
 	next := State{
-		SchemaVersion: 2,
+		SchemaVersion: schemaForProfile(plan.Profile, 2),
+		Profile:       plan.Profile, Server: plan.Server,
 		ManagedRoot:   plan.ManagedRoot,
 		Release:       plan.Release,
 		Channel:       plan.Channel,
@@ -547,6 +590,7 @@ func Activate(
 	}
 	if hadState {
 		next.Previous = &Snapshot{
+			Profile: current.Profile, Server: current.Server,
 			Release: current.Release, Channel: current.Channel, CLIVersion: current.CLIVersion,
 			BundleVersion: current.BundleVersion, TargetOS: current.TargetOS, TargetArch: current.TargetArch,
 			RoleAuthority: current.RoleAuthority, MigrationID: current.MigrationID,
@@ -562,7 +606,7 @@ func Activate(
 }
 
 func stateMatchesSource(state State, plan ActivationPlan) bool {
-	return state.Release == plan.FromRelease &&
+	return state.Profile == plan.Profile && state.Release == plan.FromRelease &&
 		state.Channel == plan.FromChannel &&
 		state.CLIVersion == plan.FromCLIVersion &&
 		state.BundleVersion == plan.FromBundleVersion &&
@@ -597,22 +641,30 @@ func Rollback(managedRoot, dataRoot string, checker func(path, version string) e
 	if err := ensureSafePath(managedRoot, current.Previous.CLIBackup); err != nil {
 		return fmt.Errorf("previous CLI backup is outside the managed root: %w", err)
 	}
-	if checker == nil {
+	if current.Previous.Profile == releasecontract.ModernProfile {
+		if checker != nil {
+			return errors.New("modern rollback cannot use legacy checker")
+		}
+		checker = func(path, _ string) error { return checkModernServer(path, managedRoot, current.Previous.Server) }
+	} else if checker == nil {
 		checker = commandSelfCheck
+	}
+	if current.Profile != current.Previous.Profile {
+		return errors.New("cross-profile rollback is unavailable")
 	}
 	unlock, err := acquireLock(managedRoot)
 	if err != nil {
 		return err
 	}
 	defer unlock()
-	activeCLI := filepath.Join(managedRoot, "bin", executableName(current.TargetOS))
+	activeCLI := filepath.Join(managedRoot, "bin", executableForProfile(current.TargetOS, current.Profile))
 	if err := ensureSafePath(managedRoot, activeCLI); err != nil {
 		return err
 	}
 	if _, err := os.Lstat(current.Previous.CLIBackup); err != nil {
 		return fmt.Errorf("previous CLI backup unavailable: %w", err)
 	}
-	revertedBackup := filepath.Join(managedRoot, "recovery", "cli", current.CLIVersion+"-rollback-"+fmt.Sprint(time.Now().UnixNano()), executableName(current.TargetOS))
+	revertedBackup := filepath.Join(managedRoot, "recovery", "cli", current.CLIVersion+"-rollback-"+fmt.Sprint(time.Now().UnixNano()), executableForProfile(current.TargetOS, current.Profile))
 	if err := ensureSafePath(managedRoot, revertedBackup); err != nil {
 		return err
 	}
@@ -632,7 +684,8 @@ func Rollback(managedRoot, dataRoot string, checker func(path, version string) e
 		return fmt.Errorf("rolled-back CLI self-check failed: %w", err)
 	}
 	next := State{
-		SchemaVersion: 2,
+		SchemaVersion: schemaForProfile(current.Previous.Profile, 2),
+		Profile:       current.Previous.Profile, Server: current.Previous.Server,
 		ManagedRoot:   managedRoot,
 		Release:       current.Previous.Release,
 		Channel:       current.Previous.Channel,
@@ -646,6 +699,7 @@ func Rollback(managedRoot, dataRoot string, checker func(path, version string) e
 		PolicySHA256:  current.Previous.PolicySHA256,
 		ActivatedAt:   time.Now().UTC(),
 		Previous: &Snapshot{
+			Profile: current.Profile, Server: current.Server,
 			Release: current.Release, Channel: current.Channel, CLIVersion: current.CLIVersion,
 			BundleVersion: current.BundleVersion, TargetOS: current.TargetOS, TargetArch: current.TargetArch,
 			RoleAuthority: current.RoleAuthority, MigrationID: current.MigrationID,
@@ -719,7 +773,12 @@ func ReconcileActivated(planPath string, options ActivateOptions) (bool, error) 
 		return false, err
 	}
 	checker := options.CheckCLI
-	if checker == nil {
+	if plan.Profile != "" {
+		if checker != nil {
+			return false, errors.New("modern reconciliation cannot use legacy checker")
+		}
+		checker = func(path, _ string) error { return checkModernServer(path, plan.ManagedRoot, plan.Server) }
+	} else if checker == nil {
 		checker = commandSelfCheck
 	}
 	receipt, err := readActivationReceipt(planPath, plan)
@@ -748,7 +807,7 @@ func ReconcileActivated(planPath string, options ActivateOptions) (bool, error) 
 		backupInfo, backupErr := os.Lstat(receipt.SourceCLIBackup)
 		backupReady := backupErr == nil && backupInfo.Mode().IsRegular()
 		if payloadErr == nil && backupReady {
-			activeCLI := filepath.Join(plan.ManagedRoot, "bin", executableName(plan.TargetOS))
+			activeCLI := filepath.Join(plan.ManagedRoot, "bin", executableForProfile(plan.TargetOS, plan.Profile))
 			if err := checker(activeCLI, plan.CLIVersion); err != nil {
 				if restoreErr := restoreInterruptedActivation(plan, receipt); restoreErr != nil {
 					return false, fmt.Errorf(
@@ -797,7 +856,7 @@ func validateReconciliationPlan(planPath string, options PrepareOptions) (Activa
 	if err != nil {
 		return ActivationPlan{}, err
 	}
-	if options.Transition != "update" ||
+	if plan.UserHome != options.UserHome || options.Transition != "update" ||
 		plan.Transition != options.Transition ||
 		plan.ConfirmationPlanID != options.ConfirmationPlanID ||
 		plan.FromRelease != options.FromRelease ||
@@ -827,9 +886,14 @@ func readActivationReceipt(planPath string, plan ActivationPlan) (ActivationRece
 }
 
 func verifyActivatedPayload(plan ActivationPlan) error {
-	activeCLI := filepath.Join(plan.ManagedRoot, "bin", executableName(plan.TargetOS))
+	activeCLI := filepath.Join(plan.ManagedRoot, "bin", executableForProfile(plan.TargetOS, plan.Profile))
 	if err := verifyRegularFile(activeCLI, plan.CLISize, plan.CLISHA256); err != nil {
 		return fmt.Errorf("reconcile active CLI: %w", err)
+	}
+	if plan.Profile != "" {
+		if err := checkModernServer(activeCLI, plan.ManagedRoot, plan.Server); err != nil {
+			return err
+		}
 	}
 	expectedBundle, err := os.MkdirTemp(filepath.Join(plan.DataRoot, "updates"), ".reconcile-bundle-")
 	if err != nil {
@@ -856,7 +920,7 @@ func verifyActivatedPayload(plan ActivationPlan) error {
 }
 
 func restoreInterruptedActivation(plan ActivationPlan, receipt ActivationReceipt) error {
-	activeCLI := filepath.Join(plan.ManagedRoot, "bin", executableName(plan.TargetOS))
+	activeCLI := filepath.Join(plan.ManagedRoot, "bin", executableForProfile(plan.TargetOS, plan.Profile))
 	backupInfo, backupErr := os.Lstat(receipt.SourceCLIBackup)
 	switch {
 	case backupErr == nil:
@@ -898,7 +962,8 @@ func restoreInterruptedActivation(plan ActivationPlan, receipt ActivationReceipt
 
 func committedTargetState(plan ActivationPlan, source State, activatedAt time.Time) State {
 	return State{
-		SchemaVersion: 2,
+		SchemaVersion: schemaForProfile(plan.Profile, 2),
+		Profile:       plan.Profile, Server: plan.Server,
 		ManagedRoot:   plan.ManagedRoot,
 		Release:       plan.Release,
 		Channel:       plan.Channel,
@@ -912,6 +977,7 @@ func committedTargetState(plan ActivationPlan, source State, activatedAt time.Ti
 		PolicySHA256:  plan.PolicySHA256,
 		ActivatedAt:   activatedAt,
 		Previous: &Snapshot{
+			Profile: source.Profile, Server: source.Server,
 			Release: source.Release, Channel: source.Channel, CLIVersion: source.CLIVersion,
 			BundleVersion: source.BundleVersion, TargetOS: source.TargetOS, TargetArch: source.TargetArch,
 			RoleAuthority: source.RoleAuthority, MigrationID: source.MigrationID,
@@ -926,7 +992,7 @@ func stateMatchesCommittedTarget(
 	plan ActivationPlan,
 	receipt ActivationReceipt,
 ) bool {
-	return state.Release == plan.Release &&
+	return state.Profile == plan.Profile && state.Server == plan.Server && state.Release == plan.Release &&
 		state.Channel == plan.Channel &&
 		state.CLIVersion == plan.CLIVersion &&
 		state.BundleVersion == plan.BundleVersion &&
@@ -936,7 +1002,7 @@ func stateMatchesCommittedTarget(
 		state.MigrationID == plan.RoleMigrationID &&
 		state.CatalogSHA256 == plan.CatalogSHA256 &&
 		state.PolicySHA256 == plan.PolicySHA256 &&
-		state.Previous != nil &&
+		state.Previous != nil && state.Previous.Profile == plan.Profile &&
 		state.Previous.Release == plan.FromRelease &&
 		state.Previous.Channel == plan.FromChannel &&
 		state.Previous.CLIVersion == plan.FromCLIVersion &&
@@ -948,7 +1014,8 @@ func stateMatchesCommittedTarget(
 
 func receiptForPlan(plan ActivationPlan, committedAt time.Time) ActivationReceipt {
 	return ActivationReceipt{
-		SchemaVersion:      1,
+		SchemaVersion: map[bool]int{true: 2, false: 1}[plan.Profile != ""],
+		Profile:       plan.Profile, Server: plan.Server,
 		ConfirmationPlanID: plan.ConfirmationPlanID,
 		TransactionID:      plan.TransactionID,
 		Release:            plan.Release,
@@ -991,7 +1058,7 @@ func expectedSourceCLIBackup(plan ActivationPlan) string {
 		"recovery",
 		"cli",
 		plan.FromCLIVersion+"-"+plan.TransactionID,
-		executableName(plan.TargetOS),
+		executableForProfile(plan.TargetOS, plan.Profile),
 	)
 }
 
@@ -1000,11 +1067,14 @@ func writeActivationReceipt(planPath string, receipt ActivationReceipt) error {
 }
 
 func WriteState(dataRoot string, state State) error {
-	if state.SchemaVersion != 2 || state.ManagedRoot == "" {
+	if state.SchemaVersion != schemaForProfile(state.Profile, 2) || !validModernIdentity(state.Profile, state.Server) || state.Profile != "" && state.CLIVersion != state.Server.Version || state.ManagedRoot == "" {
 		return errors.New("new install state must use schema version 2 with a managed root")
 	}
 	if !validRoleState(state.RoleAuthority, state.MigrationID, state.CatalogSHA256, state.PolicySHA256) {
 		return errors.New("install state role migration binding is invalid")
+	}
+	if state.Previous != nil && (!validModernIdentity(state.Previous.Profile, state.Previous.Server) || state.Previous.Profile != "" && state.Previous.CLIVersion != state.Previous.Server.Version) {
+		return errors.New("invalid previous profile")
 	}
 	if state.Previous != nil && !validRoleState(state.Previous.RoleAuthority, state.Previous.MigrationID, state.Previous.CatalogSHA256, state.Previous.PolicySHA256) {
 		return errors.New("previous install state role migration binding is invalid")
@@ -1050,7 +1120,10 @@ func readState(dataRoot, expectedManagedRoot string, allowV1Migration bool) (Sta
 			return State{}, fmt.Errorf("migrate install state to schema version 2: %w", err)
 		}
 		return state, nil
-	case 2:
+	case 2, 3:
+		if wire.SchemaVersion != schemaForProfile(wire.Profile, 2) {
+			return State{}, errors.New("install schema/profile mismatch")
+		}
 		if wire.ManagedRoot == nil || *wire.ManagedRoot == "" {
 			return State{}, errors.New("schema version 2 install state requires managed_root")
 		}
@@ -1070,6 +1143,9 @@ func readState(dataRoot, expectedManagedRoot string, allowV1Migration bool) (Sta
 }
 
 func validStateCore(state stateWire) bool {
+	if !validModernIdentity(state.Profile, state.Server) || state.Profile != "" && state.Server.Version != state.CLIVersion {
+		return false
+	}
 	if !versionPattern.MatchString(state.Release) ||
 		!versionPattern.MatchString(state.CLIVersion) ||
 		!versionPattern.MatchString(state.BundleVersion) ||
@@ -1084,7 +1160,7 @@ func validStateCore(state stateWire) bool {
 	if state.Previous == nil {
 		return true
 	}
-	return validRoleState(state.Previous.RoleAuthority, state.Previous.MigrationID, state.Previous.CatalogSHA256, state.Previous.PolicySHA256) &&
+	return validModernIdentity(state.Previous.Profile, state.Previous.Server) && validRoleState(state.Previous.RoleAuthority, state.Previous.MigrationID, state.Previous.CatalogSHA256, state.Previous.PolicySHA256) &&
 		versionPattern.MatchString(state.Previous.Release) &&
 		versionPattern.MatchString(state.Previous.CLIVersion) &&
 		versionPattern.MatchString(state.Previous.BundleVersion) &&
@@ -1107,6 +1183,7 @@ func validRoleState(authority, migrationID, catalogSHA256, policySHA256 string) 
 func stateFromWire(wire stateWire, managedRoot string) State {
 	return State{
 		SchemaVersion: wire.SchemaVersion,
+		Profile:       wire.Profile, Server: wire.Server,
 		ManagedRoot:   managedRoot,
 		Release:       wire.Release,
 		Channel:       wire.Channel,
@@ -1128,7 +1205,10 @@ func statePath(dataRoot string) string {
 }
 
 func validatePlan(path string, plan ActivationPlan) error {
-	if plan.SchemaVersion != 2 || !versionPattern.MatchString(plan.Release) ||
+	if err := verifyModernPlan(plan); err != nil {
+		return err
+	}
+	if !versionPattern.MatchString(plan.Release) ||
 		!versionPattern.MatchString(plan.CLIVersion) || !versionPattern.MatchString(plan.BundleVersion) ||
 		!sha256Pattern.MatchString(plan.ManifestSHA256) ||
 		!sha256Pattern.MatchString(plan.CLISHA256) ||
@@ -1169,7 +1249,7 @@ func validatePlan(path string, plan ActivationPlan) error {
 	if !within(transaction, plan.StagedCLI) || !within(transaction, plan.StagedBundleArchive) {
 		return errors.New("staged activation paths escape their transaction")
 	}
-	if filepath.Clean(plan.StagedCLI) != filepath.Join(transaction, "bin", executableName(plan.TargetOS)) {
+	if filepath.Clean(plan.StagedCLI) != filepath.Join(transaction, "bin", executableForProfile(plan.TargetOS, plan.Profile)) {
 		return errors.New("staged CLI has an unexpected name")
 	}
 	if filepath.Clean(plan.StagedBundleArchive) != filepath.Join(transaction, "bundle.tar.gz") {
@@ -1215,7 +1295,7 @@ func releaseArtifacts(
 	for index := range verified.Manifest.Artifacts {
 		artifact := &verified.Manifest.Artifacts[index]
 		switch {
-		case artifact.Kind == "cli" && artifact.OS == targetOS && artifact.Arch == targetArch:
+		case (artifact.Kind == "cli" && !verified.Manifest.Modern() || artifact.Kind == "mcp_server" && verified.Manifest.Modern()) && artifact.OS == targetOS && artifact.Arch == targetArch:
 			if cliArtifact != nil {
 				return nil, nil, nil, errors.New("release has multiple CLI artifacts for the target")
 			}
@@ -1225,7 +1305,7 @@ func releaseArtifacts(
 				return nil, nil, nil, errors.New("release has multiple base bundle artifacts")
 			}
 			bundleArtifact = artifact
-		case artifact.Kind == "runtime_pack":
+		case artifact.Kind == "runtime_pack" && (!verified.Manifest.Modern() || artifact.Adapter == "docling" && artifact.OS == targetOS && artifact.Arch == targetArch):
 			if runtimePack != nil {
 				return nil, nil, nil, errors.New("release has multiple runtime packs")
 			}
@@ -1410,6 +1490,10 @@ func copyVerifiedRegular(source, target string, mode os.FileMode, expectedSize i
 		output.Close()
 		return errors.New("staged artifact does not match its authenticated size and digest")
 	}
+	if err := output.Chmod(mode); err != nil {
+		output.Close()
+		return err
+	}
 	if err := output.Sync(); err != nil {
 		output.Close()
 		return err
@@ -1482,8 +1566,12 @@ func openRegular(path string, expectedSize int64) (*os.File, error) {
 	if !info.Mode().IsRegular() || info.Size() != expectedSize {
 		return nil, fmt.Errorf("install source must be a regular file with authenticated size: %s", path)
 	}
-	file, err := os.Open(path)
+	file, err := scheduler.OpenRegularFile(path)
 	if err != nil {
+		return nil, err
+	}
+	if err := scheduler.ValidateSingleLink(file); err != nil {
+		file.Close()
 		return nil, err
 	}
 	openedInfo, err := file.Stat()
@@ -1741,16 +1829,7 @@ func readJSONStrict(path string, target any) error {
 	if len(body) > 1<<20 {
 		return errors.New("JSON state exceeds 1 MiB")
 	}
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
-		return err
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return errors.New("multiple JSON values")
-		}
+	if err := releasecontract.DecodeStrictJSON(body, target); err != nil {
 		return err
 	}
 	return nil

@@ -8,6 +8,12 @@ track/proposal/apply/onboarding operations use the same admitted binding. See
 the [owner journey and local fallback guide](../../docs/product-mcp-owner.md)
 for exact operations. Roots and workspace identity are selected locally.
 
+The modern signed factory and explicit reviewed first install are described in
+the [installation guide](../../docs/product-install.md). They materialize complete
+participant-local packets after genuine admission. Their engineering source
+evidence does not establish native signing, client registration/loading or the
+still-pending modern update lifecycle.
+
 Reviewed memory adds capture, paged discovery/search/readback, bounded context,
 daily/weekly consolidation and revision-aware correction/deletion/retention.
 Read the [memory journey and local fallback guide](../../docs/product-mcp-memory.md).
@@ -62,8 +68,20 @@ its four required format/version outcomes remain separate from real client loadi
 Build N+1 to a new destination; existing/newer packets and external state survive.
 Builders do not install or change host profiles, authentication or model settings.
 
+Complete carriers also include diagnostic canonical-resource/native provenance
+in `maestro-packet.json`; the original `packet-inventory.json` remains the sole
+closed file inventory. Code's seven native hook vectors are emitted only by the
+explicit participant-local attended qualification producer. The existing hook
+command checks an optional selected owner/workspace digest after packet
+validation and before effects; that equality check grants no admission.
+Read [native review and qualification](../../docs/product-native-plugin.md) for
+the supported instruction closure, provider/context disclosure and engineering
+versus actual-host evidence boundaries. MCPB carries no Code hooks or children.
+
 The Code plugin includes all 92 canonical methods and two operator/resume aliases.
-MCP exposes 92 prompts and 248 immutable method/policy/provenance/license resources.
+MCP exposes 92 prompts plus immutable method, policy, provenance, license and
+canonical agent resources. The compiled identity and emitted packet diagnostics
+enumerate the exact current resources and their byte identities.
 Method availability is distinct from functional/native parity; check the adapter
 policy and actual operations before use. Both formats carry the native executable, six canonical runtime/memory files and
 complete method resources. The Desktop MCPB does not install native Skills. The recipes preserve host authority and owner

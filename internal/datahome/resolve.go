@@ -35,9 +35,21 @@ type Result struct {
 	MigrationSourceRoot string `json:"-"`
 }
 
-func Resolve(options Options) (Result, error) {
+func Resolve(options Options) (Result, error) { return resolve(options, false) }
+
+// PreviewInstallation inspects the same canonical home selection before the
+// managed payload exists. It grants no origin, key, locator or write authority.
+func PreviewInstallation(options Options) (Result, error) { return resolve(options, true) }
+
+func resolve(options Options, preview bool) (Result, error) {
 	var result Result
 	for name, path := range map[string]string{"user-home": options.UserHome, "product-root": options.ProductRoot} {
+		if preview && name == "product-root" {
+			if err := proposedDirectory(path); err != nil {
+				return failed(result, name+"-invalid", err)
+			}
+			continue
+		}
 		if err := existingDirectory(path); err != nil {
 			return failed(result, name+"-invalid", err)
 		}
@@ -280,4 +292,25 @@ func readRecord(path string, fields ...string) (map[string]string, error) {
 		result[field] = value
 	}
 	return result, nil
+}
+
+func proposedDirectory(path string) error {
+	if err := absolutePath(path); err != nil {
+		return err
+	}
+	current := path
+	for {
+		err := existingDirectory(current)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return errors.New("no canonical existing parent")
+		}
+		current = parent
+	}
 }

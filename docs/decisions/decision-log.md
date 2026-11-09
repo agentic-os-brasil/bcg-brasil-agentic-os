@@ -1349,13 +1349,45 @@ filesystem surface or stronger marker-transaction claim.
 - Refs: #492; specs/057-product-mcp-execution.md; docs/product-runnable-packets.md; adapters/mcp/packaging; https://code.claude.com/docs/en/plugins-reference; https://github.com/modelcontextprotocol/mcpb/blob/main/MANIFEST.md
 - Supersedes: none
 
+## NPHK - Bind native hooks to attended host and target qualification
+
+- Date: 2026-11-09
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Complete portable carriers already expose canonical methods and six inert specialist projections, but source hooks and projected instructions alone do not establish host enforcement or target-local qualification.
+- Decision: Reuse the existing admitted MCP executable and hook adapter with the bounded sequential maestro_planner profile. Only an attended producer observing the selected executable, supported local instruction closure and synthetic guard/failure controls may create opaque process-local NativeHost admission and consume it immediately in a new Code build. Code >=2.1.295 supplies documented direct exec-form argv and onFailure:block enforcement; unsupported hosts keep ordinary MCP use available without active hooks. Native hook vectors retain portable selections and check a digest of the exact reviewed owner/workspace identity before effects; that digest is equality checking, never another admission authority.
+- Consequences: The sole closed file inventory remains packet-inventory.json. Additional native/resource provenance is diagnostic and cannot authorize another build. Private qualified outputs remain participant/target scoped, while plain redistributables stay unbound. Source fixtures remain engineering evidence; native stop events never certify artifacts, review custody or execution completion. Windows native admission, real client loading, organization signing and distribution require separate evidence.
+- Refs: #495; RPKT; specs/063-product-native-plugin.md; docs/product-native-plugin.md; https://code.claude.com/docs/en/hooks
+- Supersedes: none
+
+## NOBS - Distinguish local native observation from managed device authority
+
+- Date: 2026-11-09
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The supported local host protocol exposes settings and instruction inputs but does not expose complete remote or OS-delivered managed-policy closure.
+- Decision: Bind supported local settings, recursive rules/imports and missing-file membership, and disclose an explicit digest-bound UNATTESTED managed-policy boundary, provider/context usage, bounded synthetic writes and descendant-cleanup limits before attended execution. Preserve the owner's profile and authentication. Known unsupported local inputs refuse; unknown external policy remains unattested rather than an inferred absence.
+- Consequences: Existing local autoMemoryEnabled:false and operator confirmation do not establish enterprise policy or production rollout authority. A timeout or failed control cannot mint admission. No credential-file read, profile repair, model acquisition, registration or service activation follows from source qualification.
+- Refs: #495; NPHK; specs/063-product-native-plugin.md; docs/product-native-plugin.md
+- Supersedes: none
+
+## MPDI - Build the real MCP product through canonical signed installation
+
+- Date: 2026-11-03
+- Status: accepted
+- Owner: Maestro
+- Context: The reviewed product has real MCP packets and native qualification, but the legacy factory rejects its removed CLI and names an absent bootstrapper. A complete participant install must activate the actual server and preserve private home authority.
+- Decision: Add the closed manifest-v2 mcp-local-v1 profile with an actual versioned mcp_server identity/inventory, independent maestro-install seed protocol and strict plan/state-v3 and receipt-v2 variants inside the existing canonical verifier/installer/installtx owners. Build both actual entrypoints in the MCP module. Review exact effects before confirmation; keep private installation custody separate from admitted Home, then perform genuine home/workspace admission and local Code/MCPB materialization. Bind real SDK/converter versions and fixed installed/carrier registry layouts. Preserve legacy signed bytes, semantics, migration fences and strict old-writer refusal.
+- Consequences: One functional delivery must prove actual factory-to-installed-and-packaged MCP continuation with engineering fixtures, then signed synced updates/rollback/recall and registration recovery. Production authority/native signing, devices and clients remain external evidence; no unsigned operator bypass or scaffolding PR establishes completion. A canonical read-only home-address preview grants no admission.
+- Refs: specs/020-release-distribution.md; docs/plans/2026-11-03-synced-product-distribution.md; internal/releasecontract; internal/installer; internal/installtx; adapters/mcp
+- Supersedes: none
 
 ## PWKW - Retain admitted Windows wiki namespaces through effects
 
 - Date: 2026-11-09
-- Status: accepted for issue #468 source integration; native execution remains independently qualified
+- Status: accepted
 - Owner: Maestro product maintainers
-- Context: The current Windows private-state owner already implements finite pinned-tree admission and deletion. Wiki snapshot, publication, readback and retirement still need their complete effect to retain that namespace rather than infer support from ordinary-memory availability.
+- Context: Accepted for issue #468 source integration; native execution remains independently qualified. The current Windows private-state owner already implements finite pinned-tree admission and deletion. Wiki snapshot, publication, readback and retirement still need their complete effect to retain that namespace rather than infer support from ordinary-memory availability.
 - Decision: Preserve the explicit wiki gate and make it validate the actual existing owned workspace and supported pinned namespace. Retain admitted workspace, staging/version parents and pointer custody through each owning effect. Use the current native kernel unchanged, and preserve source/cohort/event, denial, exact-parent and immutable readback rules. Never deserialize native authority or replace admission with a platform constant.
 - Consequences: Missing, unsafe or occupied custody remains unavailable without initialization or repair. Windows retains construction staging after leaf custody ends rather than reopening the old name for cleanup; the existing denial-before-whole-wiki-retirement operation owns removal. Unix cleanup ordering remains unchanged. Current native SDK/stdio, custody, sharing and hardlink controls must execute through the existing ordinary-account profile. Historical pre-wiki Windows owned memory is unsupported; actual old-consumer/compatible-producer positives stay on their admitted Mac/Linux platforms. No client installation, service, model, provider, source signing or distribution is activated.
 - Refs: #468; PWKC; specs/008-wiki-update-okf.md; docs/product-windows-private-wiki.md; internal/memory/private_wiki_native.go
