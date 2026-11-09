@@ -467,6 +467,9 @@ func verifyBoundBundle(managedRoot, dataRoot, version string, b ReleaseBinding) 
 // ValidateQualifiedLaunch is a read-only admission check. It never refreshes
 // the sync folder, enrolls source custody, repairs state or activates payloads.
 func ValidateQualifiedLaunch(managedRoot, dataRoot string, expected ReleaseBinding, now time.Time) (State, error) {
+	if (expected.ManifestSHA256 == "") != (expected.ClientInputsSHA256 == "") {
+		return State{}, errors.New("incomplete carrier release binding: manifest and client-input pins are required together")
+	}
 	state, err := ReadSourceState(dataRoot, managedRoot)
 	if err != nil {
 		return State{}, err
