@@ -62,3 +62,7 @@ Deterministic tests use `ClientSession.CallTool` over memory and the compiled CL
 stdio transport, then build N/N+1 packets against the same external ledger. Set
 TMPDIR and GOTMPDIR under Developer before testing. Native host/model acceptance,
 Windows qualification, organizational signing, release and rollout remain separate.
+
+## Reviewed maintenance lifecycle
+
+`maintenance.status` and `maintenance.report` are read-only. `maintenance.qualify`, `maintenance.enroll`, `maintenance.pause`, `maintenance.resume` and `maintenance.revoke` require trusted exact review and the current revision. `maintenance.run` dispatches enrolled due work; it neither installs a service nor attests host wake support. See [the owning guide](../../docs/product-mcp-maintenance.md) for the finite eight-job catalog and local stdin fallback. Private wiki queries are not registered in this slice.

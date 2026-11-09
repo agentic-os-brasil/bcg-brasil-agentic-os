@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -51,9 +52,9 @@ func TestCompleteMethodPackets(t *testing.T) {
 	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: ws, DataRoot: filepath.Join(h.Home, "state")}); err != nil {
 		t.Fatal(err)
 	}
-	server, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
+	server := filepath.Join(base, "maestro-mcp")
+	if output, err := exec.Command("go", "build", "-o", server, "../cmd/maestro-mcp").CombinedOutput(); err != nil {
+		t.Fatalf("rebuild product server: %s: %v", output, err)
 	}
 	opts := packaging.Options{Destination: filepath.Join(base, "plugin"), Server: server, Version: "0.2.0", Binding: product.Options{ProductRoot: prod, UserHome: home, WorkspacePath: ws, LookupEnv: lookup}}
 	if err := packaging.BuildPlugin(opts); err != nil {
@@ -137,7 +138,10 @@ func TestCompleteMethodPackets(t *testing.T) {
 				if !bytes.Contains(installed, []byte("../../METHODS.md")) {
 					t.Fatalf("method authority pointer missing: %s", id)
 				}
-				if id == "maestro-onboarding" || id == "maestro-operator" {
+				switch id {
+				case "maestro-onboarding", "maestro-operator", "dream-memory", "maestro-runtime-checkup", "maestro-environment-setup", "maestro-doctor":
+					// Preserve complete owner and maintenance recipes, removing only
+					// the checked projection authority paragraph and invocation sigil.
 					projected := installed[end:]
 					authorityEnd := bytes.Index(projected, []byte("\n\n"))
 					if authorityEnd < 0 {
@@ -150,7 +154,7 @@ func TestCompleteMethodPackets(t *testing.T) {
 						expected = bytes.ReplaceAll(expected, []byte("$"+methodID), []byte("/"+methodID))
 					}
 					if !bytes.Equal(projected, expected) {
-						t.Fatalf("complete owner recipe differs from canonical bytes: %s", id)
+						t.Fatalf("complete owner/maintenance recipe differs from canonical bytes: %s", id)
 					}
 				}
 			}
@@ -217,6 +221,18 @@ func TestCompleteMethodPackets(t *testing.T) {
 	wantArgs := []string{"serve", "--product-root", prod, "--user-home", home, "--workspace", ws}
 	if !reflect.DeepEqual(pluginConfig.Servers["maestro"].Args, wantArgs) {
 		t.Fatal("plugin binding changed")
+	}
+	serverBytes, err := os.ReadFile(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverName := "maestro-mcp"
+	if runtime.GOOS == "windows" {
+		serverName += ".exe"
+	}
+	pluginServer, err := os.ReadFile(filepath.Join(opts.Destination, "scripts", serverName))
+	if err != nil || !bytes.Equal(serverBytes, pluginServer) {
+		t.Fatal("Code plugin server differs from selected shared executable")
 	}
 	if runtime.GOOS != "darwin" {
 		return
