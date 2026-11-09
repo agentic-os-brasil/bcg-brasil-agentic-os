@@ -14,8 +14,8 @@ import (
 )
 
 func TestMigratedHomePublicMCPInit(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
+	if runtime.GOOS == "windows" && os.Getenv("MAESTRO_WINDOWS_CORE_PROOF") != "1" {
+		t.Skip("dedicated ordinary-account Windows external migration proof required")
 	}
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {

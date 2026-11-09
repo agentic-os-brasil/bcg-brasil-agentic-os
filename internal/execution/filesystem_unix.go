@@ -211,3 +211,5 @@ func OpenConfinedStore(root string) (Store, error) {
 	}
 	return Store{Root: dir.Name()}, nil
 }
+
+func openEvidenceFile(path string) (*os.File, error) { return ledgerOpen(path, os.O_RDONLY, 0) }

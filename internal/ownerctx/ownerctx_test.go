@@ -5,7 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -41,22 +41,22 @@ func TestInitializeCreatesInspectablePointersWithoutOverwritingSelf(t *testing.T
 }
 
 func TestOwnerRegistryRejectsPermissiveAndTrailingJSON(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX permission bits are not enforced on Windows")
-	}
 	root := t.TempDir()
 	if _, err := Initialize(root); err != nil {
 		t.Fatal(err)
 	}
 	registryPath := filepath.Join(root, "owner", "registry.json")
-	if err := os.Chmod(registryPath, 0o644); err != nil {
-		t.Fatal(err)
-	}
+	restore := ownerPublicRegistry(t, registryPath)
+	before := ownerTreeSnapshot(t, root)
 	if _, err := Inspect(root); err == nil {
 		t.Fatal("permissive owner registry was accepted")
 	}
-	if err := os.Chmod(registryPath, 0o600); err != nil {
-		t.Fatal(err)
+	if !reflect.DeepEqual(before, ownerTreeSnapshot(t, root)) {
+		t.Fatal("unsafe-registry inspection mutated owner tree")
+	}
+	restore()
+	if _, err := Inspect(root); err != nil {
+		t.Fatal("restored private registry must be admitted before the trailing JSON case", err)
 	}
 	body, err := os.ReadFile(registryPath)
 	if err != nil {
@@ -65,8 +65,12 @@ func TestOwnerRegistryRejectsPermissiveAndTrailingJSON(t *testing.T) {
 	if err := os.WriteFile(registryPath, append(body, []byte("{}\n")...), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	before = ownerTreeSnapshot(t, root)
 	if _, err := Inspect(root); err == nil {
 		t.Fatal("trailing owner registry JSON was accepted")
+	}
+	if !reflect.DeepEqual(before, ownerTreeSnapshot(t, root)) {
+		t.Fatal("trailing-JSON inspection mutated owner tree")
 	}
 }
 
@@ -592,9 +596,6 @@ func TestSnapshotFailsClosedForFacetMutationBeyondProjectionBound(t *testing.T) 
 }
 
 func TestAtomicPrivateWriteRejectsSymlinkTarget(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink privilege is not available on all Windows runners")
-	}
 	root := t.TempDir()
 	victim := filepath.Join(root, "victim")
 	if err := os.WriteFile(victim, []byte("safe"), 0o600); err != nil {
@@ -604,8 +605,12 @@ func TestAtomicPrivateWriteRejectsSymlinkTarget(t *testing.T) {
 	if err := os.Symlink(victim, target); err != nil {
 		t.Fatal(err)
 	}
+	before := ownerTreeSnapshot(t, root)
 	if err := atomicPrivateWrite(target, []byte("forged")); err == nil {
 		t.Fatal("atomic writer followed a symlink target")
+	}
+	if !reflect.DeepEqual(before, ownerTreeSnapshot(t, root)) {
+		t.Fatal("linked-target refusal mutated owner tree")
 	}
 	body, err := os.ReadFile(victim)
 	if err != nil || string(body) != "safe" {
@@ -614,20 +619,19 @@ func TestAtomicPrivateWriteRejectsSymlinkTarget(t *testing.T) {
 }
 
 func TestAtomicPrivateWriteRejectsSymlinkAncestor(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink privilege is not available on all Windows runners")
-	}
 	root := t.TempDir()
-	victim := filepath.Join(root, "victim")
-	if err := os.Mkdir(victim, 0o700); err != nil {
+	victim := t.TempDir()
+	if err := os.WriteFile(filepath.Join(victim, "marker"), []byte("safe"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	link := filepath.Join(root, "link")
-	if err := os.Symlink(victim, link); err != nil {
-		t.Fatal(err)
-	}
+	ownerDirectoryAlias(t, link, victim)
+	before, external := ownerTreeSnapshot(t, root), ownerTreeSnapshot(t, victim)
 	if err := atomicPrivateWrite(filepath.Join(link, "nested", "state.json"), []byte("forged")); err == nil {
 		t.Fatal("atomic writer followed a symlink ancestor")
+	}
+	if !reflect.DeepEqual(before, ownerTreeSnapshot(t, root)) || !reflect.DeepEqual(external, ownerTreeSnapshot(t, victim)) {
+		t.Fatal("linked-ancestor refusal mutated owner or external tree")
 	}
 }
 
@@ -984,4 +988,42 @@ func transitionObservation(t *testing.T, root, id string, next ObservationState,
 		return ObservationReceipt{}, err
 	}
 	return TransitionObservation(root, ObservationTransitionInput{ObservationID: id, TransitionID: "transition-" + digest(id + "\x00" + string(next) + "\x00" + current.Revision)[:32], Next: next, ExpectedState: current.State, ExpectedRevision: current.Revision, ExpectedCanonicalDigest: canonical, OwnerAction: true})
+}
+
+func ownerTreeSnapshot(t *testing.T, root string) map[string]string {
+	t.Helper()
+	snapshot := map[string]string{}
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		value := info.Mode().String() + ownerSecuritySnapshot(t, path)
+		// Directory timestamps reflect transient locks and deferred NTFS updates.
+		if !info.IsDir() {
+			value += " " + info.ModTime().String()
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			value += " " + target
+		} else if info.Mode().IsRegular() {
+			body, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			value += " " + string(body)
+		}
+		snapshot[path] = value
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return snapshot
 }

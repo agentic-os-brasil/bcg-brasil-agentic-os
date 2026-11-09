@@ -264,3 +264,91 @@ if ($env:USERPROFILE -cne $userHomeFixture -or $env:HOME -cne $userHomeFixture -
 
 if __name__ == "__main__":
     unittest.main()
+
+class WindowsEngineProfile(unittest.TestCase):
+    setUp = WindowsInspectionDriver.setUp
+    closed_manifest = WindowsInspectionDriver.closed_manifest
+    assert_preaccount_refusal = WindowsInspectionDriver.assert_preaccount_refusal
+
+    def invoke_engine(self, document):
+        self.manifest.write_text(json.dumps(document), encoding="utf-8")
+        binary = self.root / "public.exe"
+        binary.write_bytes(b"unexecuted public executable fixture")
+        return subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(DRIVER),
+                               "-TestBinary", str(binary), "-Server", str(binary),
+                               "-CanonicalManifest", str(self.manifest), "-OutputRoot", str(self.root / "proof")],
+                              capture_output=True, text=True, timeout=30)
+
+    def engine_document(self):
+        document = self.closed_manifest()
+        for entry in document["packages"]:
+            entry.pop("skip_policy")
+        digest = hashlib.sha256(b"unexecuted public executable fixture").hexdigest()
+        document.update(qualification_profile="windows_private_engine_v1",
+                        public_test_binary_sha256=digest, public_server_sha256=digest,
+                        adapter_profile="windows_private_engine_adapters_v1", adapter_packages=[])
+        return document
+
+    def test_engine_unknown_profile_refuses_before_account(self):
+        document = self.engine_document()
+        document["qualification_profile"] = "windows_private_engine_v999"
+        self.assert_preaccount_refusal(self.invoke_engine(document), "Unknown canonical qualification profile")
+
+    def test_engine_package_subset_refuses_before_account(self):
+        self.assert_preaccount_refusal(self.invoke_engine(self.engine_document()), "Engine qualification requires exactly the eight owning packages")
+
+    def test_engine_public_executable_hash_is_bound(self):
+        document = self.engine_document()
+        document["public_server_sha256"] = "0" * 64
+        self.assert_preaccount_refusal(self.invoke_engine(document), "Engine public executables differ from the sealed source manifest")
+
+    def test_engine_builder_parses(self):
+        parser = self.root / "builder-parser.ps1"
+        parser.write_text("$e=$null; [Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$e) | Out-Null; if($e.Count){throw ($e | Out-String)}", encoding="utf-8")
+        for name in ["windows-engine-build.ps1", "windows-engine-check.ps1", "windows-engine-evidence.ps1"]:
+            result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(parser), str(ROOT / "acceptance" / name)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_engine_proof_rejects_unknown_skip_duplicate_and_tampered_case_identity(self):
+        script = self.root / "engine-proof.ps1"
+        script.write_text(r'''$ErrorActionPreference='Stop'
+$tokens=$null; $errors=$null
+[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$tokens,[ref]$errors) | Out-Null
+if($errors.Count){throw ($errors | Out-String)}
+$launcher=@($tokens | Where-Object {$_.Kind -eq 'HereStringLiteral'})
+if($launcher.Count -ne 1){throw 'Expected the actual shared launcher'}
+$ast=[Management.Automation.Language.Parser]::ParseInput($launcher[0].Value,[ref]$null,[ref]$errors)
+foreach($name in @('Get-CanonicalLogRecords','Test-CanonicalObservedPass','Test-CanonicalCasePair','Get-CanonicalPackageProof','Get-EnginePublicProof')) {
+ $found=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq $name},$true))
+ if($found.Count -ne 1){throw ('Expected actual profile helper '+$name)}
+ Invoke-Expression $found[0].Extent.Text
+}
+$entry=@{tests=@('TestOriginal','TestNative'); canonical_required_tests=@('TestNative'); canonical_original_assertions=@('TestOriginal'); canonical_skip_policy=@(@{test='TestOriginal';reason='exact unavailable capability';kind='platform-counterpart';paired='TestNative'})}
+$body="=== RUN   TestOriginal`n    fixture_test.go:1: exact unavailable capability`n--- SKIP: TestOriginal (0.00s)`n=== RUN   TestNative`n--- PASS: TestNative (0.00s)`n"
+$valid=Get-CanonicalPackageProof $entry $body 0 $true
+if(-not $valid.qualified -or $valid.classified_skips.Count -ne 1 -or $valid.original_assertions[0].original_outcome -cne 'SKIP'){throw ('Exact native pair must preserve the original SKIP: '+($valid | ConvertTo-Json -Depth 6 -Compress)+' records='+(@(Get-CanonicalLogRecords $body)|ConvertTo-Json -Compress))}
+foreach($invalid in @(($body.Replace('exact unavailable capability','unknown capability')),($body+"--- PASS: TestNative (0.00s)`n"),($body.Replace('--- PASS: TestNative','--- SKIP: TestNative')),($body.Replace('TestNative','TestUnknown')))) {
+ if((Get-CanonicalPackageProof $entry $invalid 0 $true).qualified){throw ('Unknown, duplicate, missing or skipped native evidence qualified: '+($invalid | ConvertTo-Json -Compress))}
+}
+$policy=@{paired='TestOriginal/same-object-case-contract'}
+$identity=@{kind='selected-directory-case-pair-v1';scope=$policy.paired;selected='C:\owner\state';counterpart='C:\owner\STATE';selected_identity=@(1,2,3);counterpart_identity=@(1,2,3);same_object=$true}
+# Absolute Windows paths are evaluated by the actual Windows parser in CI.
+# Use native rooted case spellings locally without pretending to observe NTFS.
+if(-not [IO.Path]::IsPathRooted($identity.selected)){$identity.selected='/owner/state';$identity.counterpart='/owner/STATE'}
+$records=@([pscustomobject]@{test=$policy.paired;text=('case_pair_evidence='+($identity|ConvertTo-Json -Compress))})
+if(-not (Test-CanonicalCasePair $policy $records)){throw 'Well-typed same-object evidence should parse'}
+$identity.counterpart_identity=@(1,2,4)
+$records[0].text='case_pair_evidence='+($identity|ConvertTo-Json -Compress)
+if(Test-CanonicalCasePair $policy $records){throw 'Different native identities were accepted'}
+$identity.counterpart_identity=@(1,2,3);$identity.unexpected=$true
+$records[0].text='case_pair_evidence='+($identity|ConvertTo-Json -Compress)
+if(Test-CanonicalCasePair $policy $records){throw 'Unknown evidence field was accepted'}
+$public=@{required_tests=@('TestPublic');required_assertions=@('TestPublic','TestPublic/child')}
+$publicBody="--- PASS: TestPublic (0.00s)`n    --- PASS: TestPublic/child (0.00s)`n"
+if(-not (Get-EnginePublicProof $public $publicBody 0).qualified){throw 'Exact complete public outcomes refused'}
+foreach($invalid in @(($publicBody+"    --- PASS: TestPublic/unknown (0.00s)`n"),($publicBody.Replace('PASS: TestPublic/child','SKIP: TestPublic/child')),($publicBody+"    --- PASS: TestPublic/child (0.00s)`n"))) {
+ if((Get-EnginePublicProof $public $invalid 0).qualified){throw 'Unknown, skipped or duplicate public child qualified'}
+}
+''', encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

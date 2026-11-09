@@ -19,16 +19,6 @@ func TestInitializeFreshCreatesReadyHome(t *testing.T) {
 				opts.LookupEnv = func(string) (string, bool) { return selected, true }
 			}
 			got, err := datahome.InitializeFresh(opts)
-			if runtime.GOOS == "windows" {
-				if err == nil || got.Writable || got.Diagnostic != "ownership-unverified" {
-					t.Fatalf("Windows must fail closed: %+v %v", got, err)
-				}
-				entries, _ := os.ReadDir(opts.UserHome)
-				if len(entries) != 0 {
-					t.Fatal("unverified bootstrap wrote state")
-				}
-				return
-			}
 			if err != nil || !got.Writable || got.Diagnostic != "ready" {
 				t.Fatalf("bootstrap: %+v %v", got, err)
 			}
@@ -55,20 +45,11 @@ func TestInitializeFreshCreatesReadyHome(t *testing.T) {
 			if err != nil || !reopened.Writable || reopened.Home != got.Home {
 				t.Fatalf("reopen: %+v %v", reopened, err)
 			}
-			for _, path := range []string{got.Home, got.BrainRoot, filepath.Dir(origin)} {
-				info, err := os.Stat(path)
-				if err != nil || info.Mode().Perm() != 0700 {
-					t.Fatalf("directory mode: %s %v %v", path, info, err)
-				}
-			}
-			if after.Mode().Perm() != 0600 {
-				t.Fatal("origin must be private")
+			for _, path := range []string{got.Home, got.BrainRoot, filepath.Dir(origin), origin} {
+				initializePrivateObject(t, path)
 			}
 			if custom {
-				info, err := os.Stat(filepath.Join(opts.UserHome, ".maestro-home.json"))
-				if err != nil || info.Mode().Perm() != 0600 {
-					t.Fatalf("locator: %v %v", info, err)
-				}
+				initializePrivateObject(t, filepath.Join(opts.UserHome, ".maestro-home.json"))
 			}
 		})
 	}
@@ -101,31 +82,24 @@ func TestInitializeFreshRefusesExistingAmbiguousStateWithoutChanges(t *testing.T
 				}
 				record(t, filepath.Join(opts.UserHome, ".maestro-home.json"), map[string]any{"schema_version": 1, "home": home, "attempt_id": ""})
 			case "symlink", "ancestor-symlink":
-				if runtime.GOOS == "windows" {
-					t.Skip("native reparse qualification separate")
-				}
 				outside := filepath.Join(opts.UserHome, "outside")
 				if err := os.Mkdir(outside, 0700); err != nil {
 					t.Fatal(err)
 				}
-				if err := os.Symlink(outside, home); err != nil {
-					t.Fatal(err)
-				}
+				initializeDirectoryAlias(t, home, outside)
 				if scenario == "ancestor-symlink" {
 					selected := filepath.Join(home, "new-home")
 					opts.LookupEnv = func(string) (string, bool) { return selected, true }
 				}
 			case "public-home":
-				if runtime.GOOS == "windows" {
-					t.Skip("Unix modes")
-				}
-				if err := os.Mkdir(home, 0755); err != nil {
+				if err := os.Mkdir(home, 0700); err != nil {
 					t.Fatal(err)
 				}
+				initializePublicDirectory(t, home)
 			}
 			before := homeSnapshot(t, opts.UserHome)
 			got, err := datahome.InitializeFresh(opts)
-			if scenario == "empty-home" && runtime.GOOS != "windows" {
+			if scenario == "empty-home" {
 				if err != nil || !got.Writable {
 					t.Fatalf("empty home: %+v %v", got, err)
 				}
@@ -153,7 +127,7 @@ func homeSnapshot(t *testing.T, root string) map[string]string {
 		if err != nil {
 			return err
 		}
-		value := info.Mode().String()
+		value := info.Mode().String() + initializeSecuritySnapshot(t, path)
 		// NTFS can defer directory timestamps from fixture creation until inspection.
 		if runtime.GOOS != "windows" || !info.IsDir() {
 			value += " " + info.ModTime().String()

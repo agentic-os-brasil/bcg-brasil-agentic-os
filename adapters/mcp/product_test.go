@@ -28,9 +28,6 @@ func TestStartupNeverBootstraps(t *testing.T) {
 func TestPublicWorkflow(t *testing.T)                  { runWorkflow(t, false) }
 func TestCompiledStdioWorkflowAndPackets(t *testing.T) { runWorkflow(t, true) }
 func runWorkflow(t *testing.T, stdio bool) {
-	if runtime.GOOS == "windows" {
-		t.Skip("verified owner admission unavailable")
-	}
 	base := physicalTempDir(t)
 	prod := filepath.Join(base, "product")
 	home := filepath.Join(base, "owner")
@@ -46,7 +43,7 @@ func runWorkflow(t *testing.T, stdio bool) {
 	}
 	binary := ""
 	if stdio {
-		binary = filepath.Join(base, "maestro-mcp")
+		binary = filepath.Join(base, productTestBinaryName())
 		build := exec.Command("go", "build", "-o", binary, "./cmd/maestro-mcp")
 		if out, err := build.CombinedOutput(); err != nil {
 			t.Fatalf("build: %s %v", out, err)
@@ -316,36 +313,8 @@ func runWorkflow(t *testing.T, stdio bool) {
 
 }
 
-func TestWindowsAdmissionRefused(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("Windows admission contract")
-	}
-	base := physicalTempDir(t)
-	prod := filepath.Join(base, "product")
-	home := filepath.Join(base, "owner")
-	for _, path := range []string{prod, home} {
-		if err := os.Mkdir(path, 0700); err != nil {
-			t.Fatal(err)
-		}
-	}
-	lookup := func(string) (string, bool) { return "", false }
-	state, err := datahome.InitializeFresh(datahome.Options{ProductRoot: prod, UserHome: home, LookupEnv: lookup})
-	if err == nil || state.Writable || state.Diagnostic != "ownership-unverified" {
-		t.Fatalf("unverified Windows owner admitted: %+v %v", state, err)
-	}
-	if _, err := product.Open(product.Options{ProductRoot: prod, UserHome: home, WorkspacePath: filepath.Join(base, "workspace"), LookupEnv: lookup}); err == nil {
-		t.Fatal("Windows product store admitted")
-	}
-	if _, err := os.Lstat(filepath.Join(home, ".maestro")); !os.IsNotExist(err) {
-		t.Fatal("refused bootstrap created state")
-	}
-}
-
 func TestCLIInitRefusesUnsafeBindingsWithoutWrites(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("positive init admission unavailable")
-	}
-	binary := filepath.Join(physicalTempDir(t), "maestro-mcp")
+	binary := filepath.Join(physicalTempDir(t), productTestBinaryName())
 	if out, err := exec.Command("go", "build", "-o", binary, "./cmd/maestro-mcp").CombinedOutput(); err != nil {
 		t.Fatalf("build %s: %v", out, err)
 	}
@@ -409,4 +378,11 @@ func physicalTempDir(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+func productTestBinaryName() string {
+	if runtime.GOOS == "windows" {
+		return "maestro-mcp.exe"
+	}
+	return "maestro-mcp"
 }

@@ -6,6 +6,11 @@ on:
       - 'adapters/mcp/**'
       - 'internal/execution/**'
       - 'internal/datahome/**'
+      - 'internal/scheduler/**'
+      - 'internal/winprivate/**'
+      - 'internal/processidentity/**'
+      - 'internal/privatelock/**'
+      - 'internal/userlevel/**'
       - 'internal/zipmigration/**'
       - 'internal/zipruntime/**'
       - 'go.mod'
@@ -18,6 +23,9 @@ on:
       - 'schemas/memory-commit.schema.json'
       - 'bundles/**'
       - 'LICENSE.md'
+      - 'acceptance/windows-core-pilot.ps1'
+      - 'acceptance/windows-engine-*.ps1'
+      - 'acceptance/test_windows_profile_driver.py'
       - '.github/workflows/product-mcp.yml'
   push:
     branches: [main]
@@ -25,6 +33,11 @@ on:
       - 'adapters/mcp/**'
       - 'internal/execution/**'
       - 'internal/datahome/**'
+      - 'internal/scheduler/**'
+      - 'internal/winprivate/**'
+      - 'internal/processidentity/**'
+      - 'internal/privatelock/**'
+      - 'internal/userlevel/**'
       - 'internal/zipmigration/**'
       - 'internal/zipruntime/**'
       - 'go.mod'
@@ -37,6 +50,9 @@ on:
       - 'schemas/memory-commit.schema.json'
       - 'bundles/**'
       - 'LICENSE.md'
+      - 'acceptance/windows-core-pilot.ps1'
+      - 'acceptance/windows-engine-*.ps1'
+      - 'acceptance/test_windows_profile_driver.py'
       - '.github/workflows/product-mcp.yml'
 
 permissions:
@@ -83,16 +99,42 @@ jobs:
           }
           $stagedBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           "GOCACHE=$freshCache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Build exact committed native engine qualification inputs
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./acceptance/windows-engine-build.ps1
+      - name: Run all ordinary native owners and public journeys
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./acceptance/windows-core-pilot.ps1 -TestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/mcp.test.exe') -Server (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/maestro-mcp.exe') -CanonicalManifest (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'engine-build-manifest.json') -OutputRoot (Join-Path $env:RUNNER_TEMP 'native-engine-proof')
+      - name: Verify exact-source ordinary proof before host-positive exclusions
+        id: windows_engine_proof
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./acceptance/windows-engine-check.ps1
       - name: Canonical ledger, HOME, owner, memory and atlas contracts
+        if: runner.os != 'Windows'
         run: go test ./internal/execution ./internal/datahome ./internal/ownerctx ./internal/privatelock ./internal/memory ./internal/atlasops -timeout=300s
+      - name: Remaining canonical host contracts after native qualification
+        if: runner.os == 'Windows'
+        run: go test ./internal/privatelock ./internal/atlasops -timeout=300s
       - name: Canonical workspace initialization contracts on admitted Unix runners
         if: runner.os != 'Windows'
         run: go test ./internal/workspace -timeout=180s
-      # Windows must preserve ownership refusals; this job is not native admission.
-      # Its elevated runner cannot qualify ordinary-user workspace initialization.
+      # Exact-source ordinary execution above qualifies only the closed positive
+      # inventory. The elevated host still executes unsafe/elevated/no-bootstrap
+      # refusals and every unexcluded package/test below.
       - name: Product protocol, bootstrap refusal and package contracts
+        if: runner.os != 'Windows'
         working-directory: adapters/mcp
         run: go test ./... -timeout=600s
+      - name: Remaining Windows protocol, unsafe-owner and elevated-host contracts
+        if: runner.os == 'Windows'
+        working-directory: adapters/mcp
+        run: go test ./... -skip '${{ steps.windows_engine_proof.outputs.host_exclusions }}' -timeout=600s
       - name: Product module static checks
         working-directory: adapters/mcp
         run: go vet ./...
@@ -106,3 +148,17 @@ jobs:
             echo 'A product executable cannot depend on development packages.' >&2
             exit 1
           fi
+
+      - name: Stage only exact bounded Windows engine evidence
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./acceptance/windows-engine-evidence.ps1
+      - name: Retain this job's native proof and companion outcomes
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: product-windows-native-engine-${{ github.sha }}
+          path: ${{ runner.temp }}/native-engine-evidence/
+          if-no-files-found: error
+          retention-days: 7

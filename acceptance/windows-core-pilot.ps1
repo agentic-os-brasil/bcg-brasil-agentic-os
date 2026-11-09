@@ -23,6 +23,7 @@ if ($kitInputCount -ne 0 -and $kitInputCount -ne $kitInputs.Count) {
 $withKit = $kitInputCount -eq $kitInputs.Count
 $withCanonical = -not [string]::IsNullOrWhiteSpace($CanonicalManifest)
 $withInspection = $PSCmdlet.ParameterSetName -eq 'Inspection'
+$withEngine = $false
 $withManifest = $withCanonical -or $withInspection
 if ($withManifest) {
     $manifestPath = if ($withInspection) { $InspectionManifest } else { $CanonicalManifest }
@@ -34,11 +35,32 @@ if ($withManifest) {
         if (Test-Path -LiteralPath $OutputRoot) { throw 'Use a new inspection output; previous proof is preserved.' }
     }
     $canonical = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $hasProfile = $canonical.PSObject.Properties.Name -ccontains 'qualification_profile'
+    if ($hasProfile -and (-not $withCanonical -or $canonical.qualification_profile -cne 'windows_private_engine_v1')) {
+        throw 'Unknown canonical qualification profile.'
+    }
+    $withEngine = $hasProfile
     $expectedPackages = @('execution', 'datahome', 'ownerctx', 'memory', 'privatewiki', 'processidentity')
+    if ($withEngine) {
+        $manifestFields = @('schema_version', 'qualification_profile', 'source_revision', 'source_root', 'source_archive_sha256',
+            'sdk_root', 'sdk_go', 'sdk_go_sha256', 'vendor_files', 'packages', 'public_test_binary_sha256', 'public_server_sha256', 'adapter_profile', 'adapter_packages')
+        $actualFields = @($canonical.PSObject.Properties.Name)
+        if ($actualFields.Count -ne $manifestFields.Count -or @($actualFields | Where-Object { $_ -cnotin $manifestFields }).Count -ne 0) {
+            throw 'Engine qualification requires the exact sealed manifest fields.'
+        }
+        $expectedPackages = @('execution', 'datahome', 'ownerctx', 'memory', 'scheduler', 'processidentity', 'winprivate', 'zipmigration')
+        foreach ($binding in @(@{path=$TestBinary; hash=$canonical.public_test_binary_sha256}, @{path=$Server; hash=$canonical.public_server_sha256})) {
+            if ($binding.hash -cnotmatch '^[0-9a-f]{64}$' -or
+                (Get-FileHash -LiteralPath $binding.path -Algorithm SHA256).Hash.ToLowerInvariant() -cne $binding.hash) {
+                throw 'Engine public executables differ from the sealed source manifest.'
+            }
+        }
+    }
     if ($withInspection) { $expectedPackages = @('datahome', 'scheduler', 'zipruntime', 'maestro-runtime') }
     $actualPackages = @($canonical.packages | ForEach-Object { $_.name })
     if ($canonical.schema_version -ne 1 -or $actualPackages.Count -ne $expectedPackages.Count -or
         @((Compare-Object ($expectedPackages | Sort-Object) ($actualPackages | Sort-Object))).Count -ne 0) {
+        if ($withEngine) { throw 'Engine qualification requires exactly the eight owning packages.' }
         if ($withInspection) { throw 'Inspection qualification requires exactly the four owning packages.' }
         throw 'Canonical qualification requires exactly the six owning packages.'
     }
@@ -51,6 +73,15 @@ if ($withManifest) {
         throw 'Canonical pinned SDK hash differs from its manifest.'
     }
     foreach ($entry in $canonical.packages) {
+        if ($withEngine) {
+            $entryFields = @('name', 'package', 'binary', 'sha256', 'working_directory', 'tests')
+            $fields = @($entry.PSObject.Properties.Name)
+            if ($entry.name -cnotin $expectedPackages -or $fields.Count -ne $entryFields.Count -or
+                @($fields | Where-Object { $_ -cnotin $entryFields }).Count -ne 0 -or
+                $entry.sha256 -cnotmatch '^[0-9a-f]{64}$' -or @($entry.tests | Sort-Object -CaseSensitive -Unique).Count -ne @($entry.tests).Count) {
+                throw 'Engine package fields and inventory must be exact and closed.'
+            }
+        }
         $relative = 'internal/' + $entry.name
         if ($withInspection -and $entry.name -eq 'maestro-runtime') { $relative = 'cmd/maestro-runtime' }
         if ($entry.package -cne ('./' + $relative) -or
@@ -78,7 +109,7 @@ if ($withManifest) {
             }
         }
     }
-    if ($withInspection) {
+    if ($withInspection -or $withEngine) {
         if ($canonical.source_revision -cnotmatch '^[0-9a-f]{40}$' -or $canonical.source_archive_sha256 -cnotmatch '^[0-9a-f]{64}$' -or
             @($canonical.vendor_files).Count -eq 0 -or @($canonical.vendor_files.path | Sort-Object -Unique).Count -ne @($canonical.vendor_files).Count) {
             throw 'Inspection source and vendored dependencies require a sealed inventory.'
@@ -91,6 +122,88 @@ if ($withManifest) {
                 (Get-FileHash -LiteralPath $inputFile.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -cne $file.sha256) {
                 throw 'Inspection vendored input differs from its sealed ordinary file.'
             }
+        }
+    }
+    if ($withEngine) {
+        if ($canonical.adapter_profile -cne 'windows_private_engine_adapters_v1') { throw 'Unknown engine adapter profile.' }
+        $adapterParents = @('TestPublicWorkflow', 'TestCompiledStdioWorkflowAndPackets', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites', 'TestContentUnseededStatus', 'TestPackagedMethodsDiscovery', 'TestPackagedMethodsStdioDiscovery', 'TestPackagedMethodCallbacksRevalidateBinding', 'TestMethodQueryDiscoverySDK', 'TestMethodQueryPlanSDK', 'TestMethodPlansKeepUnregisteredDomainsUnavailable', 'TestMethodQueryPacketRestartContinuation', 'TestMethodQueryBrainIndexDefaultRequirementsSDK', 'TestMethodQueryArchitectureRecipeRequirementsSDK', 'TestMethodPlansReflectRegisteredContentWithoutRuntimeAuthority', 'TestOwnerConfirmationRefusals', 'TestOwnerChangedDuringTrustedReview', 'TestOwnerLegacyElicitation', 'TestOwnerLocalFallback', 'TestOwnerRejectsModelAuthority', 'TestOwnerUnsafeBindingBeforeEffects', 'TestOwnerQueryNeverInitializes', 'TestOwnerTrackReviewCannotOverwriteConcurrentSelection', 'TestOwnerTrackTrustedForms', 'TestOwnerPublicJourney', 'TestOwnerCompletePublicJourney', 'TestMemoryReviewedCaptureRestart', 'TestMemoryLifecycle', 'TestMemoryLocalFallback', 'TestMemoryWeeklyTrustedPromotion', 'TestMemoryConfirmationRefusals', 'TestMemoryLegacyEligibility', 'TestMemoryQueryNeverInitializes', 'TestMemoryRejectsAuthorityAndUnsafeBinding', 'TestMemoryChangedDuringReviewAndRetarget', 'TestMemoryUTF8Pagination', 'TestMemoryCapacityDoesNotBlockExistingRecords', 'TestMemoryHistoricalFallbackCannotRestoreRemovedText', 'TestMemoryLocalInputRequiresExactClosedRequest', 'TestMemoryLiteralGenerationMarkerDoesNotGrantPromotion', 'TestMemoryReviewedCaptureConcurrentReplay')
+        $adapterCommandParents = @('TestMigratedHomePublicMCPInit')
+        $adapterAssertions = @('TestPublicWorkflow', 'TestCompiledStdioWorkflowAndPackets', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites', 'TestContentUnseededStatus', 'TestPackagedMethodsDiscovery', 'TestPackagedMethodsStdioDiscovery', 'TestPackagedMethodCallbacksRevalidateBinding', 'TestMethodQueryDiscoverySDK', 'TestMethodQueryPlanSDK', 'TestMethodPlansKeepUnregisteredDomainsUnavailable', 'TestMethodQueryPacketRestartContinuation', 'TestMethodQueryBrainIndexDefaultRequirementsSDK', 'TestMethodQueryArchitectureRecipeRequirementsSDK', 'TestMethodPlansReflectRegisteredContentWithoutRuntimeAuthority', 'TestOwnerConfirmationRefusals', 'TestOwnerChangedDuringTrustedReview', 'TestOwnerLegacyElicitation', 'TestOwnerLocalFallback', 'TestOwnerRejectsModelAuthority', 'TestOwnerUnsafeBindingBeforeEffects', 'TestOwnerQueryNeverInitializes', 'TestOwnerTrackReviewCannotOverwriteConcurrentSelection', 'TestOwnerTrackTrustedForms', 'TestOwnerPublicJourney', 'TestOwnerCompletePublicJourney', 'TestMemoryReviewedCaptureRestart', 'TestMemoryLifecycle', 'TestMemoryLocalFallback', 'TestMemoryWeeklyTrustedPromotion', 'TestMemoryConfirmationRefusals', 'TestMemoryLegacyEligibility', 'TestMemoryQueryNeverInitializes', 'TestMemoryRejectsAuthorityAndUnsafeBinding', 'TestMemoryChangedDuringReviewAndRetarget', 'TestMemoryUTF8Pagination', 'TestMemoryCapacityDoesNotBlockExistingRecords', 'TestMemoryHistoricalFallbackCannotRestoreRemovedText', 'TestMemoryLocalInputRequiresExactClosedRequest', 'TestMemoryLiteralGenerationMarkerDoesNotGrantPromotion', 'TestMemoryReviewedCaptureConcurrentReplay', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/product', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/private-home', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/symlink', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/symlink-ancestor', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/brain-child', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/metadata-child', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/leaf-child', 'TestOwnerConfirmationRefusals/unsupported', 'TestOwnerConfirmationRefusals/decline', 'TestOwnerConfirmationRefusals/cancel', 'TestOwnerConfirmationRefusals/nil-content', 'TestOwnerConfirmationRefusals/false', 'TestOwnerConfirmationRefusals/missing', 'TestOwnerConfirmationRefusals/wrong-type', 'TestOwnerConfirmationRefusals/transport-error', 'TestOwnerChangedDuringTrustedReview/base', 'TestOwnerChangedDuringTrustedReview/proposal', 'TestOwnerChangedDuringTrustedReview/profile', 'TestOwnerChangedDuringTrustedReview/track', 'TestOwnerChangedDuringTrustedReview/same_track', 'TestOwnerChangedDuringTrustedReview/track_aba', 'TestOwnerChangedDuringTrustedReview/binding', 'TestOwnerUnsafeBindingBeforeEffects/workspace', 'TestOwnerUnsafeBindingBeforeEffects/home', 'TestOwnerTrackReviewCannotOverwriteConcurrentSelection/quick', 'TestOwnerTrackReviewCannotOverwriteConcurrentSelection/complete', 'TestOwnerTrackTrustedForms//current', 'TestOwnerTrackTrustedForms//decline', 'TestOwnerTrackTrustedForms//same-value-commit', 'TestOwnerTrackTrustedForms/2025-11-25/current', 'TestOwnerTrackTrustedForms/2025-11-25/decline', 'TestOwnerTrackTrustedForms/2025-11-25/same-value-commit', 'TestOwnerPublicJourney/false', 'TestOwnerPublicJourney/true', 'TestOwnerCompletePublicJourney/false', 'TestOwnerCompletePublicJourney/true', 'TestMemoryReviewedCaptureRestart/false', 'TestMemoryReviewedCaptureRestart/true', 'TestMemoryLifecycle/false', 'TestMemoryLifecycle/true', 'TestMemoryWeeklyTrustedPromotion/SDK', 'TestMemoryWeeklyTrustedPromotion/stdio', 'TestMemoryWeeklyTrustedPromotion/decline', 'TestMemoryWeeklyTrustedPromotion/unsupported', 'TestMemoryWeeklyTrustedPromotion/changed-sources', 'TestMemoryConfirmationRefusals//unsupported', 'TestMemoryConfirmationRefusals//decline', 'TestMemoryConfirmationRefusals//cancel', 'TestMemoryConfirmationRefusals//nil', 'TestMemoryConfirmationRefusals//false', 'TestMemoryConfirmationRefusals//missing', 'TestMemoryConfirmationRefusals//wrong-type', 'TestMemoryConfirmationRefusals//transport-error', 'TestMemoryConfirmationRefusals/2025-11-25/unsupported', 'TestMemoryConfirmationRefusals/2025-11-25/decline', 'TestMemoryConfirmationRefusals/2025-11-25/cancel', 'TestMemoryConfirmationRefusals/2025-11-25/nil', 'TestMemoryConfirmationRefusals/2025-11-25/false', 'TestMemoryConfirmationRefusals/2025-11-25/missing', 'TestMemoryConfirmationRefusals/2025-11-25/wrong-type', 'TestMemoryConfirmationRefusals/2025-11-25/transport-error', 'TestMemoryRejectsAuthorityAndUnsafeBinding/workspace', 'TestMemoryRejectsAuthorityAndUnsafeBinding/home', 'TestMemoryChangedDuringReviewAndRetarget/memory.correct', 'TestMemoryChangedDuringReviewAndRetarget/memory.delete', 'TestMemoryChangedDuringReviewAndRetarget/memory.retention', 'TestMemoryHistoricalFallbackCannotRestoreRemovedText/false', 'TestMemoryHistoricalFallbackCannotRestoreRemovedText/true')
+        $adapterNames = @($canonical.adapter_packages | ForEach-Object { $_.name })
+        if ($adapterNames.Count -ne 2 -or @((Compare-Object @('mcp', 'mcp-command') ($adapterNames | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) {
+            throw 'Engine adapters require exactly the two closed packages.'
+        }
+        foreach ($entry in $canonical.adapter_packages) {
+            $relative = if ($entry.name -ceq 'mcp') { 'adapters/mcp' } else { 'adapters/mcp/cmd/maestro-mcp' }
+            $fields = @($entry.PSObject.Properties.Name)
+            $entryFields = @('name', 'package', 'binary', 'sha256', 'working_directory', 'tests')
+            if ($entry.name -cnotin @('mcp', 'mcp-command') -or $fields.Count -ne $entryFields.Count -or
+                @($fields | Where-Object { $_ -cnotin $entryFields }).Count -ne 0 -or
+                $entry.package -cne ('./' + $relative) -or $entry.working_directory -cne (Join-Path $canonical.source_root $relative) -or
+                $entry.sha256 -cnotmatch '^[0-9a-f]{64}$' -or @($entry.tests).Count -eq 0 -or
+                @($entry.tests | Sort-Object -CaseSensitive -Unique).Count -ne @($entry.tests).Count -or
+                @($entry.tests | Where-Object { $_ -cnotmatch '^(Test|Example)[A-Za-z0-9_]*$' }).Count -ne 0 -or
+                (Get-FileHash -LiteralPath $entry.binary -Algorithm SHA256).Hash.ToLowerInvariant() -cne $entry.sha256) {
+                throw 'Engine adapter identity, hash and full inventory must be exact.'
+            }
+            $required = if ($entry.name -ceq 'mcp') { $adapterParents } else { $adapterCommandParents }
+            $assertions = if ($entry.name -ceq 'mcp') { $adapterAssertions } else { $required }
+            foreach ($test in $required) {
+                if (@($entry.tests | Where-Object { $_ -ceq $test }).Count -ne 1) { throw 'Engine adapter inventory omits a required positive journey.' }
+            }
+            $entry | Add-Member -NotePropertyName required_tests -NotePropertyValue @($required) -Force
+            $entry | Add-Member -NotePropertyName required_assertions -NotePropertyValue @($assertions) -Force
+        }
+    }
+    if ($withEngine) {
+        $canonicalRequired = @{
+            scheduler = @('TestWindowsSecureSchedulerStateWorksAsStandardUser', 'TestWindowsSecureSchedulerRejectsReparseAncestor', 'TestWindowsSecurePathWalkSurvivesAncestorRenameToSymlink', 'TestWindowsSecureLeafIOSurvivesAncestorSwapForEnrollmentReceiptAndLease', 'TestWindowsSecureLeafReadAndRemoveSurviveAncestorSwap', 'TestWindowsLeaseTransactionPinsGuardAndStateToOneDirectory', 'TestPrivateAtomicUpdateSerializesAndRejectsStaleBytes', 'TestWindowsReplacePrivateFileRejectsSymlinkedLeaf')
+            winprivate = @('TestWindowsMigrationSourceTreeIsReadOnlyAndPinned', 'TestWindowsMigrationSourceChildRetainsParentCustody', 'TestWindowsMigrationStageResumesAndPublishesTheHeldFile', 'TestWindowsMigrationStageRejectsUnpinnedAndLinkedInputs', 'TestWindowsMigrationMovableRootKeepsArchivedAuthority', 'TestWindowsMigrationRemoveExactRequiresCompleteExpectedBytes', 'TestWindowsMigrationRemoveExactRetainsMarkedObjectAndReader', 'TestWindowsMigrationRemoveExactExposesPostMarkCloseFailure', 'TestWindowsMigrationRemoveExactRejectsUnsafeOrBusyLeaves', 'TestWindowsMigrationStageReplacesCooperativeMetadataUnderLease', 'TestWindowsMigrationLeasedReplacementRefusesUnsafeDestinations', 'TestWindowsMigrationLeasedReplacementReportsMovedAfterLateFailure')
+            ownerctx = @('TestReviewedRefinementBindsExactProposalAndBase', 'TestReviewedOnboardingTrackConfirmationAndRestart', 'TestReviewedOwnerRejectsInvalidUTF8BeforeEffects', 'TestWindowsPromptHistoryLockRetainsGuardAcrossReaderAndReacquire')
+            execution = @('TestWindowsConfinedStoreRejectsJunctionAndPrivateHardlink', 'TestWindowsConfinedStoreRejectsJunctionAndPrivateHardlink/junction-parent', 'TestWindowsConfinedStoreRejectsJunctionAndPrivateHardlink/private-contract-hardlink')
+            processidentity = @('TestPinnedWindowsFileBlocksReplacement')
+            memory = @('TestOwnedMemoryLifecycle', 'TestOwnedMemoryCheckpointLossNeverReopensHistory', 'TestStatusRefusesApplicationAliasAndPreservesActivationLock')
+            datahome = @('TestWindowsResolveCaseAliasesRespectLocatorAuthority', 'TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator', 'TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator/empty-env', 'TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator/relative-env', 'TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator/newline-env', 'TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator/overlap-product', 'TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator/overlap-product-case-alias', 'TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator/overlap-source', 'TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator/linked-home', 'TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator/linked-missing-ancestor', 'TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator/locator-missing', 'TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator/env-marker-conflict', 'TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator/populated-unconfirmed', 'TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator/nondefault-no-marker')
+            zipmigration = @('TestWindowsExternalCaseCapabilityPreservesOverlapGuards', 'TestCommittedTargetSafetyAndRecovery', 'TestCommittedTargetSafetyAndRecovery/file_symlink', 'TestCommittedTargetSafetyAndRecovery/ancestor_symlink', 'TestCommittedTargetSafetyAndRecovery/directory_type', 'TestCommittedTargetSafetyAndRecovery/unreadable_file', 'TestCommittedTargetSafetyAndRecovery/unreadable_directory', 'TestCommittedTargetSafetyAndRecovery/new_symlink_after_edit', 'TestExternalOwnerControlsPreserveAuthoredNeighbors', 'TestExternalOwnerControlsPreserveAuthoredNeighbors/canonical', 'TestExternalOwnerControlsPreserveAuthoredNeighbors/portable-case', 'TestExternalReviewedPlanCannotOmitOrRedirectSource', 'TestExternalReviewedPlanCannotOmitOrRedirectSource/omit', 'TestExternalReviewedPlanCannotOmitOrRedirectSource/redirect', 'TestExternalPhysicalWriteSetAliasesRefuseBeforeEffects', 'TestExternalPhysicalWriteSetAliasesRefuseBeforeEffects/home', 'TestExternalPhysicalWriteSetAliasesRefuseBeforeEffects/profile-control', 'TestExternalPrivateControlDirectoriesRefuseWithoutRepair', 'TestExternalPrivateControlDirectoriesRefuseWithoutRepair/control', 'TestExternalPrivateControlDirectoriesRefuseWithoutRepair/attempt', 'TestExternalPrivateControlDirectoriesRefuseWithoutRepair/locator-staging', 'TestExternalMissingReservedProfileAliasesRefuseBeforeEffects', 'TestExternalMissingReservedProfileAliasesRefuseBeforeEffects/.MAESTRO-EXTERNAL-MIGRATION', 'TestExternalMissingReservedProfileAliasesRefuseBeforeEffects/.MAESTRO-HOME.JSON', 'TestExternalPreflightConflictsHaveNoProfileOrSourceEffects', 'TestExternalPreflightConflictsHaveNoProfileOrSourceEffects/populated', 'TestExternalPreflightConflictsHaveNoProfileOrSourceEffects/foreign-locator', 'TestExternalPreflightConflictsHaveNoProfileOrSourceEffects/hardlink-source', 'TestExternalPreflightConflictsHaveNoProfileOrSourceEffects/alias-home', 'TestExternalPreflightConflictsHaveNoProfileOrSourceEffects/stale-source', 'TestExternalPreflightConflictsHaveNoProfileOrSourceEffects/intent-overlap', 'TestExternalInterruptionAndRollbackRetainNewWork', 'TestExternalInterruptionAndRollbackRetainNewWork/prepared', 'TestExternalInterruptionAndRollbackRetainNewWork/pending', 'TestExternalInterruptionAndRollbackRetainNewWork/copying', 'TestExternalInterruptionAndRollbackRetainNewWork/copied', 'TestExternalInterruptionAndRollbackRetainNewWork/committed')
+        }
+        $originalAssertions = @{
+            scheduler = @('TestReplacePrivateFileRejectsSymlinkedLeaf', 'TestSchedulerRejectsSymlinkedRootAncestorBeforeMkdir', 'TestSchedulerStoreRejectsSymlinkedWorkspaceAncestor', 'TestSecurePathWalkSurvivesAncestorRenameToSymlink', 'TestSecureLeafIOSurvivesAncestorSwapForEnrollmentReceiptAndLease', 'TestSecureLeafReadAndRemoveSurviveAncestorSwap', 'TestLeaseTransactionPinsGuardAndStateToOneDirectory')
+            memory = @('TestStatusUsesTemporaryAliasAndRefusesApplicationAlias')
+            execution = @('TestStoreRejectsSymlinkParent')
+            datahome = @('TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator/linked-home', 'TestResolveRejectsUnsafeSelectedPathsAndConflictingLocator/linked-missing-ancestor', 'TestResolveCaseDistinctNondefaultCannotBypassLocator', 'TestResolveCaseDistinctLocatorCannotAuthorizeDifferentHome')
+            processidentity = @('TestPinnedFileNeverAdoptsAReplacement')
+            zipmigration = @('TestCommittedTargetSafetyAndRecovery/unreadable_file', 'TestCommittedTargetSafetyAndRecovery/unreadable_directory', 'TestCopyFailureRetriesAfterPermissionRecovery', 'TestReadOnlyDestinationReportsFailureWithoutSuccessMarker', 'TestExternalOwnerAuthorityRequiresFreshEnrollment', 'TestExternalOwnerControlsPreserveAuthoredNeighbors', 'TestExternalOwnerObservationsRequireFreshAttestation', 'TestExternalCurrentBrainSurvivesLegacyEvolution', 'TestExternalReviewedPlanCannotOmitOrRedirectSource', 'TestExternalControlStagingNeverWritesInsideSource', 'TestExternalPhysicalWriteSetAliasesRefuseBeforeEffects', 'TestExternalPrivateControlDirectoriesRefuseWithoutRepair', 'TestExternalHomeCannotOverlapProfilePublication', 'TestExternalMissingReservedProfileAliasesRefuseBeforeEffects', 'TestExternalDistinctCaseSensitiveRootRemainsSupported', 'TestExternalRollbackRetainedPathsUseArchive', 'TestExternalReservedAuthorityAliasesAreInactive', 'TestExternalProofIsSelfContainedAndStrict', 'TestExternalForeignLocatorDoesNotRevokeOrMoveHome', 'TestExternalPreflightConflictsHaveNoProfileOrSourceEffects', 'TestExternalConflictingPartialAndConcurrentAttemptStayOwned', 'TestExternalRetirementIsFixedDenyOnlyAndInterruptedRollbackResumes', 'TestExternalCaseAuthorityIsArchivedOutsideActiveReaders', 'TestExternalInterruptionAndRollbackRetainNewWork', 'TestExternalLegacyAuthoredStateAndInactiveAuthority')
+        }
+        $canonicalPolicies = @{
+            scheduler = @(
+                @{test='TestReplacePrivateFileRejectsSymlinkedLeaf'; reason='Unix symlink fixture; Windows reparse coverage lives in private_path_windows_test.go'; kind='platform-counterpart'; paired='TestWindowsReplacePrivateFileRejectsSymlinkedLeaf'},
+                @{test='TestSchedulerRejectsSymlinkedRootAncestorBeforeMkdir'; reason='symlink setup is host-dependent on Windows'; kind='platform-counterpart'; paired='TestWindowsSecureSchedulerRejectsReparseAncestor/root'},
+                @{test='TestSchedulerStoreRejectsSymlinkedWorkspaceAncestor'; reason='symlink setup is host-dependent on Windows'; kind='platform-counterpart'; paired='TestWindowsSecureSchedulerRejectsReparseAncestor/workspace'},
+                @{test='TestSecurePathWalkSurvivesAncestorRenameToSymlink'; reason='descriptor-relative nofollow walk is Unix-specific'; kind='platform-counterpart'; paired='TestWindowsSecurePathWalkSurvivesAncestorRenameToSymlink'},
+                @{test='TestSecureLeafIOSurvivesAncestorSwapForEnrollmentReceiptAndLease'; reason='Unix adversarial swap uses descriptor-relative test fixtures'; kind='platform-counterpart'; paired='TestWindowsSecureLeafIOSurvivesAncestorSwapForEnrollmentReceiptAndLease'},
+                @{test='TestSecureLeafReadAndRemoveSurviveAncestorSwap'; reason='Unix adversarial swap uses descriptor-relative test fixtures'; kind='platform-counterpart'; paired='TestWindowsSecureLeafReadAndRemoveSurviveAncestorSwap'},
+                @{test='TestLeaseTransactionPinsGuardAndStateToOneDirectory'; reason='real-directory replacement fixture uses Unix rename semantics'; kind='platform-counterpart'; paired='TestWindowsLeaseTransactionPinsGuardAndStateToOneDirectory'}
+            )
+            memory = @(@{test='TestStatusUsesTemporaryAliasAndRefusesApplicationAlias'; reason='Unix temporary-directory alias; Windows ownership has separate contracts'; kind='platform-counterpart'; paired='TestStatusRefusesApplicationAliasAndPreservesActivationLock'})
+            execution = @(@{test='TestStoreRejectsSymlinkParent'; reason='legacy Windows Store is not product-confined'; kind='platform-counterpart'; paired='TestWindowsConfinedStoreRejectsJunctionAndPrivateHardlink/junction-parent'})
+            processidentity = @(@{test='TestPinnedFileNeverAdoptsAReplacement'; reason='Unix atomic replacement contract; Windows held-handle contract is tested separately'; kind='platform-counterpart'; paired='TestPinnedWindowsFileBlocksReplacement'})
+            datahome = @(
+                @{test='TestResolveCaseDistinctNondefaultCannotBypassLocator'; reason='filesystem resolves case variants to the same object'; kind='selected-directory-case-pair'; paired='TestResolveCaseDistinctNondefaultCannotBypassLocator/same-object-case-contract'},
+                @{test='TestResolveCaseDistinctLocatorCannotAuthorizeDifferentHome'; reason='filesystem resolves case variants to the same object'; kind='selected-directory-case-pair'; paired='TestResolveCaseDistinctLocatorCannotAuthorizeDifferentHome/same-object-case-contract'}
+            )
+            zipmigration = @(@{test='TestExternalDistinctCaseSensitiveRootRemainsSupported'; reason='filesystem aliases the source spelling'; kind='selected-directory-case-pair'; paired='TestExternalDistinctCaseSensitiveRootRemainsSupported/same-object-source-overlap'})
+        }
+        foreach ($entry in $canonical.packages) {
+            $required = @($canonicalRequired[$entry.name] | Where-Object { $null -ne $_ })
+            $original = @($originalAssertions[$entry.name] | Where-Object { $null -ne $_ })
+            foreach ($test in @($required + $original)) {
+                if (@($entry.tests | Where-Object { $_ -ceq ($test -split '/')[0] }).Count -ne 1) {
+                    throw 'Engine inventory differs from the required closed assertion contract.'
+                }
+            }
+            $entry | Add-Member -NotePropertyName canonical_required_tests -NotePropertyValue $required -Force
+            $entry | Add-Member -NotePropertyName canonical_original_assertions -NotePropertyValue $original -Force
+            $entry | Add-Member -NotePropertyName canonical_skip_policy -NotePropertyValue @($canonicalPolicies[$entry.name] | Where-Object { $null -ne $_ }) -Force
         }
     }
 }
@@ -148,6 +261,10 @@ try {
     if (-not $withInspection) {
         Copy-Item -LiteralPath $TestBinary -Destination $nativeTest
         Copy-Item -LiteralPath $Server -Destination $nativeServer
+        if ($withEngine -and ((Get-FileHash -LiteralPath $nativeTest -Algorithm SHA256).Hash.ToLowerInvariant() -cne $canonical.public_test_binary_sha256 -or
+            (Get-FileHash -LiteralPath $nativeServer -Algorithm SHA256).Hash.ToLowerInvariant() -cne $canonical.public_server_sha256)) {
+            throw 'Copied engine public executables differ from their sealed source.'
+        }
     }
     if ($AtlasTestBinary) {
         $nativeAtlasTest = Join-Path $payload 'windows-atlas.test.exe'
@@ -195,6 +312,14 @@ try {
                 throw 'Copied canonical test executable differs from its sealed source.'
             }
             $entry.binary = $copied
+        }
+        if ($withEngine) {
+            foreach ($entry in $canonical.adapter_packages) {
+                $copied = Join-Path $payload ('adapter-' + $entry.name + '.test.exe')
+                Copy-Item -LiteralPath $entry.binary -Destination $copied
+                if ((Get-FileHash -LiteralPath $copied -Algorithm SHA256).Hash.ToLowerInvariant() -cne $entry.sha256) { throw 'Copied engine adapter differs from sealed source.' }
+                $entry.binary = $copied
+            }
         }
         $manifestName = if ($withInspection) { 'inspection-contract-manifest.json' } else { 'canonical-contract-manifest.json' }
         $nativeCanonical = Join-Path $payload $manifestName
@@ -309,7 +434,108 @@ try {
     }
     }
     if ($CanonicalManifest) {
+        function Get-CanonicalLogRecords([string]$Body) {
+            $scope = ''
+            foreach ($line in @($Body -split '\r?\n')) {
+                if ($line -cmatch '^=== (?:RUN|NAME|CONT)\s+((?:Test|Example)\S*)\s*$') { $scope = $Matches[1] }
+                elseif ($scope -ne '' -and $line -cmatch '^\s+.+\.go:\d+: (.*)$') {
+                    [pscustomobject]@{test=$scope; text=$Matches[1]}
+                }
+            }
+        }
+        function Test-CanonicalObservedPass([string]$Name, $Outcomes, $Skips) {
+            return @($Outcomes | Where-Object { $_.test -ceq $Name -and $_.outcome -ceq 'PASS' }).Count -eq 1 -and
+                @($Outcomes | Where-Object { $_.test -ceq $Name }).Count -eq 1 -and
+                @($Skips | Where-Object { $_ -ceq $Name -or $_.StartsWith($Name + '/', [StringComparison]::Ordinal) }).Count -eq 0
+        }
+        function Test-CanonicalCasePair($Policy, $Records) {
+            $markers = @($Records | Where-Object { $_.test -ceq $Policy.paired -and $_.text.StartsWith('case_pair_evidence=', [StringComparison]::Ordinal) })
+            if ($markers.Count -ne 1) { return $false }
+            $raw = $markers[0].text.Substring('case_pair_evidence='.Length)
+            if ([Text.Encoding]::UTF8.GetByteCount($raw) -gt 8192) { return $false }
+            $document = $null
+            try {
+                $document = [System.Text.Json.JsonDocument]::Parse($raw)
+                $value = $document.RootElement
+                if ($value.ValueKind -ne [System.Text.Json.JsonValueKind]::Object) { return $false }
+                $names = @($value.EnumerateObject() | ForEach-Object { $_.Name })
+                $expected = @('kind', 'scope', 'selected', 'counterpart', 'selected_identity', 'counterpart_identity', 'same_object')
+                if ($names.Count -ne 7 -or @($names | Sort-Object -CaseSensitive -Unique).Count -ne 7 -or @($names | Where-Object { $_ -cnotin $expected }).Count -ne 0) { return $false }
+                if ($value.GetProperty('kind').GetString() -cne 'selected-directory-case-pair-v1' -or
+                    $value.GetProperty('scope').GetString() -cne $Policy.paired -or
+                    $value.GetProperty('same_object').ValueKind -ne [System.Text.Json.JsonValueKind]::True) { return $false }
+                $selected = $value.GetProperty('selected').GetString()
+                $counterpart = $value.GetProperty('counterpart').GetString()
+                if ([string]::IsNullOrWhiteSpace($selected) -or [string]::IsNullOrWhiteSpace($counterpart) -or
+                    $selected.Length -gt 4096 -or $counterpart.Length -gt 4096 -or $selected -match '[\x00\r\n]' -or $counterpart -match '[\x00\r\n]' -or
+                    -not [IO.Path]::IsPathRooted($selected) -or -not [IO.Path]::IsPathRooted($counterpart) -or $selected -ceq $counterpart -or
+                    -not [string]::Equals($selected, $counterpart, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+                $left = $value.GetProperty('selected_identity')
+                $right = $value.GetProperty('counterpart_identity')
+                if ($left.ValueKind -ne [System.Text.Json.JsonValueKind]::Array -or $right.ValueKind -ne [System.Text.Json.JsonValueKind]::Array -or
+                    $left.GetArrayLength() -ne 3 -or $right.GetArrayLength() -ne 3) { return $false }
+                $identity = @(0, 0, 0)
+                foreach ($index in 0..2) {
+                    $identity[$index] = $left[$index].GetUInt32()
+                    if ($identity[$index] -ne $right[$index].GetUInt32()) { return $false }
+                }
+                return ($identity[1] -ne 0 -or $identity[2] -ne 0)
+            } catch { return $false }
+            finally { if ($null -ne $document) { $document.Dispose() } }
+        }
+        function Get-CanonicalPackageProof($Entry, [string]$Body, [int]$ExitCode, [bool]$InventoryComplete) {
+            $observations = @([regex]::Matches($Body, '(?m)^\s*--- (PASS|FAIL|SKIP): ((?:Test|Example)\S*) ') | ForEach-Object {
+                [ordered]@{test=$_.Groups[2].Value; outcome=$_.Groups[1].Value}
+            })
+            $skips = @($observations | Where-Object { $_.outcome -ceq 'SKIP' } | ForEach-Object { $_.test })
+            $tops = @($observations | Where-Object { $_.test -cnotmatch '/' })
+            $qualified = $ExitCode -eq 0 -and $InventoryComplete -and $tops.Count -eq @($Entry.tests).Count -and
+                @($tops.test | Sort-Object -CaseSensitive -Unique).Count -eq $tops.Count -and @($tops | Where-Object { $_.test -cnotin @($Entry.tests) }).Count -eq 0 -and
+                @($observations.test | Sort-Object -CaseSensitive -Unique).Count -eq $observations.Count -and
+                @($observations | Where-Object { $_.test.Split('/')[0] -cnotin @($Entry.tests) -or $_.outcome -ceq 'FAIL' }).Count -eq 0
+            foreach ($test in @($Entry.canonical_required_tests)) {
+                if (-not (Test-CanonicalObservedPass $test $observations $skips)) { $qualified = $false }
+            }
+            $records = @(Get-CanonicalLogRecords $Body)
+            $classified = @()
+            foreach ($skip in $skips) {
+                $policy = @($Entry.canonical_skip_policy | Where-Object { $_.test -ceq $skip })
+                if ($policy.Count -ne 1 -or @($observations | Where-Object { $_.test -ceq $skip }).Count -ne 1) { continue }
+                $policy = $policy[0]
+                if (@($records | Where-Object { $_.test -ceq $skip -and $_.text -ceq $policy.reason }).Count -ne 1 -or
+                    -not (Test-CanonicalObservedPass $policy.paired $observations $skips)) { continue }
+                if ($policy.kind -ceq 'selected-directory-case-pair') {
+                    if (-not (Test-CanonicalCasePair $policy $records)) { continue }
+                } elseif ($policy.kind -cne 'platform-counterpart') { continue }
+                $classified += [ordered]@{test=$skip; original_outcome='SKIP'; disposition='classified_platform_nonapplicability'; reason=$policy.reason; paired_test=$policy.paired; paired_outcome='PASS'; kind=$policy.kind}
+            }
+            $unclassified = @($skips | Where-Object { $_ -cnotin @($classified.test) })
+            $original = @()
+            foreach ($test in @($Entry.canonical_original_assertions)) {
+                $disposition = 'unresolved'
+                if (Test-CanonicalObservedPass $test $observations $skips) { $disposition = 'executed_pass' }
+                elseif (@($classified | Where-Object { $_.test -ceq $test }).Count -eq 1) { $disposition = 'classified_platform_nonapplicability' }
+                if ($disposition -ceq 'unresolved') { $qualified = $false }
+                $actual = @($observations | Where-Object { $_.test -ceq $test })
+                $original += [ordered]@{test=$test; original_outcome=$(if ($actual.Count -eq 1) {$actual[0].outcome} else {'missing_or_duplicate'}); disposition=$disposition}
+            }
+            return [ordered]@{qualified=($qualified -and $unclassified.Count -eq 0); required_tests=@($Entry.canonical_required_tests)
+                original_assertions=$original; classified_skips=$classified; unclassified_skips=$unclassified; observed_skips=$skips}
+        }
+        function Get-EnginePublicProof($Entry, [string]$Body, [int]$ExitCode) {
+            $observed = @([regex]::Matches($Body, '(?m)^\s*--- (PASS|FAIL|SKIP): ((?:Test|Example)\S*) ') | ForEach-Object { [ordered]@{test=$_.Groups[2].Value; outcome=$_.Groups[1].Value} })
+            $tops = @($observed | Where-Object { $_.test -cnotmatch '/' })
+            $required = @($Entry.required_tests)
+            $assertions = @($Entry.required_assertions)
+            $qualified = $ExitCode -eq 0 -and $required.Count -gt 0 -and $tops.Count -eq $required.Count -and
+                $assertions.Count -eq $observed.Count -and @((Compare-Object ($assertions | Sort-Object) ($observed.test | Sort-Object) -CaseSensitive)).Count -eq 0 -and
+                @($observed.test | Sort-Object -CaseSensitive -Unique).Count -eq $observed.Count -and
+                @($observed | Where-Object { $_.outcome -cne 'PASS' -or $_.test.Split('/')[0] -cnotin $required }).Count -eq 0 -and
+                @((Compare-Object ($required | Sort-Object) ($tops.test | Sort-Object) -CaseSensitive)).Count -eq 0
+            return [ordered]@{qualified=$qualified; required_tests=$required; required_assertions=$assertions; outcomes=$observed; observed_skips=@($observed | Where-Object { $_.outcome -ceq 'SKIP' } | ForEach-Object { $_.test })}
+        }
         $manifest = Get-Content -LiteralPath $CanonicalManifest -Raw -Encoding UTF8 | ConvertFrom-Json
+        $engineProfile = -not $Inspection -and $manifest.qualification_profile -ceq 'windows_private_engine_v1'
         if ($env:GOROOT) { throw 'Canonical evidence refuses caller-supplied GOROOT.' }
         foreach ($root in @($manifest.source_root, $manifest.sdk_root)) {
             $probe = Join-Path $root ('ordinary-write-probe-' + [Guid]::NewGuid().ToString('N'))
@@ -326,7 +552,7 @@ try {
         $env:GOMODCACHE = Join-Path $env:GOPATH 'pkg/mod'
         $env:GOENV = 'off'
         $env:GOTOOLCHAIN = 'local'
-        if ($Inspection) {
+        if ($Inspection -or $engineProfile) {
             $env:GOTMPDIR = $temporary
             $env:GOWORK = 'off'
             $env:GOFLAGS = '-mod=vendor -buildvcs=false'
@@ -352,6 +578,10 @@ try {
             if ($LASTEXITCODE -ne 0 -or @((Compare-Object ($entry.tests | Sort-Object) ($listed | Sort-Object))).Count -ne 0) {
                 throw 'The actual canonical binary test inventory differs from its closed manifest.'
             }
+            if ($engineProfile -and (@($listed | Sort-Object -CaseSensitive -Unique).Count -ne $listed.Count -or
+                @((Compare-Object ($entry.tests | Sort-Object -CaseSensitive) ($listed | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0)) {
+                throw 'Actual engine executable inventory is missing, duplicated or unknown.'
+            }
             Push-Location -LiteralPath $entry.working_directory
             try {
                 $output = @(& $entry.binary '-test.v' '-test.timeout=300s' 2>&1 | ForEach-Object { "$_" })
@@ -359,7 +589,7 @@ try {
             } finally { Pop-Location }
             $body = $output -join "`n"
             if ([Text.Encoding]::UTF8.GetByteCount($body) -gt 2097152) { throw 'Canonical package output exceeds the bounded log contract.' }
-            $prefix = if ($Inspection) { 'inspection' } else { 'canonical' }
+            $prefix = if ($Inspection) { 'inspection' } elseif ($engineProfile) { 'engine' } else { 'canonical' }
             $packageLog = Join-Path $ProofRoot ($prefix + '-' + $entry.name + '.log')
             [IO.File]::WriteAllText($packageLog, $body + "`n", (New-Object Text.UTF8Encoding($false)))
             $outcomes = @([regex]::Matches($body, '(?m)^--- (PASS|FAIL|SKIP): ((?:Test|Example)[A-Za-z0-9_]*) ') | ForEach-Object {
@@ -393,12 +623,48 @@ try {
                 $results[-1].unclassified_skips = $unclassified
                 $results[-1].required_migration_tests_passed = $requiredPassed
             }
+            if ($engineProfile) {
+                $results[-1].canonical_contract_proof = Get-CanonicalPackageProof $entry $body $code $complete
+                $results[-1].all_skipped_tests = $allSkips
+            }
             Write-Output ($prefix + '_result package=' + $entry.name + ' exit=' + $code + ' inventory_complete=' + $complete + ' skips=' + $skipped.Count)
         }
         $qualificationComplete = @($results | Where-Object { $_.exit_code -ne 0 -or -not $_.inventory_complete -or $_.skipped_tests.Count -ne 0 }).Count -eq 0
         if ($Inspection) {
             $qualificationComplete = @($results | Where-Object { $_.exit_code -ne 0 -or -not $_.inventory_complete -or
                 $_.unclassified_skips.Count -ne 0 -or -not $_.required_migration_tests_passed }).Count -eq 0
+        }
+        $adapterResults = @()
+        if ($engineProfile) {
+            foreach ($entry in $manifest.adapter_packages) {
+                if ((Get-FileHash -LiteralPath $entry.binary -Algorithm SHA256).Hash.ToLowerInvariant() -cne $entry.sha256) { throw 'Engine adapter executable changed.' }
+                $listed = @(& $entry.binary '-test.list' '^(Test|Example)')
+                if ($LASTEXITCODE -ne 0 -or @($listed | Sort-Object -CaseSensitive -Unique).Count -ne $listed.Count -or
+                    @((Compare-Object ($entry.tests | Sort-Object -CaseSensitive) ($listed | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) {
+                    throw 'Actual engine adapter inventory differs from its sealed full inventory.'
+                }
+                $pattern = '^(' + (($entry.required_tests | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')$'
+                Push-Location -LiteralPath $entry.working_directory
+                try {
+                    $output = @(& $entry.binary '-test.run' $pattern '-test.v' '-test.timeout=600s' 2>&1 | ForEach-Object { "$_" })
+                    $code = $LASTEXITCODE
+                } finally { Pop-Location }
+                $body = $output -join "`n"
+                if ([Text.Encoding]::UTF8.GetByteCount($body) -gt 2097152) { throw 'Engine adapter output exceeds bounded synthetic log contract.' }
+                $log = Join-Path $ProofRoot ('adapter-' + $entry.name + '.log')
+                [IO.File]::WriteAllText($log, $body + "`n", (New-Object Text.UTF8Encoding($false)))
+                $proof = Get-EnginePublicProof $entry $body $code
+                $custody = (Get-FileHash -LiteralPath $entry.binary -Algorithm SHA256).Hash.ToLowerInvariant() -ceq $entry.sha256
+                $adapterResults += [ordered]@{name=$entry.name; package=$entry.package; sha256=$entry.sha256; exit_code=$code
+                    inventory_complete=$true; copied_binary_custody=$custody; qualified=($proof.qualified -and $custody)
+                    proof=$proof; log=[IO.Path]::GetFileName($log); log_sha256=(Get-FileHash -LiteralPath $log -Algorithm SHA256).Hash.ToLowerInvariant()}
+                Write-Output ('engine_adapter_result package=' + $entry.name + ' qualified=' + $adapterResults[-1].qualified)
+            }
+        }
+        if ($engineProfile) {
+            $publicProof = Get-EnginePublicProof @{required_tests=@('TestWindowsCorePilot', 'TestWindowsDirectoryDurabilityPilot', 'TestWindowsPrivateStatePilot', 'TestWindowsOwnerReviewPilot'); required_assertions=@('TestWindowsCorePilot', 'TestWindowsDirectoryDurabilityPilot', 'TestWindowsPrivateStatePilot', 'TestWindowsOwnerReviewPilot', 'TestWindowsPrivateStatePilot/creation_has_actual_protected_owner_acl', 'TestWindowsPrivateStatePilot/unc_and_device_names_refuse_before_native_open', 'TestWindowsPrivateStatePilot/unowned_read_seam_does_not_grant_private_admission', 'TestWindowsPrivateStatePilot/world_read_directory_is_not_repaired', 'TestWindowsPrivateStatePilot/hardlink_and_nonregular_refuse_before_truncation', 'TestWindowsPrivateStatePilot/offline_leaf_refuses_without_recall', 'TestWindowsPrivateStatePilot/junction_never_redirects_private_read_or_creation', 'TestWindowsPrivateStatePilot/renamed_ancestor_cannot_redirect_held_publication', 'TestWindowsPrivateStatePilot/exclusive_cas_and_exact_absence_compensation', 'TestWindowsPrivateStatePilot/native_sharing_refusal_preserves_old_bytes_and_retry', 'TestWindowsPrivateStatePilot/live_lock_name_custody_prevents_replacement_writer', 'TestWindowsPrivateStatePilot/native_lock_contention_preserves_one_writer', 'TestWindowsPrivateStatePilot/world-read', 'TestWindowsPrivateStatePilot/null', 'TestWindowsPrivateStatePilot/unknown-effective-ace', 'TestWindowsOwnerReviewPilot/quick', 'TestWindowsOwnerReviewPilot/complete')} $coreLog 0
+            $qualificationComplete = $publicProof.qualified -and @($results | Where-Object { -not $_.canonical_contract_proof.qualified }).Count -eq 0 -and
+                $adapterResults.Count -eq 2 -and @($adapterResults | Where-Object { -not $_.qualified }).Count -eq 0
         }
         $report = [ordered]@{
             schema_version=1; source_revision=$manifest.source_revision; actual_standard_user=$true
@@ -407,7 +673,17 @@ try {
             packages=$results; qualification_complete=$qualificationComplete
             platform_nonapplicability='unclassified_existing_skips_are_not_passing_coverage'
         }
-        $reportName = if ($Inspection) { 'inspection-contract-results.json' } else { 'canonical-contract-results.json' }
+        $reportName = if ($Inspection) { 'inspection-contract-results.json' } elseif ($engineProfile) { 'engine-contract-results.json' } else { 'canonical-contract-results.json' }
+        if ($engineProfile) {
+            $report.qualification_profile = 'windows_private_engine_v1'
+            $report.public_families = $publicProof
+            $report.adapter_profile = 'windows_private_engine_adapters_v1'
+            $report.adapter_packages = $adapterResults
+            $report.original_assertions = @($results | ForEach-Object { $_.canonical_contract_proof.original_assertions })
+            $report.classified_skips = @($results | ForEach-Object { $_.canonical_contract_proof.classified_skips })
+            $report.unclassified_skips = @($results | ForEach-Object { $_.canonical_contract_proof.unclassified_skips })
+            $report.native_coverage = 'Eight exact owning packages and four public families; client loading remains separate.'
+        }
         if ($Inspection) {
             $report.elevated = $false; $report.admin_member = $false
             $report.profile_environment = $inspectionProfile

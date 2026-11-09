@@ -4,72 +4,54 @@ package ownerctx
 
 import (
 	"errors"
-	"fmt"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/privatelock"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
-	"os"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
+	"golang.org/x/sys/windows"
 	"path/filepath"
+	"time"
 )
 
-// Product mutation admission remains unavailable on Windows. Preserve source
-// callers until the product obtains a qualified ownership/confinement boundary.
 func readOwnerFile(path string, maximum int64) ([]byte, error) {
-	return scheduler.ReadPrivateFile(path, maximum)
+	return winprivate.ReadFile(path, maximum)
 }
-
-func ensureOwnerDirectory(path string) error                   { return scheduler.EnsurePrivateDirectory(path) }
-func acquireOwnerTransition(path string) (func() error, error) { return privatelock.Acquire(path) }
+func ensureOwnerDirectory(path string) error { return winprivate.MkdirAll(path) }
 func publishOwnerFile(path string, body []byte, exclusive bool) error {
-	if !exclusive {
-		return legacyAtomicPrivateWrite(path, body)
+	d, e := winprivate.Open(filepath.Dir(path), true)
+	if e != nil {
+		return e
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return err
-	}
-	if err := validatePrivateParents(filepath.Dir(path)); err != nil {
-		return err
-	}
-	return scheduler.WriteNewPrivateFile(path, body)
+	defer d.Close()
+	return d.Publish(filepath.Base(path), body, exclusive)
 }
-
-func legacyAtomicPrivateWrite(path string, body []byte) error {
-	directory := filepath.Dir(path)
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		return err
+func acquireOwnerTransition(path string) (func() error, error) {
+	d, e := winprivate.Open(filepath.Dir(path), true)
+	if e != nil {
+		return nil, e
 	}
-	if err := validatePrivateParents(directory); err != nil {
-		return err
+	defer d.Close()
+	f, e := d.OpenLock(filepath.Base(path))
+	if e != nil {
+		return nil, e
 	}
-	if info, err := os.Lstat(path); err == nil {
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			return fmt.Errorf("private target is not a regular file: %s", path)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		var overlapped windows.Overlapped
+		e = windows.LockFileEx(windows.Handle(f.Fd()), windows.LOCKFILE_EXCLUSIVE_LOCK|windows.LOCKFILE_FAIL_IMMEDIATELY, 0, 1, 0, &overlapped)
+		if e == nil {
+			return func() error {
+				var o windows.Overlapped
+				return errors.Join(windows.UnlockFileEx(windows.Handle(f.Fd()), 0, 1, 0, &o), f.Close())
+			}, nil
 		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
+		if !errors.Is(e, windows.ERROR_LOCK_VIOLATION) {
+			f.Close()
+			return nil, e
+		}
+		if time.Now().After(deadline) {
+			f.Close()
+			return nil, privatelock.ErrBusy
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
-	temporary, err := os.CreateTemp(directory, ".private-*")
-	if err != nil {
-		return err
-	}
-	temporaryPath := temporary.Name()
-	defer os.Remove(temporaryPath)
-	if err := temporary.Chmod(0o600); err != nil {
-		_ = temporary.Close()
-		return err
-	}
-	if _, err := temporary.Write(body); err != nil {
-		_ = temporary.Close()
-		return err
-	}
-	if err := temporary.Sync(); err != nil {
-		_ = temporary.Close()
-		return err
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(temporaryPath, path); err != nil {
-		return err
-	}
-	return syncPrivateDirectory(directory)
 }
+func syncPrivateDirectory(path string) error { return winprivate.Sync(path) }
