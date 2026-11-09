@@ -103,3 +103,13 @@ func publishWithGrant(ctx context.Context, grant ExecutionGrant, command Command
 	}
 	return publish()
 }
+
+// PublishExecutionGrant exposes only the product Worker's live publication
+// operation. A historical entry-only grant cannot authorize product effects.
+func PublishExecutionGrant(ctx context.Context, grant ExecutionGrant, command Command, publish func() error) error {
+	bounded, ok := grant.(executionGrant)
+	if !ok || bounded.publication == nil || publish == nil {
+		return errors.New("live product publication grant required")
+	}
+	return publishWithGrant(ctx, grant, command, publish)
+}

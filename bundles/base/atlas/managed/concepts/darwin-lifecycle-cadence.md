@@ -16,7 +16,7 @@ status: stable
 x-maestro-profile-version: "1"
 x-maestro-stable-id: managed/darwin-lifecycle-cadence
 x-maestro-scope: managed
-x-maestro-source-fingerprint: b116988bbbd862085fe230eb404b1febc2c483752f06adc3dd29a93a8a90164e
+x-maestro-source-fingerprint: 600f153de5f818d6e27b41c172d968024faa678fcea22f33d3c0dd3f79b892c7
 x-maestro-freshness: fresh
 x-maestro-status: active
 x-maestro-generator-version: maestro-managed-wiki/0.2
@@ -79,14 +79,14 @@ same allowlisted reversible repair after validation. The Yoda scheduler seam
 and runtime-neutral review core exist, but its handler remains unavailable
 until an approved model adapter, authority and scheduled-input integration are
 installed.
-The monthly Darwin job uses the existing deterministic closed planner; it is
-not a model-backed executor. It remains unavailable, disabled and never
-unattended. The worker can emit a bounded proposal
-receipt only after a concrete runtime-qualified catalog, explicit activation
-and attended monthly authority bind the exact occurrence; the shipped
-catalog-only/unavailable state cannot authorize it. Approval and application
-are separate transactions. Darwin cannot mutate code, policy, release state or
-capability manifests from a scheduled run.
+The monthly Darwin job uses the existing deterministic closed planner, with no
+model-backed executor. Without a concrete product binding it remains unavailable;
+catalog presence alone supplies no authority. The DHRP binding below permits an
+exactly reviewed attended qualification to publish a bounded assessment/proposal
+for its authoritative monthly occurrence. It rejects recurring enrollment and
+never runs unattended. Proposal approval and application are separate operations;
+Darwin cannot mutate code, policy, release state or capability manifests from
+this job.
 
 The weekly deep review also evaluates only registered, Darwin-owned
 `<agent-id>/states.md` control-plane documents beneath its local maintenance
@@ -110,3 +110,63 @@ unavailable. macOS is
 `adapter_installed_native_qualification_pending` after explicit Canary install;
 Windows is `unavailable_native_qualification_pending`. Neither state is native
 qualification, and no wake receipt alone promotes a capability.
+
+## Product local-health binding (DHRP)
+
+The three closed Darwin jobs compose a maintenance-owned constructor implemented
+by `internal/darwin`. A missing constructor or unavailable platform retains
+unavailable status. Scope derives from the admitted home/workspace, actual
+producer/configuration and existing signed installed-source guards. Model input
+cannot supply a root, collector, healthy finding, repair command or grant.
+
+Read-only status exposes absent, current, stale, corrupt, foreign, unsafe and
+unavailable cache states with bounded metadata. It creates no directory, lock,
+cache, enrollment or proposal. Review binds the exact diagnosed external inputs,
+cache-parent presence/hash and proposed effect. Genuine trusted confirmation is
+required for any admitted mutation; an altered projection or changed input
+requires fresh review.
+
+The finite collector reuses actual workspace/configuration/process/projection/
+capability owners and bounded non-Darwin scheduler observations. Enumerate only
+catalog directories, at most128 entries/job and256 total before body reads,
+with strict held-private receipt reads limited to64KiB. Exclude all Darwin job
+outputs/control/receipts and time/occurrence churn from the external fingerprint.
+Native observation and registered state-document coverage remain unavailable
+until independently bound and qualified.
+
+The cache is a strict maximum64KiB `darwin-local-health-v1` current.json under
+home/state/maintenance/workspaces/<workspace-id>/darwin/managed-state. Attended
+first qualification may create it exclusively. An occupied leaf is preserved;
+readback must match exact newly published bytes. A failed post-publication check
+retains the actual bytes and recovery journal as partial/recovery-required.
+
+Automatic replacement and byte/absence compensation remain unavailable under
+#462/#488: held-parent/CAS observations do not establish physical preservation
+against an uncooperative writer. Daily stale-cache review exposes
+`manual_refresh_required`; apply refuses before control or effect publication.
+The owner must preserve the state for explicit reconciliation. No command,
+archive/delete action, alternate service or waiver is supplied by this product
+operation. Existing scheduler/private-kernel owners remain unchanged.
+
+Weekly work can assess current external evidence while preserving an absent or
+stale cache; attended first creation is permitted when absent. Weekly/monthly
+publish immutable bounded assessment/proposal artifacts through ProposalStore,
+with verified workspace/producer/configuration/source/occurrence provenance.
+Monthly remains attended-only, cannot enroll and applies no structural change.
+Daily/weekly enrollment is a separate exact opt-in with MaxCatchUp=1 and no
+backfill. A diagnostic qualification attests actual execution, producer and
+configuration; every later attempt independently binds its new external inputs.
+
+Reuse one existing Worker/opaque grant/lease/terminal chain. Final active
+publication rechecks current process, control revision, actual installed source,
+exact per-attempt diagnosis and lease. Interrupted cache/proposal publication
+retains original occurrence and scheduled instant separately from request time;
+retry verifies/reuses the exact durable artifact rather than relabeling it.
+Semantic no-change cannot manufacture a qualification or proposal from time.
+
+The current Darwin constructor/publication remains unavailable on Windows.
+The existing native private kernel is preserved; source compilation is not
+native Darwin qualification. Focused owning and real SDK/rebuilt-stdio evidence,
+four exact-source reviews and affected hosted checks are separate gates.
+Automatic refresh/compensation acceptance, native Windows, real Code/Desktop
+loading, wake, production trust/distribution and colleague acceptance stay open.
