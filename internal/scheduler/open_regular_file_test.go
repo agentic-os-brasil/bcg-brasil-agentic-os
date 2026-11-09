@@ -13,13 +13,17 @@ func TestOpenRegularFileReadsOrdinaryFileWithoutChangingPermissions(t *testing.T
 	if err := os.WriteFile(name, []byte("source"), 0644); err != nil {
 		t.Fatal(err)
 	}
+	before, err := os.Stat(name)
+	if err != nil {
+		t.Fatal(err)
+	}
 	f, err := scheduler.OpenRegularFile(name)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer f.Close()
 	info, err := f.Stat()
-	if err != nil || info.Mode().Perm() != 0644 {
+	if err != nil || info.Mode().Perm() != before.Mode().Perm() {
 		t.Fatalf("mode changed: %v %v", info, err)
 	}
 	alias := filepath.Join(dir, "alias")
