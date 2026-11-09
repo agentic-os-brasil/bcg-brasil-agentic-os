@@ -23,8 +23,14 @@ const (
 	maximumPromptBytes         = 64 << 10
 	maximumPromptEntries       = 10000
 	maximumPromptStoreBytes    = 8 << 20
-	maximumPromptPacketCount   = 8
-	maximumPromptPacketBytes   = 32 << 10
+	// Legal metadata is at most 975 bytes including JSON syntax and newline:
+	// five 128-byte nonescaping identifiers, SHA64, language17, fixed enums,
+	// RFC3339Nano35 and field names. Keep a 2 KiB envelope for those fields.
+	maximumPromptMetadataBytes        = 2 << 10
+	maximumPromptSerializedEntryBytes = 6*maximumPromptBytes + maximumPromptMetadataBytes
+	maximumPromptSerializedStoreBytes = 6*maximumPromptStoreBytes + maximumPromptEntries*maximumPromptMetadataBytes
+	maximumPromptPacketCount          = 8
+	maximumPromptPacketBytes          = 32 << 10
 )
 
 type PromptScopeKind string
@@ -410,21 +416,16 @@ func PromptHistoryOccurrenceExists(root, ownerID, occurrenceID string) (bool, er
 	if !observationIdentifier.MatchString(ownerID) || !observationIdentifier.MatchString(occurrenceID) {
 		return false, errors.New("prompt history occurrence identity is invalid")
 	}
-	found := false
-	err := withPromptHistoryLock(root, func(entriesPath, _ string) error {
-		entries, err := readPromptHistoryEntries(entriesPath)
-		if err != nil {
-			return err
+	entries, _, err := readPromptHistorySnapshot(root)
+	if err != nil {
+		return false, err
+	}
+	for _, entry := range entries {
+		if entry.OwnerID == ownerID && entry.OccurrenceID == occurrenceID {
+			return true, nil
 		}
-		for _, entry := range entries {
-			if entry.OwnerID == ownerID && entry.OccurrenceID == occurrenceID {
-				found = true
-				break
-			}
-		}
-		return nil
-	})
-	return found, err
+	}
+	return false, nil
 }
 
 func ExportPromptHistory(root string) ([]PromptHistoryEntry, error) {
@@ -602,12 +603,12 @@ func retainPromptHistory(entries []PromptHistoryEntry, config PromptHistoryConfi
 }
 
 func readPromptHistoryEntries(path string) ([]PromptHistoryEntry, error) {
-	body, err := readOwnerFile(path, maximumPromptStoreBytes)
+	body, err := readOwnerFile(path, maximumPromptSerializedStoreBytes)
 	if err != nil {
 		return nil, err
 	}
 	scanner := bufio.NewScanner(bytes.NewReader(body))
-	scanner.Buffer(make([]byte, 4096), maximumPromptBytes+4096)
+	scanner.Buffer(make([]byte, 4096), maximumPromptSerializedEntryBytes)
 	entries := []PromptHistoryEntry{}
 	ownerID := ""
 	for scanner.Scan() {
@@ -634,9 +635,24 @@ func readPromptHistoryEntries(path string) ([]PromptHistoryEntry, error) {
 func writePromptHistoryEntries(path string, entries []PromptHistoryEntry) error {
 	var body strings.Builder
 	for _, entry := range entries {
+		if err := validatePromptHistoryEntry(entry); err != nil {
+			return err
+		}
+		metadata := entry
+		metadata.Prompt = ""
+		envelope, err := json.Marshal(metadata)
+		if err != nil {
+			return err
+		}
+		if len(envelope)+1 > maximumPromptMetadataBytes {
+			return errors.New("prompt history metadata exceeds its serialized envelope")
+		}
 		encoded, err := json.Marshal(entry)
 		if err != nil {
 			return err
+		}
+		if len(encoded)+1 > maximumPromptSerializedEntryBytes || body.Len()+len(encoded)+1 > maximumPromptSerializedStoreBytes {
+			return errors.New("prompt history exceeds its serialized envelope")
 		}
 		body.Write(encoded)
 		body.WriteByte('\n')

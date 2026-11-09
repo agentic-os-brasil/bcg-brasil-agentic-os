@@ -10,6 +10,9 @@ import (
 
 func TestPromptHistoryFreshReadsNeverInitialize(t *testing.T) {
 	root := t.TempDir()
+	if found, err := PromptHistoryOccurrenceExists(root, "owner", "event-a"); err != nil || found {
+		t.Fatalf("fresh occurrence lookup: %v %v", found, err)
+	}
 	config, err := LoadPromptHistoryConfig(root)
 	if err != nil || config != DefaultPromptHistoryConfig() {
 		t.Fatalf("fresh configuration: %+v %v", config, err)
@@ -38,6 +41,9 @@ func TestPromptHistoryIncompleteReadsNeverRepair(t *testing.T) {
 			path := filepath.Join(root, "owner", "prompt-history", missing)
 			if err := os.Remove(path); err != nil {
 				t.Fatal(err)
+			}
+			if _, err := PromptHistoryOccurrenceExists(root, "owner", "event-a"); err == nil {
+				t.Fatal("occurrence lookup admitted incomplete history")
 			}
 			if _, err := LoadPromptHistoryConfig(root); err == nil {
 				t.Fatal("configuration admitted incomplete history")
@@ -106,6 +112,11 @@ func TestPromptHistoryExistingReadsPreserveDomainFiles(t *testing.T) {
 	if _, err := Initialize(root); err != nil {
 		t.Fatal(err)
 	}
+	input := promptInput("private occurrence body", PromptScopeGlobal, "owner", time.Now().UTC())
+	input.OccurrenceID = "event-a"
+	if _, err := RecordUserPrompt(root, input); err != nil {
+		t.Fatal(err)
+	}
 	type snapshot struct {
 		info os.FileInfo
 		body string
@@ -131,6 +142,12 @@ func TestPromptHistoryExistingReadsPreserveDomainFiles(t *testing.T) {
 		path := filepath.Join(root, "owner", "prompt-history", name)
 		before[path] = take(path)
 	}
+	if found, err := PromptHistoryOccurrenceExists(root, "owner", "event-a"); err != nil || !found {
+		t.Fatalf("existing occurrence lookup: %v %v", found, err)
+	}
+	if found, err := PromptHistoryOccurrenceExists(root, "different-owner", "event-a"); err != nil || found {
+		t.Fatalf("cross-owner occurrence lookup: %v %v", found, err)
+	}
 	if _, err := LoadPromptHistoryConfig(root); err != nil {
 		t.Fatal(err)
 	}
@@ -149,6 +166,9 @@ func TestPromptHistoryExistingReadsPreserveDomainFiles(t *testing.T) {
 	config := filepath.Join(root, "owner", "prompt-history", "config.json")
 	if err := atomicPrivateWrite(config, []byte("{corrupt")); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := PromptHistoryOccurrenceExists(root, "owner", "event-a"); err == nil {
+		t.Fatal("occurrence lookup admitted corrupt configuration")
 	}
 	if _, err := ExportPromptHistory(root); err == nil {
 		t.Fatal("corrupt configuration admitted")

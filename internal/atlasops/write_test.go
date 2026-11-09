@@ -10,10 +10,7 @@ import (
 
 func testEngine(t *testing.T) *Engine {
 	t.Helper()
-	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
-	if err := os.MkdirAll(dataRoot, 0o700); err != nil {
-		t.Fatal(err)
-	}
+	dataRoot := atlasTestDataRoot(t)
 	engine, err := Open(dataRoot, func() time.Time {
 		return time.Date(2026, 8, 11, 9, 0, 0, 0, time.UTC)
 	})

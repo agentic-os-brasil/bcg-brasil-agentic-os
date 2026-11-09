@@ -163,6 +163,9 @@ func TestWindowsPromptHistoryReadNeverCreatesMissingGuard(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := PromptHistoryOccurrenceExists(root, "owner", "event-a"); err == nil {
+		t.Fatal("occurrence lookup admitted history without its established guard")
+	}
 	if _, err := ExportPromptHistory(root); err == nil {
 		t.Fatal("read admitted history without its established guard")
 	}
