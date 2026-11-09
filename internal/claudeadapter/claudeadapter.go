@@ -20,6 +20,9 @@ const MaximumNativeInputBytes = 64 << 10
 var nativeIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`)
 
 type NativeInput struct {
+	HookEventName string `json:"hook_event_name"`
+	PromptID      string `json:"prompt_id"`
+
 	SessionID      string `json:"session_id"`
 	CWD            string `json:"cwd"`
 	Prompt         string `json:"prompt"`
@@ -29,9 +32,11 @@ type NativeInput struct {
 	AgentType      string `json:"agent_type"`
 	StopHookActive bool   `json:"stop_hook_active"`
 	ToolInput      struct {
-		Command string `json:"command"`
+		Command      string `json:"command"`
+		SubagentType string `json:"subagent_type"`
 	} `json:"tool_input"`
-	rawToolInput json.RawMessage
+	rawToolInput      json.RawMessage
+	hasStopHookActive bool
 }
 
 func (input *NativeInput) UnmarshalJSON(body []byte) error {
@@ -41,13 +46,15 @@ func (input *NativeInput) UnmarshalJSON(body []byte) error {
 		return err
 	}
 	var raw struct {
-		ToolInput json.RawMessage `json:"tool_input"`
+		ToolInput      json.RawMessage `json:"tool_input"`
+		StopHookActive json.RawMessage `json:"stop_hook_active"`
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return err
 	}
 	*input = NativeInput(decoded)
 	input.rawToolInput = append(json.RawMessage(nil), raw.ToolInput...)
+	input.hasStopHookActive = string(raw.StopHookActive) == "true" || string(raw.StopHookActive) == "false"
 	return nil
 }
 
@@ -88,7 +95,7 @@ type SubagentStartOutput struct {
 func ManagedSubagentStartContext(agentType string) SubagentStartOutput {
 	var output SubagentStartOutput
 	output.HookSpecificOutput.HookEventName = "SubagentStart"
-	output.HookSpecificOutput.AdditionalContext = "You are running as the managed Maestro specialist " + agentType + ". Stay inside the exact delegated packet, never delegate, and return only to Maestro. Native qualification is beta telemetry; the deterministic scope and tool guard is authoritative."
+	output.HookSpecificOutput.AdditionalContext = "You are running as the managed Maestro specialist " + agentType + ". Stay inside the exact delegated packet, never delegate, and return only to Maestro. This is the bounded sequential maestro_planner profile. Native host qualification remains separate; a stop observation does not verify delivery, a verdict or execution completion."
 	return output
 }
 
