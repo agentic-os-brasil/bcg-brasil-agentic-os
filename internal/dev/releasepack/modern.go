@@ -103,7 +103,7 @@ func BuildModernCandidate(ctx context.Context, o ModernOptions) (ModernCandidate
 	if err != nil {
 		return ModernCandidate{}, err
 	}
-	if identity.Version != o.Version || identity.CompatibleBundle != compatibleRange(o.Version) || identity.AuthorityRegistrySHA256 != pin {
+	if identity.SchemaVersion != 2 || identity.ExecutionContract != releasecontract.SyncedSourceContract || identity.Version != o.Version || identity.CompatibleBundle != compatibleRange(o.Version) || identity.AuthorityRegistrySHA256 != pin {
 		return ModernCandidate{}, errors.New("built server does not match factory inputs")
 	}
 	server, err := inspectArtifact("mcp_server", o.Target.OS, o.Target.Arch, filepath.Join(release, serverName))
@@ -136,7 +136,7 @@ func BuildModernCandidate(ctx context.Context, o ModernOptions) (ModernCandidate
 	if err != nil {
 		return ModernCandidate{}, err
 	}
-	m := releasecontract.Manifest{SchemaVersion: 2, Product: "maestro", Release: o.Version, Channel: o.Channel, Issuer: releasecontract.Issuer{ID: "maestro-release-candidate", KeyID: "candidate-unavailable"}, Server: releasecontract.ServerComponent{Version: o.Version, CompatibleBundle: compatibleRange(o.Version), Protocol: releasecontract.ServerProtocol, EmbeddedInputsSHA256: identity.EmbeddedInputsSHA256}, Bundle: releasecontract.BundleComponent{Version: o.Version, CompatibleServer: compatibleRange(o.Version)}, Delivery: releasecontract.DeliveryComponent{Profile: releasecontract.ModernProfile, InstallerVersion: o.InstallerVersion, InstallerProtocol: releasecontract.InstallerProtocol}, Artifacts: []releasecontract.Artifact{bundle, server}, Migrations: []releasecontract.Migration{}}
+	m := releasecontract.Manifest{SchemaVersion: 2, Product: "maestro", Release: o.Version, Channel: o.Channel, Issuer: releasecontract.Issuer{ID: "maestro-release-candidate", KeyID: "candidate-unavailable"}, Server: releasecontract.ServerComponent{Version: o.Version, CompatibleBundle: compatibleRange(o.Version), Protocol: releasecontract.ServerProtocol, ExecutionContract: identity.ExecutionContract, EmbeddedInputsSHA256: identity.EmbeddedInputsSHA256}, Bundle: releasecontract.BundleComponent{Version: o.Version, CompatibleServer: compatibleRange(o.Version)}, Delivery: releasecontract.DeliveryComponent{Profile: releasecontract.ModernProfile, InstallerVersion: o.InstallerVersion, InstallerProtocol: releasecontract.InstallerProtocol}, Artifacts: []releasecontract.Artifact{bundle, server}, Migrations: []releasecontract.Migration{}}
 	if o.DoclingPack != "" {
 		if o.Target.OS != "darwin" || o.Target.Arch != "arm64" {
 			return ModernCandidate{}, errors.New("Docling has no qualified pack for the selected target")

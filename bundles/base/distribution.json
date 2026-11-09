@@ -977,6 +977,11 @@
       "role": "data"
     },
     {
+      "source": "schemas/release-generation.schema.json",
+      "path": "schemas/release-generation.schema.json",
+      "role": "data"
+    },
+    {
       "source": "schemas/release-manifest-v2.schema.json",
       "path": "schemas/release-manifest-v2.schema.json",
       "role": "data"

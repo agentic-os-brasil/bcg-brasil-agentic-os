@@ -36,6 +36,7 @@ type RuntimeDiagnosis struct {
 	InstallationCoverage string                        `json:"installation_coverage"`
 }
 type DiagnosticReport struct {
+	Update         *UpdateDiagnosis       `json:"update,omitempty"`
 	Wiki           *WikiDiagnostic        `json:"wiki,omitempty"`
 	Implementation string                 `json:"implementation,omitempty"`
 	Configuration  string                 `json:"configuration,omitempty"`
@@ -216,6 +217,15 @@ func (s *Service) diagnosticSource(job string) (DiagnosticReport, error) {
 // provenance. New reports bind actual inputs to the executing implementation.
 func (r DiagnosticReport) sourceDigest() string {
 	var input any = r.Runtime
+	if r.JobID == UpdateCheckJobID {
+		if r.Update != nil {
+			semantic := *r.Update
+			// Exact plan IDs retain observation-time/state binding. That
+			// timestamp-derived churn is not a new diagnostic finding.
+			semantic.PlanID = ""
+			input = semantic
+		}
+	}
 	if r.JobID == "memory-retention-check" {
 		input = r.Retention
 	}
@@ -238,7 +248,17 @@ func (r DiagnosticReport) validate() error {
 	if r.SourceSHA256 != r.sourceDigest() {
 		return errors.New("diagnostic source digest mismatch")
 	}
-	if wikiJob(r.JobID) {
+	if r.JobID == UpdateCheckJobID {
+		if r.Update == nil || r.Runtime != nil || r.Retention != nil || r.Wiki != nil || r.Update.Sequence == 0 || !digestPattern.MatchString(r.Update.GenerationSHA256) || !digestPattern.MatchString(r.Update.ManifestSHA256) || !digestPattern.MatchString(r.Update.ClientInputsSHA256) || r.Update.CandidateRelease == "" || r.Finding != "authenticated_update_check" {
+			return errors.New("update diagnosis lacks actual authenticated source evidence")
+		}
+		if r.Update.Outcome != "current_signed_release" && r.Update.Outcome != "candidate_staged_activation_unconfirmed" {
+			return errors.New("invalid update diagnosis outcome")
+		}
+		if (r.Update.Outcome == "candidate_staged_activation_unconfirmed") != (r.Update.PlanID != "") {
+			return errors.New("update diagnosis plan binding missing")
+		}
+	} else if wikiJob(r.JobID) {
 		if r.Wiki == nil || r.Runtime != nil || r.Retention != nil || r.Finding != "private_graph_verified" || r.Wiki.validate(r.Implementation) != nil {
 			return errors.New("wiki diagnosis lacks actual graph evidence")
 		}
@@ -268,7 +288,7 @@ func (r DiagnosticReport) validate() error {
 	return nil
 }
 func diagnosticJob(id string) bool {
-	return wikiJob(id) || id == "memory-retention-check" || id == "runtime-health-check" || id == "capability-recheck" || id == "runtime-drift-check"
+	return id == UpdateCheckJobID || wikiJob(id) || id == "memory-retention-check" || id == "runtime-health-check" || id == "capability-recheck" || id == "runtime-drift-check"
 }
 
 type DiagnosticStore struct{ Root string }

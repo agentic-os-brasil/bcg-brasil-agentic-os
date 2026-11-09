@@ -1,8 +1,11 @@
 # Deliver one complete synced-folder product install and update path
 
-Status: Task1 source and focused engineering evidence are frozen for independent
-review; Tasks2/3 remain pending. No production release or native qualification is
-implied. Front: `codex/integration/maestro-distribution`.
+Status: Task1 and reviewed Wiki/shared corrections are locally integrated at
+8c1ede63fef4b3a5a17d2d4471e4dc5b4f8c37fe, exact tested/reviewed tree
+b62905ad2137647cae4d8cebe3a8727a551ee9a2. MPDU/Spec020 settle Task2's accepted
+construction contract; implementation is separately released/gated. Task3 remains
+pending. No production release or native qualification is implied.
+Front: `codex/integration/maestro-distribution`.
 Topic: `codex/maestro-synced-distribution`. The reviewed complete native/maintenance
 dependency is incorporated at 62d7758b18b0e9deb616ceacc7c241a34f5b68ce, preserving
 its four-lens-approved tree. MPDI and Spec020 define the accepted modern

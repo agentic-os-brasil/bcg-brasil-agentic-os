@@ -39,7 +39,9 @@ func main() {
 			fmt.Fprintln(os.Stderr, "maestro: hook unavailable; inspect admitted state before retrying")
 			os.Exit(product.HookExitCode(event))
 		}
-		if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "maintenance-") {
+		if errors.Is(err, product.ErrSourceRecoveryRequired) {
+			fmt.Fprintln(os.Stderr, "maestro: signed source recovery required; use the independently admitted local maestro-install source-review/source-check route before restarting")
+		} else if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "maintenance-") {
 			fmt.Fprintln(os.Stderr, "maestro: maintenance operation refused; inspect maintenance-status, review JSON stdin with maintenance-review, then maintenance-apply with the same request, exact --review-digest and explicit --confirm")
 		} else if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "knowledge-") {
 			fmt.Fprintln(os.Stderr, "maestro: knowledge operation refused; read knowledge-review from JSON stdin, then use knowledge-apply with the same request, exact --review-digest and explicit --confirm")
@@ -90,6 +92,8 @@ func run() error {
 	flags.StringVar(&o.ProductRoot, "product-root", "", "existing installed product directory")
 	flags.StringVar(&o.UserHome, "user-home", "", "existing owner directory")
 	flags.StringVar(&o.WorkspacePath, "workspace", "", "explicit selected workspace directory")
+	flags.StringVar(&o.InstalledManifestSHA256, "installed-manifest", "", "fixed carrier signed release manifest digest")
+	flags.StringVar(&o.InstalledClientInputsSHA256, "installed-client-inputs", "", "fixed carrier immutable client input digest")
 	if os.Args[1] == "native-review" || os.Args[1] == "native-qualify-and-build" {
 		flags.StringVar(&nativeExecutable, "native-executable", "", "explicit installed Code executable")
 		flags.StringVar(&nativeScratch, "native-scratch-root", "", "existing private owner scratch directory")
@@ -139,6 +143,7 @@ func run() error {
 		}
 	}
 	seedDoclingAuthority(&o)
+	o.GuardProcess = Version != ""
 	if flags.NArg() != 0 {
 		return errors.New("unexpected_arguments")
 	}

@@ -318,6 +318,10 @@
         },
         "embedded_inputs_sha256": {
           "$ref": "#/$defs/sha256"
+        },
+        "execution_contract": {
+          "description": "Absent or empty in historical modern releases. Source-aware installation additionally requires the exact capability from the authenticated manifest and the actual verified executable identity.",
+          "enum": ["", "maestro-synced-source-v1"]
         }
       }
     },

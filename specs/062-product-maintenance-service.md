@@ -157,3 +157,36 @@ exact per-candidate owner review; without that trusted review retain L2/L3 and
 report lifetime confirmation unavailable. The existing attended memory
 consolidation path remains available; do not create a second approval authority
 or effectful MRTR retry mechanism merely to qualify the recurring job.
+
+### Attended signed-source diagnosis (MPDU)
+
+The existing update-check job can execute only as an explicitly reviewed attended
+check of the installed owner's enrolled signed source. It remains unattended-never
+and cannot enroll as recurring work or activate an update. Declare its actual
+installation-source custody, bounded candidate staging/plan and local-diagnosis
+effects in the closed catalog and exact trusted review; local_diagnostics alone
+cannot authorize source-state mutation. Model input selects no root, source/key,
+executable, clock, native verifier or approval authority.
+
+Revalidate the captured signed input, source tuple, current installation and live
+grant before effects. Confirmed authentic higher metadata retains its sequence
+and recalls even when expired or payload-incomplete, as specified by MPDU. Report
+that actual observation and unavailable eligibility separately. A genuine check
+or diagnosis is not a claim that the current release, provider or native client
+is healthy; synthetic/timestamp-only reports cannot qualify execution.
+
+Retain one existing Worker/control/lease/terminal chain and one installation-state
+serialization owner. Source custody stays outside Previous and cannot be reset
+by a report, compensation or managed rollback. A failed/stale/revoked publication
+must retain truthful partial/recovery evidence. The trusted installer provides
+the independent repair path when the MCP's qualified source launch is blocked.
+
+For update-check, advancing the source observation time can legitimately change
+the exact-state-bound pending plan ID without changing the authenticated
+source/candidate diagnosis. Exclude that derived plan ID only from diagnostic
+semantic identity; retain the full exact plan/state checks for activation.
+Reviewed-no-change preserves existing genuine qualification and its actual
+artifact/receipt, or remains unqualified, and clears only its own one-shot under
+the live guard. It cannot mint a new qualification from that clock-only churn.
+Reports retain the stored plan identity as historical when stale; a separate
+bounded current-pending projection requires read-only canonical verification.

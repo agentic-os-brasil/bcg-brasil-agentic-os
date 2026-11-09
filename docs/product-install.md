@@ -4,8 +4,9 @@ The modern `mcp-local-v1` delivery builds the shared MCP executable and an
 independently admitted native installer. One reviewed setup activates the managed
 payload, admits the selected private home and workspace, and creates local Code
 and Desktop packets. Participants do not need a Git checkout. This first-install
-source has focused engineering evidence; independent review, signed production
-execution and actual client loading remain pending.
+milestone passed focused engineering tests and independent review, and is
+locally integrated. Signed production execution and actual client loading
+retain separate gates from the source-aware lifecycle described below.
 
 ## What a publisher prepares
 
@@ -33,9 +34,10 @@ authority.
 
 SharePoint/OneDrive can transport replicated bytes after that admission. A synced
 file, successful download or checksum alone is not release authority. Signed
-generations, guarded update and registration are later tasks in the
-[complete delivery plan](plans/2026-11-03-synced-product-distribution.md); first
-installation does not yet provide those features.
+generations and guarded update are being constructed under the
+[signed-source guide](product-synced-source.md); registration follows in the
+[complete delivery plan](plans/2026-11-03-synced-product-distribution.md). The
+first-install milestone alone does not establish those complete journeys.
 
 ## Review the exact participant setup
 
@@ -92,6 +94,12 @@ immutable methods, agents, runtime, memory and policy resources. Their emitted
 launch vectors select the reviewed owner directory and workspace explicitly at
 runtime; the packet does not embed the builder's private paths or enroll a client.
 
+For a source-aware release, complete the explicit source review and confirmed
+source-check in the [signed-source runbook](product-synced-source.md) before
+opening the client carriers. First-install packet materialization is separate
+from source enrollment. Qualified launch reads that private custody and can
+refuse with source recovery required until enrollment is complete.
+
 `activated_setup_pending` means signed activation completed but a later admission,
 converter or packet step needs recovery. Preserve the managed payload, private
 installation state, home locator and existing packets. Inspect the structured
@@ -142,8 +150,12 @@ Its successful inner native admission was a controlled in-process engineering
 composition. Production-default unsigned installer probes refused. Neither result
 qualifies organization signing or a participant device.
 
-Modern update currently refuses before provider access. Do not feed modern state
-to the historical legacy updater or copy a replacement binary over an active
-server. Signed synced updates, rollback/recall custody and registration recovery
-must close before the complete distribution front is publishable. Ordinary-user
-Windows and real Code/Desktop acceptance remain separate gates.
+The source-aware signed update path has explicit review, stage, update,
+reconcile and rollback commands in the
+[synced-source runbook](product-synced-source.md). Its complete task review is
+separate from the first-install milestone above. Historical modern state without
+an authentic source-aware current binding receives a migration-unavailable
+refusal. Preserve the existing state for diagnosis instead of using the legacy
+updater, copying over an active server or clearing recall/custody state. Client
+registration/recovery, ordinary-user Windows and actual Code/Desktop acceptance
+retain their separate delivery gates.
