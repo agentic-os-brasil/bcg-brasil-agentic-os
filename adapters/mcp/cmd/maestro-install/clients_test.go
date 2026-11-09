@@ -41,4 +41,25 @@ func TestClientCapabilitiesReadOnlyWithoutInstallation(t *testing.T) {
 	if value.Schema != 1 || value.Profile != "stable-local-v1" || value.Protocol != "maestro-stable-carrier-v1" || value.Version != "0.3.7" || value.CarrierVersion != "1.0.0" {
 		t.Fatalf("unexpected actual capability: %s", body)
 	}
+	os.Args = []string{"maestro-install", "lifecycle-capabilities"}
+	r2, w2, e := os.Pipe()
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer r2.Close()
+	os.Stdout = w2
+	e = run()
+	w2.Close()
+	os.Stdout = oldOutput
+	body, e2 := io.ReadAll(r2)
+	var lifecycle struct {
+		Profile         string   `json:"profile"`
+		Events          []string `json:"events"`
+		Enforcement     string   `json:"enforcement"`
+		NativeExecution string   `json:"native_execution"`
+	}
+	if e != nil || e2 != nil || json.Unmarshal(body, &lifecycle) != nil || lifecycle.Profile != "mcp_lifecycle" || len(lifecycle.Events) != 3 || lifecycle.Enforcement != "unavailable" || lifecycle.NativeExecution != "not_observed" {
+		t.Fatalf("finite lifecycle capability: %s %v %v", body, e, e2)
+	}
+
 }

@@ -55,6 +55,7 @@ type ClientRequest struct {
 	// ManualDesktopUpdate creates the documented replacement bundle instead of
 	// reusing the byte-identical external-launcher candidate.
 	ManualDesktopUpdate bool `json:"manual_desktop_update,omitempty"`
+	LifecycleContext    bool `json:"lifecycle_context,omitempty"`
 	Reconcile           bool `json:"reconcile,omitempty"`
 }
 type ClientOptions struct {
@@ -100,6 +101,7 @@ func (b ClientBackup) ValidateBinding(codeRoot, desktopPath string) error {
 }
 
 type ClientMaterialization struct {
+	LifecycleContext              bool           `json:"lifecycle_context,omitempty"`
 	Release                       string         `json:"release"`
 	ManifestSHA256                string         `json:"manifest_sha256"`
 	ClientInputsSHA256            string         `json:"client_inputs_sha256"`
@@ -296,11 +298,29 @@ func ReviewClientsSeeded(ctx context.Context, o ClientOptions) (ClientReview, er
 	if err = readClientCapabilities(ctx, installedExecutablePath(o.ManagedRoot, s.TargetOS, s.Profile), "server", s.Server.Version, o.AuthorityRegistrySHA256); err != nil {
 		return ClientReview{}, err
 	}
+	if o.Request.LifecycleContext {
+		launcher := "maestro-install"
+		if s.TargetOS == "windows" {
+			launcher += ".exe"
+		}
+		if err = RequireLifecycleClientCapabilities(ctx, filepath.Join(o.ManagedRoot, launcher), "installer", o.Version, o.AuthorityRegistrySHA256); err != nil {
+			return ClientReview{}, err
+		}
+		if err = RequireLifecycleClientCapabilities(ctx, o.Self, "installer", o.Version, o.AuthorityRegistrySHA256); err != nil {
+			return ClientReview{}, err
+		}
+		if err = RequireLifecycleClientCapabilities(ctx, installedExecutablePath(o.ManagedRoot, s.TargetOS, s.Profile), "server", s.Server.Version, o.AuthorityRegistrySHA256); err != nil {
+			return ClientReview{}, err
+		}
+	}
 	binding, err := clientBinding(o)
 	if err != nil {
 		return ClientReview{}, err
 	}
 	review := ClientReview{SchemaVersion: 1, Request: o.Request, Binding: binding, Current: currentClients(s), Effects: []string{"generate_and_verify_current_server_packets", "publish_only_absent_or_identical_client_slots_or_return_manual_custody_step", "publish_private_current_client_record", "materialize_bound_operator_launcher"}}
+	if o.Request.LifecycleContext {
+		review.Effects = append(review.Effects, "configure_three_non_enforcing_Code_lifecycle_hooks_for_exact_reviewed_selection")
+	}
 	if o.Request.Reconcile {
 		review.Effects = append(review.Effects, "reclaim_only_dead_installation_lock_and_reconcile_actual_owned_packets")
 	}
@@ -367,7 +387,7 @@ func MaterializeClientsSeeded(ctx context.Context, o ClientOptions, digest strin
 		if e != nil {
 			return fmt.Errorf("activation-applied/client-materialization-pending: %w", e)
 		}
-		if !sameClientCurrent(material, s) || material.CodeRoot != o.Request.CodeRoot || material.DesktopPath != o.Request.DesktopPath {
+		if !sameClientCurrent(material, s) || material.CodeRoot != o.Request.CodeRoot || material.DesktopPath != o.Request.DesktopPath || material.LifecycleContext != o.Request.LifecycleContext {
 			return errors.New("materializer returned another current binding")
 		}
 		if e = validateClientFiles(material); e != nil {
@@ -443,6 +463,9 @@ func ReadClientsSeeded(ctx context.Context, o ClientOptions) (ClientStatus, erro
 	return status, nil
 }
 func PrepareStableLaunch(ctx context.Context, o ClientOptions) (QualifiedLaunch, error) {
+	return prepareStableLaunch(ctx, o, "")
+}
+func prepareStableLaunch(ctx context.Context, o ClientOptions, event string) (QualifiedLaunch, error) {
 	if _, err := admitOperationSeed(ctx, o.SeededOperationOptions); err != nil {
 		return QualifiedLaunch{}, err
 	}
@@ -455,7 +478,11 @@ func PrepareStableLaunch(ctx context.Context, o ClientOptions) (QualifiedLaunch,
 		if o.Request.Workspace != r.Binding.Workspace {
 			return errors.New("stable workspace mismatch")
 		}
+		if event != "" && !r.Materialization.LifecycleContext {
+			return errors.New("passive lifecycle was not explicitly materialized for this carrier")
+		}
 		bound := o
+		bound.Request.LifecycleContext = r.Materialization.LifecycleContext
 		bound.Request.CodeRoot = r.Materialization.CodeRoot
 		bound.Request.DesktopPath = r.Materialization.DesktopPath
 		bound.Request.CodeScope = r.Code.Scope
@@ -467,6 +494,12 @@ func PrepareStableLaunch(ctx context.Context, o ClientOptions) (QualifiedLaunch,
 			return errors.New("stable binding stale; explicit client regeneration required")
 		}
 		launch, e = PrepareQualifiedLaunch(ctx, QualifiedLaunchOptions{SeededOperationOptions: o.SeededOperationOptions, ExpectedBinding: installtx.ReleaseBinding{ManifestSHA256: r.Materialization.ManifestSHA256, ClientInputsSHA256: r.Materialization.ClientInputsSHA256}, Workspace: r.Binding.Workspace})
+		if e == nil && event != "" {
+			if len(launch.Args) == 0 || launch.Args[0] != "serve" {
+				return errors.New("canonical current launch unavailable")
+			}
+			launch.Args = append([]string{"lifecycle-hook", "--event", event}, launch.Args[1:]...)
+		}
 		return e
 	})
 	return launch, err

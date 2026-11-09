@@ -23,6 +23,10 @@ var AuthorityRegistrySHA256 string
 
 func main() {
 	if err := run(); err != nil {
+		if len(os.Args) > 1 && os.Args[1] == "stable-hook" {
+			fmt.Fprintln(os.Stderr, "maestro: passive lifecycle unavailable; inspect the selected installation and client materialization")
+			os.Exit(1)
+		}
 		writeFailure(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -42,6 +46,12 @@ func run() error {
 	}
 	root := filepath.Dir(executable)
 	registryPath := filepath.Join(root, "trust", "release-authority-registry.json")
+	if os.Args[1] == "lifecycle-capabilities" {
+		if len(os.Args) != 2 || Version == "" || AuthorityRegistrySHA256 == "" {
+			return errors.New("lifecycle protocol unavailable")
+		}
+		return json.NewEncoder(os.Stdout).Encode(installer.LifecycleClientCapabilities("installer", Version, AuthorityRegistrySHA256))
+	}
 	if os.Args[1] == "client-capabilities" {
 		if len(os.Args) != 2 || Version == "" || AuthorityRegistrySHA256 == "" {
 			return errors.New("installer capabilities unavailable")
@@ -76,6 +86,12 @@ func run() error {
 	flags.StringVar(&launch.ClientDesktopPath, "client-desktop-path", "", "fixed generated operator launcher Desktop destination")
 	flags.StringVar(&launch.ClientCodeExecutable, "client-code-executable", "", "fixed generated operator launcher Code executable")
 	flags.StringVar(&launch.ClientScope, "client-scope", "", "fixed generated operator launcher Code scope")
+	if os.Args[1] == "stable-hook" {
+		flags.StringVar(&launch.HookEvent, "event", "", "exact passive lifecycle event")
+	}
+	if os.Args[1] == "manage" {
+		flags.BoolVar(&launch.LifecycleContext, "client-lifecycle-context", false, "explicit passive Code lifecycle selection")
+	}
 	if err = flags.Parse(os.Args[2:]); err != nil {
 		return err
 	}

@@ -1,9 +1,34 @@
 ---
 name: brain-index
-description: Recompila o índice navegável do brain — índice por escopo, backlinks, conceitos e diagnóstico de saúde. Use ao fim de uma sessão que criou ou moveu páginas, quando o dono perguntar o que existe no brain sobre um assunto, ou quando quiser ver links quebrados, páginas órfãs e trabalho parado.
+description: Consulta a navegação do brain pelo caminho instalado e, no perfil ZIP com compilador admitido, recompila seus índices. Use para localizar conhecimento e inspecionar a disponibilidade da navegação sem presumir um hook automático.
 ---
 
 # Brain index
+
+## Produto MCP e plugin
+
+Quando o runtime instalado expõe `maestro_context`, use esse vínculo e as
+operações efetivamente disponíveis em `maestro_query`. Consulte `wiki.status`
+antes de navegar por `wiki.read` ou `wiki.source`, preservando a geração e as
+referências retornadas. `memory.search` e `memory.context` consultam a memória
+revisada do workspace, sem criar fontes ou índices.
+
+A wiki privada de memória e o índice do brain autoral são superfícies distintas.
+Este produto não oferece a recompilação genérica do brain autoral nem instala
+`session-stop-brain-index.sh`. Se essa for a operação pedida, informe sua
+indisponibilidade e preserve o pedido pendente. A construção explícita da wiki
+privada segue o fluxo revisado de manutenção descrito em
+[dream-memory](../dream-memory/SKILL.md); consulta e Stop não iniciam compilação.
+Os hooks opcionais de contexto leem memória gerada e registram observações,
+sem executar o compilador legado ou conceder acesso direto aos arquivos privados.
+
+Uma conversa do produto termina nesta seção. Uma chamada ausente ou recusada
+permanece indisponível; ela não seleciona o caminho ZIP.
+
+## Distribuição ZIP legada
+
+Use o restante deste método somente quando os metadados da instalação
+identificarem positivamente o perfil ZIP e o helper gerenciado estiver admitido.
 
 Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
 
@@ -14,7 +39,9 @@ Nenhuma página de índice é autoridade — ela aponta, e a página apontada ap
 
 ## Quando roda sozinho
 
-O hook `session-stop-brain-index.sh` recompila ao fim de **toda** sessão. Leva ~1s e é
+No perfil ZIP, quando `session-stop-brain-index.sh` estiver instalado e ativo,
+esse hook recompila ao fim da sessão. Sem esse registro, não há execução
+automática a afirmar. O compilador leva ~1s e é
 idempotente, então o índice nunca fica atrás do disco: pasta nova entra no índice de
 cima, pasta que cruzou o limiar ganha índice próprio, e índice que deixou de qualificar
 é removido. Nada disso exige que alguém lembre de fazer.

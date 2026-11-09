@@ -10,6 +10,7 @@ initialization and ordinary MCP operation, use the
 | Packet | Native behavior |
 | --- | --- |
 | `plugin` | Builds the complete portable MCP Code packet, including six inert canonical specialist projections, with an explicit native-unavailable reason and no active hooks. Packaging starts no qualification or model session. |
+| `plugin --lifecycle-context` | Builds the explicit `mcp_lifecycle` Code packet with three non-enforcing context/observation hooks. It does not qualify native enforcement or project specialists. See the [lifecycle context guide](product-lifecycle-context.md). |
 | `native-qualify-and-build` | Reviews and exercises the exact local target, then immediately builds a native packet only after successful qualification. |
 | `mcpb` | Carries the same shared server and immutable resources for Desktop. It installs neither Code agents/hooks nor Desktop Skills. |
 

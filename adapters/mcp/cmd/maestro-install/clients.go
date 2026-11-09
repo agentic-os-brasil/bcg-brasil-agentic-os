@@ -30,7 +30,7 @@ type clientRequest struct {
 
 func runClients(ctx context.Context, command, self string, f lifecycleFlags, digest string, confirmed bool) (bool, error) {
 	switch command {
-	case "clients-review", "clients-apply", "clients-reconcile", "clients-status", "code-review", "code-apply", "desktop-confirm", "stable-launch", "manage":
+	case "clients-review", "clients-apply", "clients-reconcile", "clients-status", "code-review", "code-apply", "desktop-confirm", "stable-launch", "stable-hook", "manage":
 	default:
 		return false, nil
 	}
@@ -40,6 +40,7 @@ func runClients(ctx context.Context, command, self string, f lifecycleFlags, dig
 		o.Request.DesktopPath = f.ClientDesktopPath
 		o.Request.CodeExecutable = f.ClientCodeExecutable
 		o.Request.CodeScope = f.ClientScope
+		o.Request.LifecycleContext = f.LifecycleContext
 	} else if f.ClientCodeRoot != "" || f.ClientDesktopPath != "" || f.ClientCodeExecutable != "" || f.ClientScope != "" {
 		return true, errors.New("operator launcher recovery choices are valid only for manage")
 	}
@@ -49,11 +50,17 @@ func runClients(ctx context.Context, command, self string, f lifecycleFlags, dig
 		}
 		return true, err
 	}
-	if command == "stable-launch" {
+	if command == "stable-launch" || command == "stable-hook" {
 		if f.ManifestSHA256 != "" || f.ClientInputsSHA256 != "" || f.PlanID != "" {
 			return true, errors.New("stable launch accepts only fixed roots/workspace/carrier ID")
 		}
-		launch, err := installer.PrepareStableLaunch(ctx, o)
+		var launch installer.QualifiedLaunch
+		var err error
+		if command == "stable-hook" {
+			launch, err = installer.PrepareStableLifecycleHook(ctx, o, f.HookEvent)
+		} else {
+			launch, err = installer.PrepareStableLaunch(ctx, o)
+		}
 		if err != nil {
 			return true, err
 		}
@@ -254,7 +261,7 @@ func manageClients(ctx context.Context, o installer.ClientOptions, input io.Read
 		return json.NewEncoder(output).Encode(r)
 	}
 	r := *status.Record
-	o.Request = installer.ClientRequest{CarrierID: r.CarrierID, Workspace: r.Binding.Workspace, CodeRoot: r.Materialization.CodeRoot, DesktopPath: r.Materialization.DesktopPath, CodeExecutable: r.Code.Executable, CodeScope: r.Code.Scope}
+	o.Request = installer.ClientRequest{CarrierID: r.CarrierID, Workspace: r.Binding.Workspace, CodeRoot: r.Materialization.CodeRoot, DesktopPath: r.Materialization.DesktopPath, CodeExecutable: r.Code.Executable, CodeScope: r.Code.Scope, LifecycleContext: r.Materialization.LifecycleContext}
 	fmt.Fprintln(output, "Maestro local management. Client loading and native qualification are reported separately.")
 	action, e := prompt("Choose status, update, regenerate, reconcile, register-code, desktop-confirm, manual-desktop-update, or rollback: ")
 	if e != nil {

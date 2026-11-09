@@ -31,6 +31,7 @@ type Options struct {
 	Destination, Server, Version string
 	Binding                      product.Options
 	NativeHost                   *NativeHost
+	LifecycleContext             bool
 	Carrier                      *StableCarrier
 	stableIdentity               releasecontract.ServerIdentity
 	serverBody                   []byte
@@ -40,6 +41,9 @@ type Options struct {
 }
 
 func prepare(o Options) (Options, string, error) {
+	if o.LifecycleContext && (o.NativeHost != nil || o.native != nil || o.hookOverride != nil) {
+		return o, "", errors.New("lifecycle context and native enforcement profiles are mutually exclusive")
+	}
 	if _, err := product.Open(o.Binding); err != nil {
 		return o, "", err
 	}

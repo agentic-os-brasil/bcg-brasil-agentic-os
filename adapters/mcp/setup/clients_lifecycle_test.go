@@ -22,9 +22,11 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/setup"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeadapter"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/releasepack"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/updateservice"
@@ -320,6 +322,78 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 	if !bytes.Contains(knowledgeBody, []byte("CLIENT_STABLE_LITERAL_KNOWLEDGE")) {
 		t.Fatalf("initial authored knowledge not collected: %s", knowledgeBody)
 	}
+	// Passive lifecycle selection is explicit and separate from native loading.
+	beforePassive := snapshot(t, root)
+	if _, e = installer.PrepareStableLifecycleHook(ctx, options, "SessionStart"); e == nil {
+		t.Fatal("plain carrier acquired passive lifecycle authority")
+	}
+	if !reflect.DeepEqual(beforePassive, snapshot(t, root)) {
+		t.Fatal("unselected passive hook changed state")
+	}
+	passiveID := "edededededededededededededededed"
+	passiveOptions := installer.ClientOptions{SeededOperationOptions: seed, LookupEnv: c.LookupEnv, Request: installer.ClientRequest{CarrierID: passiveID, Workspace: ws, CodeRoot: filepath.Join(root, "passive-code"), DesktopPath: filepath.Join(root, "passive-desktop.mcpb"), CodeScope: "user", LifecycleContext: true}}
+	passiveReview, e := installer.ReviewClientsSeeded(ctx, passiveOptions)
+	must(t, e)
+	beforePassive = snapshot(t, root)
+	if _, e = setup.ApplyClients(ctx, passiveOptions, passiveReview.Digest, false); e == nil || !reflect.DeepEqual(beforePassive, snapshot(t, root)) {
+		t.Fatal("declined passive materialization changed state")
+	}
+	changedPassive := passiveOptions
+	changedPassive.Request.LifecycleContext = false
+	if _, e = setup.ApplyClients(ctx, changedPassive, passiveReview.Digest, true); e == nil || !reflect.DeepEqual(beforePassive, snapshot(t, root)) {
+		t.Fatal("changed passive opt-in reused reviewed digest")
+	}
+	passiveRecord, e := setup.ApplyClients(ctx, passiveOptions, passiveReview.Digest, true)
+	must(t, e)
+	if !passiveRecord.Materialization.LifecycleContext {
+		t.Fatal("reviewed passive selection was not recorded")
+	}
+	if _, e = installer.PrepareStableLifecycleHook(ctx, passiveOptions, "PreToolUse"); e == nil {
+		t.Fatal("passive stable launcher accepted a native enforcement event")
+	}
+	// Consolidation remains an explicit operation; lifecycle never captures or dreams.
+	call(t, ctx, live, "maestro_apply", map[string]any{"operation": "memory.consolidate", "cycle": "daily", "date": time.Now().UTC().Format("2006-01-02")}, false)
+	for _, event := range []string{"SessionStart", "UserPromptSubmit", "Stop"} {
+		launch, e := installer.PrepareStableLifecycleHook(ctx, passiveOptions, event)
+		must(t, e)
+		if launch.Executable != filepath.Join(seed.ManagedRoot, "bin", "maestro-mcp") || len(launch.Args) < 3 || launch.Args[0] != "lifecycle-hook" || launch.Args[1] != "--event" || launch.Args[2] != event {
+			t.Fatalf("stable hook bypassed canonical current launcher: %+v", launch)
+		}
+		body, _ := json.Marshal(map[string]any{"session_id": "stable-passive-proof", "prompt_id": "stable-passive-turn", "cwd": ws, "hook_event_name": event, "prompt": "PRIVATE_PASSIVE_PROMPT", "last_assistant_message": "PRIVATE_PASSIVE_BODY"})
+		beforeHook := snapshot(t, installed.Home)
+		beforeWorkspace := snapshot(t, ws)
+		hook := exec.CommandContext(ctx, launch.Executable, launch.Args...)
+		hook.Stdin = bytes.NewReader(body)
+		output, e := hook.CombinedOutput()
+		if e != nil {
+			t.Fatalf("actual current stable hook %s: %s %v", event, output, e)
+		}
+		if bytes.Contains(output, []byte("PRIVATE_PASSIVE")) {
+			t.Fatal("passive hook leaked host bodies")
+		}
+		if event == "SessionStart" && !bytes.Contains(output, []byte("CLIENT_STABLE_LITERAL_MEMORY")) {
+			t.Fatalf("stable startup omitted committed memory: %s", output)
+		}
+		if event != "SessionStart" && bytes.Contains(output, []byte("CLIENT_STABLE_LITERAL_MEMORY")) {
+			t.Fatal("prompt/Stop repeated generated memory")
+		}
+		if event != "Stop" && !reflect.DeepEqual(beforeHook, snapshot(t, installed.Home)) {
+			t.Fatal("passive context changed owner state")
+		}
+		if !reflect.DeepEqual(beforeWorkspace, snapshot(t, ws)) {
+			t.Fatal("passive hook changed authored workspace")
+		}
+	}
+	passiveReceipt, e := claudeadapter.Receipt(lifecycle.StopFinalize, claudeadapter.NativeInput{SessionID: "stable-passive-proof"})
+	must(t, e)
+	passiveReceipt.IdempotencyKey = lifecycle.IdempotencyKey(passiveReceipt.IdempotencyKey, "stable-passive-turn")
+	receiptBody := read(t, filepath.Join(installed.Home, "state", "runtime", "receipts", passiveRecord.Binding.WorkspaceID, passiveReceipt.IdempotencyKey+".json"))
+	var observedStop lifecycle.Receipt
+	must(t, json.Unmarshal(receiptBody, &observedStop))
+	if observedStop.Event != lifecycle.StopFinalize || observedStop.Provenance != lifecycle.AdapterCommand || observedStop.State != "observed" || bytes.Contains(receiptBody, []byte("PRIVATE_PASSIVE")) || bytes.Contains(receiptBody, []byte("stable-passive-proof")) {
+		t.Fatalf("actual stable Stop did not retain body-free scoped observation: %s", receiptBody)
+	}
+
 	ownerBefore, workspaceBefore := snapshot(t, installed.Home), snapshot(t, ws)
 	beforeRefresh := read(t, recordPath)
 	publish(2, n, []releasecontract.ReleaseRecall{})
@@ -347,6 +421,10 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 	if _, e := installer.PrepareStableLaunch(ctx, options); e == nil {
 		t.Fatal("N current record acquired N+1 without regeneration")
 	}
+	if _, e = installer.PrepareStableLifecycleHook(ctx, passiveOptions, "SessionStart"); e == nil {
+		t.Fatal("stale passive carrier acquired N+1 without current materialization")
+	}
+
 	if _, e := installer.PrepareQualifiedLaunch(ctx, installer.QualifiedLaunchOptions{SeededOperationOptions: seed, ExpectedBinding: installtx.ReleaseBinding{ManifestSHA256: record.Materialization.ManifestSHA256, ClientInputsSHA256: record.Materialization.ClientInputsSHA256}, Workspace: ws}); e == nil {
 		t.Fatal("release-bound N packet acquired N+1")
 	}

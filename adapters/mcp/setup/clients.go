@@ -103,7 +103,7 @@ func CurrentClientMaterializer(o installer.ClientOptions) installer.ClientMateri
 		if err = requireInspectedClientArchive(desktopStage, expectedDesktop); err != nil {
 			return installer.ClientMaterialization{}, err
 		}
-		material := installer.ClientMaterialization{Release: s.Release, ManifestSHA256: s.Binding.ManifestSHA256, ClientInputsSHA256: s.Binding.ClientInputsSHA256, ServerSHA256: s.Server.SHA256, EmbeddedInputsSHA256: s.Server.EmbeddedInputsSHA256, BundleSHA256: s.Binding.BundleSHA256, CodeRoot: o.Request.CodeRoot, DesktopPath: o.Request.DesktopPath, DesktopNativeContractSHA256: nativeContract, BootstrapServerSHA256: s.Server.SHA256, BootstrapEmbeddedInputsSHA256: s.Server.EmbeddedInputsSHA256}
+		material := installer.ClientMaterialization{LifecycleContext: o.Request.LifecycleContext, Release: s.Release, ManifestSHA256: s.Binding.ManifestSHA256, ClientInputsSHA256: s.Binding.ClientInputsSHA256, ServerSHA256: s.Server.SHA256, EmbeddedInputsSHA256: s.Server.EmbeddedInputsSHA256, BundleSHA256: s.Binding.BundleSHA256, CodeRoot: o.Request.CodeRoot, DesktopPath: o.Request.DesktopPath, DesktopNativeContractSHA256: nativeContract, BootstrapServerSHA256: s.Server.SHA256, BootstrapEmbeddedInputsSHA256: s.Server.EmbeddedInputsSHA256}
 		// First publication may encounter an already-swapped destination. Admit
 		// its exact reviewed native contract before any Code or Desktop swap.
 		if old == nil {
@@ -218,7 +218,11 @@ func requireInspectedClientArchive(path, expected string) error {
 	return nil
 }
 func currentGeneratorArgs(command, destination, server string, o installer.ClientOptions, s installtx.State) []string {
-	return []string{command, "--destination", destination, "--server", server, "--version", s.Release, "--product-root", o.ManagedRoot, "--user-home", o.UserHome, "--workspace", o.Request.Workspace, "--installed-manifest", s.Binding.ManifestSHA256, "--installed-client-inputs", s.Binding.ClientInputsSHA256, "--carrier-profile", installer.StableClientProfile, "--carrier-id", o.Request.CarrierID, "--carrier-version", installer.StableCarrierVersion}
+	args := []string{command, "--destination", destination, "--server", server, "--version", s.Release, "--product-root", o.ManagedRoot, "--user-home", o.UserHome, "--workspace", o.Request.Workspace, "--installed-manifest", s.Binding.ManifestSHA256, "--installed-client-inputs", s.Binding.ClientInputsSHA256, "--carrier-profile", installer.StableClientProfile, "--carrier-id", o.Request.CarrierID, "--carrier-version", installer.StableCarrierVersion}
+	if command == "plugin" && o.Request.LifecycleContext {
+		args = append(args, "--lifecycle-context")
+	}
+	return args
 }
 func writeMarketplaceAndLauncher(root string, o installer.ClientOptions) error {
 	if err := os.Mkdir(filepath.Join(root, ".claude-plugin"), 0700); err != nil {
@@ -241,6 +245,9 @@ func writeMarketplaceAndLauncher(root string, o installer.ClientOptions) error {
 func managementLauncher(o installer.ClientOptions) (string, []byte) {
 	args := []string{o.Self, "manage", "--product-root", o.ManagedRoot, "--user-home", o.UserHome, "--workspace", o.Request.Workspace, "--carrier-id", o.Request.CarrierID}
 	args = append(args, "--client-code-root", o.Request.CodeRoot, "--client-desktop-path", o.Request.DesktopPath, "--client-code-executable", o.Request.CodeExecutable, "--client-scope", o.Request.CodeScope)
+	if o.Request.LifecycleContext {
+		args = append(args, "--client-lifecycle-context")
+	}
 	if runtime.GOOS == "windows" {
 		var q []string
 		for _, s := range args {

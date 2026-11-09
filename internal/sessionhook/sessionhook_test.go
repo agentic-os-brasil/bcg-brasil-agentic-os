@@ -3,6 +3,7 @@ package sessionhook
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/continuoususe"
 	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
@@ -11,6 +12,34 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
+
+func TestProductSessionMemoryBudgetAndPromptPrivacy(t *testing.T) {
+	packet := sessionctx.Build(sessionctx.Sources{
+		Profile:   profile.State{Profile: "standard", Source: "configured"},
+		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
+		Memory: sessionctx.MemorySource{State: "available", Bundle: basememory.ContextBundle{Sections: []basememory.ContextSection{
+			{Layer: "lifetime", Content: "STABLE_PRODUCT_MEMORY", DrillDown: "private/lifetime.json"},
+			{Layer: "L1", Content: "RECENT_PRODUCT_MEMORY " + strings.Repeat("memória aprovada 🧠 ", MaximumAdditionalContextBytes), DrillDown: "private/l1.json"},
+		}}},
+	})
+	packet.ProductSurface = true
+	start, err := BuildClaudeEvent(packet, "SessionStart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := start.HookSpecificOutput.AdditionalContext
+	index := strings.Index(text, "MAESTRO LOCAL MEMORY")
+	if index < 0 || len(text)-index > MaximumMemoryContextBytes || len(text) > MaximumAdditionalContextBytes || !utf8.ValidString(text) || !strings.Contains(text, "memory context truncated") {
+		t.Fatalf("product memory budget/UTF8 contract failed: bytes=%d memory_index=%d", len(text), index)
+	}
+	if strings.Contains(text, "private/") || !strings.Contains(text, "quoted historical data") || strings.Index(text, "STABLE_PRODUCT_MEMORY") > strings.Index(text, "RECENT_PRODUCT_MEMORY") {
+		t.Fatalf("product memory framing/order/path contract failed: %s", text)
+	}
+	prompt, err := BuildClaudeEvent(packet, "UserPromptSubmit")
+	if err != nil || strings.Contains(prompt.HookSpecificOutput.AdditionalContext, "PRODUCT_MEMORY") || strings.Contains(prompt.HookSpecificOutput.AdditionalContext, "MAESTRO LOCAL MEMORY") {
+		t.Fatalf("prompt repeated product memory: %v %+v", err, prompt)
+	}
+}
 
 func TestBuildUsesNativeSessionStartContextWithoutSourceBodies(t *testing.T) {
 	packet := sessionctx.Build(sessionctx.Sources{
