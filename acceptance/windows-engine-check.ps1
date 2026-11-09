@@ -25,7 +25,7 @@ if ($LASTEXITCODE -ne 0 -or $revision -cnotmatch '^[0-9a-f]{40}$' -or $manifest.
 $expected = @('execution', 'datahome', 'ownerctx', 'memory', 'scheduler', 'processidentity', 'winprivate', 'zipmigration')
 if (@($report.packages).Count -ne 8 -or
     @((Compare-Object ($expected | Sort-Object -CaseSensitive) (@($report.packages.name) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0 -or
-    @($report.public_families.required_tests).Count -ne 6 -or @($report.public_families.required_assertions).Count -ne 24 -or
+    @($report.public_families.required_tests).Count -ne 7 -or @($report.public_families.required_assertions).Count -ne 39 -or
     @($report.public_families.outcomes | Where-Object { $_.outcome -cne 'PASS' }).Count -ne 0 -or
     @($report.public_families.observed_skips).Count -ne 0 -or @($report.unclassified_skips).Count -ne 0 -or
     @($report.original_assertions).Count -ne 39 -or

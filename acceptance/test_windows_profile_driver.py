@@ -515,9 +515,10 @@ if($assignment.Count -ne 1){throw 'Expected one actual closed public family cont
 $literal=@($assignment[0].Right.FindAll({param($n) $n -is [Management.Automation.Language.HashtableAst]},$true))
 if($literal.Count -ne 1){throw 'Public contract must remain one literal hashtable'}
 $public=$literal[0].SafeGetValue()
-if($public.required_tests.Count -ne 6 -or $public.required_assertions.Count -ne 24 -or
+if($public.required_tests.Count -ne 7 -or $public.required_assertions.Count -ne 39 -or
  'TestWindowsAuthoredBrainPilot' -cnotin $public.required_tests -or
- 'TestWindowsAuthoredBrainPartialPreparationPilot' -cnotin $public.required_tests){throw 'Both authored families must extend the original4/21 contract'}
+ 'TestWindowsAuthoredBrainPartialPreparationPilot' -cnotin $public.required_tests -or
+ 'TestWindowsPrivateWikiPilot' -cnotin $public.required_tests){throw 'Authored and private wiki families must preserve the original public contract'}
 $checker=[Management.Automation.Language.Parser]::ParseFile($args[1],[ref]$null,[ref]$errors)
 $reader=@($checker.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Read-EngineLiteralArray'},$true))
 Invoke-Expression $reader[0].Extent.Text

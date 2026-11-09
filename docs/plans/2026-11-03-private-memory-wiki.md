@@ -40,8 +40,8 @@ original implementation was developed test-first here.
 
 The detailed source/output limits, authority profile, visibility and retirement
 rules live in Spec 008; implementations must preserve every applicable rule.
-Native Windows private wiki remains unavailable until its separate owning
-held-handle qualification exists. Background service setup and installed-client
+Native Windows private wiki is implemented under a retained-namespace gate and
+requires exact-source ordinary-account qualification. Background service setup and installed-client
 qualification remain separate deliveries.
 
 ## Acceptance and review
