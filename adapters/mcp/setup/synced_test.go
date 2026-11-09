@@ -270,7 +270,11 @@ func TestModernSyncedSourceLifecycle(t *testing.T) {
 	if qualified.Executable != installed.Installation.CLIPath || qualified.State.Binding.ManifestSHA256 != n.verified.ManifestSHA256 {
 		t.Fatal("launcher selected a different executable")
 	}
-	liveN := connectQualifiedSource(t, ctx, seed, current.Binding, ws)
+	// Keep the actual emitted N carrier alive across activation. Windows cannot
+	// replace a running active image; this proves immutable-copy refusal, not
+	// in-place update of a running Windows client.
+	copiedN := filepath.Join(r.CodePacket, "scripts", sourceTestExecutable("maestro-mcp"))
+	liveN := connectQualifiedSource(t, ctx, seed, current.Binding, ws, copiedN)
 	defer liveN.Close()
 	created := call(t, ctx, liveN, "maestro_apply", map[string]any{"operation": "execution.create", "objective": "signed source continuation", "next_step": "preserve this literal step", "artifacts": []string{"result.md"}}, false)
 	itemID := created["item_id"].(string)
@@ -394,7 +398,7 @@ func TestModernSyncedSourceLifecycle(t *testing.T) {
 	identity, err := releasecontract.ReadServerIdentity(installed.Installation.CLIPath)
 	must(t, err)
 	assertSourceClosure(t, source, identity, r.ManagedRoot, current.BundleVersion)
-	newSession := connectQualifiedSource(t, ctx, seed, current.Binding, ws)
+	newSession := connectQualifiedSource(t, ctx, seed, current.Binding, ws, "")
 	nextState := call(t, ctx, newSession, "maestro_query", map[string]any{"operation": "execution.next", "item_id": itemID}, false)
 	if nextState["next_step"] != "preserve this literal step" {
 		t.Fatal("MCP update lost execution continuation")
@@ -445,7 +449,7 @@ func TestModernSyncedSourceLifecycle(t *testing.T) {
 	must(t, err)
 	current, err = installer.RollbackSeeded(ctx, installer.SeededRollbackOptions{SeededOperationOptions: seed, ReviewDigest: rollbackReview.Digest})
 	must(t, err)
-	freshN := connectQualifiedSource(t, ctx, seed, current.Binding, ws)
+	freshN := connectQualifiedSource(t, ctx, seed, current.Binding, ws, copiedN)
 	defer freshN.Close()
 	call(t, ctx, freshN, "maestro_context", map[string]any{}, false)
 	// An authentic later observation recalls the previous/candidate release;
@@ -597,14 +601,23 @@ func TestModernSyncedSourceLifecycle(t *testing.T) {
 	t.Log(string(proofBody))
 }
 
-// Consume the canonical qualified-launch executable and argv directly. Stable
-// client registrations and complete source-bound carriers are a separate unit;
-// the signed lifecycle proof never reconstructs a guessed packet command.
-func connectQualifiedSource(t *testing.T, ctx context.Context, seed installer.SeededOperationOptions, binding installtx.ReleaseBinding, workspace string) *mcp.ClientSession {
+// Consume canonical qualified-launch argv. Only the retained N process uses the
+// actual emitted immutable carrier after equality with the admitted executable;
+// it must still pass the shipping process/source guard. Client registration and
+// in-place update of a running Windows client remain separate qualifications.
+func connectQualifiedSource(t *testing.T, ctx context.Context, seed installer.SeededOperationOptions, binding installtx.ReleaseBinding, workspace, carrier string) *mcp.ClientSession {
 	t.Helper()
 	launch, err := installer.PrepareQualifiedLaunch(ctx, installer.QualifiedLaunchOptions{SeededOperationOptions: seed, ExpectedBinding: binding, Workspace: workspace})
 	must(t, err)
-	command := exec.CommandContext(ctx, launch.Executable, launch.Args...)
+	executable := launch.Executable
+	if carrier != "" {
+		activeSHA, carrierSHA := sum(read(t, launch.Executable)), sum(read(t, carrier))
+		if activeSHA != launch.State.Server.SHA256 || carrierSHA != activeSHA {
+			t.Fatal("emitted immutable carrier differs from admitted active executable")
+		}
+		executable = carrier
+	}
+	command := exec.CommandContext(ctx, executable, launch.Args...)
 	client := mcp.NewClient(&mcp.Implementation{Name: "qualified-source-engineering", Version: "1"}, nil)
 	session, err := client.Connect(ctx, &mcp.CommandTransport{Command: command}, nil)
 	must(t, err)
