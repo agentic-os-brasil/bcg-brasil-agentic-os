@@ -32,8 +32,11 @@ for organization-owned native signing and exact-byte release signing before any
 production distribution. Historical beta or personal keys cannot establish that
 authority.
 
-SharePoint/OneDrive can transport replicated bytes after that admission. A synced
-file, successful download or checksum alone is not release authority. Signed
+SharePoint can host bytes after that admission. For the current Windows pilot,
+download and extract them into an ordinary local directory: direct OneDrive/
+Files On-Demand paths are unavailable, including hydrated Cloud Files, because
+source confinement refuses reparse points. Cloud synchronization remains
+unqualified. A file, successful download or checksum alone is not release authority. Signed
 generations and guarded update are being constructed under the
 [signed-source guide](product-synced-source.md); registration follows in the
 [complete delivery plan](plans/2026-11-03-synced-product-distribution.md). The
