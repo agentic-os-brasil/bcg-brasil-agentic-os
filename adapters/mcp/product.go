@@ -110,14 +110,22 @@ func (b *Bound) Server() *mcp.Server {
 		variant("execution.list", map[string]any{"offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 128}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 32}}),
 		variant("execution.next", map[string]any{"item_id": strSchema(96)}, "item_id"),
 		variant("execution.contract", map[string]any{"item_id": strSchema(96)}, "item_id"),
-	}, append(ownerQueries(), memoryQueries()...)...)}
-	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read owner metadata/questions, execution continuation, or eligible workspace memory through bounded pages. Private owner/legacy text requires trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
-	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Apply reviewed owner or memory changes; consolidate local deterministic memory. Execution changes require revision/attempt checks and artifact snapshot criteria.", InputSchema: productApplySchema()}, b.handle("apply", productApplySchema()))
+	}, append(append(ownerQueries(), memoryQueries()...), contentQueries()...)...)}
+	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read owner metadata/questions, execution continuation, eligible memory, converted content or named workspace knowledge through bounded pages. Private owner/legacy text requires trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
+	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Convert local documents and apply reviewed workspace knowledge, owner or memory changes; consolidate local deterministic memory. Execution changes require revision/attempt checks and artifact snapshot criteria.", InputSchema: productApplySchema()}, b.handle("apply", productApplySchema()))
 	b.registerMethods(s)
 	return s
 }
 
 type input struct {
+	SourcePath                 string   `json:"source_path"`
+	ArtifactID                 string   `json:"artifact_id"`
+	Format                     string   `json:"format"`
+	Page                       string   `json:"page"`
+	Section                    string   `json:"section"`
+	ExpectedPageRevision       string   `json:"expected_page_revision"`
+	Purpose                    string   `json:"purpose"`
+	Pages                      []string `json:"pages"`
 	Text                       string   `json:"text"`
 	CaptureID                  string   `json:"capture_id"`
 	Query                      string   `json:"query"`
@@ -173,7 +181,7 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		panic(err)
 	}
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		if len(req.Params.Arguments) > 128<<10 {
+		if len(req.Params.Arguments) > 2<<20 {
 			return result(nil, errors.New("input_size")), nil
 		}
 		var raw any
@@ -195,11 +203,17 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		if d.Decode(new(any)) != io.EOF {
 			return result(nil, errors.New("trailing_input")), nil
 		}
-		if len(req.Params.Arguments) > 16<<10 && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" {
+		if len(req.Params.Arguments) > 128<<10 && in.Operation != "knowledge.create" {
+			return result(nil, errors.New("input_size")), nil
+		}
+		if len(req.Params.Arguments) > 16<<10 && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" && in.Operation != "knowledge.create" && in.Operation != "knowledge.append" {
 			return result(nil, errors.New("input_size")), nil
 		}
 		if kind == "context" {
 			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "next_max_bytes": 2048, "memory": map[string]any{"context_operation": "memory.context", "max_page_bytes": 4096, "synthesis": "local_deterministic", "lifetime": "two_l3_generations_and_exact_owner_review"}}, nil), nil
+		}
+		if strings.HasPrefix(in.Operation, "content.") || strings.HasPrefix(in.Operation, "knowledge.") {
+			return b.handleContent(ctx, req, in), nil
 		}
 		if strings.HasPrefix(in.Operation, "memory.") {
 			return b.handleMemory(ctx, req, in), nil

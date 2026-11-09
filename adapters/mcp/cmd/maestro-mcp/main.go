@@ -23,7 +23,9 @@ var AuthorityRegistrySHA256 string
 
 func main() {
 	if err := run(); err != nil {
-		if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "memory-") {
+		if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "knowledge-") {
+			fmt.Fprintln(os.Stderr, "maestro: knowledge operation refused; read knowledge-review from JSON stdin, then use knowledge-apply with the same request, exact --review-digest and explicit --confirm")
+		} else if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "memory-") {
 			fmt.Fprintln(os.Stderr, "maestro: memory operation refused; read the current private memory-review from JSON stdin, then retry memory-apply with the same request, its --review-digest and explicit --confirm")
 		} else if len(os.Args) > 1 && (os.Args[1] == "owner-apply" || os.Args[1] == "owner-confirm-onboarding") {
 			fmt.Fprintln(os.Stderr, "maestro: owner confirmation refused; inspect the selected binding, read the current full owner-review or owner-onboarding-review, then retry with its exact --review-digest and --confirm")
@@ -55,11 +57,11 @@ func run() error {
 		flags.StringVar(&proposalID, "proposal-id", "", "exact owner proposal ID")
 	}
 	switch os.Args[1] {
-	case "owner-apply", "owner-confirm-onboarding", "memory-apply":
+	case "owner-apply", "owner-confirm-onboarding", "memory-apply", "knowledge-apply":
 		flags.StringVar(&reviewDigest, "review-digest", "", "exact SHA-256 digest from the full local review")
 	}
 	switch os.Args[1] {
-	case "owner-apply", "owner-confirm-onboarding", "owner-track", "memory-apply":
+	case "owner-apply", "owner-confirm-onboarding", "owner-track", "memory-apply", "knowledge-apply":
 		flags.BoolVar(&confirmed, "confirm", false, "local operator confirms the reviewed operation")
 	}
 	if os.Args[1] == "owner-track" {
@@ -132,6 +134,31 @@ func run() error {
 			value, err = bound.ConfirmOwnerOnboarding(reviewDigest, confirmed)
 		case "owner-track":
 			value, err = bound.SelectOwnerTrack(track, confirmed)
+		}
+		if err != nil {
+			return err
+		}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(value)
+	case "knowledge-review", "knowledge-apply":
+		bound, err := product.Open(o)
+		if err != nil {
+			return err
+		}
+		body, err := io.ReadAll(io.LimitReader(os.Stdin, (2<<20)+1))
+		if err != nil || len(body) > 2<<20 {
+			return errors.New("knowledge_input_size")
+		}
+		request, err := product.DecodeKnowledgeMutation(body)
+		if err != nil {
+			return err
+		}
+		var value any
+		if os.Args[1] == "knowledge-review" {
+			value, err = bound.KnowledgeReview(request)
+		} else {
+			value, err = bound.ApplyKnowledgeReview(request, reviewDigest, confirmed)
 		}
 		if err != nil {
 			return err
