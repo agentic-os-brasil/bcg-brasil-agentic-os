@@ -18,20 +18,27 @@ const promptHistoryLockName = ".lock"
 var ErrPromptHistoryLocked = errors.New("prompt history store is locked")
 
 func withPromptHistoryLock(root string, operation func(entriesPath, configPath string) error) error {
-	entriesPath, configPath, err := ensurePromptHistoryStore(root)
+	entriesPath, configPath, err := promptHistoryPaths(root)
 	if err != nil {
 		return err
+	}
+	_, statErr := os.Lstat(filepath.Dir(entriesPath))
+	fresh := errors.Is(statErr, os.ErrNotExist)
+	if statErr != nil && !fresh {
+		return fmt.Errorf("prompt history parent admission: %w", statErr)
+	}
+	if err := ensureOwnerDirectory(filepath.Dir(entriesPath)); err != nil {
+		return fmt.Errorf("prompt history parent admission: %w", err)
 	}
 	unlock, err := acquirePromptHistoryLock(filepath.Join(filepath.Dir(entriesPath), promptHistoryLockName))
 	if err != nil {
-		return err
+		return fmt.Errorf("prompt history transition lock: %w", err)
 	}
-	operationErr := operation(entriesPath, configPath)
-	unlockErr := unlock()
-	if operationErr != nil {
-		return operationErr
+	operationErr := initializePromptHistoryFiles(entriesPath, configPath, fresh)
+	if operationErr == nil {
+		operationErr = operation(entriesPath, configPath)
 	}
-	return unlockErr
+	return errors.Join(operationErr, unlock())
 }
 
 func acquirePromptHistoryLock(path string) (func() error, error) {

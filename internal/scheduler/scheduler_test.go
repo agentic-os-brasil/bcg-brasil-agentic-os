@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,7 +13,27 @@ import (
 )
 
 func TestPublishedSchedulerStateSchemaIsRecognized(t *testing.T) {
-	if err := ValidateSchemaFile("../../schemas/scheduler-state.schema.json"); err != nil {
+	// The published schema is a public read-only source, not private state.
+	source, err := filepath.Abs("../../schemas/scheduler-state.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, err := OpenRegularFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, readErr := io.ReadAll(io.LimitReader(file, (1<<20)+1))
+	if err := errors.Join(readErr, file.Close()); err != nil {
+		t.Fatal(err)
+	}
+	if len(body) > 1<<20 {
+		t.Fatal("published schema exceeds fixture bound")
+	}
+	private := filepath.Join(t.TempDir(), "scheduler-state.schema.json")
+	if err := WriteNewPrivateFile(private, body); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSchemaFile(private); err != nil {
 		t.Fatal(err)
 	}
 }

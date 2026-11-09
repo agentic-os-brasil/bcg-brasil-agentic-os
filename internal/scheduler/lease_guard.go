@@ -10,7 +10,7 @@ type leaseGuard struct {
 }
 
 func acquireLeaseGuard(directory *secureDirectory, name string) (*leaseGuard, error) {
-	file, err := directory.openFile(name, os.O_RDWR|os.O_CREATE, 0o600)
+	file, err := directory.openLock(name)
 	if err != nil {
 		if errors.Is(err, errLeaseGuardBusy) {
 			return nil, errLeaseGuardBusy

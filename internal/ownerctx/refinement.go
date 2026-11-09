@@ -640,15 +640,3 @@ func validatePrivateParents(directory string) error {
 	}
 	return nil
 }
-
-func syncPrivateDirectory(directory string) error {
-	if runtime.GOOS == "windows" {
-		return nil
-	}
-	directoryFile, err := os.Open(directory)
-	if err != nil {
-		return err
-	}
-	defer directoryFile.Close()
-	return directoryFile.Sync()
-}

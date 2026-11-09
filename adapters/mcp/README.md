@@ -38,7 +38,9 @@ remain admitted without replacing their origin. `inspect` reads the home diagnos
 A partial bootstrap preserves its files: retain the home/locator and inspect before
 support-assisted recovery. Startup and tool calls never initialize, migrate or repair.
 Pending, incomplete or tampered migrations and unverified Windows
-ownership/storage remain unavailable. Use the
+ownership/storage remain unavailable. The native private-state implementation and its
+four mandatory ordinary-user proof families are described in the
+[Windows engine contract](../../docs/product-windows-private-state.md). Use the
 [migration runbook](../../docs/external-state-migration.md) for explicit migration.
 
 Use `plugin` or `mcpb` instead of `serve` with an admitted build-time binding,

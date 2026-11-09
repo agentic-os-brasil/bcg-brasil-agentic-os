@@ -3,49 +3,43 @@
 package memory
 
 import (
-	"crypto/rand"
-	"encoding/hex"
+	"errors"
 	"fmt"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
 	"os"
-	"path/filepath"
 )
 
-func ownedIOAvailable() error { return ErrConfinementUnavailable }
-
-var memoryMkdirAll = os.MkdirAll
-var memoryMkdir = os.Mkdir
-var memoryMkdirTemp = os.MkdirTemp
-var memoryReadDir = os.ReadDir
-var memoryRemoveAll = os.RemoveAll
-var memoryRename = durableRename
-
-func memoryOpen(path string, flags int) (*os.File, error) { return os.OpenFile(path, flags, 0600) }
+func ownedIOAvailable() error                             { _, e := winprivate.CurrentUser(); return e }
+func memoryMkdirAll(path string, _ os.FileMode) error     { return winprivate.MkdirAll(path) }
+func memoryMkdir(path string, _ os.FileMode) error        { return winprivate.Mkdir(path) }
+func memoryMkdirTemp(path, prefix string) (string, error) { return winprivate.MkdirTemp(path, prefix) }
+func memoryReadDir(path string) ([]os.DirEntry, error)    { return winprivate.ReadDir(path) }
+func memoryRemoveAll(path string) error                   { return winprivate.Remove(path, true) }
+func memoryRename(source, target string) error            { return winprivate.Rename(source, target, false) }
+func memoryOpen(path string, flags int) (*os.File, error) { return winprivate.OpenFile(path, flags) }
 func memoryReadFile(path string, maximum int64) ([]byte, error) {
-	return scheduler.ReadPrivateFile(path, maximum)
+	return winprivate.ReadFile(path, maximum)
 }
-func memoryRandomID() string {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		panic(err)
-	}
-	return hex.EncodeToString(b)
-}
+func memoryRandomID() string { return winprivate.Random() }
 func memoryPublish(path string, b []byte, immutable bool) error {
-	if immutable {
-		return scheduler.WriteNewPrivateFile(path, b)
-	}
-	return scheduler.ReplacePrivateFile(path, b)
+	return winprivate.Publish(path, b, immutable)
 }
-
 func memoryPruneVisibilityHistory(path string, through uint64, fault func() error) error {
+	d, e := winprivate.Open(path, false)
+	if e != nil {
+		return e
+	}
+	defer d.Close()
 	for revision := uint64(1); revision <= through; revision++ {
-		if err := memoryRemoveAll(filepath.Join(path, fmt.Sprintf("%020d.json", revision))); err != nil {
-			return err
+		name := fmt.Sprintf("%020d.json", revision)
+		if e = d.Remove(name, false); errors.Is(e, os.ErrNotExist) {
+			continue
+		} else if e != nil {
+			return e
 		}
-		if err := fault(); err != nil {
-			return err
+		if e = fault(); e != nil {
+			return errors.Join(e, d.Sync())
 		}
 	}
-	return nil
+	return d.Sync()
 }
