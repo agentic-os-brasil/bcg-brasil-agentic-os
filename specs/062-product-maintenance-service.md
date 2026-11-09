@@ -1,6 +1,6 @@
 # Spec 062 - Product maintenance service
 
-Status: source-composed for issue #505 with eight deterministic bindings and MCP/operator lifecycle. Focused local acceptance is being recorded for this exact slice. Hosted CI, independent review and installed-client/native scheduling qualification remain separate. Private wiki delivery is tracked by #506. See the [operator workflow](../docs/product-mcp-maintenance.md).
+Status: #505 maintenance is landed. Issue #506 composes three source-owned wiki jobs and three read-only queries on that same lifecycle, for eleven supported job IDs in the eighteen-entry catalog. Source/local/hosted/client qualification remains separately recorded. Native Windows private wiki and background wake remain unavailable. See the [operator workflow](../docs/product-mcp-maintenance.md).
 
 ## Outcome
 
@@ -12,7 +12,7 @@ Worker, scheduler leases/receipts and domain stores remain authoritative.
 
 Spec036 owns the eighteen job contracts. This delivery connects checkpoint,
 light/deep dreaming, retention diagnosis, skills indexing, runtime health,
-capability diagnosis and drift diagnosis. Other catalog entries retain explicit
+capability diagnosis, drift diagnosis and the three source-owned wiki jobs described in [Spec 008](008-wiki-update-okf.md). Other catalog entries retain explicit
 unavailable reasons until their complete owning journeys are constructed.
 Catalog presence, a handler declaration and installation grant no activation.
 

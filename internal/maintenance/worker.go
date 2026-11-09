@@ -501,7 +501,7 @@ func (worker Worker) publishOccurrence(workspaceID string, occurrence scheduler.
 		})
 	}
 	if worker.product != nil {
-		return worker.product.guard(publish)
+		return worker.product.publishTerminal(publish)
 	}
 	return publish()
 }

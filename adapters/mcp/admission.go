@@ -46,7 +46,7 @@ type artifactMetadata struct {
 }
 
 func artifactPath(path string) error {
-	if !utf8.ValidString(path) || len(path) < 1 || len(path) > 256 || filepath.IsAbs(path) || strings.ContainsAny(path, "\\:\x00\r\n") || filepath.ToSlash(filepath.Clean(path)) != path {
+	if !utf8.ValidString(path) || len(path) < 1 || len(path) > 256 || strings.HasPrefix(path, "/") || filepath.IsAbs(path) || strings.ContainsAny(path, "\\:\x00\r\n") || filepath.ToSlash(filepath.Clean(path)) != path {
 		return errors.New("artifact_unavailable")
 	}
 	for _, part := range strings.Split(path, "/") {

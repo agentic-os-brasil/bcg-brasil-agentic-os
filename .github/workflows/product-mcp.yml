@@ -4,8 +4,16 @@ on:
   pull_request:
     paths:
       - 'adapters/mcp/**'
+      - 'acceptance/private_wiki_binary_fixtures.py'
+      - 'acceptance/fixtures/private-wiki-old-writer/**'
+      - 'acceptance/fixtures/private-wiki-producer/**'
       - 'internal/execution/**'
       - 'internal/datahome/**'
+      - 'internal/scheduler/**'
+      - 'internal/winprivate/**'
+      - 'internal/processidentity/**'
+      - 'internal/privatelock/**'
+      - 'internal/userlevel/**'
       - 'internal/zipmigration/**'
       - 'internal/zipruntime/**'
       - 'go.mod'
@@ -16,20 +24,30 @@ on:
       - 'internal/atlasops/**'
       - 'internal/maintenance/**'
       - 'internal/maintenancecatalog/**'
-      - 'internal/processidentity/**'
-      - 'internal/scheduler/**'
+      - 'internal/privatewiki/**'
       - 'internal/skillsindex/**'
       - 'schemas/memory-artifact.schema.json'
       - 'schemas/memory-commit.schema.json'
       - 'bundles/**'
       - 'LICENSE.md'
+      - 'acceptance/windows-core-pilot.ps1'
+      - 'acceptance/windows-engine-*.ps1'
+      - 'acceptance/test_windows_profile_driver.py'
       - '.github/workflows/product-mcp.yml'
   push:
     branches: [main]
     paths:
       - 'adapters/mcp/**'
+      - 'acceptance/private_wiki_binary_fixtures.py'
+      - 'acceptance/fixtures/private-wiki-old-writer/**'
+      - 'acceptance/fixtures/private-wiki-producer/**'
       - 'internal/execution/**'
       - 'internal/datahome/**'
+      - 'internal/scheduler/**'
+      - 'internal/winprivate/**'
+      - 'internal/processidentity/**'
+      - 'internal/privatelock/**'
+      - 'internal/userlevel/**'
       - 'internal/zipmigration/**'
       - 'internal/zipruntime/**'
       - 'go.mod'
@@ -40,13 +58,15 @@ on:
       - 'internal/atlasops/**'
       - 'internal/maintenance/**'
       - 'internal/maintenancecatalog/**'
-      - 'internal/processidentity/**'
-      - 'internal/scheduler/**'
+      - 'internal/privatewiki/**'
       - 'internal/skillsindex/**'
       - 'schemas/memory-artifact.schema.json'
       - 'schemas/memory-commit.schema.json'
       - 'bundles/**'
       - 'LICENSE.md'
+      - 'acceptance/windows-core-pilot.ps1'
+      - 'acceptance/windows-engine-*.ps1'
+      - 'acceptance/test_windows_profile_driver.py'
       - '.github/workflows/product-mcp.yml'
 
 permissions:
@@ -104,19 +124,45 @@ jobs:
           }
           $stagedBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           "GOCACHE=$freshCache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Build exact committed native engine qualification inputs
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./acceptance/windows-engine-build.ps1
+      - name: Run all ordinary native owners and public journeys
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./acceptance/windows-core-pilot.ps1 -TestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/mcp.test.exe') -Server (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/maestro-mcp.exe') -CanonicalManifest (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'engine-build-manifest.json') -OutputRoot (Join-Path $env:RUNNER_TEMP 'native-engine-proof')
+      - name: Verify exact-source ordinary proof before host-positive exclusions
+        id: windows_engine_proof
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./acceptance/windows-engine-check.ps1
       - name: Canonical ledger, HOME, owner, memory and atlas contracts
-        run: go test ./internal/execution ./internal/datahome ./internal/ownerctx ./internal/privatelock ./internal/memory ./internal/atlasops -timeout=300s
+        if: runner.os != 'Windows'
+        run: go test ./internal/execution ./internal/datahome ./internal/ownerctx ./internal/privatelock ./internal/memory ./internal/atlasops ./internal/privatewiki -timeout=300s
+      - name: Remaining canonical host contracts after native qualification
+        if: runner.os == 'Windows'
+        run: go test ./internal/privatelock ./internal/atlasops ./internal/privatewiki -timeout=300s
       - name: Maintenance lifecycle and process identity on admitted Unix runners
         if: runner.os != 'Windows'
-        run: go test ./internal/maintenance ./internal/processidentity ./internal/skillsindex ./internal/scheduler -timeout=300s
+        run: go test ./internal/maintenance ./internal/processidentity ./internal/skillsindex ./internal/scheduler -skip '^TestProductWiki' -timeout=300s
       - name: Canonical workspace initialization contracts on admitted Unix runners
         if: runner.os != 'Windows'
         run: go test ./internal/workspace -timeout=180s
-      # Windows must preserve ownership refusals; this job is not native admission.
-      # Its elevated runner cannot qualify ordinary-user workspace initialization.
+      # Exact-source ordinary execution above qualifies only the closed positive
+      # inventory. The elevated host still executes unsafe/elevated/no-bootstrap
+      # refusals and every unexcluded package/test below.
       - name: Product protocol, bootstrap refusal and package contracts
+        if: runner.os != 'Windows'
         working-directory: adapters/mcp
         run: go test ./... -timeout=600s
+      - name: Remaining Windows protocol, unsafe-owner and elevated-host contracts
+        if: runner.os == 'Windows'
+        working-directory: adapters/mcp
+        run: go test ./... -skip '${{ steps.windows_engine_proof.outputs.host_exclusions }}' -timeout=600s
       - name: Product module static checks
         working-directory: adapters/mcp
         run: go vet ./...
@@ -130,3 +176,140 @@ jobs:
             echo 'A product executable cannot depend on development packages.' >&2
             exit 1
           fi
+
+      - name: Stage only exact bounded Windows engine evidence
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./acceptance/windows-engine-evidence.ps1
+      - name: Retain this job's native proof and companion outcomes
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: product-windows-native-engine-${{ github.sha }}
+          path: ${{ runner.temp }}/native-engine-evidence/
+          if-no-files-found: error
+          retention-days: 7
+
+  wiki-maintenance-contracts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Select physical macOS temporary directory
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          physical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          printf 'TMPDIR=%s\n' "$physical_temp" >> "$GITHUB_ENV"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: adapters/mcp/go.mod
+      - name: Finite wiki maintenance families and exact terminal recovery
+        shell: bash
+        run: |
+          python3 - <<'PYCODE'
+          import json, os, pathlib, re, subprocess
+          package = "./internal/maintenance"
+          listed = subprocess.check_output(["go", "test", package, "-list", "^TestProductWiki"], text=True)
+          names = [line for line in listed.splitlines() if re.fullmatch(r"TestProductWiki[A-Za-z0-9_]+", line)]
+          required = {
+              "TestProductWikiStaleReviewAndClockOnlyNoopCannotQualify",
+              "TestProductWikiCadenceEnrollmentAndReplay",
+              "TestProductWikiLiveFencesBeforePointer",
+              "TestProductWikiTerminalFencesAfterActualEffect",
+              "TestProductWikiDiagnosticPointerHonorsDeniedPublication",
+              "TestProductWikiEventOnlyControlAndReceiptRefuseTampering",
+              "TestProductWikiEventRecoveryAfterPartialEffect",
+              "TestProductWikiEventClosureAfterReconcile",
+              "TestProductWikiEventClosureRetainsRecoveryEvidence",
+              "TestProductWikiExecutableReplacementFencesPublication",
+          }
+          assert required <= set(names) and len(names) == len(set(names)), "wiki family selection is incomplete"
+          # Prior slowest original family:89.90s. The expanded exact-event
+          # evidence/recovery family measured115.09s, so receives240s; other
+          # families receive180s. Failed360s combined runs are not reused as PASS.
+          for name in names:
+              evidence = pathlib.Path(os.environ["RUNNER_TEMP"]) / (name + ".jsonl")
+              deadline = "240s" if name == "TestProductWikiEventClosureAfterReconcile" else "180s"
+              with evidence.open("w") as output:
+                  result = subprocess.run(["go", "test", package, "-run", "^" + name + "$", "-count=1", "-json", "-timeout=" + deadline], stdout=output)
+              print(evidence.read_text(), flush=True)
+              assert result.returncode == 0, "wiki family failed: " + name
+              events = [json.loads(line) for line in evidence.read_text().splitlines()]
+              assert any(e.get("Action") == "pass" and e.get("Test") == name for e in events), "wiki family skipped or missing: " + name
+              assert not any(e.get("Action") == "skip" for e in events), "wiki family contains skipped coverage: " + name
+          PYCODE
+
+  private-wiki-binary-compatibility:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          path: source
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: d1e8f18dd13d680f81a552567c869bcc4f57ac73
+          path: legacy
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: source/go.mod
+          cache-dependency-path: source/go.sum
+      - name: Select physical macOS binary-fixture temporary root
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          python3 - <<'PYTHON'
+          import os, pathlib, tempfile
+          root = pathlib.Path(os.environ["RUNNER_TEMP"]).resolve(strict=True)
+          temporary = tempfile.mkdtemp(prefix="wiki-binary-", dir=root)
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as environment:
+              environment.write(f"TMPDIR={temporary}\nGOTMPDIR={temporary}\n")
+          PYTHON
+      - name: Provision real historical consumer and compatible producer
+        working-directory: source
+        run: python3 acceptance/private_wiki_binary_fixtures.py --source-root . --legacy-root ../legacy --output "${{ runner.temp }}/wiki-binary-fixtures"
+      - name: Require both actual-binary contracts without skipped coverage
+        working-directory: source
+        shell: bash
+        run: |
+          python3 - <<'PYTHON'
+          import json, os, pathlib, subprocess
+          root = pathlib.Path(os.environ["RUNNER_TEMP"]).resolve() / "wiki-binary-fixtures"
+          environment = os.environ.copy()
+          environment.update(MAESTRO_PRIVATE_WIKI_OLD_WRITER=str(root / "bin/old_writer"), MAESTRO_PRIVATE_WIKI_COMPAT_PRODUCER=str(root / "bin/producer"), MAESTRO_PRIVATE_WIKI_FIXTURE_MANIFEST=str(root / "manifest.json"), MAESTRO_PRIVATE_WIKI_BINARY_EVIDENCE=str(root / "evidence"))
+          required = {"TestPrivateWikiOldCohortProcessCannotReadCaptureOrDelete", "TestPrivateWikiCompatibleProducerAcrossActualBinaries"}
+          command = ["go", "test", "./internal/memory", "-run", "^(" + "|".join(sorted(required)) + ")$", "-count=1", "-json", "-timeout=120s"]
+          result = subprocess.run(command, env=environment, capture_output=True, text=True)
+          (root / "qualification.stdout.jsonl").write_text(result.stdout)
+          (root / "qualification.stderr.log").write_text(result.stderr)
+          print(result.stdout, flush=True)
+          for evidence in (root / "evidence").glob("*"):
+              assert evidence.is_file() and evidence.stat().st_size <= 65536, "binary proof exceeds its synthetic bound"
+          assert len(result.stdout.encode()) <= 1048576 and len(result.stderr.encode()) <= 1048576, "binary qualification log exceeds its bound"
+          events = [json.loads(line) for line in result.stdout.splitlines() if line.startswith("{")]
+          passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
+          assert result.returncode == 0 and required <= passed, "actual binary contract is missing or failed"
+          assert not any(event.get("Action") == "skip" for event in events), "actual binary qualification cannot contain skipped coverage"
+          PYTHON
+      - name: Retain bounded synthetic binary proof and hash manifests
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: private-wiki-binary-compatibility-${{ matrix.os }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            ${{ runner.temp }}/wiki-binary-fixtures/manifest.json
+            ${{ runner.temp }}/wiki-binary-fixtures/raw/*.build.*.log
+            ${{ runner.temp }}/wiki-binary-fixtures/evidence/
+            ${{ runner.temp }}/wiki-binary-fixtures/qualification.*

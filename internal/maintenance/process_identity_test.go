@@ -71,6 +71,10 @@ func productImageFenceChild(t *testing.T, phase string) {
 		if _, err := NewService(s.options); !errors.Is(err, processidentity.ErrChanged) {
 			t.Fatalf("new Service adopted replacement: %v", err)
 		}
+		guard := &productExecution{service: s, jobID: MemoryLightDreamJobID}
+		if err := guard.guard(func() error { t.Fatal("changed process entered publication"); return nil }); !errors.Is(err, processidentity.ErrChanged) {
+			t.Fatalf("changed process touched unprepared control authority: %v", err)
+		}
 		if !reflect.DeepEqual(before, productSnapshot(t, s.home)) {
 			t.Fatal("identity refusal changed owner state")
 		}

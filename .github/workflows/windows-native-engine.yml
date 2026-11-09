@@ -1,0 +1,62 @@
+name: Maestro Windows native engine
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, codex/integration/maestro-main-windows-engine]
+    paths:
+      - 'internal/**'
+      - 'adapters/mcp/**'
+      - 'acceptance/windows-core-pilot.ps1'
+      - 'acceptance/windows-engine-build.ps1'
+      - 'acceptance/windows-engine-check.ps1'
+      - 'acceptance/windows-engine-evidence.ps1'
+      - 'acceptance/test_windows_profile_driver.py'
+      - '.github/workflows/windows-native-engine.yml'
+      - 'go.mod'
+      - 'go.sum'
+  pull_request:
+    paths:
+      - 'internal/**'
+      - 'adapters/mcp/**'
+      - 'acceptance/windows-core-pilot.ps1'
+      - 'acceptance/windows-engine-build.ps1'
+      - 'acceptance/windows-engine-check.ps1'
+      - 'acceptance/windows-engine-evidence.ps1'
+      - 'acceptance/test_windows_profile_driver.py'
+      - '.github/workflows/windows-native-engine.yml'
+      - 'go.mod'
+      - 'go.sum'
+
+permissions:
+  contents: read
+
+jobs:
+  native-engine:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: adapters/mcp/go.mod
+      - name: Stage exact public source, SDK and shipping executables
+        shell: pwsh
+        run: |
+          ./acceptance/windows-engine-build.ps1
+      - name: Public init and restart under the actual ordinary account
+        shell: pwsh
+        run: |
+          ./acceptance/windows-core-pilot.ps1 -TestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/mcp.test.exe') -Server (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/maestro-mcp.exe') -CanonicalManifest (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'engine-build-manifest.json') -OutputRoot (Join-Path $env:RUNNER_TEMP 'native-engine-proof')
+      - name: Stage only bounded synthetic evidence
+        if: always()
+        shell: pwsh
+        run: |
+          ./acceptance/windows-engine-evidence.ps1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: windows-native-engine-${{ github.sha }}
+          path: ${{ runner.temp }}/native-engine-evidence/
+          if-no-files-found: error
+          retention-days: 7

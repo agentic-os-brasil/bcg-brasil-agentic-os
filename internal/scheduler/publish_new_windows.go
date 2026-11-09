@@ -2,9 +2,8 @@
 
 package scheduler
 
-import "errors"
+import "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
 
-// PublishNewPrivateFile remains unavailable until Windows mutation custody is qualified.
 func PublishNewPrivateFile(path string, body []byte) error {
-	return errors.New("exclusive private publication unavailable")
+	return winprivate.Publish(path, body, true)
 }

@@ -48,6 +48,34 @@ func readPrivateStateFile(file *os.File, maximum int64) ([]byte, error) {
 // read, validation and atomic publication. A nil result leaves bytes unchanged.
 // It is a small file primitive, not a source of application admission authority.
 func UpdatePrivateFile(path string, maximum int64, update func([]byte) ([]byte, error)) error {
+	return updatePrivateFileGuarded(path, maximum, nil, update, false)
+}
+
+// UpdatePrivateFileGuarded preserves the existing private update transaction,
+// placing its final CAS and visible rename inside the caller's live authority.
+// The file lock is acquired before guard: domain -> control -> installation -> lease.
+func UpdatePrivateFileGuarded(path string, maximum int64, guard func(func() error) error, update func([]byte) ([]byte, error)) error {
+	if guard == nil {
+		return errors.New("private publication guard required")
+	}
+	return updatePrivateFileGuarded(path, maximum, guard, update, false)
+}
+
+// RestorePrivateFileGuarded compensates only the exact bytes just published.
+// A nil previous value restores absence; it never deletes a different parent.
+func RestorePrivateFileGuarded(path string, maximum int64, published, previous []byte, guard func(func() error) error) error {
+	if len(published) == 0 || guard == nil {
+		return errors.New("exact compensation and guard required")
+	}
+	return updatePrivateFileGuarded(path, maximum, guard, func(current []byte) ([]byte, error) {
+		if !bytes.Equal(current, published) {
+			return nil, errors.New("private compensation parent changed")
+		}
+		return previous, nil
+	}, previous == nil)
+}
+
+func updatePrivateFileGuarded(path string, maximum int64, guard func(func() error) error, update func([]byte) ([]byte, error), remove bool) error {
 	if maximum < 1 || maximum > 1<<20 {
 		return errors.New("invalid private update limit")
 	}
@@ -60,7 +88,7 @@ func UpdatePrivateFile(path string, maximum int64, update func([]byte) ([]byte, 
 	if err := validateSecureLeaf(name); err != nil {
 		return err
 	}
-	lock, err := directory.openFile(name+".lock", os.O_RDWR|os.O_CREATE, 0600)
+	lock, err := directory.openLock(name + ".lock")
 	if err != nil {
 		return err
 	}
@@ -99,29 +127,38 @@ func UpdatePrivateFile(path string, maximum int64, update func([]byte) ([]byte, 
 	if err != nil {
 		return err
 	}
-	if after == nil || bytes.Equal(before, after) {
+	if (!remove && after == nil) || bytes.Equal(before, after) {
 		return nil
 	}
 	if int64(len(after)) > maximum {
 		return errors.New("private update size")
 	}
-	current, err := read()
-	if err != nil {
-		return err
+	publish := func() error {
+		current, err := read()
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(before, current) {
+			return errors.New("private update revision conflict")
+		}
+		if remove {
+			return directory.removePrivateReplacement(name)
+		}
+		token := make([]byte, 12)
+		if _, err := rand.Read(token); err != nil {
+			return err
+		}
+		temporary := ".update-" + hex.EncodeToString(token)
+		if err := directory.writeNewFile(temporary, after); err != nil {
+			return err
+		}
+		defer directory.removeFile(temporary)
+		return directory.publishReplacement(temporary, name)
 	}
-	if !bytes.Equal(before, current) {
-		return errors.New("private update revision conflict")
+	if guard != nil {
+		return guard(publish)
 	}
-	token := make([]byte, 12)
-	if _, err := rand.Read(token); err != nil {
-		return err
-	}
-	temporary := ".update-" + hex.EncodeToString(token)
-	if err := directory.writeNewFile(temporary, after); err != nil {
-		return err
-	}
-	defer directory.removeFile(temporary)
-	return directory.publishReplacement(temporary, name)
+	return publish()
 }
 
 func privateUpdateFile(file *os.File) error {
