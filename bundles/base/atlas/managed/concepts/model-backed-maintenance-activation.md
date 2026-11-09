@@ -16,7 +16,7 @@ status: stable
 x-maestro-profile-version: "1"
 x-maestro-stable-id: managed/model-backed-maintenance-activation
 x-maestro-scope: managed
-x-maestro-source-fingerprint: b116988bbbd862085fe230eb404b1febc2c483752f06adc3dd29a93a8a90164e
+x-maestro-source-fingerprint: 62ce62c72db4a8c76fc634fd980e62e881ad1fd5926351c8642455b7630b497d
 x-maestro-freshness: fresh
 x-maestro-status: active
 x-maestro-generator-version: maestro-managed-wiki/0.2
