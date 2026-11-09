@@ -414,3 +414,49 @@ $values|ConvertTo-Json -Depth 4 -Compress
         command = "\n".join(p.read_text() for p in (ROOT / "adapters/mcp/cmd/maestro-mcp").glob("*_test.go"))
         for name in ledger["$adapterCommandParents"]:
             self.assertIn(f"func {name}(", command)
+
+    def test_required_engine_parents_exist_in_actual_windows_build_files(self):
+        # Ask Go's build selector, not a filename-only scan: a !windows file
+        # can declare the exact required name while omitting it from the PE.
+        go = shutil.which("go")
+        self.assertIsNotNone(go, "The source inventory check requires the pinned Go tool")
+        parser = self.root / "required-parents.ps1"
+        parser.write_text(r'''$ErrorActionPreference='Stop'
+$ast=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$null)
+$assignments=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -cin @('$canonicalRequired','$originalAssertions')},$true))
+if($assignments.Count -ne 2){throw 'Expected actual required and original native source contracts'}
+foreach($assignment in $assignments){Invoke-Expression $assignment.Extent.Text}
+foreach($name in $originalAssertions.Keys){$canonicalRequired[$name]=@($canonicalRequired[$name]) + @($originalAssertions[$name])}
+$canonicalRequired|ConvertTo-Json -Depth 4 -Compress
+''', encoding="utf-8")
+        required = subprocess.run([self.pwsh,"-NoProfile","-File",str(parser),str(DRIVER)],capture_output=True,text=True,timeout=30)
+        self.assertEqual(required.returncode,0,required.stdout+required.stderr)
+        required = json.loads(required.stdout)
+        temporary = self.root / "go-temp"
+        temporary.mkdir()
+        environment = dict(os.environ, GOOS="windows", GOARCH="amd64", GOTOOLCHAIN="local", GOENV="off", GOWORK="off",
+                           GOPROXY="off", GOSUMDB="off", GOFLAGS="-mod=readonly -buildvcs=false",
+                           GOCACHE=str(self.root / "go-cache"), GOPATH=str(self.root / "go-path"),
+                           GOMODCACHE=str(self.root / "go-path/pkg/mod"), GOTMPDIR=str(temporary), TMPDIR=str(temporary))
+        names = sorted(required)
+        result = subprocess.run([go,"list","-e","-find","-json", *["./internal/"+name for name in names]],cwd=ROOT,env=environment,
+                                capture_output=True,text=True,timeout=60)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        remaining = result.stdout
+        decoder = json.JSONDecoder()
+        selected = {}
+        while remaining.strip():
+            package, consumed = decoder.raw_decode(remaining.lstrip())
+            remaining = remaining.lstrip()[consumed:]
+            selected[package["ImportPath"].rsplit("/",1)[-1]] = package
+        self.assertEqual(set(selected),set(required))
+        import re
+        for name, assertions in required.items():
+            package = selected[name]
+            self.assertNotIn("Error",package,package.get("Error"))
+            files = package.get("TestGoFiles",[])+package.get("XTestGoFiles",[])
+            declarations = []
+            for filename in files:
+                declarations.extend(re.findall(r"^func (Test[A-Za-z0-9_]+)\(", (Path(package["Dir"])/filename).read_text(),re.M))
+            for parent in {assertion.split("/")[0] for assertion in assertions}:
+                self.assertEqual(declarations.count(parent),1,f"{name}/{parent} is missing or duplicated in actual Windows-selected source")

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/windows"
 )
 
 func TestWindowsSecureSchedulerStateWorksAsStandardUser(t *testing.T) {
@@ -119,6 +121,42 @@ func TestWindowsSecurePathWalkSurvivesAncestorRenameToSymlink(t *testing.T) {
 	}
 }
 
+// Windows permits moving an opened directory itself, but refuses moving its
+// ancestor while a descendant directory remains held. Both forms preserve
+// namespace custody; exercise the observed native refusal with release controls.
+func schedulerHeldAncestorRefusesRename(t *testing.T, held *secureDirectory, ancestor, moved string, before os.FileInfo) {
+	t.Helper()
+	info, err := held.native.File.Stat()
+	if err != nil || !info.IsDir() {
+		t.Fatal("native descendant custody is unavailable", err)
+	}
+	selected, err := os.Stat(held.path)
+	if err != nil || !os.SameFile(info, selected) {
+		t.Fatal("held directory does not identify the selected fixture", err)
+	}
+	err = os.Rename(ancestor, moved)
+	if !errors.Is(err, windows.ERROR_ACCESS_DENIED) && !errors.Is(err, windows.ERROR_SHARING_VIOLATION) {
+		t.Fatalf("held native ancestor rename must refuse without effects: %v", err)
+	}
+	after, err := os.Stat(ancestor)
+	if err != nil || !os.SameFile(before, after) {
+		t.Fatal("refused rename changed ancestor identity", err)
+	}
+	if _, err := os.Lstat(moved); !os.IsNotExist(err) {
+		t.Fatal("refused rename published a destination", err)
+	}
+}
+
+func schedulerRenamePositiveControl(t *testing.T, from, to string) {
+	t.Helper()
+	if err := os.Rename(from, to); err != nil {
+		t.Fatal("unheld ancestor rename positive control failed", err)
+	}
+	if err := os.Rename(to, from); err != nil {
+		t.Fatal("unheld ancestor restoration failed", err)
+	}
+}
+
 func TestWindowsSecureLeafIOSurvivesAncestorSwapForEnrollmentReceiptAndLease(t *testing.T) {
 	cases := []struct {
 		name string
@@ -136,32 +174,49 @@ func TestWindowsSecureLeafIOSurvivesAncestorSwapForEnrollmentReceiptAndLease(t *
 			if err != nil {
 				t.Fatal(err)
 			}
-			workspaces := filepath.Join(root, "workspaces")
-			moved := filepath.Join(root, "workspaces-original")
-			fired := false
-			previous := secureLeafStepHook
+			ancestor, moved := filepath.Join(root, "workspaces"), filepath.Join(root, "workspaces-original")
+			schedulerRenamePositiveControl(t, ancestor, moved)
+			before, err := os.Stat(ancestor)
+			if err != nil {
+				t.Fatal(err)
+			}
+			held, err := openSecureDirectory(parent, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if held != nil {
+					held.close()
+				}
+			}()
+			previous, fired := secureLeafStepHook, false
 			t.Cleanup(func() { secureLeafStepHook = previous })
 			secureLeafStepHook = func(string) {
 				if fired {
 					return
 				}
 				fired = true
-				if err := os.Rename(workspaces, moved); err != nil {
-					t.Fatalf("rename ancestor: %v", err)
-				}
-				schedulerDirectoryAlias(t, workspaces, outside)
+				schedulerHeldAncestorRefusesRename(t, held, ancestor, moved, before)
 			}
-			path := filepath.Join(parent, testCase.file)
-			if err := secureWriteNewFile(path, []byte("metadata-only\n")); err != nil {
+			if err := held.writeNewFile(testCase.file, []byte("metadata-only\n")); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := os.Stat(filepath.Join(moved, filepath.Join(append(testCase.rel[1:], testCase.file)...))); err != nil {
-				t.Fatalf("secure leaf write did not stay on opened ancestor: %v", err)
+			if !fired {
+				t.Fatal("native write did not exercise held-parent refusal")
 			}
-			entries, err := os.ReadDir(outside)
-			if err != nil || len(entries) != 0 {
-				t.Fatalf("secure leaf write followed swapped ancestor: entries=%#v err=%v", entries, err)
+			body, err := held.readFile(testCase.file)
+			if err != nil || string(body) != "metadata-only\n" {
+				t.Fatalf("held native write missed its original directory: %q %v", body, err)
 			}
+			if entries, err := os.ReadDir(outside); err != nil || len(entries) != 0 {
+				t.Fatalf("native refusal redirected bytes outside: %v %v", entries, err)
+			}
+			secureLeafStepHook = previous
+			if err := held.close(); err != nil {
+				t.Fatal(err)
+			}
+			held = nil
+			schedulerRenamePositiveControl(t, ancestor, moved)
 		})
 	}
 }
@@ -176,50 +231,46 @@ func TestWindowsSecureLeafReadAndRemoveSurviveAncestorSwap(t *testing.T) {
 	if err := secureWriteNewFile(path, []byte("original\n")); err != nil {
 		t.Fatal(err)
 	}
-
-	swap := func(fired *bool) func(string) {
-		return func(string) {
-			if *fired {
-				return
-			}
-			*fired = true
-			workspaces := filepath.Join(root, "workspaces")
-			moved := filepath.Join(root, "workspaces-original")
-			if err := os.Rename(workspaces, moved); err != nil {
-				t.Fatalf("rename ancestor: %v", err)
-			}
-			schedulerDirectoryAlias(t, workspaces, outside)
+	ancestor, moved := filepath.Join(root, "workspaces"), filepath.Join(root, "workspaces-original")
+	schedulerRenamePositiveControl(t, ancestor, moved)
+	before, err := os.Stat(ancestor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	held, err := openSecureDirectory(parent, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if held != nil {
+			held.close()
 		}
-	}
-
-	previous := secureLeafStepHook
+	}()
+	previous, attempts := secureLeafStepHook, 0
 	t.Cleanup(func() { secureLeafStepHook = previous })
-	fired := false
-	secureLeafStepHook = swap(&fired)
-	body, err := secureReadFile(path)
+	secureLeafStepHook = func(string) { attempts++; schedulerHeldAncestorRefusesRename(t, held, ancestor, moved, before) }
+	body, err := held.readFile("receipt.json")
 	if err != nil || string(body) != "original\n" {
-		t.Fatalf("secure leaf read followed swapped ancestor: body=%q err=%v", body, err)
+		t.Fatalf("native held read lost original bytes: %q %v", body, err)
 	}
-
-	// Recreate the lexical ancestor only after the read assertion; the opened
-	// descriptor still identifies the moved tree, while the path now points out.
-	if err := os.Remove(filepath.Join(root, "workspaces")); err != nil {
+	if err := held.removeFile("receipt.json"); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Rename(filepath.Join(root, "workspaces-original"), filepath.Join(root, "workspaces")); err != nil {
-		t.Fatal(err)
+	if attempts != 2 {
+		t.Fatalf("expected held read and remove refusal observations, got %d", attempts)
 	}
-	fired = false
-	secureLeafStepHook = swap(&fired)
-	if err := secureRemoveFile(path); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(filepath.Join(root, "workspaces-original", "case-a", "receipts", "memory-daily", "receipt.json")); !os.IsNotExist(err) {
-		t.Fatalf("secure leaf remove did not remove original file: %v", err)
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("held remove left the original file", err)
 	}
 	if entries, err := os.ReadDir(outside); err != nil || len(entries) != 0 {
-		t.Fatalf("secure leaf remove followed swapped ancestor: entries=%#v err=%v", entries, err)
+		t.Fatalf("native refusal redirected read/remove: %v %v", entries, err)
 	}
+	secureLeafStepHook = previous
+	if err := held.close(); err != nil {
+		t.Fatal(err)
+	}
+	held = nil
+	schedulerRenamePositiveControl(t, ancestor, moved)
 }
 
 func TestWindowsLeaseTransactionPinsGuardAndStateToOneDirectory(t *testing.T) {
@@ -230,16 +281,38 @@ func TestWindowsLeaseTransactionPinsGuardAndStateToOneDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ancestor, moved := filepath.Join(root, "workspaces"), filepath.Join(root, "workspaces-original")
+	schedulerRenamePositiveControl(t, ancestor, moved)
+	before, err := os.Stat(ancestor)
+	if err != nil {
+		t.Fatal(err)
+	}
 	first, _, err := store.openLeaseDirectory("case-a", "memory-daily")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer first.close()
+	defer func() {
+		if first != nil {
+			first.close()
+		}
+	}()
 	second, _, err := store.openLeaseDirectory("case-a", "memory-daily")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer second.close()
+	defer func() {
+		if second != nil {
+			second.close()
+		}
+	}()
+	left, err := first.native.File.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	right, err := second.native.File.Stat()
+	if err != nil || !os.SameFile(left, right) {
+		t.Fatal("workers did not retain the same native lease directory", err)
+	}
 	name := safeLeaseName(lease.OccurrenceKey)
 	guard, err := acquireLeaseGuard(first, name+".guard")
 	if err != nil {
@@ -247,26 +320,36 @@ func TestWindowsLeaseTransactionPinsGuardAndStateToOneDirectory(t *testing.T) {
 	}
 	defer guard.release()
 	if _, err := acquireLeaseGuard(second, name+".guard"); !errors.Is(err, errLeaseGuardBusy) {
-		t.Fatalf("second pinned worker acquired the shared guard: %v", err)
+		t.Fatalf("second worker acquired held guard: %v", err)
 	}
-
-	workspaces := filepath.Join(root, "workspaces")
-	moved := filepath.Join(root, "workspaces-original")
-	if err := os.Rename(workspaces, moved); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Mkdir(workspaces, 0o700); err != nil {
-		t.Fatal(err)
-	}
+	schedulerHeldAncestorRefusesRename(t, first, ancestor, moved, before)
 	current, err := readLeaseInDirectory(first, name+".json", "pinned")
 	if err != nil || !sameLeaseIdentity(current, lease) {
-		t.Fatalf("pinned guard/state transaction followed replacement: lease=%#v err=%v", current, err)
+		t.Fatalf("held guard/state changed after refused replacement: %+v %v", current, err)
+	}
+	if _, err := acquireLeaseGuard(second, name+".guard"); !errors.Is(err, errLeaseGuardBusy) {
+		t.Fatalf("refused rename released shared exclusion: %v", err)
+	}
+	guard.release()
+	if err := first.close(); err != nil {
+		t.Fatal(err)
+	}
+	first = nil
+	if err := second.close(); err != nil {
+		t.Fatal(err)
+	}
+	second = nil
+	if err := os.Rename(ancestor, moved); err != nil {
+		t.Fatal("released native custody still blocked rename", err)
+	}
+	if err := os.Mkdir(ancestor, 0700); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(moved, "case-a", "leases", "memory-daily", name+".json")); err != nil {
-		t.Fatalf("original pinned state was not retained: %v", err)
+		t.Fatal("original native state was not retained", err)
 	}
-	if entries, err := os.ReadDir(workspaces); err != nil || len(entries) != 0 {
-		t.Fatalf("replacement directory received state: entries=%#v err=%v", entries, err)
+	if entries, err := os.ReadDir(ancestor); err != nil || len(entries) != 0 {
+		t.Fatalf("replacement directory received state: %v %v", entries, err)
 	}
 }
 

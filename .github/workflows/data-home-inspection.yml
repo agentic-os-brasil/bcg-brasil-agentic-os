@@ -144,8 +144,7 @@ jobs:
               @{test='TestExternalUnsafeStateBlocksBeforeContextReceipt'; reason='Raw HOME source does not admit Windows external ownership.'}
             )
             'maestro-runtime' = @(
-              @{test='TestExternalCLIApplyStatusAndRollbackKeepBindingExplicit'; reason='External HOME mutation is unavailable on Windows; native migration coverage is missing.'},
-              @{test='TestHomePathsRequiresExplicitInitAndKeepsProductUntouched'; reason='Raw HOME source does not admit Windows external ownership.'}
+              @{test='TestExternalCLIApplyStatusAndRollbackKeepBindingExplicit'; reason='External HOME mutation is unavailable on Windows; native migration coverage is missing.'}
             )
           }
           $packages = @(

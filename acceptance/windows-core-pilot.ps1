@@ -197,8 +197,9 @@ if ($withManifest) {
             $required = @($canonicalRequired[$entry.name] | Where-Object { $null -ne $_ })
             $original = @($originalAssertions[$entry.name] | Where-Object { $null -ne $_ })
             foreach ($test in @($required + $original)) {
-                if (@($entry.tests | Where-Object { $_ -ceq ($test -split '/')[0] }).Count -ne 1) {
-                    throw 'Engine inventory differs from the required closed assertion contract.'
+                $matchingTests = @($entry.tests | Where-Object { $_ -ceq ($test -split '/')[0] }).Count
+                if ($matchingTests -ne 1) {
+                    throw ('Engine inventory differs from the required closed assertion contract: package=' + $entry.name + ' test=' + $test + ' matches=' + $matchingTests)
                 }
             }
             $entry | Add-Member -NotePropertyName canonical_required_tests -NotePropertyValue $required -Force

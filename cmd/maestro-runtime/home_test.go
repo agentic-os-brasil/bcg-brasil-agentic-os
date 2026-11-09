@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 func TestHomePathsCompiledCLI(t *testing.T) {
@@ -46,18 +48,42 @@ func TestHomePathsCompiledCLI(t *testing.T) {
 	if code, body := invoke("paths"); code != 2 || !strings.Contains(body, `"mode":"initialization_required"`) || strings.Contains(body, `"home"`) {
 		t.Fatalf("unconfirmed: %d %s", code, body)
 	}
-	code, body := invoke("init")
-	if runtime.GOOS == "windows" {
-		if code != 2 || !strings.Contains(body, "ownership-unverified") {
-			t.Fatalf("Windows init: %d %s", code, body)
-		}
-		if _, err := os.Stat(home); !os.IsNotExist(err) {
-			t.Fatal("unqualified Windows init created HOME", err)
-		}
-		return
+	if output, err := exec.Command(helper, "preflight").CombinedOutput(); err != nil || !bytes.Contains(output, []byte(`"state":"non_elevated"`)) {
+		t.Fatalf("compiled home readiness requires the actual non-elevated platform process: %s %v", output, err)
 	}
-	if code != 0 {
-		t.Fatalf("init: %d %s", code, body)
+	code, body := invoke("init")
+	var ready struct {
+		Home       string `json:"home"`
+		Diagnostic string `json:"diagnostic"`
+		Writable   bool   `json:"writable"`
+	}
+	if code != 0 || json.Unmarshal([]byte(body), &ready) != nil || ready.Home != home || ready.Diagnostic != "ready" || !ready.Writable {
+		t.Fatalf("init readiness: %d %s", code, body)
+	}
+	origin := filepath.Join(home, "brain", ".maestro", "origin.json")
+	beforeInfo, err := os.Stat(origin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := scheduler.ReadPrivateFile(origin, 16<<10)
+	if err != nil {
+		t.Fatal("ready origin lacks actual private admission", err)
+	}
+	for _, directory := range []string{home, filepath.Join(home, "brain"), filepath.Dir(origin)} {
+		if err := scheduler.ValidatePrivateDirectory(directory); err != nil {
+			t.Fatal("ready home lacks actual private directory admission", err)
+		}
+	}
+	if code, body := invoke("init"); code != 0 {
+		t.Fatalf("idempotent compiled init: %d %s", code, body)
+	}
+	afterInfo, err := os.Stat(origin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := scheduler.ReadPrivateFile(origin, 16<<10)
+	if err != nil || !os.SameFile(beforeInfo, afterInfo) || !bytes.Equal(before, after) {
+		t.Fatal("compiled restart/init replaced or changed private origin", err)
 	}
 	if code, body := invoke("paths", "--field", "owner-scope"); code != 0 || body != home+"\n" {
 		t.Fatalf("owner identity: %d %q", code, body)
@@ -72,9 +98,6 @@ func TestHomePathsCompiledCLI(t *testing.T) {
 }
 
 func TestHomePathsRequiresExplicitInitAndKeepsProductUntouched(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership remains unavailable")
-	}
 	user, product := homeTestDirectory(t), homeTestDirectory(t)
 	t.Setenv("MAESTRO_HOME", filepath.Join(user, "owner with spaces"))
 	invoke := func(command string, extra ...string) (int, string) {
