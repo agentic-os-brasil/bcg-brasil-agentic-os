@@ -10,9 +10,23 @@ external paths. Building does not install anything or contact a model/provider.
 
 Both formats contain the selected executable; all 92 canonical methods and their
 248 recipe/policy/provenance/license assets; the operator/resume aliases; and six
-raw canonical runtime/memory files. Code Markdown invocation projection retains
-its canonical provenance and distributed-byte projection hashes. MCPB recipes
-remain inert canonical resources, not a native Desktop Skills installation.
+raw canonical runtime/memory files. Both also include fourteen immutable agent
+assets under `managed/agents/`: three JSON policy/catalog files, seven canonical
+definitions and four scaffolding templates. The emitted MCP server exposes the
+same bytes through the fixed `maestro://agents/` resources after revalidating the
+admitted binding on every read; it never exports an owner registry or case files.
+
+Code additionally carries six native specialist definitions in `agents/`, generated
+by the shared projector with byte-zero YAML frontmatter. Maestro remains the main
+session hub. Explicit method Agent invocations use the exact `maestro-product:`
+namespace; canonical IDs, policy and resource paths retain their original bytes.
+Canonical and projected files have separate paths and exact distributed hashes in
+the packet inventory. Code Markdown method projection retains its canonical
+provenance and distributed-byte projection hashes. MCPB carries canonical agent
+content without Code native agents or hooks; its recipes remain inert resources,
+not a native Desktop Skills installation. Native scheduling, tool denial, scope
+mediation and signed completion remain unqualified host capabilities. Reading or
+installing instructions does not grant those capabilities or prove enforcement.
 Only an independently pinned **public** release-authority registry is optional;
 private signing keys or an authenticated offline runtime are not copied from the
 builder's product directory. Content capability stays unavailable without its
@@ -69,8 +83,8 @@ exclusive no-overwrite semantics. A failed unpublished stage is cleaned up; an
 existing/newer target remains unchanged. A late publication sync error can leave
 the newly published target present: inspect it rather than deleting/replacing it.
 The inventory does not replace release signing, a distribution manifest or a
-transactional client updater. Agents/hooks packet assembly and real fresh-client
-installation are tracked separately; this source does not claim pilot delivery,
+transactional client updater. Real fresh-client installation and host mediation
+are tracked separately; this source does not claim pilot delivery,
 SharePoint publication, platform signing or real client acceptance.
 
 ## Source-bound Windows packet qualification

@@ -9,11 +9,13 @@ import (
 	"path/filepath"
 	"sort"
 
+	baseagents "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/agents"
 	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/memory"
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeagents"
 )
 
-func managedRuntimePayload() map[string][]byte {
+func managedProductPayload(namespace string) (map[string][]byte, error) {
 	files := map[string][]byte{}
 	for name, body := range baseruntime.Files() {
 		files["managed/runtime/"+name] = body
@@ -21,7 +23,23 @@ func managedRuntimePayload() map[string][]byte {
 	for name, body := range basememory.Files() {
 		files["managed/memory/"+name] = body
 	}
-	return files
+	agents, err := baseagents.Files()
+	if err != nil {
+		return nil, err
+	}
+	for name, body := range agents {
+		files["managed/agents/"+name] = body
+	}
+	if namespace != "" {
+		projections, err := claudeagents.Project(namespace)
+		if err != nil {
+			return nil, err
+		}
+		for _, projection := range projections {
+			files[projection.Path] = projection.Body
+		}
+	}
+	return files, nil
 }
 func runtimeSelections() map[string]any {
 	return map[string]any{
@@ -97,7 +115,11 @@ func buildPortable(options Options, format string) error {
 	if err != nil {
 		return err
 	}
-	for name, body := range managedRuntimePayload() {
+	managed, err := managedProductPayload(namespace)
+	if err != nil {
+		return err
+	}
+	for name, body := range managed {
 		files[name] = body
 	}
 	metadata, server, err := portableMetadata(format, platform, o.Version)
@@ -221,7 +243,11 @@ func requiredPacketFiles(format, platform, version string) (map[string][]byte, s
 	if err != nil {
 		return nil, "", err
 	}
-	for name, body := range managedRuntimePayload() {
+	managed, err := managedProductPayload(namespace)
+	if err != nil {
+		return nil, "", err
+	}
+	for name, body := range managed {
 		files[name] = body
 	}
 	metadata, server, err := portableMetadata(format, platform, version)

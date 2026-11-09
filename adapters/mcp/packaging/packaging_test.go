@@ -188,8 +188,8 @@ func TestCompleteMethodPackets(t *testing.T) {
 	}
 	for _, id := range []string{"yoda", "client-delivery-gate"} {
 		method, err := os.ReadFile(filepath.Join(opts.Destination, "skills", id, "SKILL.md"))
-		if err != nil || !bytes.Contains(method, []byte("subagent_type: \"yoda\"")) || bytes.Contains(method, []byte("subagent_type: \"maestro-product:yoda\"")) {
-			t.Errorf("native Agent identity changed during Skill projection: %s", id)
+		if err != nil || !bytes.Contains(method, []byte("subagent_type: \"maestro-product:yoda\"")) || bytes.Contains(method, []byte("subagent_type: \"yoda\"")) {
+			t.Errorf("native Agent invocation lost the exact plugin namespace: %s", id)
 		}
 	}
 	grill, err := os.ReadFile(filepath.Join(opts.Destination, "skills/pocock-grill-with-docs/SKILL.md"))

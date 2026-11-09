@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeagents"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
@@ -68,6 +69,7 @@ name: operator
 description: Start or resume reviewed owner onboarding, workspace memory or execution work in the bound Maestro workspace.
 ---
 Read maestro_context for admitted binding metadata, then inspect the current maestro_query and maestro_apply schemas for implemented operations. Treat unavailable binding as a stop: ask the owner to inspect the locally selected paths. Startup never initializes state.
+Read the fixed canonical specialist inventory and policy through maestro://agents/catalog.json and maestro://agents/activation-policy.json; all fourteen resources are immutable managed content, also packaged under managed/agents/. These contracts do not publish owner identity, installed profiles or private registries. Code plugin agents are six native instruction projections; Maestro stays the main-session hub. MCPB carries canonical resources only. Native activation, scheduling, tool denial and signed completion remain unqualified until the actual host proves them; packaged instructions and integrity hashes grant no execution or delegation authority. Use only available admitted capabilities and preserve the user's scope.
 Discover installed methods through maestro_query methods.list, inspect an exact method_id with methods.plan, and read its exact returned resource_uri through methods.read. Requirements are metadata, not host qualification, execution or user approval; explicit-only methods remain manually selected.
 For owner onboarding, read maestro://methods/maestro-onboarding/SKILL.md through MCP resources and query owner.status first. Offer a track only when track is selection_required; resume required/in_progress at its exact next_question, route review_required to owner.onboarding_review and trusted owner.confirm_onboarding, and continue ordinary work when complete. Select owner.track only for an explicit owner choice, because even the same selection invalidates final confirmation. Use owner.interview, owner.propose, owner.review and trusted owner.apply for each answer; re-read owner.status after application or confirmation. Declining or deferring preserves saved progress. Metadata and model assertions never approve a change. If trusted host review is unavailable, ask the local operator to use owner-review/owner-apply or owner-onboarding-review/owner-confirm-onboarding; local owner-track requires explicit --confirm. This recipe grants no shell or owner-file fallback.
 Capture only text the user explicitly selects for memory, using memory.capture and exact trusted review; never auto-capture conversations. Discover IDs and visibility through memory.list or memory.search, then use memory.read or memory.context for eligible bounded pages. Use memory.correct or memory.delete with the current capture revision; memory.retention requires an explicit cutoff and current visibility revision. memory.consolidate runs local deterministic daily or weekly synthesis for an explicit date. Lifetime promotion requires canonical generation evidence and trusted review of the exact candidate.
@@ -131,6 +133,10 @@ func methodPayload(namespace string) (map[string][]byte, error) {
 			path := "skills/" + method.ID + "/" + relative
 			if namespace != "" && strings.HasSuffix(relative, ".md") {
 				body = namespaceMethodReferences(body, namespace, reference)
+				body, err = claudeagents.ProjectAgentInvocations(body, namespace)
+				if err != nil {
+					return nil, err
+				}
 			}
 			if namespace != "" && relative == "SKILL.md" {
 				end := bytes.Index(body[4:], []byte("\n---\n"))
