@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -197,8 +198,13 @@ func runWorkflow(t *testing.T, stdio bool) {
 	} {
 		call(a, "maestro_query", args, true)
 	}
-	for _, path := range []string{"../escape", "/absolute/private", "nested/.bcgos/workspace.json"} {
+	beforeRefusal := call(a, "maestro_query", map[string]any{"operation": "execution.list", "limit": 32}, false)
+	for _, path := range []string{"../escape", "/absolute/private", "/", "//absolute/private", `\absolute\private`, `C:\absolute\private`, "C:/absolute/private", "nested/.bcgos/workspace.json"} {
 		call(a, "maestro_apply", map[string]any{"operation": "execution.create", "objective": "bad", "next_step": "bad", "artifacts": []string{path}}, true)
+		afterRefusal := call(a, "maestro_query", map[string]any{"operation": "execution.list", "limit": 32}, false)
+		if !reflect.DeepEqual(beforeRefusal, afterRefusal) {
+			t.Fatalf("unsafe artifact %q changed execution metadata", path)
+		}
 	}
 	call(a, "maestro_apply", map[string]any{"operation": "execution.create", "objective": strings.Repeat("private-content", 2000), "next_step": "bad", "artifacts": []string{"result.md"}}, true)
 	call(a, "maestro_apply", map[string]any{"operation": "execution.create", "objective": "bad", "next_step": "bad", "artifacts": []string{"result.md"}, "require_yoda_review": true}, true)

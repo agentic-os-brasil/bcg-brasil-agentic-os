@@ -269,11 +269,18 @@ func TestEvidenceRejectsUnsafeCommandsAndWorkspaceEscape(t *testing.T) {
 		t.Fatalf("unsafe command error = %v", err)
 	}
 
-	input = evidenceContract()
-	input.Criteria = input.Criteria[:1]
-	input.Criteria[0].TargetRef = "bcgos://workspace/../outside"
-	if _, err := evidenceStore(t).Create(input); err == nil {
-		t.Fatal("workspace escape target was accepted")
+	for _, reference := range []string{"bcgos://workspace/../outside", "bcgos://workspace//absolute/private", "bcgos://workspace//", "bcgos://workspace///absolute/private"} {
+		store := evidenceStore(t)
+		input = evidenceContract()
+		input.Criteria = input.Criteria[:1]
+		input.Criteria[0].TargetRef = reference
+		input.AllowedRefs = []string{reference}
+		if _, err := store.Create(input); err == nil {
+			t.Fatalf("workspace escape target %q was accepted", reference)
+		}
+		if entries, err := os.ReadDir(store.Root); err != nil || len(entries) != 0 {
+			t.Fatalf("refused artifact %q changed the execution root: %v %v", reference, entries, err)
+		}
 	}
 }
 

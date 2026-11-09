@@ -528,7 +528,7 @@ func commandDigest(command []string) (string, error) {
 
 func workspaceRelativePath(reference string) (string, error) {
 	const prefix = "bcgos://workspace/"
-	if !strings.HasPrefix(reference, prefix) {
+	if !strings.HasPrefix(reference, prefix) || strings.HasPrefix(strings.TrimPrefix(reference, prefix), "/") {
 		return "", errors.New("artifact target must be a workspace logical reference")
 	}
 	relative := filepath.FromSlash(strings.TrimPrefix(reference, prefix))
