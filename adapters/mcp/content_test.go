@@ -58,6 +58,13 @@ func TestContentUnseededStatus(t *testing.T) {
 	if conversion["status"] != "unavailable" || conversion["artifact_ref"] != nil {
 		t.Fatalf("valid unseeded conversion created an artifact: %v", got)
 	}
+	reason := "authority_unavailable"
+	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
+		reason = "platform_unavailable"
+	}
+	if !reflect.DeepEqual(conversion["warnings"], []any{reason}) {
+		t.Fatalf("unseeded conversion did not identify its unavailable prerequisite: %v", got)
+	}
 	if !reflect.DeepEqual(before, methodTreeSnapshot(t, base)) {
 		t.Fatal("unseeded conversion changed source, owner or workspace state")
 	}
