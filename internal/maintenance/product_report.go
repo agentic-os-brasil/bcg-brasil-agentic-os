@@ -18,6 +18,7 @@ type SourceCoverage struct {
 	State  string `json:"state"`
 }
 type ProductDomainReport struct {
+	Wiki                 *WikiDiagnostic              `json:"wiki,omitempty"`
 	Period               string                       `json:"period,omitempty"`
 	LifetimeStatus       string                       `json:"lifetime_status,omitempty"`
 	JobID                string                       `json:"job_id"`
@@ -47,7 +48,14 @@ func (s *Service) Report(job string) (ProductDomainReport, error) {
 		}
 		out.Finding = report.Finding
 		out.ObservedAt = report.ObservedAt
-		if report.Retention != nil {
+		if report.Wiki != nil {
+			out.Wiki = report.Wiki
+			out.Counts = map[string]int{"concepts": report.Wiki.Concepts, "files": report.Wiki.Files}
+			current, err := s.engine.InspectPrivateWikiMaintenance(s.workspaceID)
+			if err != nil || current.State != "current" || current.GraphEvidence != report.Wiki.GraphEvidence {
+				out.Finding = "historical_private_graph_verification"
+			}
+		} else if report.Retention != nil {
 			snapshot := report.Retention
 			out.Counts = map[string]int{"live_captures": snapshot.LiveCaptures, "denied_captures": snapshot.DeniedCaptures, "active_artifacts": snapshot.ActiveArtifacts}
 		} else {

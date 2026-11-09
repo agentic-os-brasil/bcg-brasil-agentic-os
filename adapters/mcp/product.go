@@ -113,8 +113,8 @@ func (b *Bound) Server() *mcp.Server {
 	empty := map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
 	s.AddTool(&mcp.Tool{Name: "maestro_context", Description: "Read admitted binding metadata and memory capability hints; inspect maestro_query and maestro_apply schemas for operations. No content export.", InputSchema: empty, Annotations: readonly}, b.handle("context", empty))
 	query := productQuerySchema()
-	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read immutable methods and requirements, owner metadata/questions, execution continuation, eligible memory, converted content, named workspace knowledge or maintenance status through bounded pages. Private owner/legacy text requires trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
-	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Convert documents, apply reviewed owner/knowledge/memory changes, and qualify, enroll or run exact maintenance jobs with trusted review. Execution changes require revision/attempt checks and artifact snapshot criteria.", InputSchema: productApplySchema()}, b.handle("apply", productApplySchema()))
+	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read immutable methods and requirements, owner metadata/questions, execution continuation, eligible memory, converted content, named workspace knowledge, maintenance status or private wiki through bounded pages. Private owner/legacy text requires trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
+	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Convert documents, apply reviewed knowledge/owner/memory changes, qualify and enroll exact maintenance jobs, or run active due work. Maintenance lifecycle changes require trusted exact review; execution uses revision/attempt and artifact checks.", InputSchema: productApplySchema()}, b.handle("apply", productApplySchema()))
 	b.registerMethods(s)
 	return s
 }
@@ -125,13 +125,15 @@ func productQuerySchema() map[string]any {
 		variant("execution.next", map[string]any{"item_id": strSchema(96)}, "item_id"),
 		variant("execution.contract", map[string]any{"item_id": strSchema(96)}, "item_id"),
 	}
-	for _, group := range [][]any{ownerQueries(), memoryQueries(), methodsQueries(), contentQueries(), maintenanceQueries()} {
+	for _, group := range [][]any{ownerQueries(), memoryQueries(), methodsQueries(), contentQueries(), maintenanceQueries(), wikiQueries()} {
 		variants = append(variants, group...)
 	}
 	return map[string]any{"type": "object", "oneOf": variants}
 }
 
 type input struct {
+	Generation                 string   `json:"generation"`
+	Reference                  string   `json:"reference"`
 	JobID                      string   `json:"job_id"`
 	Timezone                   string   `json:"timezone"`
 	MethodID                   string   `json:"method_id"`
@@ -174,6 +176,8 @@ func result(value any, err error) *mcp.CallToolResult {
 	if err != nil {
 		code := "execution_rejected"
 		switch {
+		case errors.Is(err, processidentity.ErrChanged):
+			code = "restart_required"
 		case errors.Is(err, execution.ErrRevisionConflict):
 			code = "revision_conflict"
 		case errors.Is(err, execution.ErrAttemptConflict):
@@ -230,11 +234,14 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		if kind == "context" {
 			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "next_max_bytes": 2048, "memory": map[string]any{"context_operation": "memory.context", "max_page_bytes": 4096, "synthesis": "local_deterministic", "lifetime": "two_l3_generations_and_exact_owner_review"}, "methods": map[string]any{"list_operation": "methods.list", "read_operation": "methods.read", "plan_operation": "methods.plan", "max_page_bytes": 4096, "mode": "methods_not_authority"}}, nil), nil
 		}
+		if strings.HasPrefix(in.Operation, "methods.") {
+			return b.handleMethods(in), nil
+		}
 		if strings.HasPrefix(in.Operation, "maintenance.") {
 			return b.handleMaintenance(ctx, req, in), nil
 		}
-		if strings.HasPrefix(in.Operation, "methods.") {
-			return b.handleMethods(in), nil
+		if strings.HasPrefix(in.Operation, "wiki.") {
+			return b.handleWiki(in), nil
 		}
 		if strings.HasPrefix(in.Operation, "content.") || strings.HasPrefix(in.Operation, "knowledge.") {
 			return b.handleContent(ctx, req, in), nil

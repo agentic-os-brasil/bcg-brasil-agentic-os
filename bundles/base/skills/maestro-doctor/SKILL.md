@@ -34,7 +34,13 @@ owner-local file and does not grant filesystem access.
 3. Inspect existing `maintenance.report` for a requested supported diagnostic
    job: `runtime-health-check`, `capability-recheck`, `runtime-drift-check` or
    `memory-retention-check`. Index/deep-dream reports are also available when
-   relevant. A missing report means no verified result is available; doctor
+   relevant. For a private wiki concern, read `wiki.status` and the existing
+   `wiki-integrity-check` report; incremental/reconcile reports expose bounded
+   build metadata when relevant. Keep current graph status separate from a
+   historical report. `retirement_pending`, stale or missing views remain
+   unavailable; diagnosis never reconstructs them from raw captures or files.
+   `restart_required` means the running executable changed and requires restart
+   before further product operations. A missing report means no verified result is available; doctor
    never calls `maintenance.qualify`, enrolls, runs due work or repairs as part
    of diagnosis. The [maintenance workflow](../maestro-runtime-checkup/SKILL.md)
    describes those separately requested, reviewed actions and operator fallback.

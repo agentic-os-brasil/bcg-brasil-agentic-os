@@ -435,4 +435,8 @@ pilot readiness.
 
 ## Reviewed maintenance through MCP
 
-Eight finite maintenance jobs are available through reviewed MCP lifecycle operations; see [the maintenance guide](docs/product-mcp-maintenance.md). Qualification and enrollment are separate, and enrollment installs no background service. Private wiki operations remain a separate delivery under #506. Windows private admission and real client qualification require independent evidence.
+Eight finite maintenance jobs are available through reviewed MCP lifecycle operations; see [the maintenance guide](docs/product-mcp-maintenance.md). Qualification and enrollment are separate, and enrollment installs no background service. Private wiki operations are source-composed under #506 with separate qualification. Windows private admission and real client qualification require independent evidence.
+
+## Private workspace-memory navigation through MCP
+
+The [private wiki guide](docs/product-mcp-wiki.md) describes deterministic navigation over eligible committed workspace-memory rollups. Three bounded read-only queries expose status, generated pages and exact source drilldown; the existing reviewed maintenance lifecycle owns compilation and recovery. Source capability does not attest client, background-wake or native Windows admission.

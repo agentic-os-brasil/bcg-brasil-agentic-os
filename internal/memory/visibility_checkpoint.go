@@ -21,21 +21,26 @@ type visibilityCheckpointRequirement struct {
 }
 
 func (engine *Engine) visibilityCheckpointRequired(workspaceID string) (bool, error) {
+	_, required, err := engine.readVisibilityRequirement(workspaceID)
+	return required, err
+}
+
+func (engine *Engine) readVisibilityRequirement(workspaceID string) (visibilityCheckpointRequirement, bool, error) {
 	body, err := memoryReadFile(filepath.Join(engine.workspaceRoot(workspaceID), ".visibility-checkpoint-required"), 512)
 	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
+		return visibilityCheckpointRequirement{}, false, nil
 	}
 	if err != nil {
-		return false, err
+		return visibilityCheckpointRequirement{}, false, err
 	}
 	var requirement visibilityCheckpointRequirement
 	if err := decodeMemoryJSON(body, &requirement); err != nil {
-		return false, err
+		return visibilityCheckpointRequirement{}, false, err
 	}
-	if requirement.SchemaVersion != 1 || requirement.WorkspaceID != workspaceID {
-		return false, errors.New("invalid memory visibility checkpoint requirement")
+	if requirement.SchemaVersion != 1 && requirement.SchemaVersion != 2 || requirement.WorkspaceID != workspaceID {
+		return visibilityCheckpointRequirement{}, false, errors.New("invalid memory visibility checkpoint requirement")
 	}
-	return true, nil
+	return requirement, true, nil
 }
 
 func (engine *Engine) readVisibility(workspaceID string) (visibilityBarrier, error) {
@@ -43,11 +48,16 @@ func (engine *Engine) readVisibility(workspaceID string) (visibilityBarrier, err
 	if err := validateWorkspaceID(workspaceID); err != nil {
 		return empty, err
 	}
-	required, err := engine.visibilityCheckpointRequired(workspaceID)
+	requirement, required, err := engine.readVisibilityRequirement(workspaceID)
 	if err != nil {
 		return empty, err
 	}
 	if !required {
+		if _, err := memoryReadFile(filepath.Join(engine.workspaceRoot(workspaceID), ".visibility", "checkpoint.json"), maximumVisibilityCheckpointBytes); err == nil {
+			return empty, ErrPrivateWikiCohort
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return empty, err
+		}
 		return engine.readLegacyVisibility(workspaceID)
 	}
 	body, err := memoryReadFile(filepath.Join(engine.workspaceRoot(workspaceID), ".visibility", "checkpoint.json"), maximumVisibilityCheckpointBytes)
@@ -61,11 +71,14 @@ func (engine *Engine) readVisibility(workspaceID string) (visibilityBarrier, err
 	if err := validateVisibilityState(workspaceID, state); err != nil {
 		return empty, err
 	}
+	if requirement.SchemaVersion == 2 && state.PrivateWiki == nil || requirement.SchemaVersion == 1 && state.PrivateWiki != nil {
+		return empty, ErrPrivateWikiCohort
+	}
 	return state, nil
 }
 
 func validateVisibilityState(workspaceID string, b visibilityBarrier) error {
-	if b.SchemaVersion != 1 || b.WorkspaceID != workspaceID || b.Revision == 0 || b.Generation > b.Revision || b.LegacyThrough > 4096 || b.LegacyThrough > b.Revision || b.Denied == nil || len(b.Denied) > maximumVisibilityIdentities || (len(b.Denied) > 0 && b.Generation == 0) {
+	if b.SchemaVersion != 1 || b.WorkspaceID != workspaceID || b.Revision == 0 && b.PrivateWiki == nil || b.Generation > b.Revision || b.LegacyThrough > 4096 || b.LegacyThrough > b.Revision || b.Denied == nil || len(b.Denied) > maximumVisibilityIdentities || (len(b.Denied) > 0 && b.Generation == 0) {
 		return errors.New("invalid memory visibility checkpoint")
 	}
 	for id, revision := range b.Denied {
@@ -73,7 +86,7 @@ func validateVisibilityState(workspaceID string, b visibilityBarrier) error {
 			return errors.New("invalid denied capture identity")
 		}
 	}
-	return nil
+	return validatePrivateWikiCohort(b)
 }
 
 func (engine *Engine) publishDenial(workspaceID string, denied map[string]uint64) (visibilityBarrier, error) {
@@ -117,7 +130,7 @@ func (engine *Engine) reserveCaptureIdentity(workspaceID, id string, b visibilit
 // The caller holds the existing workspace activation lock. The required marker
 // precedes migration publication; a missing checkpoint can never reopen history.
 func (engine *Engine) publishVisibility(workspaceID string, denied map[string]uint64, captureID string) (visibilityBarrier, error) {
-	b, err := engine.readVisibility(workspaceID)
+	b, err := engine.preparePrivateWikiCohort(workspaceID)
 	if err != nil {
 		return b, err
 	}
@@ -139,6 +152,10 @@ func (engine *Engine) publishVisibility(workspaceID string, denied map[string]ui
 	b.Revision++
 	if len(denied) > 0 {
 		b.Generation = b.Revision
+		if b.PrivateWiki != nil {
+			event := engine.newPrivateWikiEvent(workspaceID, "access_revoked", "", b.Generation, engine.Now().UTC(), false)
+			b.PrivateWiki.DenialEvent = &event
+		}
 	}
 	for id, revision := range denied {
 		if revision > b.Denied[id] {

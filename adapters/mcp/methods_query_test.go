@@ -458,7 +458,7 @@ func TestMethodContractsRejectInvalidDeclarations(t *testing.T) {
 	}
 }
 
-func TestMethodPlansResolveMaintenanceKeepWikiUnavailable(t *testing.T) {
+func TestMethodPlansResolveRegisteredMaintenanceAndWiki(t *testing.T) {
 	f := newMethodQueryFixture(t)
 	client := f.connect(t, "")
 	before := methodTreeSnapshot(t, f.root)
@@ -475,7 +475,7 @@ func TestMethodPlansResolveMaintenanceKeepWikiUnavailable(t *testing.T) {
 	}
 	methodQueryDecode(t, client, "maestro_query", map[string]any{"operation": "methods.plan", "method_id": "dream-memory"}, &plan)
 	if plan.State != "requirements_unavailable" || plan.Execution != "not_executed" {
-		t.Fatalf("missing domain operations were presented as available: %+v", plan)
+		t.Fatalf("unattested host dependencies were presented as admitted: %+v", plan)
 	}
 	want := map[string][]string{
 		"domain.maintenance_lifecycle": {"maintenance.enroll", "maintenance.pause", "maintenance.qualify", "maintenance.report", "maintenance.resume", "maintenance.revoke", "maintenance.run", "maintenance.status"},
@@ -491,12 +491,8 @@ func TestMethodPlansResolveMaintenanceKeepWikiUnavailable(t *testing.T) {
 			continue
 		}
 		operations, ok := want[dependency.ID]
-		state, reason, missing := "unavailable", "owning_operations_not_registered", operations
-		if dependency.ID == "domain.maintenance_lifecycle" {
-			state, reason, missing = "available", "owning_operations_registered", nil
-		}
-		if !ok || dependency.State != state || dependency.Reason != reason || !reflect.DeepEqual(dependency.Fulfillment, operations) || len(dependency.Missing) != len(missing) || (len(missing) > 0 && !reflect.DeepEqual(dependency.Missing, missing)) {
-			t.Fatalf("missing dependency lost its exact owning requirements: %+v", dependency)
+		if !ok || dependency.State != "available" || dependency.Reason != "owning_operations_registered" || !reflect.DeepEqual(dependency.Fulfillment, operations) || len(dependency.Missing) != 0 {
+			t.Fatalf("registered dependency lost its exact owning requirements: %+v", dependency)
 		}
 		delete(want, dependency.ID)
 	}
@@ -504,7 +500,7 @@ func TestMethodPlansResolveMaintenanceKeepWikiUnavailable(t *testing.T) {
 		t.Fatalf("unattested host dependencies were omitted: %v", unattested)
 	}
 	if len(want) != 0 {
-		t.Fatalf("missing dependencies were omitted: %v", want)
+		t.Fatalf("registered domain dependencies were omitted: %v", want)
 	}
 	if !reflect.DeepEqual(before, methodTreeSnapshot(t, f.root)) {
 		t.Fatal("dependency planning changed owner/workspace state")

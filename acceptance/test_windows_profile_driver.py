@@ -406,6 +406,12 @@ $values|ConvertTo-Json -Depth 4 -Compress
         result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(parser), str(DRIVER), str(ROOT / "acceptance/windows-engine-check.ps1")], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         ledger = json.loads(result.stdout)
+        self.assertEqual(len(ledger["$adapterParents"]), 51)
+        self.assertEqual(len(ledger["$adapterAssertions"]), 143)
+        self.assertEqual(len(ledger["$adapterCommandParents"]), 1)
+        for name in ("TestMethodPlansResolveMaintenanceKeepWikiUnavailable", "TestMethodPlansResolveRegisteredMaintenanceAndWiki"):
+            self.assertIn(name, ledger["$adapterParents"])
+            self.assertIn(name, ledger["$adapterAssertions"])
         source = "\n".join(p.read_text() for p in (ROOT / "adapters/mcp").glob("*_test.go"))
         for name in ledger["$adapterParents"]:
             self.assertIn(f"func {name}(", source)
@@ -423,10 +429,12 @@ $values|ConvertTo-Json -Depth 4 -Compress
         parser = self.root / "required-parents.ps1"
         parser.write_text(r'''$ErrorActionPreference='Stop'
 $ast=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$null)
-$assignments=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -cin @('$canonicalRequired','$originalAssertions')},$true))
-if($assignments.Count -ne 2){throw 'Expected actual required and original native source contracts'}
+$assignments=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -cin @('$canonicalRequired','$originalAssertions','$adapterParents','$adapterCommandParents')},$true))
+if($assignments.Count -ne 4){throw 'Expected actual owning and companion source contracts'}
 foreach($assignment in $assignments){Invoke-Expression $assignment.Extent.Text}
 foreach($name in $originalAssertions.Keys){$canonicalRequired[$name]=@($canonicalRequired[$name]) + @($originalAssertions[$name])}
+$canonicalRequired['mcp']=$adapterParents
+$canonicalRequired['mcp-command']=$adapterCommandParents
 $canonicalRequired|ConvertTo-Json -Depth 4 -Compress
 ''', encoding="utf-8")
         required = subprocess.run([self.pwsh,"-NoProfile","-File",str(parser),str(DRIVER)],capture_output=True,text=True,timeout=30)
@@ -438,17 +446,21 @@ $canonicalRequired|ConvertTo-Json -Depth 4 -Compress
                            GOPROXY="off", GOSUMDB="off", GOFLAGS="-mod=readonly -buildvcs=false",
                            GOCACHE=str(self.root / "go-cache"), GOPATH=str(self.root / "go-path"),
                            GOMODCACHE=str(self.root / "go-path/pkg/mod"), GOTMPDIR=str(temporary), TMPDIR=str(temporary))
-        names = sorted(required)
-        result = subprocess.run([go,"list","-e","-find","-json", *["./internal/"+name for name in names]],cwd=ROOT,env=environment,
-                                capture_output=True,text=True,timeout=60)
-        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-        remaining = result.stdout
-        decoder = json.JSONDecoder()
+        owning = sorted(set(required)-{"mcp","mcp-command"})
         selected = {}
-        while remaining.strip():
-            package, consumed = decoder.raw_decode(remaining.lstrip())
-            remaining = remaining.lstrip()[consumed:]
-            selected[package["ImportPath"].rsplit("/",1)[-1]] = package
+        decoder = json.JSONDecoder()
+        for working, packages in ((ROOT,["./internal/"+name for name in owning]),
+                                  (ROOT/"adapters/mcp",[".","./cmd/maestro-mcp"])):
+            result = subprocess.run([go,"list","-e","-find","-json",*packages],cwd=working,env=environment,
+                                    capture_output=True,text=True,timeout=60)
+            self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+            remaining = result.stdout
+            while remaining.strip():
+                package, consumed = decoder.raw_decode(remaining.lstrip())
+                remaining = remaining.lstrip()[consumed:]
+                name = "mcp-command" if package["ImportPath"].endswith("/adapters/mcp/cmd/maestro-mcp") else package["ImportPath"].rsplit("/",1)[-1]
+                self.assertNotIn(name,selected)
+                selected[name] = package
         self.assertEqual(set(selected),set(required))
         import re
         for name, assertions in required.items():

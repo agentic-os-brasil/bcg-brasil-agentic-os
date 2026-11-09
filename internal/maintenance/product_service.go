@@ -57,6 +57,7 @@ type Operation struct {
 }
 
 type ProductSchedule struct {
+	EventOnly     bool              `json:"event_only,omitempty"`
 	Timezone      string            `json:"timezone"`
 	Cadence       scheduler.Cadence `json:"cadence"`
 	IntervalHours int               `json:"interval_hours"`
@@ -81,6 +82,7 @@ type ProductReview struct {
 }
 
 type ProductQualification struct {
+	EventID        string    `json:"event_id,omitempty"`
 	ID             string    `json:"id"`
 	WorkspaceID    string    `json:"workspace_id"`
 	JobID          string    `json:"job_id"`
@@ -471,16 +473,26 @@ type productExecution struct {
 }
 
 func (p *productExecution) guard(publish func() error) error {
+	// Refuse before touching control state, then recheck after acquiring its lock.
 	if _, err := processidentity.Current(); err != nil {
 		return err
 	}
 	return p.service.withControl(p.jobID, func() error {
+		if _, err := processidentity.Current(); err != nil {
+			return err
+		}
 		c, err := p.service.loadControl(p.jobID)
 		if err != nil {
 			return err
 		}
 		if c.Revision != p.revision || p.oneShot != "" && c.OneShot != p.oneShot || p.oneShot == "" && c.State != "active" {
 			return ErrProductConflict
+		}
+		if wikiJob(p.jobID) && p.source != "" {
+			current, err := p.service.sourceState(p.jobID)
+			if err != nil || current != p.source {
+				return ErrProductConflict
+			}
 		}
 		return publish()
 	})
@@ -498,6 +510,9 @@ func (s *Service) worker(p *productExecution) Worker {
 	for _, job := range []string{"memory-retention-check", "runtime-health-check", "capability-recheck", "runtime-drift-check"} {
 		handlers[job] = productDiagnosticHandler{service: s, expected: p.source, job: job}
 	}
+	for _, job := range []string{WikiIncrementalJobID, WikiReconcileJobID, WikiIntegrityJobID} {
+		handlers[job] = productWikiHandler{service: s, expected: p.source, job: job}
+	}
 	return Worker{Catalog: s.options.Catalog, Scheduler: s.scheduler, Receipts: s.receipts, Jobs: []scheduler.Job{{ID: p.jobID, Cadence: schedule.Cadence, Weekday: schedule.Weekday, LocalHour: schedule.LocalHour, LocalMinute: schedule.LocalMinute, IntervalHours: schedule.IntervalHours, MaxCatchUp: schedule.MaxCatchUp}}, Handlers: handlers, Deadline: 2 * time.Minute, Now: s.now, product: p}
 }
 
@@ -506,15 +521,25 @@ func (s *Service) execute(ctx context.Context, p *productExecution, occ schedule
 		return Receipt{}, err
 	}
 	authority := ExecutionAuthority{catalog: s.options.Catalog, occurrences: map[string]OccurrenceAuthorization{}, activated: map[string]bool{p.jobID: true}, attended: p.oneShot != "", preauthorized: p.oneShot == "", ready: true, productBound: true}
-	if err := authority.addOccurrence(OccurrenceAuthorization{WorkspaceID: s.workspaceID, JobID: p.jobID, Trigger: TriggerPresence, ScheduledFor: occ.ScheduledFor}); err != nil {
+	trigger := TriggerPresence
+	if occ.EventID != "" {
+		trigger = TriggerEvent
+	}
+	if err := authority.addOccurrence(OccurrenceAuthorization{WorkspaceID: s.workspaceID, JobID: p.jobID, Trigger: trigger, EventID: occ.EventID, ScheduledFor: occ.ScheduledFor}); err != nil {
 		return Receipt{}, err
 	}
-	request := WakeRequest{WorkspaceID: s.workspaceID, Trigger: TriggerPresence, Now: now, OwnerID: fmt.Sprintf("product-%d", os.Getpid()), Attended: p.oneShot != "", Preauthorized: p.oneShot == "", IdleState: IdleConfirmed}
+	request := WakeRequest{WorkspaceID: s.workspaceID, Trigger: trigger, EventID: occ.EventID, Now: now, OwnerID: fmt.Sprintf("product-%d", os.Getpid()), Attended: p.oneShot != "", Preauthorized: p.oneShot == "", IdleState: IdleConfirmed}
 	receipt, err := s.worker(p).runOccurrence(ctx, request, now, occ, authority)
 	if err != nil {
 		return rejectedTerminalReceipt(receipt), err
 	}
 	if receipt.State == ReceiptSucceeded || receipt.State == ReceiptReviewedNoChange {
+		if occ.EventID != "" {
+			if err := s.receipts.VerifyEventReceipt(receipt); err != nil {
+				return rejectedTerminalReceipt(receipt), err
+			}
+			return receipt, nil
+		}
 		// A maintenance receipt alone cannot conceal a failed scheduler publication.
 		receipts, readErr := s.scheduler.Receipts(s.workspaceID)
 		if readErr != nil {
@@ -550,6 +575,33 @@ func (s *Service) RunDue(ctx context.Context) (WakeReport, error) {
 		if err := s.verifyQualification(c.Qualification); err != nil {
 			return report, err
 		}
+		if c.Schedule.EventOnly {
+			snapshot, err := s.engine.InspectPrivateWikiMaintenance(s.workspaceID)
+			if err != nil {
+				return report, err
+			}
+			if snapshot.EventID == "" || snapshot.EventAt.Before(c.Boundary) {
+				continue
+			}
+			closed, err := s.receipts.EventClosed(s.workspaceID, job.ID, snapshot.EventID)
+			if err != nil {
+				report.State = "completed_with_failures"
+				return report, err
+			}
+			if closed {
+				continue
+			}
+			occ := scheduler.Occurrence{JobID: job.ID, EventID: snapshot.EventID, ScheduledFor: snapshot.EventAt}
+			report.Due = append(report.Due, occ)
+			receipt, err := s.execute(ctx, &productExecution{service: s, jobID: job.ID, revision: c.Revision, source: snapshot.SourceIdentity}, occ, now)
+			report.Receipts = append(report.Receipts, receipt)
+			report.State = "processed"
+			if err != nil {
+				report.State = "completed_with_failures"
+				return report, err
+			}
+			continue
+		}
 		receipts, err := s.scheduler.Receipts(s.workspaceID)
 		if err != nil {
 			return report, err
@@ -570,7 +622,14 @@ func (s *Service) RunDue(ctx context.Context) (WakeReport, error) {
 		}
 		for _, occ := range due {
 			report.Due = append(report.Due, occ)
-			receipt, err := s.execute(ctx, &productExecution{service: s, jobID: job.ID, revision: c.Revision}, occ, now)
+			p := &productExecution{service: s, jobID: job.ID, revision: c.Revision}
+			if wikiJob(job.ID) {
+				p.source, err = s.sourceState(job.ID)
+				if err != nil {
+					return report, err
+				}
+			}
+			receipt, err := s.execute(ctx, p, occ, now)
 			report.Receipts = append(report.Receipts, receipt)
 			report.State = "processed"
 			if err != nil {
@@ -611,6 +670,13 @@ func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatu
 		return ProductJobStatus{}, beforeErr
 	}
 	occ := scheduler.Occurrence{JobID: p.jobID, ScheduledFor: now}
+	if p.jobID == WikiIncrementalJobID {
+		snapshot, inspectErr := s.engine.InspectPrivateWikiMaintenance(s.workspaceID)
+		if inspectErr != nil || snapshot.EventID == "" {
+			return ProductJobStatus{}, ErrQualificationRequired
+		}
+		occ.EventID, occ.ScheduledFor = snapshot.EventID, snapshot.EventAt
+	}
 	receipt, err := s.execute(ctx, p, occ, now)
 	if err != nil {
 		return ProductJobStatus{}, err
@@ -625,7 +691,7 @@ func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatu
 	if before == after || after == "" {
 		return ProductJobStatus{}, ErrQualificationRequired
 	}
-	q := ProductQualification{WorkspaceID: s.workspaceID, JobID: p.jobID, Binding: s.binding, Implementation: s.build, Configuration: s.configuration(p.jobID), Adapter: s.options.Adapter, Platform: runtime.GOOS + "/" + runtime.GOARCH, Artifact: path, ArtifactSHA256: after, Receipt: receipt, ScheduledFor: occ.ScheduledFor, RequestedAt: now, VerifiedAt: s.now().UTC()}
+	q := ProductQualification{EventID: occ.EventID, WorkspaceID: s.workspaceID, JobID: p.jobID, Binding: s.binding, Implementation: s.build, Configuration: s.configuration(p.jobID), Adapter: s.options.Adapter, Platform: runtime.GOOS + "/" + runtime.GOARCH, Artifact: path, ArtifactSHA256: after, Receipt: receipt, ScheduledFor: occ.ScheduledFor, RequestedAt: now, VerifiedAt: s.now().UTC()}
 	q.ID = productDigest(q)
 	if err := s.verifyQualification(&q); err != nil {
 		return ProductJobStatus{}, err
@@ -731,6 +797,9 @@ func (s *Service) verifyQualification(q *ProductQualification) error {
 	if q.Receipt.JobID != q.JobID || q.Receipt.WorkspaceID != s.workspaceID || q.Receipt.State != ReceiptSucceeded || !q.Receipt.RecordedAt.Equal(q.RequestedAt) {
 		return ErrQualificationRequired
 	}
+	if (q.JobID == WikiIncrementalJobID) != (q.EventID != "") || q.Receipt.EventID != q.EventID {
+		return ErrQualificationRequired
+	}
 	if strings.Contains(q.Artifact, "\\") || filepath.IsAbs(q.Artifact) || filepath.ToSlash(filepath.Clean(q.Artifact)) != q.Artifact || strings.Contains(q.Artifact, "..") {
 		return ErrQualificationRequired
 	}
@@ -808,6 +877,9 @@ func (s *Service) verifyQualification(q *ProductQualification) error {
 	if decodeProduct(body, &actual) != nil || actual != q.Receipt {
 		return ErrQualificationRequired
 	}
+	if q.EventID != "" {
+		return s.receipts.VerifyEventReceipt(q.Receipt)
+	}
 	name := q.RequestedAt.UTC().Format("20060102T150405.000000000Z") + "-" + q.ScheduledFor.UTC().Format("20060102T150405.000000000Z") + ".json"
 	body, err = scheduler.ReadPrivateFile(filepath.Join(s.scheduler.Root, "workspaces", s.workspaceID, "receipts", q.JobID, name), 64<<10)
 	if err != nil {
@@ -841,7 +913,10 @@ func NewProductWeeklyMemoryEngine(home string) (*memory.Engine, error) {
 	return engine, nil
 }
 func scheduleFor(job string) ProductSchedule {
-	if job == MemoryDeepDreamJobID {
+	if job == WikiIncrementalJobID {
+		return ProductSchedule{EventOnly: true, MaxCatchUp: 1}
+	}
+	if job == MemoryDeepDreamJobID || job == WikiReconcileJobID {
 		return ProductSchedule{Cadence: scheduler.Weekly, Weekday: time.Sunday, MaxCatchUp: 1}
 	}
 	if job == MemoryLightDreamJobID || job == MemoryCheckpointJobID {
@@ -850,6 +925,9 @@ func scheduleFor(job string) ProductSchedule {
 	return ProductSchedule{Cadence: scheduler.Daily, MaxCatchUp: 1}
 }
 func (s *Service) sourceState(job string) (string, error) {
+	if wikiJob(job) {
+		return s.wikiSourceIdentity(job)
+	}
 	switch job {
 	case MemoryLightDreamJobID:
 		return s.engine.DailyInputIdentity(s.workspaceID, s.now())
