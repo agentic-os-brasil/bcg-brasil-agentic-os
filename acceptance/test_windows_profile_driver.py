@@ -406,13 +406,13 @@ $values|ConvertTo-Json -Depth 4 -Compress
         result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(parser), str(DRIVER), str(ROOT / "acceptance/windows-engine-check.ps1")], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         ledger = json.loads(result.stdout)
-        self.assertEqual(len(ledger["$adapterParents"]), 53)
-        self.assertEqual(len(ledger["$adapterAssertions"]), 161)
+        self.assertEqual(len(ledger["$adapterParents"]), 54)
+        self.assertEqual(len(ledger["$adapterAssertions"]), 162)
         for version in ("0_1_0", "0_1_1"):
             for format in ("plugin", "mcpb"):
                 self.assertIn(f"TestCompiledStdioWorkflowAndPackets/portable_{format}_{version}", ledger["$adapterAssertions"])
         self.assertEqual(len(ledger["$adapterCommandParents"]), 1)
-        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]), 162)
+        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]), 163)
         for name in ("TestMethodPlansResolveMaintenanceKeepWikiUnavailable", "TestMethodPlansResolveRegisteredMaintenanceAndWiki", "TestAgentResourceCallbacksRevalidateBinding"):
             self.assertIn(name, ledger["$adapterParents"])
             self.assertIn(name, ledger["$adapterAssertions"])
