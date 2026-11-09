@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func externalDurabilityTree(t *testing.T) *engine {
+func externalDurabilityTree(t *testing.T) *externalTree {
 	t.Helper()
 	if err := externalMutationAllowed(); err != nil {
 		t.Skip(err)
@@ -23,7 +23,7 @@ func externalDurabilityTree(t *testing.T) *engine {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { e.root.Close() })
+	t.Cleanup(func() { e.close() })
 	return e
 }
 
@@ -133,5 +133,37 @@ func TestExternalPublicationRetainsMoveAfterActualDirectorySyncFailure(t *testin
 	actual, err := os.ReadFile(filepath.Join(e.project, to))
 	if err != nil || string(actual) != "retain newer work\n" {
 		t.Fatal("late failure changed retained bytes", err)
+	}
+}
+
+func TestExternalSourceTreeCannotFlushOrRetireOriginal(t *testing.T) {
+	e := externalDurabilityTree(t)
+	name := "original.md"
+	body := []byte("untouched original\n")
+	if err := os.WriteFile(filepath.Join(e.project, name), body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	before, err := e.stat(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := externalOpenSource(e.project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.close()
+	if err = externalSyncPath(source, name); err == nil {
+		t.Fatal("source tree acquired sync authority")
+	}
+	if marked, err := source.removeExact(name, body); err == nil || marked {
+		t.Fatal("source tree acquired retirement authority", marked, err)
+	}
+	after, err := e.stat(name)
+	if err != nil || !os.SameFile(before, after) || before.Mode() != after.Mode() || !before.ModTime().Equal(after.ModTime()) {
+		t.Fatal("source metadata changed", err)
+	}
+	actual, err := os.ReadFile(filepath.Join(e.project, name))
+	if err != nil || !bytes.Equal(actual, body) {
+		t.Fatal("source bytes changed", err)
 	}
 }

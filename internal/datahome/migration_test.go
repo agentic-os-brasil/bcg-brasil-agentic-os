@@ -13,8 +13,8 @@ import (
 )
 
 func TestResolveCommittedMigrationUsesSealedSourceIdentity(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("external ownership unavailable")
+	if runtime.GOOS == "windows" && os.Getenv("MAESTRO_WINDOWS_CORE_PROOF") != "1" {
+		t.Skip("dedicated ordinary-account Windows external migration proof required")
 	}
 	opts := fixture(t)
 	source := filepath.Join(opts.UserHome, "old ZIP")
@@ -40,7 +40,7 @@ func TestResolveCommittedMigrationUsesSealedSourceIdentity(t *testing.T) {
 		t.Fatalf("apply: %+v %v", status, err)
 	}
 	got, err := datahome.Resolve(opts)
-	if err != nil || !got.Writable || got.Origin != "migrated" || got.Home != plan.Home {
+	if err != nil || !got.Writable || got.Origin != "migrated" || got.Home != plan.Home || got.MigrationSourceRoot != source {
 		t.Fatalf("committed HOME unavailable: %+v %v", got, err)
 	}
 	otherUser := filepath.Join(opts.UserHome, "other user")
@@ -67,7 +67,7 @@ func TestResolveCommittedMigrationUsesSealedSourceIdentity(t *testing.T) {
 	if err := os.RemoveAll(source); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := datahome.Resolve(opts); err != nil || !got.Writable {
+	if got, err := datahome.Resolve(opts); err != nil || !got.Writable || got.MigrationSourceRoot != source {
 		t.Fatalf("offline historical source blocked HOME: %+v %v", got, err)
 	}
 }

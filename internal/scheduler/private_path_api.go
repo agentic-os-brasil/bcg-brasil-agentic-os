@@ -34,6 +34,9 @@ func ValidateDirectory(path string) error {
 // require an owner-only directory; Windows relies on the native protected data
 // root ACL rather than portable mode bits.
 func ValidatePrivateDirectory(path string) error {
+	if err := validatePrivateDirectoryIdentity(path); err != nil {
+		return err
+	}
 	if err := secureLookupPrivatePath(path); err != nil {
 		return err
 	}
@@ -114,7 +117,7 @@ func ReplacePrivateFile(path string, body []byte) error {
 // descriptors. It neither changes permissions nor grants private ownership;
 // callers own the handle and must enforce scope, size and link-count policy.
 func OpenRegularFile(path string) (*os.File, error) {
-	return secureOpenFile(path, os.O_RDONLY, 0)
+	return openUnownedRegularFile(path)
 }
 
 // OpenDirectory transfers an existing no-follow directory handle to the caller.

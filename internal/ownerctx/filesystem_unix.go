@@ -178,3 +178,7 @@ func acquireOwnerTransition(path string) (func() error, error) {
 		time.Sleep(5 * time.Millisecond)
 	}
 }
+
+func acquireExistingOwnerTransition(path string) (func() error, error) {
+	return acquirePromptHistoryLock(path)
+}

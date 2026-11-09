@@ -4,12 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 const (
@@ -751,7 +754,27 @@ func TestStaleStartCannotCommitAfterDeleteTakeover(t *testing.T) {
 }
 
 func TestValidateSchemaFile(t *testing.T) {
-	if err := ValidateSchemaFile(filepath.Join("..", "..", "schemas", "execution-state.schema.json")); err != nil {
+	// Published source is publicly readable; private admission belongs to state.
+	source, err := filepath.Abs(filepath.Join("..", "..", "schemas", "execution-state.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, err := scheduler.OpenRegularFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, readErr := io.ReadAll(io.LimitReader(file, (1<<20)+1))
+	if err := errors.Join(readErr, file.Close()); err != nil {
+		t.Fatal(err)
+	}
+	if len(body) > 1<<20 {
+		t.Fatal("published schema exceeds fixture bound")
+	}
+	private := filepath.Join(t.TempDir(), "execution-state.schema.json")
+	if err := scheduler.WriteNewPrivateFile(private, body); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSchemaFile(private); err != nil {
 		t.Fatal(err)
 	}
 }

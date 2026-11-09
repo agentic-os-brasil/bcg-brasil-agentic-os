@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -28,9 +29,6 @@ func TestStartupNeverBootstraps(t *testing.T) {
 func TestPublicWorkflow(t *testing.T)                  { runWorkflow(t, false) }
 func TestCompiledStdioWorkflowAndPackets(t *testing.T) { runWorkflow(t, true) }
 func runWorkflow(t *testing.T, stdio bool) {
-	if runtime.GOOS == "windows" {
-		t.Skip("verified owner admission unavailable")
-	}
 	base := physicalTempDir(t)
 	prod := filepath.Join(base, "product")
 	home := filepath.Join(base, "owner")
@@ -46,7 +44,7 @@ func runWorkflow(t *testing.T, stdio bool) {
 	}
 	binary := ""
 	if stdio {
-		binary = filepath.Join(base, "maestro-mcp")
+		binary = filepath.Join(base, productTestBinaryName())
 		build := exec.Command("go", "build", "-o", binary, "./cmd/maestro-mcp")
 		if out, err := build.CombinedOutput(); err != nil {
 			t.Fatalf("build: %s %v", out, err)
@@ -200,8 +198,13 @@ func runWorkflow(t *testing.T, stdio bool) {
 	} {
 		call(a, "maestro_query", args, true)
 	}
-	for _, path := range []string{"../escape", "/absolute/private", "nested/.bcgos/workspace.json"} {
+	beforeRefusal := call(a, "maestro_query", map[string]any{"operation": "execution.list", "limit": 32}, false)
+	for _, path := range []string{"../escape", "/absolute/private", "/", "//absolute/private", `\absolute\private`, `C:\absolute\private`, "C:/absolute/private", "nested/.bcgos/workspace.json"} {
 		call(a, "maestro_apply", map[string]any{"operation": "execution.create", "objective": "bad", "next_step": "bad", "artifacts": []string{path}}, true)
+		afterRefusal := call(a, "maestro_query", map[string]any{"operation": "execution.list", "limit": 32}, false)
+		if !reflect.DeepEqual(beforeRefusal, afterRefusal) {
+			t.Fatalf("unsafe artifact %q changed execution metadata", path)
+		}
 	}
 	call(a, "maestro_apply", map[string]any{"operation": "execution.create", "objective": strings.Repeat("private-content", 2000), "next_step": "bad", "artifacts": []string{"result.md"}}, true)
 	call(a, "maestro_apply", map[string]any{"operation": "execution.create", "objective": "bad", "next_step": "bad", "artifacts": []string{"result.md"}, "require_yoda_review": true}, true)
@@ -224,8 +227,20 @@ func runWorkflow(t *testing.T, stdio bool) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(string(manifest), home) || !strings.Contains(string(manifest), ws) {
-				t.Fatal("plugin lost binding")
+			var configuration struct {
+				Servers map[string]struct {
+					Type    string   `json:"type"`
+					Command string   `json:"command"`
+					Args    []string `json:"args"`
+				} `json:"mcpServers"`
+			}
+			if err := json.Unmarshal(manifest, &configuration); err != nil {
+				t.Fatal("plugin binding is not valid JSON", err)
+			}
+			server, ok := configuration.Servers["maestro"]
+			wantArgs := []string{"serve", "--product-root", prod, "--user-home", home, "--workspace", ws}
+			if !ok || len(configuration.Servers) != 1 || server.Type != "stdio" || server.Command != "${CLAUDE_PLUGIN_ROOT}/scripts/"+productTestBinaryName() || !reflect.DeepEqual(server.Args, wantArgs) {
+				t.Fatal("plugin lost its exact decoded executable or binding arguments")
 			}
 			if runtime.GOOS == "darwin" {
 				packet.Destination = filepath.Join(base, "maestro-"+version+".mcpb")
@@ -316,36 +331,8 @@ func runWorkflow(t *testing.T, stdio bool) {
 
 }
 
-func TestWindowsAdmissionRefused(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("Windows admission contract")
-	}
-	base := physicalTempDir(t)
-	prod := filepath.Join(base, "product")
-	home := filepath.Join(base, "owner")
-	for _, path := range []string{prod, home} {
-		if err := os.Mkdir(path, 0700); err != nil {
-			t.Fatal(err)
-		}
-	}
-	lookup := func(string) (string, bool) { return "", false }
-	state, err := datahome.InitializeFresh(datahome.Options{ProductRoot: prod, UserHome: home, LookupEnv: lookup})
-	if err == nil || state.Writable || state.Diagnostic != "ownership-unverified" {
-		t.Fatalf("unverified Windows owner admitted: %+v %v", state, err)
-	}
-	if _, err := product.Open(product.Options{ProductRoot: prod, UserHome: home, WorkspacePath: filepath.Join(base, "workspace"), LookupEnv: lookup}); err == nil {
-		t.Fatal("Windows product store admitted")
-	}
-	if _, err := os.Lstat(filepath.Join(home, ".maestro")); !os.IsNotExist(err) {
-		t.Fatal("refused bootstrap created state")
-	}
-}
-
 func TestCLIInitRefusesUnsafeBindingsWithoutWrites(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("positive init admission unavailable")
-	}
-	binary := filepath.Join(physicalTempDir(t), "maestro-mcp")
+	binary := filepath.Join(physicalTempDir(t), productTestBinaryName())
 	if out, err := exec.Command("go", "build", "-o", binary, "./cmd/maestro-mcp").CombinedOutput(); err != nil {
 		t.Fatalf("build %s: %v", out, err)
 	}
@@ -409,4 +396,11 @@ func physicalTempDir(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+func productTestBinaryName() string {
+	if runtime.GOOS == "windows" {
+		return "maestro-mcp.exe"
+	}
+	return "maestro-mcp"
 }

@@ -192,7 +192,7 @@ func TestMaintenanceLocalFallback(t *testing.T) {
 		t.Fatal(enrolled)
 	}
 	// A genuinely different rebuilt executable cannot reuse qualification.
-	replacement := filepath.Join(filepath.Dir(f.binary), "maestro-mcp-changed")
+	replacement := filepath.Join(filepath.Dir(f.binary), "maestro-mcp-changed"+filepath.Ext(productTestBinaryName()))
 	build := exec.Command("go", "build", "-ldflags", "-X main.AuthorityRegistrySHA256=synthetic-changed-build", "-o", replacement, "./cmd/maestro-mcp")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("rebuild: %s %v", out, err)

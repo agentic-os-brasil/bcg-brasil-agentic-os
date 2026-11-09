@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
 	"golang.org/x/sys/windows"
 )
 
@@ -98,15 +99,31 @@ func TestWindowsPromptHistoryLockRetainsGuardAcrossReaderAndReacquire(t *testing
 }
 
 func TestWindowsPromptHistoryLockPreservesLegacyTokenUntilItsOwnerReleases(t *testing.T) {
-	path := filepath.Join(t.TempDir(), promptHistoryLockName)
+	private, err := winprivate.Fresh(filepath.Join(t.TempDir(), "native-private"))
+	if err != nil {
+		t.Fatal("native-private legacy fixture unavailable", err)
+	}
+	defer private.Close()
+	path := filepath.Join(private.File.Name(), promptHistoryLockName)
 	const token = "0123456789abcdef0123456789abcdef"
-	legacy, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err := private.Publish(promptHistoryLockName, []byte(token), true); err != nil {
+		t.Fatal(err)
+	}
+	security, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, writeErr := legacy.WriteString(token)
-	if err := errors.Join(writeErr, legacy.Close()); err != nil {
+	owner, _, err := security.Owner()
+	if err != nil {
 		t.Fatal(err)
+	}
+	user, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil || owner == nil || user == nil || !owner.Equals(user.User.Sid) {
+		t.Fatal("legacy token fixture is not owned by the actual native user", err)
+	}
+	control, _, err := security.Control()
+	if err != nil || control&windows.SE_DACL_PROTECTED == 0 {
+		t.Fatal("legacy token fixture lacks its protected native DACL", err)
 	}
 	unlock, err := acquirePromptHistoryLock(path)
 	if unlock != nil {
@@ -117,6 +134,10 @@ func TestWindowsPromptHistoryLockPreservesLegacyTokenUntilItsOwnerReleases(t *te
 	}
 	if body, err := os.ReadFile(path); err != nil || string(body) != token {
 		t.Fatal("refusal changed legacy token bytes", err)
+	}
+	afterSecurity, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+	if err != nil || afterSecurity.String() != security.String() {
+		t.Fatal("legacy-token refusal changed native ownership or DACL", err)
 	}
 	if err := releasePromptHistoryLock(path, token); err != nil {
 		t.Fatal("native refusal prevented the legacy owner's own release", err)
@@ -130,5 +151,25 @@ func TestWindowsPromptHistoryLockPreservesLegacyTokenUntilItsOwnerReleases(t *te
 	}
 	if info, err := os.Stat(path); err != nil || info.Size() != 0 {
 		t.Fatal("native release did not retain its empty guard", err)
+	}
+}
+
+func TestWindowsPromptHistoryReadNeverCreatesMissingGuard(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "owner", "prompt-history", promptHistoryLockName)
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PromptHistoryOccurrenceExists(root, "owner", "event-a"); err == nil {
+		t.Fatal("occurrence lookup admitted history without its established guard")
+	}
+	if _, err := ExportPromptHistory(root); err == nil {
+		t.Fatal("read admitted history without its established guard")
+	}
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Fatal("read created a native guard", err)
 	}
 }

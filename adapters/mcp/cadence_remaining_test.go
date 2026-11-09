@@ -162,7 +162,7 @@ func TestMaintenanceIndexRetentionChangedExecutableRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	replacement := filepath.Join(filepath.Dir(f.binary), "maestro-mcp-changed-index-retention")
+	replacement := filepath.Join(filepath.Dir(f.binary), "maestro-mcp-changed-index-retention"+filepath.Ext(productTestBinaryName()))
 	build := exec.Command("go", "build", "-ldflags", "-X main.AuthorityRegistrySHA256=changed-index-retention-build", "-o", replacement, "./cmd/maestro-mcp")
 	build.Env = os.Environ()
 	if out, err := build.CombinedOutput(); err != nil {

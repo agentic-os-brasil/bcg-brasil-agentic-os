@@ -321,3 +321,12 @@ func unixPathParts(path string) (string, []string, error) {
 	}
 	return string(filepath.Separator), components, nil
 }
+
+// Unix retains its existing mode and descriptor-based validation.
+func validatePrivateDirectoryIdentity(string) error { return nil }
+func openUnownedRegularFile(path string) (*os.File, error) {
+	return secureOpenFile(path, os.O_RDONLY, 0)
+}
+func (directory *secureDirectory) openLock(name string) (*os.File, error) {
+	return directory.openFile(name, os.O_RDWR|os.O_CREATE, 0o600)
+}

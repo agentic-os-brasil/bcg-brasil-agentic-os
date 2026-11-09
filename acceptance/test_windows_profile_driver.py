@@ -50,29 +50,30 @@ if ($errors.Count) { throw ($errors | Out-String) }
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_workflow_windows_blocks_parse(self):
-        workflow = (ROOT / ".github/workflows/data-home-inspection.yml").read_text()
-        current = []
-        blocks = []
-        lines = workflow.splitlines()
-        for index, line in enumerate(lines):
-            if line.startswith("      - "):
-                current = []
-            current.append(line)
-            if line == "        run: |" and "        shell: pwsh" in current:
-                body = []
-                for child in lines[index + 1:]:
-                    if child and not child.startswith("          "):
-                        break
-                    body.append(child)
-                blocks.append(textwrap.dedent("\n".join(body)))
-        self.assertEqual(len(blocks), 3)
-        for index, body in enumerate(blocks):
-            script = self.root / f"workflow-{index}.ps1"
-            script.write_text(body, encoding="utf-8")
-            parser = self.root / "parse-workflow.ps1"
-            parser.write_text("$e=$null; [Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$e) | Out-Null; if($e.Count){throw ($e | Out-String)}", encoding="utf-8")
-            result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(parser), str(script)], capture_output=True, text=True, timeout=30)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        for workflow_path in (".github/workflows/data-home-inspection.yml", ".github/workflows/windows-native-engine.yml"):
+            workflow = (ROOT / workflow_path).read_text()
+            current = []
+            blocks = []
+            lines = workflow.splitlines()
+            for index, line in enumerate(lines):
+                if line.startswith("      - "):
+                    current = []
+                current.append(line)
+                if line == "        run: |" and "        shell: pwsh" in current:
+                    body = []
+                    for child in lines[index + 1:]:
+                        if child and not child.startswith("          "):
+                            break
+                        body.append(child)
+                    blocks.append(textwrap.dedent("\n".join(body)))
+            self.assertEqual(len(blocks), 3)
+            for index, body in enumerate(blocks):
+                script = self.root / f"workflow-{index}.ps1"
+                script.write_text(body, encoding="utf-8")
+                parser = self.root / "parse-workflow.ps1"
+                parser.write_text("$e=$null; [Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$e) | Out-Null; if($e.Count){throw ($e | Out-String)}", encoding="utf-8")
+                result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(parser), str(script)], capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def closed_manifest(self):
         source = self.root / "source"
@@ -263,3 +264,211 @@ if ($env:USERPROFILE -cne $userHomeFixture -or $env:HOME -cne $userHomeFixture -
 
 if __name__ == "__main__":
     unittest.main()
+
+class WindowsEngineProfile(unittest.TestCase):
+    setUp = WindowsInspectionDriver.setUp
+    closed_manifest = WindowsInspectionDriver.closed_manifest
+    assert_preaccount_refusal = WindowsInspectionDriver.assert_preaccount_refusal
+
+    def invoke_engine(self, document):
+        self.manifest.write_text(json.dumps(document), encoding="utf-8")
+        binary = self.root / "public.exe"
+        binary.write_bytes(b"unexecuted public executable fixture")
+        return subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(DRIVER),
+                               "-TestBinary", str(binary), "-Server", str(binary),
+                               "-CanonicalManifest", str(self.manifest), "-OutputRoot", str(self.root / "proof")],
+                              capture_output=True, text=True, timeout=30)
+
+    def engine_document(self):
+        document = self.closed_manifest()
+        for entry in document["packages"]:
+            entry.pop("skip_policy")
+        digest = hashlib.sha256(b"unexecuted public executable fixture").hexdigest()
+        document.update(qualification_profile="windows_private_engine_v1",
+                        public_test_binary_sha256=digest, public_server_sha256=digest,
+                        adapter_profile="windows_private_engine_adapters_v1", adapter_packages=[])
+        return document
+
+    def test_engine_unknown_profile_refuses_before_account(self):
+        document = self.engine_document()
+        document["qualification_profile"] = "windows_private_engine_v999"
+        self.assert_preaccount_refusal(self.invoke_engine(document), "Unknown canonical qualification profile")
+
+    def test_engine_package_subset_refuses_before_account(self):
+        self.assert_preaccount_refusal(self.invoke_engine(self.engine_document()), "Engine qualification requires exactly the eight owning packages")
+
+    def test_engine_public_executable_hash_is_bound(self):
+        document = self.engine_document()
+        document["public_server_sha256"] = "0" * 64
+        self.assert_preaccount_refusal(self.invoke_engine(document), "Engine public executables differ from the sealed source manifest")
+
+    def test_engine_builder_parses(self):
+        parser = self.root / "builder-parser.ps1"
+        parser.write_text("$e=$null; [Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$e) | Out-Null; if($e.Count){throw ($e | Out-String)}", encoding="utf-8")
+        for name in ["windows-engine-build.ps1", "windows-engine-check.ps1", "windows-engine-evidence.ps1"]:
+            result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(parser), str(ROOT / "acceptance" / name)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_engine_proof_rejects_unknown_skip_duplicate_and_tampered_case_identity(self):
+        script = self.root / "engine-proof.ps1"
+        script.write_text(r'''$ErrorActionPreference='Stop'
+$tokens=$null; $errors=$null
+[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$tokens,[ref]$errors) | Out-Null
+if($errors.Count){throw ($errors | Out-String)}
+$launcher=@($tokens | Where-Object {$_.Kind -eq 'HereStringLiteral'})
+if($launcher.Count -ne 1){throw 'Expected the actual shared launcher'}
+$ast=[Management.Automation.Language.Parser]::ParseInput($launcher[0].Value,[ref]$null,[ref]$errors)
+foreach($name in @('Get-CanonicalLogRecords','Test-CanonicalObservedPass','Test-CanonicalCasePair','Get-CanonicalPackageProof','Get-EnginePublicProof')) {
+ $found=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq $name},$true))
+ if($found.Count -ne 1){throw ('Expected actual profile helper '+$name)}
+ Invoke-Expression $found[0].Extent.Text
+}
+$entry=@{tests=@('TestOriginal','TestNative'); canonical_required_tests=@('TestNative'); canonical_original_assertions=@('TestOriginal'); canonical_skip_policy=@(@{test='TestOriginal';reason='exact unavailable capability';kind='platform-counterpart';paired='TestNative'})}
+$body="=== RUN   TestOriginal`n    fixture_test.go:1: exact unavailable capability`n--- SKIP: TestOriginal (0.00s)`n=== RUN   TestNative`n--- PASS: TestNative (0.00s)`n"
+$valid=Get-CanonicalPackageProof $entry $body 0 $true
+if(-not $valid.qualified -or $valid.classified_skips.Count -ne 1 -or $valid.original_assertions[0].original_outcome -cne 'SKIP'){throw ('Exact native pair must preserve the original SKIP: '+($valid | ConvertTo-Json -Depth 6 -Compress)+' records='+(@(Get-CanonicalLogRecords $body)|ConvertTo-Json -Compress))}
+foreach($invalid in @(($body.Replace('exact unavailable capability','unknown capability')),($body+"--- PASS: TestNative (0.00s)`n"),($body.Replace('--- PASS: TestNative','--- SKIP: TestNative')),($body.Replace('TestNative','TestUnknown')))) {
+ if((Get-CanonicalPackageProof $entry $invalid 0 $true).qualified){throw ('Unknown, duplicate, missing or skipped native evidence qualified: '+($invalid | ConvertTo-Json -Compress))}
+}
+$policy=@{paired='TestOriginal/same-object-case-contract'}
+$identity=@{kind='selected-directory-case-pair-v1';scope=$policy.paired;selected='C:\owner\state';counterpart='C:\owner\STATE';selected_identity=@(1,2,3);counterpart_identity=@(1,2,3);same_object=$true}
+# Absolute Windows paths are evaluated by the actual Windows parser in CI.
+# Use native rooted case spellings locally without pretending to observe NTFS.
+if(-not [IO.Path]::IsPathRooted($identity.selected)){$identity.selected='/owner/state';$identity.counterpart='/owner/STATE'}
+$records=@([pscustomobject]@{test=$policy.paired;text=('case_pair_evidence='+($identity|ConvertTo-Json -Compress))})
+if(-not (Test-CanonicalCasePair $policy $records)){throw 'Well-typed same-object evidence should parse'}
+$identity.counterpart_identity=@(1,2,4)
+$records[0].text='case_pair_evidence='+($identity|ConvertTo-Json -Compress)
+if(Test-CanonicalCasePair $policy $records){throw 'Different native identities were accepted'}
+$identity.counterpart_identity=@(1,2,3);$identity.unexpected=$true
+$records[0].text='case_pair_evidence='+($identity|ConvertTo-Json -Compress)
+if(Test-CanonicalCasePair $policy $records){throw 'Unknown evidence field was accepted'}
+$public=@{required_tests=@('TestPublic');required_assertions=@('TestPublic','TestPublic/child')}
+$publicBody="--- PASS: TestPublic (0.00s)`n    --- PASS: TestPublic/child (0.00s)`n"
+if(-not (Get-EnginePublicProof $public $publicBody 0).qualified){throw 'Exact complete public outcomes refused'}
+foreach($invalid in @(($publicBody+"    --- PASS: TestPublic/unknown (0.00s)`n"),($publicBody.Replace('PASS: TestPublic/child','SKIP: TestPublic/child')),($publicBody+"    --- PASS: TestPublic/child (0.00s)`n"))) {
+ if((Get-EnginePublicProof $public $invalid 0).qualified){throw 'Unknown, skipped or duplicate public child qualified'}
+}
+''', encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_host_exclusions_refuse_unqualified_or_wrong_source_evidence(self):
+        public = self.root / "public"
+        proof = self.root / "native-engine-proof"
+        public.mkdir()
+        proof.mkdir()
+        revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        manifest = dict(source_revision=revision, sdk_go_sha256="a" * 64, public_server_sha256="b" * 64)
+        report = dict(source_revision=revision, qualification_profile="windows_private_engine_v1",
+                      actual_standard_user=True, private_current_user_temp=True, public_source_and_sdk_read_only=True,
+                      qualification_complete=True, sdk_go_sha256="a" * 64, public_families=dict(qualified=True), packages=[])
+        core = dict(server_sha256="b" * 64, elevated=False, admin_member=False)
+        (public / "engine-build-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        (proof / "native-core-proof.json").write_text(json.dumps(core), encoding="utf-8")
+        environment = dict(os.environ, MAESTRO_ENGINE_PUBLIC_ROOT=str(public), RUNNER_TEMP=str(self.root),
+                           GITHUB_OUTPUT=str(self.root / "host-exclusions.txt"))
+        for source, message in [(revision, "Closed native owner/public assertion coverage is incomplete"),
+                                ("0" * 40, "Exact-source ordinary-account engine and shipping proof did not qualify")]:
+            report["source_revision"] = source
+            (proof / "engine-contract-results.json").write_text(json.dumps(report), encoding="utf-8")
+            result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(ROOT / "acceptance/windows-engine-check.ps1")],
+                                    cwd=ROOT, env=environment, capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(message, result.stdout + result.stderr)
+            self.assertFalse((self.root / "host-exclusions.txt").exists())
+
+    def test_current_companion_literals_are_closed_and_bound_to_source(self):
+        parser = self.root / "ledger.ps1"
+        parser.write_text(r'''$ErrorActionPreference='Stop'
+$errors=$null
+$ast=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$errors)
+if($errors.Count){throw ($errors | Out-String)}
+$helperAST=[Management.Automation.Language.Parser]::ParseFile($args[1],[ref]$null,[ref]$errors)
+$helper=@($helperAST.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Read-EngineLiteralArray'},$true))
+if($helper.Count -ne 1){throw 'Expected actual source literal reader'}
+Invoke-Expression $helper[0].Extent.Text
+$values=@{}
+foreach($name in @('$adapterParents','$adapterAssertions','$adapterCommandParents')) {
+ $assignment=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq $name},$true))
+ if($assignment.Count -ne 1){throw 'Expected one closed actual source declaration'}
+ $values[$name]=@(Read-EngineLiteralArray $assignment[0])
+ if($values[$name].Count -eq 0 -or @($values[$name]|Sort-Object -CaseSensitive -Unique).Count -ne $values[$name].Count){throw 'Source inventory is empty or duplicated'}
+}
+foreach($child in $values['$adapterAssertions']) {
+ if(($child -split '/')[0] -cnotin $values['$adapterParents']){throw 'Assertion is outside the exact selected source parents'}
+}
+foreach($parent in $values['$adapterParents']) {
+ if($parent -cnotin $values['$adapterAssertions']){throw 'Selected source parent is missing from outcome requirements'}
+}
+$values|ConvertTo-Json -Depth 4 -Compress
+''', encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(parser), str(DRIVER), str(ROOT / "acceptance/windows-engine-check.ps1")], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        ledger = json.loads(result.stdout)
+        self.assertEqual(len(ledger["$adapterParents"]), 51)
+        self.assertEqual(len(ledger["$adapterAssertions"]), 143)
+        self.assertEqual(len(ledger["$adapterCommandParents"]), 1)
+        for name in ("TestMethodPlansResolveMaintenanceKeepWikiUnavailable", "TestMethodPlansResolveRegisteredMaintenanceAndWiki"):
+            self.assertIn(name, ledger["$adapterParents"])
+            self.assertIn(name, ledger["$adapterAssertions"])
+        source = "\n".join(p.read_text() for p in (ROOT / "adapters/mcp").glob("*_test.go"))
+        for name in ledger["$adapterParents"]:
+            self.assertIn(f"func {name}(", source)
+        self.assertNotIn("TestCompiledClaudeHook", ledger["$adapterParents"])
+        self.assertNotIn("TestContentDesktopPacketOracle", ledger["$adapterParents"])
+        command = "\n".join(p.read_text() for p in (ROOT / "adapters/mcp/cmd/maestro-mcp").glob("*_test.go"))
+        for name in ledger["$adapterCommandParents"]:
+            self.assertIn(f"func {name}(", command)
+
+    def test_required_engine_parents_exist_in_actual_windows_build_files(self):
+        # Ask Go's build selector, not a filename-only scan: a !windows file
+        # can declare the exact required name while omitting it from the PE.
+        go = shutil.which("go")
+        self.assertIsNotNone(go, "The source inventory check requires the pinned Go tool")
+        parser = self.root / "required-parents.ps1"
+        parser.write_text(r'''$ErrorActionPreference='Stop'
+$ast=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$null)
+$assignments=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -cin @('$canonicalRequired','$originalAssertions','$adapterParents','$adapterCommandParents')},$true))
+if($assignments.Count -ne 4){throw 'Expected actual owning and companion source contracts'}
+foreach($assignment in $assignments){Invoke-Expression $assignment.Extent.Text}
+foreach($name in $originalAssertions.Keys){$canonicalRequired[$name]=@($canonicalRequired[$name]) + @($originalAssertions[$name])}
+$canonicalRequired['mcp']=$adapterParents
+$canonicalRequired['mcp-command']=$adapterCommandParents
+$canonicalRequired|ConvertTo-Json -Depth 4 -Compress
+''', encoding="utf-8")
+        required = subprocess.run([self.pwsh,"-NoProfile","-File",str(parser),str(DRIVER)],capture_output=True,text=True,timeout=30)
+        self.assertEqual(required.returncode,0,required.stdout+required.stderr)
+        required = json.loads(required.stdout)
+        temporary = self.root / "go-temp"
+        temporary.mkdir()
+        environment = dict(os.environ, GOOS="windows", GOARCH="amd64", GOTOOLCHAIN="local", GOENV="off", GOWORK="off",
+                           GOPROXY="off", GOSUMDB="off", GOFLAGS="-mod=readonly -buildvcs=false",
+                           GOCACHE=str(self.root / "go-cache"), GOPATH=str(self.root / "go-path"),
+                           GOMODCACHE=str(self.root / "go-path/pkg/mod"), GOTMPDIR=str(temporary), TMPDIR=str(temporary))
+        owning = sorted(set(required)-{"mcp","mcp-command"})
+        selected = {}
+        decoder = json.JSONDecoder()
+        for working, packages in ((ROOT,["./internal/"+name for name in owning]),
+                                  (ROOT/"adapters/mcp",[".","./cmd/maestro-mcp"])):
+            result = subprocess.run([go,"list","-e","-find","-json",*packages],cwd=working,env=environment,
+                                    capture_output=True,text=True,timeout=60)
+            self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+            remaining = result.stdout
+            while remaining.strip():
+                package, consumed = decoder.raw_decode(remaining.lstrip())
+                remaining = remaining.lstrip()[consumed:]
+                name = "mcp-command" if package["ImportPath"].endswith("/adapters/mcp/cmd/maestro-mcp") else package["ImportPath"].rsplit("/",1)[-1]
+                self.assertNotIn(name,selected)
+                selected[name] = package
+        self.assertEqual(set(selected),set(required))
+        import re
+        for name, assertions in required.items():
+            package = selected[name]
+            self.assertNotIn("Error",package,package.get("Error"))
+            files = package.get("TestGoFiles",[])+package.get("XTestGoFiles",[])
+            declarations = []
+            for filename in files:
+                declarations.extend(re.findall(r"^func (Test[A-Za-z0-9_]+)\(", (Path(package["Dir"])/filename).read_text(),re.M))
+            for parent in {assertion.split("/")[0] for assertion in assertions}:
+                self.assertEqual(declarations.count(parent),1,f"{name}/{parent} is missing or duplicated in actual Windows-selected source")

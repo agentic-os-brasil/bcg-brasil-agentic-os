@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -90,15 +89,9 @@ func TestPartialSourceDriftIsBlockedNotResumable(t *testing.T) {
 }
 
 func TestCopyFailureRetriesAfterPermissionRecovery(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows ACL failure is a native-device acceptance case; chmod does not remove write authority")
-	}
 	root, first, _ := interrupted(t)
 	staging := filepath.Join(root, control, "staging")
-	if err := os.Chmod(staging, 0500); err != nil {
-		t.Fatal(err)
-	}
-	defer os.Chmod(staging, 0700)
+	restore := migrationDenyWrite(t, staging)
 	failed := Run(root, Options{})
 	if failed.State != "partial" || len(failed.Errors) == 0 {
 		t.Fatalf("copy failure was hidden: %+v", failed)
@@ -106,9 +99,7 @@ func TestCopyFailureRetriesAfterPermissionRecovery(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, "brain/owner/b.md")); !os.IsNotExist(err) {
 		t.Fatal("failed copy created target")
 	}
-	if err := os.Chmod(staging, 0700); err != nil {
-		t.Fatal(err)
-	}
+	restore()
 	recovered := Run(root, Options{})
 	if recovered.State != "committed" || recovered.AttemptID != first.AttemptID {
 		t.Fatal(recovered)
@@ -190,15 +181,9 @@ func TestCommittedEditsKeepRuntimeAndLegacyReadable(t *testing.T) {
 	}
 }
 func TestReadOnlyDestinationReportsFailureWithoutSuccessMarker(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows ACL failure is a native-device acceptance case; chmod does not remove write authority")
-	}
 	root := t.TempDir()
 	put(t, root, "data/owner/a.md", "a")
-	if err := os.Chmod(root, 0500); err != nil {
-		t.Fatal(err)
-	}
-	defer os.Chmod(root, 0700)
+	migrationDenyWrite(t, root)
 	got := Run(root, Options{})
 	if got.State == "committed" {
 		t.Fatal("read-only destination reported success")
