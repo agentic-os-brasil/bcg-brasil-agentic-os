@@ -35,7 +35,7 @@ SOURCE_TREE="$(git -C "$SOURCE" rev-parse HEAD^{tree})"
   printf 'source_state=committed_clean_snapshot_sha256_identifies_exact_bytes\n'
   printf 'source_tree=%s\ntrust=unsigned_engineering_candidate\npublisher_authentication=unavailable_checksums_are_integrity_only\n' "$SOURCE_TREE"
   printf 'server_version=unavailable\npacket_label=0.0.0\nplatforms=darwin-arm64,darwin-amd64,windows-amd64\n'
-  printf 'darwin_arm64_evidence=built_actual_native_execution_requires_retained_receipt\ndarwin_amd64_evidence=cross_build_and_native_format_only\n'
+  printf 'darwin_arm64_evidence=built_actual_native_execution_requires_retained_receipt\ndarwin_amd64_evidence=cross_build_only_native_execution_unobserved\n'
   printf 'native_client_loading=not-yet-observed\nwindows_binary_evidence=cross_build_only_this_kit_requires_native_rehearsal\n'
   printf 'signed_install_update=unavailable\ndocling_unseeded=unavailable\nnative_agents_hooks=unavailable_without_attended_qualification\nwindows_darwin_jobs=unavailable\n'
 } > "$OUT/ARTIFACT.txt"
