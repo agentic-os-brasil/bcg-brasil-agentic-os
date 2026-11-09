@@ -57,6 +57,19 @@ try {
       working_directory=(Join-Path $sourceRoot ('internal/' + $package)); tests=$tests}
   }
 } finally { Pop-Location }
+$atlasBinary = Join-Path $binaryRoot 'atlasops.test.exe'
+Push-Location -LiteralPath $sourceRoot
+try {
+  & $sdkGo test -c ./internal/atlasops -o $atlasBinary
+  if ($LASTEXITCODE -ne 0) { throw 'Authored Atlas companion compilation failed.' }
+  $atlasInventory = @(& $atlasBinary '-test.list' '^(Test|Example)')
+  if ($LASTEXITCODE -ne 0 -or $atlasInventory.Count -eq 0 -or
+      @($atlasInventory | Sort-Object -CaseSensitive -Unique).Count -ne $atlasInventory.Count -or
+      @($atlasInventory | Where-Object { $_ -cnotmatch '^(Test|Example)[A-Za-z0-9_]*$' }).Count -ne 0) { throw 'Authored Atlas full inventory must be closed and unique.' }
+} finally { Pop-Location }
+$authoredPackage = [ordered]@{name='atlasops'; package='./internal/atlasops'; binary=$atlasBinary
+  sha256=(Get-FileHash -LiteralPath $atlasBinary -Algorithm SHA256).Hash.ToLowerInvariant()
+  working_directory=(Join-Path $sourceRoot 'internal/atlasops'); tests=$atlasInventory}
 $testBinary = Join-Path $binaryRoot 'mcp.test.exe'
 $server = Join-Path $binaryRoot 'maestro-mcp.exe'
 Push-Location -LiteralPath (Join-Path $sourceRoot 'adapters/mcp')
@@ -118,6 +131,7 @@ $manifest = [ordered]@{
   sdk_root=$sdkRoot; sdk_go=$sdkGo; sdk_go_sha256=(Get-FileHash -LiteralPath $sdkGo -Algorithm SHA256).Hash.ToLowerInvariant()
   vendor_files=$vendorFiles; adapter_vendor_files=$adapterVendorFiles; packages=$entries
   adapter_profile='windows_private_engine_adapters_v1'; adapter_packages=$adapterEntries
+  authored_package=$authoredPackage
   public_test_binary_sha256=(Get-FileHash -LiteralPath $testBinary -Algorithm SHA256).Hash.ToLowerInvariant()
   public_server_sha256=(Get-FileHash -LiteralPath $server -Algorithm SHA256).Hash.ToLowerInvariant()
 }

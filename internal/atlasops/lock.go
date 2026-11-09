@@ -1,7 +1,6 @@
 package atlasops
 
 import (
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/privatelock"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
@@ -19,7 +18,7 @@ func (engine *Engine) beginMutation() (func() error, error) {
 	if err := scheduler.EnsurePrivateDirectory(engine.journalDirPath("")); err != nil {
 		return nil, err
 	}
-	release, err := privatelock.Acquire(engine.journalDirPath("grants.lock"))
+	release, err := engine.acquireCorpusLock()
 	if err != nil {
 		return nil, err
 	}

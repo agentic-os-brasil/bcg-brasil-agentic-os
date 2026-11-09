@@ -161,17 +161,20 @@ func TestPendingWorkspaceAppendPreservesNewerContentAndExactRequest(t *testing.T
 }
 
 func TestInterruptedAtlasCreateFieldAndLinkRecoverThroughPublicMethods(t *testing.T) {
-	for _, operation := range []string{"create-page", "set-field", "link"} {
+	for _, operation := range []string{"create-page", "set-field", "link", "update-page"} {
 		t.Run(operation, func(t *testing.T) {
 			engine := testEngine(t)
 			page := "knowledge/notes.md"
-			if _, err := engine.CreatePage(CreatePageRequest{Page: page, Body: "# Notes\n\n- **Status:** draft\n\n## Evidence\n", Provenance: attended("initial")}); err != nil {
+			initial, err := engine.CreatePage(CreatePageRequest{Page: page, Body: "# Notes\n\n- **Status:** draft\n\n## Evidence\n", Provenance: attended("initial")})
+			if err != nil {
 				t.Fatal(err)
 			}
 			apply := func(engine *Engine) (Result, error) {
 				switch operation {
 				case "create-page":
 					return engine.CreatePage(CreatePageRequest{Page: "knowledge/created.md", Body: "# Created exactly once\n", Provenance: attended("effect")})
+				case "update-page":
+					return engine.UpdatePage(UpdatePageRequest{Page: page, Body: "# Updated exactly once\n", ExpectedRevision: initial.Revision, Provenance: attended("effect")})
 				case "set-field":
 					return engine.SetField(SetFieldRequest{Page: page, Field: "Status", Value: "reviewed", Provenance: attended("effect")})
 				default:
@@ -194,7 +197,7 @@ func TestInterruptedAtlasCreateFieldAndLinkRecoverThroughPublicMethods(t *testin
 			if err != nil || len(projection.Pages) != 1 {
 				t.Fatalf("missing recovered page: %+v %v", projection, err)
 			}
-			expected := map[string]string{"create-page": "# Created exactly once", "set-field": "- **Status:** reviewed", "link": "[Reviewed target](target.md)"}[operation]
+			expected := map[string]string{"create-page": "# Created exactly once", "set-field": "- **Status:** reviewed", "link": "[Reviewed target](target.md)", "update-page": "# Updated exactly once"}[operation]
 			if strings.Count(projection.Pages[0].Content, expected) != 1 {
 				t.Fatalf("wrong recovered content: %q", projection.Pages[0].Content)
 			}

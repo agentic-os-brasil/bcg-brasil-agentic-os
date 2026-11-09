@@ -1,5 +1,5 @@
 // Package workspacepolicy owns deterministic workspace and cross-case policy.
-// These checks admit paths at hook time; they are not filesystem race confinement.
+// These checks classify selected paths; filesystem race confinement stays with the owning reader/publisher.
 package workspacepolicy
 
 import (
@@ -9,6 +9,13 @@ import (
 	"path/filepath"
 	"strings"
 )
+
+func resolveExistingPolicyPath(path string) (string, error) {
+	if err := validatePolicyPath(path); err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(path)
+}
 
 // ResolveProspective resolves all existing ancestors, including symlink aliases
 // for paths whose final file does not exist. Broken aliases deny.
@@ -21,7 +28,7 @@ func ResolveProspective(p string) (string, error) {
 	for {
 		_, err = os.Lstat(p)
 		if err == nil {
-			r, e := filepath.EvalSymlinks(p)
+			r, e := resolveExistingPolicyPath(p)
 			if e != nil {
 				return "", e
 			}
@@ -54,7 +61,7 @@ func CasePathAllowed(root, p string) bool {
 	if err != nil {
 		return false
 	}
-	physicalRoot, err := filepath.EvalSymlinks(root)
+	physicalRoot, err := resolveExistingPolicyPath(root)
 	if err != nil {
 		return false
 	}
@@ -105,7 +112,7 @@ func CasePathAllowed(root, p string) bool {
 }
 
 func readMarker(p string) (string, error) {
-	physical, err := filepath.EvalSymlinks(p)
+	physical, err := resolveExistingPolicyPath(p)
 	if err != nil || !strings.EqualFold(physical, filepath.Clean(p)) {
 		return "", errors.New("aliased marker")
 	}

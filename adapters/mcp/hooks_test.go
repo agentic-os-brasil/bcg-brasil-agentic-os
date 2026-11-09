@@ -483,6 +483,24 @@ func TestCompiledClaudeHook(t *testing.T) {
 		if code != 1 {
 			t.Fatal("receipt alias was not refused")
 		}
+		// A failed nonblocking observation leaves the dispatch reservation as
+		// an identity fence, even when a later event omits both actor fields.
+		h := newHookFixture(t, binary)
+		hookOK(t, h, "UserPromptSubmit", nil)
+		hookAllow(t, h, dispatchFields("case", "case-agent"))
+		if _, _, code := h.call("SubagentStart", agentFields("wrong", "pa-expert")); code != 1 {
+			t.Fatal("mismatched correlation was not refused")
+		}
+		for _, pending := range []hookFixture{f, h} {
+			before := treeSnapshot(t, pending.home)
+			hookDeny(t, pending, toolFields("Bash", "unidentified-shell", map[string]any{"command": "printf safe"}))
+			hookDeny(t, pending, toolFields("Write", "unidentified-write", map[string]any{"file_path": "safe.md", "content": "PRIVATE_PENDING_SENTINEL"}))
+			hookAllow(t, pending, dispatchFields("case", "case-agent"))
+			hookDeny(t, pending, dispatchFields("other-dispatch", "case-agent"))
+			if !reflect.DeepEqual(before, treeSnapshot(t, pending.home)) {
+				t.Fatal("pending fence check or exact dispatch retry changed private state")
+			}
+		}
 		fields := toolFields("Read", "child-read", map[string]any{"file_path": "safe.md"})
 		fields["agent_id"] = "case"
 		fields["agent_type"] = "case-agent"

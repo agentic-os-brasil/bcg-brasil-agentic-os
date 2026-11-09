@@ -1,8 +1,8 @@
-# Retain only the exact sixteen bounded synthetic proof files.
+# Retain only the exact eighteen bounded synthetic proof files.
 $ErrorActionPreference = 'Stop'
 $evidence = Join-Path $env:RUNNER_TEMP 'native-engine-evidence'
 New-Item -ItemType Directory -Path $evidence -ErrorAction Stop | Out-Null
-$sources = @([pscustomobject]@{root=(Join-Path $env:RUNNER_TEMP 'native-engine-proof'); names=@('native-test.stdout.log', 'native-test.stderr.log', 'native-core-proof.json', 'engine-contract-results.json', 'engine-execution.log', 'engine-datahome.log', 'engine-ownerctx.log', 'engine-memory.log', 'engine-scheduler.log', 'engine-processidentity.log', 'engine-winprivate.log', 'engine-zipmigration.log', 'adapter-mcp.log', 'adapter-mcp-command.log', 'adapter-setup.log')})
+$sources = @([pscustomobject]@{root=(Join-Path $env:RUNNER_TEMP 'native-engine-proof'); names=@('native-test.stdout.log', 'native-test.stderr.log', 'native-core-proof.json', 'engine-contract-results.json', 'engine-execution.log', 'engine-datahome.log', 'engine-ownerctx.log', 'engine-memory.log', 'engine-scheduler.log', 'engine-processidentity.log', 'engine-winprivate.log', 'engine-zipmigration.log', 'adapter-mcp.log', 'adapter-mcp-command.log', 'adapter-setup.log', 'authored-atlas.log', 'adapter-authored.log')})
 if ($env:MAESTRO_ENGINE_PUBLIC_ROOT) {
   $sources += [pscustomobject]@{root=$env:MAESTRO_ENGINE_PUBLIC_ROOT; names=@('engine-build-manifest.json')}
 }

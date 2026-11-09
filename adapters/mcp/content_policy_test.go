@@ -366,7 +366,7 @@ func TestContentPolicyRealJourneys(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(binary), 0700); err != nil {
 		t.Fatal(err)
 	}
-	build := exec.Command("go", "build", "-mod=readonly", "-ldflags", "-X main.AuthorityRegistrySHA256="+seed, "-o", binary, "./cmd/maestro-mcp")
+	build := exec.Command("go", "build", "-mod=readonly", "-ldflags", "-X main.AuthorityRegistrySHA256="+seed+" -X main.Version=0.1.0 -X 'main.CompatibleBundle=>=0.1.0 <0.2.0'", "-o", binary, "./cmd/maestro-mcp")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("current production server build: %s %v", out, err)
 	}
@@ -602,9 +602,9 @@ func policyControls(t *testing.T, f ownerFixture, id string, source []byte, evid
 	client := connectContent(t, f, nil, "")
 	refusals := map[string]any{}
 	for _, selection := range []string{"../quoted.csv", filepath.Join(f.options.WorkspacePath, "quoted.csv")} {
-		got := contentCall(t, client, "maestro_apply", map[string]any{"operation": "content.convert", "source_path": selection}, false)["result"].(map[string]any)
-		if got["status"] != "blocked" || got["artifact_ref"] != nil {
-			t.Fatal("unsafe source admitted", got)
+		got := contentCall(t, client, "maestro_apply", map[string]any{"operation": "content.convert", "source_path": selection}, true)
+		if got["code"] != "content_rejected" || got["result"] != nil || got["artifact_ref"] != nil {
+			t.Fatal("unsafe source reached converter disclosure or publication", got)
 		}
 		refusals[selection] = got
 	}
