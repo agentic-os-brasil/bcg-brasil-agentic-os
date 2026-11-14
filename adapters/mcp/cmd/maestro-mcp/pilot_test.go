@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -140,6 +141,23 @@ func assertPilotCheckPackets(t *testing.T) {
 	}
 	if desktopSupported && (!strings.Contains(report.CodePrompt, report.WorkspaceID) || !strings.Contains(report.DesktopPrompt, report.WorkspaceID)) || !desktopSupported && (report.CodePrompt != "" || report.DesktopPrompt != "") {
 		t.Fatal("client guidance ignored native Desktop availability")
+	}
+	if desktopSupported {
+		for _, prompt := range []string{report.CodePrompt, report.DesktopPrompt} {
+			for _, selector := range []string{"execution.next somente com item_id", "lista estiver vazia, pule execution.next"} {
+				if !strings.Contains(prompt, selector) {
+					t.Fatalf("generated public prompt omits the required execution selector or empty-list branch: %s", selector)
+				}
+			}
+		}
+		for _, selector := range []string{"methods.plan com method_id", "methods.read com resource_uri", "instruction_uri", "4096", "next_offset", "brain.templates", "brain.create uma única vez com page e text", "A primeira operação na página deve ser brain.create", "independentemente do estado do recibo"} {
+			if !strings.Contains(report.CodePrompt, selector) {
+				t.Fatalf("generated public prompt omits a required method selector or read bound: %s", selector)
+			}
+		}
+		if gate, journey := strings.Index(report.CodePrompt, "Antes dos métodos ou de criar a página"), strings.Index(report.CodePrompt, "Quero testar explicitamente os métodos"); gate < 0 || journey <= gate {
+			t.Fatal("repeat-work gate must precede the method and page journey")
+		}
 	}
 	if report.KitID != kitID || !strings.Contains(report.Markdown, kitID) || !strings.Contains(report.Markdown, runtime.GOOS+"/"+runtime.GOARCH) {
 		t.Fatal("shareable Markdown lost the actual host or bounded local kit identifier")
@@ -505,6 +523,28 @@ func assertDesktopPilotNativeMaterialization(t *testing.T, binary, packet, archi
 	client := mcp.NewClient(&mcp.Implementation{Name: "desktop-materialization-contract", Version: "1"}, nil)
 	session, err := client.Connect(ctx, &mcp.CommandTransport{Command: cmd, TerminateDuration: time.Second}, nil)
 	if err != nil {
+		// Failure-only synthetic paths distinguish packet materialization from
+		// executable startup without changing the product's redacted diagnostics.
+		parent, parentErr := filepath.EvalSymlinks(filepath.Dir(selected))
+		physical := filepath.Join(parent, filepath.Base(selected))
+		physicalStatus, physicalErr := packaging.ValidatePacket(physical)
+		expectedImage, imageErr := filepath.EvalSymlinks(executable)
+		physicalServer := filepath.Join(physical, "server", filepath.Base(binary))
+		serverBody, serverErr := os.ReadFile(physicalServer)
+		sameImage := expectedImage == physicalServer
+		if runtime.GOOS == "windows" {
+			sameImage = strings.EqualFold(expectedImage, physicalServer)
+		}
+		t.Logf("desktop_materialization physical_root=%q parent_error=%v physical_validation=%v native_mode=%q physical_server=%q expected_child_image=%q image_resolution=%v image_path_equal=%t image_read=%v image_hash_equal=%t", physical, parentErr, physicalErr, physicalStatus.NativeMode, physicalServer, expectedImage, imageErr, sameImage, serverErr, fmt.Sprintf("%x", sha256.Sum256(serverBody)) == physicalStatus.ServerSHA256)
+		for _, probe := range [][]string{{"client-capabilities"}, append([]string{"inspect"}, args[1:]...)} {
+			probeContext, probeCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			var probeStderr bytes.Buffer
+			probeCommand := exec.CommandContext(probeContext, executable, probe...)
+			probeCommand.Stderr = &probeStderr
+			probeErr := probeCommand.Run()
+			t.Logf("desktop_materialization public_probe=%s error=%v timed_out=%t stderr=%q", probe[0], probeErr, probeContext.Err() != nil, probeStderr.String())
+			probeCancel()
+		}
 		t.Fatalf("actual emitted Desktop server cannot initialize through its ancestor alias: %v %s", err, stderr.String())
 	}
 	var metadata struct {
