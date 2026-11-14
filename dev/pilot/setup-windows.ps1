@@ -125,7 +125,7 @@ switch ((Get-Content -LiteralPath (Join-Path $Kit 'LIFECYCLE-CONTEXT.txt') -Raw)
 }
 & $bin plugin @common --server $bin --destination (Join-Path $Root 'exports/code') --version 0.0.0 @extra
 if ($LASTEXITCODE -ne 0) { Diagnose-Failure 'O pacote Code não foi concluído.' }
-& $bin mcpb @common --server $bin --destination (Join-Path $Root 'exports/maestro-product.mcpb') --version 0.0.0
+& $bin mcpb --desktop-pilot @common --server $bin --destination (Join-Path $Root 'exports/maestro-product.mcpb') --version 0.0.0
 if ($LASTEXITCODE -ne 0) { Diagnose-Failure 'O pacote Desktop não foi concluído.' }
 $code = @'
 $ErrorActionPreference = 'Stop'
@@ -145,7 +145,7 @@ try {
 $desktop = @'
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-Write-Host 'Confirme somente se não substituir outro ensaio Maestro. Use os campos de COMECE-AQUI.md.'
+Write-Host 'Confirme a extensão Maestro MCP — Ensaio indicada no relatório e seus caminhos preenchidos. Preserve outras extensões Maestro.'
 Start-Process -FilePath (Join-Path $root 'exports/maestro-product.mcpb')
 '@
 Write-New (Join-Path $Root 'launchers/Abrir Code.ps1') $code
@@ -168,8 +168,9 @@ Workspace:
 
     $Root\workspace
 
-Depois abra launchers/Abrir Desktop.cmd e confirme os mesmos campos.
-Se existir outra extensão maestro-product, pare antes de substituir.
+Depois abra launchers/Abrir Desktop.cmd e confirme a extensão Maestro MCP — Ensaio
+indicada no relatório. Os caminhos já vêm preenchidos para este ensaio.
+Se o cliente propuser substituir outra extensão, pare.
 
 workspace_id da criação real:
 

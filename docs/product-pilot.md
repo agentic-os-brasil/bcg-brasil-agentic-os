@@ -52,7 +52,22 @@ previous claim, resetting memory or altering another profile.
 Code launches a session-local plugin using a separate CLAUDE_CONFIG_DIR. Its
 supported userConfig prompts select the same external owner/workspace as
 Desktop's user_config prompts. See the [official Code manifest reference](https://code.claude.com/docs/en/plugins-reference#user-configuration).
-An existing Desktop extension with the same product name is an explicit stop,
+The prepared Desktop MCPB uses `mcpb --desktop-pilot`: an explicit engineering-only
+profile with a full workspace-ID extension name, a short visible rehearsal label
+and required directory defaults for the admitted owner/workspace. It is limited
+to ordinary unversioned `0.0.0` rehearsals and rejects signed/enrolled, stable,
+native and lifecycle profiles. The normal product identity and generic packet
+contract remain unchanged. The typed optional inventory binding regenerates the
+exact canonical manifest during validation. `pilot-check` matches it against the
+admitted preparation and includes the exact visible extension in its prompt.
+Packet startup also requires the exact prepared owner/workspace paths and current
+registered workspace ID/reference, so editing Desktop fields cannot redirect this
+extension to another admitted workspace.
+Legacy generic pilot archives remain diagnosable.
+
+Share the generic factory ZIP; the locally bound MCPB contains machine-local
+paths and must remain on the preparing machine. Each rehearsal can coexist with
+other Maestro extensions. An unexpected proposal to replace another extension is an explicit stop,
 not an automatic replacement.
 
 Preparation runs the existing executable's read-only `pilot-check` command and
