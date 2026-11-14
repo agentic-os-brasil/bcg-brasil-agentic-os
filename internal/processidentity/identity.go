@@ -51,11 +51,7 @@ func startupPin() executablePin {
 
 func pinExecutable(name string) executablePin {
 	p := executablePin{hint: name, err: ErrUnavailable, status: &pinStatus{}}
-	resolved, err := filepath.EvalSymlinks(name)
-	if err != nil || !filepath.IsAbs(resolved) {
-		return p
-	}
-	f, err := os.Open(resolved)
+	f, resolved, err := openExecutable(name)
 	if err != nil {
 		return p
 	}
@@ -84,6 +80,21 @@ func pinExecutable(name string) executablePin {
 	return p
 }
 
+// Windows canonicalization uses this opened file; the original hint is
+// reopened and checked against the retained file on every current() call.
+func openExecutable(name string) (*os.File, string, error) {
+	file, err := os.Open(name)
+	if err != nil {
+		return nil, "", ErrUnavailable
+	}
+	resolved, err := executableFilePath(file)
+	if err != nil || !filepath.IsAbs(resolved) {
+		file.Close()
+		return nil, "", ErrUnavailable
+	}
+	return file, resolved, nil
+}
+
 func sameFileVersion(left, right os.FileInfo) bool {
 	return right != nil && right.Mode().IsRegular() && os.SameFile(left, right) && left.Size() == right.Size() && left.ModTime().Equal(right.ModTime()) && left.Mode() == right.Mode()
 }
@@ -97,12 +108,17 @@ func (p executablePin) current() (Identity, error) {
 	if p.status.changed {
 		return Identity{}, ErrChanged
 	}
-	resolved, err := filepath.EvalSymlinks(p.hint)
-	if err != nil || resolved != p.identity.Path {
+	pathFile, resolved, err := openExecutable(p.hint)
+	if err != nil {
 		p.status.changed = true
 		return Identity{}, ErrChanged
 	}
-	pathInfo, err := os.Stat(resolved)
+	defer pathFile.Close()
+	if resolved != p.identity.Path {
+		p.status.changed = true
+		return Identity{}, ErrChanged
+	}
+	pathInfo, err := pathFile.Stat()
 	if err != nil || !sameFileVersion(p.info, pathInfo) {
 		p.status.changed = true
 		return Identity{}, ErrChanged

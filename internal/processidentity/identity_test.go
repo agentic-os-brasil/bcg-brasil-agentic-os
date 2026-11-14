@@ -5,8 +5,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"testing"
 )
@@ -23,6 +25,42 @@ func TestCurrentIsTheStartupExecutable(t *testing.T) {
 	sum := sha256.Sum256(body)
 	if identity.SHA256 != hex.EncodeToString(sum[:]) {
 		t.Fatal("startup digest differs from actual executable")
+	}
+	if runtime.GOOS == "windows" {
+		root := t.TempDir()
+		first, second, alias := filepath.Join(root, "first"), filepath.Join(root, "second"), filepath.Join(root, "image junction")
+		for _, dir := range []string{first, second} {
+			if err := os.Mkdir(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "image"), []byte("same synthetic image"), 0700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		junction := func(target string) {
+			t.Helper()
+			shell := filepath.Join(os.Getenv("SystemRoot"), "System32", "cmd.exe")
+			if out, err := exec.Command(shell, "/c", "mklink", "/J", alias, target).CombinedOutput(); err != nil {
+				t.Fatalf("ordinary junction fixture: %v %s", err, out)
+			}
+		}
+		junction(first)
+		p := pinExecutable(filepath.Join(alias, "image"))
+		if p.file == nil {
+			t.Fatal("junction image pin unavailable", p.err)
+		}
+		defer p.file.Close()
+		current, err := p.current()
+		if err != nil || !strings.EqualFold(current.Path, filepath.Join(first, "image")) {
+			t.Fatalf("junction image was not pinned to its physical file: %+v %v", current, err)
+		}
+		if err := os.Remove(alias); err != nil {
+			t.Fatal(err)
+		}
+		junction(second)
+		if _, err := p.current(); !errors.Is(err, ErrChanged) {
+			t.Fatal("retargeted junction adopted another image with identical bytes", err)
+		}
 	}
 }
 
