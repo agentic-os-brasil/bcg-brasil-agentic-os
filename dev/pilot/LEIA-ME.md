@@ -6,17 +6,15 @@ Este kit prepara um ensaio novo com produto, estado privado, workspace e perfil 
 
 ## Começar
 
-1. Extraia o ZIP inteiro para uma pasta local comum. No Windows, baixe do SharePoint/OneDrive e extraia fora da pasta sincronizada; reparse points e Files On-Demand, mesmo hidratados, não fazem parte deste fluxo.
-2. Crie uma pasta local `Developer` dentro do seu perfil, caso ela ainda não exista.
-3. No Mac, abra **Preparar Maestro.command**. No Windows x64, abra **Preparar Maestro.cmd**. Leia os caminhos apresentados e digite `PREPARAR` se forem os pretendidos.
-4. O preparador confere automaticamente o ensaio e indica o **RELATORIO.md**. Se houver bloqueio, envie esse Markdown ao time e preserve a pasta; nenhuma chamada ao modelo é feita pela conferência.
-5. Abra **Testar Maestro** na pasta `launchers` indicada. Escolha **Code** ou **Desktop**: o texto correto vai para a área de transferência. Cole uma vez na conversa do cliente. Comece pelo Code e depois retome no Desktop, como explica o **ROTEIRO.md**.
+1. Extraia o ZIP inteiro para uma pasta local comum e crie uma pasta `Developer` dentro do seu perfil, caso ela ainda não exista. No Windows, baixe do SharePoint/OneDrive e extraia fora da pasta sincronizada; reparse points e Files On-Demand, mesmo hidratados, não fazem parte deste fluxo.
+2. No Mac, abra **Preparar Maestro.command**. No Windows x64, abra **Preparar Maestro.cmd**. Leia os caminhos e digite `PREPARAR` se forem os pretendidos. O preparador confere o ensaio e indica o **RELATORIO.md**. Se houver bloqueio, envie esse Markdown ao time e preserve a pasta; a conferência não chama o modelo.
+3. Abra **Testar Maestro** na pasta `launchers` indicada. Escolha **Code** ou **Desktop**: o texto correto vai para a área de transferência. Cole uma vez na conversa do cliente. Comece pelo Code e depois retome no Desktop, como explica o **ROTEIRO.md**.
 
 O relatório automático registra a conexão MCP que ele próprio testou. Login, carregamento e permissões dos clientes, confirmação de gravações e execução real dos hooks continuam sendo observações suas. **COMECE-AQUI.md** guarda os valores de Owner directory e Workspace quando o cliente pedir.
 
 O Code abre com `--plugin-dir` e um `CLAUDE_CONFIG_DIR` específico deste ensaio. O preparador não instala plugins no seu perfil normal. Ao habilitar o plugin, preencha os campos pedidos com os valores de COMECE-AQUI.md.
 
-No Desktop, confirme a importação local da extensão **Maestro MCP — Ensaio …** indicada no relatório. Os dois caminhos já vêm preenchidos para este ensaio. Cada workspace tem sua própria extensão; preserve outras extensões Maestro. Se o cliente propuser substituir uma extensão de outro ensaio, pare e compartilhe o diagnóstico. Ao escolher Desktop em **Testar Maestro**, o launcher abre a importação para sua confirmação.
+Ao escolher Desktop em **Testar Maestro**, confirme a instalação da extensão **Maestro MCP — Ensaio …** indicada no relatório. Ela já usa as pastas aprovadas na preparação; não há caminhos para copiar ou campos de diretório para salvar. Em **Configurações → Extensões**, abra **Configurar** nessa extensão e confira **Ativado**. Cada workspace tem sua própria extensão; preserve outras extensões Maestro e pare se o cliente propuser substituir uma de outro ensaio. A etapa termina quando o prompt responder com o workspace esperado, não apenas quando a chave aparecer ativada.
 
 Se o sistema, a política PowerShell ou o cliente recusar o arquivo, preserve a mensagem e pare. O kit não muda políticas, remove quarentena, faz login ou desativa controles. Autentique somente na interface normal do cliente.
 
@@ -27,7 +25,7 @@ Se o sistema, a política PowerShell ou o cliente recusar o arquivo, preserve a 
 - Memória aceita e memória recusada pelo fluxo real de confirmação.
 - Criação e leitura de uma página sintética do segundo cérebro pelo MCP.
 
-Os pacotes contêm os recursos canônicos; recursos listados não provam que suas dependências estejam disponíveis. O Code comum inclui as projeções de agentes. Hooks de contexto passivo só entram quando o publicador selecionou essa opção em LIFECYCLE-CONTEXT.txt; isso não qualifica bloqueio de ferramentas, delegação ou execução nativa. Desktop carrega recursos MCP, sem instalar hooks/agentes nativos do Code ou Desktop Skills.
+Os pacotes contêm os recursos canônicos; recursos listados não provam que suas dependências estejam disponíveis. O canon de agentes está disponível como recurso MCP; ativação nativa depende de qualificação separada. Hooks de contexto passivo só entram quando o publicador selecionou essa opção em LIFECYCLE-CONTEXT.txt; isso não qualifica bloqueio de ferramentas, delegação ou execução nativa. Desktop carrega recursos MCP, sem instalar hooks/agentes nativos do Code ou Desktop Skills.
 
 Conversão sem runtime offline admitido, instalação/atualização assinada sem autoridade organizacional, capacidades nativas sem qualificação e jobs Darwin no Windows permanecem indisponíveis. Operações que não garantem preservar alterações concorrentes retornam pendência/manual; este ensaio não dispensa essa garantia.
 

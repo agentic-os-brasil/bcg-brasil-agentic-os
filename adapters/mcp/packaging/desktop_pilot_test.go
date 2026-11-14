@@ -3,8 +3,11 @@ package packaging
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 )
 
 func TestDesktopPilotProfileRefusesOtherAuthorities(t *testing.T) {
@@ -68,5 +71,24 @@ func TestDesktopPilotInventoryBindingIsClosed(t *testing.T) {
 	other.WorkspaceID = strings.Repeat("a", 31) + "b"
 	if admitted.Name() == other.Name() {
 		t.Fatal("different workspaces share a Desktop identity")
+	}
+	for _, name := range []string{"literal $ $() 'quote' & space", "literal \"double quote\""} {
+		if runtime.GOOS == "windows" && strings.Contains(name, `"`) {
+			continue
+		}
+		p := admitted
+		p.UserHome = filepath.Join(root, name, "owner")
+		p.Workspace = filepath.Join(root, name, "workspace")
+		if err := p.validate(); err != nil {
+			t.Fatalf("literal path metacharacters refused: %v", err)
+		}
+	}
+	for _, token := range []string{"${__dirname}", "${user_config.workspace}"} {
+		p := admitted
+		p.UserHome = filepath.Join(root, token, "owner")
+		p.Workspace = filepath.Join(root, token, "workspace")
+		if err := p.ValidateSelection(product.Options{UserHome: p.UserHome, WorkspacePath: p.Workspace}); err == nil || !strings.Contains(err.Error(), "without ${") {
+			t.Fatalf("reserved MCPB interpolation accepted or not diagnosed: %v", err)
+		}
 	}
 }

@@ -72,6 +72,27 @@ func assertPilotCheckPackets(t *testing.T) {
 		}
 		assertDesktopPilotManifest(t, options.Destination, owner, work, out)
 		assertDesktopPilotRuntimeSelection(t, binary, options.Destination, options.Binding)
+		for _, token := range []string{"${__dirname}", "${user_config.workspace}"} {
+			root := filepath.Join(t.TempDir(), token)
+			productRoot, userHome, workspace := filepath.Join(root, "product"), filepath.Join(root, "owner"), filepath.Join(root, "workspace")
+			for _, path := range []string{productRoot, userHome} {
+				if err := os.MkdirAll(path, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			selection := []string{"--product-root", productRoot, "--user-home", userHome, "--workspace", workspace}
+			if output, err := exec.Command(binary, append([]string{"init"}, selection...)...).CombinedOutput(); err != nil {
+				t.Fatalf("admit literal interpolation fixture: %v %s", err, output)
+			}
+			destination := filepath.Join(root, "exports", "refused.mcpb")
+			output, err := exec.Command(binary, append([]string{"mcpb", "--desktop-pilot", "--server", binary, "--destination", destination, "--version", "0.0.0"}, selection...)...).CombinedOutput()
+			if err == nil || !strings.Contains(string(output), "without ${") {
+				t.Fatalf("public Desktop export accepted or misdiagnosed reserved interpolation: %v %s", err, output)
+			}
+			if _, err := os.Lstat(filepath.Dir(destination)); !os.IsNotExist(err) {
+				t.Fatalf("reserved interpolation created export material: %v", err)
+			}
+		}
 	}
 	snapshot := func() map[string]string {
 		files := map[string]string{}
@@ -251,8 +272,8 @@ func TestPilotCheckRejectsUnsupportedFlagsAsJSON(t *testing.T) {
 	}
 }
 
-// The public pilot command must coexist with the ordinary extension and prefill
-// only this admitted rehearsal's paths before the client asks for confirmation.
+// The public pilot command must coexist with the ordinary extension and start
+// with its admitted paths, without requiring client-owned configuration.
 func assertDesktopPilotManifest(t *testing.T, archive, owner, work string, preparation []byte) {
 	t.Helper()
 	var prepared struct {
@@ -280,12 +301,14 @@ func assertDesktopPilotManifest(t *testing.T, archive, owner, work string, prepa
 			t.Fatal(err)
 		}
 		var manifest struct {
-			Name        string `json:"name"`
-			DisplayName string `json:"display_name"`
-			UserConfig  map[string]struct {
-				Default, Type string
-				Required      bool
-			} `json:"user_config"`
+			Name        string          `json:"name"`
+			DisplayName string          `json:"display_name"`
+			UserConfig  json.RawMessage `json:"user_config"`
+			Server      struct {
+				Config struct {
+					Args []string `json:"args"`
+				} `json:"mcp_config"`
+			} `json:"server"`
 		}
 		if err := json.Unmarshal(body, &manifest); err != nil {
 			t.Fatal(err)
@@ -293,19 +316,20 @@ func assertDesktopPilotManifest(t *testing.T, archive, owner, work string, prepa
 		if manifest.Name != "maestro-pilot-"+prepared.WorkspaceID || manifest.DisplayName != "Maestro MCP — Ensaio "+prepared.WorkspaceID[:8] {
 			t.Fatalf("Desktop identity is not isolated: %+v", manifest)
 		}
-		for key, path := range map[string]string{"user_home": owner, "workspace": work} {
-			field := manifest.UserConfig[key]
-			if field.Default != path || field.Type != "directory" || !field.Required {
-				t.Fatalf("Desktop selection %s is not prefilled and confirmed: %+v", key, field)
-			}
+		if len(manifest.UserConfig) != 0 {
+			t.Fatal("Desktop pilot still requires client-owned user_config before server launch")
+		}
+		wantArgs := []string{"serve", "--packet", "--product-root", "${__dirname}", "--user-home", owner, "--workspace", work}
+		if !reflect.DeepEqual(manifest.Server.Config.Args, wantArgs) {
+			t.Fatalf("Desktop server is not bound to its prepared paths: %q", manifest.Server.Config.Args)
 		}
 		return
 	}
 	t.Fatal("Desktop manifest missing")
 }
 
-// Stay in the existing native command admission family: Desktop configuration
-// remains editable, so startup must enforce the prepared identity independently.
+// Stay in the existing native command admission family: startup independently
+// enforces the prepared identity even if a caller changes the selected paths.
 func assertDesktopPilotRuntimeSelection(t *testing.T, binary, archive string, binding product.Options) {
 	t.Helper()
 	packet := filepath.Join(t.TempDir(), "desktop packet")
@@ -378,5 +402,36 @@ func assertDesktopPilotRuntimeSelection(t *testing.T, binary, archive string, bi
 	}
 	if err := wrong.ValidateSelection(binding); err == nil || !strings.Contains(err.Error(), "identity mismatch") {
 		t.Fatalf("Desktop binding accepted wrong current workspace identity: %v", err)
+	}
+	inventoryPath := filepath.Join(packet, packaging.InventoryName)
+	original, err := os.ReadFile(inventoryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var inventory map[string]json.RawMessage
+	if err := json.Unmarshal(original, &inventory); err != nil {
+		t.Fatal(err)
+	}
+	for _, token := range []string{"${__dirname}", "${user_config.workspace}"} {
+		wrong := *status.DesktopPilot
+		wrong.UserHome = filepath.Join(filepath.Dir(binding.UserHome), token, "owner")
+		wrong.Workspace = filepath.Join(filepath.Dir(binding.UserHome), token, "workspace")
+		inventory["desktop_pilot"], err = json.Marshal(wrong)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := json.Marshal(inventory)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(inventoryPath, body, 0644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := packaging.ValidatePacket(packet); err == nil || !strings.Contains(err.Error(), "without ${") {
+			t.Fatalf("canonical packet accepted or misdiagnosed reserved MCPB interpolation: %v", err)
+		}
+	}
+	if err := os.WriteFile(inventoryPath, original, 0644); err != nil {
+		t.Fatal(err)
 	}
 }

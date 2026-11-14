@@ -137,7 +137,7 @@ func runPilotCheck(ctx context.Context, args []string, output io.Writer) error {
 			r.add("desktop_binding", "failed", "desktop_pilot_binding_mismatch", "Preserve o ensaio e prepare um novo pacote para este workspace.")
 		} else {
 			r.DesktopExtension = pilot.DisplayName()
-			r.add("desktop_binding", "passed", "isolated_desktop_defaults_match_preparation", "")
+			r.add("desktop_binding", "passed", "isolated_desktop_binding_matches_preparation", "")
 		}
 	}
 	if _, err := exec.LookPath("claude"); err == nil {
@@ -378,7 +378,7 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 	if r.Status != "blocked" && pilotWorkspaceID.MatchString(r.WorkspaceID) {
 		r.CodePrompt, r.DesktopPrompt = pilotPrompts(r.WorkspaceID)
 		if r.DesktopExtension != "" {
-			r.DesktopPrompt = fmt.Sprintf("Use a extensão %q deste ensaio e confirme os caminhos preenchidos na importação. ", r.DesktopExtension) + r.DesktopPrompt
+			r.DesktopPrompt = fmt.Sprintf("Use a extensão %q deste ensaio, vinculada às pastas aprovadas na preparação. ", r.DesktopExtension) + r.DesktopPrompt
 		}
 	}
 	var md strings.Builder
@@ -396,7 +396,7 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 		fmt.Fprintf(&md, "Workspace verificado: `%s`.\n\n", r.WorkspaceID)
 	}
 	if r.DesktopExtension != "" {
-		fmt.Fprintf(&md, "Extensão Desktop deste ensaio: **%s**. Confirme os caminhos preenchidos ao importar.\n\n", r.DesktopExtension)
+		fmt.Fprintf(&md, "Extensão Desktop deste ensaio: **%s**. Confirme sua instalação; ela já está vinculada às pastas aprovadas na preparação.\n\n", r.DesktopExtension)
 	}
 	md.WriteString("| Verificação | Estado | Motivo | Próxima ação |\n| --- | --- | --- | --- |\n")
 	for _, check := range r.Checks {

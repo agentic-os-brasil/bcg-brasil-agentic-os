@@ -71,9 +71,8 @@ func portableMetadata(format, platform, version string, stable *stablePacketBind
 		if pilot != nil {
 			manifest["name"], manifest["display_name"] = pilot.Name(), pilot.DisplayName()
 			manifest["description"] = "Local engineering rehearsal; uses only its prepared owner and workspace."
-			selection := manifest["user_config"].(map[string]any)
-			selection["user_home"].(map[string]any)["default"] = pilot.UserHome
-			selection["workspace"].(map[string]any)["default"] = pilot.Workspace
+			delete(manifest, "user_config")
+			manifest["server"].(map[string]any)["mcp_config"].(map[string]any)["args"] = []string{"serve", "--packet", "--product-root", "${__dirname}", "--user-home", pilot.UserHome, "--workspace", pilot.Workspace}
 		}
 		body, err := json.MarshalIndent(manifest, "", "  ")
 		if err != nil {
@@ -85,7 +84,7 @@ func portableMetadata(format, platform, version string, stable *stablePacketBind
 	files["skills/resume/SKILL.md"] = []byte(resume)
 	files["README-PACKET.md"] = []byte("# Portable Maestro packet\n\nSelect Owner directory and Workspace in the client configuration; no builder's private binding is included. Use only paths outside this packet. Startup never initializes state.\n\nPreparation: run the emitted " + server + " with `init --packet --product-root <this-packet> --user-home <selected-owner> --workspace <selected-workspace>`. Server uses `serve` with the same explicit selection. Doctor uses the existing `inspect` command with those arguments. Run preparation only after explicit approval; it does not install a service, acquire a model/runtime or change client settings.\n\nManaged files are immutable during these operations. The packet inventory records their bytes and modes and excludes itself. It is an integrity diagnostic, not publisher identity or owner approval. MCPB method files are inert canonical resources, not an assertion of native Desktop Skills installation.\n")
 	if pilot != nil {
-		files["README-PACKET.md"] = []byte("# Local Maestro Desktop rehearsal\n\nConfirm the prefilled owner and workspace in the client. This engineering MCPB is bound to this machine and workspace: do not redistribute it. Share the generic pilot kit instead. The unique extension name keeps other Maestro installations separate. Inventory is an integrity diagnostic, not publisher authority or proof of native loading.\n")
+		files["README-PACKET.md"] = []byte("# Local Maestro Desktop rehearsal\n\nConfirm installation of the named rehearsal extension in the client. Its server uses the exact owner and workspace approved during preparation; no directory configuration is required. This engineering MCPB is bound to this machine and workspace: do not redistribute it. Share the generic pilot kit instead. The unique extension name keeps other Maestro installations separate. Inventory is an integrity diagnostic, not publisher authority or proof of native loading.\n")
 	}
 	if lifecycle != nil && stable == nil {
 		if err := lifecycleLocalMetadata(files, platform, lifecycle); err != nil {

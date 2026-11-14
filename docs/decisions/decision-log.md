@@ -1448,3 +1448,14 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: A locally prepared MCPB contains machine-local paths and is not redistributable; the factory ZIP remains generic. Separate workspaces coexist with existing Maestro extensions. Normal client import, permissions, actual loading and runtime qualification remain separate gates. Existing generic rehearsals remain diagnosable.
 - Refs: specs/063-product-native-plugin.md; docs/product-pilot.md; adapters/mcp/packaging/desktop_pilot.go; adapters/mcp/cmd/maestro-mcp/pilot_test.go
 - Supersedes: none
+
+## DPFX - Bind local Desktop rehearsal launch without client directory configuration
+
+- Date: 2026-11-14
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: A real local rehearsal on Claude Desktop 4.23118.0 displayed both required directory defaults and an enabled extension, but persisted no MCP configuration and skipped the extension before server launch. The engineering pilot already records the admitted paths in its typed inventory and independently checks the current workspace binding at startup.
+- Decision: For the explicit ordinary unversioned Desktop pilot only, put the exact prepared owner/workspace paths in the server argument vector and omit user_config. Reject the reserved interpolation start `${` in either bound path before export and during packet validation; do not invent MCPB escaping or reject ordinary literal dollar signs, shell-substitution text, quotes or spaces. Preserve its unique workspace-derived identity, canonical manifest validation, runtime binding guard and exclusions of signed/enrolled, stable, native and lifecycle profiles. Generic packets retain external directory selection. Explicit local preparation review, native installation and permissions remain required.
+- Consequences: The local pilot no longer relies on a client saving redundant directory defaults before launch. Its machine-local MCPB remains non-redistributable; only the generic factory ZIP is shareable. Rebuild a participant-local pilot to adopt this contract; do not rewrite an existing packet. Import, connection, tool visibility and actual runtime behavior remain separately observed evidence.
+- Refs: specs/063-product-native-plugin.md; docs/product-pilot.md; adapters/mcp/packaging/portable.go; adapters/mcp/cmd/maestro-mcp/pilot_test.go; issue #527
+- Supersedes: DPIL

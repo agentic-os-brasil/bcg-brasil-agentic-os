@@ -46,6 +46,8 @@ func main() {
 		}
 		if errors.Is(err, product.ErrSourceRecoveryRequired) {
 			fmt.Fprintln(os.Stderr, "maestro: signed source recovery required; use the independently admitted local maestro-install source-review/source-check route before restarting")
+		} else if errors.Is(err, packaging.ErrDesktopPilotInterpolation) {
+			fmt.Fprintln(os.Stderr, "maestro: Desktop rehearsal path contains MCPB interpolation; select a local rehearsal path without ${")
 		} else if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "maintenance-") {
 			fmt.Fprintln(os.Stderr, "maestro: maintenance operation refused; inspect maintenance-status, review JSON stdin with maintenance-review, then maintenance-apply with the same request, exact --review-digest and explicit --confirm")
 		} else if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "knowledge-") {
@@ -115,7 +117,7 @@ func run() error {
 	var proposalID, reviewDigest, track string
 	var confirmed, packet, lifecycleContext, desktopPilot bool
 	if os.Args[1] == "mcpb" {
-		flags.BoolVar(&desktopPilot, "desktop-pilot", false, "isolate this local engineering rehearsal and prefill its prepared Desktop paths")
+		flags.BoolVar(&desktopPilot, "desktop-pilot", false, "isolate this local engineering rehearsal and bind its exact prepared Desktop paths")
 	}
 	if os.Args[1] == "plugin" {
 		flags.BoolVar(&lifecycleContext, "lifecycle-context", false, "include explicitly selected passive lifecycle context hooks")

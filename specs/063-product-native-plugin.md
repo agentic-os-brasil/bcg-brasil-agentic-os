@@ -93,17 +93,23 @@ acceptance remain separately observed gates, never inferred from an SDK check.
 
 For an ordinary unversioned engineering rehearsal only, explicit `mcpb
 --desktop-pilot` emits a local Desktop identity derived from the full admitted
-workspace ID, with a short visible rehearsal label and required owner/workspace
-directory defaults. Its typed optional inventory binding reconstructs the exact
+workspace ID and a short visible rehearsal label. Under DPFX its server argument
+vector contains the exact prepared owner/workspace paths and omits `user_config`;
+required directory defaults do not establish saved client configuration. Its typed
+optional inventory binding reconstructs the exact
 canonical manifest; the read-only pilot check compares paths and identity with
 the admitted preparation before generating the named Desktop prompt. Packet
 startup independently enforces the same owner/workspace paths, current registered
-workspace ID and reference for init, inspect and serve; editable client fields
-cannot select a different admitted workspace under this rehearsal identity. The profile
+workspace ID and reference for init, inspect and serve; another caller cannot
+select a different admitted workspace under this rehearsal identity. The profile
 requires the prepared sibling product/owner/workspace layout and packet label
 0.0.0. It rejects stable, signed/enrolled, native and lifecycle inputs. Generic
 packets retain their existing identity and path-free distribution contract.
 This local MCPB is not redistributable; only the generic kit is shareable.
+Reject the reserved interpolation start `${` in either bound path before export
+and during packet validation, with a finite action to select another local
+rehearsal path. Do not assume an MCPB literal-escaping contract. Ordinary dollar
+signs, shell-substitution text, quotes and spaces retain their literal argv values.
 Installation and permissions still require normal client confirmation, and real
 Desktop loading remains separately observed. Existing generic rehearsals remain
 diagnosable without silently becoming isolated extensions.
