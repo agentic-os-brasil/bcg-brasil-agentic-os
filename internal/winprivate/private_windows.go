@@ -167,7 +167,7 @@ func ntOpenShared(parent windows.Handle, name string, access, disposition, optio
 		if status, ok := err.(windows.NTStatus); ok {
 			err = status.Errno()
 		}
-		return windows.InvalidHandle, withReason(ErrInspectionFailed, &os.PathError{Op: "NtCreateFile", Path: name, Err: err})
+		return windows.InvalidHandle, &os.PathError{Op: "NtCreateFile", Path: name, Err: err}
 	}
 	return h, nil
 }

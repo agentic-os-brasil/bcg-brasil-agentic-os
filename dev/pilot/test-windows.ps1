@@ -48,14 +48,33 @@ if (-not (Test-Path -LiteralPath $diagnostics)) { New-Item -ItemType Directory -
 $run = Join-Path $diagnostics ('teste-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $run | Out-Null
 $common = @('--product-root',(Join-Path $root 'product'),'--user-home',(Join-Path $root 'owner'),'--workspace',(Join-Path $root 'workspace'))
-$previousPreference = $ErrorActionPreference
-$json = @()
+$start = [Diagnostics.ProcessStartInfo]::new()
+$start.FileName = $bin
+$start.UseShellExecute = $false
+$start.CreateNoWindow = $true
+$start.RedirectStandardOutput = $true
+$start.RedirectStandardError = $true
+$start.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)
+# Fixed flags and Windows leaf paths avoid shell parsing and trailing-slash quoting.
+foreach ($argument in $common) { if ($argument -match '["\x00-\x1f]') { Fail 'Argumento inválido; preserve a preparação.' } }
+$start.Arguments = 'pilot-check ' + (($common | ForEach-Object { '"' + $_ + '"' }) -join ' ')
+$process = [Diagnostics.Process]::new()
+$process.StartInfo = $start
+$json = ''
 $status = 1
 try {
-  $ErrorActionPreference = 'Continue'
-  $json = & $bin pilot-check @common 2>$null
-  $status = $LASTEXITCODE
-} finally { $ErrorActionPreference = $previousPreference }
+  if (-not $process.Start()) { throw 'start' }
+  $stdout = $process.StandardOutput.ReadToEndAsync()
+  $stderr = $process.StandardError.ReadToEndAsync()
+  if (-not $process.WaitForExit(60000)) {
+    $process.Kill()
+    $process.WaitForExit()
+    throw 'timeout'
+  }
+  $json = $stdout.GetAwaiter().GetResult()
+  $null = $stderr.GetAwaiter().GetResult()
+  $status = $process.ExitCode
+} catch { $json = ''; $status = 1 } finally { $process.Dispose() }
 Write-New (Join-Path $run 'report.json') (($json -join "`n") + "`n")
 try {
   $report = ($json -join "`n") | ConvertFrom-Json
