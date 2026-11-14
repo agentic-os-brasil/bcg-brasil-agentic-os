@@ -138,7 +138,7 @@ func runPilotPowerShell(t *testing.T, profile, script string, args ...string) []
 	cmd := exec.CommandContext(ctx, "powershell.exe", arguments...)
 	for _, entry := range os.Environ() {
 		key := strings.ToUpper(strings.SplitN(entry, "=", 2)[0])
-		if key != "MAESTRO_HOME" && key != "USERPROFILE" && key != "HOME" {
+		if key != "MAESTRO_HOME" && key != "USERPROFILE" && key != "HOME" && key != "PSMODULEPATH" {
 			cmd.Env = append(cmd.Env, entry)
 		}
 	}

@@ -150,8 +150,8 @@ Start-Process -FilePath (Join-Path $root 'exports/maestro-product.mcpb')
 '@
 Write-New (Join-Path $Root 'launchers/Abrir Code.ps1') $code
 Write-New (Join-Path $Root 'launchers/Abrir Desktop.ps1') $desktop
-Write-New (Join-Path $Root 'launchers/Abrir Code.cmd') ('@echo off' + [char]13 + $nl + 'powershell.exe -NoLogo -NoProfile -File "%~dp0Abrir Code.ps1"' + [char]13 + $nl)
-Write-New (Join-Path $Root 'launchers/Abrir Desktop.cmd') ('@echo off' + [char]13 + $nl + 'powershell.exe -NoLogo -NoProfile -File "%~dp0Abrir Desktop.ps1"' + [char]13 + $nl)
+Write-New (Join-Path $Root 'launchers/Abrir Code.cmd') ('@echo off' + [char]13 + $nl + 'setlocal' + [char]13 + $nl + 'set "PSModulePath="' + [char]13 + $nl + 'powershell.exe -NoLogo -NoProfile -File "%~dp0Abrir Code.ps1"' + [char]13 + $nl)
+Write-New (Join-Path $Root 'launchers/Abrir Desktop.cmd') ('@echo off' + [char]13 + $nl + 'setlocal' + [char]13 + $nl + 'set "PSModulePath="' + [char]13 + $nl + 'powershell.exe -NoLogo -NoProfile -File "%~dp0Abrir Desktop.ps1"' + [char]13 + $nl)
 $start = @"
 # Maestro MCP — teste guiado
 
