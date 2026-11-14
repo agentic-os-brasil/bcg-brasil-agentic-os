@@ -46,6 +46,8 @@ func main() {
 		}
 		if errors.Is(err, product.ErrSourceRecoveryRequired) {
 			fmt.Fprintln(os.Stderr, "maestro: signed source recovery required; use the independently admitted local maestro-install source-review/source-check route before restarting")
+		} else if errors.Is(err, packaging.ErrDesktopPilotInterpolation) {
+			fmt.Fprintln(os.Stderr, "maestro: Desktop rehearsal path contains MCPB interpolation; select a local rehearsal path without ${")
 		} else if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "maintenance-") {
 			fmt.Fprintln(os.Stderr, "maestro: maintenance operation refused; inspect maintenance-status, review JSON stdin with maintenance-review, then maintenance-apply with the same request, exact --review-digest and explicit --confirm")
 		} else if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "knowledge-") {
@@ -66,7 +68,8 @@ func run() error {
 	if len(os.Args) > 1 && os.Args[1] == "pilot-check" {
 		return runPilotCheck(context.Background(), os.Args[2:], os.Stdout)
 	}
-	if _, err := processidentity.Current(); err != nil {
+	running, err := processidentity.Current()
+	if err != nil {
 		return err
 	}
 	if len(os.Args) < 2 {
@@ -115,7 +118,7 @@ func run() error {
 	var proposalID, reviewDigest, track string
 	var confirmed, packet, lifecycleContext, desktopPilot bool
 	if os.Args[1] == "mcpb" {
-		flags.BoolVar(&desktopPilot, "desktop-pilot", false, "isolate this local engineering rehearsal and prefill its prepared Desktop paths")
+		flags.BoolVar(&desktopPilot, "desktop-pilot", false, "isolate this local engineering rehearsal and bind its exact prepared Desktop paths")
 	}
 	if os.Args[1] == "plugin" {
 		flags.BoolVar(&lifecycleContext, "lifecycle-context", false, "include explicitly selected passive lifecycle context hooks")
@@ -170,10 +173,11 @@ func run() error {
 	if packet {
 		switch os.Args[1] {
 		case "init", "serve", "inspect", "hook", "lifecycle-hook", "native-startup-check", "native-qualification-hook", "native-scope-guard":
-			status, err := packaging.ValidatePacket(o.ProductRoot)
+			root, status, err := runtimePacketRoot(o.ProductRoot, running)
 			if err != nil {
 				return err
 			}
+			o.ProductRoot = root
 			if status.DesktopPilot != nil {
 				if err := status.DesktopPilot.ValidateSelection(o); err != nil {
 					return err

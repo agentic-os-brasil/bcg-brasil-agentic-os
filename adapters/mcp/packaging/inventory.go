@@ -58,9 +58,10 @@ type PacketStatus struct {
 }
 
 type packetSource struct {
-	read       func(string, int64) ([]byte, error)
-	scan       func() ([]packetFile, error)
-	exactModes bool
+	read          func(string, int64) ([]byte, error)
+	scan          func() ([]packetFile, error)
+	inventoryMode func() (os.FileMode, error)
+	exactModes    bool
 }
 
 func directoryPacketSource(root string) packetSource {
@@ -84,7 +85,23 @@ func directoryPacketSource(root string) packetSource {
 			}
 			return body, nil
 		},
-		scan:       func() ([]packetFile, error) { return scanPacket(root) },
+		scan: func() ([]packetFile, error) { return scanPacket(root) },
+		inventoryMode: func() (os.FileMode, error) {
+			file, err := scheduler.OpenRegularFile(filepath.Join(root, InventoryName))
+			if err != nil {
+				return 0, err
+			}
+			if err := scheduler.ValidateSingleLink(file); err != nil {
+				file.Close()
+				return 0, err
+			}
+			info, statErr := file.Stat()
+			closeErr := file.Close()
+			if err := errors.Join(statErr, closeErr); err != nil {
+				return 0, err
+			}
+			return info.Mode().Perm(), nil
+		},
 		exactModes: runtime.GOOS != "windows",
 	}
 }
@@ -175,9 +192,13 @@ func writeInventory(root, format, version, platform, server string, stable *stab
 	if err != nil {
 		return err
 	}
+	assetMode, serverMode := packetModes(platform, pilot)
 	for i := range files {
-		if files[i].Path == server && runtime.GOOS == "windows" {
-			files[i].Mode = 0755
+		if runtime.GOOS == "windows" {
+			files[i].Mode = uint32(assetMode)
+			if files[i].Path == server {
+				files[i].Mode = uint32(serverMode)
+			}
 		}
 	}
 	body, err := json.MarshalIndent(packetInventory{SchemaVersion: packetSchema(stable), Format: format, Version: version, Platform: platform, Server: server, Files: files, Stable: stable, Lifecycle: lifecycle, DesktopPilot: pilot}, "", "  ")
@@ -185,10 +206,10 @@ func writeInventory(root, format, version, platform, server string, stable *stab
 		return err
 	}
 	path := filepath.Join(root, InventoryName)
-	if err := os.WriteFile(path, append(body, '\n'), 0644); err != nil {
+	if err := os.WriteFile(path, append(body, '\n'), assetMode); err != nil {
 		return err
 	}
-	return os.Chmod(path, 0644)
+	return os.Chmod(path, assetMode)
 }
 
 // ValidatePacket reads the complete emitted file set without initialization or
@@ -242,9 +263,19 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 			return status, err
 		}
 	}
+	assetMode, serverMode := packetModes(inventory.Platform, inventory.DesktopPilot)
+	if assetMode == 0600 && source.exactModes {
+		if source.inventoryMode == nil {
+			return status, errors.New("packet inventory mode unavailable")
+		}
+		mode, err := source.inventoryMode()
+		if err != nil || mode != assetMode {
+			return status, errors.New("packet inventory mode differs")
+		}
+	}
 	expected := map[string]packetFile{}
 	for _, file := range inventory.Files {
-		if !packetPath(file.Path) || file.Path == InventoryName || file.Bytes < 0 || file.Bytes > maximumPacketBytes || (file.Mode != 0644 && file.Mode != 0755) || !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(file.SHA256) {
+		if !packetPath(file.Path) || file.Path == InventoryName || file.Bytes < 0 || file.Bytes > maximumPacketBytes || (file.Mode != uint32(assetMode) && file.Mode != uint32(serverMode)) || !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(file.SHA256) {
 			return status, errors.New("invalid packet entry")
 		}
 		if _, found := expected[file.Path]; found {
@@ -252,7 +283,7 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 		}
 		expected[file.Path] = file
 	}
-	if file, found := expected[inventory.Server]; !found || file.Mode != 0755 {
+	if file, found := expected[inventory.Server]; !found || file.Mode != uint32(serverMode) {
 		return status, errors.New("packet server unavailable")
 	}
 	required, server, err := requiredPacketFiles(inventory.Format, inventory.Platform, inventory.Version, inventory.Stable, inventory.Lifecycle, inventory.DesktopPilot)
@@ -279,7 +310,7 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 	}
 	for name, body := range required {
 		file, found := expected[name]
-		if !found || file.Mode != 0644 || file.Bytes != int64(len(body)) || file.SHA256 != fmt.Sprintf("%x", sha256.Sum256(body)) {
+		if !found || file.Mode != uint32(assetMode) || file.Bytes != int64(len(body)) || file.SHA256 != fmt.Sprintf("%x", sha256.Sum256(body)) {
 			return status, fmt.Errorf("canonical packet asset unavailable: %s", name)
 		}
 	}

@@ -12,6 +12,16 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
+// ErrDesktopPilotInterpolation permits a finite path-selection diagnostic.
+var ErrDesktopPilotInterpolation = errors.New("Desktop pilot path contains MCPB interpolation; select a local rehearsal path without ${")
+
+func packetModes(platform string, pilot *DesktopPilotBinding) (os.FileMode, os.FileMode) {
+	if platform == "darwin" && pilot != nil {
+		return 0600, 0700
+	}
+	return 0644, 0755
+}
+
 // DesktopPilotBinding identifies one local engineering rehearsal, never a
 // release authority. Its paths make this MCPB unsuitable for redistribution.
 type DesktopPilotBinding struct {
@@ -30,6 +40,9 @@ func (p DesktopPilotBinding) validate() error {
 		return errors.New("Desktop pilot workspace identity unavailable")
 	}
 	for _, path := range []string{p.UserHome, p.Workspace} {
+		if strings.Contains(path, "${") {
+			return ErrDesktopPilotInterpolation
+		}
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path || strings.ContainsAny(path, "\x00\r\n") {
 			return errors.New("Desktop pilot requires exact absolute local selections")
 		}
@@ -65,8 +78,8 @@ func prepareDesktopPilot(o *Options, format string) error {
 	return o.desktopPilot.validate()
 }
 
-// ValidateSelection seals editable Desktop fields to this local packet's
-// preparation; directory defaults alone cannot enforce a runtime binding.
+// ValidateSelection checks this packet's prepared paths and current workspace
+// identity independently of the manifest's launch arguments.
 func (p DesktopPilotBinding) ValidateSelection(o product.Options) error {
 	if err := p.validate(); err != nil {
 		return err
