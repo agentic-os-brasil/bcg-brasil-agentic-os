@@ -80,13 +80,17 @@ function Inventory {
 $marker = Join-Path $Root '.maestro-pilot-owned'
 $bin = Join-Path $Root 'product/maestro-mcp.exe'
 $common = @('--product-root',(Join-Path $Root 'product'),'--user-home',(Join-Path $Root 'owner'),'--workspace',(Join-Path $Root 'workspace'))
+function Diagnose-Failure([string]$Message) {
+  try { & (Join-Path $Root 'launchers/Testar Maestro.ps1') -CheckOnly } catch { Write-Warning 'O relatório do teste está na pasta diagnostics deste ensaio.' }
+  Fail ($Message + ' Preparação preservada; consulte o relatório e não apague a pasta.')
+}
+if (-not (Get-Command claude -ErrorAction SilentlyContinue)) { Write-Warning 'Code: comando claude indisponível. O relatório continuará; disponibilize-o pelo fluxo normal do cliente para testar Code.' }
 if (Test-Path -LiteralPath $Root) {
   if (-not (Test-Path -LiteralPath $marker -PathType Leaf) -or (Get-Content -LiteralPath $marker -Raw).Trim() -cne $KitID) { Fail 'Pasta estrangeira preservada; escolha uma pasta nova.' }
-  if (-not (Test-Path -LiteralPath (Join-Path $Root '.maestro-pilot-complete')) -or -not (Test-Path -LiteralPath (Join-Path $Root 'managed-files.sha256'))) { Fail 'Preparação parcial preservada; use uma pasta nova para recuperar.' }
+  if (-not (Test-Path -LiteralPath (Join-Path $Root '.maestro-pilot-complete')) -or -not (Test-Path -LiteralPath (Join-Path $Root 'managed-files.sha256'))) { Fail 'Preparação parcial preservada; abra launchers/Testar Maestro.cmd para obter o diagnóstico ou use outro destino.' }
   if ((Get-Content -LiteralPath (Join-Path $Root 'managed-files.sha256') -Raw) -cne (Inventory)) { Fail 'Material gerenciado mudou; os arquivos foram preservados.' }
-  & $bin inspect @common
-  if ($LASTEXITCODE -ne 0) { Fail 'Diagnóstico recusou o vínculo; preserve o ensaio.' }
-  Write-Host "Ensaio já preparado. Abra $Root\COMECE-AQUI.md"
+  & (Join-Path $Root 'launchers/Testar Maestro.ps1') -CheckOnly
+  Write-Host "Ensaio conferido. Para continuar, abra $Root\launchers\Testar Maestro.cmd"
   return
 }
 New-Item -ItemType Directory -Path $Root | Out-Null
@@ -95,11 +99,24 @@ foreach ($folder in @('product','owner','exports','launchers','client','client/c
 [IO.File]::Copy($binary, $bin, $false)
 $binaryLine = @(Get-Content -LiteralPath (Join-Path $Kit 'SHA256SUMS') | Where-Object { $_ -cmatch '^[0-9a-f]{64}  \./bin/maestro-mcp-windows-amd64\.exe$' })
 if ($binaryLine.Count -ne 1 -or (Get-FileHash -LiteralPath $bin -Algorithm SHA256).Hash.ToLowerInvariant() -cne $binaryLine[0].Substring(0,64)) { Fail 'O executável copiado mudou; preserve o ensaio.' }
-$result = & $bin init @common
-if ($LASTEXITCODE -ne 0) { Fail 'Inicialização parcial preservada; selecione uma pasta nova para recuperar.' }
+Write-New (Join-Path $Root 'pilot-binary.sha256') ($binaryLine[0].Substring(0,64) + '  product/maestro-mcp.exe' + $nl)
+foreach ($pair in @(@('test-windows.ps1','Testar Maestro.ps1'),@('test-windows.cmd','Testar Maestro.cmd'))) {
+  $source = Join-Path $Kit ('templates/' + $pair[0])
+  $target = Join-Path $Root ('launchers/' + $pair[1])
+  [IO.File]::Copy($source, $target, $false)
+  if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -cne (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash) { Fail 'Launcher ocupado ou alterado; preserve o ensaio.' }
+}
+$priorPreference = $ErrorActionPreference
+try {
+  # Windows PowerShell may terminate on native stderr before checking the exit code.
+  $ErrorActionPreference = 'Continue'
+  $result = & $bin init @common 2>$null
+  $initExit = $LASTEXITCODE
+} finally { $ErrorActionPreference = $priorPreference }
+if ($initExit -ne 0) { Diagnose-Failure 'A inicialização não foi concluída.' }
 Write-New (Join-Path $Root 'preparation.json') (($result -join $nl) + $nl)
 & $bin inspect @common
-if ($LASTEXITCODE -ne 0) { Fail 'O diagnóstico recusou; preserve os arquivos.' }
+if ($LASTEXITCODE -ne 0) { Diagnose-Failure 'O diagnóstico recusou o vínculo.' }
 $extra = @()
 switch ((Get-Content -LiteralPath (Join-Path $Kit 'LIFECYCLE-CONTEXT.txt') -Raw).Trim()) {
   'enabled' { $extra = @('--lifecycle-context') }
@@ -107,9 +124,9 @@ switch ((Get-Content -LiteralPath (Join-Path $Kit 'LIFECYCLE-CONTEXT.txt') -Raw)
   default { Fail 'Seleção de contexto desconhecida.' }
 }
 & $bin plugin @common --server $bin --destination (Join-Path $Root 'exports/code') --version 0.0.0 @extra
-if ($LASTEXITCODE -ne 0) { Fail 'Pacote Code parcial preservado.' }
+if ($LASTEXITCODE -ne 0) { Diagnose-Failure 'O pacote Code não foi concluído.' }
 & $bin mcpb @common --server $bin --destination (Join-Path $Root 'exports/maestro-product.mcpb') --version 0.0.0
-if ($LASTEXITCODE -ne 0) { Fail 'Pacote Desktop parcial preservado.' }
+if ($LASTEXITCODE -ne 0) { Diagnose-Failure 'O pacote Desktop não foi concluído.' }
 $code = @'
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -136,9 +153,11 @@ Write-New (Join-Path $Root 'launchers/Abrir Desktop.ps1') $desktop
 Write-New (Join-Path $Root 'launchers/Abrir Code.cmd') ('@echo off' + [char]13 + $nl + 'powershell.exe -NoLogo -NoProfile -File "%~dp0Abrir Code.ps1"' + [char]13 + $nl)
 Write-New (Join-Path $Root 'launchers/Abrir Desktop.cmd') ('@echo off' + [char]13 + $nl + 'powershell.exe -NoLogo -NoProfile -File "%~dp0Abrir Desktop.ps1"' + [char]13 + $nl)
 $start = @"
-# Maestro — ensaio local
+# Maestro MCP — teste guiado
 
-Abra launchers/Abrir Code.cmd. O perfil é separado e pode pedir login normal.
+Abra **launchers/Testar Maestro.cmd**. Ele confere o ensaio, abre o relatório e
+permite escolher Code ou Desktop. O texto com o ID correto é copiado automaticamente;
+cole uma vez na conversa escolhida. O perfil Code é separado e pode pedir login normal.
 Ao habilitar o plugin, preencha estes valores literais:
 
 Owner directory:
@@ -156,10 +175,13 @@ workspace_id da criação real:
 
 $($result -join $nl)
 
-Use o ROTEIRO.md do kit. Servidor de engenharia sem versão de release;
-0.0.0 é o rótulo dos pacotes. ARTIFACT.txt e SHA256SUMS identificam os bytes.
+Os relatórios ficam em diagnostics/, fora dos dados do Maestro. Compartilhe somente
+RELATORIO.md após conferir seu conteúdo. Login, confirmações, chamadas reais nos
+clientes e hooks continuam sendo verificados por você. Servidor de engenharia sem
+versão de release; 0.0.0 é o rótulo dos pacotes.
 "@
 Write-New (Join-Path $Root 'COMECE-AQUI.md') $start
 Write-New (Join-Path $Root 'managed-files.sha256') (Inventory)
 Write-New (Join-Path $Root '.maestro-pilot-complete') ($KitID + $nl)
-Write-Host "Preparado. Abra $Root\COMECE-AQUI.md"
+& (Join-Path $Root 'launchers/Testar Maestro.ps1') -CheckOnly
+Write-Host "Preparado e conferido. Abra $Root\launchers\Testar Maestro.cmd para testar nos clientes."

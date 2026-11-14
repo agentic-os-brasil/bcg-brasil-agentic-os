@@ -100,6 +100,7 @@ func TestMigratedHomePublicMCPInit(t *testing.T) {
 		t.Skip("dedicated ordinary-account Windows external migration proof required")
 	}
 	assertFreshLifecycleFilesystem(t)
+	assertPilotCheckPackets(t)
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

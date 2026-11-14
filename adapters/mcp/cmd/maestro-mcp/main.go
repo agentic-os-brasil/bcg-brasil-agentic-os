@@ -63,6 +63,9 @@ func main() {
 	}
 }
 func run() error {
+	if len(os.Args) > 1 && os.Args[1] == "pilot-check" {
+		return runPilotCheck(context.Background(), os.Args[2:], os.Stdout)
+	}
 	if _, err := processidentity.Current(); err != nil {
 		return err
 	}
