@@ -33,6 +33,8 @@ type Options struct {
 	Binding                      product.Options
 	NativeHost                   *NativeHost
 	LifecycleContext             bool
+	DesktopPilot                 bool
+	desktopPilot                 *DesktopPilotBinding
 	Carrier                      *StableCarrier
 	stableIdentity               releasecontract.ServerIdentity
 	serverBody                   []byte

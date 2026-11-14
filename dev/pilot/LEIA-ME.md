@@ -16,7 +16,7 @@ O relatório automático registra a conexão MCP que ele próprio testou. Login,
 
 O Code abre com `--plugin-dir` e um `CLAUDE_CONFIG_DIR` específico deste ensaio. O preparador não instala plugins no seu perfil normal. Ao habilitar o plugin, preencha os campos pedidos com os valores de COMECE-AQUI.md.
 
-No Desktop, confirme a importação local do MCPB e preencha os mesmos campos. **Se já houver outra extensão maestro-product, pare antes de substituir.** O preparador não altera o Desktop nem escolhe uma extensão existente por você.
+No Desktop, confirme a importação local da extensão **Maestro MCP — Ensaio …** indicada no relatório. Os dois caminhos já vêm preenchidos para este ensaio. Cada workspace tem sua própria extensão; preserve outras extensões Maestro. Se o cliente propuser substituir uma extensão de outro ensaio, pare e compartilhe o diagnóstico. Ao escolher Desktop em **Testar Maestro**, o launcher abre a importação para sua confirmação.
 
 Se o sistema, a política PowerShell ou o cliente recusar o arquivo, preserve a mensagem e pare. O kit não muda políticas, remove quarentena, faz login ou desativa controles. Autentique somente na interface normal do cliente.
 

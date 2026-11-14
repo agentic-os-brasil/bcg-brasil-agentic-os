@@ -113,7 +113,10 @@ func run() error {
 	}
 	var hookEvent, nativeBinding string
 	var proposalID, reviewDigest, track string
-	var confirmed, packet, lifecycleContext bool
+	var confirmed, packet, lifecycleContext, desktopPilot bool
+	if os.Args[1] == "mcpb" {
+		flags.BoolVar(&desktopPilot, "desktop-pilot", false, "isolate this local engineering rehearsal and prefill its prepared Desktop paths")
+	}
 	if os.Args[1] == "plugin" {
 		flags.BoolVar(&lifecycleContext, "lifecycle-context", false, "include explicitly selected passive lifecycle context hooks")
 	}
@@ -167,8 +170,14 @@ func run() error {
 	if packet {
 		switch os.Args[1] {
 		case "init", "serve", "inspect", "hook", "lifecycle-hook", "native-startup-check", "native-qualification-hook", "native-scope-guard":
-			if _, err := packaging.ValidatePacket(o.ProductRoot); err != nil {
+			status, err := packaging.ValidatePacket(o.ProductRoot)
+			if err != nil {
 				return err
+			}
+			if status.DesktopPilot != nil {
+				if err := status.DesktopPilot.ValidateSelection(o); err != nil {
+					return err
+				}
 			}
 		default:
 			return errors.New("packet validation is available only for init, serve, inspect and hook")
@@ -247,7 +256,7 @@ func run() error {
 	case "plugin":
 		return packaging.BuildPlugin(packaging.Options{Destination: destination, Server: server, Version: version, Binding: o, Carrier: carrier, LifecycleContext: lifecycleContext})
 	case "mcpb":
-		return packaging.BuildExtension(packaging.Options{Destination: destination, Server: server, Version: version, Binding: o, Carrier: carrier})
+		return packaging.BuildExtension(packaging.Options{Destination: destination, Server: server, Version: version, Binding: o, Carrier: carrier, DesktopPilot: desktopPilot})
 	case "inspect":
 		h, err := datahome.Resolve(datahome.Options{ProductRoot: o.ProductRoot, UserHome: o.UserHome})
 		diagnostic := h.Diagnostic
