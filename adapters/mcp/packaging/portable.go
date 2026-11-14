@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 
 	baseagents "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/agents"
@@ -71,9 +72,8 @@ func portableMetadata(format, platform, version string, stable *stablePacketBind
 		if pilot != nil {
 			manifest["name"], manifest["display_name"] = pilot.Name(), pilot.DisplayName()
 			manifest["description"] = "Local engineering rehearsal; uses only its prepared owner and workspace."
-			selection := manifest["user_config"].(map[string]any)
-			selection["user_home"].(map[string]any)["default"] = pilot.UserHome
-			selection["workspace"].(map[string]any)["default"] = pilot.Workspace
+			delete(manifest, "user_config")
+			manifest["server"].(map[string]any)["mcp_config"].(map[string]any)["args"] = []string{"serve", "--packet", "--product-root", "${__dirname}", "--user-home", pilot.UserHome, "--workspace", pilot.Workspace}
 		}
 		body, err := json.MarshalIndent(manifest, "", "  ")
 		if err != nil {
@@ -85,7 +85,7 @@ func portableMetadata(format, platform, version string, stable *stablePacketBind
 	files["skills/resume/SKILL.md"] = []byte(resume)
 	files["README-PACKET.md"] = []byte("# Portable Maestro packet\n\nSelect Owner directory and Workspace in the client configuration; no builder's private binding is included. Use only paths outside this packet. Startup never initializes state.\n\nPreparation: run the emitted " + server + " with `init --packet --product-root <this-packet> --user-home <selected-owner> --workspace <selected-workspace>`. Server uses `serve` with the same explicit selection. Doctor uses the existing `inspect` command with those arguments. Run preparation only after explicit approval; it does not install a service, acquire a model/runtime or change client settings.\n\nManaged files are immutable during these operations. The packet inventory records their bytes and modes and excludes itself. It is an integrity diagnostic, not publisher identity or owner approval. MCPB method files are inert canonical resources, not an assertion of native Desktop Skills installation.\n")
 	if pilot != nil {
-		files["README-PACKET.md"] = []byte("# Local Maestro Desktop rehearsal\n\nConfirm the prefilled owner and workspace in the client. This engineering MCPB is bound to this machine and workspace: do not redistribute it. Share the generic pilot kit instead. The unique extension name keeps other Maestro installations separate. Inventory is an integrity diagnostic, not publisher authority or proof of native loading.\n")
+		files["README-PACKET.md"] = []byte("# Local Maestro Desktop rehearsal\n\nConfirm installation of the named rehearsal extension in the client. Its server uses the exact owner and workspace approved during preparation; no directory configuration is required. This engineering MCPB is bound to this machine and workspace: do not redistribute it. Share the generic pilot kit instead. The unique extension name keeps other Maestro installations separate. Inventory is an integrity diagnostic, not publisher authority or proof of native loading.\n")
 	}
 	if lifecycle != nil && stable == nil {
 		if err := lifecycleLocalMetadata(files, platform, lifecycle); err != nil {
@@ -181,6 +181,7 @@ func buildPortable(options Options, format string) error {
 		return err
 	}
 	defer root.Close()
+	assetMode, serverMode := packetModes(platform, o.desktopPilot)
 	names := make([]string, 0, len(files))
 	for name := range files {
 		names = append(names, name)
@@ -193,12 +194,12 @@ func buildPortable(options Options, format string) error {
 		if err := root.MkdirAll(filepath.Dir(filepath.FromSlash(name)), 0700); err != nil {
 			return err
 		}
-		file, err := root.OpenFile(filepath.FromSlash(name), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+		file, err := root.OpenFile(filepath.FromSlash(name), os.O_CREATE|os.O_EXCL|os.O_WRONLY, assetMode)
 		if err != nil {
 			return err
 		}
 		_, writeErr := file.Write(files[name])
-		modeErr := file.Chmod(0644)
+		modeErr := file.Chmod(assetMode)
 		closeErr := file.Close()
 		if writeErr != nil || modeErr != nil || closeErr != nil {
 			return errors.Join(writeErr, modeErr, closeErr)
@@ -210,7 +211,7 @@ func buildPortable(options Options, format string) error {
 	if err := copyBinary(o.Server, filepath.Join(stage, filepath.FromSlash(server))); err != nil {
 		return err
 	}
-	if err := os.Chmod(filepath.Join(stage, filepath.FromSlash(server)), 0755); err != nil {
+	if err := os.Chmod(filepath.Join(stage, filepath.FromSlash(server)), serverMode); err != nil {
 		return err
 	}
 	if body, target, err := readNativeBinary(filepath.Join(stage, filepath.FromSlash(server))); err != nil || target != o.target || digest(body) != digest(o.serverBody) {
@@ -242,11 +243,14 @@ func buildPortable(options Options, format string) error {
 		return err
 	}
 	for i := range entries {
+		if runtime.GOOS == "windows" {
+			entries[i].Mode = uint32(assetMode)
+		}
 		if entries[i].Path == server {
-			entries[i].Mode = 0755
+			entries[i].Mode = uint32(serverMode)
 		}
 	}
-	entries = append(entries, packetFile{Path: InventoryName, Mode: 0644})
+	entries = append(entries, packetFile{Path: InventoryName, Mode: uint32(assetMode)})
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
 	var writeErr error
 	for _, entry := range entries {

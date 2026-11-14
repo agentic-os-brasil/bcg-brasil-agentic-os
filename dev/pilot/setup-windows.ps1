@@ -145,7 +145,7 @@ try {
 $desktop = @'
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-Write-Host 'Confirme a extensão Maestro MCP — Ensaio indicada no relatório e seus caminhos preenchidos. Preserve outras extensões Maestro.'
+Write-Host 'Confirme a instalação da extensão Maestro MCP — Ensaio indicada no relatório. Ela já usa as pastas aprovadas, sem campos de caminho. Abra uma conversa nova e cole o texto copiado por Testar Maestro. Se a extensão estiver desativada ou ausente, confira Configurações > Extensões > Configurar > Ativado. Preserve outras extensões Maestro.'
 Start-Process -FilePath (Join-Path $root 'exports/maestro-product.mcpb')
 '@
 Write-New (Join-Path $Root 'launchers/Abrir Code.ps1') $code
@@ -158,7 +158,7 @@ $start = @"
 Abra **launchers/Testar Maestro.cmd**. Ele confere o ensaio, abre o relatório e
 permite escolher Code ou Desktop. O texto com o ID correto é copiado automaticamente;
 cole uma vez na conversa escolhida. O perfil Code é separado e pode pedir login normal.
-Ao habilitar o plugin, preencha estes valores literais:
+Se o plugin Code pedir Owner directory ou Workspace, use estes valores literais:
 
 Owner directory:
 
@@ -168,8 +168,11 @@ Workspace:
 
     $Root\workspace
 
-Depois abra launchers/Abrir Desktop.cmd e confirme a extensão Maestro MCP — Ensaio
-indicada no relatório. Os caminhos já vêm preenchidos para este ensaio.
+Para Desktop, escolha essa opção em launchers/Testar Maestro.cmd e confirme a
+instalação da extensão Maestro MCP — Ensaio indicada no relatório. Ela já usa as
+pastas aprovadas; não há campos de caminho para salvar. Abra uma conversa nova
+e cole o texto copiado. Se a extensão estiver desativada ou ausente, confira
+Configurações > Extensões > Configurar > Ativado nessa extensão.
 Se o cliente propuser substituir outra extensão, pare.
 
 workspace_id da criação real:

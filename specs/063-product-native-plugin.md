@@ -93,17 +93,44 @@ acceptance remain separately observed gates, never inferred from an SDK check.
 
 For an ordinary unversioned engineering rehearsal only, explicit `mcpb
 --desktop-pilot` emits a local Desktop identity derived from the full admitted
-workspace ID, with a short visible rehearsal label and required owner/workspace
-directory defaults. Its typed optional inventory binding reconstructs the exact
+workspace ID and a short visible rehearsal label. Under DPFX its server argument
+vector contains the exact prepared owner/workspace paths and omits `user_config`;
+required directory defaults do not establish saved client configuration. Its typed
+optional inventory binding reconstructs the exact
 canonical manifest; the read-only pilot check compares paths and identity with
 the admitted preparation before generating the named Desktop prompt. Packet
 startup independently enforces the same owner/workspace paths, current registered
-workspace ID and reference for init, inspect and serve; editable client fields
-cannot select a different admitted workspace under this rehearsal identity. The profile
+workspace ID and reference for init, inspect and serve; another caller cannot
+select a different admitted workspace under this rehearsal identity. The profile
 requires the prepared sibling product/owner/workspace layout and packet label
 0.0.0. It rejects stable, signed/enrolled, native and lifecycle inputs. Generic
 packets retain their existing identity and path-free distribution contract.
 This local MCPB is not redistributable; only the generic kit is shareable.
+Reject the reserved interpolation start `${` in either bound path before export
+and during packet validation, with a finite action to select another local
+rehearsal path. Do not assume an MCPB literal-escaping contract. Ordinary dollar
+signs, shell-substitution text, quotes and spaces retain their literal argv values.
+Under DPMT, emit Darwin DesktopPilot regular files and inventory as 0600 and its
+executable as 0700 before computing inventory and ZIP headers. Validate those
+exact roles; preserve generic, stable and Windows logical modes rather than
+accepting arbitrary permission narrowing.
+
+Keep `ValidatePacket` strict. Only a local engineering MCPB runtime fallback may
+resolve the managed root's parent and append its unchanged basename, then
+strictly validate the physical packet. Require ordinary DesktopPilot/MCPB with
+no stable, registry or native authority. Its physical server path and validated
+server digest must match the executing file pin captured at process startup;
+recheck that existing pin after validation and retain the physical managed root
+for later reads. This is bounded file identity, not kernel image attestation.
+Leaf/inner links, another executable/source and all owner/workspace aliases stay
+refused. Do not alter OS links or installed permissions to make a packet pass.
+On Windows, Go 1.23+ does not resolve mount-point junctions through
+`filepath.EvalSymlinks`. Normalize the already-open executable handle and only
+the selected managed-parent directory handle to their final local DOS paths.
+Reopen the original image hint on each pin check and require the same physical
+path and file version; another target with identical bytes remains refused.
+Handle-path normalization grants no private-state admission and never replaces
+the owner/workspace or strict physical packet no-follow guards.
 Installation and permissions still require normal client confirmation, and real
 Desktop loading remains separately observed. Existing generic rehearsals remain
 diagnosable without silently becoming isolated extensions.
