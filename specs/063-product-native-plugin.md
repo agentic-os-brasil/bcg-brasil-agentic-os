@@ -110,6 +110,20 @@ Reject the reserved interpolation start `${` in either bound path before export
 and during packet validation, with a finite action to select another local
 rehearsal path. Do not assume an MCPB literal-escaping contract. Ordinary dollar
 signs, shell-substitution text, quotes and spaces retain their literal argv values.
+Under DPMT, emit Darwin DesktopPilot regular files and inventory as 0600 and its
+executable as 0700 before computing inventory and ZIP headers. Validate those
+exact roles; preserve generic, stable and Windows logical modes rather than
+accepting arbitrary permission narrowing.
+
+Keep `ValidatePacket` strict. Only a local engineering MCPB runtime fallback may
+resolve the managed root's parent and append its unchanged basename, then
+strictly validate the physical packet. Require ordinary DesktopPilot/MCPB with
+no stable, registry or native authority. Its physical server path and validated
+server digest must match the executing file pin captured at process startup;
+recheck that existing pin after validation and retain the physical managed root
+for later reads. This is bounded file identity, not kernel image attestation.
+Leaf/inner links, another executable/source and all owner/workspace aliases stay
+refused. Do not alter OS links or installed permissions to make a packet pass.
 Installation and permissions still require normal client confirmation, and real
 Desktop loading remains separately observed. Existing generic rehearsals remain
 diagnosable without silently becoming isolated extensions.

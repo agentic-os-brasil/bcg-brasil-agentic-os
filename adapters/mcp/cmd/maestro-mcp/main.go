@@ -68,7 +68,8 @@ func run() error {
 	if len(os.Args) > 1 && os.Args[1] == "pilot-check" {
 		return runPilotCheck(context.Background(), os.Args[2:], os.Stdout)
 	}
-	if _, err := processidentity.Current(); err != nil {
+	running, err := processidentity.Current()
+	if err != nil {
 		return err
 	}
 	if len(os.Args) < 2 {
@@ -172,10 +173,11 @@ func run() error {
 	if packet {
 		switch os.Args[1] {
 		case "init", "serve", "inspect", "hook", "lifecycle-hook", "native-startup-check", "native-qualification-hook", "native-scope-guard":
-			status, err := packaging.ValidatePacket(o.ProductRoot)
+			root, status, err := runtimePacketRoot(o.ProductRoot, running)
 			if err != nil {
 				return err
 			}
+			o.ProductRoot = root
 			if status.DesktopPilot != nil {
 				if err := status.DesktopPilot.ValidateSelection(o); err != nil {
 					return err

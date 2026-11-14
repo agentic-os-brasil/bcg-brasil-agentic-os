@@ -1,6 +1,6 @@
 # Maestro MCP — preparar, conferir e testar
 
-Este kit prepara um ensaio novo com produto, estado privado, workspace e perfil Code separados. Você não precisa de Go, Git, Python ou acesso ao repositório. Precisa de Code e Desktop instalados; o perfil Code do ensaio pode pedir login pelo fluxo normal.
+Este kit prepara um ensaio novo com produto, estado privado, workspace e perfil Code separados. Você não precisa de Go, Git, Python ou acesso ao repositório. Tenha instalado o cliente que vai testar. O roteiro de continuidade usa Code e Desktop; a conexão básica no Desktop não exige o comando Code. O perfil Code do ensaio pode pedir login pelo fluxo normal.
 
 **É um artefato de engenharia sem assinatura de produção.** `ARTIFACT.txt` informa a revisão e os alvos; `KIT-ID.txt` e `SHA256SUMS` identificam os bytes. O servidor informa versão de release indisponível; `0.0.0` é o rótulo dos pacotes. Checksum não autentica o publicador.
 
@@ -8,13 +8,13 @@ Este kit prepara um ensaio novo com produto, estado privado, workspace e perfil 
 
 1. Extraia o ZIP inteiro para uma pasta local comum e crie uma pasta `Developer` dentro do seu perfil, caso ela ainda não exista. No Windows, baixe do SharePoint/OneDrive e extraia fora da pasta sincronizada; reparse points e Files On-Demand, mesmo hidratados, não fazem parte deste fluxo.
 2. No Mac, abra **Preparar Maestro.command**. No Windows x64, abra **Preparar Maestro.cmd**. Leia os caminhos e digite `PREPARAR` se forem os pretendidos. O preparador confere o ensaio e indica o **RELATORIO.md**. Se houver bloqueio, envie esse Markdown ao time e preserve a pasta; a conferência não chama o modelo.
-3. Abra **Testar Maestro** na pasta `launchers` indicada. Escolha **Code** ou **Desktop**: o texto correto vai para a área de transferência. Cole uma vez na conversa do cliente. Comece pelo Code e depois retome no Desktop, como explica o **ROTEIRO.md**.
+3. Abra **Testar Maestro** na pasta `launchers` indicada. Escolha **Code** ou **Desktop**: o texto correto vai para a área de transferência. Cole uma vez na conversa do cliente. Para testar a continuidade entre clientes, comece pelo Code e depois retome no Desktop, como explica o **ROTEIRO.md**.
 
 O relatório automático registra a conexão MCP que ele próprio testou. Login, carregamento e permissões dos clientes, confirmação de gravações e execução real dos hooks continuam sendo observações suas. **COMECE-AQUI.md** guarda os valores de Owner directory e Workspace quando o cliente pedir.
 
 O Code abre com `--plugin-dir` e um `CLAUDE_CONFIG_DIR` específico deste ensaio. O preparador não instala plugins no seu perfil normal. Ao habilitar o plugin, preencha os campos pedidos com os valores de COMECE-AQUI.md.
 
-Ao escolher Desktop em **Testar Maestro**, confirme a instalação da extensão **Maestro MCP — Ensaio …** indicada no relatório. Ela já usa as pastas aprovadas na preparação; não há caminhos para copiar ou campos de diretório para salvar. Em **Configurações → Extensões**, abra **Configurar** nessa extensão e confira **Ativado**. Cada workspace tem sua própria extensão; preserve outras extensões Maestro e pare se o cliente propuser substituir uma de outro ensaio. A etapa termina quando o prompt responder com o workspace esperado, não apenas quando a chave aparecer ativada.
+Ao escolher Desktop em **Testar Maestro**, confirme a instalação da extensão **Maestro MCP — Ensaio …** indicada no relatório. Ela já usa as pastas aprovadas na preparação; não há caminhos para copiar ou campos de diretório para salvar. Abra uma conversa nova e cole o texto copiado. Se a extensão estiver desativada ou não aparecer, confira **Configurações → Extensões → Configurar → Ativado** nessa extensão. Preserve outras extensões Maestro e pare se o cliente propuser substituir uma de outro ensaio. A etapa termina quando o prompt responder com o workspace esperado, não apenas quando a chave aparecer ativada.
 
 Se o sistema, a política PowerShell ou o cliente recusar o arquivo, preserve a mensagem e pare. O kit não muda políticas, remove quarentena, faz login ou desativa controles. Autentique somente na interface normal do cliente.
 

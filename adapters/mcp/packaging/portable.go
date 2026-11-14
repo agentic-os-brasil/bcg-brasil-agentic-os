@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 
 	baseagents "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/agents"
@@ -180,6 +181,7 @@ func buildPortable(options Options, format string) error {
 		return err
 	}
 	defer root.Close()
+	assetMode, serverMode := packetModes(platform, o.desktopPilot)
 	names := make([]string, 0, len(files))
 	for name := range files {
 		names = append(names, name)
@@ -192,12 +194,12 @@ func buildPortable(options Options, format string) error {
 		if err := root.MkdirAll(filepath.Dir(filepath.FromSlash(name)), 0700); err != nil {
 			return err
 		}
-		file, err := root.OpenFile(filepath.FromSlash(name), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+		file, err := root.OpenFile(filepath.FromSlash(name), os.O_CREATE|os.O_EXCL|os.O_WRONLY, assetMode)
 		if err != nil {
 			return err
 		}
 		_, writeErr := file.Write(files[name])
-		modeErr := file.Chmod(0644)
+		modeErr := file.Chmod(assetMode)
 		closeErr := file.Close()
 		if writeErr != nil || modeErr != nil || closeErr != nil {
 			return errors.Join(writeErr, modeErr, closeErr)
@@ -209,7 +211,7 @@ func buildPortable(options Options, format string) error {
 	if err := copyBinary(o.Server, filepath.Join(stage, filepath.FromSlash(server))); err != nil {
 		return err
 	}
-	if err := os.Chmod(filepath.Join(stage, filepath.FromSlash(server)), 0755); err != nil {
+	if err := os.Chmod(filepath.Join(stage, filepath.FromSlash(server)), serverMode); err != nil {
 		return err
 	}
 	if body, target, err := readNativeBinary(filepath.Join(stage, filepath.FromSlash(server))); err != nil || target != o.target || digest(body) != digest(o.serverBody) {
@@ -241,11 +243,14 @@ func buildPortable(options Options, format string) error {
 		return err
 	}
 	for i := range entries {
+		if runtime.GOOS == "windows" {
+			entries[i].Mode = uint32(assetMode)
+		}
 		if entries[i].Path == server {
-			entries[i].Mode = 0755
+			entries[i].Mode = uint32(serverMode)
 		}
 	}
-	entries = append(entries, packetFile{Path: InventoryName, Mode: 0644})
+	entries = append(entries, packetFile{Path: InventoryName, Mode: uint32(assetMode)})
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
 	var writeErr error
 	for _, entry := range entries {

@@ -18,6 +18,7 @@ import (
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // Invoked inside the existing ordinary-account command admission on Windows.
@@ -287,6 +288,17 @@ func assertDesktopPilotManifest(t *testing.T, archive, owner, work string, prepa
 		t.Fatal(err)
 	}
 	defer reader.Close()
+	if runtime.GOOS == "darwin" {
+		for _, file := range reader.File {
+			want := os.FileMode(0600)
+			if file.Name == "server/maestro-mcp" {
+				want = 0700
+			}
+			if file.Mode().Perm() != want {
+				t.Fatalf("Darwin Desktop pilot does not emit exact owner-only roles: %s %04o, want %04o", file.Name, file.Mode().Perm(), want)
+			}
+		}
+	}
 	for _, file := range reader.File {
 		if file.Name != "manifest.json" {
 			continue
@@ -369,6 +381,7 @@ func assertDesktopPilotRuntimeSelection(t *testing.T, binary, archive string, bi
 	if out, err := exec.Command(server, append([]string{"inspect"}, packetArgs(binding.UserHome, binding.WorkspacePath)...)...).CombinedOutput(); err != nil {
 		t.Fatalf("correct Desktop binding refused: %v %s", err, out)
 	}
+	assertDesktopPilotNativeMaterialization(t, binary, packet, archive, binding)
 	alternate := filepath.Join(t.TempDir(), "other rehearsal")
 	otherOwner, otherWork := filepath.Join(alternate, "owner"), filepath.Join(alternate, "workspace")
 	if err := os.MkdirAll(otherOwner, 0700); err != nil {
@@ -433,5 +446,132 @@ func assertDesktopPilotRuntimeSelection(t *testing.T, binary, archive string, bi
 	}
 	if err := os.WriteFile(inventoryPath, original, 0644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func desktopDirectoryAlias(t *testing.T, alias, target string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		shell := filepath.Join(os.Getenv("SystemRoot"), "System32", "cmd.exe")
+		if out, err := exec.Command(shell, "/c", "mklink", "/J", alias, target).CombinedOutput(); err != nil {
+			t.Fatalf("ordinary-user junction fixture: %v %s", err, out)
+		}
+		return
+	}
+	if err := os.Symlink(target, alias); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertDesktopPilotNativeMaterialization(t *testing.T, binary, packet, archive string, binding product.Options) {
+	t.Helper()
+	status, err := packaging.ValidatePacket(packet)
+	if err != nil || status.DesktopPilot == nil {
+		t.Fatal("physical Desktop packet unavailable", err)
+	}
+	alias := filepath.Join(t.TempDir(), "application support alias")
+	desktopDirectoryAlias(t, alias, filepath.Dir(packet))
+	selected := filepath.Join(alias, filepath.Base(packet))
+	if _, err := packaging.ValidatePacket(selected); err == nil {
+		t.Fatal("strict packet API unexpectedly followed an ancestor alias")
+	}
+	var manifest struct {
+		Server struct {
+			Config struct {
+				Command string   `json:"command"`
+				Args    []string `json:"args"`
+			} `json:"mcp_config"`
+		} `json:"server"`
+	}
+	body, err := os.ReadFile(filepath.Join(packet, "manifest.json"))
+	if err != nil || json.Unmarshal(body, &manifest) != nil {
+		t.Fatal("emitted Desktop configuration unavailable", err)
+	}
+	replace := strings.NewReplacer("${__dirname}", selected)
+	executable := replace.Replace(manifest.Server.Config.Command)
+	args := append([]string(nil), manifest.Server.Config.Args...)
+	for i := range args {
+		args[i] = replace.Replace(args[i])
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, executable, args...)
+	if runtime.GOOS == "darwin" {
+		vector := append([]string{"-c", `umask 077; exec "$@"`, "desktop-materialization", executable}, args...)
+		cmd = exec.CommandContext(ctx, "/bin/sh", vector...)
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	client := mcp.NewClient(&mcp.Implementation{Name: "desktop-materialization-contract", Version: "1"}, nil)
+	session, err := client.Connect(ctx, &mcp.CommandTransport{Command: cmd, TerminateDuration: time.Second}, nil)
+	if err != nil {
+		t.Fatalf("actual emitted Desktop server cannot initialize through its ancestor alias: %v %s", err, stderr.String())
+	}
+	var metadata struct {
+		WorkspaceID string `json:"workspace_id"`
+		State       string `json:"state"`
+	}
+	err = pilotCall(ctx, session, "maestro_context", map[string]any{}, &metadata)
+	closeErr := session.Close()
+	if err != nil || closeErr != nil || metadata.WorkspaceID != status.DesktopPilot.WorkspaceID || metadata.State != "ready" {
+		t.Fatalf("emitted aliased Desktop context mismatch: %v %v %+v", err, closeErr, metadata)
+	}
+	reject := func(reason, command string, selectedArgs []string) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_, err := exec.CommandContext(ctx, command, selectedArgs...).CombinedOutput()
+		cancel()
+		if err == nil || ctx.Err() == context.DeadlineExceeded {
+			t.Fatalf("Desktop startup accepted %s: %v", reason, err)
+		}
+	}
+	reject("another executing image", binary, args)
+	leaf := filepath.Join(t.TempDir(), "linked packet")
+	desktopDirectoryAlias(t, leaf, packet)
+	leafArgs := append([]string(nil), args...)
+	leafArgs[3] = leaf
+	reject("linked managed root leaf", filepath.Join(leaf, "server", filepath.Base(binary)), leafArgs)
+	code := filepath.Join(filepath.Dir(archive), "code")
+	codeAlias := filepath.Join(t.TempDir(), "code ancestor")
+	desktopDirectoryAlias(t, codeAlias, filepath.Dir(code))
+	code = filepath.Join(codeAlias, filepath.Base(code))
+	codeArgs := append([]string(nil), args...)
+	codeArgs[3] = code
+	reject("non-pilot Code ancestor alias", filepath.Join(code, "scripts", filepath.Base(binary)), codeArgs)
+	for index, target := range map[int]string{5: binding.UserHome, 7: binding.WorkspacePath} {
+		alias := filepath.Join(t.TempDir(), "private state alias")
+		desktopDirectoryAlias(t, alias, target)
+		changed := append([]string(nil), args...)
+		changed[index] = alias
+		reject("owner/workspace alias", executable, changed)
+	}
+	managed, held := filepath.Join(packet, "managed"), filepath.Join(t.TempDir(), "held managed")
+	if err := os.Rename(managed, held); err != nil {
+		t.Fatal(err)
+	}
+	desktopDirectoryAlias(t, managed, held)
+	reject("linked inner managed directory", executable, args)
+	if err := os.Remove(managed); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(held, managed); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS == "darwin" {
+		for _, name := range []string{"LICENSE.md", packaging.InventoryName} {
+			path := filepath.Join(packet, name)
+			for _, mode := range []os.FileMode{0400, 0644} {
+				if err := os.Chmod(path, mode); err != nil {
+					t.Fatal(err)
+				}
+				reject("changed exact private mode", executable, args)
+			}
+			if err := os.Chmod(path, 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if _, err := packaging.ValidatePacket(packet); err != nil {
+		t.Fatal("negative fixtures changed the original packet", err)
 	}
 }

@@ -15,6 +15,13 @@ import (
 // ErrDesktopPilotInterpolation permits a finite path-selection diagnostic.
 var ErrDesktopPilotInterpolation = errors.New("Desktop pilot path contains MCPB interpolation; select a local rehearsal path without ${")
 
+func packetModes(platform string, pilot *DesktopPilotBinding) (os.FileMode, os.FileMode) {
+	if platform == "darwin" && pilot != nil {
+		return 0600, 0700
+	}
+	return 0644, 0755
+}
+
 // DesktopPilotBinding identifies one local engineering rehearsal, never a
 // release authority. Its paths make this MCPB unsuitable for redistribution.
 type DesktopPilotBinding struct {

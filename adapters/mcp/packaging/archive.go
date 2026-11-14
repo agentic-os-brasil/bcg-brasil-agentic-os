@@ -36,7 +36,8 @@ func ValidateArchive(path string) (PacketStatus, error) {
 	entries := map[string]*zip.File{}
 	var total uint64
 	for _, entry := range archive.File {
-		if !packetPath(entry.Name) || !entry.Mode().IsRegular() || entry.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 || (entry.Mode().Perm() != 0644 && entry.Mode().Perm() != 0755) || entry.UncompressedSize64 > uint64(maximumPacketBytes) {
+		mode := entry.Mode().Perm()
+		if !packetPath(entry.Name) || !entry.Mode().IsRegular() || entry.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 || (mode != 0600 && mode != 0700 && mode != 0644 && mode != 0755) || entry.UncompressedSize64 > uint64(maximumPacketBytes) {
 			return PacketStatus{}, errors.New("packet archive entry role or bound")
 		}
 		if _, exists := entries[entry.Name]; exists {
@@ -72,6 +73,12 @@ func ValidateArchive(path string) (PacketStatus, error) {
 	}
 	status, err := validatePacket(packetSource{
 		read: read, exactModes: true,
+		inventoryMode: func() (os.FileMode, error) {
+			if entries[InventoryName] == nil {
+				return 0, errors.New("packet inventory unavailable")
+			}
+			return entries[InventoryName].Mode().Perm(), nil
+		},
 		scan: func() ([]packetFile, error) {
 			var files []packetFile
 			for name, entry := range entries {
@@ -90,6 +97,12 @@ func ValidateArchive(path string) (PacketStatus, error) {
 	})
 	if err != nil {
 		return PacketStatus{}, err
+	}
+	if status.DesktopPilot == nil || status.Target.OS != "darwin" {
+		mode := entries[InventoryName].Mode().Perm()
+		if mode != 0644 && mode != 0755 {
+			return PacketStatus{}, errors.New("packet archive inventory mode differs")
+		}
 	}
 	after, err := file.Stat()
 	if err != nil || !sameHostMetadata(before, after) {

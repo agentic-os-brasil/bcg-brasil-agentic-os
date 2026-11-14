@@ -1459,3 +1459,14 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: The local pilot no longer relies on a client saving redundant directory defaults before launch. Its machine-local MCPB remains non-redistributable; only the generic factory ZIP is shareable. Rebuild a participant-local pilot to adopt this contract; do not rewrite an existing packet. Import, connection, tool visibility and actual runtime behavior remain separately observed evidence.
 - Refs: specs/063-product-native-plugin.md; docs/product-pilot.md; adapters/mcp/packaging/portable.go; adapters/mcp/cmd/maestro-mcp/pilot_test.go; issue #527
 - Supersedes: DPIL
+
+## DPMT - Preserve exact local Desktop materialization and executing-image custody
+
+- Date: 2026-11-14
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The actual Desktop 4.23118.0 importer preserved all 275 inventoried file hashes and sizes but narrowed regular/executable modes from 0644/0755 to 0600/0700. An existing application-support ancestor alias also prevented strict packet reads before initialization. Neither observation permits relaxing private state boundaries or accepting arbitrary permission narrowing.
+- Decision: Emit Darwin DesktopPilot regular files and inventory as 0600 and its executable as 0700 before inventory/ZIP creation, with exact closed-role validation. Preserve generic, stable and Windows logical modes. Keep ValidatePacket no-follow and exact. A local engineering MCPB startup fallback may resolve only the managed root's parent and append its unchanged basename, then strictly validate the physical packet and require an ordinary DesktopPilot with no stable, registry or native authority. Require its physical server path and validated server digest to match processidentity.Current, recheck that pin after validation and retain the physical managed root for later reads. Preserve all owner/workspace, leaf and inner no-follow boundaries; do not change existing OS links or installed permissions.
+- Consequences: Importer permission narrowing becomes idempotent for the newly produced Darwin pilot rather than a permissive validator predicate. Generic/Code aliases, linked leaves, linked inner files and another executable/source remain refused. The process pin is bounded file identity, not kernel image attestation or publisher authority. Rebuild the local MCPB and observe actual native initialization; packaging and source checks alone do not qualify the client.
+- Refs: specs/063-product-native-plugin.md; docs/product-pilot.md; adapters/mcp/packaging/desktop_pilot.go; adapters/mcp/packaging/inventory.go; adapters/mcp/cmd/maestro-mcp/packet_runtime.go; issue #527; DPFX
+- Supersedes: none

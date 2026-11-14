@@ -69,6 +69,20 @@ this extension to another admitted workspace.
 Bound paths containing the reserved interpolation start `${` refuse before export
 and during packet validation. Choose another ordinary local rehearsal path;
 literal dollar signs, shell-substitution text, quotes and spaces are preserved.
+Under DPMT, the Darwin DesktopPilot producer emits regular files and inventory
+as 0600 and the executable as 0700 before computing the inventory and ZIP. Exact
+role checks remain mandatory; this is not a predicate accepting any narrower
+permissions. Generic, stable and Windows logical roles remain unchanged.
+
+The public packet validator remains strict about ancestor, leaf and inner links.
+Only the runtime's local engineering MCPB fallback may resolve the managed
+root's parent, append the unchanged basename and strictly validate that physical
+packet. It must be an ordinary DesktopPilot without stable, registry or native
+authority, and its physical server path/digest must match the executing file pin
+captured at process startup and rechecked after validation. Later managed reads
+retain the physical root. Owner/workspace paths are never resolved this way;
+no OS alias or installed permission is changed. The pin is bounded file identity,
+not kernel image attestation or publisher authority.
 Legacy generic pilot archives remain diagnosable.
 
 Share the generic factory ZIP; the locally bound MCPB contains machine-local
@@ -91,9 +105,12 @@ marker. The Desktop prompt discovers the single matching work item and uses its
 current revision, so the participant does not transport execution IDs/revisions.
 The launcher copies a prompt and opens a client only after that explicit choice.
 For Desktop, the participant confirms installation of the named extension and
-checks its activation in Settings > Extensions > Configure. No directory fields
-need copying or saving. An enabled toggle alone does not prove a connection;
-the generated prompt must obtain the expected workspace through that extension.
+pastes the copied prompt into a new conversation. No directory fields need
+copying or saving. Settings > Extensions > Configure > Enabled is conditional
+recovery if that extension is disabled or unavailable. An enabled toggle alone
+does not prove a connection; the prompt must obtain the expected workspace
+through that extension. Basic Desktop connectivity does not require the Code
+CLI; the cross-client checkpoint scenario requires the Code step first.
 `--check-only` on Mac and `-CheckOnly` on Windows save reports without opening a
 client or report viewer; preparation uses that mode. Missing `claude` is reported
 without installing software or preventing the independent MCP/archive checks.
