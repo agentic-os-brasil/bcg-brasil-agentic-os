@@ -50,7 +50,7 @@ func runtimeSelections() map[string]any {
 func portableArgs(root, command string) []string {
 	return []string{command, "--packet", "--product-root", root, "--user-home", "${user_config.user_home}", "--workspace", "${user_config.workspace}"}
 }
-func portableMetadata(format, platform, version string, stable *stablePacketBinding, lifecycle *lifecyclePacketBinding) (map[string][]byte, string, error) {
+func portableMetadata(format, platform, version string, stable *stablePacketBinding, lifecycle *lifecyclePacketBinding, pilot *DesktopPilotBinding) (map[string][]byte, string, error) {
 	name := binaryName(platform)
 	files := map[string][]byte{}
 	server := "scripts/" + name
@@ -67,7 +67,15 @@ func portableMetadata(format, platform, version string, stable *stablePacketBind
 		files[".mcp.json"] = append(body, '\n')
 	} else {
 		server = "server/" + name
-		body, err := json.MarshalIndent(map[string]any{"manifest_version": "0.3", "name": "maestro-product", "version": version, "description": "Portable managed Maestro product; explicit external preparation.", "author": map[string]string{"name": "Agentic OS Brasil"}, "user_config": runtimeSelections(), "server": map[string]any{"type": "binary", "entry_point": server, "mcp_config": map[string]any{"command": "${__dirname}/" + server, "args": portableArgs("${__dirname}", "serve")}}, "compatibility": map[string]any{"platforms": []string{platform}}}, "", "  ")
+		manifest := map[string]any{"manifest_version": "0.3", "name": "maestro-product", "version": version, "description": "Portable managed Maestro product; explicit external preparation.", "author": map[string]string{"name": "Agentic OS Brasil"}, "user_config": runtimeSelections(), "server": map[string]any{"type": "binary", "entry_point": server, "mcp_config": map[string]any{"command": "${__dirname}/" + server, "args": portableArgs("${__dirname}", "serve")}}, "compatibility": map[string]any{"platforms": []string{platform}}}
+		if pilot != nil {
+			manifest["name"], manifest["display_name"] = pilot.Name(), pilot.DisplayName()
+			manifest["description"] = "Local engineering rehearsal; uses only its prepared owner and workspace."
+			selection := manifest["user_config"].(map[string]any)
+			selection["user_home"].(map[string]any)["default"] = pilot.UserHome
+			selection["workspace"].(map[string]any)["default"] = pilot.Workspace
+		}
+		body, err := json.MarshalIndent(manifest, "", "  ")
 		if err != nil {
 			return nil, "", err
 		}
@@ -76,6 +84,9 @@ func portableMetadata(format, platform, version string, stable *stablePacketBind
 	files["skills/operator/SKILL.md"] = []byte(operator)
 	files["skills/resume/SKILL.md"] = []byte(resume)
 	files["README-PACKET.md"] = []byte("# Portable Maestro packet\n\nSelect Owner directory and Workspace in the client configuration; no builder's private binding is included. Use only paths outside this packet. Startup never initializes state.\n\nPreparation: run the emitted " + server + " with `init --packet --product-root <this-packet> --user-home <selected-owner> --workspace <selected-workspace>`. Server uses `serve` with the same explicit selection. Doctor uses the existing `inspect` command with those arguments. Run preparation only after explicit approval; it does not install a service, acquire a model/runtime or change client settings.\n\nManaged files are immutable during these operations. The packet inventory records their bytes and modes and excludes itself. It is an integrity diagnostic, not publisher identity or owner approval. MCPB method files are inert canonical resources, not an assertion of native Desktop Skills installation.\n")
+	if pilot != nil {
+		files["README-PACKET.md"] = []byte("# Local Maestro Desktop rehearsal\n\nConfirm the prefilled owner and workspace in the client. This engineering MCPB is bound to this machine and workspace: do not redistribute it. Share the generic pilot kit instead. The unique extension name keeps other Maestro installations separate. Inventory is an integrity diagnostic, not publisher authority or proof of native loading.\n")
+	}
 	if lifecycle != nil && stable == nil {
 		if err := lifecycleLocalMetadata(files, platform, lifecycle); err != nil {
 			return nil, "", err
@@ -89,6 +100,9 @@ func portableMetadata(format, platform, version string, stable *stablePacketBind
 	return files, server, nil
 }
 func buildPortable(options Options, format string) error {
+	if err := prepareDesktopPilot(&options, format); err != nil {
+		return err
+	}
 	if format == "mcpb" && options.LifecycleContext {
 		return errors.New("lifecycle context hooks are a Code-only packet profile")
 	}
@@ -135,7 +149,7 @@ func buildPortable(options Options, format string) error {
 	for name, body := range managed {
 		files[name] = body
 	}
-	metadata, server, err := portableMetadata(format, platform, o.Version, stableBinding(o), lifecycleBinding(o))
+	metadata, server, err := portableMetadata(format, platform, o.Version, stableBinding(o), lifecycleBinding(o), o.desktopPilot)
 	if err != nil {
 		return err
 	}
@@ -202,7 +216,7 @@ func buildPortable(options Options, format string) error {
 	if body, target, err := readNativeBinary(filepath.Join(stage, filepath.FromSlash(server))); err != nil || target != o.target || digest(body) != digest(o.serverBody) {
 		return errors.New("selected server changed while packaging")
 	}
-	if err := writeInventory(stage, format, o.Version, platform, server, stableBinding(o), lifecycleBinding(o)); err != nil {
+	if err := writeInventory(stage, format, o.Version, platform, server, stableBinding(o), lifecycleBinding(o), o.desktopPilot); err != nil {
 		return err
 	}
 	if _, err := ValidatePacket(stage); err != nil {
@@ -257,7 +271,7 @@ func buildPortable(options Options, format string) error {
 
 // Do not permit a self-consistent edited inventory to omit canonical managed
 // configuration or recipes. Native bytes/public registry remain separate inputs.
-func requiredPacketFiles(format, platform, version string, stable *stablePacketBinding, lifecycle *lifecyclePacketBinding) (map[string][]byte, string, error) {
+func requiredPacketFiles(format, platform, version string, stable *stablePacketBinding, lifecycle *lifecyclePacketBinding, pilot *DesktopPilotBinding) (map[string][]byte, string, error) {
 	namespace := ""
 	if format == "plugin" {
 		namespace = "maestro-product"
@@ -273,7 +287,7 @@ func requiredPacketFiles(format, platform, version string, stable *stablePacketB
 	for name, body := range managed {
 		files[name] = body
 	}
-	metadata, server, err := portableMetadata(format, platform, version, stable, lifecycle)
+	metadata, server, err := portableMetadata(format, platform, version, stable, lifecycle, pilot)
 	if err != nil {
 		return nil, "", err
 	}

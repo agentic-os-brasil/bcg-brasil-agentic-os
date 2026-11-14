@@ -91,6 +91,23 @@ current revision before a single resume. Unknown or ambiguous state stops the
 exercise. Native client login, loading, confirmation, hook delivery and colleague
 acceptance remain separately observed gates, never inferred from an SDK check.
 
+For an ordinary unversioned engineering rehearsal only, explicit `mcpb
+--desktop-pilot` emits a local Desktop identity derived from the full admitted
+workspace ID, with a short visible rehearsal label and required owner/workspace
+directory defaults. Its typed optional inventory binding reconstructs the exact
+canonical manifest; the read-only pilot check compares paths and identity with
+the admitted preparation before generating the named Desktop prompt. Packet
+startup independently enforces the same owner/workspace paths, current registered
+workspace ID and reference for init, inspect and serve; editable client fields
+cannot select a different admitted workspace under this rehearsal identity. The profile
+requires the prepared sibling product/owner/workspace layout and packet label
+0.0.0. It rejects stable, signed/enrolled, native and lifecycle inputs. Generic
+packets retain their existing identity and path-free distribution contract.
+This local MCPB is not redistributable; only the generic kit is shareable.
+Installation and permissions still require normal client confirmation, and real
+Desktop loading remains separately observed. Existing generic rehearsals remain
+diagnosable without silently becoming isolated extensions.
+
 ## Canonical identities and projection
 
 Maestro remains the main-session hub. Project the six canonical specialists:

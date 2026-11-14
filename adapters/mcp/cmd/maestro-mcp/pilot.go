@@ -34,16 +34,17 @@ type pilotCheck struct {
 
 // This is shareable diagnostic metadata, never a dump of context, logs or paths.
 type pilotReport struct {
-	SchemaVersion int              `json:"schema_version"`
-	Status        string           `json:"status"`
-	Checks        []pilotCheck     `json:"checks"`
-	WorkspaceID   string           `json:"workspace_id"`
-	KitID         string           `json:"kit_id"`
-	ReferenceHost packaging.Target `json:"reference_host"`
-	Target        packaging.Target `json:"target"`
-	Markdown      string           `json:"markdown"`
-	CodePrompt    string           `json:"code_prompt"`
-	DesktopPrompt string           `json:"desktop_prompt"`
+	SchemaVersion    int              `json:"schema_version"`
+	Status           string           `json:"status"`
+	Checks           []pilotCheck     `json:"checks"`
+	WorkspaceID      string           `json:"workspace_id"`
+	KitID            string           `json:"kit_id"`
+	ReferenceHost    packaging.Target `json:"reference_host"`
+	Target           packaging.Target `json:"target"`
+	Markdown         string           `json:"markdown"`
+	CodePrompt       string           `json:"code_prompt"`
+	DesktopPrompt    string           `json:"desktop_prompt"`
+	DesktopExtension string           `json:"desktop_extension,omitempty"`
 }
 
 func (r *pilotReport) add(name, status, reason, action string) {
@@ -129,6 +130,15 @@ func runPilotCheck(ctx context.Context, args []string, output io.Writer) error {
 	} else {
 		r.add("preparation", "failed", "preparation_missing_or_workspace_mismatch", "A preparação não foi confirmada para este workspace. Preserve os arquivos e compartilhe o diagnóstico.")
 		preparedOK = false
+	}
+	if archiveErr == nil && archive.DesktopPilot != nil {
+		pilot := archive.DesktopPilot
+		if !bindingOK || !preparedOK || pilot.UserHome != o.UserHome || pilot.Workspace != o.WorkspacePath || pilot.WorkspaceID != inspection.WorkspaceID {
+			r.add("desktop_binding", "failed", "desktop_pilot_binding_mismatch", "Preserve o ensaio e prepare um novo pacote para este workspace.")
+		} else {
+			r.DesktopExtension = pilot.DisplayName()
+			r.add("desktop_binding", "passed", "isolated_desktop_defaults_match_preparation", "")
+		}
 	}
 	if _, err := exec.LookPath("claude"); err == nil {
 		r.add("code_cli", "passed", "code_cli_found_login_not_tested", "")
@@ -367,6 +377,9 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 	}
 	if r.Status != "blocked" && pilotWorkspaceID.MatchString(r.WorkspaceID) {
 		r.CodePrompt, r.DesktopPrompt = pilotPrompts(r.WorkspaceID)
+		if r.DesktopExtension != "" {
+			r.DesktopPrompt = fmt.Sprintf("Use a extensão %q deste ensaio e confirme os caminhos preenchidos na importação. ", r.DesktopExtension) + r.DesktopPrompt
+		}
 	}
 	var md strings.Builder
 	fmt.Fprintf(&md, "# Maestro MCP — diagnóstico do ensaio\n\nStatus: **%s**.\n\n", r.Status)
@@ -381,6 +394,9 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 	}
 	if r.WorkspaceID != "" {
 		fmt.Fprintf(&md, "Workspace verificado: `%s`.\n\n", r.WorkspaceID)
+	}
+	if r.DesktopExtension != "" {
+		fmt.Fprintf(&md, "Extensão Desktop deste ensaio: **%s**. Confirme os caminhos preenchidos ao importar.\n\n", r.DesktopExtension)
 	}
 	md.WriteString("| Verificação | Estado | Motivo | Próxima ação |\n| --- | --- | --- | --- |\n")
 	for _, check := range r.Checks {

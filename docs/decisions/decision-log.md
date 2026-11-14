@@ -1436,3 +1436,15 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: These command hooks are non-enforcing and retain host permissions and source/process validation. Stop records observation only, respects recursion and cannot certify work, capture conversations, dream, index, run maintenance or enroll jobs. Packet configuration, actual client delivery, native enforcement, Windows client execution and release acceptance remain separate evidence. Context delivery is validated by a real synthetic client session; it does not qualify the full native profile or complete the second-brain migration.
 - Refs: NPHK; NOBS; specs/063-product-native-plugin.md; specs/019-nonblocking-hook-execution.md; specs/006-memory-persistence.md; specs/060-product-owner-memory.md
 - Supersedes: none
+
+
+## DPIL - Isolate local engineering Desktop rehearsals
+
+- Date: 2026-11-14
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: A prepared engineering rehearsal shares the ordinary Desktop extension identity and requires manually selecting paths, which can collide with an existing installation and misbind an otherwise isolated exercise.
+- Decision: Add an explicit Desktop-only ordinary unversioned 0.0.0 pilot profile. Derive its extension identity from the full admitted workspace ID, show a short rehearsal label, and prefill required directory selections. Preserve the typed local binding in the canonical inventory and regenerate exact manifest bytes during validation. Compare it with admitted preparation before issuing the named client prompt and enforce the exact paths and current registered workspace identity at packet startup. Keep generic packets unchanged and reject signed/enrolled, stable, native and lifecycle inputs.
+- Consequences: A locally prepared MCPB contains machine-local paths and is not redistributable; the factory ZIP remains generic. Separate workspaces coexist with existing Maestro extensions. Normal client import, permissions, actual loading and runtime qualification remain separate gates. Existing generic rehearsals remain diagnosable.
+- Refs: specs/063-product-native-plugin.md; docs/product-pilot.md; adapters/mcp/packaging/desktop_pilot.go; adapters/mcp/cmd/maestro-mcp/pilot_test.go
+- Supersedes: none

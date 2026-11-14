@@ -90,10 +90,10 @@ cat "$ROOT/preparation.json"
 "$BIN" inspect --product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" || diagnose_failure 'O diagnóstico recusou o vínculo.'
 build_code() { "$BIN" plugin --product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" --server "$BIN" --destination "$ROOT/exports/code" --version 0.0.0 "$@"; }
 case "$(cat "$KIT/LIFECYCLE-CONTEXT.txt")" in enabled) build_code --lifecycle-context || diagnose_failure 'O pacote Code não foi concluído.';; disabled) build_code || diagnose_failure 'O pacote Code não foi concluído.';; *) fail 'Seleção de contexto desconhecida.';; esac
-"$BIN" mcpb --product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" --server "$BIN" --destination "$ROOT/exports/maestro-product.mcpb" --version 0.0.0 || diagnose_failure 'O pacote Desktop não foi concluído.'
+"$BIN" mcpb --desktop-pilot --product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" --server "$BIN" --destination "$ROOT/exports/maestro-product.mcpb" --version 0.0.0 || diagnose_failure 'O pacote Desktop não foi concluído.'
 {
   printf '# Maestro MCP — teste guiado\n\nAbra **launchers/Testar Maestro.command**. Ele confere o ensaio, abre o relatório e permite escolher Code ou Desktop; o texto com o ID correto é copiado automaticamente. Cole uma vez na conversa escolhida.\n\nO perfil Code é separado e pode pedir login normal. Ao habilitar o plugin, preencha os campos com estes valores literais:\n\nOwner directory:\n\n    %s/owner\n\nWorkspace:\n\n    %s/workspace\n\n' "$ROOT" "$ROOT"
-  printf 'Depois abra launchers/Abrir Desktop.command e confirme os mesmos campos na extensão. Se já houver outra extensão maestro-product, pare antes de substituir.\n\nO workspace_id esperado vem desta criação real:\n\n'
+  printf 'Depois abra launchers/Abrir Desktop.command e confirme a extensão Maestro MCP — Ensaio indicada no relatório. Owner directory e Workspace já vêm preenchidos para este ensaio. Preserve outras extensões Maestro; se o cliente propuser substituir outra extensão, pare.\n\nO workspace_id esperado vem desta criação real:\n\n'
   cat "$ROOT/preparation.json"
   printf '\n\nOs relatórios ficam em diagnostics/, fora dos dados do Maestro. Compartilhe somente RELATORIO.md após conferir seu conteúdo. As chamadas reais nos clientes, login, confirmações e hooks continuam sendo verificados por você. O servidor é de engenharia sem versão de release; 0.0.0 é o rótulo dos pacotes.\n'
 } > "$ROOT/COMECE-AQUI.md"
