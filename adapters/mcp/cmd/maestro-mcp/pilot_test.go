@@ -158,6 +158,9 @@ func assertPilotCheckPackets(t *testing.T) {
 		if gate, journey := strings.Index(report.CodePrompt, "Antes dos métodos ou de criar a página"), strings.Index(report.CodePrompt, "Quero testar explicitamente os métodos"); gate < 0 || journey <= gate {
 			t.Fatal("repeat-work gate must precede the method and page journey")
 		}
+		if gate, page := strings.Index(report.DesktopPrompt, "pare antes de brain.read"), strings.Index(report.DesktopPrompt, "Somente com um trabalho identificado recupere"); gate < 0 || page <= gate {
+			t.Fatal("Desktop must report the verified context and stop before page reads when no unique Code work exists")
+		}
 	}
 	if report.KitID != kitID || !strings.Contains(report.Markdown, kitID) || !strings.Contains(report.Markdown, runtime.GOOS+"/"+runtime.GOARCH) {
 		t.Fatal("shareable Markdown lost the actual host or bounded local kit identifier")
@@ -525,7 +528,7 @@ func assertDesktopPilotNativeMaterialization(t *testing.T, binary, packet, archi
 	if err != nil {
 		// Failure-only synthetic paths distinguish packet materialization from
 		// executable startup without changing the product's redacted diagnostics.
-		parent, parentErr := filepath.EvalSymlinks(filepath.Dir(selected))
+		parent, parentErr := managedPacketParent(filepath.Dir(selected))
 		physical := filepath.Join(parent, filepath.Base(selected))
 		physicalStatus, physicalErr := packaging.ValidatePacket(physical)
 		expectedImage, imageErr := filepath.EvalSymlinks(executable)
@@ -535,7 +538,7 @@ func assertDesktopPilotNativeMaterialization(t *testing.T, binary, packet, archi
 		if runtime.GOOS == "windows" {
 			sameImage = strings.EqualFold(expectedImage, physicalServer)
 		}
-		t.Logf("desktop_materialization physical_root=%q parent_error=%v physical_validation=%v native_mode=%q physical_server=%q expected_child_image=%q image_resolution=%v image_path_equal=%t image_read=%v image_hash_equal=%t", physical, parentErr, physicalErr, physicalStatus.NativeMode, physicalServer, expectedImage, imageErr, sameImage, serverErr, fmt.Sprintf("%x", sha256.Sum256(serverBody)) == physicalStatus.ServerSHA256)
+		t.Logf("desktop_materialization physical_root=%q parent_error=%v physical_validation=%v native_mode=%q physical_server=%q hint_eval_path=%q hint_eval_error=%v hint_eval_path_equal=%t image_read=%v image_hash_equal=%t", physical, parentErr, physicalErr, physicalStatus.NativeMode, physicalServer, expectedImage, imageErr, sameImage, serverErr, fmt.Sprintf("%x", sha256.Sum256(serverBody)) == physicalStatus.ServerSHA256)
 		for _, probe := range [][]string{{"client-capabilities"}, append([]string{"inspect"}, args[1:]...)} {
 			probeContext, probeCancel := context.WithTimeout(context.Background(), 5*time.Second)
 			var probeStderr bytes.Buffer

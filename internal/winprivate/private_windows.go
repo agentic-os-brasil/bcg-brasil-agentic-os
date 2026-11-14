@@ -37,6 +37,30 @@ type Directory struct {
 	pinnedTree bool
 }
 
+// FinalLocalPath normalizes an already-open handle to a local DOS path.
+// It neither opens an object nor admits it as private or managed state.
+func FinalLocalPath(file *os.File) (string, error) {
+	if file == nil {
+		return "", errors.New("Windows path handle unavailable")
+	}
+	buffer := make([]uint16, 32768)
+	n, err := windows.GetFinalPathNameByHandle(windows.Handle(file.Fd()), &buffer[0], uint32(len(buffer)), 0)
+	runtime.KeepAlive(file)
+	if err != nil || n == 0 || n >= uint32(len(buffer)) {
+		return "", errors.New("Windows final path unavailable")
+	}
+	path := windows.UTF16ToString(buffer[:n])
+	if !strings.HasPrefix(path, `\\?\`) {
+		return "", errors.New("Windows local DOS path unavailable")
+	}
+	path = strings.TrimPrefix(path, `\\?\`)
+	volume := filepath.VolumeName(path)
+	if len(volume) != 2 || volume[1] != ':' || !filepath.IsAbs(path) {
+		return "", errors.New("Windows local DOS path unavailable")
+	}
+	return filepath.Clean(path), nil
+}
+
 func CurrentUser() (*windows.SID, error) {
 	u, err := windows.GetCurrentProcessToken().GetTokenUser()
 	if err != nil {

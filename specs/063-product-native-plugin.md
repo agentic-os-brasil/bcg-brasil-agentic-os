@@ -124,6 +124,13 @@ recheck that existing pin after validation and retain the physical managed root
 for later reads. This is bounded file identity, not kernel image attestation.
 Leaf/inner links, another executable/source and all owner/workspace aliases stay
 refused. Do not alter OS links or installed permissions to make a packet pass.
+On Windows, Go 1.23+ does not resolve mount-point junctions through
+`filepath.EvalSymlinks`. Normalize the already-open executable handle and only
+the selected managed-parent directory handle to their final local DOS paths.
+Reopen the original image hint on each pin check and require the same physical
+path and file version; another target with identical bytes remains refused.
+Handle-path normalization grants no private-state admission and never replaces
+the owner/workspace or strict physical packet no-follow guards.
 Installation and permissions still require normal client confirmation, and real
 Desktop loading remains separately observed. Existing generic rehearsals remain
 diagnosable without silently becoming isolated extensions.

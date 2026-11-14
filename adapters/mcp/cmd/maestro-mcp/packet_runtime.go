@@ -21,7 +21,7 @@ func runtimePacketRoot(root string, pin processidentity.Identity) (string, packa
 	if err != nil {
 		return "", status, strictErr
 	}
-	parent, err := filepath.EvalSymlinks(filepath.Dir(clean))
+	parent, err := managedPacketParent(filepath.Dir(clean))
 	if err != nil {
 		return "", status, strictErr
 	}
