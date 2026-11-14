@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,6 +21,7 @@ import (
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/zipmigration"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/zipruntime"
@@ -81,6 +83,50 @@ func TestWindowsCorePilot(t *testing.T) {
 	for _, path := range []string{productRoot, home} {
 		if err = os.Mkdir(path, 0700); err != nil {
 			t.Fatal(err)
+		}
+	}
+	// Stay within the admitted native parent; this is an inline refusal witness,
+	// not another platform outcome or an authority to repair owner security.
+	{
+		refusedHome := filepath.Join(root, "unsafe-owner")
+		if err := os.Mkdir(refusedHome, 0700); err != nil {
+			t.Fatal(err)
+		}
+		sd, err := windows.SecurityDescriptorFromString("O:" + user.User.Sid.String() + "D:P(A;OICI;FA;;;" + user.User.Sid.String() + ")(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;GR;;;WD)")
+		if err != nil {
+			t.Fatal(err)
+		}
+		acl, _, err := sd.DACL()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := windows.SetNamedSecurityInfo(refusedHome, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil); err != nil {
+			t.Fatal(err)
+		}
+		readSecurity := func() string {
+			t.Helper()
+			actual, err := windows.GetNamedSecurityInfo(refusedHome, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+			if err != nil {
+				t.Fatal(err)
+			}
+			owner, _, err := actual.Owner()
+			if err != nil || owner == nil || !owner.Equals(user.User.Sid) {
+				t.Fatal("fixture must retain actual process ownership", err)
+			}
+			return actual.String()
+		}
+		before := readSecurity()
+		err = product.Preflight(product.Options{ProductRoot: productRoot, UserHome: refusedHome, WorkspacePath: filepath.Join(root, "refused-workspace"), LookupEnv: func(string) (string, bool) { return "", false }})
+		var native *winprivate.DiagnosticError
+		if !errors.Is(err, winprivate.ErrUnsafeACL) || !errors.As(err, &native) || datahome.DiagnosticReason(err) != "unsafe_acl" {
+			t.Fatal("public preflight discarded the native unsafe-ACL reason", err)
+		}
+		if err.Error() != "home_unavailable" {
+			t.Fatal("public preflight exposed private native facts")
+		}
+		entries, err := os.ReadDir(refusedHome)
+		if err != nil || len(entries) != 0 || readSecurity() != before {
+			t.Fatal("read-only refusal changed owner state or security descriptor", err)
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)

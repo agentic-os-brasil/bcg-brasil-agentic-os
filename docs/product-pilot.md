@@ -55,11 +55,31 @@ Desktop's user_config prompts. See the [official Code manifest reference](https:
 An existing Desktop extension with the same product name is an explicit stop,
 not an automatic replacement.
 
-The short participant instructions and actual-client prompts live in
+Preparation runs the existing executable's read-only `pilot-check` command and
+retains a new JSON/Markdown report under `diagnostics/` for every check. Reports
+live outside the hashed product, exports and launcher trees. The check validates
+the emitted Code packet and Desktop archive, connects to the actual Code packet
+server through the MCP SDK and compares the workspace to `preparation.json`.
+Archive validation does not prove Desktop loading. A blocked initialization also
+keeps the verified executable, test launcher and bounded diagnostic report;
+neither the preparer nor the checker repairs owner ACLs or removes partial data.
+
+The participant opens **Testar Maestro**, chooses Code or Desktop, and pastes one
+generated prompt. Each prompt binds the verified workspace and a synthetic trial
+marker. The Desktop prompt discovers the single matching work item and uses its
+current revision, so the participant does not transport execution IDs/revisions.
+The launcher copies a prompt and opens a client only after that explicit choice.
+`--check-only` on Mac and `-CheckOnly` on Windows save reports without opening a
+client or report viewer; preparation uses that mode. Missing `claude` is reported
+without installing software or preventing the independent MCP/archive checks.
+
+The short participant instructions and actual-client flow live in
 [LEIA-ME.md](../dev/pilot/LEIA-ME.md) and [ROTEIRO.md](../dev/pilot/ROTEIRO.md).
 They keep packaging, import, connection, cross-client work and accepted effects
-separate. Actual native client loading remains unobserved until those actions
-are run and their receipts retained.
+separate. Automatic reports leave Code/Desktop client loading, login, real host
+hooks and confirmation as `not_tested`; participants record those observations
+after using the clients. Share only the reviewed Markdown report, not owner,
+workspace, client profiles or participant-local generated packets/prompts.
 
 ## Trust and platform limits
 

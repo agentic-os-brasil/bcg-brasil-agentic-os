@@ -70,6 +70,27 @@ host version, selected plugin/binding and private synthetic receipts. Passive
 client delivery is not full native qualification, Windows device acceptance,
 automatic second-brain maintenance or production release approval.
 
+## Isolated pilot self-service
+
+The generic pilot preparer invokes a read-only `pilot-check` on the compiled
+shared MCP executable using its existing product/home/workspace selection. That
+check validates the known emitted packet layout, exercises the actual Code
+packet through the MCP SDK and compares the observed workspace with the saved
+preparation result. It returns bounded metadata, a Markdown report and two
+workspace-bound synthetic exercise prompts. It never initializes state, repairs
+permissions, calls a model, applies mutations or activates a client. An admission
+failure preserves a finite typed diagnostic reason without disclosing owner
+contents, native SIDs or raw private error bodies.
+
+Participant wrappers retain each report exclusively under a sibling diagnostics
+directory, outside managed packet inventories. They also capture initialization
+failure after the verified executable is available, preserving partial data.
+The test launcher offers an explicit client choice and copies one filled prompt;
+the Desktop exercise resolves exactly one matching paused work item and its
+current revision before a single resume. Unknown or ambiguous state stops the
+exercise. Native client login, loading, confirmation, hook delivery and colleague
+acceptance remain separately observed gates, never inferred from an SDK check.
+
 ## Canonical identities and projection
 
 Maestro remains the main-session hub. Project the six canonical specialists:

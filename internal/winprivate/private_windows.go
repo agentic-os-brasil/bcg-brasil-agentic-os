@@ -40,10 +40,10 @@ type Directory struct {
 func CurrentUser() (*windows.SID, error) {
 	u, err := windows.GetCurrentProcessToken().GetTokenUser()
 	if err != nil {
-		return nil, err
+		return nil, withReason(ErrInspectionFailed, err)
 	}
 	if u == nil || u.User.Sid == nil || !u.User.Sid.IsValid() {
-		return nil, errors.New("Windows process owner SID unavailable")
+		return nil, withReason(ErrInspectionFailed, errors.New("Windows process owner SID unavailable"))
 	}
 	return u.User.Sid, nil
 }
@@ -58,46 +58,52 @@ func Validate(h windows.Handle, directory bool) error {
 	}
 	sd, err := windows.GetSecurityInfo(h, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
 	if err != nil {
-		return fmt.Errorf("inspect held private security descriptor: %w", err)
+		return withReason(ErrInspectionFailed, fmt.Errorf("inspect held private security descriptor: %w", err))
 	}
 	if sd == nil || !sd.IsValid() {
-		return errors.New("private object security descriptor is invalid")
+		return withReason(ErrUnsafeACL, errors.New("private object security descriptor is invalid"))
 	}
 	owner, _, err := sd.Owner()
-	if err != nil || owner == nil || !owner.IsValid() {
-		return errors.New("private object owner is invalid")
+	if err != nil {
+		return withReason(ErrInspectionFailed, fmt.Errorf("inspect private object owner: %w", err))
+	}
+	if owner == nil || !owner.IsValid() {
+		return withReason(ErrInspectionFailed, errors.New("private object owner is invalid"))
 	}
 	user, err := CurrentUser()
 	if err != nil {
 		return err
 	}
 	if !owner.Equals(user) {
-		return errors.New("private object belongs to a different Windows owner")
+		return withReason(ErrOwnerMismatch, errors.New("private object belongs to a different Windows owner"))
 	}
 	acl, _, err := sd.DACL()
-	if err != nil || acl == nil {
-		return errors.New("private object has no valid non-null DACL")
+	if err != nil {
+		return withReason(ErrInspectionFailed, fmt.Errorf("inspect private object DACL: %w", err))
+	}
+	if acl == nil {
+		return withReason(ErrUnsafeACL, errors.New("private object has no valid non-null DACL"))
 	}
 	for i := uint16(0); i < acl.AceCount; i++ {
 		var ace *windows.ACCESS_ALLOWED_ACE
 		if err := windows.GetAce(acl, uint32(i), &ace); err != nil {
-			return err
+			return withReason(ErrInspectionFailed, err)
 		}
 		if ace == nil {
-			return errors.New("private object contains an empty ACE")
+			return withReason(ErrUnsafeACL, errors.New("private object contains an empty ACE"))
 		}
 		if ace.Header.AceType == windows.ACCESS_DENIED_ACE_TYPE || ace.Header.AceFlags&windows.INHERIT_ONLY_ACE != 0 {
 			continue
 		}
 		if ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE {
-			return errors.New("private object contains an unsupported effective ACE")
+			return withReason(ErrUnsafeACL, errors.New("private object contains an unsupported effective ACE"))
 		}
 		if ace.Mask == 0 {
 			continue
 		}
 		sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
 		if !sid.IsValid() || (!sid.Equals(user) && !sid.IsWellKnown(windows.WinLocalSystemSid) && !sid.IsWellKnown(windows.WinBuiltinAdministratorsSid)) {
-			return errors.New("private object grants access to an unapproved Windows principal")
+			return withReason(ErrUnsafeACL, errors.New("private object grants access to an unapproved Windows principal"))
 		}
 	}
 	return nil
@@ -105,21 +111,24 @@ func Validate(h windows.Handle, directory bool) error {
 
 func validateType(h windows.Handle, directory, single bool) error {
 	kind, err := windows.GetFileType(h)
-	if err != nil || kind != windows.FILE_TYPE_DISK {
-		return errors.New("private object must be a local disk object")
+	if err != nil {
+		return withReason(ErrInspectionFailed, err)
+	}
+	if kind != windows.FILE_TYPE_DISK {
+		return withReason(ErrUnsupportedFilesystem, errors.New("private object must be a local disk object"))
 	}
 	var info windows.ByHandleFileInformation
 	if err := windows.GetFileInformationByHandle(h, &info); err != nil {
-		return err
+		return withReason(ErrInspectionFailed, err)
 	}
 	if info.FileAttributes&unsafeAttributes != 0 {
-		return errors.New("private object is a reparse, offline or recall object")
+		return withReason(ErrUnsafeAttributes, errors.New("private object is a reparse, offline or recall object"))
 	}
 	if (info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0) != directory {
-		return errors.New("private object has the wrong filesystem type")
+		return withReason(ErrUnsafeAttributes, errors.New("private object has the wrong filesystem type"))
 	}
 	if single && info.NumberOfLinks != 1 {
-		return errors.New("private file must have exactly one link")
+		return withReason(ErrUnsafeAttributes, errors.New("private file must have exactly one link"))
 	}
 	return nil
 }
@@ -169,7 +178,7 @@ var queryVolume = windows.NewLazySystemDLL("ntdll.dll").NewProc("NtQueryVolumeIn
 // held object's kernel volume facts, rather than its spelling, admit locality.
 func validateLocalVolume(h windows.Handle) error {
 	if err := queryVolume.Find(); err != nil {
-		return err
+		return withReason(ErrBackendUnavailable, err)
 	}
 	var information struct {
 		DeviceType      uint32
@@ -181,13 +190,13 @@ func validateLocalVolume(h windows.Handle) error {
 	const fileRemoteDevice = 0x10
 	status, _, _ := queryVolume.Call(uintptr(h), uintptr(unsafe.Pointer(&iosb)), uintptr(unsafe.Pointer(&information)), unsafe.Sizeof(information), fileFsDeviceInformation)
 	if status != 0 {
-		return fmt.Errorf("inspect held private volume: %w", windows.NTStatus(uint32(status)).Errno())
+		return withReason(ErrInspectionFailed, fmt.Errorf("inspect held private volume: %w", windows.NTStatus(uint32(status)).Errno()))
 	}
 	if iosb.Information != unsafe.Sizeof(information) {
-		return errors.New("held private volume facts are incomplete")
+		return withReason(ErrInspectionFailed, errors.New("held private volume facts are incomplete"))
 	}
 	if information.DeviceType != fileDeviceDisk || information.Characteristics&fileRemoteDevice != 0 {
-		return errors.New("private state requires a local disk volume")
+		return withReason(ErrUnsupportedFilesystem, errors.New("private state requires a local disk volume"))
 	}
 	return nil
 }

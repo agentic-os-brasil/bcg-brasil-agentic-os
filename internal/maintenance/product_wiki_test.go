@@ -94,7 +94,8 @@ func TestProductWikiCadenceEnrollmentAndReplay(t *testing.T) {
 			}
 			days := 1
 			if job == WikiReconcileJobID {
-				days = 8
+				// Eight days can leave a second Sunday pending behind MaxCatchUp=1.
+				days = 7
 			}
 			later := s.now().AddDate(0, 0, days)
 			s.now = func() time.Time { return later }

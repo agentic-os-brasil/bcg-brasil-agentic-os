@@ -16,10 +16,18 @@ import (
 // Preflight validates selected paths without creating state or following links.
 // Fresh initialization and existing binding admission share these constraints.
 func Preflight(o Options) error { _, err := resolveBinding(o); return err }
+
+// Keep the public admission message bounded while retaining native causes for
+// read-only diagnostic classification through errors.Is and errors.As.
+type homeAdmissionError struct{ cause error }
+
+func (e *homeAdmissionError) Error() string { return "home_unavailable" }
+func (e *homeAdmissionError) Unwrap() error { return e.cause }
+
 func resolveBinding(o Options) (datahome.Result, error) {
 	h, err := datahome.Resolve(datahome.Options{ProductRoot: o.ProductRoot, UserHome: o.UserHome, LookupEnv: o.LookupEnv})
 	if err != nil {
-		return h, errors.New("home_unavailable")
+		return h, &homeAdmissionError{cause: err}
 	}
 	paths := zipruntime.ResolvePaths(o.ProductRoot, zipruntime.Options{UserHome: o.UserHome, LookupEnv: o.LookupEnv})
 	if paths.Mode != "external" && paths.Mode != "initialization_required" {

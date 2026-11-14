@@ -261,7 +261,9 @@ func TestProductRemainingEnrollmentDueAndReplay(t *testing.T) {
 			}
 			days := 1
 			if job == MemoryDeepDreamJobID {
-				days = 8
+				// One weekly cadence has exactly one due occurrence. Eight days
+				// can cross two Sundays, so a catch-up limit of one leaves work.
+				days = 7
 			}
 			later := s.now().AddDate(0, 0, days)
 			s.now = func() time.Time { return later }

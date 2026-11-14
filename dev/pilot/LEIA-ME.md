@@ -1,4 +1,4 @@
-# Maestro — teste local com Code e Desktop
+# Maestro MCP — preparar, conferir e testar
 
 Este kit prepara um ensaio novo com produto, estado privado, workspace e perfil Code separados. Você não precisa de Go, Git, Python ou acesso ao repositório. Precisa de Code e Desktop instalados; o perfil Code do ensaio pode pedir login pelo fluxo normal.
 
@@ -9,8 +9,10 @@ Este kit prepara um ensaio novo com produto, estado privado, workspace e perfil 
 1. Extraia o ZIP inteiro para uma pasta local comum. No Windows, baixe do SharePoint/OneDrive e extraia fora da pasta sincronizada; reparse points e Files On-Demand, mesmo hidratados, não fazem parte deste fluxo.
 2. Crie uma pasta local `Developer` dentro do seu perfil, caso ela ainda não exista.
 3. No Mac, abra **Preparar Maestro.command**. No Windows x64, abra **Preparar Maestro.cmd**. Leia os caminhos apresentados e digite `PREPARAR` se forem os pretendidos.
-4. Abra o **COMECE-AQUI.md** que o preparador indicar. Ele contém os launchers e os valores exatos de **Owner directory** e **Workspace** para os dois clientes.
-5. Execute o **ROTEIRO.md**. Compare o `workspace_id` da criação com o retorno do MCP em cada cliente antes de gravar.
+4. O preparador confere automaticamente o ensaio e indica o **RELATORIO.md**. Se houver bloqueio, envie esse Markdown ao time e preserve a pasta; nenhuma chamada ao modelo é feita pela conferência.
+5. Abra **Testar Maestro** na pasta `launchers` indicada. Escolha **Code** ou **Desktop**: o texto correto vai para a área de transferência. Cole uma vez na conversa do cliente. Comece pelo Code e depois retome no Desktop, como explica o **ROTEIRO.md**.
+
+O relatório automático registra a conexão MCP que ele próprio testou. Login, carregamento e permissões dos clientes, confirmação de gravações e execução real dos hooks continuam sendo observações suas. **COMECE-AQUI.md** guarda os valores de Owner directory e Workspace quando o cliente pedir.
 
 O Code abre com `--plugin-dir` e um `CLAUDE_CONFIG_DIR` específico deste ensaio. O preparador não instala plugins no seu perfil normal. Ao habilitar o plugin, preencha os campos pedidos com os valores de COMECE-AQUI.md.
 
@@ -31,8 +33,10 @@ Conversão sem runtime offline admitido, instalação/atualização assinada sem
 
 ## Repetir e recuperar
 
-Abrir novamente o mesmo preparador confere os arquivos gerenciados e lê o diagnóstico; memória, páginas e checkpoints permanecem no estado privado. Outra identidade de kit usa outra pasta. Destino estrangeiro, material alterado ou preparação parcial são preservados e recusados: escolha uma pasta nova para recuperar, sem apagar a anterior.
+Abrir novamente o mesmo preparador confere os arquivos gerenciados e gera outro relatório; memória, páginas e checkpoints permanecem no estado privado. Você também pode repetir **Testar Maestro** diretamente. Cada execução guarda um novo relatório em `diagnostics`, sem sobrescrever o anterior.
+
+Outra identidade de kit usa outra pasta. Destino estrangeiro e material alterado são preservados e recusados. Se a inicialização falhar após copiar o executável, o preparador guarda o diagnóstico e deixa **Testar Maestro** disponível na pasta parcial. Envie o relatório antes de tentar outra pasta; preserve a anterior. O kit não corrige permissões automaticamente.
 
 Compartilhe somente o ZIP genérico. A pasta preparada contém estado e caminhos locais; não redistribua owner, workspace, perfil Code, MCPB ou plugin gerados.
 
-Retorne: sistema/arquitetura, versões Code/Desktop, KIT-ID, etapa e resultado real. Use “não testado” ou “indisponível” quando couber. Não envie credenciais, memória ou documentos reais.
+Retorne o **RELATORIO.md**, após conferir seu conteúdo, e o resultado real nos clientes conforme o roteiro. Use “não testado” ou “indisponível” quando couber. Não envie credenciais, memória ou documentos reais.
