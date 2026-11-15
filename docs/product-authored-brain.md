@@ -119,9 +119,9 @@ only inserted text follows its target heading while surrounding bytes remain
 unchanged. Legacy pages remain readable with diagnostics. Preparation preserves hand edits
 and does not retrofit metadata. Appending, declared-field edits and links retain
 the surrounding legacy source; a full replacement requires valid metadata.
-This authored-page route does not recompile the authored navigation index,
-create private memory, activate daily/weekly rituals or attest an external
-SharePoint publication. Those remain independently owned product capabilities.
+Explicit authored navigation is available through the separate reviewed
+`brain.compile` route described below. Page creation/editing does not compile it
+automatically, create private memory, activate rituals or publish to SharePoint.
 
 
 ## Shared knowledge and effect-time scope
@@ -137,3 +137,51 @@ Source and target admission, existence and reviewed target content are checked
 after acquiring the corpus lock, before receipt replay/finalization, and again
 before publication. A waited-for lock or old receipt cannot renew lost target
 authority. These checks do not serialize arbitrary external case-marker writers.
+
+
+## Compile and use authored navigation
+
+Choose up to 24 exact page names with the owner, then call `maestro_apply` with
+`brain.compile`, `pages` and a short `purpose`. The source collection is bounded
+to 128 KiB. Review and approve the exact cohort in the client's native form; no
+form means compilation stays unavailable. This creates only derived navigation,
+leaving authored Markdown and private memory untouched. A source outside that
+cohort is never searched or probed. To verify a particular missing link, include
+its exact target name explicitly.
+
+Keep the returned `generation` and start `brain.navigate` at `reference=index.md`.
+It links to hierarchical indexes, summaries and backlinks. Resolve relative
+links inside this virtual tree, preserving their canonical percent-encoding.
+Pass the encoded bundle-relative reference to `brain.navigate`; it decodes once.
+A filename containing literal `%23` uses `%2523` and remains distinct from `#`
+(`%23`). Never pass a fragment or query. These are not local machine paths. Read the original
+with `brain.read(page,purpose)`. Text pages are at most 4096 bytes; continue with
+`next_offset` until `-1`. `brain.diagnostics` uses the same paging contract.
+`brain.search(generation,query,purpose)` finds Unicode case/accent-insensitive
+substring matches and returns exact page revisions/pointers; paginate its match
+`offset/next_offset` until `complete=true`. Search has at most 24 hits and a
+512–4096-byte serialized budget per result.
+
+`brain.navigation_status` is read-only: absent, ready or stale. The same source
+bytes and names return `unchanged`, even when supplied in a different order.
+Changed, moved, deleted or no-longer-admitted pages make an old generation
+unavailable; recompile explicitly after inspecting current sources. Interrupted
+publication preserves the previous complete generation, and a cold restart
+reads the published record. Source edits can still make that previous record
+stale; preserving a pointer does not authorize presenting obsolete text.
+
+Backlinks, orphans and broken links describe only the reviewed cohort. Unvisited
+links remain unchecked. Invalid metadata and malformed generated-region markers
+are diagnostics; superseded sources and invalid pages are excluded from search.
+Compilation does not repair source, register a background job, run a legacy
+Python helper or imply that a particular installed Code/Desktop/Windows client
+has been qualified. The `brain-index` packaged method describes this exact MCP
+path; method discovery itself executes nothing.
+
+The `brain-index` method plan declares both the registered authored compiler
+operations and the required `host.trusted_review` capability. Operation
+registration makes the domain dependency available; it does not attest native
+review in the selected client. The static plan therefore reports `requirements_unavailable`; compilation must
+separately satisfy the actual host review gate. A successful approval does not
+mutate this capability declaration. Read-only navigation queries do not require
+publication approval.
