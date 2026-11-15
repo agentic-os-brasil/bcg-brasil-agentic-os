@@ -1,8 +1,10 @@
 package scheduler
 
 import (
+	"context"
 	"errors"
 	"os"
+	"time"
 )
 
 type leaseGuard struct {
@@ -12,6 +14,25 @@ type leaseGuard struct {
 func acquireLeaseGuard(directory *secureDirectory, name string) (*leaseGuard, error) {
 	file, err := directory.openLock(name)
 	return lockLeaseGuard(file, err)
+}
+
+func acquireLeaseGuardContext(ctx context.Context, directory *secureDirectory, name string) (*leaseGuard, error) {
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		guard, err := acquireLeaseGuard(directory, name)
+		if !errors.Is(err, errLeaseGuardBusy) {
+			return guard, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 func acquireExistingLeaseGuard(directory *secureDirectory, name string) (*leaseGuard, error) {
