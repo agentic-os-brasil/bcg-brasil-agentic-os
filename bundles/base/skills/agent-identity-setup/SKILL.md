@@ -9,6 +9,14 @@ Use the admitted Maestro connector for all identity operations. Names and
 emoji belong to the canonical private identity profile; never write legacy
 `agents.json`, per-case `agent.json` or managed templates yourself.
 
+## Interaction profile
+
+Resolve the canonical [interaction-profile](../interaction-profile/SKILL.md)
+through an admitted owner-profile projection before asking a question. If this
+MCP cannot project it, use `standard` and state that calibration is unavailable;
+do not probe legacy owner files or another connector. The profile changes
+explanation depth only, never question order, ownership or native review.
+
 ## Open the current question
 
 1. Query `agent.identity.interview`. Follow its actual `state`,
