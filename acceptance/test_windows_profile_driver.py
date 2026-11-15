@@ -13,6 +13,8 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 DRIVER = ROOT / "acceptance/windows-core-pilot.ps1"
 
+# Canonical repository text is UTF-8, independently of the Windows ANSI default.
+
 
 class WindowsInspectionDriver(unittest.TestCase):
     def setUp(self):
@@ -52,7 +54,7 @@ if ($errors.Count) { throw ($errors | Out-String) }
 
     def test_workflow_windows_blocks_parse(self):
         for workflow_path in (".github/workflows/data-home-inspection.yml", ".github/workflows/windows-native-engine.yml"):
-            workflow = (ROOT / workflow_path).read_text()
+            workflow = (ROOT / workflow_path).read_text(encoding="utf-8")
             current = []
             blocks = []
             lines = workflow.splitlines()
@@ -102,7 +104,7 @@ if ($errors.Count) { throw ($errors | Out-String) }
                     packages=entries, vendor_files=[dict(path="modules.txt", sha256=hashlib.sha256(vendor.read_bytes()).hexdigest())])
 
     def test_workflow_keeps_migration_skips_exact_and_explicitly_unqualified(self):
-        workflow = (ROOT / ".github/workflows/data-home-inspection.yml").read_text()
+        workflow = (ROOT / ".github/workflows/data-home-inspection.yml").read_text(encoding="utf-8")
         stage = workflow.split("      - name: Stage closed Windows inspection inputs\n", 1)[1]
         body = stage.split("      - name:", 1)[0].split("        run: |\n", 1)[1]
         source = self.root / "stage.ps1"
@@ -544,7 +546,7 @@ $values|ConvertTo-Json -Depth 4 -Compress
         self.assertEqual(len(set(ledger["$adapterSetupAssertions"])), 22)
         for assertion in ledger["$adapterSetupAssertions"]:
             self.assertIn(assertion.split("/")[0], ledger["$adapterSetupParents"])
-        setup_source = "\n".join(p.read_text() for p in (ROOT / "adapters/mcp/setup").glob("*_test.go"))
+        setup_source = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "adapters/mcp/setup").glob("*_test.go"))
         for parent in ledger["$adapterSetupParents"]:
             self.assertIn(f"func {parent}(", setup_source)
         self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]) + len(ledger["$adapterSetupAssertions"]), 200)
@@ -558,7 +560,7 @@ $values|ConvertTo-Json -Depth 4 -Compress
         for name in ("TestMethodPlansResolveMaintenanceKeepWikiUnavailable", "TestMethodPlansResolveRegisteredMaintenanceAndWiki", "TestAgentResourceCallbacksRevalidateBinding"):
             self.assertIn(name, ledger["$adapterParents"])
             self.assertIn(name, ledger["$adapterAssertions"])
-        source = "\n".join(p.read_text() for p in (ROOT / "adapters/mcp").glob("*_test.go"))
+        source = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "adapters/mcp").glob("*_test.go"))
         for name in ledger["$adapterParents"]:
             self.assertIn(f"func {name}(", source)
         # These are compiled adapter contracts under the existing ordinary-user
@@ -583,7 +585,7 @@ $values|ConvertTo-Json -Depth 4 -Compress
                           if name == "TestCompiledClaudeHook" or name.startswith("TestCompiledClaudeHook/")},
                          hook_outcomes)
         self.assertNotIn("TestContentDesktopPacketOracle", ledger["$adapterParents"])
-        command = "\n".join(p.read_text() for p in (ROOT / "adapters/mcp/cmd/maestro-mcp").glob("*_test.go"))
+        command = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "adapters/mcp/cmd/maestro-mcp").glob("*_test.go"))
         for name in ledger["$adapterCommandParents"]:
             self.assertIn(f"func {name}(", command)
 
@@ -638,7 +640,7 @@ $canonicalRequired|ConvertTo-Json -Depth 4 -Compress
             files = package.get("TestGoFiles",[])+package.get("XTestGoFiles",[])
             declarations = []
             for filename in files:
-                declarations.extend(re.findall(r"^func (Test[A-Za-z0-9_]+)\(", (Path(package["Dir"])/filename).read_text(),re.M))
+                declarations.extend(re.findall(r"^func (Test[A-Za-z0-9_]+)\(", (Path(package["Dir"])/filename).read_text(encoding="utf-8"),re.M))
             for parent in {assertion.split("/")[0] for assertion in assertions}:
                 self.assertEqual(declarations.count(parent),1,f"{name}/{parent} is missing or duplicated in actual Windows-selected source")
 
@@ -708,7 +710,7 @@ if($sealed -eq 0){throw 'Expected an actual sealed-engine caller'}
 ''', encoding="utf-8")
         selected = 0
         for workflow in sorted((ROOT / ".github/workflows").glob("*.yml")):
-            lines = workflow.read_text().splitlines()
+            lines = workflow.read_text(encoding="utf-8").splitlines()
             for index, line in enumerate(lines):
                 if line.strip() != "run: |":
                     continue
