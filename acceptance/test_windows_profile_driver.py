@@ -306,7 +306,7 @@ class WindowsEngineProfile(unittest.TestCase):
         document["public_server_sha256"] = "0" * 64
         self.assert_preaccount_refusal(self.invoke_engine(document), "Engine public executables differ from the sealed source manifest")
 
-    def exact_kit_fixture(self):
+    def exact_kit_fixture(self, inventory_newline=None):
         kit = self.root / "Maestro-Pilot-Artifact"
         (kit / "bin").mkdir(parents=True)
         revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
@@ -316,8 +316,9 @@ class WindowsEngineProfile(unittest.TestCase):
         (kit / "ARTIFACT.txt").write_text(f"binary_source_base_commit={revision}\nsource_tree={tree}\ntrust=unsigned_engineering_candidate\n", encoding="utf-8")
         rows = "".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  ./{path.relative_to(kit).as_posix()}\n"
                        for path in sorted(kit.rglob("*")) if path.is_file())
-        (kit / "SHA256SUMS").write_text(rows, encoding="utf-8")
-        kit_id = hashlib.sha256(rows.encode()).hexdigest()
+        (kit / "SHA256SUMS").write_text(rows, encoding="utf-8", newline=inventory_newline)
+        # The identity binds stored bytes; text writes use CRLF on Windows.
+        kit_id = hashlib.sha256((kit / "SHA256SUMS").read_bytes()).hexdigest()
         (kit / "KIT-ID.txt").write_text(kit_id + "\n", encoding="utf-8")
         archive = Path(str(kit) + ".zip")
         with zipfile.ZipFile(archive, "w") as zipped:
@@ -334,7 +335,7 @@ class WindowsEngineProfile(unittest.TestCase):
 
     def test_exact_kit_refuses_changed_inputs_before_account(self):
         document = self.engine_document()
-        kit, archive, identity_path, identity = self.exact_kit_fixture()
+        kit, archive, identity_path, identity = self.exact_kit_fixture(inventory_newline="\r\n")
         original_zip = archive.read_bytes()
         server = kit / "bin/maestro-mcp-windows-amd64.exe"
         original_server = server.read_bytes()
