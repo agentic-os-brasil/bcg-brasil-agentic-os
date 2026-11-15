@@ -84,6 +84,8 @@ type NativeResult struct {
 	CallsAttempted            int     `json:"native_cli_sessions_attempted"`
 	EvidenceClass             string  `json:"evidence_class"`
 	EstimatedSpendUSD         float64 `json:"estimated_spend_usd"`
+	EstimatedSpendSessions    int     `json:"estimated_spend_sessions"`
+	EstimatedSpendComplete    bool    `json:"estimated_spend_complete"`
 	BillingBoundary           string  `json:"billing_boundary"`
 	VendorProvenance          string  `json:"vendor_provenance"`
 	DescendantCleanup         string  `json:"descendant_cleanup"`
@@ -294,20 +296,32 @@ func qualifyAndBuildNative(ctx context.Context, in NativeOptions, reviewDigest s
 		}
 		call, cancel := context.WithTimeout(ctx, nativeCallSeconds*time.Second)
 		result.CallsAttempted++
+		result.EstimatedSpendComplete = false
 		output, callErr := run(call, in.Executable, probe.arguments(in.MaxBudgetUSD), probe.binding.WorkspacePath)
-		timedOut := call.Err() != nil
+		callContextErr := call.Err()
+		timedOut := callContextErr != nil
 		cancel()
-		evidence, err := verifyNativeProbe(output, probe, index == 0)
+		var diagnostic nativeFailureDiagnostic
+		evidence, err := verifyNativeProbeDetailed(output, probe, index == 0, &diagnostic)
 		if timedOut || callErr != nil || err != nil {
 			result.Reason = "native_challenge_evidence_incomplete"
 			if timedOut {
 				result.Reason = "native_timeout_cleanup_unattested"
 			}
+			if err := writeNativeFailure(probe, diagnostic, index, callContextErr, callErr); err != nil {
+				return result, err
+			}
 			return result, buildUnavailable(o, result.Reason)
 		}
 		result.EstimatedSpendUSD += evidence.Cost
+		result.EstimatedSpendSessions++
+		result.EstimatedSpendComplete = result.EstimatedSpendSessions == result.CallsAttempted
 		if evidence.Cost > in.MaxBudgetUSD {
 			result.Reason = "native_estimate_exceeded_reviewed_per_call_limit"
+			diagnostic.FailureCode = "reviewed_estimate_exceeded"
+			if err := writeNativeFailure(probe, diagnostic, index, nil, nil); err != nil {
+				return result, err
+			}
 			return result, buildUnavailable(o, result.Reason)
 		}
 		body, _ := json.MarshalIndent(evidence, "", "  ")
@@ -337,6 +351,35 @@ func qualifyAndBuildNative(ctx context.Context, in NativeOptions, reviewDigest s
 	}
 	return result, nil
 }
+
+// Persist only finite closed observations. A transport error's text is never
+// evidence; only a preserved typed ExitCode can make an unknown exit known.
+func writeNativeFailure(probe nativeProbe, d nativeFailureDiagnostic, attempt int, contextErr, runnerErr error) error {
+	d.AttemptIndex, d.RunnerError = attempt, runnerErr != nil
+	d.TimedOut = errors.Is(contextErr, context.DeadlineExceeded)
+	d.Canceled = errors.Is(contextErr, context.Canceled)
+	if runnerErr == nil && contextErr == nil {
+		zero := 0
+		d.ExitCode = &zero
+	} else if runnerErr != nil {
+		var exit interface{ ExitCode() int }
+		if errors.As(runnerErr, &exit) && exit.ExitCode() >= 0 {
+			code := exit.ExitCode()
+			d.ExitCode = &code
+		}
+	}
+	if contextErr != nil {
+		d.Phase, d.FailureCode = "execution", "execution_context_stopped"
+	} else if runnerErr != nil {
+		d.Phase, d.FailureCode = "execution", "runner_failed"
+	}
+	body, err := json.MarshalIndent(d, "", "  ")
+	if err != nil || len(body)+1 > 4096 {
+		return errors.New("native failure diagnostic unavailable")
+	}
+	return scheduler.WriteNewPrivateFile(filepath.Join(probe.root, "failure.json"), append(body, '\n'))
+}
+
 func buildUnavailable(o Options, reason string) error {
 	c := nativeCapability(o)
 	c.State = "unavailable"
