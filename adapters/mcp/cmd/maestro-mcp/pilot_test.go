@@ -139,6 +139,7 @@ func assertPilotCheckPackets(t *testing.T) {
 	if report.Status != expectedStatus || len(report.WorkspaceID) != 32 {
 		t.Fatalf("actual packet did not produce guided client handoff: %+v", report)
 	}
+	assertPilotReadinessPrompt(t, out, report.WorkspaceID, desktopSupported)
 	if desktopSupported && (!strings.Contains(report.CodePrompt, report.WorkspaceID) || !strings.Contains(report.DesktopPrompt, report.WorkspaceID)) || !desktopSupported && (report.CodePrompt != "" || report.DesktopPrompt != "") {
 		t.Fatal("client guidance ignored native Desktop availability")
 	}
@@ -233,9 +234,43 @@ func assertPilotCheckPackets(t *testing.T) {
 	if err := json.Unmarshal(blocked.Bytes(), &report); err != nil || report.Status != "blocked" || report.CodePrompt != "" {
 		t.Fatalf("workspace mismatch published unsafe guidance: %s", blocked.String())
 	}
+	assertPilotReadinessPrompt(t, blocked.Bytes(), "", false)
 }
 
 func sha256Sum(body []byte) []byte { sum := sha256.Sum256(body); return sum[:] }
+
+// The emitted launchers extract this public report field even when admission fails.
+func assertPilotReadinessPrompt(t *testing.T, body []byte, workspaceID string, admitted bool) {
+	t.Helper()
+	var report map[string]json.RawMessage
+	if err := json.Unmarshal(body, &report); err != nil {
+		t.Fatal(err)
+	}
+	var prompt string
+	field, present := report["code_ready_prompt"]
+	if !present || json.Unmarshal(field, &prompt) != nil {
+		t.Fatal("public diagnostic must emit code_ready_prompt as a string, including blocked reports")
+	}
+	if !admitted {
+		if prompt != "" {
+			t.Fatal("blocked or unbound diagnostic released a Code connection prompt")
+		}
+		return
+	}
+	for _, required := range []string{"plugin:maestro-product:maestro", "maestro_context", "uma única vez", "sem parâmetros", workspaceID, "ready"} {
+		if !strings.Contains(prompt, required) {
+			t.Fatalf("Code connection prompt omitted native plugin selection or its single bound read: %s", required)
+		}
+	}
+	if strings.Count(prompt, "maestro_context") != 1 {
+		t.Fatal("Code connection prompt must request only one context call")
+	}
+	for _, forbidden := range []string{"maestro_apply", "maestro_query", "execution.", "brain.", "owner.", "memory.", "methods.", "--mcp-config", "--strict-mcp-config"} {
+		if strings.Contains(prompt, forbidden) {
+			t.Fatalf("read-only Code connection prompt expanded the journey: %s", forbidden)
+		}
+	}
+}
 
 func TestPilotCheckBlockedReportIsStructuredAndPrivate(t *testing.T) {
 	t.Setenv("MAESTRO_HOME", "")
@@ -252,6 +287,7 @@ func TestPilotCheckBlockedReportIsStructuredAndPrivate(t *testing.T) {
 	if report.SchemaVersion != 1 || report.Status != "blocked" || len(report.Checks) == 0 || report.WorkspaceID != "" || report.CodePrompt != "" || report.DesktopPrompt != "" {
 		t.Fatalf("blocked report advertises a prepared client: %+v", report)
 	}
+	assertPilotReadinessPrompt(t, output.Bytes(), "", false)
 	if strings.Contains(output.String(), base) {
 		t.Fatal("shareable diagnostic exposed a local private path")
 	}
