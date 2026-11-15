@@ -1473,6 +1473,17 @@ filesystem surface or stronger marker-transaction claim.
 
 - Implementation clarification (2026-11-14): Native Windows CI established that Go 1.23+ intentionally leaves mount-point junctions unresolved in filepath.EvalSymlinks. Normalize the already-open executable handle and the explicitly selected managed-parent directory handle through the Windows final local DOS path API. This normalization confers no private-state admission; preserve exact physical packet validation, original-hint/file-identity rechecks, the digest pin and all owner/workspace no-follow rules. Unix path resolution and the bounded-file-identity claim remain unchanged.
 
+## ANAV - Compile explicit authored cohorts into immutable navigation generations
+
+- Date: 2026-11-14
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Authored workspace Markdown needs foreground search, backlinks and hierarchical navigation without conflating authored pages with private-memory rollups, scanning unrelated roots or making a derived index authoritative.
+- Decision: Compile only an explicitly named admitted cohort, bounded by the existing Atlas collection limits, through a pure authored compiler. Store each complete deterministic generation and a current pointer through the existing Atlas private journal publisher and corpus lock; retain exact workspace ownership and source revisions. Native review authorizes publication of that exact cohort and expected current generation. Queries require the current generation and revalidate all source revisions and current page admission before disclosure. Missing named targets may produce broken-link diagnostics; links outside the cohort remain unchecked. Source Markdown, curated content and private-memory generations remain unchanged.
+- Consequences: No-op fingerprints avoid rewriting unchanged generations. Incomplete publication preserves the last complete pointer. Editing, moving, deleting or revoking an indexed page makes the old view unavailable until an explicit recompile. Compilation is foreground only; this contract introduces no filesystem walk, standing maintenance authority, source repair, signing claim or independent index framework. Native-client and Windows runtime qualification remain separately observed gates.
+- Refs: specs/007-content-navigation.md; specs/008-wiki-update-okf.md; specs/064-product-authored-brain.md; internal/atlas/authored_navigation.go; internal/atlasops/navigation.go; issue #467
+- Supersedes: none
+
 ## NADM - Bind managed plugin sources and own native qualification processes
 
 - Date: 2026-11-15
