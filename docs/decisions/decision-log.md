@@ -1472,3 +1472,14 @@ filesystem surface or stronger marker-transaction claim.
 - Supersedes: none
 
 - Implementation clarification (2026-11-14): Native Windows CI established that Go 1.23+ intentionally leaves mount-point junctions unresolved in filepath.EvalSymlinks. Normalize the already-open executable handle and the explicitly selected managed-parent directory handle through the Windows final local DOS path API. This normalization confers no private-state admission; preserve exact physical packet validation, original-hint/file-identity rechecks, the digest pin and all owner/workspace no-follow rules. Unix path resolution and the bounded-file-identity claim remain unchanged.
+
+## UPKP - Own recurring MCP upkeep without borrowing foreground eligibility
+
+- Date: 2026-11-15
+- Status: accepted
+- Owner: Maestro
+- Context: The product service already owns reviewed qualification/enrollment, due planning and guarded domain publication. Its explicit foreground intent is not evidence that an unattended process observed native idle. A timer around that entrypoint alone could silently inherit its eligibility exception.
+- Decision: Let each admitted MCP serve lifetime own one cancellable serial pulse over the same canonical service, controls, occurrence leases and handlers. Background dispatch requires a real native observation of five minutes idle. A trusted constructor veto checks eligibility before effects outside control locks, dispatch cancellation is checked inside the control fence, and an owned activity monitor cancels running work on active/unknown state. Preserve the explicit foreground path with no background veto. macOS reuses the HID observer; Windows admits only its own active interactive session and bounded input/tick counters. Caller tool arguments cannot supply observations, clocks, preauthorization or replacement handlers.
+- Consequences: No grant or no due work creates no background state or native probe. Unknown/active observation cannot publish success. Prior commits and partial recovery evidence remain truthful. Source tests with constructor observations do not qualify native clients. Closing all MCP processes stops this adapter; OS task installation, production trust and native acceptance remain separate.
+- Refs: specs/062-product-maintenance-service.md; specs/036-maintenance-plane.md; specs/009-scheduler-catch-up.md; adapters/mcp/maintenance_worker.go; internal/maintenance/product_service.go; internal/windowsadapter/idle_windows.go; #466
+- Supersedes: none
