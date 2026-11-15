@@ -129,6 +129,22 @@ func TestOwnerConfirmationRefusals(t *testing.T) {
 		if !strings.HasPrefix(line, "maestro_confirmation_unavailable stage=form_undeclared ") || strings.Count(line, "\n") != 1 {
 			t.Fatalf("missing bounded refusal diagnostic: %q", line)
 		}
+		// Unsupported protocol metadata is rejected by the SDK before the
+		// product handler; it must not add an unbounded diagnostic line.
+		out, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
+			Name: "maestro_apply", Arguments: map[string]any{"operation": "owner.apply", "proposal_id": p["id"]},
+			Meta: mcp.Meta{mcp.MetaKeyProtocolVersion: "unknown\nprivate-protocol-marker /private/path", mcp.MetaKeyClientCapabilities: map[string]any{}},
+		})
+		if out != nil || err == nil || !strings.Contains(err.Error(), "unsupported protocol version") {
+			t.Fatalf("unknown protocol crossed the SDK boundary: %+v %v", out, err)
+		}
+		if strings.Contains(err.Error(), "private-protocol-marker") || strings.Contains(err.Error(), "/private/path") {
+			t.Fatal("unsupported protocol response exposed private metadata")
+		}
+		current, err := os.ReadFile(log.Name())
+		if err != nil || string(current) != line {
+			t.Fatal("unsupported protocol changed the bounded product diagnostic")
+		}
 		for _, private := range []string{"private-owner-marker", f.root, f.options.UserHome, f.options.WorkspacePath} {
 			if strings.Contains(line, private) {
 				t.Fatal("refusal diagnostic exposed private content or paths")
