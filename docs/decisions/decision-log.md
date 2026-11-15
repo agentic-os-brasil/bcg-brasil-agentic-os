@@ -1505,3 +1505,14 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: A supported local Maestro installation can be reviewed without pretending arbitrary plugins or policy are known. Exact source or session-override changes invalidate review. Controlled streams remain engineering fixtures; Mac, Windows, CLI and Code-tab observations remain separate. The bounded qualifier does not install a packet, clear fences, bypass permissions or attest to detached host processes.
 - Refs: specs/063-product-native-plugin.md; docs/product-native-hooks.md; adapters/mcp/packaging/native.go; adapters/mcp/packaging/native_instructions.go; adapters/mcp/packaging/native_windows.go; issue #537; issue #469
 - Supersedes: none
+
+## FCSV - Govern first-case setup through existing MCP domain owners
+
+- Date: 2026-11-15
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: A fresh client workspace cannot author its first pending case through the shared selector policy, and the existing registration, brief and execution owners have no reviewed first-case MCP bridge. A replacement registry or direct multi-file helper would duplicate authority and obscure interruption effects.
+- Decision: Expose only case.setup.status, prepare and finish over the admitted binding. Reuse canonical local instance integrity, the workspace gatekeeper, explicit authored-brain creation/read-back and optional accepted execution work. Client mode preserves the exact signed account relation and reviewed active/pending snapshots; direct internal mode has current workspace scope and no fictional account. Resolve and revalidate the complete tuple outside and inside canonical publication custody. Consume retained roots for actual private I/O and use a stable setup-derived ledger identity across crash/restart. Native exact review remains required; no tool, provider, runtime or background authority is granted.
+- Consequences: Preserve exact legacy bindings and truthful partial receipts instead of claiming a transaction across domains. Changed pending bytes remain untouched after active publication. Unpublished stages remain private and non-authoritative; safe physical move/archive stays pending under its separate custody contract. Wider account narratives and multi-case management remain separate. Source/SDK/stdio evidence does not replace hosted or actual client qualification.
+- Refs: issue #545; specs/017-workspace-agent-initialization.md; specs/033-workspace-first-value.md; docs/product-case-setup.md; internal/workspaceagent/setup.go; adapters/mcp/case_setup.go
+- Supersedes: none

@@ -5,6 +5,10 @@ description: Compatibility alias for the governed first-case setup interview, ex
 
 # Workspace Agent Setup
 
+Resolve the canonical [interaction-profile](../interaction-profile/SKILL.md)
+before presenting the interview. Calibration changes explanation depth only;
+it never changes setup scope, review, persistence or authority.
+
 This is a compatibility alias for
 [case-agent-setup](../case-agent-setup/SKILL.md), not another setup engine or role.
 Carry the current request, answers and known setup progress into that method.
