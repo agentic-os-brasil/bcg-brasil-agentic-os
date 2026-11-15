@@ -333,7 +333,9 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 				if err := workerCtx.Err(); err != nil {
 					return err
 				}
-				return worker.Scheduler.WithCurrentLease(lease, worker.product.service.now(), publish)
+				publicationCtx, stopPublication := context.WithTimeout(workerCtx, leaseQuarantineGrace)
+				defer stopPublication()
+				return worker.Scheduler.WithCurrentLeaseContext(publicationCtx, lease, worker.product.service.now(), publish)
 			})
 		}
 		grant = bounded
@@ -376,17 +378,25 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 		// Fencing must survive the normal lease TTL while the late handler is
 		// still capable of side effects. A successor remains denied until the
 		// original handler exits and releases this quarantine marker.
-		if quarantineErr := worker.Scheduler.QuarantineLease(lease); quarantineErr != nil {
+		quarantineCtx, stopQuarantine := context.WithTimeout(context.Background(), leaseQuarantineGrace)
+		quarantineErr := worker.Scheduler.QuarantineLeaseContext(quarantineCtx, lease)
+		stopQuarantine()
+		if quarantineErr != nil {
+			worker.boundLateHandler(outcomeChannel, lease, base, request, occurrence)
 			return base, quarantineErr
 		}
-		if err := worker.publishOccurrence(request.WorkspaceID, occurrence, now, lease, base); err != nil {
+		if err := worker.publishOccurrence(context.WithoutCancel(workerCtx), request.WorkspaceID, occurrence, now, lease, base); err != nil {
 			worker.boundLateHandler(outcomeChannel, lease, base, request, occurrence)
 			return rejectedTerminalReceipt(base), err
 		}
 		worker.boundLateHandler(outcomeChannel, lease, base, request, occurrence)
 		return base, executeErr
 	}
-	if err := worker.publishOccurrence(request.WorkspaceID, occurrence, now, lease, base); err != nil {
+	publicationCtx := workerCtx
+	if base.State == ReceiptTimedOut {
+		publicationCtx = context.WithoutCancel(workerCtx)
+	}
+	if err := worker.publishOccurrence(publicationCtx, request.WorkspaceID, occurrence, now, lease, base); err != nil {
 		if releaseErr := worker.releaseLease(lease); releaseErr != nil {
 			return worker.recordReleaseRecovery(request, occurrence, base, releaseErr)
 		}
@@ -409,15 +419,15 @@ func (worker Worker) boundLateHandler(outcomeChannel <-chan handlerOutcome, leas
 	if cleanup <= 0 || cleanup > 15*time.Minute {
 		cleanup = 2 * time.Minute
 	}
+	cleanupCtx, stopCleanup := context.WithTimeout(context.Background(), cleanup)
 	go func() {
-		timer := time.NewTimer(cleanup)
-		defer timer.Stop()
+		defer stopCleanup()
 		select {
 		case <-outcomeChannel:
-			if err := worker.releaseLease(lease); err != nil {
+			if err := worker.releaseLeaseWithin(cleanupCtx, lease); err != nil {
 				_, _ = worker.recordReleaseRecovery(request, occurrence, base, err)
 			}
-		case <-timer.C:
+		case <-cleanupCtx.Done():
 			// Quarantine deliberately survives lease expiry. A stuck handler
 			// requires explicit operator recovery after its process is gone.
 		}
@@ -438,10 +448,20 @@ func (worker Worker) recordReleaseRecovery(request WakeRequest, occurrence sched
 }
 
 func (worker Worker) releaseLease(lease scheduler.Lease) error {
+	// Handler cancellation must not cancel retirement of its own fence.
+	ctx, cancel := context.WithTimeout(context.Background(), leaseQuarantineGrace)
+	defer cancel()
+	return worker.releaseLeaseWithin(ctx, lease)
+}
+
+func (worker Worker) releaseLeaseWithin(ctx context.Context, lease scheduler.Lease) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if worker.ReleaseLease != nil {
 		return worker.ReleaseLease(lease)
 	}
-	return worker.Scheduler.ReleaseLease(lease)
+	return worker.Scheduler.ReleaseLeaseContext(ctx, lease)
 }
 
 func (worker Worker) armLease(lease scheduler.Lease) error {
@@ -480,13 +500,15 @@ func rejectedTerminalReceipt(receipt Receipt) Receipt {
 	return receipt
 }
 
-func (worker Worker) publishOccurrence(workspaceID string, occurrence scheduler.Occurrence, now time.Time, lease scheduler.Lease, receipt Receipt) error {
+func (worker Worker) publishOccurrence(ctx context.Context, workspaceID string, occurrence scheduler.Occurrence, now time.Time, lease scheduler.Lease, receipt Receipt) error {
+	publicationCtx, stopPublication := context.WithTimeout(ctx, leaseQuarantineGrace)
+	defer stopPublication()
 	leaseNow := now
 	if worker.product != nil {
 		leaseNow = worker.product.service.now()
 	}
 	publish := func() error {
-		return worker.Scheduler.WithCurrentLease(lease, leaseNow, func() error {
+		return worker.Scheduler.WithCurrentLeaseContext(publicationCtx, lease, leaseNow, func() error {
 			if err := worker.Receipts.AppendReceipt(receipt); err != nil {
 				return err
 			}
