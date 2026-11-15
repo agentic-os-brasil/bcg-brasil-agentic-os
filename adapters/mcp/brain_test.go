@@ -87,6 +87,7 @@ func TestAuthoredBrainCreateAndRestartedRead(t *testing.T) {
 			if read["text"] != body || read["revision"] != created["revision"] || read["workspace_id"] != workspace {
 				t.Fatal("restarted client did not read the actual reviewed page", read)
 			}
+			authoredNavigationJourney(t, f, second, workspace)
 		})
 	}
 }
@@ -200,6 +201,7 @@ func TestAuthoredBrainReadOnlyRefusalsAndPreservedLegacy(t *testing.T) {
 	})
 	beforeHome, beforeWorkspace := contentTree(t, f.options.UserHome, false), contentTree(t, f.options.WorkspacePath, false)
 	brainCall(t, cs, "status", nil, false)
+	brainCall(t, cs, "navigation_status", nil, false)
 	brainCall(t, cs, "templates", nil, false)
 	brainCall(t, cs, "read", map[string]any{"page": "absent.md", "purpose": "Check a named absent page"}, true)
 	brainCall(t, cs, "prepare", nil, true)
