@@ -43,6 +43,7 @@ type pilotReport struct {
 	Target           packaging.Target `json:"target"`
 	Markdown         string           `json:"markdown"`
 	CodePrompt       string           `json:"code_prompt"`
+	CodeReadyPrompt  string           `json:"code_ready_prompt"`
 	DesktopPrompt    string           `json:"desktop_prompt"`
 	DesktopExtension string           `json:"desktop_extension,omitempty"`
 }
@@ -377,6 +378,7 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 	}
 	if r.Status != "blocked" && pilotWorkspaceID.MatchString(r.WorkspaceID) {
 		r.CodePrompt, r.DesktopPrompt = pilotPrompts(r.WorkspaceID)
+		r.CodeReadyPrompt = fmt.Sprintf("Use somente o servidor MCP plugin:maestro-product:maestro, declarado pelo plugin Maestro deste ensaio. Chame maestro_context uma única vez, sem parâmetros. Confirme workspace_id exatamente %s e state ready. Mostre o workspace_id e o estado retornados e encerre após essa leitura. Se esse servidor estiver ausente, ambíguo ou recusado, se houver erro ou se os valores divergirem, pare e explique. Esta conferência autoriza somente essa leitura de contexto.", r.WorkspaceID)
 		if r.DesktopExtension != "" {
 			r.DesktopPrompt = fmt.Sprintf("Use a extensão %q deste ensaio, vinculada às pastas aprovadas na preparação. ", r.DesktopExtension) + r.DesktopPrompt
 		}

@@ -32,7 +32,7 @@ if ! /usr/bin/plutil -extract schema_version raw -o - "$RUN/report.json" 2>/dev/
   printf 'Relatório: %s/RELATORIO.md\n' "$RUN"
   exit 1
 fi
-for pair in 'markdown|RELATORIO.md' 'code_prompt|CODE.txt' 'desktop_prompt|DESKTOP.txt'; do
+for pair in 'markdown|RELATORIO.md' 'code_prompt|CODE.txt' 'desktop_prompt|DESKTOP.txt' 'code_ready_prompt|CODE-CONEXAO.txt'; do
   /usr/bin/plutil -extract "${pair%%|*}" raw -o "$RUN/${pair#*|}" "$RUN/report.json" || fail "Relatório incompleto; preserve $RUN."
 done
 printf '\nRelatório: %s/RELATORIO.md\n' "$RUN"
@@ -40,7 +40,7 @@ printf '\nRelatório: %s/RELATORIO.md\n' "$RUN"
 open -t "$RUN/RELATORIO.md"
 if [[ "$status" -ne 0 ]]; then fail 'Preparação bloqueada. Envie RELATORIO.md ao time; os arquivos foram preservados.'; fi
 [[ -t 0 ]] || exit 0
-printf '\n1 — Testar no Code\n2 — Testar no Desktop\nEnter — Sair\nEscolha: '
+printf '\n1 — Testar no Code\n2 — Testar no Desktop\n3 — Conferir conexão Code (somente leitura)\nEnter — Sair\nEscolha: '
 read -r choice
 case "$choice" in
   1) [[ -s "$RUN/CODE.txt" ]] || fail 'O relatório ainda não liberou o ensaio no cliente.'
@@ -52,6 +52,11 @@ case "$choice" in
      pbcopy < "$RUN/DESKTOP.txt"
      printf 'Prompt copiado. Confirme a extensão deste ensaio e cole uma vez em uma conversa do Desktop.\n'
      exec "$ROOT/launchers/Abrir Desktop.command";;
+  3) [[ -s "$RUN/CODE-CONEXAO.txt" ]] || fail 'O relatório ainda não liberou a conferência no Code.'
+     command -v claude >/dev/null || fail 'Disponibilize o comando claude pelo fluxo normal do Code e abra Testar Maestro novamente.'
+     pbcopy < "$RUN/CODE-CONEXAO.txt"
+     printf 'Conferência copiada. Se esta janela pedir login, conclua o fluxo normal. Depois cole uma vez na conversa do Code.\n'
+     exec "$ROOT/launchers/Abrir Code.command";;
   '') ;;
-  *) fail 'Escolha 1, 2 ou Enter.';;
+  *) fail 'Escolha 1, 2, 3 ou Enter.';;
 esac
