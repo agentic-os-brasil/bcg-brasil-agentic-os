@@ -22,6 +22,8 @@ import (
 type ownerFixture struct {
 	options      product.Options
 	root, binary string
+	stderr       *os.File
+	capabilities *mcp.ClientCapabilities
 }
 
 const ownerReviewFixtureSuffix = "\n\"Revisão autorizada\" <conteúdo> & colaboração.\n"
@@ -78,10 +80,13 @@ func (f ownerFixture) connect(t *testing.T, handler func(context.Context, *mcp.E
 }
 func (f ownerFixture) connectProtocol(t *testing.T, handler func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error), protocol string) *mcp.ClientSession {
 	t.Helper()
-	client := mcp.NewClient(&mcp.Implementation{Name: "owner-test", Version: "1"}, &mcp.ClientOptions{ElicitationHandler: handler})
+	client := mcp.NewClient(&mcp.Implementation{Name: "owner-test", Version: "1"}, &mcp.ClientOptions{ElicitationHandler: handler, Capabilities: f.capabilities})
 	var transport mcp.Transport
 	if f.binary != "" {
 		cmd := exec.Command(f.binary, "serve", "--product-root", f.options.ProductRoot, "--user-home", f.options.UserHome, "--workspace", f.options.WorkspacePath)
+		if f.stderr != nil {
+			cmd.Stderr = f.stderr
+		}
 		transport = &mcp.CommandTransport{Command: cmd, TerminateDuration: time.Second}
 	} else {
 		b, err := product.Open(f.options)
@@ -105,6 +110,104 @@ func (f ownerFixture) connectProtocol(t *testing.T, handler func(context.Context
 }
 
 func TestOwnerConfirmationRefusals(t *testing.T) {
+	t.Run("refusal-diagnostic", func(t *testing.T) {
+		f := newOwnerFixture(t, true)
+		log, err := os.CreateTemp(physicalTempDir(t), "confirmation-stderr")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { log.Close() })
+		f.stderr = log
+		cs := f.connect(t, nil)
+		p := ownerCall(t, cs, "owner.propose", map[string]any{"facet": "personal-context", "evidence": "synthetic", "proposed_body": "private-owner-marker unsupported review"}, false)
+		ownerCall(t, cs, "owner.apply", map[string]any{"proposal_id": p["id"]}, true)
+		data, err := os.ReadFile(log.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		line := string(data)
+		if !strings.HasPrefix(line, "maestro_confirmation_unavailable stage=form_undeclared ") || strings.Count(line, "\n") != 1 {
+			t.Fatalf("missing bounded refusal diagnostic: %q", line)
+		}
+		// Unsupported protocol metadata is rejected by the SDK before the
+		// product handler; it must not add an unbounded diagnostic line.
+		out, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
+			Name: "maestro_apply", Arguments: map[string]any{"operation": "owner.apply", "proposal_id": p["id"]},
+			Meta: mcp.Meta{mcp.MetaKeyProtocolVersion: "unknown\nprivate-protocol-marker /private/path", mcp.MetaKeyClientCapabilities: map[string]any{}},
+		})
+		if out != nil || err == nil || !strings.Contains(err.Error(), "unsupported protocol version") {
+			t.Fatalf("unknown protocol crossed the SDK boundary: %+v %v", out, err)
+		}
+		if strings.Contains(err.Error(), "private-protocol-marker") || strings.Contains(err.Error(), "/private/path") {
+			t.Fatal("unsupported protocol response exposed private metadata")
+		}
+		current, err := os.ReadFile(log.Name())
+		if err != nil || string(current) != line {
+			t.Fatal("unsupported protocol changed the bounded product diagnostic")
+		}
+		for _, private := range []string{"private-owner-marker", f.root, f.options.UserHome, f.options.WorkspacePath} {
+			if strings.Contains(line, private) {
+				t.Fatal("refusal diagnostic exposed private content or paths")
+			}
+		}
+	})
+	for _, tc := range []struct {
+		name          string
+		capabilities  map[string]any
+		form          bool
+		initialAbsent bool
+	}{
+		{name: "request-capability-withdrawal", capabilities: map[string]any{}},
+		{name: "request-url-only", capabilities: map[string]any{"elicitation": map[string]any{"url": map[string]any{}}}},
+		{name: "request-empty-elicitation", capabilities: map[string]any{"elicitation": map[string]any{}}, form: true},
+		{name: "request-explicit-form", capabilities: map[string]any{"elicitation": map[string]any{"form": map[string]any{}}}, form: true},
+		{name: "request-form-added", capabilities: map[string]any{"elicitation": map[string]any{"form": map[string]any{}}}, form: true, initialAbsent: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newOwnerFixture(t, false)
+			path := filepath.Join(f.root, "owner/self/personal-context.md")
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			called := false
+			if tc.initialAbsent {
+				f.capabilities = &mcp.ClientCapabilities{Elicitation: &mcp.ElicitationCapabilities{URL: &mcp.URLElicitationCapabilities{}}}
+			}
+			cs := f.connect(t, func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+				called = true
+				return &mcp.ElicitResult{Action: "decline"}, nil
+			})
+			p := ownerCall(t, cs, "owner.propose", map[string]any{"facet": "personal-context", "evidence": "synthetic", "proposed_body": "private-owner-marker withdrawn capability"}, false)
+			out, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
+				Name: "maestro_apply", Arguments: map[string]any{"operation": "owner.apply", "proposal_id": p["id"]},
+				Meta: mcp.Meta{mcp.MetaKeyProtocolVersion: "2026-07-28", mcp.MetaKeyClientCapabilities: tc.capabilities},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if out == nil || !out.IsError || len(out.Content) != 1 {
+				t.Fatalf("withdrawn form capability accepted: %+v", out)
+			}
+			var failure struct {
+				Code string `json:"code"`
+			}
+			if err := json.Unmarshal([]byte(out.Content[0].(*mcp.TextContent).Text), &failure); err != nil {
+				t.Fatal(err)
+			}
+			wantCode := "confirmation_unavailable"
+			if tc.form {
+				wantCode = "confirmation_declined"
+			}
+			if failure.Code != wantCode || called != tc.form {
+				t.Fatalf("effective form capability was ignored: code=%s handler_called=%v", failure.Code, called)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil || string(before) != string(after) {
+				t.Fatal("withdrawn form capability mutated the canonical facet")
+			}
+		})
+	}
 	for _, tc := range []struct {
 		name, action                string
 		content                     map[string]any
