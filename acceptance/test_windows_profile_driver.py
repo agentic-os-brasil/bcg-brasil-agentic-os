@@ -509,7 +509,7 @@ $helper=@($helperAST.FindAll({param($n) $n -is [Management.Automation.Language.F
 if($helper.Count -ne 1){throw 'Expected actual source literal reader'}
 Invoke-Expression $helper[0].Extent.Text
 $values=@{}
-foreach($name in @('$adapterParents','$adapterAssertions','$adapterCommandParents','$adapterSetupParents','$adapterSetupAssertions')) {
+foreach($name in @('$adapterParents','$adapterAssertions','$adapterCommandParents','$adapterSetupParents','$adapterSetupAssertions','$adapterPackagingParents','$adapterPackagingAssertions')) {
  $assignment=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq $name},$true))
  if($assignment.Count -ne 1){throw 'Expected one closed actual source declaration'}
  $values[$name]=@(Read-EngineLiteralArray $assignment[0])
@@ -548,6 +548,13 @@ $values|ConvertTo-Json -Depth 4 -Compress
         for parent in ledger["$adapterSetupParents"]:
             self.assertIn(f"func {parent}(", setup_source)
         self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]) + len(ledger["$adapterSetupAssertions"]), 200)
+        self.assertEqual(ledger["$adapterPackagingParents"], ["TestNativeWindowsOwnedProcessTree"])
+        self.assertEqual(ledger["$adapterPackagingAssertions"], ["TestNativeWindowsOwnedProcessTree"] + [
+            "TestNativeWindowsOwnedProcessTree/" + child for child in
+            ("private-scratch", "cancel", "parent-exit", "output-limit", "nonzero-exit", "pre-cancel")])
+        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]) +
+                         len(ledger["$adapterSetupAssertions"]) + len(ledger["$adapterPackagingAssertions"]), 207)
+
         for name in ("TestMethodPlansResolveMaintenanceKeepWikiUnavailable", "TestMethodPlansResolveRegisteredMaintenanceAndWiki", "TestAgentResourceCallbacksRevalidateBinding"):
             self.assertIn(name, ledger["$adapterParents"])
             self.assertIn(name, ledger["$adapterAssertions"])
@@ -588,14 +595,15 @@ $values|ConvertTo-Json -Depth 4 -Compress
         parser = self.root / "required-parents.ps1"
         parser.write_text(r'''$ErrorActionPreference='Stop'
 $ast=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$null)
-$assignments=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -cin @('$canonicalRequired','$originalAssertions','$adapterParents','$adapterCommandParents','$authoredAdapterParents','$authoredAtlasParents','$adapterSetupParents')},$true))
-if($assignments.Count -ne 7){throw 'Expected actual owning and both companion source contracts'}
+$assignments=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -cin @('$canonicalRequired','$originalAssertions','$adapterParents','$adapterCommandParents','$authoredAdapterParents','$authoredAtlasParents','$adapterSetupParents','$adapterPackagingParents')},$true))
+if($assignments.Count -ne 8){throw 'Expected actual owning and closed companion source contracts'}
 foreach($assignment in $assignments){Invoke-Expression $assignment.Extent.Text}
 foreach($name in $originalAssertions.Keys){$canonicalRequired[$name]=@($canonicalRequired[$name]) + @($originalAssertions[$name])}
 $canonicalRequired['mcp']=@($adapterParents)+@($authoredAdapterParents)
 $canonicalRequired['atlasops']=$authoredAtlasParents
 $canonicalRequired['mcp-command']=$adapterCommandParents
 $canonicalRequired['setup']=$adapterSetupParents
+$canonicalRequired['packaging']=$adapterPackagingParents
 $canonicalRequired|ConvertTo-Json -Depth 4 -Compress
 ''', encoding="utf-8")
         required = subprocess.run([self.pwsh,"-NoProfile","-File",str(parser),str(DRIVER)],capture_output=True,text=True,timeout=30)
@@ -607,11 +615,11 @@ $canonicalRequired|ConvertTo-Json -Depth 4 -Compress
                            GOPROXY="off", GOSUMDB="off", GOFLAGS="-mod=readonly -buildvcs=false",
                            GOCACHE=str(self.root / "go-cache"), GOPATH=str(self.root / "go-path"),
                            GOMODCACHE=str(self.root / "go-path/pkg/mod"), GOTMPDIR=str(temporary), TMPDIR=str(temporary))
-        owning = sorted(set(required)-{"mcp","mcp-command","setup"})
+        owning = sorted(set(required)-{"mcp","mcp-command","setup","packaging"})
         selected = {}
         decoder = json.JSONDecoder()
         for working, packages in ((ROOT,["./internal/"+name for name in owning]),
-                                  (ROOT/"adapters/mcp",[".","./cmd/maestro-mcp","./setup"])):
+                                  (ROOT/"adapters/mcp",[".","./cmd/maestro-mcp","./setup","./packaging"])):
             result = subprocess.run([go,"list","-e","-find","-json",*packages],cwd=working,env=environment,
                                     capture_output=True,text=True,timeout=60)
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
@@ -720,6 +728,66 @@ if($sealed -eq 0){throw 'Expected an actual sealed-engine caller'}
                                         capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0, f"{workflow.name}: {result.stdout}{result.stderr}")
         self.assertGreater(selected, 0, "No actual sealed-engine workflow callers were checked")
+
+    def test_owned_process_companion_requires_all_actual_outcomes(self):
+        script = self.root / "owned-process-proof.ps1"
+        script.write_text(r'''$ErrorActionPreference='Stop'
+$e=$null; $tokens=$null
+$outer=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$tokens,[ref]$e)
+if($e.Count){throw ($e | Out-String)}
+$checker=[Management.Automation.Language.Parser]::ParseFile($args[1],[ref]$null,[ref]$e)
+$reader=@($checker.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Read-EngineLiteralArray'},$true))
+Invoke-Expression $reader[0].Extent.Text
+$entry=@{}
+foreach($binding in @(@{name='$adapterPackagingParents';field='required_tests'},@{name='$adapterPackagingAssertions';field='required_assertions'})){
+ $name=$binding.name
+ $assignment=@($outer.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq $name},$true))
+ if($assignment.Count -ne 1){throw 'Expected one actual closed native process source ledger'}
+ $entry[$binding.field]=@(Read-EngineLiteralArray $assignment[0])
+}
+$launcher=@($tokens | Where-Object {$_.Kind -eq 'HereStringLiteral'})
+$inner=[Management.Automation.Language.Parser]::ParseInput($launcher[0].Value,[ref]$null,[ref]$e)
+$parser=@($inner.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Get-EnginePublicProof'},$true))
+Invoke-Expression $parser[0].Extent.Text
+$body=($entry.required_assertions|ForEach-Object {'--- PASS: '+$_+' (0.00s)'}) -join "`n"
+$body+="`n"
+if(-not (Get-EnginePublicProof $entry $body 0).qualified){throw 'Exact owned-process outcomes refused'}
+foreach($test in $entry.required_assertions){
+ $partial=($entry.required_assertions|Where-Object {$_ -cne $test}|ForEach-Object {'--- PASS: '+$_+' (0.00s)'}) -join "`n"
+ foreach($bad in @($partial,$body.Replace('PASS: '+$test+' (','SKIP: '+$test+' ('),$body.Replace('PASS: '+$test+' (','FAIL: '+$test+' ('),($body+'--- PASS: '+$test+" (0.00s)`n"))){
+  if((Get-EnginePublicProof $entry $bad 0).qualified){throw 'Missing/skipped/failed/duplicated native process outcome qualified'}
+ }
+}
+foreach($bad in @('native_windows_owned_process ordinary_account=true atomic_job_assignment=true',($body+"--- PASS: TestNativeWindowsOwnedProcessTree/unknown (0.00s)`n"))){
+ if((Get-EnginePublicProof $entry $bad 0).qualified){throw 'Marker-only or unowned native process outcome qualified'}
+}
+if((Get-EnginePublicProof $entry $body 1).qualified){throw 'Nonzero native process family qualified'}
+$aggregate=@($inner.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and
+ $n.Left.Extent.Text -ceq '$qualificationComplete' -and $n.Right.Extent.Text.Contains('$adapterResults.Count')},$true))
+if($aggregate.Count -ne 1){throw 'Expected actual source aggregate qualification gate'}
+$publicProof=@{qualified=$true}; $authoredResult=@{qualified=$true}; $authoredAdapterResult=@{qualified=$true}
+$results=@(@{canonical_contract_proof=@{qualified=$true}})
+$adapterResults=@(@{qualified=$true},@{qualified=$true},@{qualified=$true},@{qualified=$true})
+Invoke-Expression $aggregate[0].Extent.Text
+if(-not $qualificationComplete){throw 'Four fully qualified closed adapter cohorts must qualify the actual aggregate'}
+for($i=0;$i -lt 4;$i++){
+ $adapterResults[$i].qualified=$false
+ Invoke-Expression $aggregate[0].Extent.Text
+ if($qualificationComplete){throw 'An unqualified adapter cohort passed the aggregate'}
+ $adapterResults[$i].qualified=$true
+}
+foreach($count in @(3,5)){
+ $adapterResults=@(1..$count | ForEach-Object {@{qualified=$true}})
+ Invoke-Expression $aggregate[0].Extent.Text
+ if($qualificationComplete){throw 'Missing or extra adapter cohort passed the aggregate'}
+}
+
+$exclusion=@($checker.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq '$exclusions'},$true))
+if($exclusion.Count -ne 1 -or -not $exclusion[0].Right.Extent.Text.Contains('$adapterPackagingParents')){throw 'Verified owned-process family is missing from exact host exclusions'}
+''', encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER),
+                                 str(ROOT / "acceptance/windows-engine-check.ps1")], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_authored_same_binary_companion_is_closed_before_host_exclusion(self):
         script = self.root / "authored-adapter-proof.ps1"
