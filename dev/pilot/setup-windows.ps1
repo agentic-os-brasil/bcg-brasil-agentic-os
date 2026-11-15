@@ -145,7 +145,7 @@ try {
 $desktop = @'
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-Write-Host 'Confirme a instalação da extensão Maestro MCP — Ensaio indicada no relatório. Ela já usa as pastas aprovadas, sem campos de caminho. Abra uma conversa nova e cole o texto copiado por Testar Maestro. Se a extensão estiver desativada ou ausente, confira Configurações > Extensões > Configurar > Ativado. Preserve outras extensões Maestro.'
+Write-Host 'Confirme a instalação da extensão Maestro MCP — Ensaio indicada no relatório. Ela já usa as pastas aprovadas, sem campos de caminho. Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e, somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir. Preserve as demais permissões. ✓ / Sempre permitir libera só a leitura; gravações de conteúdo continuam exigindo revisão nativa disponível no cliente. Abra uma conversa nova e cole o texto copiado por Testar Maestro. Se a extensão estiver desativada ou ausente, confira Configurações > Extensões > Configurar > Ativado. Preserve outras extensões Maestro.'
 Start-Process -FilePath (Join-Path $root 'exports/maestro-product.mcpb')
 '@
 Write-New (Join-Path $Root 'launchers/Abrir Code.ps1') $code
@@ -155,25 +155,35 @@ Write-New (Join-Path $Root 'launchers/Abrir Desktop.cmd') ('@echo off' + [char]1
 $start = @"
 # Maestro MCP — teste guiado
 
-Abra **launchers/Testar Maestro.cmd**. Ele confere o ensaio, abre o relatório e
-permite escolher Code ou Desktop. O texto com o ID correto é copiado automaticamente;
-cole uma vez na conversa escolhida. O perfil Code é separado e pode pedir login normal.
-Se o plugin Code pedir Owner directory ou Workspace, use estes valores literais:
+Abra **launchers/Testar Maestro.cmd**. Para conferir a conexão sem alterar dados,
+escolha **3 — Conferir conexão Code** ou **4 — Conferir conexão Desktop**. O texto
+com o workspace correto é copiado automaticamente: cole uma vez na conversa do
+cliente escolhido. O estado mostrado é a saúde da conexão, não o estado dos trabalhos.
 
-Owner directory:
+Para o ensaio completo, escolha **1 — Ensaio completo no Code** e depois
+**2 — Retomar no Desktop**. O texto copiado conduz cada etapa e suas confirmações normais.
 
-    $Root\owner
+O perfil Code é separado e pode pedir login normal nessa janela. O plugin e a
+extensão já usam as pastas aprovadas; não há diretórios para copiar ou preencher.
+Se o cliente pedir configurar outros caminhos, preserve a mensagem e pare.
 
-Workspace:
-
-    $Root\workspace
-
-Para Desktop, escolha essa opção em launchers/Testar Maestro.cmd e confirme a
+Para Desktop, escolha 4 para conferir somente a conexão ou 2 para retomar o ensaio
+completo em launchers/Testar Maestro.cmd e confirme a
 instalação da extensão Maestro MCP — Ensaio indicada no relatório. Ela já usa as
-pastas aprovadas; não há campos de caminho para salvar. Abra uma conversa nova
-e cole o texto copiado. Se a extensão estiver desativada ou ausente, confira
+pastas aprovadas; não há campos de caminho para salvar.
+Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e,
+somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir.
+Preserve as demais permissões. ✓ / Sempre permitir libera só a leitura; gravações
+de conteúdo continuam exigindo revisão nativa disponível no cliente. Abra uma conversa nova e cole o texto copiado. Se a extensão estiver desativada ou ausente, confira
 Configurações > Extensões > Configurar > Ativado nessa extensão.
 Se o cliente propuser substituir outra extensão, pare.
+
+Limite atual do Desktop: leitura e continuidade 1 → 2 não comprovam todos os fluxos
+de gravação. Gravações de perfil, páginas ou memória com revisão exata exigem
+formulários do cliente. Se receber confirmation_unavailable, deixe a ação pendente
+e use o Code com sua confirmação nativa. Não repita a chamada, não contorne o
+bloqueio nem use um sim no chat como aprovação. A permissão de leitura não
+habilita esses formulários.
 
 workspace_id da criação real:
 
