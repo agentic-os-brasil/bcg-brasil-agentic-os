@@ -147,10 +147,14 @@ owners and retain their namespace for the qualification lifetime. Existing paths
 are preserved. Managed-file inspection uses the platform's ClaudeCode system
 location instead of assuming a Unix directory on Windows.
 
-Windows full admission remains withheld until the actual ordinary-account
-process/private-scratch proof passes. The dedicated packaging proof requires the
-existing ordinary-account driver and actual token checks; a supplied test flag,
-elevated skip or cross-build cannot qualify it. After that source gate is
-reviewed, the participant still needs actual authenticated Code qualification.
+The reviewed [ordinary-account Windows proof](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/actions/runs/43695879338)
+has passed the private-scratch and owned-process prerequisite, including
+transient and late descendants. Its
+source, sealed image, exact generic ZIP and actual non-admin token were verified;
+a supplied flag, elevated skip or cross-build is insufficient. The platform-only
+block is removed so a matching Windows host/server target can attempt the
+existing review and qualification path. This does not qualify a Windows client:
+actual authentication, finite source/profile closure, exact reviewed inputs and
+all real native controls remain required before a native packet can be produced.
 CLI and the Desktop Code tab require separate observations; a Desktop MCP
 extension carries neither Code hooks nor native specialist activation.

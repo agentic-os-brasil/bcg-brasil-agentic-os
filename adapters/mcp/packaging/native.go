@@ -156,7 +156,7 @@ func reviewNativeAt(ctx context.Context, in NativeOptions, run nativeCommand, ch
 		p.Reason = "native_executable_unavailable"
 	} else {
 		p.HostSHA256 = host
-		if target.OS != runtime.GOOS || target.Arch != runtime.GOARCH || o.target.OS != runtime.GOOS || o.target.Arch != runtime.GOARCH || runtime.GOOS == "windows" {
+		if !nativeTargetsMatch(target, o.target, Target{OS: runtime.GOOS, Arch: runtime.GOARCH}) {
 			p.Reason = "native_target_or_private_admission_unsupported"
 		} else {
 			inspection, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -211,6 +211,13 @@ func reviewNativeAt(ctx context.Context, in NativeOptions, run nativeCommand, ch
 	}
 	return NativeReview{p, digest(body)}, nil
 }
+
+// This pure comparison selects only the execution platform. It grants neither
+// host/source admission nor observed native qualification.
+func nativeTargetsMatch(host, server, current Target) bool {
+	return host.OS == current.OS && host.Arch == current.Arch && server.OS == current.OS && server.Arch == current.Arch
+}
+
 func parseHostVersion(body []byte) string {
 	if len(body) > 4096 {
 		return ""

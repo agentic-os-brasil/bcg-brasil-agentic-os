@@ -360,9 +360,14 @@ exit all close the owned process tree and observe closure before returning.
 No start-then-assign gap, global process kill, breakaway permission or privileged
 service is allowed. Use platform managed settings locations, including the
 Windows ClaudeCode system directory, rather than checking a Unix path there.
-Keep Windows native admission unavailable until actual ordinary-user process
-ownership/cancellation and full client qualification are observed. A compiled
-implementation or cross-build is not that evidence.
+The reviewed ordinary-user Windows proof has established the private-scratch
+and owned-process prerequisite, including transient and late descendants. A
+matching Windows host/server target may therefore attempt the existing native
+review and qualification path; platform selection alone grants no admission.
+Preserve executable, authentication, finite source/profile, exact review and
+all real native control requirements. Native Windows clients remain untested
+until those target-local observations pass. A compiled implementation,
+cross-build or ordinary-user primitive proof is not full client qualification.
 
 ## Packet closure and acceptance
 

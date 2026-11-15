@@ -267,6 +267,18 @@ func TestNativePublicReviewRefusesUnsupportedInstructionSources(t *testing.T) {
 }
 
 func TestNativeHostInspectionPreservesPayloadAndIdentityRefusals(t *testing.T) {
+	// Pure target equality is not a controlled-host or native-client proof.
+	// Ordinary Windows ownership has separate retained native evidence.
+	for _, current := range []Target{{OS: "windows", Arch: "amd64"}, {OS: "windows", Arch: "arm64"}, {OS: "darwin", Arch: "arm64"}, {OS: "linux", Arch: "amd64"}} {
+		if !nativeTargetsMatch(current, current, current) {
+			t.Fatalf("matching target cannot attempt native review: %+v", current)
+		}
+		for _, mismatch := range []Target{{OS: "other", Arch: current.Arch}, {OS: current.OS, Arch: "other"}} {
+			if nativeTargetsMatch(mismatch, current, current) || nativeTargetsMatch(current, mismatch, current) {
+				t.Fatal("cross-OS/architecture host or server admitted for review")
+			}
+		}
+	}
 	in := nativeFixture(t)
 	in.Executable = controlledInspectionHost(t, in, 0)
 	review, err := ReviewNative(context.Background(), in)
