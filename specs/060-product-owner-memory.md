@@ -131,6 +131,16 @@ Missing or unverifiable ancestry never grants promotion. Keep that in-process
 evidence separate from user text and preserve valid persisted artifact bytes
 and readback; no second adapter-specific eligibility gate is permitted.
 
+The deterministic weekly candidate is a bounded selection of complete units,
+not recursively embedded prior summaries. Prioritize current evidence, collapse
+exact normalized repeats, preserve authored multiline units, and apply the
+existing context byte ceiling as well as artifact rune validation. Failure to
+fit a complete current unit refuses publication; omission of older whole units
+does not authorize fabricated synthesis. Keep the exact selected candidate in
+the existing trusted review, with original source/ancestry and eligibility
+rules unchanged. Unchanged inputs remain skipped; this formatting-quality fix
+does not itself create operational history or lifetime eligibility.
+
 Bound visibility metadata with an atomic checkpoint rather than an unbounded
 transition history. A required-checkpoint sentinel prevents fallback after lost
 or corrupted authority. The current capacity is 4096 lifetime capture identities,

@@ -1070,7 +1070,7 @@ func NewProductWeeklyMemoryEngine(home string) (*memory.Engine, error) {
 		return nil, err
 	}
 	daily := engine.Synthesizer.(memory.DeterministicL1Synthesizer)
-	engine.Synthesizer = memory.DeterministicWeeklySynthesizer{Daily: daily, MaxRunes: engine.Budgets, MaxInputBytes: cfg.L1MaxInputBytes}
+	engine.Synthesizer = memory.DeterministicWeeklySynthesizer{Daily: daily, MaxRunes: engine.Budgets, MaxBytes: cfg.ContextBudgets(), MaxInputBytes: cfg.L1MaxInputBytes}
 	engine.SynthesizerID = memory.DeterministicWeeklySynthesizerID
 	engine.EligibilityPolicyID = "deterministic-two-l3-generations+exact-owner-review-v1"
 	engine.Eligibility = memory.EligibilityFunc(func(ctx context.Context, candidate memory.Artifact) (bool, string, error) {

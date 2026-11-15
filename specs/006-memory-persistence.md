@@ -40,6 +40,20 @@ trusted capture-v2 envelopes. `memory-deep-dream` uses the bundled
 deterministic weekly adapter: it reads only active L1/L2/L3/lifetime artifacts,
 stages L2/L3/lifetime together and applies the named continuity policy.
 
+The bundled weekly adapter selects bounded complete observation units from
+validated artifacts. Current evidence precedes unique prior continuity; only
+known generated framing is flattened, and exact normalized repeated units are
+collapsed. Authored headings, multiline paragraphs and bullet continuations
+remain content. An ambiguous hard-cut tail from known recursive legacy output
+is not reused as a complete observation. Selection may omit less-recent whole units; it does not promise
+to preserve every fact or perform model-backed semantic synthesis. Product
+outputs obey both their rune validation and the existing per-layer byte caps.
+If a complete current observation cannot fit, refuse before activation and keep
+the previous committed outputs. Original captures and source/ancestry references
+remain unchanged. Existing committed artifacts are preserved: unchanged input
+stays skipped and cannot create another generation; improved content appears
+on the next genuinely changed-source consolidation within the same protocol.
+
 ### L1 source composition
 
 The target L1 model combines two complementary local evidence streams for the
