@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -54,6 +55,18 @@ func TestAuthoredBrainSDKCreatesPageWithoutConversionArtifact(t *testing.T) {
 	}
 	if actual, err := os.ReadFile(filepath.Join(f.options.WorkspacePath, "brain", filepath.FromSlash(page))); err != nil || string(actual) != body {
 		t.Fatal("public authored creation did not persist the exact reviewed page", err)
+	}
+	beforeReads := contentTree(t, f.options.WorkspacePath, false)
+	status := brainCall(t, client, "status", nil, false)
+	if status["prepared"] != false {
+		t.Fatal("unprepared authored fixture unexpectedly has all scaffold pages", status)
+	}
+	read := brainCall(t, client, "read", map[string]any{"page": page, "purpose": "Recover admitted prior work without preparing scaffold", "max_bytes": 4096}, false)
+	if read["text"] != body || read["revision"] != written.Revision {
+		t.Fatal("missing scaffolds hid an admitted canonical source", read)
+	}
+	if !reflect.DeepEqual(beforeReads, contentTree(t, f.options.WorkspacePath, false)) {
+		t.Fatal("read-only recovery prepared or changed the workspace")
 	}
 	if _, err := os.Stat(filepath.Join(filepath.Dir(f.root), "state", "content")); !os.IsNotExist(err) {
 		t.Fatalf("attended page creation fabricated a conversion artifact store: %v", err)

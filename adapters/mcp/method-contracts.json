@@ -497,7 +497,15 @@
       "method_ids": [
         "find-prior-work"
       ],
-      "required_operations": [],
+      "required_operations": [
+        "brain.navigation_status",
+        "brain.search",
+        "brain.navigate",
+        "brain.read",
+        "knowledge.collect",
+        "memory.search",
+        "memory.read"
+      ],
       "effects": [
         "read"
       ],
@@ -508,7 +516,16 @@
         {
           "id": "domain.prior_work_search",
           "kind": "domain",
-          "required": true
+          "required": true,
+          "fulfillment_operations": [
+            "brain.navigation_status",
+            "brain.search",
+            "brain.navigate",
+            "brain.read",
+            "knowledge.collect",
+            "memory.search",
+            "memory.read"
+          ]
         }
       ]
     },

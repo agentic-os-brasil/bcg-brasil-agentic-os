@@ -119,6 +119,66 @@ func mutationSchema() map[string]any {
 	variants = append(variants, agentIdentityMutations()...)
 	return map[string]any{"type": "object", "oneOf": variants}
 }
+
+// toolPresentation keeps discovery in ordinary object properties because some
+// MCP hosts flatten a top-level oneOf into its first branch. The authoritative
+// closed variants still validate every request in handle; this projection never
+// supplies admission or replaces their per-operation requirements.
+func toolPresentation(authoritative map[string]any) (map[string]any, string) {
+	properties := map[string]any{}
+	requiredFor := map[string][]string{}
+	allowedFor := map[string][]string{}
+	constraints := map[string][]string{}
+	var operations []string
+	for _, entry := range authoritative["oneOf"].([]any) {
+		v := entry.(map[string]any)
+		fields := v["properties"].(map[string]any)
+		op := fields["operation"].(map[string]any)["const"].(string)
+		operations = append(operations, op)
+		required := map[string]bool{}
+		for _, name := range v["required"].([]string) {
+			required[name] = true
+		}
+		for name, definition := range fields {
+			if name == "operation" {
+				continue
+			}
+			allowedFor[name] = append(allowedFor[name], op)
+			if required[name] {
+				requiredFor[name] = append(requiredFor[name], op)
+			}
+			encoded, _ := json.Marshal(definition)
+			constraints[name] = append(constraints[name], op+": "+string(encoded))
+			candidate := definition.(map[string]any)
+			if current, exists := properties[name]; exists {
+				// Shared metadata must not import a different branch's tighter bound.
+				common := current.(map[string]any)
+				for key, value := range common {
+					a, _ := json.Marshal(value)
+					b, present := candidate[key]
+					encoded, _ := json.Marshal(b)
+					if !present || !bytes.Equal(a, encoded) {
+						delete(common, key)
+					}
+				}
+			} else {
+				copy := map[string]any{}
+				for key, value := range candidate {
+					copy[key] = value
+				}
+				properties[name] = copy
+			}
+		}
+	}
+	for name, definition := range properties {
+		// Hosts may truncate the tool description. Keep each field's complete
+		// contract beside that field instead of one duplicated, lossy tool blob.
+		definition.(map[string]any)["description"] = "Required for: " + strings.Join(requiredFor[name], ", ") + "\nAllowed for: " + strings.Join(allowedFor[name], ", ") + "\nExact constraints by operation:\n" + strings.Join(constraints[name], "\n")
+	}
+	properties["operation"] = map[string]any{"type": "string", "enum": operations, "description": "Select one listed operation. Each other field states exactly which operations require or allow it, and its exact per-operation constraints. Omit every field not allowed for the selected operation."}
+	return map[string]any{"type": "object", "properties": properties, "required": []string{"operation"}, "additionalProperties": false}, " Read each field's Required for, Allowed for and exact constraint lines before calling. Include every required field and only fields allowed for the selected operation."
+}
+
 func (b *Bound) Server() *mcp.Server {
 	version := b.options.CLIVersion
 	if version == "" {
@@ -140,8 +200,11 @@ func (b *Bound) Server() *mcp.Server {
 	empty := map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
 	s.AddTool(&mcp.Tool{Name: "maestro_context", Description: "Read admitted binding metadata, canonical display identities and memory capability hints; inspect maestro_query and maestro_apply schemas for operations. No document or facet export.", InputSchema: empty, Annotations: readonly}, b.handle("context", empty))
 	query := productQuerySchema()
-	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read immutable methods and requirements, owner metadata/questions, execution continuation, eligible memory, authored pages, converted content, named workspace knowledge, maintenance status or private wiki through bounded pages. Private owner/legacy text requires trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
-	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Author reviewed workspace pages, convert documents, apply reviewed knowledge/owner/memory changes, qualify and enroll exact maintenance jobs, or run active due work. Maintenance lifecycle changes require trusted exact review; execution uses revision/attempt and artifact checks.", InputSchema: productApplySchema()}, b.handle("apply", productApplySchema()))
+	queryPresentation, queryContracts := toolPresentation(query)
+	apply := productApplySchema()
+	applyPresentation, applyContracts := toolPresentation(apply)
+	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read immutable methods and requirements, owner metadata/questions, execution continuation, eligible memory, authored pages, converted content, named workspace knowledge, maintenance status or private wiki through bounded pages. Private owner/legacy text requires trusted review." + queryContracts, InputSchema: queryPresentation, Annotations: readonly}, b.handle("query", query))
+	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Author reviewed workspace pages, convert documents, apply reviewed knowledge/owner/memory changes, qualify and enroll exact maintenance jobs, or run active due work. Maintenance lifecycle changes require trusted exact review; execution uses revision/attempt and artifact checks." + applyContracts, InputSchema: applyPresentation}, b.handle("apply", apply))
 	b.registerMethods(s)
 	return s
 }

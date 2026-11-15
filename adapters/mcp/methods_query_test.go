@@ -323,6 +323,40 @@ func TestMethodQueryPlanSDK(t *testing.T) {
 	f := newMethodQueryFixture(t)
 	client := f.connect(t, "")
 	before := methodTreeSnapshot(t, f.root)
+	var prior struct {
+		State      string   `json:"state"`
+		Execution  string   `json:"execution_state"`
+		Effects    []string `json:"effects"`
+		Operations []struct {
+			Name  string `json:"name"`
+			State string `json:"state"`
+		} `json:"operations"`
+		Dependencies []struct {
+			ID          string   `json:"id"`
+			Required    bool     `json:"required"`
+			State       string   `json:"state"`
+			Fulfillment []string `json:"fulfillment_operations"`
+		} `json:"dependencies"`
+	}
+	methodQueryDecode(t, client, "maestro_query", map[string]any{"operation": "methods.plan", "method_id": "find-prior-work"}, &prior)
+	if prior.State != "requirements_available" || prior.Execution != "not_executed" || !reflect.DeepEqual(prior.Effects, []string{"read"}) {
+		t.Fatalf("prior-work retrieval cannot reach its registered read-only owners: %+v", prior)
+	}
+	needed := map[string]bool{"brain.navigation_status": false, "brain.search": false, "brain.navigate": false, "brain.read": false, "knowledge.collect": false, "memory.search": false, "memory.read": false}
+	for _, operation := range prior.Operations {
+		if _, ok := needed[operation.Name]; !ok || operation.State != "registered" {
+			t.Fatalf("unregistered or unrelated retrieval operation: %+v", operation)
+		}
+		needed[operation.Name] = true
+	}
+	for name, present := range needed {
+		if !present {
+			t.Fatal("retrieval contract omits", name)
+		}
+	}
+	if len(prior.Dependencies) != 1 || prior.Dependencies[0].ID != "domain.prior_work_search" || !prior.Dependencies[0].Required || prior.Dependencies[0].State != "available" || len(prior.Dependencies[0].Fulfillment) != len(needed) {
+		t.Fatalf("retrieval readiness invented execution, external sources or missing owners: %+v", prior.Dependencies)
+	}
 	for _, test := range []struct{ id, domain, state string }{{"case-agent-setup", "domain.case_setup", "available"}, {"workspace-agent-setup", "domain.case_setup", "available"}, {"account-case-setup", "domain.account_case_scaffold", "unavailable"}} {
 		var setupPlan struct {
 			Execution    string `json:"execution_state"`
