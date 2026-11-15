@@ -101,8 +101,8 @@ func TestMaintenanceFreshStatusReadOnly(t *testing.T) {
 	for _, stdio := range []bool{false, true} {
 		t.Run(fmt.Sprint(stdio), func(t *testing.T) {
 			f := newOwnerFixture(t, stdio)
-			cs := f.connect(t, nil)
 			before := cadenceTree(t, f)
+			cs := f.connect(t, nil)
 			status := cadenceCall(t, cs, "status", nil, false)
 			if len(status["jobs"].([]any)) != 18 {
 				t.Fatal(status)
@@ -124,6 +124,7 @@ func TestMaintenanceFreshStatusReadOnly(t *testing.T) {
 }
 
 func TestMaintenancePublicJourney(t *testing.T) {
+	t.Run("owned-background", testMaintenanceOwnedBackground)
 	for _, stdio := range []bool{false, true} {
 		t.Run(fmt.Sprint(stdio), func(t *testing.T) {
 			f := newOwnerFixture(t, stdio)

@@ -1,6 +1,5 @@
-// Package windowsadapter describes the per-user Task Scheduler boundary. The
-// renderer is testable everywhere; native creation stays unavailable until a
-// qualified Windows probe exists.
+// Package windowsadapter owns native activity observations and the per-user
+// Task Scheduler contract. Task creation remains unavailable until qualified.
 package windowsadapter
 
 import (

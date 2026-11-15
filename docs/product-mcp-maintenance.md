@@ -10,7 +10,8 @@ Use the same explicit `--product-root`, `--user-home` and `--workspace` binding
 for every local command. These select the installed product, existing owner
 directory and registered workspace; they are not model-selected paths. Follow
 the [module setup guide](../adapters/mcp/README.md) for explicit initialization.
-Ordinary startup, status and review do not bootstrap or repair private state.
+Startup without an active grant, status and review do not bootstrap or repair
+private state.
 
 ## Inspect and choose a job
 
@@ -112,7 +113,54 @@ flags or fabricated observations. Enrollment authorizes exactly the reviewed
 job's schedule and write set. It grants no standing approval of future lifetime
 memory candidates, providers or native scheduling.
 
-## Execute and inspect the result
+## Keep enrolled work running
+
+While a Code or Desktop MCP process is open, its owned background worker checks
+the existing active enrollments independently of conversation requests. It
+checks once when the server starts and waits thirty seconds after each finished
+check. The job's reviewed schedule still decides when an occurrence is due;
+the pulse does not create a new schedule or qualify a job. With no active
+enrollment, starting and closing the server creates no maintenance state.
+
+Automatic work requires a real native observation of five minutes idle. Active
+or unknown activity leaves due work pending; it does not create a grant, lease
+or domain output. The server keeps observing while work runs and cancels when
+activity returns or observation becomes unavailable. Each publication also
+rechecks eligibility and current authority. An explicit foreground
+`maintenance.run` retains its separate owner-requested behavior.
+
+macOS uses the existing HID observer. Windows requires the process's own active
+interactive session and valid input/tick counters. A headless/disconnected
+session, hidden window station or missing/ambiguous counter stays unavailable.
+No key, input text or clipboard content is collected. Native platform/client
+qualification remains separate from source and controlled constructor tests.
+
+The worker uses the same current implementation, qualification, revision and
+lease checks as foreground execution. Competing clients cannot claim the same
+occurrence as separate successful work. Closing the MCP connection cancels and
+joins that process's worker; completed domain results remain available to the
+next session. If all clients are closed, work waits until a later server starts
+and performs the existing bounded catch-up. This does not install a LaunchAgent,
+Windows task or always-running service.
+
+Interruption preserves the existing attempt fence. A cooperative handler can
+finish cancellation cleanup while its process remains open; an abrupt process
+exit or an unresponsive handler can leave a quarantined lease requiring the
+existing explicit recovery. Reopening a client never clears that fence or
+relabels partial work as success.
+
+Private-memory wiki compilation needs its own qualification and enrollment.
+An automatically committed memory rollup can trigger that job's actual source
+event in the same worker; enabling memory upkeep alone does not enable wiki
+compilation. Authored-page navigation remains a separate compiler and scope.
+
+Read `maintenance.status`, the supported `maintenance.report`, or
+`memory.context` to inspect actual state and committed output. A live client,
+successful pulse or wake alone does not prove a domain commit. A changed build,
+configuration, paused/revoked grant or unsafe binding refuses work; inspect and
+review current qualification rather than copying an old control record.
+
+## Execute an immediate check and inspect the result
 
 Call `maestro_apply` with `{"operation":"maintenance.run"}` to execute active
 due jobs in the foreground. It has no job selector and performs no implicit

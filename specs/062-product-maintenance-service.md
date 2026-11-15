@@ -1,6 +1,6 @@
 # Spec 062 - Product maintenance service
 
-Status: The landed maintenance and wiki owners retain their existing lifecycle. Signed-source checks and the three closed Darwin health/cache/proposal jobs use that same lifecycle and catalog. Windows private wiki uses retained-namespace admission; Darwin private publication on Windows and background wake remain unavailable. Source construction, focused local proof, hosted qualification and installed-client acceptance remain separate. See the [operator workflow](../docs/product-mcp-maintenance.md).
+Status: The landed maintenance and wiki owners retain their existing lifecycle. Signed-source checks and the three closed Darwin health/cache/proposal jobs use that same lifecycle and catalog. The MCP serve process owns a cancellable background adapter over that service. Windows private wiki uses retained-namespace admission; Darwin private publication on Windows and operating-system wake registration remain unavailable. Source construction, focused local proof, hosted qualification and installed-client acceptance remain separate. See the [operator workflow](../docs/product-mcp-maintenance.md).
 
 ## Outcome
 
@@ -111,9 +111,53 @@ contains bounded metadata and domain references, not private captures or full
 profiles. The installed method routes these intents to the same service.
 
 Ordinary run dispatches only active due jobs and never installs OS tasks,
-downloads dependencies or calls a provider/model. Native lifecycle ownership
-remains a separately attended operation. Foreground proof does not establish
+downloads dependencies or calls a provider/model. Operating-system wake
+installation remains a separately attended operation. Foreground proof does not establish
 background wake behavior or client qualification.
+
+### Owned MCP process
+
+The stdio serve entrypoint owns one asynchronous maintenance loop. An initial
+pulse and a fixed thirty-second delay after each completed pulse invoke the same
+RunDue owner as explicit foreground operation. Pulses never overlap within that
+loop; competing MCP processes retain the canonical occurrence lease. No job is
+qualified or enrolled by startup, discovery, a pulse or a hook. With no active
+grant, starting or closing the process creates no maintenance state or keys.
+
+Each pulse reconstructs the current admitted binding and rechecks the existing
+executable/configuration, enrollment revision, source and publication fences.
+Changed, paused or revoked authority cannot be cached as a standing grant.
+Background dispatch additionally requires an actual native observation of at
+least five minutes idle. It never borrows the foreground intent's idle constant.
+Active, unknown, malformed or unsupported observation refuses before control,
+lease or domain effects. No active due job means no native activity probe.
+
+The adapter observes the existing macOS HID counter or the current interactive,
+active Windows session's input/tick counter. Headless, hidden-window-station,
+disconnected/mismatched session and ambiguous/missing counters stay unavailable.
+These are eligibility observations, never enrollment or native-qualification
+authority. A trusted constructor veto runs outside control locks before each
+effect; dispatch cancellation is rechecked inside the canonical control fence
+and immediately before each domain or terminal callback after any installation
+serialization wait. During work an owned one-second activity monitor cancels on activity or unknown
+state. Publication and terminal success retain the same guards. Prior valid
+commits and truthful partial evidence are preserved rather than rolled back.
+
+Cancellation stops further dispatch and the serve owner joins its worker when
+the transport closes; it never leaves a detached goroutine as an independent
+service. A refused pulse emits a fixed body-free stderr diagnostic once until
+recovery, while canonical receipts and domain state retain the actual outcome.
+Canonical late-handler cleanup retains its bounded lifetime and quarantine:
+closing a process before cleanup completes does not clear its attempt fence.
+A surviving quarantined lease still requires the existing explicit recovery;
+the adapter does not infer safe takeover from TTL expiry or process shutdown.
+
+The pulse is not a new job cadence or a catch-up queue. The scheduler retains
+the exact enrolled cadence, no-backfill boundary and MaxCatchUp. Daily and
+weekly handlers and exact lifetime-candidate review are unchanged. When every
+MCP process is closed, this adapter performs no work; a later owned process
+provides bounded catch-up. OS service/task installation remains separate and
+cannot be inferred from a live MCP connection or source-level test.
 
 ## Acceptance
 
