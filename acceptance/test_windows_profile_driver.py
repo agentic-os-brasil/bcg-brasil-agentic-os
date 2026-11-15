@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import textwrap
 import unittest
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 DRIVER = ROOT / "acceptance/windows-core-pilot.ps1"
@@ -270,13 +271,13 @@ class WindowsEngineProfile(unittest.TestCase):
     closed_manifest = WindowsInspectionDriver.closed_manifest
     assert_preaccount_refusal = WindowsInspectionDriver.assert_preaccount_refusal
 
-    def invoke_engine(self, document):
+    def invoke_engine(self, document, *extra):
         self.manifest.write_text(json.dumps(document), encoding="utf-8")
         binary = self.root / "public.exe"
         binary.write_bytes(b"unexecuted public executable fixture")
         return subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(DRIVER),
                                "-TestBinary", str(binary), "-Server", str(binary),
-                               "-CanonicalManifest", str(self.manifest), "-OutputRoot", str(self.root / "proof")],
+                               "-CanonicalManifest", str(self.manifest), "-OutputRoot", str(self.root / "proof"), *extra],
                               capture_output=True, text=True, timeout=30)
 
     def engine_document(self):
@@ -304,6 +305,121 @@ class WindowsEngineProfile(unittest.TestCase):
         document = self.engine_document()
         document["public_server_sha256"] = "0" * 64
         self.assert_preaccount_refusal(self.invoke_engine(document), "Engine public executables differ from the sealed source manifest")
+
+    def exact_kit_fixture(self):
+        kit = self.root / "Maestro-Pilot-Artifact"
+        (kit / "bin").mkdir(parents=True)
+        revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, text=True).strip()
+        server = b"unexecuted public executable fixture"
+        (kit / "bin/maestro-mcp-windows-amd64.exe").write_bytes(server)
+        (kit / "ARTIFACT.txt").write_text(f"binary_source_base_commit={revision}\nsource_tree={tree}\ntrust=unsigned_engineering_candidate\n", encoding="utf-8")
+        rows = "".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  ./{path.relative_to(kit).as_posix()}\n"
+                       for path in sorted(kit.rglob("*")) if path.is_file())
+        (kit / "SHA256SUMS").write_text(rows, encoding="utf-8")
+        kit_id = hashlib.sha256(rows.encode()).hexdigest()
+        (kit / "KIT-ID.txt").write_text(kit_id + "\n", encoding="utf-8")
+        archive = Path(str(kit) + ".zip")
+        with zipfile.ZipFile(archive, "w") as zipped:
+            for path in sorted(kit.rglob("*")):
+                if path.is_file():
+                    zipped.write(path, kit.name + "/" + path.relative_to(kit).as_posix())
+        zip_hash = hashlib.sha256(archive.read_bytes()).hexdigest()
+        Path(str(archive) + ".sha256").write_text(zip_hash + "  " + archive.name + "\n", encoding="utf-8")
+        identity = dict(schema_version=1, source_revision=revision, source_tree=tree, producer_run_id=os.environ.get("GITHUB_RUN_ID", "123456"),
+                        generic_zip_sha256=zip_hash, kit_id=kit_id, shipping_server_sha256=hashlib.sha256(server).hexdigest())
+        identity_path = self.root / "pilot-artifact-input.json"
+        identity_path.write_text(json.dumps(identity), encoding="utf-8")
+        return kit, archive, identity_path, identity
+
+    def test_exact_kit_refuses_changed_inputs_before_account(self):
+        document = self.engine_document()
+        kit, archive, identity_path, identity = self.exact_kit_fixture()
+        original_zip = archive.read_bytes()
+        server = kit / "bin/maestro-mcp-windows-amd64.exe"
+        original_server = server.read_bytes()
+        fixture = ROOT / "adapters/mcp/packaging/testdata/method-ids.txt"
+        cases = [("zip", "Exact pilot ZIP checksum differs"),
+                 ("server", "Exact pilot PE checksum differs"),
+                 ("source", "Exact pilot source differs"),
+                 ("missing", "Exact pilot identity is missing")]
+        for kind, message in cases:
+            with self.subTest(kind=kind):
+                archive.write_bytes(original_zip)
+                server.write_bytes(original_server)
+                current = dict(identity)
+                selected_identity = identity_path
+                if kind == "zip": archive.write_bytes(original_zip + b"changed")
+                if kind == "server": server.write_bytes(original_server + b"changed")
+                if kind == "source": current["source_revision"] = "0" * 40
+                if kind == "missing": selected_identity = self.root / "missing-identity.json"
+                identity_path.write_text(json.dumps(current), encoding="utf-8")
+                result = self.invoke_engine(document, "-Kit", str(kit), "-KitIdentity", str(selected_identity), "-MethodFixture", str(fixture))
+                self.assert_preaccount_refusal(result, message)
+
+        archive.write_bytes(original_zip)
+        server.write_bytes(original_server)
+        identity_path.write_text(json.dumps(identity), encoding="utf-8")
+        result = self.invoke_engine(document, "-Kit", str(kit), "-KitIdentity", str(identity_path), "-MethodFixture", str(fixture))
+        self.assert_preaccount_refusal(result, "Engine qualification requires exactly the eight owning packages")
+
+    def test_exact_kit_requires_complete_matched_evidence(self):
+        _, _, identity_path, identity = self.exact_kit_fixture()
+        proof = dict(identity, passed=True, powershell_edition="Desktop", powershell_version="5.1.26100.1", command_test_image_sha256="c" * 64, prepared_server_sha256=identity["shipping_server_sha256"],
+                     packet_server_sha256=identity["shipping_server_sha256"], desktop_packet_server_sha256=identity["shipping_server_sha256"], workspace_id="a" * 32,
+                     emitted_review_confirmed=True, private_and_managed_unchanged=True, sdk_context_verified=True,
+                     canonical_methods=92, skill_folders=94, reports_count=3, native_Code_Desktop="not_run")
+        proof_path = self.root / "native-kit-proof.json"
+        proof_path.write_text(json.dumps(proof), encoding="utf-8")
+        script = self.root / "artifact-proof-check.ps1"
+        script.write_text(r'''$ErrorActionPreference='Stop'
+$ast=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$null)
+$functions=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Assert-PilotArtifactProof'},$true))
+if($functions.Count -ne 1){throw 'Expected the existing driver to own exact artifact evidence validation'}
+Invoke-Expression $functions[0].Extent.Text
+$identity=Get-Content -LiteralPath $args[1] -Raw | ConvertFrom-Json
+$proofPath=$args[2]
+$null=Assert-PilotArtifactProof $identity $proofPath
+foreach($kind in @('missing','zip','prepared','workspace','preservation','sdk','malformed-boolean','preparer-version','preparer-edition')){
+ $copy=Get-Content -LiteralPath $proofPath -Raw | ConvertFrom-Json
+ switch($kind){
+  zip {$copy.generic_zip_sha256='0'*64}
+  prepared {$copy.prepared_server_sha256='0'*64}
+  workspace {$copy.workspace_id=''}
+  preservation {$copy.private_and_managed_unchanged=$false}
+  sdk {$copy.sdk_context_verified=$false}
+  malformed-boolean {$copy.passed='true'}
+  preparer-version {$copy.powershell_version='7.5.0'}
+  preparer-edition {$copy.powershell_edition='Core'}
+ }
+ $selected=$proofPath+'.invalid';$copy|ConvertTo-Json|Set-Content -LiteralPath $selected
+ if($kind -ceq 'missing'){$selected=$proofPath+'.absent'}
+ $refused=$false
+ try{$null=Assert-PilotArtifactProof $identity $selected}catch{$refused=$true}
+ if(-not $refused){throw ('Missing or mismatched exact artifact evidence accepted: '+$kind)}
+}
+''', encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER), str(identity_path), str(proof_path)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_exact_kit_retains_engine_host(self):
+        script = self.root / "artifact-engine-shell.ps1"
+        script.write_text(r'''$ErrorActionPreference='Stop'
+$body=Get-Content -LiteralPath $args[0] -Raw
+$ast=[Management.Automation.Language.Parser]::ParseInput($body,[ref]$null,[ref]$null)
+$assignments=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq '$powershell'},$true)|Sort-Object {$_.Extent.StartOffset})
+$start=$assignments[0].Extent.StartOffset
+$finish=$body.IndexOf('    $hadModulePath =',$start)
+if($start -lt 0 -or $finish -le $start){throw 'Expected actual credentialed engine shell selection'}
+$env:SystemRoot=Join-Path $args[1] 'synthetic-windows'
+$withInspection=$false;$withManifest=$false;$withKit=$true
+$AtlasTestBinary=$null;$DoclingTestBinary=$null;$AuthoredBrain=$false;$PrivateWiki=$false
+$launcher='synthetic-launcher';$OutputRoot='synthetic-output';$nativeTest='synthetic-test';$nativeKit='synthetic-kit'
+Invoke-Expression $body.Substring($start,$finish-$start)
+if($powershell -cne (Join-Path $PSHOME 'pwsh.exe')){throw 'Exact artifact mode replaced the engine qualifier host; strict JSON case-pair classification requires PowerShell 7'}
+''', encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER), str(self.root)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_engine_builder_parses(self):
         parser = self.root / "builder-parser.ps1"

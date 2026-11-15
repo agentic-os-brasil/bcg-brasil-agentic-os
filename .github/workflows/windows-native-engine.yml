@@ -7,6 +7,7 @@ on:
     paths:
       - 'internal/**'
       - 'adapters/mcp/**'
+      - 'dev/pilot/**'
       - 'acceptance/windows-core-pilot.ps1'
       - 'acceptance/windows-engine-build.ps1'
       - 'acceptance/windows-engine-check.ps1'
@@ -19,6 +20,7 @@ on:
     paths:
       - 'internal/**'
       - 'adapters/mcp/**'
+      - 'dev/pilot/**'
       - 'acceptance/windows-core-pilot.ps1'
       - 'acceptance/windows-engine-build.ps1'
       - 'acceptance/windows-engine-check.ps1'
@@ -32,7 +34,49 @@ permissions:
   contents: read
 
 jobs:
+  pilot-artifact:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: adapters/mcp/go.mod
+      - name: Build one generic engineering ZIP with the existing constructor
+        shell: bash
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          mkdir -p "$HOME/Developer"
+          ./dev/pilot/build-kit.sh "$HOME/Developer/Maestro-Pilot-Artifact" --lifecycle-context
+          python3 - <<'PYTHON'
+          import hashlib, json, os, subprocess
+          from pathlib import Path
+          root = Path.home() / "Developer"
+          kit = root / "Maestro-Pilot-Artifact"
+          digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+          identity = dict(schema_version=1,
+              source_revision=subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              source_tree=subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip(),
+              producer_run_id=os.environ["GITHUB_RUN_ID"],
+              generic_zip_sha256=digest(root / "Maestro-Pilot-Artifact.zip"),
+              kit_id=(kit / "KIT-ID.txt").read_text().strip(),
+              shipping_server_sha256=digest(kit / "bin/maestro-mcp-windows-amd64.exe"))
+          (root / "pilot-artifact-input.json").write_text(json.dumps(identity, indent=2) + "\n")
+          print(json.dumps(identity))
+          PYTHON
+      - name: Retain the same ZIP and its exact producer identity
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: maestro-pilot-zip-${{ github.sha }}
+          path: |
+            ~/Developer/Maestro-Pilot-Artifact.zip
+            ~/Developer/Maestro-Pilot-Artifact.zip.sha256
+            ~/Developer/pilot-artifact-input.json
+          if-no-files-found: error
+          retention-days: 7
   native-engine:
+    needs: pilot-artifact
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -40,14 +84,19 @@ jobs:
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: adapters/mcp/go.mod
+      - name: Download the immutable generic ZIP from this producing run
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: maestro-pilot-zip-${{ github.sha }}
+          path: ${{ runner.temp }}/pilot-artifact
       - name: Stage exact public source, SDK and shipping executables
         shell: pwsh
         run: |
-          ./acceptance/windows-engine-build.ps1
+          ./acceptance/windows-engine-build.ps1 -KitArchive (Join-Path $env:RUNNER_TEMP 'pilot-artifact/Maestro-Pilot-Artifact.zip') -KitIdentity (Join-Path $env:RUNNER_TEMP 'pilot-artifact/pilot-artifact-input.json')
       - name: Public init and restart under the actual ordinary account
         shell: pwsh
         run: |
-          ./acceptance/windows-core-pilot.ps1 -TestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/mcp.test.exe') -Server (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/maestro-mcp.exe') -AuthoredBrain -PrivateWiki -AtlasTestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/atlasops.test.exe') -CanonicalManifest (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'engine-build-manifest.json') -OutputRoot (Join-Path $env:RUNNER_TEMP 'native-engine-proof')
+          ./acceptance/windows-core-pilot.ps1 -TestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/mcp.test.exe') -Server (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/maestro-mcp.exe') -AuthoredBrain -PrivateWiki -AtlasTestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/atlasops.test.exe') -CanonicalManifest (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'engine-build-manifest.json') -Kit $env:MAESTRO_ENGINE_PILOT_KIT -KitIdentity $env:MAESTRO_ENGINE_PILOT_IDENTITY -MethodFixture (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'source/adapters/mcp/packaging/testdata/method-ids.txt') -OutputRoot (Join-Path $env:RUNNER_TEMP 'native-engine-proof')
       - name: Stage only bounded synthetic evidence
         if: always()
         shell: pwsh
