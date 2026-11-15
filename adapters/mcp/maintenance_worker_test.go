@@ -3,6 +3,7 @@ package product_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -197,10 +198,10 @@ func testMaintenanceOwnedBackground(t *testing.T) {
 	cleaned := false
 	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
 		leases, err := schedulerStore.QuarantinedLeases(workspace)
-		if err != nil {
+		if err != nil && !errors.Is(err, scheduler.ErrLeaseBusy) {
 			t.Fatal(err)
 		}
-		if len(leases) == 0 {
+		if err == nil && len(leases) == 0 {
 			cleaned = true
 			break
 		}
@@ -259,8 +260,20 @@ func testMaintenanceOwnedBackground(t *testing.T) {
 			}
 			time.Sleep(20 * time.Millisecond)
 		}
+		artifact, _, artifactErr := engine.ActiveArtifact(workspace, "L1/"+initial.Format("2006-01-02"))
+		wiki, wikiErr := engine.InspectPrivateWikiMaintenance(workspace)
+		t.Logf("owned maintenance expiry expected_successes=%d clock=%s artifact_read=%t marker_present=%t wiki_read=%t wiki_state=%s generation_changed=%t event_pending=%t event_missing=%t source_ready=%t retirement_complete=%t", expected, time.Unix(0, clock.Load()).UTC().Format(time.RFC3339Nano), artifactErr == nil, strings.Contains(artifact.Content, marker), wikiErr == nil, wiki.State, wiki.Generation != initialGeneration, wiki.EventPending, wiki.EventMissing, wiki.SourceReady, wiki.RetirementComplete)
+		status := cadenceCall(t, cs, "status", nil, false)
+		for _, id := range []string{job, wikiJob} {
+			state := cadenceJob(t, status, id)
+			receipts, err := store.Receipts(workspace, id)
+			t.Logf("owned maintenance job=%s state=%v revision=%v qualification=%v reason=%v receipts_read=%t receipts=%d", id, state["state"], state["revision"], state["qualification_state"], state["reason"], err == nil, len(receipts))
+			for _, receipt := range receipts[max(0, len(receipts)-4):] {
+				t.Logf("owned maintenance receipt job=%s state=%s reason=%s recorded_at=%s", id, receipt.State, receipt.ReasonCode, receipt.RecordedAt.Format(time.RFC3339Nano))
+			}
+		}
 		manual := cadenceCall(t, cs, "run", nil, false)
-		t.Fatalf("owned serve did not publish due L1/navigation and receipts; manual diagnosis state=%v", manual["state"])
+		t.Fatalf("owned serve did not publish due L1/navigation and receipts; manual diagnosis state=%v due=%v receipts=%v", manual["state"], manual["due"], manual["receipts"])
 	}
 	awaitCommit(fresh, 2, 5*time.Second)
 	const nextPulse = "owned upkeep recurring pulse reviewed action"
