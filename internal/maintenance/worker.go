@@ -329,12 +329,12 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 	if worker.product != nil {
 		bounded := grant.(executionGrant)
 		bounded.publication = func(publish func() error) error {
-			return worker.product.guard(func() error {
+			publicationCtx, stopPublication := context.WithTimeout(workerCtx, leaseQuarantineGrace)
+			defer stopPublication()
+			return worker.product.guardWithin(workerCtx, publicationCtx, func() error {
 				if err := workerCtx.Err(); err != nil {
 					return err
 				}
-				publicationCtx, stopPublication := context.WithTimeout(workerCtx, leaseQuarantineGrace)
-				defer stopPublication()
 				return worker.Scheduler.WithCurrentLeaseContext(publicationCtx, lease, worker.product.service.now(), publish)
 			})
 		}
@@ -523,7 +523,7 @@ func (worker Worker) publishOccurrence(ctx context.Context, workspaceID string, 
 		})
 	}
 	if worker.product != nil {
-		return worker.product.publishTerminal(publish)
+		return worker.product.publishTerminalWithin(ctx, publicationCtx, publish)
 	}
 	return publish()
 }
