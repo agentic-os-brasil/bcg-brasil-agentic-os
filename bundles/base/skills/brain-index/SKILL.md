@@ -1,26 +1,48 @@
 ---
 name: brain-index
-description: Consulta a navegação do brain pelo caminho instalado e, no perfil ZIP com compilador admitido, recompila seus índices. Use para localizar conhecimento e inspecionar a disponibilidade da navegação sem presumir um hook automático.
+description: Compila com revisão um conjunto explícito de páginas autorais pelo MCP e consulta busca, índices, backlinks e diagnósticos na geração atual. Use sem presumir varredura global, reparo ou hook automático.
 ---
 
 # Brain index
 
 ## Produto MCP e plugin
 
-Quando o runtime instalado expõe `maestro_context`, use esse vínculo e as
-operações efetivamente disponíveis em `maestro_query`. Consulte `wiki.status`
-antes de navegar por `wiki.read` ou `wiki.source`, preservando a geração e as
-referências retornadas. `memory.search` e `memory.context` consultam a memória
-revisada do workspace, sem criar fontes ou índices.
+1. Confirme o workspace de `maestro_context` e leia `brain.navigation_status`.
+   Escolha com o dono os nomes exatos das páginas relevantes; não enumere o
+   filesystem nem procure fontes no owner brain, memória privada ou outro caso.
+2. Para compilar, use `maestro_apply` com `operation=brain.compile`, `pages`
+   (até 24 nomes relativos `.md`) e `purpose`. O total coletado é de até 128 KiB.
+   Inclua um alvo ausente apenas se o dono pediu verificar esse nome. Apresente
+   a revisão nativa: ela autoriza somente a geração derivada daquele conjunto,
+   preservando todo o Markdown canônico. O plano mantém `host.trusted_review`
+   como dependência exigida e não atestada; registrar as operações não prova
+   que o cliente oferece essa revisão. Sem revisão disponível ou aprovada,
+   mantenha a compilação pendente; não substitua por shell/Python.
+3. Guarde a `generation` e a `reference=index.md` retornadas. Use
+   `brain.navigate(generation, reference, purpose)` para seguir referências
+   virtuais; resolva os links relativos dentro dessa árvore derivada e preserve
+   o percent-encoding da referência (não decodifique nem normalize duas vezes).
+   `#` usa `%23`; um `%23` literal no nome usa `%2523`. Leia as
+   páginas em no máximo 4096 bytes, seguindo `next_offset` até `-1`.
+4. Busque com `brain.search(generation, query, purpose)`. Use somente a geração
+   atual, `offset/next_offset`, `limit` de até 24 e `max_bytes` entre 512 e 4096.
+   `complete=true` encerra a busca. Cada resultado contém a página canônica,
+   revisão, ponteiro e referência de navegação. Abra o texto original com
+   `brain.read(page, purpose)`, também em páginas limitadas.
+5. Leia `brain.diagnostics(generation, purpose)` para metadados, órfãos e links
+   quebrados observados. Órfão significa sem backlinks **neste conjunto**, não
+   em todo o brain. Um link fora do conjunto não foi verificado e não é
+   diagnosticado como quebrado. Páginas sem metadados válidos ou superseded
+   ficam fora da busca; diagnósticos nunca autorizam reparos automáticos.
+6. Uma geração desatualizada ou recusada interrompe a navegação. Consulte o
+   status e solicite uma nova compilação explícita; não reapresente texto antigo.
+   O mesmo conjunto e bytes, em qualquer ordem, retorna `unchanged`.
 
-A wiki privada de memória e o índice do brain autoral são superfícies distintas.
-Este produto não oferece a recompilação genérica do brain autoral nem instala
-`session-stop-brain-index.sh`. Se essa for a operação pedida, informe sua
-indisponibilidade e preserve o pedido pendente. A construção explícita da wiki
-privada segue o fluxo revisado de manutenção descrito em
-[dream-memory](../dream-memory/SKILL.md); consulta e Stop não iniciam compilação.
-Os hooks opcionais de contexto leem memória gerada e registram observações,
-sem executar o compilador legado ou conceder acesso direto aos arquivos privados.
+A wiki privada de memória é outra superfície: `wiki.status/read/source` e
+`memory.search/context` não compilam o brain autoral. Esta operação não instala
+hooks nem agenda manutenção. A futura manutenção depende de autoridade própria;
+consulta e Stop nunca iniciam a compilação. Não execute `brain-index.py` neste
+perfil MCP, mesmo que um recurso legado mencione esse helper.
 
 Uma conversa do produto termina nesta seção. Uma chamada ausente ou recusada
 permanece indisponível; ela não seleciona o caminho ZIP.

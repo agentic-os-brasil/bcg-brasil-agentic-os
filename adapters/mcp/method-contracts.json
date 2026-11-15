@@ -80,31 +80,20 @@
       "dependencies": []
     },
     {
-      "method_ids": [
-        "brain-index"
-      ],
-      "required_operations": [],
-      "effects": [
-        "read",
-        "host_execution",
-        "write_owner"
-      ],
-      "output_kinds": [
-        "navigation_page",
-        "diagnostic_report"
-      ],
-      "dependencies": [
-        {
-          "id": "domain.authored_brain_compiler",
-          "kind": "domain",
-          "required": true
-        },
-        {
-          "id": "host.command_run",
-          "kind": "host",
-          "required": true
-        }
-      ]
+      "method_ids": ["brain-index"],
+      "required_operations": ["brain.compile", "brain.navigation_status", "brain.search", "brain.navigate", "brain.diagnostics", "brain.read"],
+      "effects": ["read", "write_workspace"],
+      "output_kinds": ["navigation_page", "diagnostic_report"],
+      "dependencies": [{
+        "id": "domain.authored_brain_compiler",
+        "kind": "domain",
+        "required": true,
+        "fulfillment_operations": ["brain.compile", "brain.navigation_status", "brain.search", "brain.navigate", "brain.diagnostics", "brain.read"]
+      }, {
+        "id": "host.trusted_review",
+        "kind": "host",
+        "required": true
+      }]
     },
     {
       "method_ids": [
