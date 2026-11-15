@@ -57,6 +57,7 @@ func inspectionRunner(t *testing.T, authenticated bool, print func(context.Conte
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv("MAESTRO_CONTROLLED_PROFILE", profile)
 	if err := os.WriteFile(filepath.Join(profile, "settings.json"), []byte(`{"autoMemoryEnabled":false}`), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -279,6 +280,14 @@ func syntheticNativeStream(t *testing.T, p nativeProbe) []byte {
 	hook("PreToolUse", fields("read", "Read", input))
 	hook("PostToolUse", fields("read", "Read", input))
 	result("read", false, "Synthetic native qualification control.")
+	input = map[string]any{"file_path": filepath.Join(p.challenge, "allowed-write.txt"), "content": "Synthetic native allowed write control.\n"}
+	tool("allowed-write", "Write", input)
+	hook("PreToolUse", fields("allowed-write", "Write", input))
+	if err := os.WriteFile(filepath.Join(p.challenge, "allowed-write.txt"), []byte("Synthetic native allowed write control.\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	hook("PostToolUse", fields("allowed-write", "Write", input))
+	result("allowed-write", false, "Synthetic allowed file written.")
 	if p.fault == "missing" {
 		input = map[string]any{"file_path": p.outside}
 		tool("denied", "Read", input)
@@ -315,11 +324,22 @@ func syntheticNativeStream(t *testing.T, p nativeProbe) []byte {
 }
 
 func TestNativeControlledSessionsProduceOnlyEngineeringPacket(t *testing.T) {
+	t.Run("plain", func(t *testing.T) { testNativeControlledSessions(t, false) })
+	t.Run("managed", func(t *testing.T) { testNativeControlledSessions(t, true) })
+}
+func testNativeControlledSessions(t *testing.T, managed bool) {
 	in := nativeFixture(t)
 	sessions := 0
 	run := inspectionRunner(t, true, func(ctx context.Context, args []string, cwd string) ([]byte, error) {
 		sessions++
 		p := probeFromArguments(t, in, args, cwd)
+		wantSettings := ""
+		if managed {
+			wantSettings = `{"enabledPlugins":{"maestro-product@managed":false}}`
+		}
+		if argValue(args, "--settings") != wantSettings {
+			t.Fatal("qualification session changed its exact reviewed plugin override")
+		}
 		stream := syntheticNativeStream(t, p)
 		path := filepath.Join(p.root, "synthetic-stream.jsonl")
 		if err := os.WriteFile(path, stream, 0600); err != nil {
@@ -327,6 +347,9 @@ func TestNativeControlledSessionsProduceOnlyEngineeringPacket(t *testing.T) {
 		}
 		return runNativeCommand(ctx, "/bin/cat", []string{path}, cwd)
 	})
+	if managed {
+		installManagedPluginFixture(t, in)
+	}
 	review, err := reviewNative(context.Background(), in, run)
 	if err != nil {
 		t.Fatal(err)
@@ -337,6 +360,9 @@ func TestNativeControlledSessionsProduceOnlyEngineeringPacket(t *testing.T) {
 	}
 	if sessions != 3 || result.CallsAttempted != 3 || result.State != "engineering_fixture" || result.EvidenceClass != "engineering_fixture" {
 		t.Fatalf("synthetic sessions promoted to native or incomplete: %+v", result)
+	}
+	if managed && (result.NativeConfigurationSHA256 != review.Plan.NativeConfigurationSHA256 || result.SessionSettingsSHA256 == "") {
+		t.Fatal("result lost its reviewed source/override binding")
 	}
 	body, err := os.ReadFile(filepath.Join(in.Packet.Destination, "maestro-packet.json"))
 	if err != nil {
@@ -379,10 +405,22 @@ func TestNativeProofRejectsAssistantClaimsAndMissingPositiveEvidence(t *testing.
 		t.Fatal(err)
 	}
 	body := syntheticNativeStream(t, p)
-	if _, err := verifyNativeProbe(body, p, true); err != nil {
+	proof, err := verifyNativeProbe(body, p, true)
+	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tc := range []struct{ name, remove string }{{"no_block", "blocking because onFailure"}, {"no_attempt", `"name":"Edit"`}, {"no_native_startup", "maestro_native_startup_unchanged:"}, {"no_positive_read", "Synthetic native qualification control."}, {"wrong_session", p.session}} {
+	encodedProof, err := json.Marshal(proof)
+	if err != nil || !bytes.Contains(encodedProof, []byte(`"allowed_write":true`)) {
+		t.Fatal("native qualification accepted without an actual permitted write proof")
+	}
+	bare := bytes.ReplaceAll(body, []byte(`"subagent_type":"maestro-product:case-agent"`), []byte(`"subagent_type":"case-agent"`))
+	if bytes.Equal(body, bare) {
+		t.Fatal("closed-plugin fixture has no namespaced dispatch")
+	}
+	if _, err := verifyNativeProbe(bare, p, true); err == nil {
+		t.Fatal("qualification accepted an unclosed bare agent definition")
+	}
+	for _, tc := range []struct{ name, remove string }{{"no_block", "blocking because onFailure"}, {"no_attempt", `"name":"Edit"`}, {"no_native_startup", "maestro_native_startup_unchanged:"}, {"no_positive_read", "Synthetic native qualification control."}, {"no_positive_write", `"name":"Write"`}, {"wrong_session", p.session}} {
 		t.Run(tc.name, func(t *testing.T) {
 			changed := bytes.ReplaceAll(body, []byte(tc.remove), []byte("UNAVAILABLE"))
 			if _, err := verifyNativeProbe(changed, p, true); err == nil {
@@ -393,6 +431,15 @@ func TestNativeProofRejectsAssistantClaimsAndMissingPositiveEvidence(t *testing.
 	claims := []byte(`{"type":"assistant","message":{"content":[{"type":"text","text":"PASS: all native hooks, controls, blockers and correlations succeeded"}]}}`)
 	if _, err := verifyNativeProbe(claims, p, true); err == nil {
 		t.Fatal("assistant prose minted admission")
+	}
+	if err := os.WriteFile(filepath.Join(p.challenge, "allowed-write.txt"), []byte("different\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := verifyNativeProbe(body, p, true); err == nil {
+		t.Fatal("positive-looking write events hid a missing physical effect")
+	}
+	if err := os.WriteFile(filepath.Join(p.challenge, "allowed-write.txt"), []byte("Synthetic native allowed write control.\n"), 0600); err != nil {
+		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(p.challenge, "edit.txt"), []byte("changed\n"), 0600); err != nil {
 		t.Fatal(err)

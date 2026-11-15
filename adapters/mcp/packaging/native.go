@@ -10,7 +10,6 @@ import (
 	"io"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -23,7 +22,8 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
-const qualificationProtocol = "native-planner-v1"
+const qualificationProtocol = "native-planner-v2"
+const nativeAllowedWriteContent = "Synthetic native allowed write control.\n"
 const maximumNativeCalls = 3
 const maximumNativeTurns = 8
 const nativeCallSeconds = 120
@@ -46,6 +46,7 @@ type NativePlan struct {
 	AuthConfigurationLocationSHA256 string   `json:"auth_configuration_location_sha256,omitempty"`
 	NativeConfigurationDirectory    string   `json:"native_configuration_directory,omitempty"`
 	NativeConfigurationSHA256       string   `json:"native_configuration_sha256,omitempty"`
+	SessionSettingsOverride         string   `json:"session_settings_override,omitempty"`
 	ServerSHA256                    string   `json:"server_sha256"`
 	BindingSHA256                   string   `json:"binding_sha256"`
 	ProfileSHA256                   string   `json:"profile_sha256"`
@@ -73,17 +74,20 @@ type NativeReview struct {
 	ReviewDigest string     `json:"review_digest"`
 }
 type NativeResult struct {
-	ScratchDirectory      string  `json:"scratch_directory,omitempty"`
-	State                 string  `json:"state"`
-	Reason                string  `json:"reason,omitempty"`
-	ReviewDigest          string  `json:"review_digest"`
-	CallsAttempted        int     `json:"native_cli_sessions_attempted"`
-	EvidenceClass         string  `json:"evidence_class"`
-	EstimatedSpendUSD     float64 `json:"estimated_spend_usd"`
-	BillingBoundary       string  `json:"billing_boundary"`
-	VendorProvenance      string  `json:"vendor_provenance"`
-	DescendantCleanup     string  `json:"descendant_cleanup"`
-	ManagedPolicyBoundary string  `json:"managed_policy_boundary"`
+	Protocol                  string  `json:"protocol"`
+	ScratchDirectory          string  `json:"scratch_directory,omitempty"`
+	State                     string  `json:"state"`
+	Reason                    string  `json:"reason,omitempty"`
+	ReviewDigest              string  `json:"review_digest"`
+	NativeConfigurationSHA256 string  `json:"native_configuration_sha256,omitempty"`
+	SessionSettingsSHA256     string  `json:"session_settings_sha256,omitempty"`
+	CallsAttempted            int     `json:"native_cli_sessions_attempted"`
+	EvidenceClass             string  `json:"evidence_class"`
+	EstimatedSpendUSD         float64 `json:"estimated_spend_usd"`
+	BillingBoundary           string  `json:"billing_boundary"`
+	VendorProvenance          string  `json:"vendor_provenance"`
+	DescendantCleanup         string  `json:"descendant_cleanup"`
+	ManagedPolicyBoundary     string  `json:"managed_policy_boundary"`
 }
 type nativeCommand func(context.Context, string, []string, string) ([]byte, error)
 
@@ -135,7 +139,7 @@ func reviewNativeAt(ctx context.Context, in NativeOptions, run nativeCommand, ch
 		return out, err
 	}
 	profile, profileErr := profileFingerprint(o)
-	p := NativePlan{Protocol: qualificationProtocol, State: "unavailable", Profile: nativeProfile, HostExecutable: in.Executable, ServerSHA256: digest(o.serverBody), BindingSHA256: binding, ProfileSHA256: profile, Target: o.target, Destination: o.Destination, Version: o.Version, ScratchRoot: in.ScratchRoot, Authentication: "unavailable", MaximumCalls: maximumNativeCalls, MaximumTurnsPerCall: maximumNativeTurns, MaximumSecondsPerCall: nativeCallSeconds, MaxBudgetUSDPerCall: in.MaxBudgetUSD, AggregateEstimatedLimitUSD: maximumNativeCalls * in.MaxBudgetUSD, BillingBoundary: "Provider billing and CLI caps are estimates, not hard ceilings. Stop remaining calls when an observed estimate exceeds the reviewed per-call limit.", VendorProvenance: "Explicitly operator-selected local installation; Anthropic vendor provenance is not independently attested.", Challenges: []string{"read_only_startup", "allowed_read", "guard_denial", "sequential_case_gamma_correlation_and_stops", "missing_helper_blocks_edit", "crashing_helper_blocks_edit", "timed_out_helper_blocks_edit"}}
+	p := NativePlan{Protocol: qualificationProtocol, State: "unavailable", Profile: nativeProfile, HostExecutable: in.Executable, ServerSHA256: digest(o.serverBody), BindingSHA256: binding, ProfileSHA256: profile, Target: o.target, Destination: o.Destination, Version: o.Version, ScratchRoot: in.ScratchRoot, Authentication: "unavailable", MaximumCalls: maximumNativeCalls, MaximumTurnsPerCall: maximumNativeTurns, MaximumSecondsPerCall: nativeCallSeconds, MaxBudgetUSDPerCall: in.MaxBudgetUSD, AggregateEstimatedLimitUSD: maximumNativeCalls * in.MaxBudgetUSD, BillingBoundary: "Provider billing and CLI caps are estimates, not hard ceilings. Stop remaining calls when an observed estimate exceeds the reviewed per-call limit.", VendorProvenance: "Explicitly operator-selected local installation; Anthropic vendor provenance is not independently attested.", Challenges: []string{"read_only_startup", "allowed_read", "allowed_write", "guard_denial", "sequential_case_gamma_correlation_and_stops", "missing_helper_blocks_edit", "crashing_helper_blocks_edit", "timed_out_helper_blocks_edit"}}
 	p.ChallengeDirectory = in.ChallengeDirectory
 	if contains(o.Binding.WorkspacePath, o.Server) {
 		return out, errors.New("negative read control requires the selected public server outside the workspace")
@@ -144,7 +148,7 @@ func reviewNativeAt(ctx context.Context, in NativeOptions, run nativeCommand, ch
 	p.ContextBoundary = "All sessions use the exact selected workspace cwd and effective normal project/local hook settings. Choose a synthetic non-client target: Code may load and send its effective context. Agent children can make additional provider requests beyond the parent turn count. Qualification advertises an empty MCP config and disallows MCP tools. Managed policy may affect startup connections; those connectors are not used as qualification evidence or qualified by this result."
 	p.ManagedPolicyBoundary = "Remote or OS-delivered managed policy is UNATTESTED and may affect startup/context. Local autoMemoryEnabled:false establishes only the supported local file profile; it does not prove that managed policy disables memory. Native observations do not establish enterprise device-policy admission or production rollout authority; those remain external acceptance gates."
 	p.MetadataWrites = []string{"new synthetic control files inside the exact challenge directory", "native-agent-flow metadata and lifecycle receipts for three new sessions in the selected canonical owner state", "local candidate packets and metadata-only observations inside the selected private scratch root"}
-	p.DescendantCleanup = "Timeout cancels the qualification-owned Unix process group. Independently detached host descendants are not attested; a timeout never qualifies and reports cleanup unavailable. No global process cleanup occurs."
+	p.DescendantCleanup = nativeProcessBoundary()
 	host, target, err := nativeHostIdentity(in.Executable)
 	if profileErr != nil {
 		p.Reason = nativeConfigurationReason(profileErr)
@@ -175,12 +179,16 @@ func reviewNativeAt(ctx context.Context, in NativeOptions, run nativeCommand, ch
 				} else {
 					p.Authentication = state.AuthMethod
 					p.AuthConfigurationLocationSHA256 = digest([]byte(state.Configuration))
-					configuration, err := nativeUserConfiguration(state.Configuration, nativeInstructionPaths(in, o)...)
+					configuration, err := nativeUserConfiguration(state.Configuration, o, nativeInstructionPaths(in, o)...)
 					if err != nil {
 						p.Reason = nativeConfigurationReason(err)
 					} else {
 						p.NativeConfigurationDirectory = state.Configuration
-						p.NativeConfigurationSHA256 = configuration
+						p.NativeConfigurationSHA256 = configuration.SHA256
+						p.SessionSettingsOverride = configuration.SessionSettings
+						if p.SessionSettingsOverride != "" {
+							p.ContextBoundary += " The exact reviewed session-only settings disable only the verified installed Maestro ID while the inline candidate runs, preventing duplicate hooks. No stored settings are edited or other plugin sources ignored."
+						}
 						p.State = "reviewable"
 					}
 				}
@@ -221,7 +229,7 @@ func QualifyAndBuildNative(ctx context.Context, in NativeOptions, reviewDigest s
 	return qualifyAndBuildNative(ctx, in, reviewDigest, confirmed, runNativeCommand, "native_observed")
 }
 func qualifyAndBuildNative(ctx context.Context, in NativeOptions, reviewDigest string, confirmed bool, run nativeCommand, evidenceClass string) (NativeResult, error) {
-	result := NativeResult{State: "unavailable", EvidenceClass: "not_observed"}
+	result := NativeResult{Protocol: qualificationProtocol, State: "unavailable", EvidenceClass: "not_observed"}
 	if !confirmed {
 		return result, errors.New("explicit native operator confirmation required")
 	}
@@ -234,6 +242,10 @@ func qualifyAndBuildNative(ctx context.Context, in NativeOptions, reviewDigest s
 	}
 	p := review.Plan
 	result.ReviewDigest = reviewDigest
+	result.NativeConfigurationSHA256 = p.NativeConfigurationSHA256
+	if p.SessionSettingsOverride != "" {
+		result.SessionSettingsSHA256 = digest([]byte(p.SessionSettingsOverride))
+	}
 	result.BillingBoundary = p.BillingBoundary
 	result.VendorProvenance = p.VendorProvenance
 	result.DescendantCleanup = p.DescendantCleanup
@@ -246,14 +258,17 @@ func qualifyAndBuildNative(ctx context.Context, in NativeOptions, reviewDigest s
 		result.Reason = p.Reason
 		return result, buildUnavailable(o, p.Reason)
 	}
-	root, err := os.MkdirTemp(in.ScratchRoot, "maestro-native-")
+	root, releaseRoot, err := createNativeScratch(in.ScratchRoot)
 	if err != nil {
 		return result, err
 	}
+	defer releaseRoot()
 	result.ScratchDirectory = root
-	if err := os.Mkdir(in.ChallengeDirectory, 0700); err != nil {
+	releaseChallenge, err := makeNativePrivateDirectory(in.ChallengeDirectory)
+	if err != nil {
 		return result, err
 	}
+	defer releaseChallenge()
 	// Synthetic evidence is local and retained for diagnosis; it is never an
 	// importable admission or permission to install/register a host profile.
 	for index, fault := range []string{"missing", "crash", "timeout"} {
@@ -264,6 +279,8 @@ func qualifyAndBuildNative(ctx context.Context, in NativeOptions, reviewDigest s
 		if err != nil {
 			return result, err
 		}
+		defer probe.release()
+		probe.sessionSettings = p.SessionSettingsOverride
 		dispatch, _ := json.MarshalIndent(map[string]any{"protocol": qualificationProtocol, "session_id": probe.session, "workspace_sha256": p.BindingSHA256, "state": "dispatch_prepared", "maximum_parent_turns": maximumNativeTurns, "maximum_seconds": nativeCallSeconds, "estimated_budget_usd": in.MaxBudgetUSD}, "", "  ")
 		if err := scheduler.WriteNewPrivateFile(filepath.Join(probe.root, "dispatch.json"), append(dispatch, '\n')); err != nil {
 			return result, err
@@ -294,7 +311,7 @@ func qualifyAndBuildNative(ctx context.Context, in NativeOptions, reviewDigest s
 	if err := validateNativeInputs(ctx, in, review, run); err != nil {
 		return result, err
 	}
-	h := &NativeHost{binding: p.BindingSHA256, serverSHA: p.ServerSHA256, hostPath: p.HostExecutable, hostSHA: p.HostSHA256, profileSHA: p.ProfileSHA256, version: p.HostVersion, configurationDirectory: p.NativeConfigurationDirectory, configurationSHA: p.NativeConfigurationSHA256, instructionPaths: nativeInstructionPaths(in, o), evidenceClass: evidenceClass, ready: true}
+	h := &NativeHost{binding: p.BindingSHA256, serverSHA: p.ServerSHA256, hostPath: p.HostExecutable, hostSHA: p.HostSHA256, profileSHA: p.ProfileSHA256, version: p.HostVersion, configurationDirectory: p.NativeConfigurationDirectory, configurationSHA: p.NativeConfigurationSHA256, instructionPaths: nativeInstructionPaths(in, o), sessionSettingsSHA: result.SessionSettingsSHA256, evidenceClass: evidenceClass, ready: true}
 	o.NativeHost = h
 	if err := h.validate(o); err != nil {
 		return result, err
@@ -367,19 +384,31 @@ func validateNativeInputs(ctx context.Context, in NativeOptions, review NativeRe
 
 type nativeProbe struct {
 	root, challenge, outside, plugin, fault, nonce, session string
+	sessionSettings                                         string
+	release                                                 func()
 	binding                                                 product.Options
 	server                                                  string
 }
 
 func prepareNativeProbe(o Options, root, challenge string, index int, fault string) (nativeProbe, error) {
 	p := nativeProbe{root: filepath.Join(root, strconv.Itoa(index)), fault: fault, server: o.Server}
-	if err := os.Mkdir(p.root, 0700); err != nil {
+	releaseRoot, err := makeNativePrivateDirectory(p.root)
+	if err != nil {
 		return p, err
 	}
+	p.release = releaseRoot
+	accepted := false
+	defer func() {
+		if !accepted {
+			p.release()
+		}
+	}()
 	p.challenge = filepath.Join(challenge, strconv.Itoa(index))
-	if err := os.Mkdir(p.challenge, 0700); err != nil {
+	releaseChallenge, err := makeNativePrivateDirectory(p.challenge)
+	if err != nil {
 		return p, err
 	}
+	p.release = func() { releaseChallenge(); releaseRoot() }
 	token := make([]byte, 16)
 	if _, err := rand.Read(token); err != nil {
 		return p, err
@@ -390,7 +419,7 @@ func prepareNativeProbe(o Options, root, challenge string, index int, fault stri
 	p.session = hex.EncodeToString(token[:4]) + "-" + hex.EncodeToString(token[4:6]) + "-" + hex.EncodeToString(token[6:8]) + "-" + hex.EncodeToString(token[8:10]) + "-" + hex.EncodeToString(token[10:])
 	p.binding = o.Binding
 	p.outside = o.Server
-	for name, body := range map[string]string{"allowed.txt": "Synthetic native qualification control.\n", "edit.txt": "original\n"} {
+	for name, body := range map[string]string{"allowed.txt": "Synthetic native qualification control.\n", "edit.txt": "original\n", "allowed-write.txt": "pending\n"} {
 		if err := scheduler.WriteNewPrivateFile(filepath.Join(p.challenge, name), []byte(body)); err != nil {
 			return p, err
 		}
@@ -453,17 +482,23 @@ func prepareNativeProbe(o Options, root, challenge string, index int, fault stri
 	if err := buildNativeCandidate(candidate, capability, append(body, '\n')); err != nil {
 		return p, err
 	}
+	accepted = true
 	return p, nil
 }
 func (p nativeProbe) arguments(budget float64) []string {
 	allowed := filepath.Join(p.challenge, "allowed.txt")
 	edit := filepath.Join(p.challenge, "edit.txt")
 	outside := p.outside
-	prompt := "Use only these synthetic qualification controls: Read " + strconv.Quote(allowed) + ", then attempt Edit of " + strconv.Quote(edit) + " replacing original with changed. The expected hook failure is the test: report it and do not retry or use another tool. Never run tools or agents in the background."
+	write := filepath.Join(p.challenge, "allowed-write.txt")
+	prompt := "Use only these synthetic qualification controls: Read " + strconv.Quote(allowed) + "; Write " + strconv.Quote(write) + " with exact content " + strconv.Quote(nativeAllowedWriteContent) + "; then attempt Edit of " + strconv.Quote(edit) + " replacing original with changed. The expected hook failure is the test: report it and do not retry or use another tool. Never run tools or agents in the background."
 	if p.fault == "missing" {
-		prompt = "Perform these synthetic qualification steps sequentially, never in parallel or background: Read " + strconv.Quote(allowed) + "; attempt Read of " + strconv.Quote(outside) + " (expected policy denial, continue); call Agent with subagent_type maestro-product:case-agent and prompt 'Synthetic packet: return CASE_OBSERVATION only, no tools and no delegation'; after its return call Agent with subagent_type maestro-product:gamma-guardian and prompt 'Synthetic bounded packet: analyze CASE_OBSERVATION only, no tools, return GAMMA_OBSERVATION'; finally attempt Edit of " + strconv.Quote(edit) + " replacing original with changed (expected missing-guard block), report the block and do not retry. These are lifecycle observations, not artifact delivery or review verdicts."
+		prompt = "Perform these synthetic qualification steps sequentially, never in parallel or background: Read " + strconv.Quote(allowed) + "; Write " + strconv.Quote(write) + " with exact content " + strconv.Quote(nativeAllowedWriteContent) + "; attempt Read of " + strconv.Quote(outside) + " (expected policy denial, continue); call Agent with subagent_type maestro-product:case-agent and prompt 'Synthetic packet: return CASE_OBSERVATION only, no tools and no delegation'; after its return call Agent with subagent_type maestro-product:gamma-guardian and prompt 'Synthetic bounded packet: analyze CASE_OBSERVATION only, no tools, return GAMMA_OBSERVATION'; finally attempt Edit of " + strconv.Quote(edit) + " replacing original with changed (expected missing-guard block), report the block and do not retry. These are lifecycle observations, not artifact delivery or review verdicts."
 	}
-	return []string{"--print", "--output-format", "stream-json", "--verbose", "--include-hook-events", "--no-session-persistence", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--disallowedTools", "mcp__*", "--tools", "Read,Edit,Agent", "--plugin-dir", p.plugin, "--session-id", p.session, "--max-turns", strconv.Itoa(maximumNativeTurns), "--max-budget-usd", strconv.FormatFloat(budget, 'g', -1, 64), prompt}
+	args := []string{"--print", "--output-format", "stream-json", "--verbose", "--include-hook-events", "--no-session-persistence", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--disallowedTools", "mcp__*", "--tools", "Read,Write,Edit,Agent", "--plugin-dir", p.plugin, "--session-id", p.session, "--max-turns", strconv.Itoa(maximumNativeTurns), "--max-budget-usd", strconv.FormatFloat(budget, 'g', -1, 64)}
+	if p.sessionSettings != "" {
+		args = append(args, "--settings", p.sessionSettings)
+	}
+	return append(args, prompt)
 }
 
 type boundedNativeOutput struct{ bytes.Buffer }
@@ -475,15 +510,16 @@ func (b *boundedNativeOutput) Write(p []byte) (int, error) {
 	return b.Buffer.Write(p)
 }
 func runNativeCommand(ctx context.Context, path string, args []string, cwd string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, path, args...)
-	cmd.Dir = cwd
-	cmd.Stderr = io.Discard
-	cmd.WaitDelay = 2 * time.Second
-	configureNativeProcess(cmd)
-	var stdout boundedNativeOutput
-	cmd.Stdout = &stdout
-	err := cmd.Run()
-	return stdout.Bytes(), err
+	return runOwnedNativeCommand(ctx, path, args, cwd)
+}
+func createNativeScratch(root string) (string, func(), error) {
+	token := make([]byte, 16)
+	if _, err := rand.Read(token); err != nil {
+		return "", nil, err
+	}
+	path := filepath.Join(root, "maestro-native-"+hex.EncodeToString(token))
+	release, err := makeNativePrivateDirectory(path)
+	return path, release, err
 }
 
 // CheckNativeStartup is a qualification-only wrapper around the same read-only

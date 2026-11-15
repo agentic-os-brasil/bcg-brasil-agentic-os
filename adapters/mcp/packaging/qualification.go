@@ -61,13 +61,14 @@ func QualificationScopeGuard(binding product.Options, directory, outside string,
 		Background   bool   `json:"run_in_background"`
 		Old          string `json:"old_string"`
 		New          string `json:"new_string"`
+		Content      string `json:"content"`
 	}
 	if json.Unmarshal(input.ToolInputJSON(), &fields) != nil {
 		return errors.New("qualification tool input unavailable")
 	}
 	allowed := false
 	switch input.ToolName {
-	case "Read", "Edit":
+	case "Read", "Edit", "Write":
 		path := fields.Path
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(input.CWD, path)
@@ -77,13 +78,16 @@ func QualificationScopeGuard(binding product.Options, directory, outside string,
 			if input.ToolName == "Read" {
 				allowed = resolved == filepath.Join(directory, "allowed.txt") || resolved == outside
 			}
+			if input.ToolName == "Write" {
+				allowed = resolved == filepath.Join(directory, "allowed-write.txt") && fields.Content == nativeAllowedWriteContent
+			}
 			if input.ToolName == "Edit" {
 				allowed = resolved == filepath.Join(directory, "edit.txt") && (fields.Old == "original" || fields.Old == "original\n") && (fields.New == "changed" || fields.New == "changed\n")
 			}
 		}
 	case "Agent":
 		id, known := claudeagents.CanonicalAgentID(fields.SubagentType)
-		allowed = known && (id == "case-agent" || id == "gamma-guardian") && !fields.Background
+		allowed = known && fields.SubagentType == "maestro-product:"+id && (id == "case-agent" || id == "gamma-guardian") && !fields.Background
 	}
 	if !allowed {
 		return json.NewEncoder(out).Encode(claudeadapter.FailClosedDenial())

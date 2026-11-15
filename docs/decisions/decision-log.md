@@ -1472,3 +1472,14 @@ filesystem surface or stronger marker-transaction claim.
 - Supersedes: none
 
 - Implementation clarification (2026-11-14): Native Windows CI established that Go 1.23+ intentionally leaves mount-point junctions unresolved in filepath.EvalSymlinks. Normalize the already-open executable handle and the explicitly selected managed-parent directory handle through the Windows final local DOS path API. This normalization confers no private-state admission; preserve exact physical packet validation, original-hint/file-identity rechecks, the digest pin and all owner/workspace no-follow rules. Unix path resolution and the bounded-file-identity claim remain unchanged.
+
+## NADM - Bind managed plugin sources and own native qualification processes
+
+- Date: 2026-11-15
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The passive Code packet works without qualifying the full planner. The native producer rejects the installed managed Maestro plugin, Windows scratch and process ownership are absent, and the existing proof has no permitted write control. Relaxing source or process checks would turn source construction into unsupported host authority.
+- Decision: Admit only the exact physically validated managed Maestro plugin and canonical inventory through the actual host configuration closure, binding registry, source, server, profile and any explicit session-only disable of the installed ID while the new candidate runs. Unknown sources and nonempty ambient hook groups with unclosed external commands remain refused; no profile or credential is rewritten. Reuse native private-state owners and creation-time owned Windows Job Object containment with bounded cancellation and observed closure. Require both an actual allowed write effect and correlated native events in addition to read, denial, delegation and guard-failure controls. Qualification dispatches require exact namespaced plugin roles rather than unclosed bare aliases. Preserve the seven canonical handlers, normal permissions and opaque process-local admission. Keep Windows native qualification unavailable until its actual ownership and client proofs exist.
+- Consequences: A supported local Maestro installation can be reviewed without pretending arbitrary plugins or policy are known. Exact source or session-override changes invalidate review. Controlled streams remain engineering fixtures; Mac, Windows, CLI and Code-tab observations remain separate. The bounded qualifier does not install a packet, clear fences, bypass permissions or attest to detached host processes.
+- Refs: specs/063-product-native-plugin.md; docs/product-native-hooks.md; adapters/mcp/packaging/native.go; adapters/mcp/packaging/native_instructions.go; adapters/mcp/packaging/native_windows.go; issue #537; issue #469
+- Supersedes: none
