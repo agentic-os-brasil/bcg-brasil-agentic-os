@@ -164,13 +164,15 @@ func (directory *secureDirectory) removeFile(name string) error {
 }
 
 func (directory *secureDirectory) readDir() ([]os.DirEntry, error) {
-	file := os.NewFile(uintptr(directory.fd), directory.path)
+	fd, err := unix.Openat(directory.fd, ".", secureDirectoryFlags, 0)
+	if err != nil {
+		return nil, err
+	}
+	file := os.NewFile(uintptr(fd), directory.path)
 	if file == nil {
+		_ = unix.Close(fd)
 		return nil, errors.New("scheduler secure directory handle creation failed")
 	}
-	// Transfer the descriptor to the os.File; callers close the directory after
-	// ReadDir, so prevent close from being attempted twice.
-	directory.fd = -1
 	defer file.Close()
 	return file.ReadDir(-1)
 }
@@ -289,6 +291,7 @@ func secureReadDir(path string) ([]os.DirEntry, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer directory.close()
 	return directory.readDir()
 }
 
@@ -329,4 +332,8 @@ func openUnownedRegularFile(path string) (*os.File, error) {
 }
 func (directory *secureDirectory) openLock(name string) (*os.File, error) {
 	return directory.openFile(name, os.O_RDWR|os.O_CREATE, 0o600)
+}
+
+func (directory *secureDirectory) openExistingLock(name string) (*os.File, error) {
+	return directory.openFile(name, os.O_RDWR, 0)
 }
