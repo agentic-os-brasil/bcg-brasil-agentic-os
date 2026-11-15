@@ -294,7 +294,14 @@
         "start-day",
         "upward-feedback"
       ],
-      "required_operations": [],
+      "required_operations": [
+        "owner.atlas.append",
+        "owner.atlas.collect",
+        "owner.atlas.create",
+        "owner.atlas.prepare",
+        "owner.atlas.status",
+        "owner.atlas.update"
+      ],
       "effects": [
         "write_owner"
       ],
@@ -305,7 +312,15 @@
         {
           "id": "domain.owner_atlas",
           "kind": "domain",
-          "required": true
+          "required": true,
+          "fulfillment_operations": [
+            "owner.atlas.append",
+            "owner.atlas.collect",
+            "owner.atlas.create",
+            "owner.atlas.prepare",
+            "owner.atlas.status",
+            "owner.atlas.update"
+          ]
         },
         {
           "id": "host.trusted_review",

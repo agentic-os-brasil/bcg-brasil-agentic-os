@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -15,12 +16,12 @@ func trackSchema() map[string]any {
 	return map[string]any{"type": "string", "enum": []string{"quick", "complete"}}
 }
 func ownerQueries() []any {
-	return []any{
+	return append([]any{
 		variant("owner.status", map[string]any{}),
 		variant("owner.interview", map[string]any{"track": trackSchema()}, "track"),
 		variant("owner.review", map[string]any{"proposal_id": strSchema(96)}, "proposal_id"),
 		variant("owner.onboarding_review", map[string]any{}),
-	}
+	}, ownerAtlasQueries()...)
 }
 func applySchema() map[string]any {
 	s := mutationSchema()
@@ -30,6 +31,7 @@ func applySchema() map[string]any {
 		variant("owner.apply", map[string]any{"proposal_id": strSchema(96)}, "proposal_id"),
 		variant("owner.confirm_onboarding", map[string]any{}),
 	)
+	s["oneOf"] = append(s["oneOf"].([]any), ownerAtlasMutations()...)
 	return s
 }
 func (b *Bound) ownerRoot() string { return filepath.Join(b.home, "brain") }
@@ -91,6 +93,9 @@ func (b *Bound) SelectOwnerTrack(track string, confirmed bool) (map[string]any, 
 	return ownerMetadata(s), err
 }
 func (b *Bound) handleOwner(ctx context.Context, req *mcp.CallToolRequest, in input) *mcp.CallToolResult {
+	if strings.HasPrefix(in.Operation, "owner.atlas.") {
+		return b.handleOwnerAtlas(ctx, req, in)
+	}
 	var value any
 	var err error
 	switch in.Operation {

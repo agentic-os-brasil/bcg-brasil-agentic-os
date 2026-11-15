@@ -5,6 +5,17 @@ description: Help the owner prepare considered feedback to give upward to a seni
 
 # Upward Feedback
 
+## MCP owner-atlas route
+
+When this method runs through the Maestro MCP product, first read
+`maestro://methods/start-day/resources/owner-atlas-mcp.md` in full through
+`methods.read` on the same admitted connector (follow `has_more` and
+`next_offset`). Follow that owning operation route. It replaces legacy
+file/command mechanics below; retain the content, privacy and human
+confirmation rules. A scheduled marker does not replace trusted review
+or create a standing grant. Unavailable review leaves a draft, not a write.
+
+
 Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
 
 

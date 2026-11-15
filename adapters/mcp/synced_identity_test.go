@@ -1,7 +1,10 @@
 package product_test
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -29,7 +32,23 @@ func TestIdentityAdvertisesSignedSourceExecutionContract(t *testing.T) {
 	if wire.SchemaVersion != 2 || wire.ExecutionContract != "maestro-synced-source-v1" {
 		t.Fatalf("actual identity cannot qualify signed-source execution: schema=%d contract=%q", wire.SchemaVersion, wire.ExecutionContract)
 	}
-	if len(identity.Resources) != 263 { // 249 method resources plus 14 canonical agent resources.
-		t.Fatalf("immutable resource closure changed: got %d, want 263", len(identity.Resources))
+	if len(identity.Resources) != 264 { // 250 method resources plus 14 canonical agent resources.
+		t.Fatalf("immutable resource closure changed: got %d, want 264", len(identity.Resources))
+	}
+	canonical, err := os.ReadFile("../../bundles/base/skills/start-day/resources/owner-atlas-mcp.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, resource := range identity.Resources {
+		if resource.URI == "maestro://methods/start-day/resources/owner-atlas-mcp.md" {
+			found = true
+			if resource.Bytes != int64(len(canonical)) || resource.SHA256 != fmt.Sprintf("%x", sha256.Sum256(canonical)) {
+				t.Fatal("owner-atlas resource identity differs from canonical bytes")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("owner-atlas method resource is absent from immutable identity")
 	}
 }

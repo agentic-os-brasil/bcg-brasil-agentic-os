@@ -16,10 +16,10 @@ func TestAuthoredBrainResourceHasIndependentCanonicalIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Independently inspected canonical files: 243 method files plus six shared
+	// Independently inspected canonical files: 244 method files plus six shared
 	// policy/catalogue/license/provenance/declaration resources and 14 fixed agent assets.
-	if len(resources.Resources) != 263 {
-		t.Fatalf("immutable current resource closure: got %d want 263", len(resources.Resources))
+	if len(resources.Resources) != 264 {
+		t.Fatalf("immutable current resource closure: got %d want 264", len(resources.Resources))
 	}
 	const uri = "maestro://methods/maestro-operator/resources/authored-brain.md"
 	canonical, err := os.ReadFile("../../bundles/base/skills/maestro-operator/resources/authored-brain.md")
