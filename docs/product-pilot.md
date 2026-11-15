@@ -99,9 +99,19 @@ Archive validation does not prove Desktop loading. A blocked initialization also
 keeps the verified executable, test launcher and bounded diagnostic report;
 neither the preparer nor the checker repairs owner ACLs or removes partial data.
 
-The participant opens **Testar Maestro**, chooses Code or Desktop, and pastes one
-generated prompt. Each prompt binds the verified workspace and a synthetic trial
-marker. The Desktop prompt discovers the single matching work item and uses its
+The participant opens **Testar Maestro** and chooses a clearly named route.
+Options 3 (Code) and 4 (Desktop) are independent read-only connection checks. Each
+copies one prompt bound to the verified workspace and exact client connector;
+Desktop names the unique local extension and requires neither the Code CLI nor
+a Code work item. Each prompt calls only `maestro_context` once and reports the
+workspace and returned connection-health state. It neither queries work-item
+state nor resumes work. The JSON fields `code_ready_prompt` and additive
+`desktop_ready_prompt` are always strings and empty on blocked admission; emitted
+files are `CODE-CONEXAO.txt` and `DESKTOP-CONEXAO.txt`.
+
+Option 1 is the complete Code exercise; option 2 is the subsequent Desktop
+continuity/resume exercise. These prompts bind a synthetic trial marker. The
+Desktop continuity prompt discovers the single matching work item and uses its
 current revision, so the participant does not transport execution IDs/revisions.
 The launcher copies a prompt and opens a client only after that explicit choice.
 For Desktop, the participant confirms installation of the named extension and

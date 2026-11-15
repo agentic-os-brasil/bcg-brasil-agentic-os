@@ -155,20 +155,20 @@ Write-New (Join-Path $Root 'launchers/Abrir Desktop.cmd') ('@echo off' + [char]1
 $start = @"
 # Maestro MCP — teste guiado
 
-Abra **launchers/Testar Maestro.cmd**. Ele confere o ensaio, abre o relatório e
-permite escolher Code ou Desktop. O texto com o ID correto é copiado automaticamente;
-cole uma vez na conversa escolhida. O perfil Code é separado e pode pedir login normal.
-Se o plugin Code pedir Owner directory ou Workspace, use estes valores literais:
+Abra **launchers/Testar Maestro.cmd**. Para conferir a conexão sem alterar dados,
+escolha **3 — Conferir conexão Code** ou **4 — Conferir conexão Desktop**. O texto
+com o workspace correto é copiado automaticamente: cole uma vez na conversa do
+cliente escolhido. O estado mostrado é a saúde da conexão, não o estado dos trabalhos.
 
-Owner directory:
+Para o ensaio completo, escolha **1 — Ensaio completo no Code** e depois
+**2 — Retomar no Desktop**. O texto copiado conduz cada etapa e suas confirmações normais.
 
-    $Root\owner
+O perfil Code é separado e pode pedir login normal nessa janela. O plugin e a
+extensão já usam as pastas aprovadas; não há diretórios para copiar ou preencher.
+Se o cliente pedir configurar outros caminhos, preserve a mensagem e pare.
 
-Workspace:
-
-    $Root\workspace
-
-Para Desktop, escolha essa opção em launchers/Testar Maestro.cmd e confirme a
+Para Desktop, escolha 4 para conferir somente a conexão ou 2 para retomar o ensaio
+completo em launchers/Testar Maestro.cmd e confirme a
 instalação da extensão Maestro MCP — Ensaio indicada no relatório. Ela já usa as
 pastas aprovadas; não há campos de caminho para salvar. Abra uma conversa nova
 e cole o texto copiado. Se a extensão estiver desativada ou ausente, confira
