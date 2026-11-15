@@ -247,6 +247,35 @@ func TestSchedulerStorePersistsEnrollmentAndReceipts(t *testing.T) {
 
 func TestSchedulerLeaseIsNonBlockingAndReclaimsAfterExpiry(t *testing.T) {
 	{
+		path := filepath.Join(t.TempDir(), "control.guard")
+		calls := 0
+		ctx, cancel := context.WithCancel(context.Background())
+		err := WithPrivateLockContext(ctx, path, func() error {
+			calls++
+			cancel()
+			return ErrLeaseBusy
+		})
+		if !errors.Is(err, ErrLeaseBusy) || calls != 1 {
+			t.Fatalf("private guard replayed or replaced an entered action: calls=%d err=%v", calls, err)
+		}
+		if err := WithPrivateLock(path, func() error {
+			if err := WithPrivateLock(path, func() error { calls++; return nil }); !errors.Is(err, ErrLeaseBusy) {
+				t.Fatalf("original private lock stopped being nonblocking: %v", err)
+			}
+			wait, stop := context.WithTimeout(context.Background(), 20*time.Millisecond)
+			defer stop()
+			if err := WithPrivateLockContext(wait, path, func() error { calls++; return nil }); !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("private guard ignored acquisition deadline: %v", err)
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := WithPrivateLockContext(ctx, path, func() error { calls++; return nil }); !errors.Is(err, context.Canceled) || calls != 1 {
+			t.Fatalf("cancelled private acquisition entered action: calls=%d err=%v", calls, err)
+		}
+	}
+	{
 		store := Store{Root: t.TempDir()}
 		now := time.Now().UTC()
 		lease, err := store.TryAcquireLease("case-a", "memory-daily", "context-publication", "worker-a", now, time.Minute)
