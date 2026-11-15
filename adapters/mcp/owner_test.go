@@ -20,10 +20,11 @@ import (
 )
 
 type ownerFixture struct {
-	options      product.Options
-	root, binary string
-	stderr       *os.File
-	capabilities *mcp.ClientCapabilities
+	options              product.Options
+	root, binary         string
+	stderr               *os.File
+	capabilities         *mcp.ClientCapabilities
+	manualInputResponses bool
 }
 
 const ownerReviewFixtureSuffix = "\n\"Revisão autorizada\" <conteúdo> & colaboração.\n"
@@ -80,7 +81,11 @@ func (f ownerFixture) connect(t *testing.T, handler func(context.Context, *mcp.E
 }
 func (f ownerFixture) connectProtocol(t *testing.T, handler func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error), protocol string) *mcp.ClientSession {
 	t.Helper()
-	client := mcp.NewClient(&mcp.Implementation{Name: "owner-test", Version: "1"}, &mcp.ClientOptions{ElicitationHandler: handler, Capabilities: f.capabilities})
+	options := &mcp.ClientOptions{ElicitationHandler: handler, Capabilities: f.capabilities}
+	if f.manualInputResponses {
+		options.MultiRoundTrip = &mcp.MultiRoundTripOptions{Disabled: true}
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "owner-test", Version: "1"}, options)
 	var transport mcp.Transport
 	if f.binary != "" {
 		cmd := exec.Command(f.binary, "serve", "--product-root", f.options.ProductRoot, "--user-home", f.options.UserHome, "--workspace", f.options.WorkspacePath)
@@ -605,6 +610,7 @@ func ownerCall(t *testing.T, cs *mcp.ClientSession, op string, extra map[string]
 	return v
 }
 func TestOwnerPublicJourney(t *testing.T) {
+	assertAgentIdentityJourney(t)
 	runOwnerJourney(t, "quick")
 }
 func TestOwnerCompletePublicJourney(t *testing.T) {

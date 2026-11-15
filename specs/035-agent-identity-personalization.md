@@ -108,8 +108,9 @@ return a blocked interview state instead of inviting another answer.
 Yoda or Darwin while retaining the richer transparent catalog. A profile is
 only a private draft until review and explicit confirmation. Its digest binds
 the complete proposed profile, question-contract version, current profile
-revision, consent and no-client-data attestation. Stale revisions, altered
-envelopes and closed drafts fail without overwriting the confirmed profile.
+revision, consent and no-client-data attestation. Stale revisions and altered envelopes fail without overwriting the confirmed
+profile. An already-applied exact draft returns its existing receipt only while
+the canonical profile still matches that recorded result.
 The attestation is owner-asserted; it is not a client-data classifier.
 Identity drafts use the closed `drafted -> prepared -> applied` lifecycle.
 `prepared` is persisted before the canonical profile commit, so a retry can
@@ -132,6 +133,64 @@ The three main-agent questions are exact and ordered:
 1. Maestro: “Como você quer chamar o agente que fala com você e rege o trabalho profissional — e qual emoji deve representá-lo?”
 2. Yoda: “Como você quer chamar o revisor interno que faz o pressure-test antes de algo importante chegar a você — e qual emoji combina com esse papel?”
 3. Darwin: “Como você quer chamar o agente que observa saúde, drift e evolução do sistema — e qual emoji deve representá-lo?”
+
+## Product MCP identity onboarding
+
+The product owns the canonical identity state below its admitted data root,
+`<Maestro home>/state/agents/`. It reuses `personalization.json` and the
+existing `interview/drafts` lifecycle; it does not copy names into a second
+profile or the managed product. Compiled server identity remains unrelated.
+
+`agent.identity.interview` is a noncreating query. It returns the canonical
+next question, open draft when present, confirmed profile when available and
+`profile_revision` (`absent` or its exact SHA256). Invalid, unreadable or
+aliased state blocks; it never becomes a fresh interview. The existing
+three-question cadence remains Maestro, Yoda, Darwin. Scope/role authority
+comes from the canonical catalog, never from presentation customization.
+
+`agent.identity.answer` proposes one exact answer and, after ordinary native
+full review, creates and confirms it through the canonical draft engine in
+one short transition. Model fields are `owner_id`, `role`, `display_name`,
+`emoji`, `question_id` and `expected_profile_revision`, with `agent_id` only
+for an admitted concrete instance. The server carries previous selections
+forward, derives scope and binds current profile, question and proposed
+profile. Model consent, confirmation and no-client-data flags are forbidden.
+The native review explicitly attests owner-only presentation data and the
+exact requested effect. Decline before draft creation leaves no proposal or
+profile effect. A later I/O failure may leave an inactive canonical draft or
+an already-committed profile; report that recovery state instead of claiming
+that every filesystem byte stayed unchanged.
+
+`agent.identity.propose` offers the explicit draft-only variant of the same
+reviewed answer. It preserves an open canonical draft without changing the
+confirmed profile. `agent.identity.review` returns bounded draft metadata;
+`agent.identity.apply` presents the full current/proposed profile for exact
+native confirmation and resumes the canonical draft. They accept only the
+returned `proposal_id`; callers cannot supply a review digest or approval.
+A repeated applied confirmation returns its existing exact receipt when the
+current profile still matches; it never replays over a later change.
+
+`maestro_context` consumes confirmed preferences through the canonical managed
+identity projection. Its bounded presentation roster keeps the fixed agent IDs
+and roles while exposing the reviewed names/emoji after restart. No preference
+profile reports `defaults_active`. A corrupt profile reports `profile_invalid`
+and deterministic default presentation, preserving it and blocking identity
+onboarding while unrelated admitted workspace context remains available. This
+does not modify immutable compiled agent resources or activate a runtime.
+
+The native confirmation envelope binds the operation as well as the complete
+answer/base/profile. Approval of a draft-only effect cannot be replayed as an
+immediate profile publication, including modern multi-round input responses.
+
+Human interaction occurs outside all canonical store/control locks. The
+mutation reacquires its transition lock, revalidates source/question/base and
+reconstructs the exact review before publication. Canonical identity reads,
+locks, writes, enumeration and compaction use bounded private no-follow I/O.
+Queries do not create locks, directories or permission repairs. Accepted
+writes preserve existing valid profiles and canonical paths. Registered
+instance selections require their actual role/owner/scope binding; a missing
+account/case instance remains an explicit dependency and never becomes a
+global selection. Missing native form support authorizes no alternate write.
 
 ## Acceptance criteria
 
