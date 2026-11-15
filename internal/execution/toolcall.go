@@ -247,7 +247,7 @@ func (store Store) latestToolCalls(workspaceID, itemID string) (map[string]ToolC
 
 func (store Store) toolCalls(workspaceID, itemID string) ([]ToolCallReceipt, error) {
 	root := filepath.Join(store.itemRoot(workspaceID, itemID), "revisions")
-	entries, err := ledgerReadDir(root)
+	entries, err := store.ledgerReadDir(root)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +258,7 @@ func (store Store) toolCalls(workspaceID, itemID string) ([]ToolCallReceipt, err
 			continue
 		}
 		var revision Revision
-		if err := readStrictJSON(filepath.Join(root, entry.Name()), &revision); err != nil {
+		if err := store.readStrictJSON(filepath.Join(root, entry.Name()), &revision); err != nil {
 			return nil, err
 		}
 		if err := validateRevision(revision); err != nil || entry.Name() != revisionName(revision.State.StateRevision) {

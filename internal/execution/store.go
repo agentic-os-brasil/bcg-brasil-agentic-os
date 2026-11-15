@@ -17,6 +17,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 type ItemState string
@@ -67,6 +69,7 @@ var (
 	ErrConfirmationRequired   = errors.New("explicit confirmation is required")
 	ErrItemBusy               = errors.New("execution item is busy")
 	ErrActiveItemAmbiguous    = errors.New("multiple active execution items require an explicit item ID")
+	setupStagingPattern       = regexp.MustCompile(`^\.setup-create-[a-f0-9]{24}$`)
 	idPattern                 = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$`)
 	workspaceIDPattern        = regexp.MustCompile(`^[a-f0-9]{32}$`)
 	logicalRefPattern         = regexp.MustCompile(`^bcgos://[A-Za-z0-9/_.-]+$`)
@@ -268,20 +271,94 @@ type ActiveContinuity struct {
 }
 
 type Store struct {
-	Root       string
-	Now        func() time.Time
-	NewID      func(kind string) (string, error)
-	FaultPoint func(point string) error
+	// DataDirectory is borrowed from the admitted setup owner; nil retains ordinary ledger admission.
+	DataDirectory *scheduler.HeldDirectory
+	Root          string
+	Now           func() time.Time
+	NewID         func(kind string) (string, error)
+	FaultPoint    func(point string) error
 }
 
 func (store Store) Create(input CreateInput) (Item, error) {
+	return store.create(input, "")
+}
+
+// CreateForSetup binds one accepted setup contract to a deterministic item in
+// the canonical ledger. The directory publication is the idempotency record.
+func setupItemID(setupID, workspaceID string) (string, error) {
+	if len(setupID) != 64 {
+		return "", errors.New("setup_identity_invalid")
+	}
+	if _, err := hex.DecodeString(setupID); err != nil {
+		return "", errors.New("setup_identity_invalid")
+	}
+	if err := validateID("workspace", workspaceID); err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256([]byte(workspaceID + "/" + setupID))
+	return "item-setup-" + hex.EncodeToString(digest[:16]), nil
+}
+
+// InspectForSetup is noncreating and checks the exact accepted setup contract.
+func (store Store) InspectForSetup(setupID string, input CreateInput) (Item, error) {
+	id, err := setupItemID(setupID, input.WorkspaceID)
+	if err != nil {
+		return Item{}, err
+	}
+	item, err := store.Inspect(input.WorkspaceID, id)
+	if err != nil {
+		return item, err
+	}
+	return sameSetupContract(item, input)
+}
+func (store Store) CreateForSetup(setupID string, input CreateInput) (Item, error) {
+	id, err := setupItemID(setupID, input.WorkspaceID)
+	if err != nil {
+		return Item{}, err
+	}
+	prior, err := store.InspectForSetup(setupID, input)
+	if err == nil {
+		return prior, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return Item{}, err
+	}
+	item, err := store.create(input, id)
+	if err != nil {
+		if prior, e := store.InspectForSetup(setupID, input); e == nil {
+			return prior, nil
+		}
+	}
+	return item, err
+}
+
+func sameSetupContract(item Item, input CreateInput) (Item, error) {
+	want := item.Contract
+	want.Objective = strings.TrimSpace(input.Objective)
+	want.InitialNextStep = strings.TrimSpace(input.InitialNextStep)
+	want.Criteria = input.Criteria
+	want.AllowedRefs = input.AllowedRefs
+	if input.RequireYodaReview || input.YodaPublicKey != "" || input.YodaKeyID != "" || input.YodaInstallationID != "" {
+		return Item{}, ErrContractChanged
+	}
+	a, _ := json.Marshal(want)
+	b, _ := json.Marshal(item.Contract)
+	if !bytes.Equal(a, b) {
+		return Item{}, ErrContractChanged
+	}
+	return item, nil
+}
+func (store Store) create(input CreateInput, fixedID string) (Item, error) {
 	if err := validateStoreRoot(store.Root); err != nil {
 		return Item{}, err
 	}
 	if err := validateCreateInput(input); err != nil {
 		return Item{}, err
 	}
-	itemID, err := store.newID("item")
+	itemID, err := fixedID, error(nil)
+	if itemID == "" {
+		itemID, err = store.newID("item")
+	}
 	if err != nil {
 		return Item{}, err
 	}
@@ -331,28 +408,44 @@ func (store Store) Create(input CreateInput) (Item, error) {
 
 	itemsRoot := store.itemsRoot(input.WorkspaceID)
 	stagingRoot := filepath.Join(store.executionRoot(input.WorkspaceID), ".transactions")
-	if err := ledgerMkdirAll(stagingRoot, 0o700); err != nil {
+	if fixedID != "" {
+		stagingRoot = itemsRoot
+	}
+	if err := store.ledgerMkdirAll(stagingRoot, 0o700); err != nil {
 		return Item{}, err
 	}
-	staging, err := ledgerMkdirTemp(stagingRoot, "create-")
+	prefix := "create-"
+	if fixedID != "" {
+		prefix = ".setup-create-"
+	}
+	staging, err := store.ledgerMkdirTemp(stagingRoot, prefix)
 	if err != nil {
 		return Item{}, err
 	}
-	defer ledgerRemoveAll(staging)
-	if err := writeNewJSON(filepath.Join(staging, "contract.v1.json"), contract); err != nil {
+	defer store.ledgerRemoveAll(staging)
+	if err := store.writeNewJSON(filepath.Join(staging, "contract.v1.json"), contract); err != nil {
 		return Item{}, err
 	}
-	if err := writeNewJSON(filepath.Join(staging, "state.json"), state); err != nil {
+	if err := store.writeNewJSON(filepath.Join(staging, "state.json"), state); err != nil {
 		return Item{}, err
 	}
-	if err := writeNewJSON(filepath.Join(staging, "revisions", revisionName(1)), revision); err != nil {
+	if err := store.writeNewJSON(filepath.Join(staging, "revisions", revisionName(1)), revision); err != nil {
 		return Item{}, err
 	}
-	if err := ledgerMkdirAll(itemsRoot, 0o700); err != nil {
+	if err := store.ledgerMkdirAll(itemsRoot, 0o700); err != nil {
 		return Item{}, err
 	}
 	destination := filepath.Join(itemsRoot, itemID)
-	if err := durableRename(staging, destination); err != nil {
+	if fixedID != "" {
+		if err := store.fault("before_setup_item_publication"); err != nil {
+			return Item{}, err
+		}
+	}
+	publish := store.durableRename
+	if fixedID != "" {
+		publish = store.publishSetupItem
+	}
+	if err := publish(staging, destination); err != nil {
 		return Item{}, err
 	}
 	return Item{Contract: contract, State: state}, nil
@@ -410,13 +503,13 @@ func (store Store) Start(workspaceID, itemID string, expectedRevision int) (Item
 	if err := store.fault("before_revision_commit"); err != nil {
 		return Item{}, err
 	}
-	if err := writeImmutableRevision(filepath.Join(store.itemRoot(workspaceID, itemID), "revisions", revisionName(state.StateRevision)), revision); err != nil {
+	if err := store.writeImmutableRevision(filepath.Join(store.itemRoot(workspaceID, itemID), "revisions", revisionName(state.StateRevision)), revision); err != nil {
 		return Item{}, err
 	}
 	if err := store.fault("after_revision_commit"); err != nil {
 		return Item{}, err
 	}
-	if err := writeAtomicJSON(filepath.Join(store.itemRoot(workspaceID, itemID), "state.json"), state); err != nil {
+	if err := store.writeAtomicJSON(filepath.Join(store.itemRoot(workspaceID, itemID), "state.json"), state); err != nil {
 		return Item{}, err
 	}
 	if err := store.fault("after_state_projection"); err != nil {
@@ -697,7 +790,7 @@ func (store Store) activeItemIDs(workspaceID string) ([]string, error) {
 	if err := validateID("workspace", workspaceID); err != nil {
 		return nil, err
 	}
-	entries, err := ledgerReadDir(store.itemsRoot(workspaceID))
+	entries, err := store.ledgerReadDir(store.itemsRoot(workspaceID))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -709,7 +802,7 @@ func (store Store) activeItemIDs(workspaceID string) ([]string, error) {
 	}
 	active := make([]string, 0, 1)
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		if !entry.IsDir() || setupStagingPattern.MatchString(entry.Name()) {
 			continue
 		}
 		if err := validateID("item", entry.Name()); err != nil {
@@ -758,7 +851,7 @@ func (store Store) List(workspaceID string) ([]Summary, error) {
 	if err := validateID("workspace", workspaceID); err != nil {
 		return nil, err
 	}
-	entries, err := ledgerReadDir(store.itemsRoot(workspaceID))
+	entries, err := store.ledgerReadDir(store.itemsRoot(workspaceID))
 	if errors.Is(err, os.ErrNotExist) {
 		return []Summary{}, nil
 	}
@@ -770,7 +863,7 @@ func (store Store) List(workspaceID string) ([]Summary, error) {
 	}
 	items := make([]Summary, 0, len(entries))
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		if !entry.IsDir() || setupStagingPattern.MatchString(entry.Name()) {
 			continue
 		}
 		if err := validateID("item", entry.Name()); err != nil {
@@ -798,13 +891,13 @@ func (store Store) List(workspaceID string) ([]Summary, error) {
 func (store Store) inspectUnlocked(workspaceID, itemID string) (Item, error) {
 	root := store.itemRoot(workspaceID, itemID)
 	var contract Contract
-	if err := readStrictJSON(filepath.Join(root, "contract.v1.json"), &contract); err != nil {
+	if err := store.readStrictJSON(filepath.Join(root, "contract.v1.json"), &contract); err != nil {
 		return Item{}, err
 	}
 	if err := validateContract(contract); err != nil {
 		return Item{}, err
 	}
-	revision, err := latestValidRevision(root)
+	revision, err := store.latestValidRevision(root)
 	if err != nil {
 		return Item{}, err
 	}
@@ -858,6 +951,9 @@ func (store Store) Export(workspaceID, itemID string) (Export, error) {
 }
 
 func (store Store) Delete(workspaceID, itemID string, expectedRevision int, confirmed bool) error {
+	if store.DataDirectory != nil {
+		return ErrConfinementUnavailable
+	}
 	if !confirmed {
 		return ErrConfirmationRequired
 	}
@@ -894,24 +990,24 @@ func (store Store) Delete(workspaceID, itemID string, expectedRevision int, conf
 	if err := validateRevision(tombstone); err != nil {
 		return err
 	}
-	if err := writeImmutableRevision(filepath.Join(store.itemRoot(workspaceID, itemID), "revisions", revisionName(tombstoneState.StateRevision)), tombstone); err != nil {
+	if err := store.writeImmutableRevision(filepath.Join(store.itemRoot(workspaceID, itemID), "revisions", revisionName(tombstoneState.StateRevision)), tombstone); err != nil {
 		return fmt.Errorf("delete lost execution revision compare-and-swap: %w", err)
 	}
 	root := store.itemRoot(workspaceID, itemID)
 	trashRoot := filepath.Join(store.executionRoot(workspaceID), ".trash")
-	if err := ledgerMkdirAll(trashRoot, 0o700); err != nil {
+	if err := store.ledgerMkdirAll(trashRoot, 0o700); err != nil {
 		return err
 	}
 	target := filepath.Join(trashRoot, itemID+"-"+hex.EncodeToString(randomBytes(6)))
-	if err := durableRename(root, target); err != nil {
+	if err := store.durableRename(root, target); err != nil {
 		return err
 	}
-	return ledgerRemoveAll(target)
+	return store.ledgerRemoveAll(target)
 }
 
 func (store Store) transitions(workspaceID, itemID string) ([]Transition, error) {
 	root := filepath.Join(store.itemRoot(workspaceID, itemID), "revisions")
-	entries, err := ledgerReadDir(root)
+	entries, err := store.ledgerReadDir(root)
 	if err != nil {
 		return nil, err
 	}
@@ -922,7 +1018,7 @@ func (store Store) transitions(workspaceID, itemID string) ([]Transition, error)
 			continue
 		}
 		var revision Revision
-		if err := readStrictJSON(filepath.Join(root, entry.Name()), &revision); err != nil {
+		if err := store.readStrictJSON(filepath.Join(root, entry.Name()), &revision); err != nil {
 			return nil, err
 		}
 		if err := validateRevision(revision); err != nil {
@@ -945,48 +1041,48 @@ func (store Store) lock(workspaceID, itemID string) (func(), error) {
 	token := hex.EncodeToString(randomBytes(12))
 	ownerPath := filepath.Join(path, "owner-"+token)
 	acquire := func() error {
-		if err := ledgerMkdir(path, 0o700); err != nil {
+		if err := store.ledgerMkdir(path, 0o700); err != nil {
 			return err
 		}
-		file, err := ledgerOpen(ownerPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		file, err := store.ledgerOpen(ownerPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if err != nil {
-			_ = ledgerRemove(path)
+			_ = store.ledgerRemove(path)
 			return err
 		}
 		if err := file.Sync(); err != nil {
 			_ = file.Close()
-			_ = ledgerRemove(ownerPath)
-			_ = ledgerRemove(path)
+			_ = store.ledgerRemove(ownerPath)
+			_ = store.ledgerRemove(path)
 			return err
 		}
 		if err := file.Close(); err != nil {
-			_ = ledgerRemove(ownerPath)
-			_ = ledgerRemove(path)
+			_ = store.ledgerRemove(ownerPath)
+			_ = store.ledgerRemove(path)
 			return err
 		}
 		return nil
 	}
 	err := acquire()
 	if errors.Is(err, os.ErrExist) {
-		info, statErr := ledgerStatDirectory(path)
+		info, statErr := store.ledgerStatDirectory(path)
 		if statErr != nil || store.now().Sub(info.ModTime()) <= 2*time.Minute {
 			return nil, ErrItemBusy
 		}
 		stalePath := path + ".stale-" + token
-		if renameErr := durableRename(path, stalePath); renameErr != nil {
+		if renameErr := store.durableRename(path, stalePath); renameErr != nil {
 			return nil, ErrItemBusy
 		}
-		defer ledgerRemoveAll(stalePath)
+		defer store.ledgerRemoveAll(stalePath)
 		err = acquire()
 	}
 	if err != nil {
 		return nil, err
 	}
 	return func() {
-		if err := ledgerRemove(ownerPath); err != nil {
+		if err := store.ledgerRemove(ownerPath); err != nil {
 			return
 		}
-		_ = ledgerRemove(path)
+		_ = store.ledgerRemove(path)
 	}, nil
 }
 
@@ -1046,13 +1142,13 @@ func (store Store) commitRevision(workspaceID, itemID string, revision Revision)
 		"revisions",
 		revisionName(revision.State.StateRevision),
 	)
-	if err := writeImmutableRevision(path, revision); err != nil {
+	if err := store.writeImmutableRevision(path, revision); err != nil {
 		return err
 	}
 	if err := store.fault("after_revision_commit"); err != nil {
 		return err
 	}
-	if err := writeAtomicJSON(filepath.Join(store.itemRoot(workspaceID, itemID), "state.json"), revision.State); err != nil {
+	if err := store.writeAtomicJSON(filepath.Join(store.itemRoot(workspaceID, itemID), "state.json"), revision.State); err != nil {
 		return err
 	}
 	return store.fault("after_state_projection")
@@ -1426,9 +1522,9 @@ func revisionName(revision int) string {
 	return fmt.Sprintf("%020d.json", revision)
 }
 
-func latestValidRevision(itemRoot string) (Revision, error) {
+func (store Store) latestValidRevision(itemRoot string) (Revision, error) {
 	root := filepath.Join(itemRoot, "revisions")
-	entries, err := ledgerReadDir(root)
+	entries, err := store.ledgerReadDir(root)
 	if err != nil {
 		return Revision{}, err
 	}
@@ -1440,7 +1536,7 @@ func latestValidRevision(itemRoot string) (Revision, error) {
 		var revision Revision
 		// Only published JSON is authoritative; unfinished temporary files have
 		// no .json extension. Never recover an older attempt past corruption.
-		if err := readStrictJSON(filepath.Join(root, entry.Name()), &revision); err != nil {
+		if err := store.readStrictJSON(filepath.Join(root, entry.Name()), &revision); err != nil {
 			return Revision{}, err
 		}
 		if err := validateRevision(revision); err != nil {
@@ -1454,8 +1550,8 @@ func latestValidRevision(itemRoot string) (Revision, error) {
 	return Revision{}, os.ErrNotExist
 }
 
-func readStrictJSON(path string, target any) error {
-	file, err := ledgerOpen(path, os.O_RDONLY, 0)
+func (store Store) readStrictJSON(path string, target any) error {
+	file, err := store.ledgerOpen(path, os.O_RDONLY, 0)
 	if err != nil {
 		return fmt.Errorf("%w: %w", errUnsafeLedgerFile, err)
 	}
@@ -1489,15 +1585,15 @@ func readStrictJSON(path string, target any) error {
 	return nil
 }
 
-func writeNewJSON(path string, value any) error {
+func (store Store) writeNewJSON(path string, value any) error {
 	body, err := boundedJSON(value)
 	if err != nil {
 		return err
 	}
-	if err := ledgerMkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := store.ledgerMkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	file, err := ledgerOpen(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	file, err := store.ledgerOpen(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return err
 	}
@@ -1516,20 +1612,20 @@ var errUnsafeLedgerFile = errors.New("execution JSON requires a bounded regular 
 
 const maximumLedgerJSONBytes = 1 << 20
 
-func writeImmutableRevision(path string, value Revision) error {
+func (store Store) writeImmutableRevision(path string, value Revision) error {
 	body, err := boundedJSON(value)
 	if err != nil {
 		return err
 	}
-	return ledgerPublishJSON(path, body, true)
+	return store.ledgerPublishJSON(path, body, true)
 }
 
-func writeAtomicJSON(path string, value any) error {
+func (store Store) writeAtomicJSON(path string, value any) error {
 	body, err := boundedJSON(value)
 	if err != nil {
 		return err
 	}
-	return ledgerPublishJSON(path, body, false)
+	return store.ledgerPublishJSON(path, body, false)
 }
 
 func boundedJSON(value any) ([]byte, error) {
@@ -1593,4 +1689,24 @@ func ValidateSchemaFile(path string) error {
 		}
 	}
 	return nil
+}
+
+// ValidateSetupCheckpoint proves the real bounded handoff projection before an
+// accepted setup intent is saved. It neither generates IDs nor touches a store.
+func ValidateSetupCheckpoint(setupID string, input CreateInput, summary string) error {
+	if err := validateCreateInput(input); err != nil {
+		return err
+	}
+	id, err := setupItemID(setupID, input.WorkspaceID)
+	if err != nil {
+		return err
+	}
+	at := time.Unix(0, 999999999).UTC()
+	return validateNextProjection(NextProjection{SchemaVersion: 1, ItemID: id, State: StatePaused, StateRevision: 4, AttemptID: "attempt-" + strings.Repeat("a", 24), Summary: strings.TrimSpace(summary), NextStep: strings.TrimSpace(input.InitialNextStep), ArtifactRefs: append([]string(nil), input.AllowedRefs...), CheckpointAt: &at})
+}
+
+func latestValidRevision(path string) (Revision, error) { return (Store{}).latestValidRevision(path) }
+func readStrictJSON(path string, target any) error      { return (Store{}).readStrictJSON(path, target) }
+func writeImmutableRevision(path string, value Revision) error {
+	return (Store{}).writeImmutableRevision(path, value)
 }

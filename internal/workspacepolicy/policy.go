@@ -4,6 +4,7 @@ package workspacepolicy
 
 import (
 	"errors"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"io"
 	"os"
 	"path/filepath"
@@ -101,7 +102,7 @@ func CasePathAllowed(root, p string) bool {
 	}
 	targetID := parts[0] + "/" + parts[2]
 	active, err := readMarker(filepath.Join(accounts, ".active"))
-	if err != nil || active == "" {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return false
 	}
 	if targetID == active {
@@ -112,23 +113,24 @@ func CasePathAllowed(root, p string) bool {
 }
 
 func readMarker(p string) (string, error) {
-	physical, err := resolveExistingPolicyPath(p)
-	if err != nil || !strings.EqualFold(physical, filepath.Clean(p)) {
-		return "", errors.New("aliased marker")
-	}
-	f, err := os.Open(p)
+	file, err := scheduler.OpenRegularFile(p)
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, 1025))
-	if err != nil || len(b) > 1024 {
+	defer file.Close()
+	if err = scheduler.ValidateSingleLink(file); err != nil {
+		return "", err
+	}
+	body, err := io.ReadAll(io.LimitReader(file, 1025))
+	if err != nil {
+		return "", err
+	}
+	if len(body) > 1024 {
 		return "", errors.New("invalid marker")
 	}
-	s := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(string(b), "\uFEFF")))
-	parts := strings.Split(s, "/")
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || strings.ContainsAny(s, " \t\r\n\\") || strings.HasPrefix(parts[0], ".") || strings.HasPrefix(parts[1], ".") {
+	pair := MarkerPair(string(body))
+	if !validPair(pair) {
 		return "", errors.New("invalid marker")
 	}
-	return s, nil
+	return pair, nil
 }

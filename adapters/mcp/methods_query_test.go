@@ -323,6 +323,29 @@ func TestMethodQueryPlanSDK(t *testing.T) {
 	f := newMethodQueryFixture(t)
 	client := f.connect(t, "")
 	before := methodTreeSnapshot(t, f.root)
+	for _, test := range []struct{ id, domain, state string }{{"case-agent-setup", "domain.case_setup", "available"}, {"workspace-agent-setup", "domain.case_setup", "available"}, {"account-case-setup", "domain.account_case_scaffold", "unavailable"}} {
+		var setupPlan struct {
+			Execution    string `json:"execution_state"`
+			Dependencies []struct {
+				ID    string `json:"id"`
+				State string `json:"state"`
+			} `json:"dependencies"`
+		}
+		methodQueryDecode(t, client, "maestro_query", map[string]any{"operation": "methods.plan", "method_id": test.id}, &setupPlan)
+		domain, host := false, false
+		for _, dependency := range setupPlan.Dependencies {
+			if dependency.ID == test.domain {
+				domain = dependency.State == test.state
+			}
+			if dependency.ID == "host.trusted_review" {
+				host = dependency.State == "unavailable"
+			}
+		}
+		if !domain || setupPlan.Execution != "not_executed" || test.state == "available" && !host {
+			t.Fatal("case setup availability invented account narrative or native host execution", test.id, setupPlan)
+		}
+	}
+
 	var continuation struct {
 		ID         string `json:"method_id"`
 		State      string `json:"state"`

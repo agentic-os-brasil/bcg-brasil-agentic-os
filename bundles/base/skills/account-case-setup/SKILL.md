@@ -5,6 +5,21 @@ description: Create the right Maestro workspace context for a client account and
 
 # Account Case Setup
 
+## MCP first-case boundary
+
+For the first case in the current admitted workspace, use
+[case-agent-setup](../case-agent-setup/SKILL.md): inspect current setup, review its
+canonical registration, explicitly save the full brief through brain operations
+and finish with a checkpoint only when work was requested. Reuse returned
+bindings, paths and revisions; never hand-write an identity or account marker.
+The workspace alias follows that same owner, not a second workflow.
+
+This first-case bridge does not deliver the broader account narrative,
+relationship history, cross-case recall/promotion or arbitrary agent hiring.
+Keep those effects pending unless their separate owning capability is actually
+available and explicitly requested. A local HMAC-authenticated registration is
+instance integrity, not release signing, runtime activation or a tool grant.
+
 Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
 
 
@@ -24,10 +39,10 @@ Client Account Agent → Case Agent → first useful delivery → checkpoint
 
 The Client Account Agent is the partner-like steward of the relationship, stakeholders, strategic context and account narrative. The Case Agent executes the particular project. For a low-stakes internal task, a direct Case Agent is appropriate; do not create account structure merely for ceremony.
 
-## Canonical locations
+## Account narrative locations are a separate scope
 
-Every client account — and every internal (non-client) account used the same way —
-lives at `brain/accounts/<account-id>/`:
+A client account with a separately authorized account narrative lives at
+`brain/accounts/<account-id>/`:
 
 - `brain/accounts/<account-id>/<account-id>.md` — the account brief, and the
   account's only file: relationship context, stakeholders, strategic view,
@@ -38,27 +53,31 @@ lives at `brain/accounts/<account-id>/`:
   elsewhere in the brain (`craft/craft.md`, etc.). Unlike those, an account has
   no separate generated index at all: `accounts_index.md` links to this file
   directly, and this page is never touched by the compiler — the `## Cases`
-  list is entirely hand-maintained ([`case-agent-setup`](../case-agent-setup/SKILL.md) adds a line here when it
-  creates a case). This is the only place account-level narrative is written;
+  list belongs to the separately reviewed account narrative; first-case setup
+  does not append or overwrite it automatically. This is the account-level narrative;
   it is never duplicated into a case.
-- `brain/accounts/<account-id>/agent.json` — the Client Account Agent's identity for
-  this specific account (name, emoji, `owner_id`, `account_id`), written by
-  `$agent-identity-setup`. One identity per account, not a shared global block.
-- `brain/accounts/<account-id>/cases/<case-id>/` — every case (project) that belongs to
-  this account, each with its own identity and `brain/` (see [`case-agent-setup`](../case-agent-setup/SKILL.md)).
+- The exact Client Account Agent registration belongs to the canonical local
+  scaffold owner. Use its returned identity/reference; these narrative paths
+  are not a request to create `agent.json` or to choose a role/parent manually.
+- `brain/accounts/<account-id>/cases/<case-id>/` — the client case's authored
+  pages, including its root brief (see [`case-agent-setup`](../case-agent-setup/SKILL.md)).
+  Use the canonical registration reference; do not create another nested brain
+  or an identity file from this narrative layout.
 
-An account groups one or more cases over time; a case never exists outside an account.
-For internal, non-client work, use (or create) an internal account rather than
-skipping the account tier — e.g. `brain/accounts/<team-or-initiative-slug>/`.
+A client case has its exact immutable account relation. Direct internal work is
+also valid: the Case Agent has workspace scope, no account relation or account
+pair markers, and a default brief at `projects/<workspace-id>.md`. Do not invent
+an internal account for ceremony. An existing exact binding wins without
+renaming; this first-case unit does not silently rebind it to another mode/case.
 
 ## Create one clear working context at a time
 
 1. Confirmar o espaço de trabalho atual do Maestro e ajustar o tom e o nível de detalhe ao perfil do usuário.
 2. Ask for the account or project name, what success looks like and the first useful outcome. Do not request a schema, agent ID or a folder plan.
-3. Explain the proposed pair in everyday language, including their suggested names and emoji-avatars. Offer customization through `$agent-identity-setup` when the owner wants it. Persist the account identity to `brain/accounts/<account-id>/agent.json` and the case identity to `brain/accounts/<account-id>/cases/<case-id>/agent.json` — each is its own instance, never a shared role block.
-4. For an account, capture only the authorized relationship context: stakeholders, important concepts, strategic view and the intended use of the context, writing it to `brain/accounts/<account-id>/<account-id>.md`. Do not import client material, crawl SharePoint or infer a cross-project mandate.
-5. For a Case Agent, use `$case-agent-setup` to create the reviewed project brief, first plan and its next action under `brain/accounts/<account-id>/cases/<case-id>/`. Keep the Case Agent within its workspace and make promotion back to the account periodic and deliberate.
-6. End with one small delivery or checkpoint. A complete setup is useful only when it leads to work.
+3. Explain the client-account/case relation, or the direct internal Case choice, in everyday language. Keep optional names/avatars as a draft until their owning reviewed capability is available. First-case registration uses the admitted setup route and its native review, not direct identity files or a generic scaffold request.
+4. If an account narrative is separately requested, draft only authorized relationship context: stakeholders, concepts, strategic view and intended use. Its persistence needs its own admitted operation/review; the first-case registration is not proof that this broader account workflow is delivered. Do not import client material, crawl SharePoint or infer a cross-project mandate.
+5. Use `$case-agent-setup` for the complete reviewed project brief and first plan at the returned destination. New client cases default to `accounts/<account-id>/cases/<workspace-id>/<workspace-id>.md` relative to the workspace brain; internal projects use `projects/<workspace-id>.md`. Existing exact destinations win. No automatic promotion back to account context occurs.
+6. End with the actual saved brief and next owner/step. Create a checkpoint only if requested/accepted, using the setup owner's stable work identity; do not duplicate work on a retry. Report pending effects rather than declaring a fictional transaction complete.
 
 ## Keep the roles honest
 

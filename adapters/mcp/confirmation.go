@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceagent"
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -40,6 +41,10 @@ func (b *Bound) confirm(ctx context.Context, req *mcp.CallToolRequest, question 
 	maximum := 1 << 20
 	// A full 256KiB page plus its proposed replacement can expand sixfold in JSON.
 	switch review.(type) {
+	case workspaceagent.SetupReview:
+		// One complete 256KiB page expands at most sixfold; bounded registration,
+		// current/proposed setup and optional checkpoint fit in the remaining 512KiB.
+		maximum = 2 << 20
 	case KnowledgeReview, BrainReview:
 		maximum = 4 << 20
 	case ownerAtlasReview:

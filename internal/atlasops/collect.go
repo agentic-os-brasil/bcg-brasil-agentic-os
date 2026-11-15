@@ -3,6 +3,9 @@ package atlasops
 import (
 	"errors"
 	"fmt"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -150,6 +153,26 @@ func knownReader(reader Reader) bool {
 // ReviewPage returns one complete bounded page only for an attended owner review.
 // Ordinary collection keeps its aggregate budget; reads never recover operations.
 func (engine *Engine) ReviewPage(request CollectRequest) (PageProjection, error) {
+	return engine.reviewPage(request, nil)
+}
+
+// ReviewPageRetained preserves the exact canonical review algorithm while
+// binding its bytes to the admitted caller's already-retained workspace brain.
+// It cannot grant a new root, page, reader, scope or mutation authority.
+func (engine *Engine) ReviewPageRetained(request CollectRequest, retained *scheduler.HeldDirectory) (PageProjection, error) {
+	if retained == nil || engine.workspace == nil || filepath.Clean(retained.Path()) != filepath.Clean(engine.root) || len(engine.boundDirectories) != 3 {
+		return PageProjection{}, errors.New("retained workspace brain required")
+	}
+	info, e := retained.StatDirectory(".")
+	if e != nil {
+		return PageProjection{}, e
+	}
+	if !os.SameFile(info, engine.boundDirectories[2]) {
+		return PageProjection{}, errors.New("retained workspace brain changed")
+	}
+	return engine.reviewPage(request, retained)
+}
+func (engine *Engine) reviewPage(request CollectRequest, retained *scheduler.HeldDirectory) (PageProjection, error) {
 	if err := validateAtlasText(request.Purpose); err != nil {
 		return PageProjection{}, err
 	}
@@ -160,7 +183,7 @@ func (engine *Engine) ReviewPage(request CollectRequest) (PageProjection, error)
 	if err != nil {
 		return PageProjection{}, err
 	}
-	body, err := engine.read(relative)
+	body, err := engine.readRetained(relative, retained)
 	if err != nil {
 		return PageProjection{}, err
 	}

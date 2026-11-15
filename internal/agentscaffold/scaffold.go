@@ -3,6 +3,7 @@
 package agentscaffold
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -22,6 +23,7 @@ import (
 	baseagents "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/agents"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentidentity"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 var expertVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$`)
@@ -122,6 +124,20 @@ func identityCompatibility(agentID string) string {
 }
 
 func Scaffold(dataRoot string, request Request) (Status, error) {
+	if err := scheduler.EnsurePrivateDirectory(dataRoot); err != nil {
+		return Status{}, err
+	}
+	files, err := scheduler.HoldDirectory(dataRoot, nil)
+	if err != nil {
+		return Status{}, err
+	}
+	defer files.Close()
+	var out Status
+	err = files.WithPrivateLock("config/agent-enrollment.lock", func() error { var e error; out, e = scaffold(files, request, false); return e })
+	return out, err
+}
+func scaffold(files *scheduler.HeldDirectory, request Request, resolved bool) (Status, error) {
+	root := &scaffoldRoot{files: files}
 	catalog, err := baseagents.Catalog()
 	if err != nil {
 		return Status{}, err
@@ -129,8 +145,10 @@ func Scaffold(dataRoot string, request Request) (Status, error) {
 	if err := catalog.RejectLegacyRegistration(request.AgentID, request.Role); err != nil {
 		return Status{}, err
 	}
-	if err := applyIdentity(dataRoot, &request); err != nil {
-		return Status{}, err
+	if !resolved {
+		if err := applyIdentity(root, &request); err != nil {
+			return Status{}, err
+		}
 	}
 	request.Role = catalog.CanonicalRole(request.Role)
 	request.ParentRole = catalog.CanonicalRole(request.ParentRole)
@@ -145,14 +163,6 @@ func Scaffold(dataRoot string, request Request) (Status, error) {
 	templateDigest := sha256.Sum256(template)
 	templateSHA256 := hex.EncodeToString(templateDigest[:])
 
-	if err := os.MkdirAll(dataRoot, 0o700); err != nil {
-		return Status{}, err
-	}
-	root, err := os.OpenRoot(dataRoot)
-	if err != nil {
-		return Status{}, err
-	}
-	defer root.Close()
 	integrityKey, err := loadOrCreateIntegrityKey(root)
 	if err != nil {
 		return Status{}, err
@@ -174,7 +184,7 @@ func Scaffold(dataRoot string, request Request) (Status, error) {
 	created := time.Now().UTC()
 	finalDirectory := instanceDirectory(request.AgentID)
 	parentDirectory := filepath.Dir(finalDirectory)
-	if err := root.MkdirAll(parentDirectory, 0o700); err != nil {
+	if err := files.EnsureDirectory(parentDirectory); err != nil {
 		return Status{}, err
 	}
 	if err := syncPathChain(root, parentDirectory); err != nil {
@@ -185,7 +195,7 @@ func Scaffold(dataRoot string, request Request) (Status, error) {
 		return Status{}, err
 	}
 	stagingDirectory := filepath.Join(parentDirectory, ".scaffold-"+hex.EncodeToString(nonce))
-	if err := root.Mkdir(stagingDirectory, 0o700); err != nil {
+	if err := files.EnsureDirectory(stagingDirectory); err != nil {
 		return Status{}, err
 	}
 	defer root.RemoveAll(stagingDirectory)
@@ -235,7 +245,7 @@ func Scaffold(dataRoot string, request Request) (Status, error) {
 	if err := syncDirectory(root, stagingDirectory); err != nil {
 		return Status{}, err
 	}
-	if err := root.Rename(stagingDirectory, finalDirectory); err != nil {
+	if err := files.Rename(stagingDirectory, finalDirectory, false); err != nil {
 		if current, inspectErr := inspect(root, request.AgentID, integrityKey); inspectErr == nil &&
 			matchesRequest(current.Instance, request, contract, templateSHA256) {
 			current.Existing = true
@@ -250,14 +260,19 @@ func Scaffold(dataRoot string, request Request) (Status, error) {
 }
 
 func Inspect(dataRoot, agentID string) (Status, error) {
+	files, e := scheduler.HoldDirectory(dataRoot, nil)
+	if e != nil {
+		return Status{}, e
+	}
+	defer files.Close()
+	return InspectAt(files, agentID)
+}
+func InspectAt(files *scheduler.HeldDirectory, agentID string) (Status, error) {
+	root := &scaffoldRoot{files: files}
+
 	if !agentcatalog.ValidAgentID(agentID) {
 		return Status{}, errors.New("agent scaffold ID is invalid")
 	}
-	root, err := os.OpenRoot(dataRoot)
-	if err != nil {
-		return Status{}, err
-	}
-	defer root.Close()
 	integrityKey, err := readIntegrityKey(root)
 	if err != nil {
 		return Status{}, err
@@ -292,26 +307,20 @@ func Inspect(dataRoot, agentID string) (Status, error) {
 // A malformed or tampered registration fails the whole listing rather than
 // silently changing the routing registry.
 func ListPAExperts(dataRoot string) ([]Instance, error) {
-	root, err := os.OpenRoot(dataRoot)
+	files, err := scheduler.HoldDirectory(dataRoot, nil)
 	if err != nil {
 		return nil, err
 	}
-	defer root.Close()
-	directory, err := root.Open(filepath.Join("agents", "instances"))
+	defer files.Close()
+	root := &scaffoldRoot{files: files}
+	entries, err := files.ReadDir("agents/instances", -1)
 	if errors.Is(err, os.ErrNotExist) {
 		return []Instance{}, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	entries, err := directory.ReadDir(-1)
-	closeErr := directory.Close()
-	if err != nil {
-		return nil, err
-	}
-	if closeErr != nil {
-		return nil, closeErr
-	}
+
 	integrityKey, err := readIntegrityKey(root)
 	if err != nil {
 		return nil, err
@@ -319,6 +328,9 @@ func ListPAExperts(dataRoot string) ([]Instance, error) {
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 	instances := []Instance{}
 	for _, entry := range entries {
+		if entry.IsDir() && scaffoldStagingDirectory(entry.Name()) {
+			continue
+		}
 		if !entry.IsDir() || !agentcatalog.ValidAgentID(entry.Name()) {
 			return nil, errors.New("agent registry contains an invalid instance entry")
 		}
@@ -333,7 +345,7 @@ func ListPAExperts(dataRoot string) ([]Instance, error) {
 	return instances, nil
 }
 
-func inspect(root *os.Root, agentID string, integrityKey []byte) (Status, error) {
+func inspect(root *scaffoldRoot, agentID string, integrityKey []byte) (Status, error) {
 	if !agentcatalog.ValidAgentID(agentID) {
 		return Status{}, errors.New("agent scaffold ID is invalid")
 	}
@@ -371,7 +383,7 @@ func inspect(root *os.Root, agentID string, integrityKey []byte) (Status, error)
 		instance.DefinitionPath != filepath.ToSlash(filepath.Join(directory, "AGENT.md")) {
 		return Status{}, errors.New("agent scaffold manifest violates its governed role contract")
 	}
-	definition, err := root.ReadFile(filepath.Join(directory, "AGENT.md"))
+	definition, err := root.files.ReadFile(root.rel(filepath.Join(directory, "AGENT.md")), 256<<10, true)
 	if err != nil {
 		return Status{}, err
 	}
@@ -485,7 +497,7 @@ func validateRequest(catalog agentcatalog.Catalog, request Request) (agentcatalo
 	return contract, nil
 }
 
-func validateResolvedBindings(root *os.Root, integrityKey []byte, catalog agentcatalog.Catalog, request Request) error {
+func validateResolvedBindings(root *scaffoldRoot, integrityKey []byte, catalog agentcatalog.Catalog, request Request) error {
 	if catalog.CanonicalRole(request.Role) == "case_agent" && request.ScopeKind == "workspace" {
 		if !managedAgentHasRole(catalog, request.ParentAgent, request.ParentRole) {
 			return errors.New("Case Agent scaffold parent is not the registered Maestro hub")
@@ -530,7 +542,7 @@ func validateResolvedBindings(root *os.Root, integrityKey []byte, catalog agentc
 	return nil
 }
 
-func validatePAExpertCanon(root *os.Root, expertID, canonPath, expectedSHA256 string) error {
+func validatePAExpertCanon(root *scaffoldRoot, expertID, canonPath, expectedSHA256 string) error {
 	cleaned := filepath.Clean(canonPath)
 	slashed := filepath.ToSlash(cleaned)
 	prefix := "pa-experts/" + expertID + "/"
@@ -572,7 +584,7 @@ func managedAgentHasRole(catalog agentcatalog.Catalog, agentID, role string) boo
 	return false
 }
 
-func validateWorkspaceScope(root *os.Root, workspaceID string) error {
+func validateWorkspaceScope(root *scaffoldRoot, workspaceID string) error {
 	var registration struct {
 		SchemaVersion int    `json:"schema_version"`
 		WorkspaceID   string `json:"workspace_id"`
@@ -628,8 +640,8 @@ func matchesRequest(instance Instance, request Request, contract agentcatalog.Ro
 		instance.RuntimeState == "unavailable"
 }
 
-func applyIdentity(dataRoot string, request *Request) error {
-	if profile, err := agentidentity.Load(dataRoot); err == nil {
+func applyIdentity(root *scaffoldRoot, request *Request) error {
+	if profile, err := enrollmentIdentity(root); err == nil {
 		if selection, ok := agentidentity.Resolve(profile, request.Role, request.AgentID); ok {
 			request.DisplayName, request.Emoji = selection.DisplayName, selection.Emoji
 			request.OwnerID, request.OwnershipScope = selection.OwnerID, selection.OwnershipScope
@@ -686,7 +698,7 @@ func verifyInstanceSignature(instance Instance, integrityKey []byte) error {
 	return nil
 }
 
-func loadOrCreateIntegrityKey(root *os.Root) ([]byte, error) {
+func loadOrCreateIntegrityKey(root *scaffoldRoot) ([]byte, error) {
 	key, err := readIntegrityKey(root)
 	if err == nil {
 		return key, nil
@@ -701,7 +713,7 @@ func loadOrCreateIntegrityKey(root *os.Root) ([]byte, error) {
 	if exists {
 		return nil, errors.New("agent scaffold integrity key is missing while instances exist; explicit recovery is required")
 	}
-	if err := root.MkdirAll("config", 0o700); err != nil {
+	if err := root.files.EnsureDirectory(root.rel("config")); err != nil {
 		return nil, err
 	}
 	if err := syncPathChain(root, "config"); err != nil {
@@ -711,32 +723,17 @@ func loadOrCreateIntegrityKey(root *os.Root) ([]byte, error) {
 	if _, err := rand.Read(key); err != nil {
 		return nil, err
 	}
-	file, err := root.OpenFile(integrityKeyPath(), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
+	if err := root.files.PublishNewFile(root.rel(integrityKeyPath()), key); err != nil {
 		if errors.Is(err, os.ErrExist) {
 			return readIntegrityKey(root)
 		}
 		return nil, err
 	}
-	if _, err := file.Write(key); err != nil {
-		file.Close()
-		return nil, err
-	}
-	if err := file.Sync(); err != nil {
-		file.Close()
-		return nil, err
-	}
-	if err := file.Close(); err != nil {
-		return nil, err
-	}
-	if err := syncDirectory(root, "config"); err != nil {
-		return nil, err
-	}
 	return key, nil
 }
 
-func readIntegrityKey(root *os.Root) ([]byte, error) {
-	key, err := root.ReadFile(integrityKeyPath())
+func readIntegrityKey(root *scaffoldRoot) ([]byte, error) {
+	key, err := root.files.ReadFile(root.rel(integrityKeyPath()), 32, true)
 	if err != nil {
 		return nil, err
 	}
@@ -758,23 +755,34 @@ func validSHA256(value string) bool {
 	return err == nil && len(decoded) == sha256.Size
 }
 
-func scaffoldInstancesExist(root *os.Root) (bool, error) {
-	directory, err := root.Open(filepath.Join("agents", "instances"))
-	if errors.Is(err, os.ErrNotExist) {
+// Only this exact private publication namespace is non-authoritative. A
+// malformed real registry entry still prevents integrity-key regeneration.
+func scaffoldStagingDirectory(name string) bool {
+	const prefix = ".scaffold-"
+	if !strings.HasPrefix(name, prefix) || len(name) != len(prefix)+32 || name != strings.ToLower(name) {
+		return false
+	}
+	decoded, err := hex.DecodeString(strings.TrimPrefix(name, prefix))
+	return err == nil && len(decoded) == 16
+}
+
+func scaffoldInstancesExist(root *scaffoldRoot) (bool, error) {
+	entries, err := root.files.ReadDir(root.rel("agents/instances"), -1)
+	if errors.Is(err, os.ErrNotExist) || errors.Is(err, io.EOF) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
-	defer directory.Close()
-	entries, err := directory.ReadDir(1)
-	if errors.Is(err, io.EOF) {
-		return false, nil
+	for _, entry := range entries {
+		if !entry.IsDir() || !scaffoldStagingDirectory(entry.Name()) {
+			return true, nil
+		}
 	}
-	return len(entries) != 0, err
+	return false, nil
 }
 
-func syncPathChain(root *os.Root, directory string) error {
+func syncPathChain(root *scaffoldRoot, directory string) error {
 	if runtime.GOOS == "windows" {
 		return nil
 	}
@@ -794,28 +802,17 @@ func syncPathChain(root *os.Root, directory string) error {
 	return nil
 }
 
-func syncDirectory(root *os.Root, directory string) error {
-	if runtime.GOOS == "windows" {
-		return nil
-	}
-	file, err := root.Open(directory)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	return file.Sync()
+func syncDirectory(root *scaffoldRoot, directory string) error {
+	return root.files.SyncDirectory(root.rel(directory))
 }
 
 func instanceDirectory(agentID string) string {
 	return filepath.Join("agents", "instances", agentID)
 }
 
-func writeStagingFile(root *os.Root, path string, value any) error {
-	file, err := root.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		return err
-	}
+func writeStagingFile(root *scaffoldRoot, path string, value any) error {
 	var body []byte
+	var err error
 	switch typed := value.(type) {
 	case []byte:
 		body = typed
@@ -825,36 +822,24 @@ func writeStagingFile(root *os.Root, path string, value any) error {
 			body = append(body, '\n')
 		}
 	}
-	if err == nil {
-		_, err = file.Write(body)
-	}
-	if err == nil {
-		err = file.Sync()
-	}
-	closeErr := file.Close()
 	if err != nil {
 		return err
 	}
-	return closeErr
+	return root.files.PublishNewFile(root.rel(path), body)
 }
 
-func readStrictJSON(root *os.Root, path string, target any) error {
-	file, err := root.Open(path)
+func readStrictJSON(root *scaffoldRoot, path string, target any) error {
+	body, err := root.files.ReadFile(root.rel(path), 1<<20, true)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
-	decoder := json.NewDecoder(io.LimitReader(file, 1<<20))
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
+	if err = decoder.Decode(target); err != nil {
 		return err
 	}
-	var extra any
-	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return fmt.Errorf("%s contains multiple JSON values", path)
-		}
-		return err
+	if decoder.Decode(new(any)) != io.EOF {
+		return fmt.Errorf("%s contains trailing JSON", path)
 	}
 	return nil
 }

@@ -1,21 +1,30 @@
 ---
 name: workspace-agent-setup
-description: Cria ou retoma o agente de um workspace de caso (briefing revisto, plano de pesquisa pública aprovado, evidências com fonte e snapshot econômico público opcional). Use ao iniciar um novo projeto de cliente ou refrescar o briefing de um existente.
+description: Compatibility alias for the governed first-case setup interview, explicit reviewed brain save and optional requested checkpoint in the current admitted workspace.
 ---
 
-Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+# Workspace Agent Setup
 
+Resolve the canonical [interaction-profile](../interaction-profile/SKILL.md)
+before presenting the interview. Calibration changes explanation depth only;
+it never changes setup scope, review, persistence or authority.
 
-> **Deprecated alias.** This skill is now [`case-agent-setup`](../case-agent-setup/SKILL.md), which supersedes it entirely.
-> Maestro routes all new invocations to [`case-agent-setup`](../case-agent-setup/SKILL.md). This file is retained for
-> backward compatibility only and will be removed in v0.2.
+This is a compatibility alias for
+[case-agent-setup](../case-agent-setup/SKILL.md), not another setup engine or role.
+Carry the current request, answers and known setup progress into that method.
+Read the current setup status and resume its exact binding/revisions; do not
+require a fresh workspace or repeat accepted work simply because this alias was
+selected. New canonical role identities use `case_agent`; preserve an existing
+compatible legacy ID instead of renaming or re-signing it. This alias never
+creates a new `workspace_agent` role.
 
-## Redirect
+Follow the same client-account versus direct internal workspace choice, complete
+brief review, explicit brain Save and optional requested checkpoint. Direct
+internal work needs no fictional account. A registered definition does not grant
+runtime activation or tools.
 
-When this skill is invoked:
-1. Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) skill if available.
-2. Confirm with the user that the request is to set up a new case workspace.
-3. Immediately hand off to [`case-agent-setup`](../case-agent-setup/SKILL.md) — do not execute this skill's logic.
-4. Log the deprecation in `brain/owner/deprecation-notices.json` if the file exists.
-
-No further action required here.
+If the required MCP operations or native review are unavailable, keep the draft
+or effect pending and report the actual limitation. Do not fall back to a
+compatibility CLI or direct filesystem writes. Do not create a deprecation
+notice, identity file, second state store or additional task as an alias side
+effect. The alias itself needs no extra confirmation or persistence.
