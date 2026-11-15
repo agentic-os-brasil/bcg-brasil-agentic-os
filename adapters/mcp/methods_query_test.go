@@ -636,16 +636,21 @@ func TestMethodQueryBrainIndexDefaultRequirementsSDK(t *testing.T) {
 	if plan.State != "requirements_unavailable" || plan.Execution != "not_executed" {
 		t.Fatalf("compiler selection claimed execution or admission: %+v", plan)
 	}
-	if !reflect.DeepEqual(plan.Effects, []string{"read", "host_execution", "write_owner"}) {
-		t.Fatalf("default compiler owner publication effects are inaccurate: %v", plan.Effects)
+	if !reflect.DeepEqual(plan.Effects, []string{"read", "write_workspace"}) {
+		t.Fatalf("authored workspace publication effects are inaccurate: %v", plan.Effects)
 	}
-	if len(plan.Operations) != 0 {
-		t.Fatalf("read-only memory/wiki operations cannot implement authored compilation: %v", plan.Operations)
+	if len(plan.Operations) != 6 {
+		t.Fatalf("authored compilation requires all registered owning operations: %v", plan.Operations)
 	}
-	want := map[string]bool{"domain.authored_brain_compiler": true, "host.command_run": true}
+	want := map[string]string{"domain.authored_brain_compiler": "available", "host.trusted_review": "unavailable"}
 	for _, dependency := range plan.Dependencies {
-		if !want[dependency.ID] || !dependency.Required || dependency.State != "unavailable" || dependency.Action == "" || len(dependency.Fulfillment) != 0 {
-			t.Fatalf("default compiler capability can be omitted or fulfilled by navigation: %+v", dependency)
+		expected, known := want[dependency.ID]
+		fulfillments := 0
+		if dependency.ID == "domain.authored_brain_compiler" {
+			fulfillments = 6
+		}
+		if !known || !dependency.Required || dependency.State != expected || dependency.Action == "" || len(dependency.Fulfillment) != fulfillments {
+			t.Fatalf("registered compiler operations cannot attest host review: %+v", dependency)
 		}
 		delete(want, dependency.ID)
 	}

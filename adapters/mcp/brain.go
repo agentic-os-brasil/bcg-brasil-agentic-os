@@ -17,7 +17,7 @@ func brainQueries() []any {
 	fields := memoryTextFields()
 	fields["offset"] = map[string]any{"type": "integer", "minimum": 0, "maximum": 256 << 10}
 	fields["page"], fields["purpose"] = strSchema(256), strSchema(768)
-	return []any{variant("brain.status", map[string]any{}), variant("brain.templates", map[string]any{}), variant("brain.read", fields, "page", "purpose")}
+	return append([]any{variant("brain.status", map[string]any{}), variant("brain.templates", map[string]any{}), variant("brain.read", fields, "page", "purpose")}, brainNavigationQueries()...)
 }
 func brainMutations() []any {
 	edits := func(extra map[string]any) map[string]any {
@@ -27,14 +27,14 @@ func brainMutations() []any {
 		}
 		return fields
 	}
-	return []any{
+	return append([]any{
 		variant("brain.prepare", map[string]any{}),
 		variant("brain.create", map[string]any{"page": strSchema(256), "text": strSchema(256 << 10)}, "page", "text"),
 		variant("brain.append", edits(map[string]any{"section": strSchema(256), "text": strSchema(8 << 10)}), "page", "expected_page_revision", "section", "text"),
 		variant("brain.update", edits(map[string]any{"text": strSchema(256 << 10)}), "page", "expected_page_revision", "text"),
 		variant("brain.set_field", edits(map[string]any{"field": strSchema(256), "value": strSchema(4096)}), "page", "expected_page_revision", "field", "value"),
 		variant("brain.link", edits(map[string]any{"section": strSchema(256), "target": strSchema(256), "label": strSchema(512)}), "page", "expected_page_revision", "section", "target", "label"),
-	}
+	}, brainNavigationMutations()...)
 }
 
 type BrainMutation struct {
@@ -258,6 +258,8 @@ func (b *Bound) handleBrain(ctx context.Context, req *mcp.CallToolRequest, in in
 	var value any
 	if err == nil {
 		switch in.Operation {
+		case "brain.compile", "brain.navigation_status", "brain.navigate", "brain.search", "brain.diagnostics":
+			value, err = b.brainNavigation(ctx, req, engine, in)
 		case "brain.status":
 			missing := []string{}
 			diagnostics := map[string][]string{}
@@ -342,6 +344,8 @@ func (b *Bound) handleBrain(ctx context.Context, req *mcp.CallToolRequest, in in
 	}
 	code := "brain_rejected"
 	switch {
+	case errors.Is(err, atlasops.ErrNavigationStale):
+		code = "brain_navigation_stale"
 	case errors.Is(err, errConfirmationUnavailable):
 		code = "confirmation_unavailable"
 	case errors.Is(err, errConfirmationDeclined):

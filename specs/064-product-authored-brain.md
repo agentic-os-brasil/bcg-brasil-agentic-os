@@ -140,3 +140,76 @@ before replay/finalization, unchanged receipts or publication. Exact replay neve
 renews lost endpoint authority. Arbitrary direct marker writers are not thereby
 serialized; these are explicit admission checks at the actual owning boundaries,
 not a claim of an atomic cross-domain marker transaction.
+
+
+## Explicit authored navigation generations (#467, ANAV)
+
+`brain.compile(pages,purpose)` is an attended foreground operation over exactly
+1–24 current admitted Markdown names, within the existing 128 KiB Atlas collection
+budget. The native review binds source bytes/revisions, observed named absence,
+workspace ownership and the expected current generation. Duplicate, forbidden,
+aliased or incomplete-budget cohorts fail before publication. Sources remain
+canonical and unchanged; no root walk, private-memory compiler, repair, source
+move/retirement or standing maintenance authority is introduced.
+
+The pure compiler parses the canonical eight-field metadata, matching scope,
+status, curated body and local Markdown links. Superseded or invalid-metadata
+sources remain fingerprints/diagnostics, not search results. A balanced
+`maestro:generated:start/end` region is excluded from search and link feedback;
+unbalanced regions are diagnosed. Out-of-cohort links are unchecked and omitted
+from derived references. Only an explicitly observed missing target can be a
+broken link. Backlinks and orphan diagnostics describe this cohort, not a claim
+about all workspace pages. External URLs, inline code and fenced examples are
+not sources of local-link authority.
+
+Deterministic fingerprints include compiler schema, workspace ID, sorted names,
+exact source revisions/bytes and named absence. Complete immutable generation
+records (including timestamp and attended provenance) and the current pointer
+are published inside the existing owner-private `.atlasops` journal through the
+owning held-parent publisher and corpus lock. The complete generation is durable
+before the atomic pointer change. Interruption leaves the previous complete
+pointer intact; a read neither repairs nor promotes staged data. An explicit
+retry may reuse only the same validated complete generation. Identical current
+input returns `unchanged` without replacing the pointer. Source revisions and
+current admission are rechecked after staging and before publication.
+
+Read-only `brain.navigation_status` reports absent/ready/stale. `brain.navigate`
+reads an exact virtual reference, starting at `index.md`; hierarchical indexes,
+page summaries/backlinks, `backlinks.json`, `diagnostics.json` and `log.md` are generated
+references, not host paths. `brain.diagnostics` pages the diagnostic view.
+`brain.search` performs deterministic Unicode case/accent-folded substring
+matching over admitted titles, summaries and curated bodies and returns bounded
+canonical references/revisions. It uses at most 24 matches per page and a serialized
+result budget of 512–4096 bytes. Navigation/diagnostic text uses UTF-8 byte pages
+of 4–4096 bytes and `next_offset=-1` when complete. Canonical full text remains
+`brain.read`.
+
+All data queries require the current exact generation and re-read the complete
+explicit source cohort/current policy before disclosure, including a final
+adapter recheck after formatting. Source edits, absence/move/deletion, changed
+case admission or pointer replacement fence the prior generation; no last-good
+text fallback is returned. Exact stored workspace scope rejects copied journals.
+Uncoordinated external edits are detected by revision rechecks; this is bounded
+read validation, not custody of arbitrary external writers. Foreground navigation
+registration is not native-client or hosted Windows qualification.
+
+Compiler-policy semantic changes must advance the fingerprinted compiler schema;
+immutable records are never rewritten to fit a new compiler. Historical derived
+records remain owner-private and inaccessible through old-generation queries;
+this foreground delivery does not claim physical retirement or source lifecycle
+mutation. Publication time and attended provenance live in the owning generation
+envelope/receipt; the deterministic virtual `log.md` omits source names, bodies and source
+fingerprints. It points to the private owning envelope as audit authority.
+Markdown concepts carry parseable OKF/Profile frontmatter, the root declares
+`okf_version: "0.2"`, and query records include the owning publication timestamp.
+Aggregate indexes conservatively use the highest source sensitivity in the cohort.
+
+Virtual Markdown destinations and wire `reference` selectors use the same
+canonical URI path representation: percent-escape each path segment exactly
+once while retaining structural slashes. Resolve an emitted relative href against
+its current virtual reference, then pass that canonical encoded bundle-relative
+path to `brain.navigate`. Navigation decodes exactly once and rejects fragments,
+queries, traversal, encoded slashes, invalid UTF-8 and noncanonical aliases.
+Canonical page selectors for `brain.read` remain the original admitted names.
+Literal `%23` in a filename therefore uses `%2523` on the navigation wire and
+stays distinct from `#` (wire `%23`). Markdown labels escape control syntax.

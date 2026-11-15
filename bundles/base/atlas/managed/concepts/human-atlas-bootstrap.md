@@ -15,7 +15,7 @@ status: stable
 x-maestro-profile-version: "1"
 x-maestro-stable-id: managed/human-atlas-bootstrap
 x-maestro-scope: managed
-x-maestro-source-fingerprint: 9fda72e034942cbf770b598b7112e019fd7fe7dd9b7689fb0991e7cbbb597171
+x-maestro-source-fingerprint: 7ec32eff72aed0903001679f02a956ada59b92670a11f32593f6823add0ddd92
 x-maestro-freshness: fresh
 x-maestro-status: active
 x-maestro-generator-version: maestro-managed-wiki/0.2
@@ -109,6 +109,33 @@ The atlas status check reports the three root states without reading page
 bodies. Repeated initialization never overwrites a user page.
 
 ## Follow-up
+
+### Attended MCP owner-atlas adapter
+
+The product MCP exposes the existing owner corpus through six closed
+operations: `owner.atlas.status`, `owner.atlas.collect`,
+`owner.atlas.prepare`, `owner.atlas.create`, `owner.atlas.append` and
+`owner.atlas.update`. The first two are queries and never initialize or repair
+the corpus. Preparation is explicit, non-overwriting and subject to the same
+native full-content review as every attended mutation. Status detects a
+missing canonical scaffold page instead of equating root existence with
+completion.
+
+Named collection requires a purpose, is limited to 24 pages and preserves the
+canonical projection budget. Mutation parameters contain relative page names,
+content and, for edits, the observed page revision. Root selection, reader
+identity, attended provenance and exact retry identity belong to the server.
+The adapter reuses canonical atlas operations and their journal; it creates
+no second store. Edits re-read the full proposed review before publication,
+reject stale revisions and preserve the exact canonical receipt on retry.
+Missing or declined host confirmation authorizes no effect.
+
+This implements owner-atlas effects used by professional daily, craft,
+feedback, retrospective and sanitized-learning methods. It does not implement
+unattended owner writing, tasks, generated-memory promotion, authored corpus
+move/archive or private compiled navigation. Those remain separate owning
+contracts. Native host acceptance and exact-artifact distribution remain
+qualification steps beyond source tests.
 
 The private compiled atlas remains blocked on enrollment, authorization,
 deletion propagation, provider and OKF lifecycle contracts from Specs 007 and

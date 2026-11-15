@@ -47,6 +47,28 @@ func TestBaseSkillCatalogIsClosedByDistributionAllowlist(t *testing.T) {
 		if !allowed[skill.RelativePath] {
 			t.Errorf("catalog skill %q is missing from distribution allowlist: %s", skill.ID, skill.RelativePath)
 		}
+		// The managed bundle must close over every resource of each canonical
+		// skill, not only its entry point and runtime projection. MCP immutable
+		// discovery and a signed installed bundle must expose identical bytes.
+		directory := filepath.Join(root, "bundles", "base", filepath.FromSlash(path.Dir(skill.RelativePath)))
+		if err := filepath.WalkDir(directory, func(file string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			relative, err := filepath.Rel(filepath.Join(root, "bundles", "base"), file)
+			if err != nil {
+				return err
+			}
+			if !allowed[filepath.ToSlash(relative)] {
+				t.Errorf("catalog skill %q resource is missing from distribution allowlist: %s", skill.ID, filepath.ToSlash(relative))
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
 		projection := path.Join(path.Dir(skill.RelativePath), "agents", "openai.yaml")
 		if !allowed[projection] {
 			t.Errorf("catalog skill %q projection is missing from distribution allowlist: %s", skill.ID, projection)

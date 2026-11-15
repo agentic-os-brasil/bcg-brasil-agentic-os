@@ -1597,6 +1597,11 @@
       "role": "data"
     },
     {
+      "source": "bundles/base/skills/start-day/resources/owner-atlas-mcp.md",
+      "path": "skills/start-day/resources/owner-atlas-mcp.md",
+      "role": "data"
+    },
+    {
       "source": "bundles/base/skills/upward-feedback/SKILL.md",
       "path": "skills/upward-feedback/SKILL.md",
       "role": "data"

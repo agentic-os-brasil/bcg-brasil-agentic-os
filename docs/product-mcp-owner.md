@@ -125,3 +125,45 @@ An absent optional profile uses defaults; invalid preferences are explicitly
 `profile_invalid` with deterministic default presentation and preserved data.
 That condition blocks identity onboarding, while unrelated workspace context
 remains available. Immutable compiled agent resources are unchanged.
+
+## Record attended professional work
+
+The owner atlas is the canonical professional Markdown corpus under the
+admitted data home's `atlas/owner`. It is distinct from Owner Context facets,
+workspace pages and generated memory. The `start-day`, `eod`, craft, feedback,
+retrospective and learning methods use this corpus through the shared
+`start-day/resources/owner-atlas-mcp.md` method resource.
+
+Query `owner.atlas.status` without creating directories or repairing pages.
+If its fixed scaffold is incomplete, explicitly apply `owner.atlas.prepare`.
+The host reviews the exact canonical pages and any existing content before
+the non-overwriting preparation. A partial failure is not a completed setup;
+inspect status and explicitly retry. Existing daily and hand-authored pages
+remain unchanged.
+
+Query `owner.atlas.collect` with a concrete `purpose` and one to 24 named
+relative `pages`. It returns bounded content, page revisions and explicit
+omissions; it cannot enumerate or disclose the whole corpus. A missing atlas
+is a refusal, while a missing named page in an existing atlas is an omission.
+The server selects the canonical root and fixes the reader to the attended
+owner session. Callers cannot supply a filesystem root or impersonate a
+delegate.
+
+Apply `owner.atlas.create` with `page` and complete `text` for a missing page.
+Creation preserves an occupied page. Apply `owner.atlas.append` with `page`,
+the actual Markdown `section`, entry `text` and the last observed
+`expected_page_revision`. A reviewed correction uses `owner.atlas.update`
+with `page`, full replacement `text` and the expected revision. All mutations
+require trusted full-content review. A changed page or review is refused;
+Decline, unavailable confirmation and transport errors grant no write.
+An identical retry retains its canonical operation receipt and cannot append
+the same entry twice. Read the named page again after a successful mutation,
+including after a new MCP process starts.
+
+These operations create real owner pages through the existing atlas journal,
+publication and revision rules. They grant no Owner Context promotion, memory
+capture, background producer, provider access or workspace-to-owner transfer.
+Only sanitized professional reflection and pointers belong here. A scheduled
+marker cannot replace an attended review; without its separately admitted
+adapter, a scheduled result remains an unrecorded proposal. No command or raw
+filesystem fallback is available for this MCP family.

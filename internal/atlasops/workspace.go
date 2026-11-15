@@ -77,7 +77,16 @@ func OpenWorkspaceWithPolicy(options atlas.Options, policy WorkspacePolicy) (*En
 
 func (engine *Engine) validateBinding() error {
 	if engine.workspace == nil {
-		return scheduler.ValidatePrivateDirectory(engine.root)
+		if err := scheduler.ValidatePrivateDirectory(engine.root); err != nil {
+			return err
+		}
+		if len(engine.boundDirectories) != 0 {
+			info, err := boundAtlasDirectory(engine.root)
+			if err != nil || !os.SameFile(engine.boundDirectories[0], info) {
+				return errors.New("owner atlas directory binding changed")
+			}
+		}
+		return nil
 	}
 	scope := engine.workspace
 	for index, path := range []string{scope.DataRoot, scope.WorkspacePath, engine.root} {
