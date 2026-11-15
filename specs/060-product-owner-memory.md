@@ -34,6 +34,13 @@ and revalidate the digest/base after the interaction. Accept with missing conten
 decline, cancel, unsupported capability or transport failure grants no authority.
 The model cannot supply the elicitation response through tool arguments.
 
+Use the effective protocol and client capabilities on the current request;
+session initialization is the legacy fallback. An empty elicitation capability
+permits form review; URL-only support does not. Refusal diagnostics on stderr
+contain only bounded protocol labels, capability-presence booleans and a closed
+failure stage. Never log reviewed content, raw capabilities, identities, paths
+or transport error text. A diagnostic or passing SDK test is not native host proof.
+
 An explicit local review/confirm command is the supported fallback for clients
 without elicitation. It uses the same canonical review and digest checks. Never
 silently convert a missing host capability into approval or claim native support
