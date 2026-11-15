@@ -552,6 +552,24 @@ type productExecution struct {
 }
 
 func (p *productExecution) guard(publish func() error) error {
+	return p.guardWithControl(p.ctx, publish, func(action func() error) error {
+		return p.service.withControl(p.jobID, action)
+	})
+}
+
+func (p *productExecution) guardWithin(ctx, acquisitionCtx context.Context, publish func() error) error {
+	return p.guardWithControl(ctx, publish, func(action func() error) error {
+		return scheduler.WithPrivateLockContext(acquisitionCtx, filepath.Join(filepath.Dir(p.service.controlPath(p.jobID)), "control.guard"), action)
+	})
+}
+
+func (p *productExecution) guardWithControl(ctx context.Context, publish func() error, withControl func(func() error) error) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if p.ctx != nil && p.ctx.Err() != nil {
 		return p.ctx.Err()
 	}
@@ -564,7 +582,10 @@ func (p *productExecution) guard(publish func() error) error {
 	if _, err := processidentity.Current(); err != nil {
 		return err
 	}
-	return p.service.withControl(p.jobID, func() error {
+	return withControl(func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if p.ctx != nil && p.ctx.Err() != nil {
 			return p.ctx.Err()
 		}
@@ -594,6 +615,9 @@ func (p *productExecution) guard(publish func() error) error {
 		// that lock here would recursively lock ObserveSource/activation. The
 		// exact current source snapshot above and canonical CAS fence this job.
 		guardedPublish := func() error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			// Installation serialization can wait after the control-fence check.
 			if p.ctx != nil && p.ctx.Err() != nil {
 				return p.ctx.Err()

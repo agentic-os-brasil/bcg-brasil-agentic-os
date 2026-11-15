@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -216,6 +217,154 @@ func TestProductServiceRealQualificationEnrollmentCheckpointReplay(t *testing.T)
 	if err != nil || current.Schedule.Timezone != "America/Sao_Paulo" {
 		t.Fatalf("timezone lost: %+v %v", current, err)
 	}
+
+	for _, boundary := range []string{"entry", "terminal", "changed-control"} {
+		s := productFixture(t)
+		at := s.now().UTC().Truncate(24 * time.Hour)
+		s.now = func() time.Time { return at }
+		s.engine.Now = s.now
+		productCapture(t, s, "Original daily source before control contention.")
+		productApply(t, s, "qualify", MemoryLightDreamJobID, "")
+		active := productApply(t, s, "enroll", MemoryLightDreamJobID, "UTC")
+		at = at.Add(4 * time.Hour)
+		const newest = "Newest complete daily observation survives brief control contention."
+		productCapture(t, s, newest)
+		p := &productExecution{ctx: context.Background(), service: s, jobID: MemoryLightDreamJobID, revision: active.Revision}
+		worker := s.worker(p)
+		held, release := make(chan struct{}), make(chan struct{})
+		holderDone := make(chan error, 1)
+		holdControl := func() error {
+			ready := make(chan error, 1)
+			go func() {
+				entered := false
+				err := s.withControl(MemoryLightDreamJobID, func() error {
+					entered = true
+					close(held)
+					ready <- nil
+					<-release
+					if boundary == "changed-control" {
+						current, err := s.loadControl(MemoryLightDreamJobID)
+						if err != nil {
+							return err
+						}
+						current.Revision++
+						current.State = "revoked"
+						return s.saveControl(current)
+					}
+					return nil
+				})
+				if !entered {
+					ready <- err
+				}
+				holderDone <- err
+			}()
+			return <-ready
+		}
+		worker.ArmLease = func(lease scheduler.Lease) error {
+			if err := s.scheduler.ArmLease(lease); err != nil {
+				return err
+			}
+			if boundary != "terminal" {
+				return holdControl()
+			}
+			return nil
+		}
+		calls := 0
+		actual := worker.Handlers[MemoryLightDreamJobID].(Handler)
+		worker.Handlers[MemoryLightDreamJobID] = HandlerFunc(func(ctx context.Context, command Command, grant ExecutionGrant) (HandlerResult, error) {
+			calls++
+			out, err := actual.ExecuteAuthorized(ctx, command, grant)
+			if err == nil && out.State == ReceiptSucceeded && boundary == "terminal" {
+				err = holdControl()
+			}
+			return out, err
+		})
+		occurrence := scheduler.Occurrence{JobID: MemoryLightDreamJobID, ScheduledFor: at.Add(-time.Hour)}
+		authority := ExecutionAuthority{catalog: s.options.Catalog, occurrences: map[string]OccurrenceAuthorization{}, activated: map[string]bool{MemoryLightDreamJobID: true}, preauthorized: true, ready: true, productBound: true}
+		if err := authority.addOccurrence(OccurrenceAuthorization{WorkspaceID: s.workspaceID, JobID: MemoryLightDreamJobID, Trigger: TriggerPresence, ScheduledFor: occurrence.ScheduledFor}); err != nil {
+			t.Fatal(err)
+		}
+		request := WakeRequest{WorkspaceID: s.workspaceID, Trigger: TriggerPresence, Now: at, OwnerID: "control-contention-witness", Preauthorized: true, IdleState: IdleConfirmed}
+		type result struct {
+			receipt Receipt
+			err     error
+		}
+		outcome := make(chan result, 1)
+		go func() {
+			receipt, err := worker.runOccurrence(context.Background(), request, at, occurrence, authority)
+			outcome <- result{receipt, err}
+		}()
+		select {
+		case <-held:
+		case out := <-outcome:
+			t.Fatalf("%s never reached held control guard: %+v %v", boundary, out.receipt, out.err)
+		case <-time.After(5 * time.Second):
+			t.Fatal("control contention witness did not reach its owning boundary")
+		}
+		legacyCalls := 0
+		if err := p.guard(func() error { legacyCalls++; return nil }); !errors.Is(err, scheduler.ErrLeaseBusy) || legacyCalls != 0 {
+			t.Fatalf("legacy qualification/control guard stopped being nonblocking: calls=%d err=%v", legacyCalls, err)
+		}
+		var out result
+		returned := false
+		select {
+		case out = <-outcome:
+			returned = true
+			t.Errorf("%s abandoned a live attempt while only its control acquisition was busy: state=%s err=%v", boundary, out.receipt.State, out.err)
+		case <-time.After(100 * time.Millisecond):
+		}
+		close(release)
+		if err := <-holderDone; err != nil {
+			t.Fatal(err)
+		}
+		if !returned {
+			select {
+			case out = <-outcome:
+			case <-time.After(5 * time.Second):
+				t.Fatal("released control guard did not let the owned attempt finish")
+			}
+		}
+		artifact, _, artifactErr := s.engine.ActiveArtifact(s.workspaceID, "L1/"+at.Format("2006-01-02"))
+		if boundary == "changed-control" {
+			if !errors.Is(out.err, ErrProductConflict) || out.receipt.State == ReceiptSucceeded || artifactErr != nil || strings.Contains(artifact.Content, newest) {
+				t.Errorf("control changed while waiting but old authority published: %+v %v source_read=%t newest=%t", out.receipt, out.err, artifactErr == nil, strings.Contains(artifact.Content, newest))
+			}
+			continue
+		}
+		if out.err != nil || out.receipt.State != ReceiptSucceeded || artifactErr != nil || !strings.Contains(artifact.Content, newest) {
+			t.Errorf("%s lost original daily completion: state=%s err=%v source_read=%t newest=%t", boundary, out.receipt.State, out.err, artifactErr == nil, strings.Contains(artifact.Content, newest))
+			continue
+		}
+		receipts, err := s.receipts.Receipts(s.workspaceID, MemoryLightDreamJobID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		succeeded := 0
+		for _, receipt := range receipts {
+			if receipt.OccurrenceDigest == out.receipt.OccurrenceDigest && receipt.State == ReceiptSucceeded {
+				succeeded++
+			}
+		}
+		calendar, err := s.scheduler.Receipts(s.workspaceID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		calendarSucceeded := 0
+		for _, receipt := range calendar {
+			if receipt.JobID == MemoryLightDreamJobID && receipt.ScheduledFor.Equal(occurrence.ScheduledFor) && receipt.AttemptedAt.Equal(at) && receipt.State == scheduler.Succeeded {
+				calendarSucceeded++
+			}
+		}
+		if succeeded != 1 || calendarSucceeded != 1 || calls != 1 {
+			t.Fatalf("%s completion lost exact receipt/handler custody: command=%d calendar=%d handler=%d", boundary, succeeded, calendarSucceeded, calls)
+		}
+		before := productSnapshot(t, s.home)
+		replay, err := worker.runOccurrence(context.Background(), request, at, occurrence, authority)
+		if err != nil || replay != out.receipt || calls != 1 || !reflect.DeepEqual(before, productSnapshot(t, s.home)) {
+			t.Errorf("%s replay changed completed work or replaced its original receipt: %+v %v", boundary, replay, err)
+		}
+	}
+
 }
 
 func TestProductServiceNoOpCannotQualifyAndCheckpointNeedsSources(t *testing.T) {
