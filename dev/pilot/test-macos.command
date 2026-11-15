@@ -50,7 +50,7 @@ case "$choice" in
      exec "$ROOT/launchers/Abrir Code.command";;
   2) [[ -s "$RUN/DESKTOP.txt" ]] || fail 'O relatório ainda não liberou o ensaio no cliente.'
      pbcopy < "$RUN/DESKTOP.txt"
-     printf 'Prompt copiado. Confirme a extensão deste ensaio e cole uma vez em uma conversa do Desktop.\n'
+     printf 'Prompt copiado. Confirme a instalação da extensão deste ensaio. Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e, somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir. Preserve as permissões das demais ferramentas e extensões; gravações continuam pelo fluxo de confirmação nativa. Depois cole uma vez em uma conversa nova do Desktop.\n'
      exec "$ROOT/launchers/Abrir Desktop.command";;
   3) [[ -s "$RUN/CODE-CONEXAO.txt" ]] || fail 'O relatório ainda não liberou a conferência no Code.'
      command -v claude >/dev/null || fail 'Disponibilize o comando claude pelo fluxo normal do Code e abra Testar Maestro novamente.'
@@ -59,7 +59,7 @@ case "$choice" in
      exec "$ROOT/launchers/Abrir Code.command";;
   4) [[ -s "$RUN/DESKTOP-CONEXAO.txt" ]] || fail 'O relatório ainda não liberou a conferência no Desktop.'
      pbcopy < "$RUN/DESKTOP-CONEXAO.txt"
-     printf 'Conferência copiada. Confirme a extensão deste ensaio e cole uma vez em uma conversa nova do Desktop.\n'
+     printf 'Conferência copiada. Confirme a instalação da extensão deste ensaio. Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e, somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir. Preserve as permissões das demais ferramentas e extensões; gravações continuam pelo fluxo de confirmação nativa. Depois cole uma vez em uma conversa nova do Desktop.\n'
      exec "$ROOT/launchers/Abrir Desktop.command";;
   '') ;;
   *) fail 'Escolha 1, 2, 3, 4 ou Enter.';;

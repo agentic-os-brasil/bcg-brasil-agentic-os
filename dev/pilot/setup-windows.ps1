@@ -145,7 +145,7 @@ try {
 $desktop = @'
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-Write-Host 'Confirme a instalação da extensão Maestro MCP — Ensaio indicada no relatório. Ela já usa as pastas aprovadas, sem campos de caminho. Abra uma conversa nova e cole o texto copiado por Testar Maestro. Se a extensão estiver desativada ou ausente, confira Configurações > Extensões > Configurar > Ativado. Preserve outras extensões Maestro.'
+Write-Host 'Confirme a instalação da extensão Maestro MCP — Ensaio indicada no relatório. Ela já usa as pastas aprovadas, sem campos de caminho. Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e, somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir. Preserve as permissões das demais ferramentas e extensões; gravações continuam pelo fluxo de confirmação nativa. Abra uma conversa nova e cole o texto copiado por Testar Maestro. Se a extensão estiver desativada ou ausente, confira Configurações > Extensões > Configurar > Ativado. Preserve outras extensões Maestro.'
 Start-Process -FilePath (Join-Path $root 'exports/maestro-product.mcpb')
 '@
 Write-New (Join-Path $Root 'launchers/Abrir Code.ps1') $code
@@ -170,8 +170,11 @@ Se o cliente pedir configurar outros caminhos, preserve a mensagem e pare.
 Para Desktop, escolha 4 para conferir somente a conexão ou 2 para retomar o ensaio
 completo em launchers/Testar Maestro.cmd e confirme a
 instalação da extensão Maestro MCP — Ensaio indicada no relatório. Ela já usa as
-pastas aprovadas; não há campos de caminho para salvar. Abra uma conversa nova
-e cole o texto copiado. Se a extensão estiver desativada ou ausente, confira
+pastas aprovadas; não há campos de caminho para salvar.
+Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e,
+somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir.
+Preserve as permissões das demais ferramentas e extensões; gravações continuam
+pelo fluxo de confirmação nativa. Abra uma conversa nova e cole o texto copiado. Se a extensão estiver desativada ou ausente, confira
 Configurações > Extensões > Configurar > Ativado nessa extensão.
 Se o cliente propuser substituir outra extensão, pare.
 
