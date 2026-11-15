@@ -246,6 +246,53 @@ func TestSchedulerStorePersistsEnrollmentAndReceipts(t *testing.T) {
 }
 
 func TestSchedulerLeaseIsNonBlockingAndReclaimsAfterExpiry(t *testing.T) {
+	{
+		store := Store{Root: t.TempDir()}
+		now := time.Now().UTC()
+		lease, err := store.TryAcquireLease("case-a", "memory-daily", "context-publication", "worker-a", now, time.Minute)
+		if err != nil {
+			t.Fatal(err)
+		}
+		calls := 0
+		effect := filepath.Join(t.TempDir(), "committed-effect")
+		err = store.WithCurrentLeaseContext(context.Background(), lease, now, func() error {
+			calls++
+			if err := os.WriteFile(effect, []byte("one committed effect"), 0600); err != nil {
+				return err
+			}
+			return ErrLeaseBusy
+		})
+		if !errors.Is(err, ErrLeaseBusy) || calls != 1 {
+			t.Fatalf("callback error replayed a committed effect: calls=%d err=%v", calls, err)
+		}
+		if body, err := os.ReadFile(effect); err != nil || string(body) != "one committed effect" {
+			t.Fatal("callback effect was lost")
+		}
+		if err := store.WithCurrentLease(lease, now, func() error {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+			defer cancel()
+			err := store.WithCurrentLeaseContext(ctx, lease, now, func() error { calls++; return nil })
+			if !errors.Is(err, context.DeadlineExceeded) || calls != 1 {
+				t.Fatalf("expired guard wait published: calls=%d err=%v", calls, err)
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		if err := store.WithCurrentLeaseContext(ctx, lease, now, func() error { calls++; return nil }); !errors.Is(err, context.Canceled) || calls != 1 {
+			t.Fatalf("cancelled publication ran: calls=%d err=%v", calls, err)
+		}
+		stale := lease
+		stale.FenceToken = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+		if err := store.WithCurrentLeaseContext(context.Background(), stale, now, func() error { calls++; return nil }); !errors.Is(err, ErrLeaseLost) || calls != 1 {
+			t.Fatalf("stale fence published: calls=%d err=%v", calls, err)
+		}
+		if err := store.ReleaseLease(lease); err != nil {
+			t.Fatal(err)
+		}
+	}
 	root := t.TempDir()
 	store := Store{Root: root}
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)

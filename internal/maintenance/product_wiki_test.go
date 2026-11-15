@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -233,6 +234,153 @@ func TestProductWikiLiveFencesBeforePointer(t *testing.T) {
 }
 
 func TestProductWikiTerminalFencesAfterActualEffect(t *testing.T) {
+	for _, boundary := range []string{"diagnostic", "terminal", "critical-locks"} {
+		s, active := activeProductWiki(t)
+		critical := boundary == "critical-locks"
+		var probeID string
+		var probeRevision uint64
+		if critical {
+			input, err := s.engine.SealOwnedCapture(s.workspaceID, "", 0, "private-wiki-body: DENIAL_LIVENESS_PROBE", s.now())
+			if err != nil {
+				t.Fatal(err)
+			}
+			capture, err := s.engine.CaptureOwned(s.workspaceID, input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			probeID, probeRevision = capture.ID, capture.Revision
+		}
+		pending, err := s.engine.InspectPrivateWikiMaintenance(s.workspaceID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p := &productExecution{service: s, jobID: WikiIncrementalJobID, revision: active.Revision, source: pending.SourceIdentity}
+		worker := s.worker(p)
+		worker.Jobs = nil
+		worker.LocalQualification = map[string]string{WikiIncrementalJobID: active.Qualification.ID}
+		worker.ActivatedJobs = []string{WikiIncrementalJobID}
+		var lease scheduler.Lease
+		worker.ArmLease = func(actual scheduler.Lease) error { lease = actual; return s.scheduler.ArmLease(actual) }
+		guardDone := make(chan error, 1)
+		criticalResults := make(chan []error, 1)
+		held := false
+		holdGuard := func() error {
+			ready := make(chan error, 1)
+			go func() {
+				signalled := false
+				err := s.scheduler.WithCurrentLease(lease, s.now(), func() error {
+					signalled = true
+					ready <- nil
+					if critical {
+						release := make(chan struct{})
+						go func() {
+							time.Sleep(4 * leaseQuarantineGrace)
+							review, revokeErr := s.Review(Operation{Kind: "revoke", JobID: WikiIncrementalJobID, ExpectedRevision: active.Revision})
+							if revokeErr == nil {
+								_, revokeErr = s.Apply(context.Background(), review, approveProduct)
+							}
+							_, denialErr := s.engine.DeleteCapture(s.workspaceID, probeID, probeRevision)
+							criticalResults <- []error{revokeErr, denialErr}
+							close(release)
+						}()
+						<-release
+					} else {
+						time.Sleep(100 * time.Millisecond)
+					}
+					return nil
+				})
+				if !signalled {
+					ready <- err
+				}
+				guardDone <- err
+			}()
+			err := <-ready
+			held = err == nil
+			return err
+		}
+		actual := worker.Handlers[WikiIncrementalJobID].(Handler)
+		worker.Handlers[WikiIncrementalJobID] = HandlerFunc(func(ctx context.Context, command Command, grant ExecutionGrant) (HandlerResult, error) {
+			if boundary == "diagnostic" || critical {
+				bounded := grant.(executionGrant)
+				publish := bounded.publication
+				bounded.publication = func(effect func() error) error {
+					current, err := s.engine.InspectPrivateWikiMaintenance(s.workspaceID)
+					if err != nil {
+						return err
+					}
+					if !held && current.State == "current" && current.SourceIdentity == pending.SourceIdentity {
+						if err := holdGuard(); err != nil {
+							return err
+						}
+					}
+					return publish(effect)
+				}
+				grant = bounded
+			}
+			out, err := actual.ExecuteAuthorized(ctx, command, grant)
+			if err == nil && out.State == ReceiptSucceeded && boundary == "terminal" {
+				err = holdGuard()
+			}
+			return out, err
+		})
+		out, runErr := worker.Run(context.Background(), WakeRequest{WorkspaceID: s.workspaceID, Trigger: TriggerEvent, EventID: pending.EventID, Now: s.now(), OwnerID: "wiki-contention-witness", Preauthorized: true, IdleState: IdleConfirmed})
+		if !held {
+			t.Fatalf("actual graph did not reach the %s publication boundary: %+v %v", boundary, out, runErr)
+		}
+		if err := <-guardDone; err != nil {
+			t.Fatal(err)
+		}
+		if critical {
+			results := <-criticalResults
+			if results[0] != nil || results[1] != nil {
+				t.Errorf("domain guard wait reserved revocation/source-denial locks beyond publication grace: revoke=%v denial=%v", results[0], results[1])
+			}
+			for _, receipt := range out.Receipts {
+				if receipt.State == ReceiptSucceeded {
+					t.Error("expired domain acquisition published success")
+				}
+			}
+			continue
+		}
+		if runErr != nil || len(out.Receipts) != 1 || out.Receipts[0].State != ReceiptSucceeded {
+			t.Errorf("changed wiki lost success after %s guard contention: %+v %v", boundary, out, runErr)
+		}
+		after, err := s.engine.InspectPrivateWikiMaintenance(s.workspaceID)
+		if err != nil || after.State != "current" || after.SourceIdentity != pending.SourceIdentity || after.Generation == pending.Generation {
+			t.Fatalf("actual newest graph missing after %s contention: %+v %v", boundary, after, err)
+		}
+		index, err := s.engine.ReadPrivateWiki(s.workspaceID, after.Generation, "index.md", 0, 4096)
+		if err != nil {
+			t.Fatal(err)
+		}
+		link := regexp.MustCompile(`\((concepts/[a-f0-9]{64}\.md)\)`).FindStringSubmatch(index.Content)
+		if len(link) != 2 {
+			t.Fatal("actual newest wiki omitted its concept route")
+		}
+		concept, err := s.engine.ReadPrivateWiki(s.workspaceID, after.Generation, link[1], 0, 4096)
+		if err != nil || !strings.Contains(concept.Content, "PENDING_FENCED_SOURCE") {
+			t.Fatal("actual wiki readback omitted the newest committed source")
+		}
+		receipts, err := s.receipts.Receipts(s.workspaceID, WikiIncrementalJobID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		succeeded := 0
+		for _, receipt := range receipts {
+			if receipt.EventID == pending.EventID && receipt.State == ReceiptSucceeded {
+				succeeded++
+			}
+		}
+		if succeeded != 1 {
+			t.Errorf("%s contention persisted %d succeeded receipts for the changed event", boundary, succeeded)
+		}
+		if succeeded == 1 {
+			before := productSnapshot(t, s.home)
+			if replay, err := s.RunDue(context.Background()); err != nil || len(replay.Due) != 0 || !reflect.DeepEqual(before, productSnapshot(t, s.home)) {
+				t.Fatal("completed wiki replay duplicated an effect")
+			}
+		}
+	}
 	for _, action := range []string{"pause", "revoke", "source", "lease"} {
 		t.Run(action, func(t *testing.T) {
 			s, active := activeProductWiki(t)
