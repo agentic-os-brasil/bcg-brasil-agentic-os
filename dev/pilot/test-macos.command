@@ -19,7 +19,9 @@ actual="$(shasum -a 256 "$ROOT/product/maestro-mcp")"
 [[ "${actual%% *}" == "$expected" ]] || fail 'O executável mudou; preserve a preparação.'
 if [[ -f "$ROOT/.maestro-pilot-complete" ]]; then
   [[ -f "$ROOT/managed-files.sha256" && ! -L "$ROOT/managed-files.sha256" ]] || fail 'Falta o inventário gerenciado.'
-  cmp -s "$ROOT/managed-files.sha256" <(cd "$ROOT" && LC_ALL=C find -s product exports launchers -type f -exec shasum -a 256 '{}' \;) || fail 'Material gerenciado mudou; preserve a preparação.'
+  # The sentinel preserves exact trailing newlines while the producer status is checked.
+  current_inventory="$(cd "$ROOT" && LC_ALL=C find -s product exports launchers -type f -exec shasum -a 256 '{}' + && printf .)" || fail 'Não foi possível conferir o material gerenciado; preserve a preparação.'
+  cmp -s "$ROOT/managed-files.sha256" <(printf '%s' "${current_inventory%.}") || fail 'Material gerenciado mudou; preserve a preparação.'
 fi
 [[ ! -L "$ROOT/diagnostics" ]] || fail 'A pasta de diagnóstico contém link; preserve a preparação.'
 if [[ ! -e "$ROOT/diagnostics" ]]; then mkdir "$ROOT/diagnostics"; fi
