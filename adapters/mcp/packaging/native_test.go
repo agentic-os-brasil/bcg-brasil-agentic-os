@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -16,6 +17,7 @@ import (
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
@@ -324,6 +326,11 @@ func syntheticNativeStream(t *testing.T, p nativeProbe) []byte {
 	return stream.Bytes()
 }
 
+type nativeDiagnosticExitError struct{}
+
+func (nativeDiagnosticExitError) Error() string { return "PRIVATE_TYPED_ERROR /private/credential" }
+func (nativeDiagnosticExitError) ExitCode() int { return 7 }
+
 func TestNativeControlledSessionsProduceOnlyEngineeringPacket(t *testing.T) {
 	t.Run("plain", func(t *testing.T) { testNativeControlledSessions(t, false) })
 	t.Run("managed", func(t *testing.T) { testNativeControlledSessions(t, true) })
@@ -387,6 +394,83 @@ func testNativeControlledSessions(t *testing.T, managed bool) {
 	if _, _, err := prepare(other); err == nil {
 		t.Fatal("unrelated target admitted")
 	}
+	if !result.EstimatedSpendComplete || result.EstimatedSpendSessions != 3 {
+		t.Fatal("verified native estimates lost their availability boundary")
+	}
+	if !managed {
+		for _, kind := range []string{"transport", "typed_exit", "result", "partial"} {
+			failed := nativeFixture(t)
+			calls := 0
+			run := inspectionRunner(t, true, func(ctx context.Context, args []string, cwd string) ([]byte, error) {
+				calls++
+				if kind == "transport" {
+					return []byte("PRIVATE_STREAM https://private.invalid/prompt"), errors.New("PRIVATE_ERROR auth=/private/credential")
+				}
+				if kind == "typed_exit" {
+					return nil, nativeDiagnosticExitError{}
+				}
+				p := probeFromArguments(t, failed, args, cwd)
+				stream := syntheticNativeStream(t, p)
+				if kind == "result" {
+					return bytes.Replace(stream, []byte(`"subtype":"success"`), []byte(`"subtype":"PRIVATE_SUBTYPE"`), 1), nil
+				}
+				if calls == 2 {
+					return bytes.ReplaceAll(stream, []byte("Synthetic native qualification control."), []byte("PRIVATE_CONTENT https://private.invalid")), nil
+				}
+				return stream, nil
+			})
+			review, err := reviewNative(context.Background(), failed, run)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := qualifyAndBuildNative(context.Background(), failed, review.ReviewDigest, true, run, "engineering_fixture")
+			wantCalls := 1
+			if kind == "partial" {
+				wantCalls = 2
+			}
+			if err != nil || result.State != "unavailable" || result.EvidenceClass != "not_observed" || calls != wantCalls || result.EstimatedSpendComplete || result.EstimatedSpendSessions != wantCalls-1 {
+				t.Fatalf("failed %s session changed fallback/cost availability or retried: %+v %v", kind, result, err)
+			}
+			path := filepath.Join(result.ScratchDirectory, fmt.Sprint(calls-1), "failure.json")
+			body, err := scheduler.ReadPrivateFile(path, 4096)
+			if err != nil {
+				t.Fatal("native session failure has no bounded diagnostic receipt", err)
+			}
+			info, err := os.Stat(path)
+			if err != nil || info.Mode().Perm() != 0600 || len(body) > 4096 || bytes.Contains(body, []byte("PRIVATE_")) || bytes.Contains(body, []byte("https://")) || bytes.Contains(body, []byte("/private/")) {
+				t.Fatal("native failure diagnostic lost privacy or bounds")
+			}
+			var diagnostic map[string]any
+			if json.Unmarshal(body, &diagnostic) != nil {
+				t.Fatal("invalid diagnostic JSON")
+			}
+			if _, exists := diagnostic["exit_code"]; !exists {
+				t.Fatal("unknown exit field absent")
+			}
+			if kind == "transport" {
+				if diagnostic["exit_code"] != nil || diagnostic["phase"] != "execution" || diagnostic["cost_available"] != false || diagnostic["estimated_cost_usd"] != nil {
+					t.Fatal("unknown runner exit/cost became fabricated observations")
+				}
+			} else if kind == "typed_exit" {
+				if diagnostic["exit_code"] != float64(7) || diagnostic["cost_available"] != false {
+					t.Fatal("preserved typed exit lost its known code")
+				}
+			} else if diagnostic["exit_code"] != float64(0) || diagnostic["cost_available"] != true {
+				t.Fatal("returned native stream lost known exit/cost availability")
+			}
+			if kind == "result" && (diagnostic["result_kind"] != "other" || diagnostic["result_seen"] != true || diagnostic["result_accepted"] != false) {
+				t.Fatal("rejected result lost safe closed diagnostic kind")
+			}
+			if kind == "partial" && (diagnostic["phase"] != "controls" || diagnostic["read_observed"] != false || diagnostic["write_observed"] != true || result.EstimatedSpendUSD != 0.01) {
+				t.Fatal("partial controls or verified-only aggregate became misleading")
+			}
+			packet, err := os.ReadFile(filepath.Join(failed.Packet.Destination, "maestro-packet.json"))
+			var manifest nativePacketManifest
+			if err != nil || json.Unmarshal(packet, &manifest) != nil || manifest.Mode != "mcp_only" {
+				t.Fatal("failure diagnostic promoted native authority or removed MCP fallback")
+			}
+		}
+	}
 }
 func TestNativeProofRejectsAssistantClaimsAndMissingPositiveEvidence(t *testing.T) {
 	in := nativeFixture(t)
@@ -410,6 +494,19 @@ func TestNativeProofRejectsAssistantClaimsAndMissingPositiveEvidence(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
+	var diagnostic nativeFailureDiagnostic
+	detailed, err := verifyNativeProbeDetailed(body, p, true, &diagnostic)
+	if err != nil || detailed != proof || !diagnostic.ResultAccepted || !diagnostic.CostAvailable || diagnostic.EstimatedCostUSD == nil || !diagnostic.CanonicalFlowObserved {
+		t.Fatal("diagnostic path changed accepted proof or lost observations")
+	}
+	zeroCost := bytes.ReplaceAll(body, []byte(`"total_cost_usd":0.01`), []byte(`"total_cost_usd":0`))
+	if _, err := verifyNativeProbeDetailed(zeroCost, p, true, &diagnostic); err != nil || !diagnostic.CostAvailable || diagnostic.EstimatedCostUSD == nil || *diagnostic.EstimatedCostUSD != 0 {
+		t.Fatal("known zero estimate became an unavailable cost")
+	}
+	missingCost := bytes.ReplaceAll(body, []byte(`,"total_cost_usd":0.01`), nil)
+	if _, err := verifyNativeProbeDetailed(missingCost, p, true, &diagnostic); err == nil || diagnostic.CostAvailable || diagnostic.EstimatedCostUSD != nil || diagnostic.ResultAccepted {
+		t.Fatal("missing estimate became accepted or a fabricated zero cost")
+	}
 	encodedProof, err := json.Marshal(proof)
 	if err != nil || !bytes.Contains(encodedProof, []byte(`"allowed_write":true`)) {
 		t.Fatal("native qualification accepted without an actual permitted write proof")
@@ -424,14 +521,22 @@ func TestNativeProofRejectsAssistantClaimsAndMissingPositiveEvidence(t *testing.
 	for _, tc := range []struct{ name, remove string }{{"no_block", "blocking because onFailure"}, {"no_attempt", `"name":"Edit"`}, {"no_native_startup", "maestro_native_startup_unchanged:"}, {"no_positive_read", "Synthetic native qualification control."}, {"no_positive_write", `"name":"Write"`}, {"wrong_session", p.session}} {
 		t.Run(tc.name, func(t *testing.T) {
 			changed := bytes.ReplaceAll(body, []byte(tc.remove), []byte("UNAVAILABLE"))
-			if _, err := verifyNativeProbe(changed, p, true); err == nil {
-				t.Fatal("incomplete native evidence accepted")
+			var d nativeFailureDiagnostic
+			if _, err := verifyNativeProbeDetailed(changed, p, true, &d); err == nil || d.FailureCode == "" {
+				t.Fatal("incomplete native evidence accepted or lost safe failure code")
+			}
+			encoded, err := json.Marshal(d)
+			if err != nil || bytes.Contains(encoded, []byte(p.session)) || bytes.Contains(encoded, []byte(p.challenge)) || bytes.Contains(encoded, []byte(p.nonce)) {
+				t.Fatal("diagnostic retained native identity or payload paths")
 			}
 		})
 	}
 	claims := []byte(`{"type":"assistant","message":{"content":[{"type":"text","text":"PASS: all native hooks, controls, blockers and correlations succeeded"}]}}`)
-	if _, err := verifyNativeProbe(claims, p, true); err == nil {
-		t.Fatal("assistant prose minted admission")
+	if _, err := verifyNativeProbeDetailed(claims, p, true, &diagnostic); err == nil || diagnostic.ResultSeen || diagnostic.CostAvailable || diagnostic.EstimatedCostUSD != nil || diagnostic.Phase != "controls" {
+		t.Fatal("assistant prose minted admission or fabricated result/cost")
+	}
+	if _, err := verifyNativeProbeDetailed([]byte("PRIVATE_BAD_JSON"), p, true, &diagnostic); err == nil || diagnostic.Phase != "stream" || diagnostic.ParseComplete || diagnostic.CostAvailable {
+		t.Fatal("malformed stream lost its bounded failure phase")
 	}
 	if err := os.WriteFile(filepath.Join(p.challenge, "allowed-write.txt"), []byte("different\n"), 0600); err != nil {
 		t.Fatal(err)
