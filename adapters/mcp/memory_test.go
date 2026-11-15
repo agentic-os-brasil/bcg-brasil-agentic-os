@@ -285,17 +285,31 @@ func TestMemoryWeeklyTrustedPromotion(t *testing.T) {
 			f := newOwnerFixture(t, tc.stdio)
 			prepareMemoryFixture(t, f)
 			e, workspace := fixtureMemoryEngine(t, f)
-			firstCapture := seedReviewedMemory(t, e, workspace, "first-week-synthetic-continuity", "2026-10-12")
-			seedReviewedMemory(t, e, workspace, "second-week-synthetic-continuity", "2026-10-19")
+			oldText := "first-week-synthetic-continuity " + strings.Repeat("contexto necessário ", 12) + "FIRST_COMPLETE."
+			newText := "second-week-synthetic-continuity " + strings.Repeat("informação útil ", 12) + "NEW_COMPLETE_LESSON_END."
+			firstCapture := seedReviewedMemory(t, e, workspace, oldText, "2026-10-12")
+			seedReviewedMemory(t, e, workspace, newText, "2026-10-13")
 			calls := 0
-			var presentation string
+			var presentation, reviewedCandidate string
 			var approve func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error)
 			if !tc.unavailable {
 				approve = func(_ context.Context, r *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
 					calls++
 					presentation = r.Params.Message
+					start := strings.IndexByte(presentation, '{')
+					var record map[string]any
+					if start < 0 || json.Unmarshal([]byte(presentation[start:]), &record) != nil {
+						t.Fatal("trusted candidate form lost its complete JSON record")
+					}
+					if record["Operação"] == "Promover memória vitalícia" {
+						var ok bool
+						reviewedCandidate, ok = record["Texto candidato completo"].(string)
+						if !ok || reviewedCandidate == "" {
+							t.Fatal("trusted form omitted full candidate text")
+						}
+					}
 					if tc.stale {
-						seedReviewedMemory(t, e, workspace, "changed-after-exact-review", "2026-10-19")
+						seedReviewedMemory(t, e, workspace, "changed-after-exact-review", "2026-10-13")
 					}
 					action := "accept"
 					if tc.decline {
@@ -311,12 +325,12 @@ func TestMemoryWeeklyTrustedPromotion(t *testing.T) {
 			if calls != 0 || !strings.Contains(string(raw), "observed 1") {
 				t.Fatalf("first generation gate: %s calls=%d", raw, calls)
 			}
-			memoryCall(t, cs, "memory.consolidate", map[string]any{"cycle": "daily", "date": "2026-10-19"}, false)
-			second := memoryCall(t, cs, "memory.consolidate", map[string]any{"cycle": "weekly", "date": "2026-10-19"}, tc.stale)
+			memoryCall(t, cs, "memory.consolidate", map[string]any{"cycle": "daily", "date": "2026-10-13"}, false)
+			second := memoryCall(t, cs, "memory.consolidate", map[string]any{"cycle": "weekly", "date": "2026-10-13"}, tc.stale)
 			if !tc.unavailable && calls != 1 {
 				t.Fatalf("MRTR review was not stable/exact: calls=%d result=%v", calls, second)
 			}
-			if !tc.unavailable && (!strings.Contains(presentation, "first-week-synthetic-continuity") || !strings.Contains(presentation, "second-week-synthetic-continuity")) {
+			if !tc.unavailable && (!strings.Contains(presentation, oldText) || !strings.Contains(presentation, newText) || strings.Count(presentation, "first-week-synthetic-continuity") != 1) {
 				t.Fatalf("candidate body omitted: %s", presentation)
 			}
 			for _, field := range []string{"source_digest", "source_fingerprint", "visibility_revision", "review_digest", "GeneratedAt"} {
@@ -333,10 +347,42 @@ func TestMemoryWeeklyTrustedPromotion(t *testing.T) {
 			if !tc.stale && (!strings.Contains(string(raw), "L2") || !strings.Contains(string(raw), "L3")) {
 				t.Fatalf("working weekly layers missing: %v", view)
 			}
+			if !tc.stale {
+				cfg, err := basememory.Runtime()
+				if err != nil {
+					t.Fatal(err)
+				}
+				// The seeding helper deliberately has no context configuration;
+				// apply the same embedded bounds as the product before readback.
+				e.Budgets = cfg.ContextBudgets()
+				e.Budgets["L1"] = cfg.L1MaxRunes
+				bundle, err := e.AssembleContext(workspace)
+				if err != nil {
+					t.Fatal(err)
+				}
+				foundL3, foundLifetime := false, false
+				for _, section := range bundle.Sections {
+					if section.Layer == "L3" {
+						foundL3 = true
+						if len(section.Content) > cfg.ContextBudgets()["L3"] || section.Truncated || section.DrillDown == "" || !strings.Contains(section.Content, newText) {
+							t.Fatal("product L3 lost complete latest observation, byte bound or drill-down")
+						}
+					}
+					if section.Layer == "lifetime" {
+						foundLifetime = true
+						if !want || section.Truncated || reviewedCandidate != section.Content {
+							t.Fatal("persisted lifetime differs from the full exact reviewed candidate")
+						}
+					}
+				}
+				if !foundL3 || foundLifetime != want {
+					t.Fatal("canonical context readback omitted the expected generated layers")
+				}
+			}
 			if want {
 				memoryCall(t, cs, "memory.delete", map[string]any{"capture_id": firstCapture.ID, "expected_revision": 1}, false)
-				memoryCall(t, cs, "memory.consolidate", map[string]any{"cycle": "daily", "date": "2026-10-19"}, false)
-				memoryCall(t, cs, "memory.consolidate", map[string]any{"cycle": "weekly", "date": "2026-10-19"}, false)
+				memoryCall(t, cs, "memory.consolidate", map[string]any{"cycle": "daily", "date": "2026-10-13"}, false)
+				memoryCall(t, cs, "memory.consolidate", map[string]any{"cycle": "weekly", "date": "2026-10-13"}, false)
 				rebuilt := memoryCall(t, f.connect(t, nil), "memory.context", nil, false)
 				if strings.Contains(rebuilt["text"].(string), "first-week-synthetic-continuity") {
 					t.Fatal("revoked source returned through L3/lifetime carry-forward")

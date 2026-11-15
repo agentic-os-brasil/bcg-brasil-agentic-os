@@ -513,7 +513,7 @@ func (b *Bound) handleMemory(ctx context.Context, req *mcp.CallToolRequest, in i
 				sourceDigest, visibility, err = b.memorySnapshot(e)
 				if err == nil {
 					daily := e.Synthesizer.(memory.DeterministicL1Synthesizer)
-					e.Synthesizer = memory.DeterministicWeeklySynthesizer{Daily: daily, MaxRunes: e.Budgets, MaxInputBytes: cfg.L1MaxInputBytes}
+					e.Synthesizer = memory.DeterministicWeeklySynthesizer{Daily: daily, MaxRunes: e.Budgets, MaxBytes: cfg.ContextBudgets(), MaxInputBytes: cfg.L1MaxInputBytes}
 					e.SynthesizerID = memory.DeterministicWeeklySynthesizerID
 					e.EligibilityPolicyID = "deterministic-two-l3-generations+exact-owner-review-v1"
 					status = "unchanged"
