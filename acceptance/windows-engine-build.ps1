@@ -1,9 +1,23 @@
 # Build only exact committed source and a publicly readable copied SDK.
 # The existing credentialed driver owns all ordinary-account execution.
+param([string]$KitArchive, [string]$KitIdentity)
 $ErrorActionPreference = 'Stop'
 if (-not $env:GITHUB_ENV -or -not $env:RUNNER_TEMP) { throw 'Use this builder inside the reviewed hosted qualification job.' }
 $ErrorActionPreference = 'Stop'
 if ($env:GOROOT) { throw 'Native engine proof refuses caller-supplied GOROOT.' }
+$artifactMode = -not [string]::IsNullOrWhiteSpace($KitArchive) -or -not [string]::IsNullOrWhiteSpace($KitIdentity)
+$artifactInput = $null
+if ($artifactMode) {
+  if (-not $KitArchive -or -not $KitIdentity -or -not (Test-Path -LiteralPath $KitArchive -PathType Leaf) -or -not (Test-Path -LiteralPath $KitIdentity -PathType Leaf)) { throw 'Exact pilot archive and identity must both exist.' }
+  $artifactInput = Get-Content -LiteralPath $KitIdentity -Raw -Encoding UTF8 | ConvertFrom-Json
+  $revisionInput = (git rev-parse HEAD).Trim()
+  $treeInput = (git rev-parse 'HEAD^{tree}').Trim()
+  if ($LASTEXITCODE -ne 0 -or $artifactInput.schema_version -ne 1 -or $artifactInput.source_revision -cne $revisionInput -or $artifactInput.source_tree -cne $treeInput -or
+      $artifactInput.producer_run_id -cne $env:GITHUB_RUN_ID -or $artifactInput.generic_zip_sha256 -cnotmatch '^[a-f0-9]{64}$' -or
+      (Get-FileHash -LiteralPath $KitArchive -Algorithm SHA256).Hash.ToLowerInvariant() -cne $artifactInput.generic_zip_sha256) { throw 'Exact pilot producer, source or archive identity differs.' }
+  if ((Get-Content -LiteralPath ($KitArchive + '.sha256') -Raw -Encoding UTF8).Trim() -cne ($artifactInput.generic_zip_sha256 + '  ' + [IO.Path]::GetFileName($KitArchive))) { throw 'Exact pilot checksum sidecar differs.' }
+}
+
 $installedRoot = (go env GOROOT).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Pinned SDK lookup failed.' }
 $publicRoot = Join-Path $env:SystemDrive ('MaestroNativeEngine-' + [Guid]::NewGuid().ToString('N'))
@@ -15,6 +29,36 @@ foreach ($sid in @('S-1-5-18', 'S-1-5-32-544')) {
 }
 $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-32-545'), 'ReadAndExecute', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
 Set-Acl -LiteralPath $publicRoot -AclObject $acl
+if ($artifactMode) {
+  $artifactRoot = Join-Path $publicRoot 'pilot-artifact'
+  New-Item -ItemType Directory -Path $artifactRoot | Out-Null
+  $kitName = [IO.Path]::GetFileNameWithoutExtension($KitArchive)
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $zip = [IO.Compression.ZipFile]::OpenRead($KitArchive)
+  try {
+    $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    [long]$total = 0
+    foreach ($entry in $zip.Entries) {
+      $total += $entry.Length
+      if ($entry.Length -gt 134217728 -or $total -gt 268435456 -or $seen.Count -ge 512) { throw 'Exact pilot archive exceeds its bounded input contract.' }
+      $name = $entry.FullName
+      if ($name -cnotmatch ('^' + [regex]::Escape($kitName) + '/') -or $name -match '(^|/)\.\.?(/|$)|[\\:\x00-\x1f]' -or -not $seen.Add($name) -or
+          (($entry.ExternalAttributes -shr 16) -band 0xF000) -eq 0xA000) { throw 'Exact pilot archive has an unsafe or duplicate entry.' }
+    }
+  } finally { $zip.Dispose() }
+  $nativeArchive = Join-Path $artifactRoot ([IO.Path]::GetFileName($KitArchive))
+  Copy-Item -LiteralPath $KitArchive -Destination $nativeArchive
+  Copy-Item -LiteralPath ($KitArchive + '.sha256') -Destination ($nativeArchive + '.sha256')
+  Expand-Archive -LiteralPath $nativeArchive -DestinationPath $artifactRoot
+  $kitRoot = Join-Path $artifactRoot $kitName
+  $kitServer = Join-Path $kitRoot 'bin/maestro-mcp-windows-amd64.exe'
+  if ((Get-FileHash -LiteralPath $nativeArchive -Algorithm SHA256).Hash.ToLowerInvariant() -cne $artifactInput.generic_zip_sha256 -or
+      (Get-FileHash -LiteralPath $kitServer -Algorithm SHA256).Hash.ToLowerInvariant() -cne $artifactInput.shipping_server_sha256 -or
+      (Get-FileHash -LiteralPath (Join-Path $kitRoot 'SHA256SUMS') -Algorithm SHA256).Hash.ToLowerInvariant() -cne $artifactInput.kit_id) { throw 'Exact pilot extracted ZIP, KIT-ID or PE differs.' }
+  $nativeKitIdentity = Join-Path $publicRoot 'pilot-artifact-input.json'
+  Copy-Item -LiteralPath $KitIdentity -Destination $nativeKitIdentity
+}
+
 $sdkRoot = Join-Path $publicRoot 'sdk'
 New-Item -ItemType Directory -Path $sdkRoot | Out-Null
 Get-ChildItem -LiteralPath $installedRoot -Force | Copy-Item -Destination $sdkRoot -Recurse
@@ -105,8 +149,13 @@ try {
   )
   if ($LASTEXITCODE -ne 0 -or $setupInventory.Count -ne 10 -or
       @((Compare-Object $expectedSetupInventory ($setupInventory | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) { throw 'Setup full inventory must contain the ten existing first-install, source and client parents.' }
-  & $sdkGo build -o $server ./cmd/maestro-mcp
-  if ($LASTEXITCODE -ne 0) { throw 'Shipping MCP compilation failed.' }
+  if ($artifactMode) {
+    Copy-Item -LiteralPath $kitServer -Destination $server
+    if ((Get-FileHash -LiteralPath $server -Algorithm SHA256).Hash.ToLowerInvariant() -cne $artifactInput.shipping_server_sha256) { throw 'Exact pilot PE changed during sealing; rebuilding is unavailable.' }
+  } else {
+    & $sdkGo build -o $server ./cmd/maestro-mcp
+    if ($LASTEXITCODE -ne 0) { throw 'Shipping MCP compilation failed.' }
+  }
   $inventory = @(& $testBinary '-test.list' '^(Test|Example)')
   if ($LASTEXITCODE -ne 0 -or 'TestWindowsCorePilot' -cnotin $inventory -or
       @($inventory | Sort-Object -Unique).Count -ne $inventory.Count -or
@@ -150,3 +199,8 @@ $manifest = [ordered]@{
 }
 $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $publicRoot 'engine-build-manifest.json') -Encoding utf8
 "MAESTRO_ENGINE_PUBLIC_ROOT=$publicRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+if ($artifactMode) {
+  "MAESTRO_ENGINE_PILOT_KIT=$kitRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+  "MAESTRO_ENGINE_PILOT_IDENTITY=$nativeKitIdentity" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+}

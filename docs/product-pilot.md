@@ -138,6 +138,35 @@ quarantine, installs a client, authenticates, activates a provider or sends mail
 The real SharePoint destination and organization-owned signing remain external
 configuration. Local assembly proves neither publication nor colleague delivery.
 
+The existing Windows native-engine workflow also has an explicit exact-artifact
+route (#531). Its Mac job runs the same constructor once, retains the generic
+ZIP/checksum plus producing run, source tree, KIT-ID and Windows PE hashes, then
+transfers those immutable bytes into the existing Windows ordinary-account job.
+In this route the sealed public server is copied from the verified ZIP; rebuilding
+a substitute server is unavailable. The existing core parent executes that PE,
+and the existing preparation parent extracts the same ZIP and runs its unchanged
+PowerShell 5.1 review, digest confirmation, emitted checker and repeat preparation.
+The engine qualifier stays on PowerShell 7 so its strict JSON case-pair and skip
+classification remain intact; the helper separately observes the exact stock
+PowerShell 5.1 executable used for emitted scripts and binds its edition/version.
+Source-only jobs retain their original meaning and do not inherit artifact proof.
+
+The bounded `native-kit-proof.json` and `native-kit-qualification.json` receipts
+bind the ZIP, KIT-ID, extracted/prepared/packet PE, source/test images, native token,
+PowerShell version and prepared workspace. Missing or changed input/evidence
+refuses qualification. Repeated checks preserve private and managed bytes/modes.
+The canonical catalog has 92 methods; the Code packet has 94 skill folders because
+`operator` and `resume` are additional bridges. Cross-format projections are not
+required to have identical Markdown bytes. Use the exact CI-produced candidate
+and recorded hashes; this does not relabel an older local ZIP as executed.
+
+This hosted evidence covers actual Windows artifact execution, not corporate
+download policy, SmartScreen admission, native Code/Desktop login/import or
+colleague feedback. For the remaining human test, download the recorded candidate,
+extract it into an ordinary local folder, open `Preparar Maestro.cmd`, then use
+`Testar Maestro.cmd` and return its Markdown report with the actual client result.
+Keep prepared exports/private state local and preserve any policy refusal.
+
 No new smoke/canary framework or CI band is introduced. Existing focused product
 journeys and direct emitted-preparer verification cover source behavior; full
 affected hosted checks and independent reviews remain promotion gates.
