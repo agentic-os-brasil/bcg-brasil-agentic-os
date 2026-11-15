@@ -59,7 +59,7 @@ SOURCE_TREE="$(git -C "$SOURCE" rev-parse HEAD^{tree})"
   printf 'native_client_loading=not-yet-observed\nwindows_binary_evidence=cross_build_only_this_kit_requires_native_rehearsal\n'
   printf 'signed_install_update=unavailable\ndocling_unseeded=unavailable\nnative_agents_hooks=unavailable_without_attended_qualification\nwindows_darwin_jobs=unavailable\n'
 } > "$OUT/ARTIFACT.txt"
-(cd "$OUT"; LC_ALL=C find -s . -type f ! -name SHA256SUMS ! -name KIT-ID.txt -exec shasum -a 256 '{}' \;) > "$OUT/SHA256SUMS"
+(cd "$OUT"; LC_ALL=C find -s . -type f ! -name SHA256SUMS ! -name KIT-ID.txt -exec shasum -a 256 '{}' +) > "$OUT/SHA256SUMS"
 CONTENT_ID="$(shasum -a 256 "$OUT/SHA256SUMS")"
 printf '%s\n' "${CONTENT_ID%% *}" > "$OUT/KIT-ID.txt"
 (cd "$OUT" && shasum -a 256 -c SHA256SUMS)

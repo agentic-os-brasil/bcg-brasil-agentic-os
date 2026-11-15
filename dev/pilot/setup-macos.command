@@ -49,7 +49,7 @@ else
 fi
 verify_kit
 [[ "$KIT_ID" == "$REVIEWED_KIT_ID" ]] || fail 'O kit mudou após a revisão; leia uma revisão nova.'
-inventory() { (cd "$ROOT" && LC_ALL=C find -s product exports launchers -type f -exec shasum -a 256 '{}' \;); }
+inventory() { (cd "$ROOT" && LC_ALL=C find -s product exports launchers -type f -exec shasum -a 256 '{}' +); }
 diagnose_failure() {
   "$ROOT/launchers/Testar Maestro.command" --check-only || true
   fail "$* Preparação preservada; consulte o relatório e não apague a pasta."
@@ -61,7 +61,9 @@ if [[ -e "$ROOT" ]]; then
   [[ -f "$ROOT/.maestro-pilot-owned" && ! -L "$ROOT/.maestro-pilot-owned" && "$(cat "$ROOT/.maestro-pilot-owned")" == "$KIT_ID" ]] || fail 'Pasta estrangeira preservada; selecione um destino novo.'
   [[ -f "$ROOT/.maestro-pilot-complete" && -f "$ROOT/managed-files.sha256" ]] || fail 'Preparação parcial preservada; abra launchers/Testar Maestro.command para obter o diagnóstico ou use outro destino.'
   [[ -z "$(find "$ROOT/product" "$ROOT/exports" "$ROOT/launchers" -type l -print -quit)" ]] || fail 'Material gerenciado contém link; preservado.'
-  cmp -s "$ROOT/managed-files.sha256" <(inventory) || fail 'Material gerenciado mudou; o kit preserva os arquivos.'
+  # The sentinel preserves exact trailing newlines while the producer status is checked.
+  current_inventory="$(inventory && printf .)" || fail 'Não foi possível conferir o material gerenciado; o kit preserva os arquivos.'
+  cmp -s "$ROOT/managed-files.sha256" <(printf '%s' "${current_inventory%.}") || fail 'Material gerenciado mudou; o kit preserva os arquivos.'
   "$ROOT/launchers/Testar Maestro.command" --check-only
   printf 'Ensaio conferido. Para continuar, abra %s/launchers/Testar Maestro.command\n' "$ROOT"
   exit 0
