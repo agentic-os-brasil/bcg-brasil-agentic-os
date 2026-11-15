@@ -35,7 +35,14 @@ func nativeSourceDirectoryIdentity(file *os.File) (string, error) {
 }
 
 func makeNativePrivateDirectory(path string) (func(), error) {
-	fresh, err := winprivate.Fresh(path)
+	// Fresh bootstraps missing components but deliberately admits an existing
+	// directory. Native controls require a genuinely new leaf under a held parent.
+	parent, err := winprivate.OpenPinnedTree(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	defer parent.Close()
+	fresh, err := parent.Child(filepath.Base(path), true, true)
 	if err != nil {
 		return nil, err
 	}

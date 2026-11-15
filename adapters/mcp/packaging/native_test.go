@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -450,6 +451,13 @@ func TestNativeProofRejectsAssistantClaimsAndMissingPositiveEvidence(t *testing.
 }
 
 func TestNativeCommandRunnerBoundsOrdinaryOwnedProcessGroup(t *testing.T) {
+	// io.Copy may prefer a promoted ReaderFrom over Write; the same native
+	// output cap must hold for streaming readers without a WriterTo method.
+	var output boundedNativeOutput
+	read := io.LimitReader(strings.NewReader(strings.Repeat("x", (2<<20)+1)), (2<<20)+1)
+	if n, err := io.Copy(&output, read); err == nil || n > 2<<20 || len(output.Bytes()) > 2<<20 {
+		t.Fatal("native output stream bypassed its bounded writer")
+	}
 	if runtime.GOOS == "windows" {
 		t.Skip("native process group boundary unavailable")
 	}

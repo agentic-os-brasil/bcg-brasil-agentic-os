@@ -22,6 +22,7 @@ import (
 type nativeTreeWitness struct {
 	Parent, Child               uint32
 	ParentCreated, ChildCreated uint64
+	TransientReaped             bool
 }
 
 func nativeTestCreation(process windows.Handle) (uint64, error) {
@@ -34,6 +35,10 @@ func nativeTestCreation(process windows.Handle) (uint64, error) {
 
 func TestNativeWindowsOwnedProcessTree(t *testing.T) {
 	for i, arg := range os.Args {
+		if arg == "--maestro-owned-transient" {
+			time.Sleep(100 * time.Millisecond)
+			os.Exit(0)
+		}
 		if arg == "--maestro-owned-grandchild" {
 			time.Sleep(30 * time.Second)
 			os.Exit(0)
@@ -125,20 +130,18 @@ func TestNativeWindowsOwnedProcessTree(t *testing.T) {
 				}
 				time.Sleep(10 * time.Millisecond)
 			}
-			if !ready {
-				t.Fatal("owned helper did not create bounded synthetic witness")
+			if !ready || !witness.TransientReaped {
+				t.Fatal("owned helper did not create its actual reaped-transient witness")
 			}
 			held := []windows.Handle{}
-			for _, identity := range []struct {
-				pid     uint32
-				created uint64
-			}{{witness.Parent, witness.ParentCreated}, {witness.Child, witness.ChildCreated}} {
-				h, err := windows.OpenProcess(windows.SYNCHRONIZE|windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.PROCESS_TERMINATE, false, identity.pid)
+			hold := func(pid uint32, expected uint64) {
+				t.Helper()
+				h, err := windows.OpenProcess(windows.SYNCHRONIZE|windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.PROCESS_TERMINATE, false, pid)
 				if err != nil {
 					t.Fatal(err)
 				}
 				created, err := nativeTestCreation(h)
-				if err != nil || created != identity.created {
+				if err != nil || created != expected {
 					windows.CloseHandle(h)
 					t.Fatal("synthetic owned process identity changed")
 				}
@@ -151,11 +154,32 @@ func TestNativeWindowsOwnedProcessTree(t *testing.T) {
 					_ = windows.CloseHandle(h)
 				})
 			}
+			hold(witness.Parent, witness.ParentCreated)
+			hold(witness.Child, witness.ChildCreated)
 			started := time.Now()
 			if mode == "cancel" {
 				cancel()
-			} else if err := scheduler.WriteNewPrivateFile(trigger, []byte("release")); err != nil {
-				t.Fatal(err)
+			} else {
+				if err := scheduler.WriteNewPrivateFile(trigger, []byte("release")); err != nil {
+					t.Fatal(err)
+				}
+				// The helper creates this descendant only after the first witness.
+				// Retain its identity before allowing parent exit/output failure.
+				var late nativeTreeWitness
+				for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); {
+					body, err := scheduler.ReadPrivateFile(trigger+"-late", 4096)
+					if err == nil && json.Unmarshal(body, &late) == nil {
+						break
+					}
+					time.Sleep(time.Millisecond)
+				}
+				if late.Parent == 0 {
+					t.Fatal("late descendant witness unavailable")
+				}
+				hold(late.Parent, late.ParentCreated)
+				if err := scheduler.WriteNewPrivateFile(trigger+"-held", []byte("held")); err != nil {
+					t.Fatal(err)
+				}
 			}
 			var out result
 			select {
@@ -196,6 +220,12 @@ func TestNativeWindowsOwnedProcessTree(t *testing.T) {
 }
 
 func nativeTreeHelper(mode, witnessPath, trigger string) {
+	// This member has already exited before the parent publishes its witness;
+	// an end-only PID snapshot cannot establish complete lifetime custody.
+	transient := exec.Command(os.Args[0], "-test.run=^TestNativeWindowsOwnedProcessTree$", "--", "--maestro-owned-transient")
+	if err := transient.Run(); err != nil {
+		os.Exit(98)
+	}
 	child := exec.Command(os.Args[0], "-test.run=^TestNativeWindowsOwnedProcessTree$", "--", "--maestro-owned-grandchild")
 	if err := child.Start(); err != nil {
 		os.Exit(94)
@@ -213,13 +243,39 @@ func nativeTreeHelper(mode, witnessPath, trigger string) {
 	if err != nil {
 		os.Exit(95)
 	}
-	body, _ := json.Marshal(nativeTreeWitness{Parent: uint32(os.Getpid()), Child: uint32(child.Process.Pid), ParentCreated: parentCreated, ChildCreated: childCreated})
+	body, _ := json.Marshal(nativeTreeWitness{Parent: uint32(os.Getpid()), Child: uint32(child.Process.Pid), ParentCreated: parentCreated, ChildCreated: childCreated, TransientReaped: true})
 	if err := scheduler.WriteNewPrivateFile(witnessPath, body); err != nil {
 		os.Exit(96)
 	}
 	fmt.Fprintln(os.Stdout, "synthetic owned tree ready")
 	for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); {
 		if _, err := os.Stat(trigger); err == nil {
+			late := exec.Command(os.Args[0], "-test.run=^TestNativeWindowsOwnedProcessTree$", "--", "--maestro-owned-grandchild")
+			if err := late.Start(); err != nil {
+				os.Exit(99)
+			}
+			h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(late.Process.Pid))
+			if err != nil {
+				os.Exit(99)
+			}
+			created, err := nativeTestCreation(h)
+			_ = windows.CloseHandle(h)
+			if err != nil {
+				os.Exit(99)
+			}
+			body, _ := json.Marshal(nativeTreeWitness{Parent: uint32(late.Process.Pid), ParentCreated: created})
+			if err := scheduler.WriteNewPrivateFile(trigger+"-late", body); err != nil {
+				os.Exit(99)
+			}
+			for deadline := time.Now().Add(3 * time.Second); ; {
+				if _, err := os.Stat(trigger + "-held"); err == nil {
+					break
+				}
+				if !time.Now().Before(deadline) {
+					os.Exit(99)
+				}
+				time.Sleep(time.Millisecond)
+			}
 			switch mode {
 			case "parent-exit":
 				return

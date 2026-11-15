@@ -10,6 +10,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -35,6 +36,11 @@ func runOwnedNativeCommand(ctx context.Context, path string, args []string, cwd 
 		return nil, errors.New("native owned job limits unavailable")
 	}
 	runtime.KeepAlive(&limits)
+	tracker, err := newNativeJobTracker(job)
+	if err != nil {
+		return nil, err
+	}
+	defer tracker.close()
 	attributes, err := windows.NewProcThreadAttributeList(2)
 	if err != nil {
 		return nil, err
@@ -89,7 +95,7 @@ func runOwnedNativeCommand(ctx context.Context, path string, args []string, cwd 
 		return nil, err
 	}
 	process := windows.ProcessInformation{}
-	err = windows.CreateProcess(application, command, nil, nil, true, windows.EXTENDED_STARTUPINFO_PRESENT|windows.CREATE_UNICODE_ENVIRONMENT|windows.CREATE_NO_WINDOW, nil, directory, &startup.StartupInfo, &process)
+	err = windows.CreateProcess(application, command, nil, nil, true, windows.EXTENDED_STARTUPINFO_PRESENT|windows.CREATE_UNICODE_ENVIRONMENT|windows.CREATE_NO_WINDOW|windows.CREATE_SUSPENDED, nil, directory, &startup.StartupInfo, &process)
 	runtime.KeepAlive(attributes)
 	runtime.KeepAlive(jobs)
 	runtime.KeepAlive(handles)
@@ -104,9 +110,19 @@ func runOwnedNativeCommand(ctx context.Context, path string, args []string, cwd 
 	drained := make(chan error, 1)
 	go func() { _, err := io.Copy(&output, read); drained <- err }()
 	var outputErr, runErr error
+	// The job association is still atomic at creation. Keep the root suspended
+	// only until its exact-job handle and output reader have been retained, then
+	// permit user code; this also admits fast version/auth commands reliably.
+	tracker.capture(uintptr(process.ProcessId))
+	runErr = tracker.failure()
+	if runErr == nil {
+		if _, err := windows.ResumeThread(process.Thread); err != nil {
+			runErr = errors.New("native owned process resume unavailable")
+		}
+	}
 	outputDone := false
 	waitOutput := drained
-	running := true
+	running := runErr == nil
 	for running {
 		select {
 		case <-ctx.Done():
@@ -122,6 +138,11 @@ func runOwnedNativeCommand(ctx context.Context, path string, args []string, cwd 
 				continue
 			}
 		default:
+		}
+		tracker.captureCurrent()
+		if err := tracker.failure(); err != nil {
+			runErr = err
+			break
 		}
 		state, err := windows.WaitForSingleObject(process.Process, 25)
 		if err != nil {
@@ -143,8 +164,11 @@ func runOwnedNativeCommand(ctx context.Context, path string, args []string, cwd 
 	}
 	// Retain the non-inherited job handle until all of its members are gone.
 	// Even an ordinary parent exit cannot leave a child holding stdout open.
+	tracker.captureCurrent()
 	terminateErr := windows.TerminateJobObject(job, 1)
-	cleanupErr := waitNativeJobEmpty(job, 2*time.Second)
+	// Keep notification capture alive through termination: late members still
+	// contribute to the ever-assigned census and need actual signaled handles.
+	cleanupErr := tracker.waitClosed(2 * time.Second)
 	if !outputDone {
 		select {
 		case outputErr = <-drained:
@@ -167,28 +191,180 @@ func runOwnedNativeCommand(ctx context.Context, path string, args []string, cwd 
 	return output.Bytes(), errors.Join(runErr, terminateErr, cleanupErr, outputErr)
 }
 
-func waitNativeJobEmpty(job windows.Handle, limit time.Duration) error {
-	// JOBOBJECT_BASIC_ACCOUNTING_INFORMATION has four LARGE_INTEGER times and
-	// four DWORD counters. ActiveProcesses is the third DWORD counter.
-	var info struct {
-		Times                                 [4]int64
-		PageFaults, Total, Active, Terminated uint32
+type nativeJobAccounting struct {
+	Times                                 [4]int64
+	PageFaults, Total, Active, Terminated uint32
+}
+
+func nativeAccounting(job windows.Handle) (nativeJobAccounting, error) {
+	var info nativeJobAccounting
+	var returned uint32
+	err := windows.QueryInformationJobObject(job, windows.JobObjectBasicAccountingInformation, uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info)), &returned)
+	runtime.KeepAlive(&info)
+	if err != nil || returned != uint32(unsafe.Sizeof(info)) {
+		return info, errors.New("native owned job closure unavailable")
 	}
-	deadline := time.Now().Add(limit)
-	for {
-		var returned uint32
-		err := windows.QueryInformationJobObject(job, windows.JobObjectBasicAccountingInformation, uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info)), &returned)
-		runtime.KeepAlive(&info)
-		runtime.KeepAlive(&returned)
-		if err != nil || returned != uint32(unsafe.Sizeof(info)) {
-			return errors.New("native owned job closure unavailable")
-		}
-		if info.Active == 0 {
-			return nil
-		}
-		if !time.Now().Before(deadline) {
-			return errors.New("native owned job members did not close")
-		}
-		time.Sleep(10 * time.Millisecond)
+	return info, nil
+}
+
+// Notifications are best-effort discovery hints, not completion evidence. Keep
+// exact-job handles for the entire command and require their signaled state plus
+// a matching monotonic job census. A missed/ambiguous identity cannot qualify.
+type nativeJobTracker struct {
+	job, port windows.Handle
+	mu        sync.Mutex
+	members   map[uint32]windows.Handle
+	err       error
+	stop      chan struct{}
+	done      chan struct{}
+}
+
+func newNativeJobTracker(job windows.Handle) (*nativeJobTracker, error) {
+	port, err := windows.CreateIoCompletionPort(windows.InvalidHandle, 0, 0, 1)
+	if err != nil {
+		return nil, errors.New("native owned process notifications unavailable")
+	}
+	association := struct {
+		Key  uintptr
+		Port windows.Handle
+	}{1, port}
+	_, err = windows.SetInformationJobObject(job, windows.JobObjectAssociateCompletionPortInformation, uintptr(unsafe.Pointer(&association)), uint32(unsafe.Sizeof(association)))
+	runtime.KeepAlive(&association)
+	if err != nil {
+		_ = windows.CloseHandle(port)
+		return nil, errors.New("native owned process notification association unavailable")
+	}
+	t := &nativeJobTracker{job: job, port: port, members: map[uint32]windows.Handle{}, stop: make(chan struct{}), done: make(chan struct{})}
+	go t.observe()
+	return t, nil
+}
+
+func (t *nativeJobTracker) fail(err error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.err == nil {
+		t.err = err
 	}
 }
+func (t *nativeJobTracker) failure() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.err
+}
+func (t *nativeJobTracker) capture(id uintptr) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if id == 0 || id > uintptr(^uint32(0)) {
+		t.err = errors.New("native owned process identity unavailable")
+		return
+	}
+	if _, known := t.members[uint32(id)]; known {
+		return // Retained handles prevent an old identity becoming new custody.
+	}
+	if len(t.members) >= 256 {
+		t.err = errors.New("native owned process census exceeds bound")
+		return
+	}
+	h, err := windows.OpenProcess(windows.SYNCHRONIZE|windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(id))
+	if err != nil {
+		t.err = errors.New("native owned process custody unavailable")
+		return
+	}
+	var belongs uint32
+	ok, _, _ := nativeIsProcessInJob.Call(uintptr(h), uintptr(t.job), uintptr(unsafe.Pointer(&belongs)))
+	runtime.KeepAlive(&belongs)
+	if ok == 0 || belongs == 0 {
+		_ = windows.CloseHandle(h)
+		t.err = errors.New("native owned process membership unavailable")
+		return
+	}
+	t.members[uint32(id)] = h
+}
+func (t *nativeJobTracker) captureCurrent() {
+	var ids struct {
+		Assigned, Count uint32
+		Processes       [256]uintptr
+	}
+	err := windows.QueryInformationJobObject(t.job, windows.JobObjectBasicProcessIdList, uintptr(unsafe.Pointer(&ids)), uint32(unsafe.Sizeof(ids)), nil)
+	runtime.KeepAlive(&ids)
+	if err != nil || ids.Assigned != ids.Count || ids.Count > uint32(len(ids.Processes)) {
+		t.fail(errors.New("native owned process inventory unavailable"))
+		return
+	}
+	for _, id := range ids.Processes[:ids.Count] {
+		t.capture(id)
+	}
+}
+func (t *nativeJobTracker) observe() {
+	defer close(t.done)
+	for messages := 0; messages < 4096; {
+		select {
+		case <-t.stop:
+			return
+		default:
+		}
+		// A job port uses lpOverlapped as a numeric PID, not a Go pointer.
+		var message uint32
+		var key, id uintptr
+		ok, _, callErr := nativeGetQueuedCompletionStatus.Call(uintptr(t.port), uintptr(unsafe.Pointer(&message)), uintptr(unsafe.Pointer(&key)), uintptr(unsafe.Pointer(&id)), 10)
+		if ok == 0 {
+			if errors.Is(callErr, windows.WAIT_TIMEOUT) {
+				continue
+			}
+			t.fail(errors.New("native owned process notification read unavailable"))
+			return
+		}
+		messages++
+		if key != 1 {
+			t.fail(errors.New("native owned process notification identity unavailable"))
+			return
+		}
+		if message == 6 { // JOB_OBJECT_MSG_NEW_PROCESS; never trust its PID alone.
+			t.capture(id)
+		}
+	}
+	t.fail(errors.New("native owned process notifications exceed bound"))
+}
+func (t *nativeJobTracker) waitClosed(limit time.Duration) error {
+	deadline := time.Now().Add(limit)
+	for {
+		t.captureCurrent()
+		info, err := nativeAccounting(t.job)
+		if err != nil {
+			return err
+		}
+		t.mu.Lock()
+		signaled := true
+		for _, member := range t.members {
+			state, err := windows.WaitForSingleObject(member, 0)
+			if err != nil || state != windows.WAIT_OBJECT_0 {
+				signaled = false
+			}
+		}
+		observedErr := t.err
+		complete := observedErr == nil && info.Active == 0 && info.Total == uint32(len(t.members)) && signaled
+		t.mu.Unlock()
+		if complete {
+			return nil
+		}
+		if observedErr != nil && info.Active == 0 && signaled {
+			return observedErr // Cleanup of observed members never erases failed proof.
+		}
+		if !time.Now().Before(deadline) {
+			return errors.Join(observedErr, errors.New("native owned process completion census unavailable"))
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+func (t *nativeJobTracker) close() {
+	close(t.stop)
+	<-t.done // Never close a process/port handle while the observer can use it.
+	for _, member := range t.members {
+		_ = windows.CloseHandle(member)
+	}
+	_ = windows.CloseHandle(t.port)
+}
+
+var nativeKernel32 = windows.NewLazySystemDLL("kernel32.dll")
+var nativeIsProcessInJob = nativeKernel32.NewProc("IsProcessInJob")
+var nativeGetQueuedCompletionStatus = nativeKernel32.NewProc("GetQueuedCompletionStatus")

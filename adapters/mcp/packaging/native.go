@@ -501,13 +501,15 @@ func (p nativeProbe) arguments(budget float64) []string {
 	return append(args, prompt)
 }
 
-type boundedNativeOutput struct{ bytes.Buffer }
+type boundedNativeOutput struct{ buffer bytes.Buffer }
+
+func (b *boundedNativeOutput) Bytes() []byte { return b.buffer.Bytes() }
 
 func (b *boundedNativeOutput) Write(p []byte) (int, error) {
-	if b.Len()+len(p) > 2<<20 {
+	if b.buffer.Len()+len(p) > 2<<20 {
 		return 0, errors.New("native output limit")
 	}
-	return b.Buffer.Write(p)
+	return b.buffer.Write(p)
 }
 func runNativeCommand(ctx context.Context, path string, args []string, cwd string) ([]byte, error) {
 	return runOwnedNativeCommand(ctx, path, args, cwd)
