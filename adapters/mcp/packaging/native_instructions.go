@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"unicode"
@@ -35,12 +34,13 @@ type instructionSources struct {
 	active        map[string]bool
 	parsed        map[string]bool
 	settingsFiles map[string]bool
+	plugins       map[string]bool
 	bytes, count  int
 	autoDisabled  bool
 }
 
 func newInstructionSources() *instructionSources {
-	return &instructionSources{files: map[string]string{}, active: map[string]bool{}, parsed: map[string]bool{}, settingsFiles: map[string]bool{}}
+	return &instructionSources{files: map[string]string{}, active: map[string]bool{}, parsed: map[string]bool{}, settingsFiles: map[string]bool{}, plugins: map[string]bool{}}
 }
 func sourceUnsupported(reason string) error {
 	return instructionSourceError("native_instruction_" + reason + "_unsupported")
@@ -135,6 +135,17 @@ func (s *instructionSources) settings(body []byte) error {
 	if json.Unmarshal(body, &value) != nil {
 		return sourceUnsupported("settings_schema")
 	}
+	if raw, ok := value["hooks"]; ok {
+		var groups map[string][]json.RawMessage
+		if json.Unmarshal(raw, &groups) != nil {
+			return sourceUnsupported("hooks")
+		}
+		for _, rows := range groups {
+			if len(rows) != 0 {
+				return sourceUnsupported("hooks")
+			}
+		}
+	}
 	if raw, ok := value["autoMemoryEnabled"]; ok {
 		if strings.TrimSpace(string(raw)) != "false" {
 			return sourceUnsupported("auto_memory")
@@ -160,9 +171,12 @@ func (s *instructionSources) settings(body []byte) error {
 		if json.Unmarshal(raw, &plugins) != nil {
 			return sourceUnsupported("plugins")
 		}
-		for _, enabled := range plugins {
+		for id, enabled := range plugins {
 			if enabled {
-				return sourceUnsupported("plugins")
+				if !managedNativePluginID(id) {
+					return sourceUnsupported("plugins")
+				}
+				s.plugins[id] = true
 			}
 		}
 	}
@@ -184,7 +198,7 @@ func (s *instructionSources) settings(body []byte) error {
 
 func instructionEnvironmentControl(key string) bool {
 	switch key {
-	case "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_DISABLE_AUTO_MEMORY", "CLAUDE_CODE_DISABLE_CLAUDE_MDS", "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD", "CLAUDE_CODE_AUTO_MEMORY_PATH", "CLAUDE_CODE_AUTO_MEMORY_DIR":
+	case "CLAUDE_CODE_PLUGIN_DIRS", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_DISABLE_AUTO_MEMORY", "CLAUDE_CODE_DISABLE_CLAUDE_MDS", "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD", "CLAUDE_CODE_AUTO_MEMORY_PATH", "CLAUDE_CODE_AUTO_MEMORY_DIR":
 		return true
 	}
 	return false
@@ -192,7 +206,7 @@ func instructionEnvironmentControl(key string) bool {
 func (s *instructionSources) environment() error {
 	// Unknown source-expanding controls refuse by presence. Do not fingerprint
 	// arbitrary CLAUDE/ANTHROPIC variables, which may contain credentials.
-	for _, key := range []string{"CLAUDE_CODE_DISABLE_CLAUDE_MDS", "CLAUDE_CODE_AUTO_MEMORY_PATH", "CLAUDE_CODE_AUTO_MEMORY_DIR"} {
+	for _, key := range []string{"CLAUDE_CODE_PLUGIN_DIRS", "CLAUDE_CODE_DISABLE_CLAUDE_MDS", "CLAUDE_CODE_AUTO_MEMORY_PATH", "CLAUDE_CODE_AUTO_MEMORY_DIR"} {
 		if _, present := os.LookupEnv(key); present {
 			return sourceUnsupported("environment_sources")
 		}
@@ -408,28 +422,28 @@ func (s *instructionSources) projectLocalRoot(directory string) (string, error) 
 	}
 }
 
-func instructionConfiguration(directory string, paths ...string) (string, error) {
+func instructionConfiguration(directory string, o Options, paths ...string) (nativeConfiguration, error) {
 	if !filepath.IsAbs(directory) {
-		return "", sourceUnsupported("configuration_location")
+		return nativeConfiguration{}, sourceUnsupported("configuration_location")
 	}
 	s := newInstructionSources()
 	if err := s.environment(); err != nil {
-		return "", err
+		return nativeConfiguration{}, err
 	}
 	if err := s.root(directory, "settings.json"); err != nil {
-		return "", err
+		return nativeConfiguration{}, err
 	}
 	for index, path := range paths {
 		if err := s.ancestry(path, index == 0); err != nil {
-			return "", err
+			return nativeConfiguration{}, err
 		}
 	}
-	managed := "/etc/claude-code"
-	if runtime.GOOS == "darwin" {
-		managed = "/Library/Application Support/ClaudeCode"
+	managed, err := nativeManagedDirectory()
+	if err != nil {
+		return nativeConfiguration{}, sourceUnsupported("managed_location")
 	}
 	if err := s.root(managed); err != nil {
-		return "", err
+		return nativeConfiguration{}, err
 	}
 	managedRoot := managed
 	if resolved := s.files["root:"+managed]; resolved != "" && resolved != "missing" {
@@ -438,27 +452,31 @@ func instructionConfiguration(directory string, paths ...string) (string, error)
 	managedFile := filepath.Join(managedRoot, "managed-settings.json")
 	s.settingsFiles[managedFile] = true
 	if err := s.file(managedFile, false, 0); err != nil {
-		return "", err
+		return nativeConfiguration{}, err
 	}
 	if info, err := os.Lstat(filepath.Join(managed, "managed-settings.d")); err == nil {
 		if !info.IsDir() {
-			return "", sourceUnsupported("managed_sources")
+			return nativeConfiguration{}, sourceUnsupported("managed_sources")
 		}
 		entries, err := os.ReadDir(filepath.Join(managed, "managed-settings.d"))
 		if err != nil {
-			return "", err
+			return nativeConfiguration{}, err
 		}
 		if len(entries) > 0 {
-			return "", sourceUnsupported("managed_sources")
+			return nativeConfiguration{}, sourceUnsupported("managed_sources")
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", err
+		return nativeConfiguration{}, err
 	}
 	if !s.autoDisabled {
-		return "", sourceUnsupported("auto_memory")
+		return nativeConfiguration{}, sourceUnsupported("auto_memory")
+	}
+	override, err := s.managedPluginConfiguration(directory, o)
+	if err != nil {
+		return nativeConfiguration{}, err
 	}
 	body, err := json.Marshal(s.files)
-	return digest(body), err
+	return nativeConfiguration{SHA256: digest(body), SessionSettings: override}, err
 }
 
 // Supported imports: relative/absolute/~/ paths, escaped spaces, inline code
