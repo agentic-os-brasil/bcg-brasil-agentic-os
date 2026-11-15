@@ -5,6 +5,17 @@ description: Conduz entrevista estruturada e gera o texto de avaliação de perf
 
 # Skill: fodais-performance-review
 
+## MCP owner-atlas route
+
+When this method runs through the Maestro MCP product, first read
+`maestro://methods/start-day/resources/owner-atlas-mcp.md` in full through
+`methods.read` on the same admitted connector (follow `has_more` and
+`next_offset`). Follow that owning operation route. It replaces legacy
+file/command mechanics below; retain the content, privacy and human
+confirmation rules. A scheduled marker does not replace trusted review
+or create a standing grant. Unavailable review leaves a draft, not a write.
+
+
 ## Tipo
 Atômica
 

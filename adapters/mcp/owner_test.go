@@ -502,6 +502,7 @@ func ownerCall(t *testing.T, cs *mcp.ClientSession, op string, extra map[string]
 	return v
 }
 func TestOwnerPublicJourney(t *testing.T) {
+	assertOwnerAtlasDailyWorkflow(t)
 	runOwnerJourney(t, "quick")
 }
 func TestOwnerCompletePublicJourney(t *testing.T) {

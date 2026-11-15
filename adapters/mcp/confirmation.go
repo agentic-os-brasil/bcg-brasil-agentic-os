@@ -40,6 +40,12 @@ func (b *Bound) confirm(ctx context.Context, req *mcp.CallToolRequest, question 
 	switch review.(type) {
 	case KnowledgeReview, BrainReview:
 		maximum = 4 << 20
+	case ownerAtlasReview:
+		// Preparation reviews four existing 256KiB scaffold pages: at most
+		// 6MiB after sixfold JSON escaping. Create/update bind at most three
+		// page-sized copies (input, proposal, current): 4.5MiB. Keep 2MiB
+		// beyond the larger shape for fixed templates and bound metadata.
+		maximum = 8 << 20
 	}
 	envelope, err := json.MarshalIndent(review, "", "  ")
 	if err != nil || len(envelope) > maximum {
