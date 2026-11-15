@@ -374,7 +374,7 @@ func ValidateSelection(selection Selection) error {
 
 func validDisplayName(value string) bool {
 	trimmed := strings.TrimSpace(value)
-	if trimmed == "" || len([]byte(trimmed)) > 80 {
+	if trimmed == "" || len([]byte(value)) > 80 {
 		return false
 	}
 	for _, r := range trimmed {
@@ -419,63 +419,51 @@ func validEmoji(value string) bool {
 }
 
 func Save(root string, profile Profile) error {
-	for index := range profile.Selections {
-		profile.Selections[index].Role = CanonicalRole(profile.Selections[index].Role)
+	profile = normalizedProfile(profile)
+	if err := profile.Validate(); err != nil {
+		return err
+	}
+	return withIdentityTransition(root, func() error { return saveProfileLocked(root, profile) })
+}
+
+func normalizedProfile(profile Profile) Profile {
+	profile.Selections = append([]Selection(nil), profile.Selections...)
+	profile.CapabilityTracks = append([]string(nil), profile.CapabilityTracks...)
+	for i := range profile.Selections {
+		profile.Selections[i].Role = CanonicalRole(profile.Selections[i].Role)
 	}
 	SortSelections(&profile)
 	sort.Strings(profile.CapabilityTracks)
+	profile.UpdatedAt = profile.UpdatedAt.UTC()
+	return profile
+}
+
+func saveProfileLocked(root string, profile Profile) error {
+	profile = normalizedProfile(profile)
 	if err := profile.Validate(); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Join(root, "agents"), 0o700); err != nil {
+	if _, err := ReadProfile(root); err != nil {
 		return err
 	}
-	profile.UpdatedAt = profile.UpdatedAt.UTC()
-	body, err := json.MarshalIndent(profile, "", "  ")
-	if err != nil {
-		return err
-	}
-	body = append(body, '\n')
-	temporary, err := os.CreateTemp(filepath.Join(root, "agents"), ".personalization-*")
-	if err != nil {
-		return err
-	}
-	temporaryPath := temporary.Name()
-	defer os.Remove(temporaryPath)
-	if err := temporary.Chmod(0o600); err != nil {
-		temporary.Close()
-		return err
-	}
-	if _, err := temporary.Write(body); err != nil {
-		temporary.Close()
-		return err
-	}
-	if err := temporary.Sync(); err != nil {
-		temporary.Close()
-		return err
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	return os.Rename(temporaryPath, filepath.Join(root, "agents", "personalization.json"))
+	return writeIdentityJSON(filepath.Join(root, "agents", "personalization.json"), profile)
 }
 
 func Load(root string) (Profile, error) {
-	body, err := os.ReadFile(filepath.Join(root, "agents", "personalization.json"))
+	state, err := ReadProfile(root)
 	if err != nil {
 		return Profile{}, err
 	}
-	var profile Profile
-	if err := DecodeStrict(body, &profile); err != nil {
-		return Profile{}, err
+	if state.Profile == nil {
+		return Profile{}, os.ErrNotExist
 	}
-	if err := profile.Validate(); err != nil {
-		return Profile{}, err
-	}
-	return profile, nil
+	return *state.Profile, nil
 }
 
 func DecodeStrict(body []byte, target *Profile) error {
+	if !utf8.Valid(body) {
+		return errors.New("agent identity JSON must be valid UTF-8")
+	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
