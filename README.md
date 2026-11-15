@@ -422,7 +422,7 @@ The canonical entry points are skills invoked as slash-commands:
 /maestro-operator       control-plane routing (loaded at SessionStart)
 /execution-continuity   register a task, checkpoint and resume across sessions
 /ingest-content         bounded local document ingestion
-/find-prior-work        explicit prior-work search from enrolled SharePoint folders
+/find-prior-work        explicit read-only retrieval from admitted workspace knowledge
 /dream-memory           L1/L2/L3 dreaming and memory consolidation
 ```
 

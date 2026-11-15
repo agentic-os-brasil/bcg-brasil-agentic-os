@@ -48,6 +48,19 @@ the existing pinned official SDK and imports canonical runtime packages only.
   `execution.evidence`, `execution.complete`. Each variant has its own required and
   allowed fields; unknown fields and cross-variant combinations are rejected.
 
+Tool discovery advertises an ordinary object schema with an explicit `operation`
+enumeration and a finite union of parameter names. Each field documents exactly
+which operations require or allow it and its full operation-specific constraints,
+derived from the same authoritative variants. Shared property constraints retain
+only values common to every occurrence. Tool descriptions remain short; complete
+parameter contracts do not depend on a host preserving a long tool description.
+The current field descriptions are independently bounded below 4096 UTF-8 bytes,
+without truncating any contract. This avoids both top-level `oneOf` flattening and
+observed tool-description truncation in supported clients. Admission is unchanged:
+the server validates each request against the original closed `oneOf`, including
+per-operation required fields and rejection of unknown or mixed-branch fields.
+There is no second operation registry, new tool or client-specific authority.
+
 The adapter supplies WorkspaceID/WorkspaceRoot, producer identity and policy.
 Mutation outputs are metadata receipts; errors are bounded codes without private
 paths or user content. Evidence is initially artifact_snapshot only, never arbitrary

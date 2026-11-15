@@ -382,10 +382,19 @@ The query body travels through standard input so client, project and people
 terms do not enter process arguments or shell history. Enrollment is create-only;
 scope expansion requires a newly confirmed policy rather than an overwrite.
 
-The intended product skill is `find-prior-work`. It activates only for explicit
-retrieval of prior professional material and uses the local index first. A sync
-is proposed only when the index is absent or stale and the active runtime is
-Claude with the approved SharePoint connection.
+The shipped `find-prior-work` MCP/plugin method activates only for explicit
+retrieval from the current workspace's admitted authored navigation and eligible
+memory. It uses the registered read owners, short literal queries, virtual
+navigation references and canonical source read-back. Missing scaffold templates
+are not evidence that the workspace has no saved knowledge. It never performs
+raw filesystem scans, sync, enrollment or publication as a retrieval fallback.
+
+The organizational SharePoint index described here is a separate governed
+capability. The stock method's readiness does not attest its collector, authorize
+organizational lookup or bypass the runtime/tenant policy. Organizational sync
+and retrieval need their own explicitly admitted adapter and qualified scope;
+an absent/stale organizational index remains pending rather than causing the
+workspace method to launch collection.
 
 ## Acceptance evidence
 
