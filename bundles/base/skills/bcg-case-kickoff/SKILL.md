@@ -55,3 +55,19 @@ Return a structured packet with `objective`, `scope_boundary`, `phases`,
   Darwin was invoked; this skill only produces a method packet.
 - A missing required capability remains `unavailable`; do not emulate it with
   an external provider or hidden persistence.
+
+
+## Separate explicit Save
+
+Generating this packet is pure: end by showing the complete draft, with no
+registration, file, ledger, schedule, delegation or external action. An explicit
+request to save is a separate effect, including when that request was already
+part of the initial instruction; do not ask for redundant verbal approval.
+Use the admitted first-case
+workflow in [case-agent-setup](../case-agent-setup/SKILL.md) if a current binding
+still needs setup, then the existing reviewed brain route for the full packet.
+Read back the actual page and revision; preserve an existing page and use current
+CAS for a requested correction. Register a checkpoint only when the owner also
+requests or accepts that work, through the owning setup/execution flow. Neither
+asking for a kickoff nor naming a next action grants that Save or task request.
+Unavailable setup/review remains pending; it never selects shell or hidden files.

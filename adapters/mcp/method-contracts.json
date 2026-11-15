@@ -3,9 +3,7 @@
   "groups": [
     {
       "method_ids": [
-        "account-case-setup",
-        "case-agent-setup",
-        "workspace-agent-setup"
+        "account-case-setup"
       ],
       "required_operations": [],
       "effects": [
@@ -18,6 +16,45 @@
         {
           "id": "domain.account_case_scaffold",
           "kind": "domain",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "case-agent-setup",
+        "workspace-agent-setup"
+      ],
+      "required_operations": [
+        "case.setup.status",
+        "case.setup.prepare",
+        "brain.create",
+        "brain.read",
+        "case.setup.finish"
+      ],
+      "effects": [
+        "write_workspace"
+      ],
+      "output_kinds": [
+        "case_artifact",
+        "execution_checkpoint"
+      ],
+      "dependencies": [
+        {
+          "id": "domain.case_setup",
+          "kind": "domain",
+          "required": true,
+          "fulfillment_operations": [
+            "case.setup.status",
+            "case.setup.prepare",
+            "case.setup.finish",
+            "brain.create",
+            "brain.read"
+          ]
+        },
+        {
+          "id": "host.trusted_review",
+          "kind": "host",
           "required": true
         }
       ]

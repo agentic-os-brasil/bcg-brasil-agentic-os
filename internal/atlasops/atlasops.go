@@ -443,13 +443,25 @@ func (engine *Engine) pagePath(relative string) string {
 }
 
 func (engine *Engine) read(relative string) (string, error) {
+	return engine.readRetained(relative, nil)
+}
+func (engine *Engine) readRetained(relative string, retained *scheduler.HeldDirectory) (string, error) {
 	if err := engine.validateBinding(); err != nil {
 		return "", err
 	}
 	if err := engine.admitWorkspacePage(relative); err != nil {
 		return "", err
 	}
-	body, err := readAtlasFile(engine.pagePath(relative), maximumPageBytes, engine.workspace != nil)
+	var body []byte
+	var err error
+	if retained == nil {
+		body, err = readAtlasFile(engine.pagePath(relative), maximumPageBytes, engine.workspace != nil)
+	} else {
+		body, err = retained.ReadPrivateFile(relative, maximumPageBytes)
+		if err == nil {
+			err = validateAtlasFileText(body)
+		}
+	}
 	if err != nil {
 		return "", err
 	}
@@ -579,10 +591,17 @@ func readAtlasFile(path string, maximum int64, privateParent bool) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
-	if !utf8.Valid(body) {
-		return nil, errors.New("atlas file must contain valid UTF-8")
+	if err := validateAtlasFileText(body); err != nil {
+		return nil, err
 	}
 	return body, nil
+}
+
+func validateAtlasFileText(body []byte) error {
+	if !utf8.Valid(body) {
+		return errors.New("atlas file must contain valid UTF-8")
+	}
+	return nil
 }
 
 func digestRequest(request any) (string, error) {

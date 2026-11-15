@@ -335,7 +335,7 @@ func (store Store) latestEvidence(workspaceID, itemID string) (map[string]Eviden
 
 func (store Store) evidences(workspaceID, itemID string) ([]EvidenceReceipt, error) {
 	root := filepath.Join(store.itemRoot(workspaceID, itemID), "revisions")
-	entries, err := ledgerReadDir(root)
+	entries, err := store.ledgerReadDir(root)
 	if err != nil {
 		return nil, err
 	}
@@ -345,7 +345,7 @@ func (store Store) evidences(workspaceID, itemID string) ([]EvidenceReceipt, err
 			continue
 		}
 		var revision Revision
-		if err := readStrictJSON(filepath.Join(root, entry.Name()), &revision); err != nil {
+		if err := store.readStrictJSON(filepath.Join(root, entry.Name()), &revision); err != nil {
 			return nil, err
 		}
 		if err := validateRevision(revision); err != nil || entry.Name() != revisionName(revision.State.StateRevision) {

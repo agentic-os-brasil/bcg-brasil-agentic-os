@@ -1,11 +1,14 @@
 package atlasops_test
 
 import (
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlasops"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlasops"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 func TestWorkspaceFullPageReviewPreservesCollectionBudget(t *testing.T) {
@@ -42,6 +45,7 @@ func TestWorkspaceFullPageReviewPreservesCollectionBudget(t *testing.T) {
 }
 
 func TestWorkspaceFullPageReviewPreservesTextAndBindingGuards(t *testing.T) {
+	assertRetainedReviewPreservesOrdinaryReadGuards(t)
 	base := t.TempDir()
 	options := registeredWorkspace(t, base, filepath.Join(base, "state"), "case")
 	engine, err := atlasops.OpenWorkspace(options)
@@ -79,5 +83,68 @@ func TestWorkspaceFullPageReviewPreservesTextAndBindingGuards(t *testing.T) {
 	}
 	if got, err := os.ReadFile(path); err != nil || string(got) != body {
 		t.Fatal("refused full review changed page bytes", err)
+	}
+}
+
+func assertRetainedReviewPreservesOrdinaryReadGuards(t *testing.T) {
+	t.Helper()
+	base := t.TempDir()
+	options := registeredWorkspace(t, base, filepath.Join(base, "state"), "retained-review")
+	engine, e := atlasops.OpenWorkspace(options)
+	if e != nil {
+		t.Fatal(e)
+	}
+	page, body := "projects/review.md", "# Reviewed project\n"
+	if _, e = engine.CreatePage(atlasops.CreatePageRequest{Page: page, Body: body, Provenance: provenance("retained-reader-parity")}); e != nil {
+		t.Fatal(e)
+	}
+	retained, e := scheduler.HoldDirectory(engine.Root(), nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer retained.Close()
+	request := atlasops.CollectRequest{Purpose: "Read the same selected canonical page", Reader: atlasops.ReaderOwnerSession, Pages: []string{page}}
+	ordinary, e := engine.ReviewPage(request)
+	if e != nil || ordinary.Content != body {
+		t.Fatal("ordinary valid page read failed", e)
+	}
+	held, e := engine.ReviewPageRetained(request, retained)
+	if e != nil || held.Content != ordinary.Content || held.Revision != ordinary.Revision {
+		t.Fatal("retained valid page read diverged", e)
+	}
+	path := filepath.Join(engine.Root(), filepath.FromSlash(page))
+	parent := filepath.Dir(path)
+	if runtime.GOOS != "windows" {
+		if e = os.Chmod(parent, 0755); e != nil {
+			t.Fatal(e)
+		}
+		if _, e = engine.ReviewPage(request); e == nil {
+			t.Error("ordinary review admitted a nonprivate final parent")
+		}
+		if _, e = engine.ReviewPageRetained(request, retained); e == nil {
+			t.Error("retained review lost private-parent gate")
+		}
+		if info, e := os.Stat(parent); e != nil || info.Mode().Perm() != 0755 {
+			t.Fatal("read repaired directory mode", e)
+		}
+		if got, e := os.ReadFile(path); e != nil || string(got) != body {
+			t.Fatal("read changed page bytes", e)
+		}
+		if e = os.Chmod(parent, 0700); e != nil {
+			t.Fatal(e)
+		}
+	}
+	malformed := append([]byte(body), 0xff)
+	if e = os.WriteFile(path, malformed, 0600); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = engine.ReviewPage(request); e == nil {
+		t.Error("ordinary review admitted malformed UTF8")
+	}
+	if _, e = engine.ReviewPageRetained(request, retained); e == nil {
+		t.Error("retained review lost canonical UTF8 check")
+	}
+	if got, e := os.ReadFile(path); e != nil || string(got) != string(malformed) {
+		t.Fatal("refused retained review repaired malformed bytes", e)
 	}
 }

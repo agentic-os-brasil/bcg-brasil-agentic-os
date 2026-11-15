@@ -10,6 +10,7 @@ import (
 )
 
 func TestInitializeCreatesCompactAgentControlPlane(t *testing.T) {
+	assertCaseSetupRecovery(t)
 	root := t.TempDir()
 	status, err := Initialize(root, "ws-123")
 	if err != nil {
