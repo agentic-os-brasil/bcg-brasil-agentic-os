@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -98,6 +99,23 @@ func (store Store) TryAcquireLease(workspaceID, jobID, occurrenceKey, ownerID st
 }
 
 func (store Store) ReleaseLease(lease Lease) error {
+	return store.releaseLease(context.Background(), lease, acquireLeaseGuard)
+}
+
+// ReleaseLeaseContext waits for acquisition, then retires only the exact fence.
+func (store Store) ReleaseLeaseContext(ctx context.Context, lease Lease) error {
+	return store.releaseLease(ctx, lease, func(directory *secureDirectory, name string) (*leaseGuard, error) {
+		return acquireLeaseGuardContext(ctx, directory, name)
+	})
+}
+
+func (store Store) releaseLease(ctx context.Context, lease Lease, acquire func(*secureDirectory, string) (*leaseGuard, error)) error {
+	if ctx == nil {
+		return errors.New("scheduler lease context is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := validateStoreInput(store.Root, lease.WorkspaceID); err != nil {
 		return err
 	}
@@ -111,7 +129,7 @@ func (store Store) ReleaseLease(lease Lease) error {
 	defer directory.close()
 	name := safeLeaseName(lease.OccurrenceKey)
 	leaseName := name + ".json"
-	guard, err := acquireLeaseGuard(directory, name+".guard")
+	guard, err := acquire(directory, name+".guard")
 	if err != nil {
 		if errors.Is(err, errLeaseGuardBusy) {
 			return ErrLeaseBusy
@@ -119,6 +137,9 @@ func (store Store) ReleaseLease(lease Lease) error {
 		return err
 	}
 	defer guard.release()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	current, err := readLeaseInDirectory(directory, leaseName, filepath.Join(directoryPath, leaseName))
 	if errors.Is(err, os.ErrNotExist) {
 		return removeQuarantineMarkerInDirectory(directory, leaseName+".quarantine", lease)
@@ -185,7 +206,24 @@ func (store Store) QuarantineLease(lease Lease) error {
 	return store.writeFenceMarker(lease, "quarantined")
 }
 
+// QuarantineLeaseContext waits for acquisition without replaying a transition.
+func (store Store) QuarantineLeaseContext(ctx context.Context, lease Lease) error {
+	return store.writeFenceMarkerWithin(ctx, lease, "quarantined", func(directory *secureDirectory, name string) (*leaseGuard, error) {
+		return acquireLeaseGuardContext(ctx, directory, name)
+	})
+}
+
 func (store Store) writeFenceMarker(lease Lease, state string) error {
+	return store.writeFenceMarkerWithin(context.Background(), lease, state, acquireLeaseGuard)
+}
+
+func (store Store) writeFenceMarkerWithin(ctx context.Context, lease Lease, state string, acquire func(*secureDirectory, string) (*leaseGuard, error)) error {
+	if ctx == nil {
+		return errors.New("scheduler lease context is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := validateStoreInput(store.Root, lease.WorkspaceID); err != nil {
 		return err
 	}
@@ -199,7 +237,7 @@ func (store Store) writeFenceMarker(lease Lease, state string) error {
 	defer directory.close()
 	name := safeLeaseName(lease.OccurrenceKey)
 	leaseName := name + ".json"
-	guard, err := acquireLeaseGuard(directory, name+".guard")
+	guard, err := acquire(directory, name+".guard")
 	if err != nil {
 		if errors.Is(err, errLeaseGuardBusy) {
 			return ErrLeaseBusy
@@ -207,6 +245,9 @@ func (store Store) writeFenceMarker(lease Lease, state string) error {
 		return err
 	}
 	defer guard.release()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	current, err := readLeaseInDirectory(directory, leaseName, filepath.Join(directoryPath, leaseName))
 	if err != nil {
 		return err
@@ -401,6 +442,24 @@ func (store Store) LeaseCurrent(lease Lease, now time.Time) error {
 // WithCurrentLease holds the per-occurrence OS guard across terminal
 // publication, closing the check-then-write takeover race.
 func (store Store) WithCurrentLease(lease Lease, now time.Time, publish func() error) error {
+	return store.withCurrentLease(context.Background(), lease, now, publish, acquireLeaseGuard)
+}
+
+// WithCurrentLeaseContext waits only for guard acquisition. The callback runs
+// once under the same current fence, even if it returns ErrLeaseBusy itself.
+func (store Store) WithCurrentLeaseContext(ctx context.Context, lease Lease, now time.Time, publish func() error) error {
+	return store.withCurrentLease(ctx, lease, now, publish, func(directory *secureDirectory, name string) (*leaseGuard, error) {
+		return acquireLeaseGuardContext(ctx, directory, name)
+	})
+}
+
+func (store Store) withCurrentLease(ctx context.Context, lease Lease, now time.Time, publish func() error, acquire func(*secureDirectory, string) (*leaseGuard, error)) error {
+	if ctx == nil {
+		return errors.New("scheduler lease context is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := validateStoreInput(store.Root, lease.WorkspaceID); err != nil {
 		return err
 	}
@@ -417,7 +476,7 @@ func (store Store) WithCurrentLease(lease Lease, now time.Time, publish func() e
 	defer directory.close()
 	name := safeLeaseName(lease.OccurrenceKey)
 	leaseName := name + ".json"
-	guard, err := acquireLeaseGuard(directory, name+".guard")
+	guard, err := acquire(directory, name+".guard")
 	if err != nil {
 		if errors.Is(err, errLeaseGuardBusy) {
 			return ErrLeaseBusy
@@ -431,6 +490,9 @@ func (store Store) WithCurrentLease(lease Lease, now time.Time, publish func() e
 	}
 	if !sameLeaseIdentity(current, lease) || !current.ExpiresAt.After(now) {
 		return ErrLeaseLost
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	return publish()
 }

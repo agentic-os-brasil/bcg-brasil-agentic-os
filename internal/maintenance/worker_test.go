@@ -195,6 +195,30 @@ func TestWorkerPreservesEventIdentityAndSuppressesDuplicateEvent(t *testing.T) {
 }
 
 func TestWorkerReleaseFailureReturnsRecoveryRequired(t *testing.T) {
+	{
+		store := scheduler.Store{Root: t.TempDir()}
+		now := time.Now().UTC()
+		lease, err := store.TryAcquireLease("maestro-system", "memory-light-dream", "callback-once", "cleanup-owner", now, time.Minute)
+		if err != nil {
+			t.Fatal(err)
+		}
+		calls := 0
+		worker := Worker{ReleaseLease: func(actual scheduler.Lease) error {
+			calls++
+			if err := store.ReleaseLease(actual); err != nil {
+				return err
+			}
+			return scheduler.ErrLeaseBusy
+		}}
+		if err := worker.releaseLease(lease); !errors.Is(err, scheduler.ErrLeaseBusy) || calls != 1 {
+			t.Fatalf("cleanup callback replayed a retired fence: calls=%d err=%v", calls, err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		if err := worker.releaseLeaseWithin(ctx, lease); !errors.Is(err, context.Canceled) || calls != 1 {
+			t.Fatalf("expired cleanup called retirement: calls=%d err=%v", calls, err)
+		}
+	}
 	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
 	if err != nil {
 		t.Fatal(err)
@@ -465,6 +489,94 @@ func TestWorkerQuarantinesOccurrenceWhileLateHandlerCanStillSideEffect(t *testin
 	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, contention := range []string{"release", "quarantine"} {
+		// The product constructor clock can precede wall time while its fence remains live.
+		now := time.Now().UTC().Add(-time.Hour)
+		store := scheduler.Store{Root: t.TempDir()}
+		if _, err := store.EnsureEnrollment("maestro-system", now.Add(-24*time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+		started, cancelled, finish := make(chan struct{}), make(chan struct{}), make(chan struct{})
+		claimed := make(chan scheduler.Lease, 1)
+		worker := Worker{
+			Catalog: catalog, Scheduler: store, Receipts: Store{Root: t.TempDir()},
+			Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: (now.Hour() + 23) % 24, MaxCatchUp: 1}},
+			Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(ctx context.Context, _ Command, _ ExecutionGrant) (HandlerResult, error) {
+				close(started)
+				<-ctx.Done()
+				close(cancelled)
+				<-finish
+				return HandlerResult{}, ctx.Err()
+			})},
+			LocalQualification: map[string]string{"darwin-housekeeping-daily": QualificationDigest("darwin-housekeeping-daily")},
+			ActivatedJobs:      []string{"darwin-housekeeping-daily"}, Deadline: time.Second, Now: func() time.Time { return now },
+			ArmLease: func(lease scheduler.Lease) error {
+				claimed <- lease
+				return store.ArmLease(lease)
+			},
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan WakeReport, 1)
+		go func() {
+			report, _ := worker.Run(ctx, WakeRequest{WorkspaceID: "maestro-system", OwnerID: "cooperative-owner", Now: now, Attended: true})
+			done <- report
+		}()
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			cancel()
+			close(finish)
+			t.Fatal("cooperative handler did not start")
+		}
+		lease := <-claimed
+		if contention == "quarantine" {
+			if err := store.WithCurrentLease(lease, now, func() error {
+				cancel()
+				<-cancelled
+				time.Sleep(20 * time.Millisecond)
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			cancel()
+		}
+		select {
+		case report := <-done:
+			if len(report.Receipts) != 1 || report.Receipts[0].State != ReceiptTimedOut {
+				t.Fatalf("cooperative cancellation report=%#v", report)
+			}
+		case <-time.After(time.Second):
+			close(finish)
+			t.Fatal("cancelled worker did not return")
+		}
+		if contention == "release" {
+			if err := store.WithCurrentLease(lease, now, func() error {
+				close(finish)
+				time.Sleep(100 * time.Millisecond)
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			close(finish)
+		}
+		cleaned := false
+		for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
+			leases, err := store.QuarantinedLeases("maestro-system")
+			if err != nil && !errors.Is(err, scheduler.ErrLeaseBusy) {
+				t.Fatal(err)
+			}
+			if err == nil && len(leases) == 0 {
+				cleaned = true
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		if !cleaned {
+			t.Errorf("cooperative handler left its canonical fence after %s guard contention", contention)
+		}
 	}
 	now := time.Now().UTC()
 	schedulerRoot, receiptRoot := t.TempDir(), t.TempDir()
