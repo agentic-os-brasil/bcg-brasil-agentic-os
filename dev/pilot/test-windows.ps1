@@ -83,6 +83,7 @@ try {
   Write-New (Join-Path $run 'CODE.txt') ([string]$report.code_prompt)
   Write-New (Join-Path $run 'DESKTOP.txt') ([string]$report.desktop_prompt)
   Write-New (Join-Path $run 'CODE-CONEXAO.txt') ([string]$report.code_ready_prompt)
+  Write-New (Join-Path $run 'DESKTOP-CONEXAO.txt') ([string]$report.desktop_ready_prompt)
 } catch {
   Write-New (Join-Path $run 'FALHA.md') "# Maestro MCP — diagnóstico incompleto`n`nO verificador não produziu um relatório reconhecido. Preserve esta pasta e envie este arquivo ao time. Nenhum cliente foi aberto.`n"
   Fail "Relatório incompleto em $run\FALHA.md. Preserve os arquivos."
@@ -91,7 +92,7 @@ Write-Host "Relatório: $run\RELATORIO.md"
 if ($CheckOnly) { if ($status -ne 0) { Fail 'Diagnóstico bloqueado; consulte o relatório.' }; return }
 Start-Process -FilePath (Join-Path $env:WINDIR 'System32/notepad.exe') -ArgumentList ('"' + (Join-Path $run 'RELATORIO.md') + '"')
 if ($status -ne 0) { Fail 'Preparação bloqueada. Envie RELATORIO.md ao time; os arquivos foram preservados.' }
-Write-Host "1 — Testar no Code`n2 — Testar no Desktop`n3 — Conferir conexão Code (somente leitura)`nEnter — Sair"
+Write-Host "1 — Ensaio completo no Code`n2 — Retomar no Desktop`n3 — Conferir conexão Code (somente leitura)`n4 — Conferir conexão Desktop (somente leitura)`nEnter — Sair"
 $choice = Read-Host 'Escolha'
 switch ($choice) {
   '1' {
@@ -104,7 +105,7 @@ switch ($choice) {
   '2' {
     if (-not $report.desktop_prompt) { Fail 'O relatório ainda não liberou o ensaio no cliente.' }
     Set-Clipboard -Value $report.desktop_prompt
-    Write-Host 'Prompt copiado. Confirme a extensão deste ensaio e cole uma vez em uma conversa do Desktop.'
+    Write-Host 'Prompt copiado. Confirme a instalação da extensão deste ensaio. Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e, somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir. Preserve as demais permissões. ✓ / Sempre permitir libera só a leitura; gravações de conteúdo continuam exigindo revisão nativa disponível no cliente. Depois cole uma vez em uma conversa nova do Desktop.'
     & (Join-Path $root 'launchers/Abrir Desktop.ps1')
   }
   '3' {
@@ -114,6 +115,12 @@ switch ($choice) {
     Write-Host 'Conferência copiada. Se esta janela pedir login, conclua o fluxo normal. Depois cole uma vez na conversa do Code.'
     & (Join-Path $root 'launchers/Abrir Code.ps1')
   }
+  '4' {
+    if (-not $report.desktop_ready_prompt) { Fail 'O relatório ainda não liberou a conferência no Desktop.' }
+    Set-Clipboard -Value $report.desktop_ready_prompt
+    Write-Host 'Conferência copiada. Confirme a instalação da extensão deste ensaio. Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e, somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir. Preserve as demais permissões. ✓ / Sempre permitir libera só a leitura; gravações de conteúdo continuam exigindo revisão nativa disponível no cliente. Depois cole uma vez em uma conversa nova do Desktop.'
+    & (Join-Path $root 'launchers/Abrir Desktop.ps1')
+  }
   '' { }
-  default { Fail 'Escolha 1, 2, 3 ou Enter.' }
+  default { Fail 'Escolha 1, 2, 3, 4 ou Enter.' }
 }

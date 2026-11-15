@@ -34,18 +34,19 @@ type pilotCheck struct {
 
 // This is shareable diagnostic metadata, never a dump of context, logs or paths.
 type pilotReport struct {
-	SchemaVersion    int              `json:"schema_version"`
-	Status           string           `json:"status"`
-	Checks           []pilotCheck     `json:"checks"`
-	WorkspaceID      string           `json:"workspace_id"`
-	KitID            string           `json:"kit_id"`
-	ReferenceHost    packaging.Target `json:"reference_host"`
-	Target           packaging.Target `json:"target"`
-	Markdown         string           `json:"markdown"`
-	CodePrompt       string           `json:"code_prompt"`
-	CodeReadyPrompt  string           `json:"code_ready_prompt"`
-	DesktopPrompt    string           `json:"desktop_prompt"`
-	DesktopExtension string           `json:"desktop_extension,omitempty"`
+	SchemaVersion      int              `json:"schema_version"`
+	Status             string           `json:"status"`
+	Checks             []pilotCheck     `json:"checks"`
+	WorkspaceID        string           `json:"workspace_id"`
+	KitID              string           `json:"kit_id"`
+	ReferenceHost      packaging.Target `json:"reference_host"`
+	Target             packaging.Target `json:"target"`
+	Markdown           string           `json:"markdown"`
+	CodePrompt         string           `json:"code_prompt"`
+	CodeReadyPrompt    string           `json:"code_ready_prompt"`
+	DesktopPrompt      string           `json:"desktop_prompt"`
+	DesktopReadyPrompt string           `json:"desktop_ready_prompt"`
+	DesktopExtension   string           `json:"desktop_extension,omitempty"`
 }
 
 func (r *pilotReport) add(name, status, reason, action string) {
@@ -380,6 +381,7 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 		r.CodePrompt, r.DesktopPrompt = pilotPrompts(r.WorkspaceID)
 		r.CodeReadyPrompt = fmt.Sprintf("Use somente o servidor MCP plugin:maestro-product:maestro, declarado pelo plugin Maestro deste ensaio. Chame maestro_context uma única vez, sem parâmetros. Confirme workspace_id exatamente %s e state ready. Mostre o workspace_id e o estado retornados e encerre após essa leitura. Se esse servidor estiver ausente, ambíguo ou recusado, se houver erro ou se os valores divergirem, pare e explique. Esta conferência autoriza somente essa leitura de contexto.", r.WorkspaceID)
 		if r.DesktopExtension != "" {
+			r.DesktopReadyPrompt = fmt.Sprintf("Use somente a extensão %q deste ensaio, vinculada às pastas aprovadas na preparação. Identifique com segurança o servidor MCP dessa extensão; não escolha outra extensão ou conector de nome semelhante. Chame maestro_context uma única vez, sem parâmetros. Confirme workspace_id exatamente %s e state ready. Mostre somente o workspace_id e o estado de saúde da conexão retornados e encerre após essa leitura. O estado dos trabalhos não foi consultado. Se essa extensão estiver ausente, ambígua ou recusada, se não conseguir identificar seu conector, se houver erro ou se os valores divergirem, pare e explique. Esta conferência autoriza somente essa leitura de contexto.", r.DesktopExtension, r.WorkspaceID)
 			r.DesktopPrompt = fmt.Sprintf("Use a extensão %q deste ensaio, vinculada às pastas aprovadas na preparação. ", r.DesktopExtension) + r.DesktopPrompt
 		}
 	}
@@ -405,6 +407,7 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 		fmt.Fprintf(&md, "| %s | %s | %s | %s |\n", check.Name, check.Status, check.Reason, check.NextAction)
 	}
 	md.WriteString("\nEste diagnóstico faz apenas leituras locais. Integridade do MCPB e conexão SDK com o pacote Code não comprovam carregamento, login, permissões, hooks ou retomada nos clientes nativos. Os prompts Code e Desktop guiam esse teste com dados sintéticos e confirmação normal do cliente.\n")
+	md.WriteString("\nPara uma conferência rápida somente leitura, use 3 — Conferir conexão Code ou 4 — Conferir conexão Desktop. Esses atalhos mostram o workspace e a saúde da conexão, sem consultar trabalhos. Para o ensaio completo, use 1 — Ensaio completo no Code e depois 2 — Retomar no Desktop. Um diagnóstico bloqueado deve ser enviado ao time antes de abrir clientes.\n")
 	r.Markdown = md.String()
 	if err := json.NewEncoder(output).Encode(r); err != nil {
 		return err

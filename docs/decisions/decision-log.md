@@ -1483,3 +1483,25 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: No-op fingerprints avoid rewriting unchanged generations. Incomplete publication preserves the last complete pointer. Editing, moving, deleting or revoking an indexed page makes the old view unavailable until an explicit recompile. Compilation is foreground only; this contract introduces no filesystem walk, standing maintenance authority, source repair, signing claim or independent index framework. Native-client and Windows runtime qualification remain separately observed gates.
 - Refs: specs/007-content-navigation.md; specs/008-wiki-update-okf.md; specs/064-product-authored-brain.md; internal/atlas/authored_navigation.go; internal/atlasops/navigation.go; issue #467
 - Supersedes: none
+
+## UPKP - Own recurring MCP upkeep without borrowing foreground eligibility
+
+- Date: 2026-11-15
+- Status: accepted
+- Owner: Maestro
+- Context: The product service already owns reviewed qualification/enrollment, due planning and guarded domain publication. Its explicit foreground intent is not evidence that an unattended process observed native idle. A timer around that entrypoint alone could silently inherit its eligibility exception.
+- Decision: Let each admitted MCP serve lifetime own one cancellable serial pulse over the same canonical service, controls, occurrence leases and handlers. Background dispatch requires a real native observation of five minutes idle. A trusted constructor veto checks eligibility before effects outside control locks, dispatch cancellation is checked inside the control fence, and an owned activity monitor cancels running work on active/unknown state. Preserve the explicit foreground path with no background veto. macOS reuses the HID observer; Windows admits only its own active interactive session and bounded input/tick counters. Caller tool arguments cannot supply observations, clocks, preauthorization or replacement handlers.
+- Consequences: No grant or no due work creates no background state or native probe. Unknown/active observation cannot publish success. Prior commits and partial recovery evidence remain truthful. Source tests with constructor observations do not qualify native clients. Closing all MCP processes stops this adapter; OS task installation, production trust and native acceptance remain separate.
+- Refs: specs/062-product-maintenance-service.md; specs/036-maintenance-plane.md; specs/009-scheduler-catch-up.md; adapters/mcp/maintenance_worker.go; internal/maintenance/product_service.go; internal/windowsadapter/idle_windows.go; #466
+- Supersedes: none
+
+## NADM - Bind managed plugin sources and own native qualification processes
+
+- Date: 2026-11-15
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The passive Code packet works without qualifying the full planner. The native producer rejects the installed managed Maestro plugin, Windows scratch and process ownership are absent, and the existing proof has no permitted write control. Relaxing source or process checks would turn source construction into unsupported host authority.
+- Decision: Admit only the exact physically validated managed Maestro plugin and canonical inventory through the actual host configuration closure, binding registry, source, server, profile and any explicit session-only disable of the installed ID while the new candidate runs. Unknown sources and nonempty ambient hook groups with unclosed external commands remain refused; no profile or credential is rewritten. Reuse native private-state owners and creation-time owned Windows Job Object containment with bounded cancellation and observed closure. Require both an actual allowed write effect and correlated native events in addition to read, denial, delegation and guard-failure controls. Qualification dispatches require exact namespaced plugin roles rather than unclosed bare aliases. Preserve the seven canonical handlers, normal permissions and opaque process-local admission. Keep Windows native qualification unavailable until its actual ownership and client proofs exist.
+- Consequences: A supported local Maestro installation can be reviewed without pretending arbitrary plugins or policy are known. Exact source or session-override changes invalidate review. Controlled streams remain engineering fixtures; Mac, Windows, CLI and Code-tab observations remain separate. The bounded qualifier does not install a packet, clear fences, bypass permissions or attest to detached host processes.
+- Refs: specs/063-product-native-plugin.md; docs/product-native-hooks.md; adapters/mcp/packaging/native.go; adapters/mcp/packaging/native_instructions.go; adapters/mcp/packaging/native_windows.go; issue #537; issue #469
+- Supersedes: none

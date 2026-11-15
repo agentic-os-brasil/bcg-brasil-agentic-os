@@ -79,3 +79,82 @@ recursion. Their current-owner composition controls include complete packet
 admission and all six canonical specialists. Native Windows execution and real
 client enforcement require their own observed results; cross-compilation is
 only build evidence.
+
+## Qualify the installed profile
+
+Read the emitted `maestro-packet.json` first. `mcp_lifecycle` is the explicitly
+configured three-event passive profile; successful context or Stop calls do not
+establish full enforcement. The full `maestro_planner` profile has seven events
+and its own exact-host review and qualification. `native_qualification` inside
+adapter-command context is not a substitute for that manifest and proof.
+
+Use the existing local `native-review` and explicitly confirmed
+`native-qualify-and-build` workflow with the actual selected Code executable,
+owner, workspace, new destination, private scratch and synthetic challenge
+paths. Review reports the real host version/configuration directory and the
+supported local source closure. It does not create a model session or modify
+stored settings. A source, executable, settings, selection or profile change
+requires a new review. No copied receipt, test flag or declared version can
+qualify a host.
+
+The finite installed-plugin profile supports one exact user-scoped
+`maestro-product@<origin>` installation from the actual configuration's registry.
+Its complete canonical packet, server digest, physical root and any bound
+owner/workspace selection must match. Unknown IDs, additional physical
+candidates, project/local installation scopes, discovered/synced plugins,
+unsafe aliases and unsupported source controls remain explicit refusals.
+Nonempty user/project/local hook groups outside the plugin are also unsupported;
+the producer cannot close arbitrary external scripts from a settings hash.
+Empty maps/event lists remain harmless. This is not general third-party plugin compatibility. The producer never changes
+an owner's profile to make it pass.
+
+If that verified installation would load alongside the new candidate, review
+shows `session_settings_override` disabling only the installed ID for the three
+qualification sessions. The candidate loads through its separate inline plugin
+path. This override is local to those calls; no settings file is patched. The
+review/receipt bind its digest and the exact source closure. Changed inputs
+refuse before another session or final native packet assembly.
+
+The `native-planner-v2` proof requires both an allowed Read and an allowed Write
+with actual host tool results, canonical hook observations and exact physical
+write readback. The new file control has one reviewed path and literal content;
+the separate Edit control must remain unchanged when its missing, crashing or
+timed-out guard blocks. Normal tool permissions still apply. A denied positive
+control is an incomplete qualification, not permission to bypass the host.
+The experiment's finite Read/Write/Edit/Agent tool set does not expand the
+shipping specialist profiles. Its Case/Gamma dispatches must use the exact
+`maestro-product:` IDs; a same-named project or user agent cannot qualify the
+plugin. Shipping event normalization remains unchanged.
+
+New native capability metadata records the qualification protocol and source/
+session-settings digests. Passive, engineering-fixture and actual observed
+native evidence remain distinct. These fields are construction/diagnostic
+evidence, never an importable admission or permission grant. Provider estimates
+and per-call caps remain estimates; qualification does not install or register
+the resulting packet.
+
+## Windows ownership boundary
+
+The source includes a Windows launcher that associates each command with its
+owned Job Object inside process creation, before child code executes. It limits
+inherited handles to stdio, refuses unsupported association, bounds output and
+waits for all owned members to exit after cancellation, output refusal or parent
+exit. It does not kill a global process name or grant breakaway. Independently
+created processes outside that job remain unattested.
+
+New scratch/challenge directories reuse current-user private ACL and no-reparse
+owners and retain their namespace for the qualification lifetime. Existing paths
+are preserved. Managed-file inspection uses the platform's ClaudeCode system
+location instead of assuming a Unix directory on Windows.
+
+The reviewed [ordinary-account Windows proof](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/actions/runs/43695879338)
+has passed the private-scratch and owned-process prerequisite, including
+transient and late descendants. Its
+source, sealed image, exact generic ZIP and actual non-admin token were verified;
+a supplied flag, elevated skip or cross-build is insufficient. The platform-only
+block is removed so a matching Windows host/server target can attempt the
+existing review and qualification path. This does not qualify a Windows client:
+actual authentication, finite source/profile closure, exact reviewed inputs and
+all real native controls remain required before a native packet can be produced.
+CLI and the Desktop Code tab require separate observations; a Desktop MCP
+extension carries neither Code hooks nor native specialist activation.

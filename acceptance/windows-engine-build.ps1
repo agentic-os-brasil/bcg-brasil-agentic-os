@@ -149,6 +149,15 @@ try {
   )
   if ($LASTEXITCODE -ne 0 -or $setupInventory.Count -ne 10 -or
       @((Compare-Object $expectedSetupInventory ($setupInventory | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) { throw 'Setup full inventory must contain the ten existing first-install, source and client parents.' }
+  $packagingBinary = Join-Path $binaryRoot 'packaging.test.exe'
+  & $sdkGo test -c ./packaging -o $packagingBinary
+  if ($LASTEXITCODE -ne 0) { throw 'Native owned-process packaging test compilation failed.' }
+  $packagingInventory = @(& $packagingBinary '-test.list' '^(Test|Example)')
+  if ($LASTEXITCODE -ne 0 -or 'TestNativeWindowsOwnedProcessTree' -cnotin $packagingInventory -or
+      @($packagingInventory | Sort-Object -CaseSensitive -Unique).Count -ne $packagingInventory.Count -or
+      @($packagingInventory | Where-Object { $_ -cnotmatch '^(Test|Example)[A-Za-z0-9_]*$' }).Count -ne 0) {
+    throw 'Packaging full inventory must be closed, unique and contain the native owned-process family.'
+  }
   if ($artifactMode) {
     Copy-Item -LiteralPath $kitServer -Destination $server
     if ((Get-FileHash -LiteralPath $server -Algorithm SHA256).Hash.ToLowerInvariant() -cne $artifactInput.shipping_server_sha256) { throw 'Exact pilot PE changed during sealing; rebuilding is unavailable.' }
@@ -185,7 +194,10 @@ $adapterEntries = @(
     working_directory=(Join-Path $sourceRoot 'adapters/mcp/cmd/maestro-mcp'); tests=$commandInventory},
   [ordered]@{name='setup'; package='./adapters/mcp/setup'; binary=$setupBinary
     sha256=(Get-FileHash -LiteralPath $setupBinary -Algorithm SHA256).Hash.ToLowerInvariant()
-    working_directory=(Join-Path $sourceRoot 'adapters/mcp/setup'); tests=$setupInventory}
+    working_directory=(Join-Path $sourceRoot 'adapters/mcp/setup'); tests=$setupInventory},
+  [ordered]@{name='packaging'; package='./adapters/mcp/packaging'; binary=$packagingBinary
+    sha256=(Get-FileHash -LiteralPath $packagingBinary -Algorithm SHA256).Hash.ToLowerInvariant()
+    working_directory=(Join-Path $sourceRoot 'adapters/mcp/packaging'); tests=$packagingInventory}
 )
 $manifest = [ordered]@{
   schema_version=1; qualification_profile='windows_private_engine_v1'; source_revision=$revision; source_root=$sourceRoot

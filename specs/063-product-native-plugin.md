@@ -316,6 +316,59 @@ CLI and Code tab evidence remain distinct. Source construction must provide the
 real admission/qualification entrypoint, even when auth/device policy prevents
 running its attended native proof in this environment.
 
+## Managed plugin admission and owned platform qualification
+
+The finite supported configuration may include one exact user-scoped installed
+managed Maestro plugin; project/local installation scopes remain unsupported. Resolve only exact `maestro-product@<origin>` records from the actual
+host-reported configuration directory. Bind the registry bytes and physical
+source root, and validate the complete canonical packet inventory, transitive
+assets, selected server digest and external owner/workspace selections. A name,
+directory, copied manifest or serialized native capability grants no admission.
+Unknown plugin IDs, multiple physical candidates, unsupported origins, extra
+source controls, changed bytes and unsafe aliases remain explicit refusals.
+Nonempty user/project/local hook groups outside the canonical plugin remain
+unsupported: their external commands/scripts are not part of this closed
+inventory. Empty hook maps/event lists add no command. Do not traverse shell
+syntax, ignore configured hooks or rewrite the owner's settings to admit them.
+The settings/instruction closure retains its existing bounds and no-credential
+reader. No fallback synthesizes the host's configuration directory.
+
+Qualification loads a new candidate through the existing `--plugin-dir` path.
+When the verified installed Maestro would otherwise load too, the exact review
+and receipt bind a session-only settings override disabling that installed ID.
+This prevents duplicate hook execution without editing user/project settings.
+The inline candidate stays distinct. No other plugin is silently disabled or
+ignored, and a changed registry, source or override invalidates review. A
+configured passive carrier and full observed enforcement retain separate
+capability states; adapter-command context alone cannot promote qualification.
+
+The native-planner-v2 positive controls include an allowed Read and a distinct synthetic Write,
+with canonical PreToolUse/PostToolUse observations, actual host tool success,
+and exact physical content readback. Fault injection still matches Edit only.
+The failed Edit must retain its original bytes. All controls stay in the exact
+reviewed challenge directory and remain subject to normal host permissions.
+Assistant prose or a successful tool-shaped fixture cannot qualify production.
+Qualification dispatch controls require the exact namespaced plugin Case/Gamma
+IDs. Bare project/user agent aliases cannot establish a closed plugin's proof;
+this does not alter shipping seven-event normalization or native event identity.
+
+Windows scratch admission reuses the canonical held-directory owner/DACL,
+local-volume and no-reparse primitives. Its owned launcher must associate the
+new process with an owned Job Object during process creation, before untrusted
+child execution. Timeout, cancellation, bounded-output failure and ordinary
+exit all close the owned process tree and observe closure before returning.
+No start-then-assign gap, global process kill, breakaway permission or privileged
+service is allowed. Use platform managed settings locations, including the
+Windows ClaudeCode system directory, rather than checking a Unix path there.
+The reviewed ordinary-user Windows proof has established the private-scratch
+and owned-process prerequisite, including transient and late descendants. A
+matching Windows host/server target may therefore attempt the existing native
+review and qualification path; platform selection alone grants no admission.
+Preserve executable, authentication, finite source/profile, exact review and
+all real native control requirements. Native Windows clients remain untested
+until those target-local observations pass. A compiled implementation,
+cross-build or ordinary-user primitive proof is not full client qualification.
+
 ## Packet closure and acceptance
 
 Explicitly allowlist the selected target server, public pinned registry,
@@ -343,3 +396,27 @@ spoofed-ID, retry and read-only-startup fixtures; verify no prompt persistence.
 These prove source/adapter behavior only. Organization signing, Windows private
 handle/non-elevation qualification, native failure behavior, actual delegation
 delivery and attended Desktop/pilot acceptance remain explicit external gates.
+
+
+### Independent quick connection in both clients
+
+The pilot report adds `desktop_ready_prompt` alongside `code_ready_prompt`.
+Both fields are always JSON strings, including an empty value when admission is
+blocked. Each admitted quick prompt names its exact client connector and verified
+workspace and requests exactly one read-only `maestro_context`, with no arguments.
+It reports workspace ID and the returned connection-health `state`; this is not
+execution/work-item state. No execution listing, mutation, onboarding, page,
+memory, method or hook action belongs to this path.
+
+Emitted launchers save `CODE-CONEXAO.txt` and `DESKTOP-CONEXAO.txt`. Options 3
+(Code) and 4 (Desktop) copy the corresponding quick prompt and open the selected
+client only after explicit choice. Desktop quick connection names the unique
+`Maestro MCP — Ensaio …` extension and uses its prepared binding; it requires
+neither the Code CLI nor a prior Code work item. Missing/ambiguous connector,
+workspace mismatch or refusal stops without trying another connector.
+
+Option 1 remains the complete Code exercise and option 2 remains the Desktop
+continuity/resume exercise. Guides distinguish quick 3/4 from complete 1→2 and do
+not ask participants to re-enter prepared owner/workspace paths. Normal login,
+installation, permissions and actual native-client observation remain required;
+a generated prompt or SDK check does not attest that the client executed it.

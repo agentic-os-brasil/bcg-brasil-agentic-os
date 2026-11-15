@@ -251,8 +251,13 @@ func assertPilotReadinessPrompt(t *testing.T, body []byte, workspaceID string, a
 	if !present || json.Unmarshal(field, &prompt) != nil {
 		t.Fatal("public diagnostic must emit code_ready_prompt as a string, including blocked reports")
 	}
+	var desktopPrompt string
+	desktopField, desktopPresent := report["desktop_ready_prompt"]
+	if !desktopPresent || json.Unmarshal(desktopField, &desktopPrompt) != nil {
+		t.Fatal("public diagnostic must emit desktop_ready_prompt as a string, including blocked reports")
+	}
 	if !admitted {
-		if prompt != "" {
+		if prompt != "" || desktopPrompt != "" {
 			t.Fatal("blocked or unbound diagnostic released a Code connection prompt")
 		}
 		return
@@ -268,6 +273,21 @@ func assertPilotReadinessPrompt(t *testing.T, body []byte, workspaceID string, a
 	for _, forbidden := range []string{"maestro_apply", "maestro_query", "execution.", "brain.", "owner.", "memory.", "methods.", "--mcp-config", "--strict-mcp-config"} {
 		if strings.Contains(prompt, forbidden) {
 			t.Fatalf("read-only Code connection prompt expanded the journey: %s", forbidden)
+		}
+	}
+
+	extension := "Maestro MCP — Ensaio " + workspaceID[:8]
+	for _, required := range []string{extension, "extensão", "maestro_context", "uma única vez", "sem parâmetros", workspaceID, "ready"} {
+		if !strings.Contains(desktopPrompt, required) {
+			t.Fatalf("Desktop connection prompt omitted its unique extension or single bound read: %s", required)
+		}
+	}
+	if strings.Count(desktopPrompt, "maestro_context") != 1 {
+		t.Fatal("Desktop connection prompt must request only one context call")
+	}
+	for _, forbidden := range []string{"maestro_apply", "maestro_query", "execution.", "brain.", "owner.", "memory.", "methods.", "--mcp-config", "--strict-mcp-config"} {
+		if strings.Contains(desktopPrompt, forbidden) {
+			t.Fatalf("read-only Desktop connection prompt expanded the journey: %s", forbidden)
 		}
 	}
 }

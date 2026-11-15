@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/google/jsonschema-go/jsonschema"
@@ -36,6 +37,7 @@ type Bound struct {
 	afterBrainPrepareEffect    func() error
 	observeWorkspaceTransition func(stage, page string)
 	maintenanceClock           func() time.Time
+	maintenanceActivity        func(context.Context) (maintenance.IdleState, error)
 }
 
 func Open(o Options) (*Bound, error) {
@@ -114,6 +116,7 @@ func mutationSchema() map[string]any {
 		}
 		variants = append(variants, variant("execution."+op, f, r...))
 	}
+	variants = append(variants, agentIdentityMutations()...)
 	return map[string]any{"type": "object", "oneOf": variants}
 }
 func (b *Bound) Server() *mcp.Server {
@@ -135,7 +138,7 @@ func (b *Bound) Server() *mcp.Server {
 	})
 	readonly := &mcp.ToolAnnotations{ReadOnlyHint: true}
 	empty := map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
-	s.AddTool(&mcp.Tool{Name: "maestro_context", Description: "Read admitted binding metadata and memory capability hints; inspect maestro_query and maestro_apply schemas for operations. No content export.", InputSchema: empty, Annotations: readonly}, b.handle("context", empty))
+	s.AddTool(&mcp.Tool{Name: "maestro_context", Description: "Read admitted binding metadata, canonical display identities and memory capability hints; inspect maestro_query and maestro_apply schemas for operations. No document or facet export.", InputSchema: empty, Annotations: readonly}, b.handle("context", empty))
 	query := productQuerySchema()
 	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read immutable methods and requirements, owner metadata/questions, execution continuation, eligible memory, authored pages, converted content, named workspace knowledge, maintenance status or private wiki through bounded pages. Private owner/legacy text requires trusted review.", InputSchema: query, Annotations: readonly}, b.handle("query", query))
 	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Author reviewed workspace pages, convert documents, apply reviewed knowledge/owner/memory changes, qualify and enroll exact maintenance jobs, or run active due work. Maintenance lifecycle changes require trusted exact review; execution uses revision/attempt and artifact checks.", InputSchema: productApplySchema()}, b.handle("apply", productApplySchema()))
@@ -149,7 +152,7 @@ func productQuerySchema() map[string]any {
 		variant("execution.next", map[string]any{"item_id": strSchema(96)}, "item_id"),
 		variant("execution.contract", map[string]any{"item_id": strSchema(96)}, "item_id"),
 	}
-	for _, group := range [][]any{caseSetupQueries(), ownerQueries(), memoryQueries(), methodsQueries(), contentQueries(), brainQueries(), maintenanceQueries(), wikiQueries()} {
+	for _, group := range [][]any{caseSetupQueries(), ownerQueries(), agentIdentityQueries(), memoryQueries(), methodsQueries(), contentQueries(), brainQueries(), maintenanceQueries(), wikiQueries()} {
 		variants = append(variants, group...)
 	}
 	return map[string]any{"type": "object", "oneOf": variants}
@@ -162,6 +165,13 @@ type input struct {
 	AccountOwner               string   `json:"account_owner"`
 	AccountMandate             string   `json:"account_mandate"`
 	ExpectedSetupRevision      string   `json:"expected_setup_revision"`
+	IdentityOwnerID            string   `json:"owner_id"`
+	IdentityRole               string   `json:"role"`
+	IdentityAgentID            string   `json:"agent_id"`
+	IdentityDisplayName        string   `json:"display_name"`
+	IdentityEmoji              string   `json:"emoji"`
+	IdentityQuestionID         string   `json:"question_id"`
+	IdentityExpectedRevision   string   `json:"expected_profile_revision"`
 	Generation                 string   `json:"generation"`
 	Reference                  string   `json:"reference"`
 	JobID                      string   `json:"job_id"`
@@ -272,7 +282,7 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 			return result(nil, errors.New("input_size")), nil
 		}
 		if kind == "context" {
-			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "next_max_bytes": 2048, "memory": map[string]any{"context_operation": "memory.context", "max_page_bytes": 4096, "synthesis": "local_deterministic", "lifetime": "two_l3_generations_and_exact_owner_review"}, "methods": map[string]any{"list_operation": "methods.list", "read_operation": "methods.read", "plan_operation": "methods.plan", "max_page_bytes": 4096, "mode": "methods_not_authority"}}, nil), nil
+			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "agent_identity": b.managedIdentityContext(), "next_max_bytes": 2048, "memory": map[string]any{"context_operation": "memory.context", "max_page_bytes": 4096, "synthesis": "local_deterministic", "lifetime": "two_l3_generations_and_exact_owner_review"}, "methods": map[string]any{"list_operation": "methods.list", "read_operation": "methods.read", "plan_operation": "methods.plan", "max_page_bytes": 4096, "mode": "methods_not_authority"}}, nil), nil
 		}
 		if strings.HasPrefix(in.Operation, "case.setup.") {
 			return b.handleCaseSetup(ctx, req, in), nil
@@ -294,6 +304,9 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		}
 		if strings.HasPrefix(in.Operation, "memory.") {
 			return b.handleMemory(ctx, req, in), nil
+		}
+		if strings.HasPrefix(in.Operation, "agent.identity.") {
+			return b.handleAgentIdentity(ctx, req, in), nil
 		}
 		if strings.HasPrefix(in.Operation, "owner.") {
 			return b.handleOwner(ctx, req, in), nil
