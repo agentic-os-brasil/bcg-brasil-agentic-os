@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/google/jsonschema-go/jsonschema"
@@ -36,6 +37,7 @@ type Bound struct {
 	afterBrainPrepareEffect    func() error
 	observeWorkspaceTransition func(stage, page string)
 	maintenanceClock           func() time.Time
+	maintenanceActivity        func(context.Context) (maintenance.IdleState, error)
 }
 
 func Open(o Options) (*Bound, error) {
