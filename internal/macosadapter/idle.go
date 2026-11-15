@@ -32,7 +32,7 @@ func ObserveIdle(ctx context.Context, threshold time.Duration) (NativeIdleState,
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, idleProbeTimeout)
 	defer cancel()
-	command := exec.CommandContext(probeCtx, ioregPath, "-c", "IOHIDSystem", "-d", "1")
+	command := exec.CommandContext(probeCtx, ioregPath, "-r", "-c", "IOHIDSystem", "-d", "1")
 	var output boundedBuffer
 	command.Stdout, command.Stderr = &output, &output
 	if err := command.Run(); err != nil {
