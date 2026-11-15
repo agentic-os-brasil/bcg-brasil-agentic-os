@@ -4,9 +4,8 @@ param(
     [Parameter(Mandatory = $true, ParameterSetName = 'Pilot')][string]$Server,
     [Parameter(Mandatory = $true)][string]$OutputRoot,
     [Parameter(ParameterSetName = 'Pilot')][string]$Kit,
-    [Parameter(ParameterSetName = 'Pilot')][string]$KitTestScript,
+    [Parameter(ParameterSetName = 'Pilot')][string]$KitIdentity,
     [Parameter(ParameterSetName = 'Pilot')][string]$MethodFixture,
-    [Parameter(ParameterSetName = 'Pilot')][string]$SdkWitness,
     [Parameter(ParameterSetName = 'Pilot')][string]$AtlasTestBinary,
     [Parameter(ParameterSetName = 'Pilot')][string]$DoclingTestBinary,
     [Parameter(ParameterSetName = 'Pilot')][string]$CanonicalManifest,
@@ -15,12 +14,91 @@ param(
     [Parameter(Mandatory = $true, ParameterSetName = 'Inspection')][string]$InspectionManifest
 )
 $ErrorActionPreference = 'Stop'
-$kitInputs = @($Kit, $KitTestScript, $MethodFixture, $SdkWitness)
+$kitInputs = @($Kit, $KitIdentity, $MethodFixture)
 $kitInputCount = @($kitInputs | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
 if ($kitInputCount -ne 0 -and $kitInputCount -ne $kitInputs.Count) {
-    throw 'Kit, KitTestScript, MethodFixture and SdkWitness must be supplied together.'
+    throw 'Kit, KitIdentity and MethodFixture must be supplied together.'
 }
 $withKit = $kitInputCount -eq $kitInputs.Count
+# These development-only checks bind an artifact; they confer no release authority.
+function Read-PilotArtifactInput([string]$Root, [string]$IdentityPath, [string]$Methods, [string]$SelectedServer) {
+    if (-not (Test-Path -LiteralPath $IdentityPath -PathType Leaf)) { throw 'Exact pilot identity is missing.' }
+    $identityFile = Get-Item -LiteralPath $IdentityPath -Force
+    if (($identityFile.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $identityFile.Length -gt 65536) { throw 'Exact pilot identity must be a bounded ordinary file.' }
+    $identity = Get-Content -LiteralPath $IdentityPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $fields = @('schema_version','source_revision','source_tree','producer_run_id','generic_zip_sha256','kit_id','shipping_server_sha256')
+    if (@($identity.PSObject.Properties.Name).Count -ne $fields.Count -or @($identity.PSObject.Properties.Name | Where-Object { $_ -cnotin $fields }).Count -ne 0 -or
+        $identity.schema_version -ne 1 -or $identity.source_revision -cnotmatch '^[a-f0-9]{40}$' -or $identity.source_tree -cnotmatch '^[a-f0-9]{40}$' -or
+        $identity.producer_run_id -cnotmatch '^[1-9][0-9]*$' -or $identity.generic_zip_sha256 -cnotmatch '^[a-f0-9]{64}$' -or
+        $identity.kit_id -cnotmatch '^[a-f0-9]{64}$' -or $identity.shipping_server_sha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Exact pilot identity fields are invalid.' }
+    foreach ($selectedPath in @($Root, $IdentityPath, ($Root + '.zip'), ($Root + '.zip.sha256'), (Join-Path $Root 'bin/maestro-mcp-windows-amd64.exe'))) {
+        if (Test-Path -LiteralPath $selectedPath) {
+            if (((Get-Item -LiteralPath $selectedPath -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Exact pilot input is a reparse object.' }
+        }
+    }
+    $zip = $Root + '.zip'
+    if (-not (Test-Path -LiteralPath $zip -PathType Leaf) -or (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant() -cne $identity.generic_zip_sha256) { throw 'Exact pilot ZIP checksum differs.' }
+    $sidecar = $zip + '.sha256'
+    if (-not (Test-Path -LiteralPath $sidecar -PathType Leaf) -or
+        (Get-Content -LiteralPath $sidecar -Raw -Encoding UTF8).Trim() -cne ($identity.generic_zip_sha256 + '  ' + [IO.Path]::GetFileName($zip))) { throw 'Exact pilot ZIP checksum sidecar differs.' }
+    $server = Join-Path $Root 'bin/maestro-mcp-windows-amd64.exe'
+    if (-not (Test-Path -LiteralPath $server -PathType Leaf) -or (Get-FileHash -LiteralPath $server -Algorithm SHA256).Hash.ToLowerInvariant() -cne $identity.shipping_server_sha256 -or
+        (Get-FileHash -LiteralPath $SelectedServer -Algorithm SHA256).Hash.ToLowerInvariant() -cne $identity.shipping_server_sha256) { throw 'Exact pilot PE checksum differs.' }
+    $revision = (git rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0) { throw 'Exact pilot source differs.' }
+    $tree = (git rev-parse 'HEAD^{tree}').Trim()
+    if ($LASTEXITCODE -ne 0 -or $identity.source_revision -cne $revision -or $identity.source_tree -cne $tree -or
+        ($env:GITHUB_RUN_ID -and $identity.producer_run_id -cne $env:GITHUB_RUN_ID)) { throw 'Exact pilot source differs.' }
+    $artifact = Get-Content -LiteralPath (Join-Path $Root 'ARTIFACT.txt') -Raw -Encoding UTF8
+    if ($artifact -cnotmatch ('(?m)^binary_source_base_commit=' + $revision + '\r?$') -or $artifact -cnotmatch ('(?m)^source_tree=' + $tree + '\r?$') -or
+        $artifact -cnotmatch '(?m)^trust=unsigned_engineering_candidate\r?$') { throw 'Exact pilot source differs.' }
+    $sums = Join-Path $Root 'SHA256SUMS'
+    if ((Get-FileHash -LiteralPath $sums -Algorithm SHA256).Hash.ToLowerInvariant() -cne $identity.kit_id -or
+        (Get-Content -LiteralPath (Join-Path $Root 'KIT-ID.txt') -Raw -Encoding UTF8).Trim() -cne $identity.kit_id) { throw 'Exact pilot KIT-ID differs.' }
+    $listed = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($line in Get-Content -LiteralPath $sums -Encoding UTF8) {
+        if ($line -cnotmatch '^([a-f0-9]{64})  \./([^\\:]+)$') { throw 'Exact pilot inventory is invalid.' }
+        $hash = $Matches[1]; $relative = $Matches[2]
+        if ($relative -match '(^|/)\.\.?(/|$)|[\x00-\x1f]' -or -not $listed.Add($relative)) { throw 'Exact pilot inventory is invalid.' }
+        if ((Get-FileHash -LiteralPath (Join-Path $Root $relative) -Algorithm SHA256).Hash.ToLowerInvariant() -cne $hash) { throw 'Exact pilot inventory differs.' }
+    }
+    foreach ($entry in @((Get-Item -LiteralPath $Root -Force)) + @(Get-ChildItem -LiteralPath $Root -Recurse -Force)) {
+        if (($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Exact pilot contains a reparse object.' }
+        if ($entry -is [IO.FileInfo]) {
+            $relative = $entry.FullName.Substring($Root.Length + 1).Replace('\','/')
+            if ($relative -cnotin @('SHA256SUMS','KIT-ID.txt') -and -not $listed.Remove($relative)) { throw 'Exact pilot has unlisted material.' }
+        }
+    }
+    if ($listed.Count -ne 0) { throw 'Exact pilot inventory is incomplete.' }
+    $methodIds = @(Get-Content -LiteralPath $Methods -Encoding UTF8)
+    if ($methodIds.Count -ne 92 -or @($methodIds | Sort-Object -Unique).Count -ne 92) { throw 'The canonical method fixture must contain 92 unique entries; native bridge folders are separate.' }
+    return $identity
+}
+function Assert-PilotArtifactProof($Identity, [string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw 'Exact pilot artifact proof is missing or incomplete.' }
+    $file = Get-Item -LiteralPath $Path -Force
+    if (($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $file.Length -gt 2097152) { throw 'Exact pilot artifact proof must be bounded and ordinary.' }
+    $proof = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
+    foreach ($field in @('source_revision','source_tree','producer_run_id','generic_zip_sha256','kit_id','shipping_server_sha256')) {
+        if ($proof.$field -cne $Identity.$field) { throw 'Exact pilot artifact proof identity differs.' }
+    }
+    foreach ($flag in @('passed','emitted_review_confirmed','private_and_managed_unchanged','sdk_context_verified')) {
+        if ($proof.$flag -isnot [bool] -or $proof.$flag -ne $true) { throw 'Exact pilot artifact proof requires actual Boolean evidence.' }
+    }
+    if ($proof.prepared_server_sha256 -cne $Identity.shipping_server_sha256 -or $proof.packet_server_sha256 -cne $Identity.shipping_server_sha256 -or $proof.desktop_packet_server_sha256 -cne $Identity.shipping_server_sha256 -or
+        $proof.workspace_id -cnotmatch '^[a-f0-9]{32}$' -or $proof.canonical_methods -ne 92 -or $proof.skill_folders -ne 94 -or $proof.reports_count -ne 3 -or
+        $proof.native_Code_Desktop -cne 'not_run' -or $proof.command_test_image_sha256 -cnotmatch '^[a-f0-9]{64}$' -or
+        $proof.powershell_edition -cne 'Desktop' -or $proof.powershell_version -cnotmatch '^5\.1\.[0-9]+(\.[0-9]+)?$') { throw 'Exact pilot artifact proof is missing or incomplete.' }
+    return $proof
+}
+$artifactInput = $null
+foreach ($key in @('MAESTRO_WINDOWS_PILOT_KIT','MAESTRO_WINDOWS_PILOT_IDENTITY','MAESTRO_WINDOWS_PILOT_METHODS','MAESTRO_WINDOWS_PILOT_PROOF')) {
+    if (Test-Path ('Env:' + $key)) { throw 'Exact pilot fixture inputs must be selected by this driver, not inherited.' }
+}
+if ($withKit) {
+    if (Test-Path -LiteralPath $OutputRoot) { throw 'Use a new qualification output; previous proof is preserved.' }
+    $artifactInput = Read-PilotArtifactInput $Kit $KitIdentity $MethodFixture $Server
+}
 $withCanonical = -not [string]::IsNullOrWhiteSpace($CanonicalManifest)
 $withInspection = $PSCmdlet.ParameterSetName -eq 'Inspection'
 $withEngine = $false
@@ -276,16 +354,9 @@ if ($withEngine -and -not $PrivateWiki) {
     throw 'Canonical native engine qualification requires the current private wiki family.'
 }
 if ($withKit) {
-    if (Test-Path -LiteralPath $OutputRoot) { throw 'Use a new qualification output; previous proof is preserved.' }
-    foreach ($inputPath in @($Kit, ($Kit + '.zip'), ($Kit + '.zip.sha256'), $KitTestScript, $MethodFixture, $SdkWitness)) {
-        if (-not (Test-Path -LiteralPath $inputPath)) { throw 'An exact-artifact qualification input is missing.' }
-    }
-    $kitServer = Join-Path $Kit 'bin/maestro-mcp-windows-amd64.exe'
-    $serverHash = (Get-FileHash -LiteralPath $Server -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($serverHash -cne (Get-FileHash -LiteralPath $kitServer -Algorithm SHA256).Hash.ToLowerInvariant()) {
-        throw 'Core must qualify the actual produced kit server.'
-    }
-    if ([IO.File]::ReadAllLines($MethodFixture).Count -ne 92) { throw 'The independent method fixture must contain 92 entries.' }
+    if (-not $withEngine -or $artifactInput.source_revision -cne $canonical.source_revision) { throw 'Exact pilot qualification requires the matched sealed engine profile.' }
+    $canonicalMethods = Join-Path $canonical.source_root 'adapters/mcp/packaging/testdata/method-ids.txt'
+    if ((Get-FileHash -LiteralPath $MethodFixture -Algorithm SHA256).Hash -cne (Get-FileHash -LiteralPath $canonicalMethods -Algorithm SHA256).Hash) { throw 'Exact pilot methods differ from the sealed source.' }
 }
 $name = 'mcp' + [Guid]::NewGuid().ToString('N').Substring(0, 10)
 $password = [Guid]::NewGuid().ToString('N') + 'aA1!'
@@ -338,27 +409,17 @@ try {
         Copy-Item -LiteralPath $Kit -Destination $nativeKit -Recurse
         Copy-Item -LiteralPath ($Kit + '.zip') -Destination ($nativeKit + '.zip')
         Copy-Item -LiteralPath ($Kit + '.zip.sha256') -Destination ($nativeKit + '.zip.sha256')
-        $nativeKitTest = Join-Path $payload 'dev/pilot/test-windows-kit.ps1'
-        $nativeMethods = Join-Path $payload 'adapters/mcp/packaging/testdata/method-ids.txt'
-        foreach ($path in @($nativeKitTest, $nativeMethods)) {
-            New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($path)) -Force | Out-Null
-        }
-        Copy-Item -LiteralPath $KitTestScript -Destination $nativeKitTest
+        $nativeKitIdentity = Join-Path $payload 'pilot-artifact-input.json'
+        $nativeMethods = Join-Path $payload 'method-ids.txt'
+        Copy-Item -LiteralPath $KitIdentity -Destination $nativeKitIdentity
         Copy-Item -LiteralPath $MethodFixture -Destination $nativeMethods
-        $nativeSdk = Join-Path $payload 'maestro-pilot-sdk-witness.exe'
-        Copy-Item -LiteralPath $SdkWitness -Destination $nativeSdk
-        if ($serverHash -cne (Get-FileHash -LiteralPath $nativeServer -Algorithm SHA256).Hash.ToLowerInvariant() -or
-            $serverHash -cne (Get-FileHash -LiteralPath (Join-Path $nativeKit 'bin/maestro-mcp-windows-amd64.exe') -Algorithm SHA256).Hash.ToLowerInvariant()) {
-            throw 'The copied shipping PE differs from the produced kit.'
-        }
-        $zipHash = (Get-FileHash -LiteralPath ($Kit + '.zip') -Algorithm SHA256).Hash.ToLowerInvariant()
-        if ($zipHash -cne (Get-FileHash -LiteralPath ($nativeKit + '.zip') -Algorithm SHA256).Hash.ToLowerInvariant()) {
-            throw 'The ordinary-user proof received a different generic ZIP.'
-        }
-        $expectedChecksum = $zipHash + '  ' + [IO.Path]::GetFileName($nativeKit) + '.zip'
-        if ([IO.File]::ReadAllText($nativeKit + '.zip.sha256').Trim() -cne $expectedChecksum) {
-            throw 'The generic ZIP checksum does not bind the actual archive.'
-        }
+        $copiedIdentity = Read-PilotArtifactInput $nativeKit $nativeKitIdentity $nativeMethods $nativeServer
+        $serverHash = $artifactInput.shipping_server_sha256
+        $zipHash = $artifactInput.generic_zip_sha256
+        $env:MAESTRO_WINDOWS_PILOT_KIT = $nativeKit
+        $env:MAESTRO_WINDOWS_PILOT_IDENTITY = $nativeKitIdentity
+        $env:MAESTRO_WINDOWS_PILOT_METHODS = $nativeMethods
+        $env:MAESTRO_WINDOWS_PILOT_PROOF = Join-Path $OutputRoot 'native-kit-proof.json'
     }
     if ($withManifest) {
         foreach ($entry in $canonical.packages) {
@@ -393,7 +454,7 @@ try {
     # owner is the standard user; never grant that user access to runner data.
     $launcher = Join-Path $payload 'native-user-launcher.ps1'
     @'
-param([string]$TestBinary, [string]$ProofRoot, [string]$Kit, [string]$KitTestScript, [string]$SdkWitness, [string]$AtlasTestBinary, [string]$DoclingTestBinary, [string]$DoclingTestSHA256, [switch]$AuthoredBrain, [switch]$PrivateWiki, [string]$CanonicalManifest, [switch]$Inspection, [string]$ExpectedUserSID)
+param([string]$TestBinary, [string]$ProofRoot, [string]$Kit, [string]$AtlasTestBinary, [string]$DoclingTestBinary, [string]$DoclingTestSHA256, [switch]$AuthoredBrain, [switch]$PrivateWiki, [string]$CanonicalManifest, [switch]$Inspection, [string]$ExpectedUserSID)
 $ErrorActionPreference = 'Stop'
 try {
     $temporary = Join-Path $ProofRoot 'user-temp'
@@ -800,56 +861,8 @@ try {
             throw 'Canonical contracts remain incomplete; retain all six package logs and classified outcomes.'
         }
     }
-    if ($Kit) {
-        if ($PSVersionTable.PSEdition -ne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) {
-            throw 'Kit qualification requires stock Windows PowerShell5.1.'
-        }
-        $kitReport = Join-Path $ProofRoot 'native-kit-proof.json'
-        & $KitTestScript -Kit $Kit -Report $kitReport
-        $kitProof = Get-Content -LiteralPath $kitReport -Raw -Encoding UTF8 | ConvertFrom-Json
-        $shippingHash = (Get-FileHash -LiteralPath (Join-Path $Kit 'bin/maestro-mcp-windows-amd64.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
-        if ($kitProof.passed -ne $true -or $kitProof.actual_standard_user -ne $true -or $kitProof.shipping_server_sha256 -cne $shippingHash) {
-            throw 'Public kit acceptance did not qualify the same shipping server.'
-        }
-        # Kit acceptance deliberately tampers its last managed-config fixture.
-        # Prepare an independent fresh root through the actual public preparer.
-        $developer = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)) 'Developer'
-        $sdkRoot = Join-Path $developer ('MaestroSdkProof-' + [Guid]::NewGuid().ToString('N'))
-        $shell = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
-        & $shell -NoLogo -NoProfile -NonInteractive -File (Join-Path $Kit 'Preparar Maestro.ps1') -Root $sdkRoot
-        if ($LASTEXITCODE -ne 0) { throw 'Fresh SDK preparation failed.' }
-        $initialized = Get-Content -LiteralPath (Join-Path $sdkRoot 'diagnostico-init.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-        $sdkServer = Join-Path $sdkRoot 'product/maestro-mcp.exe'
-        if ((Get-FileHash -LiteralPath $sdkServer -Algorithm SHA256).Hash.ToLowerInvariant() -cne $shippingHash) {
-            throw 'Public SDK preparation changed the exact kit PE.'
-        }
-        $sdkReport = Join-Path $ProofRoot 'native-kit-sdk-proof.json'
-        & $SdkWitness -binary $sdkServer -root $sdkRoot -report $sdkReport
-        if ($LASTEXITCODE -ne 0) { throw 'Actual shipping and restarted-packet SDK witness failed.' }
-        $sdkProof = Get-Content -LiteralPath $sdkReport -Raw -Encoding UTF8 | ConvertFrom-Json
-        if ($sdkProof.passed -ne $true -or $sdkProof.workspace_id -cne $initialized.workspace_id -or
-            $sdkProof.paused.state_revision -ne 4 -or $sdkProof.resumed.state_revision -ne 5 -or
-            $sdkProof.declined_owner_bytes_unchanged -ne $true -or $sdkProof.modern_identity_refused -ne $true) {
-            throw 'SDK continuation/review proof differs from the actual prepared binding.'
-        }
-        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-        $admin = New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')
-        $principal = New-Object Security.Principal.WindowsPrincipal($identity)
-        if ($principal.IsInRole($admin) -or @($identity.Groups | Where-Object { $_.Value -eq $admin.Value }).Count -ne 0) {
-            throw 'Kit qualification did not retain an actual ordinary account.'
-        }
-        $proof = [ordered]@{
-            passed=$true; actual_standard_user=$true; powershell_version=$PSVersionTable.PSVersion.ToString()
-            shipping_server_sha256=$shippingHash
-            generic_zip_sha256=(Get-FileHash -LiteralPath ($Kit + '.zip') -Algorithm SHA256).Hash.ToLowerInvariant()
-            sdk_witness_sha256=(Get-FileHash -LiteralPath $SdkWitness -Algorithm SHA256).Hash.ToLowerInvariant()
-            core_families_passed=$families.Count; core_skips=0; kit_acceptance=$true; fresh_prepared_sdk_binding=$true
-            sdk_paused_revision=4; sdk_resumed_revision=5; stale_attempt_refused=$true
-            reviewed_memory_restart=$true; declined_owner_bytes_unchanged=$true
-            native_Code_Desktop='not_run'; mode='ordinary_unversioned_developer_rehearsal'
-        }
-        $utf8 = New-Object Text.UTF8Encoding($false)
-        [IO.File]::WriteAllText((Join-Path $ProofRoot 'native-kit-qualification.json'), ($proof | ConvertTo-Json -Depth 5) + "`n", $utf8)
+    if ($Kit -and -not (Test-Path -LiteralPath (Join-Path $ProofRoot 'native-kit-proof.json') -PathType Leaf)) {
+        throw 'The existing public command parent did not produce exact pilot artifact evidence.'
     }
     exit 0
 } catch {
@@ -867,8 +880,7 @@ try {
     if ($PrivateWiki) { $arguments += '-PrivateWiki' }
     if ($withManifest) { $arguments += @('-CanonicalManifest', "`"$nativeCanonical`"") }
     if ($withKit) {
-        $powershell = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
-        $arguments += @('-Kit', "`"$nativeKit`"", '-KitTestScript', "`"$nativeKitTest`"", '-SdkWitness', "`"$nativeSdk`"")
+        $arguments += @('-Kit', "`"$nativeKit`"")
     }
     $hadModulePath = Test-Path Env:PSModulePath
     $priorModulePath = $env:PSModulePath
@@ -920,24 +932,30 @@ try {
         throw 'The Docling placement proof does not bind both passing tests to the compiled executable.'
     }
     if ($withKit) {
-        foreach ($proofName in @('native-core-proof.json', 'native-kit-proof.json', 'native-kit-sdk-proof.json', 'native-kit-qualification.json')) {
-            $path = Join-Path $OutputRoot $proofName
-            if ((Get-Item -LiteralPath $path).Length -gt 2097152) { throw 'Native JSON proof exceeded its bounded contract.' }
-            $proof = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
-            if ($proofName -eq 'native-core-proof.json') {
-                if ($proof.server_sha256 -cne $serverHash) { throw 'Core proof does not bind the produced kit PE.' }
-            } elseif ($proof.passed -ne $true) { throw 'Exact-artifact proof is incomplete.' }
-        }
-        $finalProof = Get-Content -LiteralPath (Join-Path $OutputRoot 'native-kit-qualification.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-        if ($finalProof.shipping_server_sha256 -cne $serverHash -or $finalProof.generic_zip_sha256 -cne $zipHash) {
-            throw 'Final proof does not bind the produced PE and generic ZIP.'
-        }
+        $kitProof = Assert-PilotArtifactProof $artifactInput (Join-Path $OutputRoot 'native-kit-proof.json')
+        $coreProof = Get-Content -LiteralPath (Join-Path $OutputRoot 'native-core-proof.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $commandImage = @($canonical.adapter_packages | Where-Object { $_.name -ceq 'mcp-command' })
+        if ($commandImage.Count -ne 1 -or $kitProof.command_test_image_sha256 -cne $commandImage[0].sha256 -or
+            (Get-FileHash -LiteralPath ($nativeKit + '.zip') -Algorithm SHA256).Hash.ToLowerInvariant() -cne $zipHash -or
+            (Get-FileHash -LiteralPath $nativeServer -Algorithm SHA256).Hash.ToLowerInvariant() -cne $serverHash) { throw 'Exact pilot archive or executed test/server image changed.' }
+
+        if ($coreProof.server_sha256 -cne $serverHash -or $coreProof.elevated -ne $false -or $coreProof.admin_member -ne $false) { throw 'Exact pilot native token, stock PowerShell or executed image did not match.' }
+        $proof = [ordered]@{passed=$true; actual_standard_user=$true; elevated=$false; admin_member=$false
+            source_revision=$artifactInput.source_revision; source_tree=$artifactInput.source_tree; producer_run_id=$artifactInput.producer_run_id
+            generic_zip_sha256=$zipHash; kit_id=$artifactInput.kit_id; shipping_server_sha256=$serverHash
+            core_executed_server_sha256=$coreProof.server_sha256; prepared_executed_server_sha256=$kitProof.prepared_server_sha256
+            packet_executed_server_sha256=$kitProof.packet_server_sha256; desktop_packet_server_sha256=$kitProof.desktop_packet_server_sha256; command_test_image_sha256=$kitProof.command_test_image_sha256; core_test_image_sha256=$canonical.public_test_binary_sha256
+            powershell_edition=$kitProof.powershell_edition; powershell_version=$kitProof.powershell_version; workspace_id=$kitProof.workspace_id; emitted_review_confirmed=$true
+            private_and_managed_unchanged=$true; sdk_context_verified=$true; native_Code_Desktop='not_run'
+            qualification_profile='exact_generic_zip_windows_ordinary_account'; trust='unsigned_engineering_candidate'}
+        $proof | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $OutputRoot 'native-kit-qualification.json') -Encoding UTF8
     }
     }
 } finally {
     Remove-Item Env:MAESTRO_WINDOWS_CORE_PROOF -ErrorAction SilentlyContinue
     Remove-Item Env:MAESTRO_WINDOWS_CORE_SERVER -ErrorAction SilentlyContinue
     Remove-Item Env:MAESTRO_WINDOWS_CORE_PROOF_ROOT -ErrorAction SilentlyContinue
+    foreach ($key in @('MAESTRO_WINDOWS_PILOT_KIT','MAESTRO_WINDOWS_PILOT_IDENTITY','MAESTRO_WINDOWS_PILOT_METHODS','MAESTRO_WINDOWS_PILOT_PROOF')) { Remove-Item ('Env:' + $key) -ErrorAction SilentlyContinue }
     if ($account) { Remove-LocalUser -SID $account.SID -ErrorAction Continue }
     $password = $null
     $secure = $null
