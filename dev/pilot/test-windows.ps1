@@ -105,7 +105,7 @@ switch ($choice) {
   '2' {
     if (-not $report.desktop_prompt) { Fail 'O relatório ainda não liberou o ensaio no cliente.' }
     Set-Clipboard -Value $report.desktop_prompt
-    Write-Host 'Prompt copiado. Confirme a instalação da extensão deste ensaio. Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e, somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir. Preserve as permissões das demais ferramentas e extensões; gravações continuam pelo fluxo de confirmação nativa. Depois cole uma vez em uma conversa nova do Desktop.'
+    Write-Host 'Prompt copiado. Confirme a instalação da extensão deste ensaio. Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e, somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir. Preserve as demais permissões. ✓ / Sempre permitir libera só a leitura; gravações de conteúdo continuam exigindo revisão nativa disponível no cliente. Depois cole uma vez em uma conversa nova do Desktop.'
     & (Join-Path $root 'launchers/Abrir Desktop.ps1')
   }
   '3' {
@@ -118,7 +118,7 @@ switch ($choice) {
   '4' {
     if (-not $report.desktop_ready_prompt) { Fail 'O relatório ainda não liberou a conferência no Desktop.' }
     Set-Clipboard -Value $report.desktop_ready_prompt
-    Write-Host 'Conferência copiada. Confirme a instalação da extensão deste ensaio. Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e, somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir. Preserve as permissões das demais ferramentas e extensões; gravações continuam pelo fluxo de confirmação nativa. Depois cole uma vez em uma conversa nova do Desktop.'
+    Write-Host 'Conferência copiada. Confirme a instalação da extensão deste ensaio. Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e, somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir. Preserve as demais permissões. ✓ / Sempre permitir libera só a leitura; gravações de conteúdo continuam exigindo revisão nativa disponível no cliente. Depois cole uma vez em uma conversa nova do Desktop.'
     & (Join-Path $root 'launchers/Abrir Desktop.ps1')
   }
   '' { }
