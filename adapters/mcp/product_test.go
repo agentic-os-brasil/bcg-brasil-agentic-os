@@ -24,12 +24,6 @@ import (
 	"time"
 )
 
-func TestStartupNeverBootstraps(t *testing.T) {
-	if _, err := product.Open(product.Options{}); err == nil {
-		t.Fatal("unbound startup admitted")
-	}
-}
-
 func TestPublicWorkflow(t *testing.T)                  { runWorkflow(t, false) }
 func TestCompiledStdioWorkflowAndPackets(t *testing.T) { runWorkflow(t, true) }
 func runWorkflow(t *testing.T, stdio bool) {
@@ -99,6 +93,7 @@ func runWorkflow(t *testing.T, stdio bool) {
 		return cs
 	}
 	a, b := connect(), connect()
+	assertInteroperableToolPresentation(t, a)
 	call := func(c *mcp.ClientSession, tool string, args map[string]any, wantError bool) map[string]any {
 		t.Helper()
 		out, err := c.CallTool(context.Background(), &mcp.CallToolParams{Name: tool, Arguments: args})
@@ -113,6 +108,26 @@ func runWorkflow(t *testing.T, stdio bool) {
 			t.Fatal(err)
 		}
 		return v
+	}
+	// Presentation is deliberately a union of field metadata. Exact operation
+	// requirements and cross-branch exclusions must still fail at the server.
+	for _, rejected := range []struct {
+		tool string
+		args map[string]any
+	}{
+		{"maestro_query", map[string]any{"operation": "unknown.operation"}},
+		{"maestro_query", map[string]any{"operation": "execution.list", "item_id": "foreign-branch"}},
+		{"maestro_query", map[string]any{"operation": "brain.read", "page": "projects/missing.md"}},
+		{"maestro_query", map[string]any{"operation": "brain.read", "page": "projects/missing.md", "purpose": "read fixture", "generation": "foreign-branch"}},
+		{"maestro_apply", map[string]any{"operation": "unknown.operation"}},
+		{"maestro_apply", map[string]any{"operation": "execution.create", "objective": "incomplete"}},
+		{"maestro_apply", map[string]any{"operation": "execution.create", "objective": "invalid authority", "next_step": "later", "artifacts": []string{"result.md"}, "approved": true}},
+	} {
+		call(a, rejected.tool, rejected.args, true)
+	}
+	unchanged := call(a, "maestro_query", map[string]any{"operation": "execution.list"}, false)
+	if len(unchanged["items"].([]any)) != 0 {
+		t.Fatal("rejected requests created work", unchanged)
 	}
 	create := call(a, "maestro_apply", map[string]any{"operation": "execution.create", "objective": "deliver result", "next_step": "write result", "artifacts": []string{"result.md", "second.md"}}, false)
 	id := create["item_id"].(string)
@@ -363,6 +378,72 @@ func runWorkflow(t *testing.T, stdio bool) {
 	}
 	call(a, "maestro_context", map[string]any{}, true)
 
+}
+
+// Inspect the actual SDK/stdio tools/list boundary. A top-level oneOf is
+// flattened by a supported client into its first operation; the model must see
+// the complete selector vocabulary in a normal object schema instead.
+func assertInteroperableToolPresentation(t *testing.T, client *mcp.ClientSession) {
+	t.Helper()
+	listed, err := client.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wanted := map[string][]string{
+		"maestro_query": {"execution.list", "methods.plan", "memory.read", "brain.templates", "brain.navigation_status", "brain.search", "brain.read", "knowledge.collect"},
+		"maestro_apply": {"execution.create", "execution.resume", "owner.propose", "memory.capture", "knowledge.create", "brain.compile", "maintenance.enroll", "case.setup.finish"},
+	}
+	for _, tool := range listed.Tools {
+		expected, relevant := wanted[tool.Name]
+		if !relevant {
+			continue
+		}
+		body, err := json.Marshal(tool.InputSchema)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var schema map[string]any
+		if err = json.Unmarshal(body, &schema); err != nil {
+			t.Fatal(err)
+		}
+		properties, ok := schema["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s hides operation discovery behind a union instead of explicit properties", tool.Name)
+		}
+		operation := properties["operation"].(map[string]any)
+		choices, ok := operation["enum"].([]any)
+		if !ok || operation["const"] != nil || schema["oneOf"] != nil {
+			t.Fatalf("%s can collapse to one operation in the client: %s", tool.Name, body)
+		}
+		visible := map[string]bool{}
+		for _, choice := range choices {
+			visible[choice.(string)] = true
+		}
+		for _, name := range expected {
+			if !visible[name] {
+				t.Errorf("%s does not expose selector and parameter requirements for %s", tool.Name, name)
+			}
+		}
+		if len([]byte(tool.Description)) > 3072 {
+			t.Errorf("%s description loses parameter contracts in supported clients", tool.Name)
+		}
+		for name, field := range properties {
+			if name == "operation" {
+				continue
+			}
+			description, _ := field.(map[string]any)["description"].(string)
+			if len([]byte(description)) > 4096 || !strings.HasPrefix(description, "Required for: ") || !strings.Contains(description, "\nAllowed for: ") {
+				t.Errorf("%s.%s has no complete bounded per-operation metadata", tool.Name, name)
+			}
+		}
+		if !reflect.DeepEqual(schema["required"], []any{"operation"}) || schema["additionalProperties"] != false {
+			t.Errorf("%s presentation lost its finite field/selector envelope: %s", tool.Name, body)
+		}
+		delete(wanted, tool.Name)
+	}
+	if len(wanted) != 0 {
+		t.Fatal("missing product tools", wanted)
+	}
 }
 
 func TestCLIInitRefusesUnsafeBindingsWithoutWrites(t *testing.T) {

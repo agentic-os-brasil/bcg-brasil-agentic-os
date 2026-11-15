@@ -1,5 +1,15 @@
 # Onboarding completo — recuperação de trabalhos anteriores no SharePoint
 
+## Escopo deste guia e do plugin MCP atual
+
+Este guia descreve o catálogo organizacional governado do SharePoint, com seus
+gates de coleta e distribuição. A skill `find-prior-work` do plugin MCP consulta
+somente a navegação autoral admitida e a memória elegível do workspace atual.
+Ela não transforma a disponibilidade dessa consulta local em autorização ou
+qualificação do catálogo organizacional. Para o fluxo local, segue os índices
+virtuais pelo MCP e lê as páginas de origem; não varre arquivos nem inicia uma
+coleta para atender um pedido de leitura.
+
 ## Resultado que esta capacidade entrega
 
 Uma pessoa pode pedir explicitamente:
@@ -118,7 +128,7 @@ Wiki organizacional de prior-work
         │
         │ somente após intenção explícita
         ▼
-/find-prior-work (skill)
+Consulta organizacional (adapter qualificado separado)
   resultados + origem + frescor + justificativa
 ```
 
@@ -402,14 +412,14 @@ mostrado ao usuário, não escondido.
 
 ## 12. Recuperar um trabalho anterior
 
-A busca exige intenção explícita. Usuários invocam a skill:
+A busca exige intenção explícita. No plugin MCP, `/find-prior-work` recupera
+fontes já admitidas no workspace e memória elegível, sem abrir o SharePoint.
+A consulta ao catálogo organizacional das seções anteriores depende do adapter
+qualificado e do escopo autorizado; a skill local não concede essa permissão.
+Os campos de resultado abaixo pertencem à consulta organizacional governada,
+não a uma promessa de conexão corporativa do plugin instalado.
 
-```text
-/find-prior-work
-```
-
-O Maestro solicita a descrição do trabalho anterior que se quer recuperar,
-por exemplo:
+O pedido delimita o trabalho anterior que se quer recuperar, por exemplo:
 
 ```text
 quero o deck que apresentei pro CEO da Suzano em 2023 sobre PLANTIO

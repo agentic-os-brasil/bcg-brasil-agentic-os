@@ -43,10 +43,31 @@ func authoredNavigationJourney(t *testing.T, f ownerFixture, cs *mcp.ClientSessi
 		t.Fatal(err)
 	}
 	cs = f.connect(t, approve)
+	beforeRetrieval := contentTree(t, f.options.WorkspacePath, false)
+	miss := brainCall(t, cs, "search", map[string]any{"generation": generation, "query": "Navegação Ágil an entire question absent from the source", "purpose": "Keep literal zero hits distinct from absence"}, false)
+	if len(miss["matches"].([]any)) != 0 {
+		t.Fatal("literal search unexpectedly interpreted a natural-language question", miss)
+	}
+	status := brainCall(t, cs, "navigation_status", nil, false)
+	if status["generation"] != generation || status["page_count"] != float64(2) {
+		t.Fatal("source cohort count became a virtual entrypoint count", status)
+	}
+	entry := brainCall(t, cs, "navigate", map[string]any{"generation": generation, "reference": status["reference"], "purpose": "Follow the returned virtual entry, not an authored filename"}, false)
+	if !strings.Contains(entry["text"].(string), "indexes/projects/index.md") {
+		t.Fatal("virtual root did not expose the admitted project navigation", entry)
+	}
 	search := brainCall(t, cs, "search", map[string]any{"generation": generation, "query": "CAFÉ", "purpose": "Recover the named authored cohort"}, false)
 	encoded, _ := json.Marshal(search)
 	if !strings.Contains(string(encoded), a) || strings.Contains(string(encoded), "outside.md") {
 		t.Fatal("search lost Unicode match or enumerated unchecked target", search)
+	}
+	hit := search["matches"].([]any)[0].(map[string]any)
+	source := brainCall(t, cs, "read", map[string]any{"page": hit["page"], "purpose": "Verify the canonical source after the shorter query"}, false)
+	if source["text"] != aText || source["revision"] != hit["revision"] {
+		t.Fatal("navigation summary substituted for the exact prior-work source", source)
+	}
+	if !reflect.DeepEqual(beforeRetrieval, contentTree(t, f.options.WorkspacePath, false)) {
+		t.Fatal("zero-hit fallback or source read changed the admitted corpus")
 	}
 	bounded := brainCall(t, cs, "search", map[string]any{"generation": generation, "query": "Navigation", "purpose": "Keep serialized search results bounded", "max_bytes": 1024, "limit": 1}, false)
 	boundedBytes, _ := json.Marshal(bounded)

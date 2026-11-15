@@ -34,6 +34,7 @@ closed rather than inventing an expert.
 The base Case-method policy includes local `ingest-content` and explicit
 `find-prior-work` routing. Their method selection remains pointer-only:
 `ingest-content` still requires an authorized source and verified local pack;
-`find-prior-work` still requires explicit retrieval intent and an enrolled
-local index. Neither method changes the Maestro depth decision or creates a
+`find-prior-work` still requires explicit retrieval intent and an admitted
+current-workspace navigation cohort or eligible workspace memory. Its MCP
+retrieval never enrolls or searches an organizational SharePoint index. Neither method changes the Maestro depth decision or creates a
 Case-to-SharePoint delegation edge.
