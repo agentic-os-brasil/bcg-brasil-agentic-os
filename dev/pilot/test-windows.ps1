@@ -82,6 +82,7 @@ try {
   Write-New (Join-Path $run 'RELATORIO.md') ([string]$report.markdown)
   Write-New (Join-Path $run 'CODE.txt') ([string]$report.code_prompt)
   Write-New (Join-Path $run 'DESKTOP.txt') ([string]$report.desktop_prompt)
+  Write-New (Join-Path $run 'CODE-CONEXAO.txt') ([string]$report.code_ready_prompt)
 } catch {
   Write-New (Join-Path $run 'FALHA.md') "# Maestro MCP — diagnóstico incompleto`n`nO verificador não produziu um relatório reconhecido. Preserve esta pasta e envie este arquivo ao time. Nenhum cliente foi aberto.`n"
   Fail "Relatório incompleto em $run\FALHA.md. Preserve os arquivos."
@@ -90,7 +91,7 @@ Write-Host "Relatório: $run\RELATORIO.md"
 if ($CheckOnly) { if ($status -ne 0) { Fail 'Diagnóstico bloqueado; consulte o relatório.' }; return }
 Start-Process -FilePath (Join-Path $env:WINDIR 'System32/notepad.exe') -ArgumentList ('"' + (Join-Path $run 'RELATORIO.md') + '"')
 if ($status -ne 0) { Fail 'Preparação bloqueada. Envie RELATORIO.md ao time; os arquivos foram preservados.' }
-Write-Host "1 — Testar no Code`n2 — Testar no Desktop`nEnter — Sair"
+Write-Host "1 — Testar no Code`n2 — Testar no Desktop`n3 — Conferir conexão Code (somente leitura)`nEnter — Sair"
 $choice = Read-Host 'Escolha'
 switch ($choice) {
   '1' {
@@ -106,6 +107,13 @@ switch ($choice) {
     Write-Host 'Prompt copiado. Confirme a extensão deste ensaio e cole uma vez em uma conversa do Desktop.'
     & (Join-Path $root 'launchers/Abrir Desktop.ps1')
   }
+  '3' {
+    if (-not $report.code_ready_prompt) { Fail 'O relatório ainda não liberou a conferência no Code.' }
+    if (-not (Get-Command claude -ErrorAction SilentlyContinue)) { Fail 'Disponibilize o comando claude pelo fluxo normal do Code e abra Testar Maestro novamente.' }
+    Set-Clipboard -Value $report.code_ready_prompt
+    Write-Host 'Conferência copiada. Se esta janela pedir login, conclua o fluxo normal. Depois cole uma vez na conversa do Code.'
+    & (Join-Path $root 'launchers/Abrir Code.ps1')
+  }
   '' { }
-  default { Fail 'Escolha 1, 2 ou Enter.' }
+  default { Fail 'Escolha 1, 2, 3 ou Enter.' }
 }

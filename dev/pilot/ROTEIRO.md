@@ -2,6 +2,8 @@
 
 Use somente dados sintéticos. Para o roteiro completo de continuidade, cole **um texto no Code e outro no Desktop**; o launcher preenche o workspace e encontra o trabalho automaticamente.
 
+Para conferir apenas a conexão no Code, abra **Testar Maestro** e escolha **3 — Conferir conexão Code (somente leitura)**. O perfil separado pode pedir login: conclua o fluxo normal nessa janela e depois cole uma vez o texto copiado. A resposta deve mostrar o workspace esperado e o estado `ready`, obtidos por uma única leitura do MCP declarado pelo plugin. Você pode repetir essa consulta preservando trabalhos, páginas, onboarding e memória. Se o login, o plugin ou a leitura falhar, envie a mensagem real; abrir o cliente ou ter login em outro perfil não comprova esta conexão.
+
 Para conferir apenas a conexão no Desktop, escolha **2 — Desktop**, instale a extensão indicada e cole o texto em uma conversa nova. A resposta precisa trazer o workspace esperado. Essa conferência não exige o comando Code; a retomada de um trabalho depende da etapa Code abaixo.
 
 1. Abra **Testar Maestro** na pasta `launchers` do ensaio. O verificador testa a conexão MCP do pacote, confere os recursos e abre `RELATORIO.md`. Nenhuma chamada ao modelo é feita nessa etapa.

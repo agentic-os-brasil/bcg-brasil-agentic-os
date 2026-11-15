@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -24,16 +25,17 @@ func (b *Bound) confirm(ctx context.Context, req *mcp.CallToolRequest, question 
 	if err := b.validate(); err != nil {
 		return err
 	}
-	if req.Session == nil {
+	unavailable := func(stage string) error {
+		logConfirmationUnavailable(req, stage)
 		return errConfirmationUnavailable
 	}
-	ip := req.Session.InitializeParams()
-	if ip == nil || ip.Capabilities == nil || ip.Capabilities.Elicitation == nil {
-		return errConfirmationUnavailable
+	capabilities := req.ClientCapabilities()
+	if capabilities == nil || capabilities.Elicitation == nil {
+		return unavailable("form_undeclared")
 	}
-	caps := ip.Capabilities.Elicitation
+	caps := capabilities.Elicitation
 	if caps.Form == nil && caps.URL != nil {
-		return errConfirmationUnavailable
+		return unavailable("url_only")
 	}
 	maximum := 1 << 20
 	// A full 256KiB page plus its proposed replacement can expand sixfold in JSON.
@@ -42,12 +44,18 @@ func (b *Bound) confirm(ctx context.Context, req *mcp.CallToolRequest, question 
 		maximum = 4 << 20
 	}
 	envelope, err := json.MarshalIndent(review, "", "  ")
-	if err != nil || len(envelope) > maximum {
-		return errConfirmationUnavailable
+	if err != nil {
+		return unavailable("review_encoding")
+	}
+	if len(envelope) > maximum {
+		return unavailable("review_size")
 	}
 	body, err := json.MarshalIndent(presentation, "", "  ")
-	if err != nil || len(body) > maximum {
-		return errConfirmationUnavailable
+	if err != nil {
+		return unavailable("presentation_encoding")
+	}
+	if len(body) > maximum {
+		return unavailable("presentation_size")
 	}
 	params := &mcp.ElicitParams{
 		Mode:    "form",
@@ -57,7 +65,7 @@ func (b *Bound) confirm(ctx context.Context, req *mcp.CallToolRequest, question 
 		}, Required: []string{"approved"}},
 	}
 	var out *mcp.ElicitResult
-	if ip.ProtocolVersion >= "2026-07-28" {
+	if req.ProtocolVersion() >= "2026-07-28" {
 		// Bind the host response to this exact review and admitted scope; a
 		// changed base or track cannot reuse an earlier round-trip response.
 		key := fmt.Sprintf("owner-review-%x", sha256.Sum256([]byte(b.home+"\x00"+b.workspaceID+"\x00"+question+"\x00"+string(envelope))))
@@ -70,13 +78,48 @@ func (b *Bound) confirm(ctx context.Context, req *mcp.CallToolRequest, question 
 		}
 		out, _ = response.(*mcp.ElicitResult)
 	} else {
+		if req.Session == nil {
+			return unavailable("missing_session")
+		}
 		out, err = req.Session.Elicit(ctx, params)
 	}
 	if err != nil {
-		return errConfirmationUnavailable
+		return unavailable("host_roundtrip_failed")
 	}
 	if out == nil || out.Action != "accept" || out.Content == nil || out.Content["approved"] != true {
 		return errConfirmationDeclined
 	}
 	return b.validate()
+}
+
+func logConfirmationUnavailable(req *mcp.CallToolRequest, stage string) {
+	initialForm, initialURL := false, false
+	if req.Session != nil {
+		if p := req.Session.InitializeParams(); p != nil {
+			initialForm, initialURL = confirmationModes(p.Capabilities)
+		}
+	}
+	form, url := confirmationModes(req.ClientCapabilities())
+	_, requestCapabilities := req.Params.Meta[mcp.MetaKeyClientCapabilities]
+	fmt.Fprintf(os.Stderr, "maestro_confirmation_unavailable stage=%s protocol=%s request_capabilities=%t initial_form=%t initial_url=%t form=%t url=%t\n",
+		stage, confirmationProtocolLabel(req.ProtocolVersion()), requestCapabilities, initialForm, initialURL, form, url)
+}
+
+func confirmationModes(c *mcp.ClientCapabilities) (form, url bool) {
+	if c != nil && c.Elicitation != nil {
+		url = c.Elicitation.URL != nil
+		form = c.Elicitation.Form != nil || !url
+	}
+	return
+}
+
+func confirmationProtocolLabel(version string) string {
+	switch version {
+	case "2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25", "2026-07-28":
+		return version
+	case "":
+		return "missing"
+	default:
+		return "other"
+	}
 }
