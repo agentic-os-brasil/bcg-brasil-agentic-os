@@ -76,6 +76,15 @@ func (p *productExecution) publishTerminal(publish func() error) error {
 	})
 }
 
+func (p *productExecution) publishTerminalWithin(ctx, acquisitionCtx context.Context, publish func() error) error {
+	if !wikiJob(p.jobID) {
+		return p.guardWithin(ctx, acquisitionCtx, publish)
+	}
+	return p.service.engine.WithRetentionSnapshot(p.service.workspaceID, func(memory.RetentionState) error {
+		return p.guardWithin(ctx, acquisitionCtx, publish)
+	})
+}
+
 type productWikiHandler struct {
 	service  *Service
 	expected string
