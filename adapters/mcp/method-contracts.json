@@ -26,7 +26,13 @@
       "method_ids": [
         "agent-identity-setup"
       ],
-      "required_operations": [],
+      "required_operations": [
+        "agent.identity.answer",
+        "agent.identity.apply",
+        "agent.identity.interview",
+        "agent.identity.propose",
+        "agent.identity.review"
+      ],
       "effects": [
         "write_owner"
       ],
@@ -37,7 +43,24 @@
         {
           "id": "domain.agent_identity_registration",
           "kind": "domain",
+          "required": true,
+          "fulfillment_operations": [
+            "agent.identity.answer",
+            "agent.identity.apply",
+            "agent.identity.interview",
+            "agent.identity.propose",
+            "agent.identity.review"
+          ]
+        },
+        {
+          "id": "host.trusted_review",
+          "kind": "host",
           "required": true
+        },
+        {
+          "id": "domain.account_case_scaffold",
+          "kind": "domain",
+          "required": false
         }
       ]
     },
