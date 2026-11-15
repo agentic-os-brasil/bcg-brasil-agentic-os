@@ -21,6 +21,7 @@ type nativeProof struct {
 	Fault                  string  `json:"fault"`
 	StartupUnchanged       bool    `json:"startup_unchanged"`
 	AllowedRead            bool    `json:"allowed_read"`
+	AllowedWrite           bool    `json:"allowed_write"`
 	GuardDenied            bool    `json:"guard_denied"`
 	FaultAttempted         bool    `json:"fault_attempted"`
 	FaultBlocked           bool    `json:"fault_blocked"`
@@ -106,6 +107,7 @@ func verifyNativeProbe(body []byte, p nativeProbe, full bool) (nativeProof, erro
 				}
 				var input struct {
 					Path         string `json:"file_path"`
+					Content      string `json:"content"`
 					Background   bool   `json:"run_in_background"`
 					SubagentType string `json:"subagent_type"`
 				}
@@ -121,12 +123,16 @@ func verifyNativeProbe(body []byte, p nativeProbe, full bool) (nativeProof, erro
 					if filepath.Clean(path) != filepath.Join(p.challenge, "allowed.txt") && (!full || filepath.Clean(path) != filepath.Clean(p.outside)) {
 						return proof, errors.New("native read deviated from reviewed protocol")
 					}
+				case "Write":
+					if filepath.Clean(path) != filepath.Join(p.challenge, "allowed-write.txt") || input.Content != nativeAllowedWriteContent {
+						return proof, errors.New("native write deviated from reviewed protocol")
+					}
 				case "Edit":
 					if filepath.Clean(path) != filepath.Join(p.challenge, "edit.txt") {
 						return proof, errors.New("native edit deviated from reviewed protocol")
 					}
 				case "Agent":
-					if !full || (input.SubagentType != "maestro-product:case-agent" && input.SubagentType != "case-agent" && input.SubagentType != "maestro-product:gamma-guardian" && input.SubagentType != "gamma-guardian") {
+					if !full || (input.SubagentType != "maestro-product:case-agent" && input.SubagentType != "maestro-product:gamma-guardian") {
 						return proof, errors.New("native agent deviated from reviewed protocol")
 					}
 				default:
@@ -155,6 +161,8 @@ func verifyNativeProbe(body []byte, p nativeProbe, full bool) (nativeProof, erro
 						marker = "absent-native-guard"
 					}
 					tool.blocked = bytes.Contains(content.Content, []byte(marker)) && bytes.Contains(content.Content, []byte(`blocking because onFailure`)) && (p.fault != "timeout" || bytes.Contains(bytes.ToLower(content.Content), []byte("timed out")))
+				} else if tool.name == "Write" {
+					tool.allowed = true
 				} else if tool.name == "Read" && bytes.Contains(content.Content, []byte("Synthetic native qualification control.")) {
 					tool.allowed = true
 				}
@@ -209,7 +217,7 @@ func verifyNativeProbe(body []byte, p nativeProbe, full bool) (nativeProof, erro
 					}
 				}
 			}
-			if m.HookEvent == "PostToolUse" && m.Outcome == "success" && tool.name == "Read" {
+			if m.HookEvent == "PostToolUse" && m.Outcome == "success" && (tool.name == "Read" || tool.name == "Write") {
 				tool.postObserved = true
 			}
 			if m.HookEvent == "PostToolUse" && tool.name == "Edit" {
@@ -238,6 +246,9 @@ func verifyNativeProbe(body []byte, p nativeProbe, full bool) (nativeProof, erro
 		if tool.name == "Read" && filepath.Clean(path) == filepath.Join(p.challenge, "allowed.txt") && tool.allowed && tool.canonicalObserved && tool.postObserved && tool.result && !tool.denied {
 			proof.AllowedRead = true
 		}
+		if tool.name == "Write" && filepath.Clean(path) == filepath.Join(p.challenge, "allowed-write.txt") && tool.allowed && tool.canonicalObserved && tool.postObserved && tool.result && !tool.denied && !tool.errorResult {
+			proof.AllowedWrite = true
+		}
 		if tool.name == "Read" && filepath.Clean(path) == filepath.Clean(p.outside) && tool.denied && tool.result && tool.errorResult {
 			proof.GuardDenied = true
 		}
@@ -246,8 +257,12 @@ func verifyNativeProbe(body []byte, p nativeProbe, full bool) (nativeProof, erro
 			proof.FaultBlocked = tool.canonicalObserved && !tool.denied && tool.hookFailure && tool.blocked && tool.result
 		}
 	}
-	if !resultSeen || !proof.StartupUnchanged || !proof.AllowedRead || !proof.FaultAttempted || !proof.FaultBlocked || !stopSeen {
+	if !resultSeen || !proof.StartupUnchanged || !proof.AllowedRead || !proof.AllowedWrite || !proof.FaultAttempted || !proof.FaultBlocked || !stopSeen {
 		return proof, errors.New("native challenge incomplete")
+	}
+	written, err := scheduler.ReadPrivateFile(filepath.Join(p.challenge, "allowed-write.txt"), 128)
+	if err != nil || string(written) != nativeAllowedWriteContent {
+		return proof, errors.New("native allowed write effect unavailable")
 	}
 	// This is an additional effect control, never the positive blocking proof.
 	edit, err := scheduler.ReadPrivateFile(filepath.Join(p.challenge, "edit.txt"), 128)

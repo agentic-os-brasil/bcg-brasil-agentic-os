@@ -37,9 +37,11 @@ func TestQualificationScopeCannotSupplyCanonicalOrFaultPass(t *testing.T) {
 		allowed    bool
 	}{
 		{"control read", "Read", map[string]any{"file_path": filepath.Join(p.challenge, "allowed.txt")}, true},
+		{"control write", "Write", map[string]any{"file_path": filepath.Join(p.challenge, "allowed-write.txt"), "content": "Synthetic native allowed write control.\n"}, true},
 		{"public outside negative read", "Read", map[string]any{"file_path": p.outside}, true},
 		{"fault edit", "Edit", map[string]any{"file_path": filepath.Join(p.challenge, "edit.txt"), "old_string": "original", "new_string": "changed"}, true},
 		{"case dispatch", "Agent", map[string]any{"subagent_type": "maestro-product:case-agent"}, true},
+		{"unclosed bare case alias", "Agent", map[string]any{"subagent_type": "case-agent"}, false},
 		{"gamma dispatch", "Agent", map[string]any{"subagent_type": "maestro-product:gamma-guardian"}, true},
 		{"unreviewed workspace read", "Read", map[string]any{"file_path": filepath.Join(p.binding.WorkspacePath, "README.md")}, false},
 		{"unreviewed write", "Write", map[string]any{"file_path": filepath.Join(p.challenge, "allowed.txt"), "content": "unreviewed"}, false},

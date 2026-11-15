@@ -2,6 +2,7 @@ package packaging
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -59,8 +60,29 @@ func assertNoNativeEffects(t *testing.T, in NativeOptions) {
 	}
 }
 
+func installManagedPluginFixture(t *testing.T, in NativeOptions) string {
+	t.Helper()
+	profile := os.Getenv("MAESTRO_CONTROLLED_PROFILE")
+	installed := in.Packet
+	installed.Destination = filepath.Join(profile, "plugins", "cache", "managed", "maestro-product", "0.2.0")
+	if err := os.MkdirAll(filepath.Dir(installed.Destination), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := BuildPlugin(installed); err != nil {
+		t.Fatal(err)
+	}
+	registry, _ := json.Marshal(map[string]any{"version": 2, "plugins": map[string]any{"maestro-product@managed": []any{map[string]any{"scope": "user", "installPath": installed.Destination, "version": "0.2.0"}}}})
+	if err := os.WriteFile(filepath.Join(profile, "plugins", "installed_plugins.json"), registry, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(profile, "settings.json"), []byte(`{"autoMemoryEnabled":false,"hooks":{"PreToolUse":[]},"enabledPlugins":{"maestro-product@managed":true}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(installed.Destination, "README-PACKET.md")
+}
+
 func TestNativePublicReviewBindsChangedInstructionClosureBeforeEffects(t *testing.T) {
-	for _, source := range []string{"local", "import", "rule", "user_rule", "nested_local", "new_local", "new_rule", "negative_local", "git_local"} {
+	for _, source := range []string{"local", "import", "rule", "user_rule", "nested_local", "new_local", "new_rule", "negative_local", "git_local", "managed_plugin"} {
 		t.Run(source, func(t *testing.T) {
 			in := nativeFixture(t)
 			in.Executable = controlledInspectionHost(t, in, 0)
@@ -101,6 +123,8 @@ func TestNativePublicReviewBindsChangedInstructionClosureBeforeEffects(t *testin
 					t.Fatal(err)
 				}
 				path = filepath.Join(public, "CLAUDE.local.md")
+			case "managed_plugin":
+				path = installManagedPluginFixture(t, in)
 			case "git_local":
 				project := filepath.Dir(ws)
 				makeNativeGitFixture(t, project)
@@ -113,7 +137,7 @@ func TestNativePublicReviewBindsChangedInstructionClosureBeforeEffects(t *testin
 			if source == "git_local" {
 				body = `{"autoMemoryEnabled":false}`
 			}
-			if source != "new_local" && source != "new_rule" {
+			if source != "new_local" && source != "new_rule" && source != "managed_plugin" {
 				if err := os.WriteFile(path, []byte(body), 0600); err != nil {
 					t.Fatal(err)
 				}
@@ -121,6 +145,9 @@ func TestNativePublicReviewBindsChangedInstructionClosureBeforeEffects(t *testin
 			review, err := ReviewNative(context.Background(), in)
 			if err != nil || review.Plan.State != "reviewable" {
 				t.Fatalf("public review unavailable: %+v %v", review, err)
+			}
+			if source == "managed_plugin" && review.Plan.SessionSettingsOverride != `{"enabledPlugins":{"maestro-product@managed":false}}` {
+				t.Fatal("review did not expose the exact session-only installed-plugin override")
 			}
 			body = "Changed instruction.\n"
 			if source == "git_local" {
@@ -153,7 +180,7 @@ func makeNativeGitFixture(t *testing.T, root string) {
 }
 
 func TestNativePublicReviewRefusesUnsupportedInstructionSources(t *testing.T) {
-	for _, kind := range []string{"cycle", "depth", "file_size", "closure_size", "syntax", "rule_alias", "source_alias", "default_memory", "null_memory", "imported_settings_policy", "inactive_user_local", "plugin", "worktree", "bare_git", "root_plugin"} {
+	for _, kind := range []string{"cycle", "depth", "file_size", "closure_size", "syntax", "rule_alias", "source_alias", "default_memory", "null_memory", "imported_settings_policy", "inactive_user_local", "plugin", "worktree", "bare_git", "root_plugin", "external_hooks"} {
 		t.Run(kind, func(t *testing.T) {
 			in := nativeFixture(t)
 			in.Executable = controlledInspectionHost(t, in, 0)
@@ -219,6 +246,8 @@ func TestNativePublicReviewRefusesUnsupportedInstructionSources(t *testing.T) {
 				write(filepath.Join(ws, ".claude", "settings.json"), `{"autoMemoryEnabled":false}`)
 			case "plugin":
 				write(filepath.Join(ws, ".claude", "settings.json"), `{"enabledPlugins":{"external@fixture":true}}`)
+			case "external_hooks":
+				write(filepath.Join(ws, ".claude", "settings.json"), `{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"unclosed-external-hook"}]}]}}`)
 			case "worktree":
 				write(filepath.Join(ws, ".git"), "gitdir: /unreviewed/main-checkout/.git/worktrees/fixture\n")
 			case "bare_git":

@@ -35,12 +35,15 @@ func (t Target) Platform() string {
 }
 
 type NativeCapability struct {
-	State            string `json:"state"`
-	Reason           string `json:"reason,omitempty"`
-	Profile          string `json:"profile"`
-	EvidenceClass    string `json:"evidence_class"`
-	HostVersion      string `json:"host_version,omitempty"`
-	VendorProvenance string `json:"vendor_provenance"`
+	State                 string `json:"state"`
+	Reason                string `json:"reason,omitempty"`
+	Profile               string `json:"profile"`
+	EvidenceClass         string `json:"evidence_class"`
+	HostVersion           string `json:"host_version,omitempty"`
+	VendorProvenance      string `json:"vendor_provenance"`
+	QualificationProtocol string `json:"qualification_protocol,omitempty"`
+	ConfigurationSHA256   string `json:"configuration_sha256,omitempty"`
+	SessionSettingsSHA256 string `json:"session_settings_sha256,omitempty"`
 }
 
 // NativeHost is process-local authority. Only the attended native producer can
@@ -48,6 +51,7 @@ type NativeCapability struct {
 type NativeHost struct {
 	binding, serverSHA, hostPath, hostSHA, profileSHA, version string
 	configurationDirectory, configurationSHA                   string
+	sessionSettingsSHA                                         string
 	instructionPaths                                           []string
 	evidenceClass                                              string
 	ready                                                      bool
@@ -61,6 +65,9 @@ func nativeCapability(o Options) NativeCapability {
 			c.Reason = ""
 			c.EvidenceClass = h.evidenceClass
 			c.HostVersion = h.version
+			c.QualificationProtocol = qualificationProtocol
+			c.ConfigurationSHA256 = h.configurationSHA
+			c.SessionSettingsSHA256 = h.sessionSettingsSHA
 		} else {
 			c.Reason = "native_admission_stale_or_invalid"
 		}
@@ -88,8 +95,8 @@ func (h *NativeHost) validate(o Options) error {
 		return errors.New("native profile changed")
 	}
 	if h.configurationDirectory != "" {
-		configuration, err := nativeUserConfiguration(h.configurationDirectory, h.instructionPaths...)
-		if err != nil || configuration != h.configurationSHA {
+		configuration, err := nativeUserConfiguration(h.configurationDirectory, o, h.instructionPaths...)
+		if err != nil || configuration.SHA256 != h.configurationSHA {
 			return errors.New("native user configuration changed")
 		}
 	} else if h.evidenceClass != "engineering_fixture" {
@@ -99,8 +106,8 @@ func (h *NativeHost) validate(o Options) error {
 }
 
 // Snapshot the bounded selected instruction closure, never credential files.
-func nativeUserConfiguration(directory string, paths ...string) (string, error) {
-	return instructionConfiguration(directory, paths...)
+func nativeUserConfiguration(directory string, o Options, paths ...string) (nativeConfiguration, error) {
+	return instructionConfiguration(directory, o, paths...)
 }
 
 func digest(body []byte) string { return fmt.Sprintf("%x", sha256.Sum256(body)) }
