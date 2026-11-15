@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -276,6 +277,78 @@ func TestSchedulerLeaseIsNonBlockingAndReclaimsAfterExpiry(t *testing.T) {
 }
 
 func TestQuarantinedLeaseRequiresExplicitRecoveryAfterExpiry(t *testing.T) {
+	{
+		store := Store{Root: t.TempDir()}
+		now := time.Now().UTC()
+		lease, err := store.TryAcquireLease("case-a", "memory-daily", ScheduledOccurrenceKey("memory-daily", now), "worker-a", now, time.Minute)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.QuarantineLease(lease); err != nil {
+			t.Fatal(err)
+		}
+		name := safeLeaseName(lease.OccurrenceKey)
+		retired := false
+		secureLeafStepHook = func(path string) {
+			if filepath.Base(path) != name+".guard" && filepath.Base(path) != name+".json" {
+				return
+			}
+			secureLeafStepHook = nil
+			if err := store.ReleaseLease(lease); err != nil {
+				t.Fatal(err)
+			}
+			retired = true
+		}
+		t.Cleanup(func() { secureLeafStepHook = nil })
+		leases, err := store.QuarantinedLeases("case-a")
+		if !retired || err != nil || len(leases) != 0 {
+			t.Fatalf("retired snapshot retired=%v leases=%d err=%v", retired, len(leases), err)
+		}
+	}
+	{
+		store := Store{Root: t.TempDir()}
+		now := time.Now().UTC()
+		lease, err := store.TryAcquireLease("case-a", "memory-daily", ScheduledOccurrenceKey("memory-daily", now), "worker-a", now, time.Minute)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.QuarantineLease(lease); err != nil {
+			t.Fatal(err)
+		}
+		directory, _, err := store.openLeaseDirectory("case-a", "memory-daily")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer directory.close()
+		guard, err := acquireLeaseGuard(directory, safeLeaseName(lease.OccurrenceKey)+".guard")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer guard.release()
+		if _, err := store.QuarantinedLeases("case-a"); !errors.Is(err, ErrLeaseBusy) {
+			t.Fatalf("snapshot while occurrence retires err=%v, want ErrLeaseBusy", err)
+		}
+		guard.release()
+		blocked := false
+		secureLeafStepHook = func(path string) {
+			if filepath.Base(path) != safeLeaseName(lease.OccurrenceKey)+".json" {
+				return
+			}
+			secureLeafStepHook = nil
+			if err := store.ReleaseLease(lease); !errors.Is(err, ErrLeaseBusy) {
+				t.Fatalf("retirement overlapped snapshot: %v", err)
+			}
+			blocked = true
+		}
+		leases, err := store.QuarantinedLeases("case-a")
+		secureLeafStepHook = nil
+		if !blocked || err != nil || len(leases) != 1 {
+			t.Fatalf("guarded snapshot blocked=%v leases=%d err=%v", blocked, len(leases), err)
+		}
+		if err := store.ReleaseLease(lease); err != nil {
+			t.Fatal(err)
+		}
+	}
 	root := t.TempDir()
 	store := Store{Root: root}
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
@@ -305,6 +378,78 @@ func TestQuarantinedLeaseRequiresExplicitRecoveryAfterExpiry(t *testing.T) {
 }
 
 func TestReleaseLeaseCannotClearQuarantineWithWrongFenceToken(t *testing.T) {
+	damages := []string{"missing-lease", "missing-marker", "missing-guard", "marker-token", "marker-state", "marker-unknown", "job", "occurrence"}
+	if runtime.GOOS == "windows" {
+		damages = append(damages, "linked-lease", "linked-marker", "linked-guard")
+	}
+	for _, damage := range damages {
+		store := Store{Root: t.TempDir()}
+		now := time.Now().UTC()
+		lease, err := store.TryAcquireLease("case-a", "memory-daily", ScheduledOccurrenceKey("memory-daily", now), "worker-a", now, time.Minute)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.QuarantineLease(lease); err != nil {
+			t.Fatal(err)
+		}
+		root := filepath.Join(store.Root, "workspaces", "case-a", "leases", "memory-daily")
+		name := safeLeaseName(lease.OccurrenceKey)
+		leasePath, markerPath := filepath.Join(root, name+".json"), filepath.Join(root, name+".json.quarantine")
+		guardPath := filepath.Join(root, name+".guard")
+		switch damage {
+		case "missing-lease":
+			err = os.Remove(leasePath)
+		case "missing-marker":
+			secureLeafStepHook = func(path string) {
+				if path == guardPath {
+					secureLeafStepHook = nil
+					if err := os.Remove(markerPath); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+		case "missing-guard":
+			err = os.Remove(guardPath)
+		case "linked-lease", "linked-marker", "linked-guard":
+			target := leasePath
+			if damage == "linked-marker" {
+				target = markerPath
+			} else if damage == "linked-guard" {
+				target = guardPath
+			}
+			err = os.Link(target, filepath.Join(root, "alias"))
+		case "marker-token":
+			err = secureWriteFile(markerPath, []byte(`{"fence_token":"wrong","state":"quarantined"}`))
+		case "marker-state":
+			err = secureWriteFile(markerPath, []byte(`{"fence_token":"`+lease.FenceToken+`","state":"unknown"}`))
+		case "marker-unknown":
+			err = secureWriteFile(markerPath, []byte(`{"fence_token":"`+lease.FenceToken+`","state":"quarantined","extra":true}`))
+		case "job", "occurrence":
+			if damage == "job" {
+				lease.JobID = "other-job"
+			} else {
+				lease.OccurrenceKey = "other-occurrence"
+			}
+			body, marshalErr := json.Marshal(lease)
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
+			err = secureWriteFile(leasePath, body)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = store.QuarantinedLeases("case-a")
+		secureLeafStepHook = nil
+		if err == nil {
+			t.Fatalf("quarantine snapshot accepted %s", damage)
+		}
+		if damage == "missing-guard" {
+			if _, err := os.Stat(guardPath); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("read created a missing guard: %v", err)
+			}
+		}
+	}
 	root := t.TempDir()
 	store := Store{Root: root}
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
