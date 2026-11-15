@@ -3,10 +3,22 @@ package atlas
 import (
 	"errors"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
+
+// OwnerPages returns the canonical non-overwriting scaffold for exact review.
+// It is a template projection, never a read of the owner's private corpus.
+func OwnerPages() []AuthoredPage {
+	pages := make([]AuthoredPage, 0, len(ownerFiles))
+	for page, text := range ownerFiles {
+		pages = append(pages, AuthoredPage{Page: page, Text: text})
+	}
+	sort.Slice(pages, func(i, j int) bool { return pages[i].Page < pages[j].Page })
+	return pages
+}
 
 // OwnerRoot resolves the canonical owner atlas root from the data root alone.
 //
