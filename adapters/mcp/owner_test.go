@@ -23,6 +23,7 @@ type ownerFixture struct {
 	options      product.Options
 	root, binary string
 	stderr       *os.File
+	capabilities *mcp.ClientCapabilities
 }
 
 const ownerReviewFixtureSuffix = "\n\"Revisão autorizada\" <conteúdo> & colaboração.\n"
@@ -79,7 +80,7 @@ func (f ownerFixture) connect(t *testing.T, handler func(context.Context, *mcp.E
 }
 func (f ownerFixture) connectProtocol(t *testing.T, handler func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error), protocol string) *mcp.ClientSession {
 	t.Helper()
-	client := mcp.NewClient(&mcp.Implementation{Name: "owner-test", Version: "1"}, &mcp.ClientOptions{ElicitationHandler: handler})
+	client := mcp.NewClient(&mcp.Implementation{Name: "owner-test", Version: "1"}, &mcp.ClientOptions{ElicitationHandler: handler, Capabilities: f.capabilities})
 	var transport mcp.Transport
 	if f.binary != "" {
 		cmd := exec.Command(f.binary, "serve", "--product-root", f.options.ProductRoot, "--user-home", f.options.UserHome, "--workspace", f.options.WorkspacePath)
@@ -154,18 +155,13 @@ func TestOwnerConfirmationRefusals(t *testing.T) {
 				t.Fatal(err)
 			}
 			called := false
+			if tc.initialAbsent {
+				f.capabilities = &mcp.ClientCapabilities{Elicitation: &mcp.ElicitationCapabilities{URL: &mcp.URLElicitationCapabilities{}}}
+			}
 			cs := f.connect(t, func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
 				called = true
 				return &mcp.ElicitResult{Action: "decline"}, nil
 			})
-			if tc.initialAbsent {
-				_, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "maestro_context", Meta: mcp.Meta{
-					mcp.MetaKeyProtocolVersion: "2026-07-28", mcp.MetaKeyClientCapabilities: map[string]any{},
-				}})
-				if err != nil {
-					t.Fatal(err)
-				}
-			}
 			p := ownerCall(t, cs, "owner.propose", map[string]any{"facet": "personal-context", "evidence": "synthetic", "proposed_body": "private-owner-marker withdrawn capability"}, false)
 			out, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
 				Name: "maestro_apply", Arguments: map[string]any{"operation": "owner.apply", "proposal_id": p["id"]},
