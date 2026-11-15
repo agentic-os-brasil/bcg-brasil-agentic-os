@@ -56,6 +56,12 @@ func (d *secureDirectory) openLock(name string) (*os.File, error) {
 	}
 	return d.native.OpenLock(name)
 }
+func (d *secureDirectory) openExistingLock(name string) (*os.File, error) {
+	if secureLeafStepHook != nil {
+		secureLeafStepHook(filepath.Join(d.path, name))
+	}
+	return d.native.OpenExistingLock(name)
+}
 func (d *secureDirectory) openFile(name string, flags int, _ os.FileMode) (*os.File, error) {
 	if secureLeafStepHook != nil {
 		secureLeafStepHook(filepath.Join(d.path, name))

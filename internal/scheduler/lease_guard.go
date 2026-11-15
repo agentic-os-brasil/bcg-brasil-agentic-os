@@ -11,6 +11,15 @@ type leaseGuard struct {
 
 func acquireLeaseGuard(directory *secureDirectory, name string) (*leaseGuard, error) {
 	file, err := directory.openLock(name)
+	return lockLeaseGuard(file, err)
+}
+
+func acquireExistingLeaseGuard(directory *secureDirectory, name string) (*leaseGuard, error) {
+	file, err := directory.openExistingLock(name)
+	return lockLeaseGuard(file, err)
+}
+
+func lockLeaseGuard(file *os.File, err error) (*leaseGuard, error) {
 	if err != nil {
 		if errors.Is(err, errLeaseGuardBusy) {
 			return nil, errLeaseGuardBusy

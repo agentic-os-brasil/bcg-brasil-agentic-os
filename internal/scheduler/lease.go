@@ -272,43 +272,77 @@ func (store Store) QuarantinedLeases(workspaceID string) ([]Lease, error) {
 		if !jobEntry.IsDir() {
 			continue
 		}
-		jobRoot := filepath.Join(root, jobEntry.Name())
-		markers, readErr := secureReadDir(jobRoot)
-		if readErr != nil {
-			return nil, readErr
+		jobLeases, err := quarantinedJobLeases(filepath.Join(root, jobEntry.Name()), workspaceID, jobEntry.Name())
+		if err != nil {
+			return nil, err
 		}
-		for _, marker := range markers {
-			if marker.Type()&os.ModeSymlink != 0 {
-				return nil, errors.New("scheduler quarantine marker cannot be a symlink")
-			}
-			if marker.IsDir() || !strings.HasSuffix(marker.Name(), ".json.quarantine") {
-				continue
-			}
-			leasePath := filepath.Join(jobRoot, strings.TrimSuffix(marker.Name(), ".quarantine"))
-			lease, leaseErr := readLease(leasePath)
-			if leaseErr != nil {
-				return nil, leaseErr
-			}
-			if lease.WorkspaceID != workspaceID {
-				return nil, errors.New("scheduler quarantine workspace mismatch")
-			}
-			markerBody, readErr := secureReadFile(filepath.Join(jobRoot, marker.Name()))
-			if readErr != nil {
-				return nil, readErr
-			}
-			var markerState struct {
-				State string `json:"state"`
-			}
-			if err := json.Unmarshal(markerBody, &markerState); err != nil {
-				return nil, err
-			}
-			if markerState.State == "active" && lease.ExpiresAt.After(time.Now().UTC()) {
-				continue
-			}
+		leases = append(leases, jobLeases...)
+	}
+	return leases, nil
+}
+
+func quarantinedJobLeases(path, workspaceID, jobID string) ([]Lease, error) {
+	directory, err := openSecureDirectory(path, false)
+	if err != nil {
+		return nil, err
+	}
+	defer directory.close()
+	markers, err := directory.readDir()
+	if err != nil {
+		return nil, err
+	}
+	var leases []Lease
+	for _, marker := range markers {
+		if marker.Type()&os.ModeSymlink != 0 {
+			return nil, errors.New("scheduler quarantine marker cannot be a symlink")
+		}
+		if marker.IsDir() || !strings.HasSuffix(marker.Name(), ".json.quarantine") {
+			continue
+		}
+		lease, present, err := quarantinedLeaseSnapshot(directory, marker.Name(), workspaceID, jobID)
+		if err != nil {
+			return nil, err
+		}
+		if present {
 			leases = append(leases, lease)
 		}
 	}
 	return leases, nil
+}
+
+func quarantinedLeaseSnapshot(directory *secureDirectory, markerName, workspaceID, jobID string) (Lease, bool, error) {
+	leaseName := strings.TrimSuffix(markerName, ".quarantine")
+	guard, err := acquireExistingLeaseGuard(directory, strings.TrimSuffix(leaseName, ".json")+".guard")
+	if errors.Is(err, errLeaseGuardBusy) {
+		return Lease{}, false, ErrLeaseBusy
+	}
+	if err != nil {
+		return Lease{}, false, err
+	}
+	defer guard.release()
+	// Retirement removes both names under this same occurrence guard.
+	lease, leaseErr := readLeaseInDirectory(directory, leaseName, leaseName)
+	markerBody, markerErr := directory.readFile(markerName)
+	if errors.Is(leaseErr, os.ErrNotExist) && errors.Is(markerErr, os.ErrNotExist) {
+		return Lease{}, false, nil
+	}
+	if leaseErr != nil || markerErr != nil {
+		return Lease{}, false, errors.Join(leaseErr, markerErr)
+	}
+	if lease.WorkspaceID != workspaceID || lease.JobID != jobID || leaseName != safeLeaseName(lease.OccurrenceKey)+".json" {
+		return Lease{}, false, errors.New("scheduler quarantine identity mismatch")
+	}
+	var markerState struct {
+		FenceToken string `json:"fence_token"`
+		State      string `json:"state"`
+	}
+	if err := decodeStrictJSON(markerBody, &markerState); err != nil {
+		return Lease{}, false, err
+	}
+	if markerState.FenceToken != lease.FenceToken || markerState.State != "active" && markerState.State != "quarantined" {
+		return Lease{}, false, errors.New("scheduler quarantine marker mismatch")
+	}
+	return lease, markerState.State != "active" || !lease.ExpiresAt.After(time.Now().UTC()), nil
 }
 
 // RecoverQuarantinedLease is an explicit operator recovery boundary. It
