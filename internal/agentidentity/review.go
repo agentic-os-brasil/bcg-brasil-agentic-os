@@ -12,8 +12,9 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/privatelock"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 const identityDraftSchemaVersion = 1
@@ -67,8 +68,12 @@ func GuidedIdentityInterview(root string) GuidedInterview {
 		return GuidedInterview{State: "review_required", OpenDraftID: openDraftID, Guidance: "review or confirm the open agent identity draft before asking another question", Catalog: catalog}
 	}
 	configured := map[string]bool{}
-	if profile, err := Load(root); err == nil {
-		for _, selection := range profile.Selections {
+	state, err := ReadProfile(root)
+	if err != nil {
+		return GuidedInterview{State: "blocked", Guidance: "agent identity profile is invalid; preserve it and inspect the admitted state", Catalog: catalog}
+	}
+	if state.Profile != nil {
+		for _, selection := range state.Profile.Selections {
 			configured[CanonicalRole(selection.Role)] = true
 		}
 	}
@@ -87,16 +92,15 @@ func GuidedIdentityInterview(root string) GuidedInterview {
 }
 
 func DraftProfile(root string, profile Profile, consent, noClientData bool) (ProfileDraft, error) {
-	unlock, err := privatelock.Acquire(filepath.Join(root, "agents", "interview", ".transition.lock"))
-	if err != nil {
-		return ProfileDraft{}, err
+	if !consent || !noClientData {
+		return ProfileDraft{}, errors.New("explicit owner consent and owner no-client-data attestation are required")
 	}
-	result, operationErr := draftProfileLocked(root, profile, consent, noClientData)
-	unlockErr := unlock()
-	if operationErr != nil {
-		return result, errors.Join(operationErr, unlockErr)
+	if state := GuidedIdentityInterview(root); state.State == "blocked" {
+		return ProfileDraft{}, ErrIdentityState
 	}
-	return result, unlockErr
+	var result ProfileDraft
+	err := withIdentityTransition(root, func() (err error) { result, err = draftProfileLocked(root, profile, consent, noClientData); return err })
+	return result, err
 }
 
 func draftProfileLocked(root string, profile Profile, consent, noClientData bool) (ProfileDraft, error) {
@@ -116,6 +120,9 @@ func draftProfileLocked(root string, profile Profile, consent, noClientData bool
 		return ProfileDraft{}, err
 	}
 	guided := GuidedIdentityInterview(root)
+	if guided.State == "blocked" {
+		return ProfileDraft{}, ErrIdentityState
+	}
 	if guided.NextQuestion != nil {
 		current := Profile{}
 		if loaded, err := Load(root); err == nil {
@@ -172,20 +179,22 @@ func managedAgentID(role string) string {
 }
 
 func ReviewProfileDraft(root, id string) (ProfileDraft, error) {
-	return readProfileDraft(filepath.Join(root, "agents", "interview", "drafts", filepath.Base(id)+".json"))
+	if !validDraftID(id) {
+		return ProfileDraft{}, errors.New("invalid agent identity draft id")
+	}
+	return readProfileDraft(filepath.Join(root, "agents", "interview", "drafts", id+".json"))
 }
 
 func ConfirmProfileDraft(root, id, reviewDigest string, confirmed bool) (ProfileDraft, error) {
-	unlock, err := privatelock.Acquire(filepath.Join(root, "agents", "interview", ".transition.lock"))
-	if err != nil {
-		return ProfileDraft{}, err
+	if !confirmed || !validDraftID(id) {
+		return ProfileDraft{}, errors.New("exact agent identity confirmation is required")
 	}
-	result, operationErr := confirmProfileDraftLocked(root, id, reviewDigest, confirmed)
-	unlockErr := unlock()
-	if operationErr != nil {
-		return result, errors.Join(operationErr, unlockErr)
-	}
-	return result, unlockErr
+	var result ProfileDraft
+	err := withIdentityTransition(root, func() (err error) {
+		result, err = confirmProfileDraftLocked(root, id, reviewDigest, confirmed)
+		return err
+	})
+	return result, err
 }
 
 func confirmProfileDraftLocked(root, id, reviewDigest string, confirmed bool) (ProfileDraft, error) {
@@ -196,7 +205,7 @@ func confirmProfileDraftLocked(root, id, reviewDigest string, confirmed bool) (P
 	if err != nil {
 		return ProfileDraft{}, err
 	}
-	if (d.State != "drafted" && d.State != "prepared") || !validProfileDraft(d) || !digestEqual(reviewDigest, d.ReviewDigest) {
+	if (d.State != "drafted" && d.State != "prepared" && d.State != "applied") || !validProfileDraft(d) || !digestEqual(reviewDigest, d.ReviewDigest) {
 		return ProfileDraft{}, errors.New("agent identity confirmation denied because the reviewed envelope is invalid or closed")
 	}
 	base, err := profileBaseSHA(root)
@@ -206,6 +215,12 @@ func confirmProfileDraftLocked(root, id, reviewDigest string, confirmed bool) (P
 	expected, err := storedProfileSHA(d.Profile)
 	if err != nil {
 		return ProfileDraft{}, err
+	}
+	if d.State == "applied" {
+		if base != expected {
+			return ProfileDraft{}, ErrIdentityChanged
+		}
+		return d, nil
 	}
 	if d.State == "drafted" {
 		if base != d.BaseSHA256 {
@@ -219,7 +234,7 @@ func confirmProfileDraftLocked(root, id, reviewDigest string, confirmed bool) (P
 		return ProfileDraft{}, errors.New("agent identity profile changed during prepared recovery; refusing to overwrite newer content")
 	}
 	if base != expected {
-		if err := Save(root, d.Profile); err != nil {
+		if err := saveProfileLocked(root, d.Profile); err != nil {
 			return ProfileDraft{}, err
 		}
 	}
@@ -234,15 +249,8 @@ func confirmProfileDraftLocked(root, id, reviewDigest string, confirmed bool) (P
 }
 
 func profileBaseSHA(root string) (string, error) {
-	body, err := os.ReadFile(filepath.Join(root, "agents", "personalization.json"))
-	if errors.Is(err, os.ErrNotExist) {
-		return "absent", nil
-	}
-	if err != nil {
-		return "", err
-	}
-	sum := sha256.Sum256(body)
-	return hex.EncodeToString(sum[:]), nil
+	state, err := ReadProfile(root)
+	return state.Revision, err
 }
 func profileDraftDigest(d ProfileDraft) string {
 	envelope := struct {
@@ -276,9 +284,12 @@ func digestEqual(a, b string) bool {
 	return subtle.ConstantTimeCompare([]byte(strings.ToLower(a)), []byte(strings.ToLower(b))) == 1
 }
 func readProfileDraft(path string) (ProfileDraft, error) {
-	body, err := os.ReadFile(path)
+	body, err := scheduler.ReadPrivateStateFile(path, maximumIdentityBytes)
 	if err != nil {
 		return ProfileDraft{}, err
+	}
+	if !utf8.Valid(body) {
+		return ProfileDraft{}, ErrIdentityState
 	}
 	var d ProfileDraft
 	decoder := json.NewDecoder(strings.NewReader(string(body)))
@@ -317,7 +328,7 @@ func ensureNoOpenIdentityDraft(root string) error {
 }
 
 func openIdentityDraftID(root string) (string, error) {
-	paths, err := filepath.Glob(filepath.Join(root, "agents", "interview", "drafts", "*.json"))
+	paths, err := identityDraftPaths(root)
 	if err != nil {
 		return "", err
 	}
@@ -337,7 +348,7 @@ func openIdentityDraftID(root string) (string, error) {
 	return openID, nil
 }
 func compactIdentityDrafts(root, currentID string) error {
-	paths, err := filepath.Glob(filepath.Join(root, "agents", "interview", "drafts", "*.json"))
+	paths, err := identityDraftPaths(root)
 	if err != nil {
 		return err
 	}
@@ -350,7 +361,10 @@ func compactIdentityDrafts(root, currentID string) error {
 			return err
 		}
 		if draft.State == "applied" {
-			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			if err := removeIdentityEntry(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+			if err := removeIdentityEntry(path + ".lock"); err != nil && !errors.Is(err, os.ErrNotExist) {
 				return err
 			}
 		}
@@ -358,34 +372,13 @@ func compactIdentityDrafts(root, currentID string) error {
 	return nil
 }
 func writeIdentityJSON(path string, value any) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
 	body, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
 	}
 	body = append(body, '\n')
-	temporary, err := os.CreateTemp(filepath.Dir(path), ".identity-draft-*")
-	if err != nil {
-		return err
+	if len(body) > maximumIdentityBytes {
+		return errors.New("agent identity state exceeds its bounded record size")
 	}
-	temporaryPath := temporary.Name()
-	defer os.Remove(temporaryPath)
-	if err := temporary.Chmod(0o600); err != nil {
-		temporary.Close()
-		return err
-	}
-	if _, err := temporary.Write(body); err != nil {
-		temporary.Close()
-		return err
-	}
-	if err := temporary.Sync(); err != nil {
-		temporary.Close()
-		return err
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	return os.Rename(temporaryPath, path)
+	return scheduler.UpdatePrivateFile(path, maximumIdentityBytes, func([]byte) ([]byte, error) { return body, nil })
 }

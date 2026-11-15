@@ -56,7 +56,14 @@ func TestGuidedOwnerSkillsCarryResumableReviewContracts(t *testing.T) {
 			id: "agent-identity-setup",
 			required: []string{
 				"interaction-profile",
-				"brain/owner/agents.json",
+				"agent.identity.interview",
+				"agent.identity.propose",
+				"agent.identity.answer",
+				"agent.identity.review",
+				"agent.identity.apply",
+				"expected_profile_revision",
+				"open_draft_id",
+				"next_question",
 				"owner_id",
 			},
 		},
@@ -69,6 +76,13 @@ func TestGuidedOwnerSkillsCarryResumableReviewContracts(t *testing.T) {
 			for _, required := range test.required {
 				if !strings.Contains(string(body), required) {
 					t.Fatalf("distributed skill %s is missing resumable command contract %q", test.id, required)
+				}
+			}
+			if test.id == "agent-identity-setup" {
+				for _, retired := range []string{"brain/owner/agents.json", "bcgos agent"} {
+					if strings.Contains(string(body), retired) {
+						t.Fatalf("MCP identity recipe reintroduced retired persistence guidance %q", retired)
+					}
 				}
 			}
 		})

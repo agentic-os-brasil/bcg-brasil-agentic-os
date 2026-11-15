@@ -89,6 +89,43 @@ owner state. MCPB installs a server and manifest, not Code Skills. Native loadin
 human-form privacy, corporate signing, team publication and pilot acceptance
 remain separate qualification steps.
 
+## Personalize agent presentation
+
+Identity personalization is a separate optional phase after core owner
+onboarding. Query `agent.identity.interview` for the canonical next question,
+profile revision and any pending draft. The three main-agent questions resume
+one at a time. Missing preferences keep installed defaults active; invalid
+existing state blocks instead of becoming a new interview.
+
+Apply `agent.identity.answer` for one exact name/emoji and the returned
+question/base. One full native review authorizes canonical draft creation and
+confirmation. `agent.identity.propose` is the explicit draft-only variant;
+`agent.identity.review` returns its metadata and `agent.identity.apply`
+reviews/resumes that same draft. Model arguments cannot supply consent,
+approval, scope or review digests. Query again after a successful write and
+a new process to observe the actual persisted profile.
+
+Human interaction holds no canonical/control lock. Publication revalidates the
+complete base/question/proposal after acquiring the transition lock. Decline
+before ordinary draft creation leaves no identity proposal/profile effect;
+a declined explicit draft remains pending. A later I/O error can leave durable
+recovery state, which must be reported rather than described as no filesystem
+change. Exact applied-draft receipt replay never overwrites a newer profile.
+
+The adapter uses the existing private `state/agents/personalization.json` and
+canonical draft lifecycle. Reads are bounded and noncreating; storage aliases,
+corruption, stale reviews and unregistered/foreign instances refuse. Signed
+instance definitions remain unchanged. Names and emoji grant no tools, runtime,
+provider or delegation authority. Native client acceptance remains a separate
+qualification gate from these source contracts.
+
+Ordinary `maestro_context` also consumes the confirmed main-agent names/emoji
+through the canonical managed roster after restart. IDs and roles remain fixed.
+An absent optional profile uses defaults; invalid preferences are explicitly
+`profile_invalid` with deterministic default presentation and preserved data.
+That condition blocks identity onboarding, while unrelated workspace context
+remains available. Immutable compiled agent resources are unchanged.
+
 ## Record attended professional work
 
 The owner atlas is the canonical professional Markdown corpus under the

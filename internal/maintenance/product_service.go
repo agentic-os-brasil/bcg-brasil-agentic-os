@@ -43,6 +43,8 @@ type ServiceOptions struct {
 	// InstalledGuard comes from the fixed product binding. It is not a grant
 	// or a model input and cannot replace the live job/control/lease checks.
 	InstalledGuard func(func() error) error `json:"-"`
+	// EligibilityGuard is a trusted native veto; it cannot replace job authority.
+	EligibilityGuard func() error `json:"-"`
 }
 
 type Service struct {
@@ -540,6 +542,7 @@ func (s *Service) jobStatus(id string) (ProductJobStatus, error) {
 // Existing memory activation lock → control guard → occurrence lease guard →
 // visible publication. Control transitions never acquire memory or lease locks.
 type productExecution struct {
+	ctx          context.Context
 	darwinSource *DarwinSource
 	service      *Service
 	jobID        string
@@ -549,11 +552,22 @@ type productExecution struct {
 }
 
 func (p *productExecution) guard(publish func() error) error {
+	if p.ctx != nil && p.ctx.Err() != nil {
+		return p.ctx.Err()
+	}
+	if p.service.options.EligibilityGuard != nil {
+		if err := p.service.options.EligibilityGuard(); err != nil {
+			return err
+		}
+	}
 	// Refuse before touching control state, then recheck after acquiring its lock.
 	if _, err := processidentity.Current(); err != nil {
 		return err
 	}
 	return p.service.withControl(p.jobID, func() error {
+		if p.ctx != nil && p.ctx.Err() != nil {
+			return p.ctx.Err()
+		}
 		if _, err := processidentity.Current(); err != nil {
 			return err
 		}
@@ -579,10 +593,17 @@ func (p *productExecution) guard(publish func() error) error {
 		// The update owner acquires installation serialization itself. Holding
 		// that lock here would recursively lock ObserveSource/activation. The
 		// exact current source snapshot above and canonical CAS fence this job.
-		if p.jobID != UpdateCheckJobID && p.service.options.InstalledGuard != nil {
-			return p.service.options.InstalledGuard(publish)
+		guardedPublish := func() error {
+			// Installation serialization can wait after the control-fence check.
+			if p.ctx != nil && p.ctx.Err() != nil {
+				return p.ctx.Err()
+			}
+			return publish()
 		}
-		return publish()
+		if p.jobID != UpdateCheckJobID && p.service.options.InstalledGuard != nil {
+			return p.service.options.InstalledGuard(guardedPublish)
+		}
+		return guardedPublish()
 	})
 }
 func (s *Service) worker(p *productExecution) Worker {
@@ -609,6 +630,7 @@ func (s *Service) worker(p *productExecution) Worker {
 }
 
 func (s *Service) execute(ctx context.Context, p *productExecution, occ scheduler.Occurrence, now time.Time) (Receipt, error) {
+	p.ctx = ctx
 	if err := p.guard(func() error { return nil }); err != nil {
 		return Receipt{}, err
 	}

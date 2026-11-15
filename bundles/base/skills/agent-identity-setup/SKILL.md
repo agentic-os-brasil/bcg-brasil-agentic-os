@@ -1,62 +1,80 @@
 ---
 name: agent-identity-setup
-description: Conduct the initial governed interview for agent names, emoji-avatars, personalization and ownership. Use when a new owner, account or case is onboarded.
+description: Personalize the main agents' names and emoji through the canonical Maestro MCP identity interview, or resume its pending draft. Use when the owner chooses agent presentation during onboarding or explicitly asks to rename an agent. Changes presentation only, never runtime authority.
 ---
 
-# Agent Identity Setup
+# Agent identity setup
 
-Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
-
+Use the admitted Maestro connector for all identity operations. Names and
+emoji belong to the canonical private identity profile; never write legacy
+`agents.json`, per-case `agent.json` or managed templates yourself.
 
 ## Interaction profile
 
-Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) before starting. It controls
-explanation depth and optional technical detail only; it never changes the
-identity schema, confirmation gate or ownership rules.
+Resolve the canonical [interaction-profile](../interaction-profile/SKILL.md)
+through an admitted owner-profile projection before asking a question. If this
+MCP cannot project it, use `standard` and state that calibration is unavailable;
+do not probe legacy owner files or another connector. The profile changes
+explanation depth only, never question order, ownership or native review.
 
-Conduct the principal-agent interview conversationally. Explain each role
-before asking for a choice:
+## Open the current question
 
-- Maestro — the user-facing orchestration hub;
-- Client Account Agent — the partner-like account relationship owner;
-- Case Agent — the project execution and delivery owner;
-- o revisor de qualidade do Maestro — gate interno de revisão e consistência;
-- o monitor de saúde do sistema — mantém o ambiente operacional estável e alinhado; e
-- o especialista de indústria — referência de advisory FPA/IPA por setor, versionada.
+1. Query `agent.identity.interview`. Follow its actual `state`,
+   `profile_revision`, `next_question` and `open_draft_id`. Reading never
+   initializes a profile. A blocked/invalid state stops this interview;
+   preserve it rather than treating it as a clean installation.
+2. For `action_required`, ask only `next_question`. Use its role explanation,
+   default name, emoji and transparent suggestions from the catalog. The
+   canonical order is Maestro, the internal reviewer, then system health.
+   Do not batch a future answer or infer psychological preferences.
+3. Carry the existing profile's `owner_id` forward. For a first profile,
+   agree one stable nonsensitive local owner identifier. Do not request
+   credentials. Personalization is optional; absent preferences leave the
+   installed defaults active and do not block unrelated professional work.
 
-Show the default name, suggested alternatives, purpose and suggested
-emoji-avatar. Ask the owner for an explicit `owner_id`, one name and one emoji
-per role, plus the ownership scope. The owner may customize presentation, but
-cannot change role authority, scope rules, industry-specialist versioning or review gates.
+## Save one answer
 
-**Default naming for per-instance roles.** The suggested default name is
-literal, not thematic: `agente_<account-id>` for the Client Account Agent and
-`agente_<case-slug>` for the Case Agent (e.g. `agente_acme`,
-`agente_diagnostico-2026`) — never an invented nickname or metaphor. Use a
-neutral emoji per tier (e.g. 🏢 for accounts, 📁 for cases) unless the owner
-asks for something else. This is a default suggestion, always shown for
-confirmation like any other proposed identity — the owner can rename to
-anything at any time.
+Apply `agent.identity.answer` with only the owner-provided `display_name`
+and `emoji`, the current `role` and `question_id`, `owner_id`, and the exact
+`expected_profile_revision` just returned. The host presents complete current
+and proposed preferences plus the owner-only/no-client-data attestation.
+One native review creates and confirms this answer through the canonical
+draft lifecycle. Never send consent, approval, scope or review-digest fields.
 
-Before writing, show the complete proposed profile and ask for one explicit
-confirmation. A missing confirmation, unknown role, invalid emoji or
-ownership-scope mismatch cancels the operation: do not write anything.
+After an applied receipt, query the interview again. Verify the confirmed
+name/emoji and then ask its next question. `complete` means the three main
+questions are complete; it does not activate agents, grant tools or qualify
+providers. An explicit later rename uses its canonical `identity-<role>`
+question ID and a freshly read profile revision, preserving all other choices.
 
-Persistence depends on the role's ownership scope:
+For a deliberate pause before applying, use `agent.identity.propose` instead.
+Its native review authorizes an inactive canonical draft only. Report the
+returned proposal ID and `review_required`; the confirmed profile is unchanged.
 
-- **Global roles** (Maestro, o revisor de qualidade, o monitor de saúde do sistema,
-  o especialista de indústria) — exactly one identity ever, regardless of how many
-  accounts or cases exist. Persist to `brain/owner/agents.json` (create the file
-  if absent, overwrite the matching role block otherwise).
-- **Per-instance roles** (Client Account Agent, Case Agent) — one identity per
-  specific account or case, never a shared block. A Client Account Agent's identity
-  is `{name, emoji, owner_id, role: "client_account_agent", account_id}`, written to
-  `brain/accounts/<account-id>/agent.json`. A Case Agent's identity is
-  `{name, emoji, owner_id, role: "case_agent", account_id, case_id}`, written to
-  `brain/accounts/<account-id>/cases/<case-id>/agent.json`. Running this interview
-  again for a *different* account or case never overwrites another instance's file —
-  each account and each case keeps its own name and emoji for the life of that
-  account or case.
+## Resume a pending draft
 
-Personalization is local owner data. It is never copied into managed templates,
-client context, telemetry or industry-specialist advisory packets.
+For `review_required`, query `agent.identity.review` with exactly the returned
+`proposal_id`, then apply `agent.identity.apply` with that same ID. Metadata
+queries do not expose or approve the proposed body; the native host presents
+its full current/proposed profile for confirmation. Do not ask another
+question or create a competing draft.
+
+Declining an ordinary answer creates no draft or profile. Declining an
+existing draft keeps that inactive review pending; report this and stop rather
+than deleting it or advancing the interview. A post-review I/O error may leave
+an open draft or an already-applied profile: use the returned recovery metadata
+and query again. Repeating an applied draft returns its current exact receipt;
+a stale answer or later profile change requires fresh review.
+
+## Preserve boundaries
+
+- Unknown/mismatched role, emoji, owner, question or revision is refused.
+- An account/case/PA identity requires a real admitted instance and explicit
+  `agent_id`. Missing registration is pending; never substitute a global role.
+  Case instances must belong to this admitted workspace. Keep signed instance
+  definitions and runtime state unchanged.
+- `confirmation_unavailable` or a denied native form authorizes no alternate
+  write. Explain the client limitation; do not invoke a shell, raw filesystem,
+  another connector or an installation operator to persist preferences.
+- Personalization remains owner data. Never place names/preferences into client
+  context, provider packets, telemetry or the managed product.

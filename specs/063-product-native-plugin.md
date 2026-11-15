@@ -391,3 +391,27 @@ spoofed-ID, retry and read-only-startup fixtures; verify no prompt persistence.
 These prove source/adapter behavior only. Organization signing, Windows private
 handle/non-elevation qualification, native failure behavior, actual delegation
 delivery and attended Desktop/pilot acceptance remain explicit external gates.
+
+
+### Independent quick connection in both clients
+
+The pilot report adds `desktop_ready_prompt` alongside `code_ready_prompt`.
+Both fields are always JSON strings, including an empty value when admission is
+blocked. Each admitted quick prompt names its exact client connector and verified
+workspace and requests exactly one read-only `maestro_context`, with no arguments.
+It reports workspace ID and the returned connection-health `state`; this is not
+execution/work-item state. No execution listing, mutation, onboarding, page,
+memory, method or hook action belongs to this path.
+
+Emitted launchers save `CODE-CONEXAO.txt` and `DESKTOP-CONEXAO.txt`. Options 3
+(Code) and 4 (Desktop) copy the corresponding quick prompt and open the selected
+client only after explicit choice. Desktop quick connection names the unique
+`Maestro MCP — Ensaio …` extension and uses its prepared binding; it requires
+neither the Code CLI nor a prior Code work item. Missing/ambiguous connector,
+workspace mismatch or refusal stops without trying another connector.
+
+Option 1 remains the complete Code exercise and option 2 remains the Desktop
+continuity/resume exercise. Guides distinguish quick 3/4 from complete 1→2 and do
+not ask participants to re-enter prepared owner/workspace paths. Normal login,
+installation, permissions and actual native-client observation remain required;
+a generated prompt or SDK check does not attest that the client executed it.

@@ -1484,6 +1484,17 @@ filesystem surface or stronger marker-transaction claim.
 - Refs: specs/007-content-navigation.md; specs/008-wiki-update-okf.md; specs/064-product-authored-brain.md; internal/atlas/authored_navigation.go; internal/atlasops/navigation.go; issue #467
 - Supersedes: none
 
+## UPKP - Own recurring MCP upkeep without borrowing foreground eligibility
+
+- Date: 2026-11-15
+- Status: accepted
+- Owner: Maestro
+- Context: The product service already owns reviewed qualification/enrollment, due planning and guarded domain publication. Its explicit foreground intent is not evidence that an unattended process observed native idle. A timer around that entrypoint alone could silently inherit its eligibility exception.
+- Decision: Let each admitted MCP serve lifetime own one cancellable serial pulse over the same canonical service, controls, occurrence leases and handlers. Background dispatch requires a real native observation of five minutes idle. A trusted constructor veto checks eligibility before effects outside control locks, dispatch cancellation is checked inside the control fence, and an owned activity monitor cancels running work on active/unknown state. Preserve the explicit foreground path with no background veto. macOS reuses the HID observer; Windows admits only its own active interactive session and bounded input/tick counters. Caller tool arguments cannot supply observations, clocks, preauthorization or replacement handlers.
+- Consequences: No grant or no due work creates no background state or native probe. Unknown/active observation cannot publish success. Prior commits and partial recovery evidence remain truthful. Source tests with constructor observations do not qualify native clients. Closing all MCP processes stops this adapter; OS task installation, production trust and native acceptance remain separate.
+- Refs: specs/062-product-maintenance-service.md; specs/036-maintenance-plane.md; specs/009-scheduler-catch-up.md; adapters/mcp/maintenance_worker.go; internal/maintenance/product_service.go; internal/windowsadapter/idle_windows.go; #466
+- Supersedes: none
+
 ## NADM - Bind managed plugin sources and own native qualification processes
 
 - Date: 2026-11-15

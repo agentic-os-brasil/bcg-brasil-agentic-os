@@ -461,6 +461,53 @@ func TestProductCheckpointGuardPreservesLastKnownGood(t *testing.T) {
 	if err != nil || before != after || !guarded {
 		t.Fatalf("last-known-good changed %+v %+v %v", before, after, err)
 	}
+	now = now.Add(4 * time.Hour)
+	productCapture(t, s, "Third actual source waits for native eligibility.")
+	snapshot := productSnapshot(t, s.home)
+	denied := errors.New("native eligibility unavailable")
+	s.options.EligibilityGuard = func() error { return denied }
+	if _, err := s.RunDue(context.Background()); !errors.Is(err, denied) {
+		t.Fatalf("native eligibility veto did not refuse due work: %v", err)
+	}
+	if !reflect.DeepEqual(snapshot, productSnapshot(t, s.home)) {
+		t.Fatal("native eligibility veto created state or changed last-good output")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.options.EligibilityGuard = func() error { cancel(); return nil }
+	if _, err := s.RunDue(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancellation between eligibility and the control fence was ignored: %v", err)
+	}
+	if !reflect.DeepEqual(snapshot, productSnapshot(t, s.home)) {
+		t.Fatal("cancelled eligibility changed canonical state")
+	}
+	s.options.EligibilityGuard = nil
+	if out, err := s.RunDue(context.Background()); err != nil || out.State != "processed" {
+		t.Fatalf("explicit foreground execution lost its independent authority: %+v %v", out, err)
+	}
+	control, err := s.loadControl(MemoryLightDreamJobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	terminalCtx, cancelTerminal := context.WithCancel(context.Background())
+	defer cancelTerminal()
+	installedGuard := s.options.InstalledGuard
+	defer func() { s.options.InstalledGuard = installedGuard }()
+	s.options.InstalledGuard = func(publish func() error) error {
+		cancelTerminal()
+		return publish()
+	}
+	execution := productExecution{ctx: terminalCtx, service: s, jobID: MemoryLightDreamJobID, revision: control.Revision}
+	terminalReceipt := receipts[len(receipts)-1]
+	terminalReceipt.AttemptedAt = now.Add(time.Minute)
+	beforeTerminal := productSnapshot(t, s.home)
+	if err := execution.publishTerminal(func() error {
+		return s.scheduler.AppendReceipt(s.workspaceID, terminalReceipt)
+	}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("installation wait cancellation allowed terminal publication: %v", err)
+	}
+	if !reflect.DeepEqual(beforeTerminal, productSnapshot(t, s.home)) {
+		t.Fatal("installation wait cancellation changed terminal receipt state")
+	}
 }
 
 func TestProductReplayReportsPartialReceiptEvidence(t *testing.T) {

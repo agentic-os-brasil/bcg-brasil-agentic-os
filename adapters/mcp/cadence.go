@@ -55,6 +55,10 @@ func maintenanceMutations() []any {
 }
 
 func (b *Bound) maintenanceService() (*maintenance.Service, error) {
+	return b.maintenanceServiceWithEligibility(nil)
+}
+
+func (b *Bound) maintenanceServiceWithEligibility(eligibility func() error) (*maintenance.Service, error) {
 	if err := b.validate(); err != nil {
 		return nil, err
 	}
@@ -62,10 +66,11 @@ func (b *Bound) maintenanceService() (*maintenance.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	// This executable's foreground entry is local. ClientInfo is not evidence
-	// that a native Code/Desktop adapter or background wake was qualified.
+	// Foreground and serve-owned work share local authority. ClientInfo cannot
+	// qualify a native Code/Desktop adapter or an operating-system wake.
 	return maintenance.NewService(maintenance.ServiceOptions{
-		ProductRoot: b.options.ProductRoot, UserHome: b.options.UserHome,
+		EligibilityGuard: eligibility,
+		ProductRoot:      b.options.ProductRoot, UserHome: b.options.UserHome,
 		WorkspacePath: b.options.WorkspacePath, LookupEnv: b.options.LookupEnv,
 		DarwinFactory: darwin.NewProductBinding, Catalog: catalog, Adapter: "local", Now: b.maintenanceClock, CLIVersion: b.options.CLIVersion, InstalledGuard: b.guardPublication, AuthorityRegistryPath: b.options.AuthorityRegistryPath, AuthorityRegistrySHA256: b.options.AuthorityRegistrySHA256,
 	})
@@ -249,7 +254,7 @@ func maintenancePresentation(review maintenance.ProductReview) any {
 		"schedule": review.Schedule, "writes": review.Writes,
 		"qualification_id": review.QualificationID, "implementation": review.Implementation,
 		"configuration": review.Configuration, "source_state": review.SourceState,
-		"scope": "This exact job and workspace only. Qualification executes once; enrollment authorizes only this schedule and write set. Native scheduling remains separate.",
+		"scope": "This exact job and workspace only. Qualification executes once; enrollment authorizes only this schedule and write set. Operating-system wake installation remains separate.",
 	}
 	if review.Operation.JobID == maintenance.UpdateCheckJobID {
 		presentation["signed_source_review"] = review.SourceReview

@@ -16,8 +16,10 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 // AuthorityRegistrySHA256 is linker-bound by the release builder; empty is unavailable.
@@ -409,7 +411,13 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		return bound.Server().Run(context.Background(), &mcp.StdioTransport{})
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		err = bound.Serve(ctx, &mcp.StdioTransport{})
+		if errors.Is(err, context.Canceled) && ctx.Err() != nil {
+			return nil
+		}
+		return err
 	default:
 		return errors.New("unsupported_command")
 	}
