@@ -47,7 +47,7 @@ func memoryMutations() []any {
 }
 func productApplySchema() map[string]any {
 	s := applySchema()
-	for _, group := range [][]any{memoryMutations(), contentMutations(), brainMutations(), maintenanceMutations()} {
+	for _, group := range [][]any{caseSetupMutations(), memoryMutations(), contentMutations(), brainMutations(), maintenanceMutations()} {
 		s["oneOf"] = append(s["oneOf"].([]any), group...)
 	}
 	return s

@@ -149,13 +149,19 @@ func productQuerySchema() map[string]any {
 		variant("execution.next", map[string]any{"item_id": strSchema(96)}, "item_id"),
 		variant("execution.contract", map[string]any{"item_id": strSchema(96)}, "item_id"),
 	}
-	for _, group := range [][]any{ownerQueries(), memoryQueries(), methodsQueries(), contentQueries(), brainQueries(), maintenanceQueries(), wikiQueries()} {
+	for _, group := range [][]any{caseSetupQueries(), ownerQueries(), memoryQueries(), methodsQueries(), contentQueries(), brainQueries(), maintenanceQueries(), wikiQueries()} {
 		variants = append(variants, group...)
 	}
 	return map[string]any{"type": "object", "oneOf": variants}
 }
 
 type input struct {
+	Mode                       string   `json:"mode"`
+	ProjectName                string   `json:"project_name"`
+	AccountID                  string   `json:"account_id"`
+	AccountOwner               string   `json:"account_owner"`
+	AccountMandate             string   `json:"account_mandate"`
+	ExpectedSetupRevision      string   `json:"expected_setup_revision"`
 	Generation                 string   `json:"generation"`
 	Reference                  string   `json:"reference"`
 	JobID                      string   `json:"job_id"`
@@ -267,6 +273,9 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		}
 		if kind == "context" {
 			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "next_max_bytes": 2048, "memory": map[string]any{"context_operation": "memory.context", "max_page_bytes": 4096, "synthesis": "local_deterministic", "lifetime": "two_l3_generations_and_exact_owner_review"}, "methods": map[string]any{"list_operation": "methods.list", "read_operation": "methods.read", "plan_operation": "methods.plan", "max_page_bytes": 4096, "mode": "methods_not_authority"}}, nil), nil
+		}
+		if strings.HasPrefix(in.Operation, "case.setup.") {
+			return b.handleCaseSetup(ctx, req, in), nil
 		}
 		if strings.HasPrefix(in.Operation, "methods.") {
 			return b.handleMethods(in), nil

@@ -9,17 +9,19 @@ unavailable.
 ## Objective
 
 Create a useful Case Agent without turning its case workspace state into an untraceable
-context blob. Creation combines a user interview, authorized external research
-and a small attested public economic snapshot; all substantive context remains
-workspace-scoped, versioned and attributable.
+context blob. Local first-case creation needs a reviewed interview and an
+explicitly saved brief; authorized external research and an attested public
+economic snapshot are separate optional work. Substantive case context remains
+workspace-scoped, revisioned and attributable.
 
 ## Creation flow
 
-`bcgos init` registers the workspace boundary first. It then offers the
-canonical `case-agent-setup` skill. The current `workspace-agent` CLI command
-remains a compatibility surface for the same `case_agent` role and collects
-only the information needed to establish
-the mandate:
+Existing setup registers the workspace boundary first and offers the canonical
+`case-agent-setup` method. The MCP first-case profile below uses the six-question
+local first-value interview and separate explicit Save. Research is optional,
+never a prerequisite for that first brief. The retained `workspace-agent` CLI is
+a compatibility surface for the same `case_agent` role; its older
+research-oriented interview can collect the following mandate details:
 
 1. client/account and project label;
 2. objective, deliverables, time horizon and decision to support;
@@ -31,6 +33,67 @@ the mandate:
 The user reviews the resulting mandate and explicitly confirms any external
 research plan before the first query is sent. Setup remains resumable; a
 workspace may exist without completed research.
+
+## Governed MCP first-case profile (#545)
+
+This profile connects the existing workspace gatekeeper and local agent scaffold
+to canonical authored-brain persistence and the existing execution ledger. It
+is a first-case delivery, not a broader account narrative, generic agent-hiring
+API or runtime dispatcher. Use the current registered workspace and admitted
+owner home; model input cannot choose roots, roles, parent paths, signable bytes
+or integrity-key material. The existing owner-local HMAC authenticates instance
+integrity only, never platform/publisher/release authority.
+
+Noncreating setup inspection precedes reviewed prepare. Client mode reviews the
+exact bounded account owner/mandate and canonical account/case relation, then
+selects the exact pending pair. Direct internal mode keeps `ScopeKind=workspace`
+and an empty account relation, with no fictional internal account or pair
+markers. New case scope IDs default to the opaque workspace ID; an existing
+exact binding and its legacy IDs/destination are preserved. A second case in an
+already-bound workspace is an immutable conflict for this unit.
+
+Preview covers the full resolved tuple: personalization, managed template and
+catalog identities, registration metadata, destinations, current setup/marker
+revisions and immutable account relation. Native review occurs outside every
+lock. Apply reacquires the canonical custody in one acyclic owner order and
+recomputes that same tuple; any changed resolved field requires a new review.
+Only timestamps/authenticators may be generated afterward. A missing local
+integrity key may be created after approval only when no instances exist;
+missing/invalid keys with existing registrations, aliases or tampering refuse
+without re-signing or repair.
+
+After the six minimum questions, show the complete brief and one-to-three-action
+plan. Saving is a separate explicit request through the existing reviewed brain
+owner, with complete frontmatter and read-back at the actual page revision.
+Client defaults use `accounts/<account-id>/cases/<workspace-id>/<workspace-id>.md`;
+internal defaults use `projects/<workspace-id>.md`, relative to the registered
+workspace brain. The actual returned existing destination always wins. No
+arbitrary deliverables path or legacy multi-write first-value helper is exposed.
+
+Reviewed finish checks current setup and saved-page revisions. When work was
+requested, the existing execution owner atomically creates or recovers one item
+from the stable server-derived setup identity, rejecting changed accepted work
+or artifacts even after a crash before the setup link is published. Finish
+reconciles normal revision/attempt-fenced start/checkpoint/pause; title search or
+an unrelated execution create is not recovery. With no requested work, finish
+needs no checkpoint and creates none.
+
+Client active selection commits at durable `.active` publication, followed by
+conditional removal of only the exact reviewed `.pending`. The common case path
+policy admits a valid first pending pair when active is absent; corrupt/aliased
+active state never becomes fresh state. Existing unrelated valid active-case
+reads remain admitted while conflicting setup transitions refuse. Return
+`active_cleanup_pending` if active committed but cleanup remains; retry only
+while selection, setup identity and pending snapshot still match. Never restore
+an older active marker or delete a newer pending marker as compensation.
+Internal progress instead uses the revisioned gatekeeper. Interrupted stages
+report exact completed/pending effects; this is not a cross-owner transaction.
+
+The current MCP schemas define accepted fields and bounds for
+`case.setup.status`, `case.setup.prepare`, `case.setup.finish`. Missing operations
+or native review remain unavailable/pending; neither a chat yes nor a model
+consent field substitutes. Read/setup/brief/checkpoint evidence must be
+reported separately from actual native-client and hosted-platform qualification.
 
 ## External research guardrail
 
@@ -122,7 +185,8 @@ findings flow upward automatically.
 `bcgos init` creates the compact Case Agent control plane and atomically
 materializes its governed local stub from the managed `case_agent` template.
 The current CLI retains the `workspace-agent` command as the compatibility CLI
-for canonical `case_agent` and supports:
+for canonical `case_agent`. The following is retained source/recovery reference,
+not the MCP participant workflow or a fallback when native review is unavailable:
 
 ```text
 bcgos workspace-agent interview [workspace-path]

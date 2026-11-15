@@ -159,6 +159,38 @@ func TestScaffoldHiresClientAccountCaseAndVersionedPAExpert(t *testing.T) {
 		expertStatus.Instance.ExpertLifecycle != "draft" {
 		t.Fatalf("unexpected PA expert: %#v", expertStatus.Instance)
 	}
+	stage := filepath.Join(root, "agents", "instances", ".scaffold-"+strings.Repeat("a", 32))
+	if err = os.Mkdir(stage, 0700); err != nil {
+		t.Fatal(err)
+	}
+	sentinel := filepath.Join(stage, "uncommitted-data-free-registration")
+	if err = os.WriteFile(sentinel, []byte("preserve private orphan"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if experts, e := ListPAExperts(root); e != nil || len(experts) != 1 {
+		t.Errorf("reserved scaffold stage poisoned PA registry: %v %v", experts, e)
+	}
+	if _, e := Scaffold(root, caseRequest); e != nil {
+		t.Fatal("case retry did not remain idempotent", e)
+	}
+	if experts, e := ListPAExperts(root); e != nil || len(experts) != 1 {
+		t.Errorf("PA registry remained poisoned after case retry: %v %v", experts, e)
+	}
+	if body, e := os.ReadFile(sentinel); e != nil || string(body) != "preserve private orphan" {
+		t.Fatal("registry read removed private orphan", e)
+	}
+	for _, name := range []string{"malformed-real-agent", ".scaffold-" + strings.Repeat("C", 32), ".scaffold-not-hex"} {
+		malformed := filepath.Join(root, "agents", "instances", name)
+		if err = os.Mkdir(malformed, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if _, e := ListPAExperts(root); e == nil {
+			t.Errorf("malformed real registration %q was ignored with stage", name)
+		}
+		if err = os.Remove(malformed); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func TestPAExpertHireRejectsMissingVersionAndChangedCanon(t *testing.T) {
@@ -402,6 +434,18 @@ func TestScaffoldRejectsOrphanAccountAndSubjectSpecialists(t *testing.T) {
 }
 
 func TestScaffoldRefusesSilentIntegrityKeyReplacement(t *testing.T) {
+	orphanRoot := t.TempDir()
+	initializeWorkspaceScope(t, orphanRoot, "ws-orphan")
+	orphan := filepath.Join(orphanRoot, "agents", "instances", ".scaffold-"+strings.Repeat("b", 32))
+	if err := os.MkdirAll(orphan, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Scaffold(orphanRoot, WorkspaceRequest("ws-orphan")); err != nil {
+		t.Fatal("unpublished stage blocked first governed registration", err)
+	}
+	if info, err := os.Stat(orphan); err != nil || !info.IsDir() {
+		t.Fatal("registration removed private orphan", err)
+	}
 	root := t.TempDir()
 	initializeWorkspaceScope(t, root, "ws-alpha")
 	initializeWorkspaceScope(t, root, "ws-beta")

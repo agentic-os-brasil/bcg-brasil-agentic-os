@@ -39,8 +39,8 @@
     {
       "id": "case-agent-setup",
       "display_name": "Case Agent",
-      "trigger": "Entrevista e pesquisa um case de projeto com segurança",
-      "default_prompt": "Use $case-agent-setup para criar ou atualizar este Case Agent com contexto revisado e com fonte.",
+      "trigger": "Prepara o primeiro caso local e sua continuidade",
+      "default_prompt": "Use $case-agent-setup para preparar o primeiro caso neste workspace com brief revisado e continuidade.",
       "relative_path": "skills/case-agent-setup/SKILL.md"
     },
     {

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -52,6 +53,8 @@ func testCreateInput() CreateInput {
 }
 
 func TestCreateStartInspectAndRestart(t *testing.T) {
+	assertSetupStagingDoesNotBecomeAnItem(t)
+	assertSetupLedgerRetainsAdmittedRoot(t)
 	store := testStore(t)
 	created, err := store.Create(testCreateInput())
 	if err != nil {
@@ -776,5 +779,136 @@ func TestValidateSchemaFile(t *testing.T) {
 	}
 	if err := ValidateSchemaFile(private); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func assertSetupStagingDoesNotBecomeAnItem(t *testing.T) {
+	t.Helper()
+	store := testStore(t)
+	staged := false
+	interrupted := errors.New("synthetic setup publication interruption")
+	store.FaultPoint = func(point string) error {
+		if point != "before_setup_item_publication" {
+			return nil
+		}
+		staged = true
+		if items, e := store.List(testWorkspaceID); e != nil || len(items) != 0 {
+			t.Errorf("live setup staging broke item listing: %v %v", items, e)
+		}
+		entries, e := os.ReadDir(store.itemsRoot(testWorkspaceID))
+		if e != nil || len(entries) != 1 {
+			t.Fatal("expected one actual producer stage", entries, e)
+		}
+		name := entries[0].Name()
+		last := byte('0')
+		if name[len(name)-1] == '0' {
+			last = '1'
+		}
+		orphan := name[:len(name)-1] + string(last)
+		if e = os.Rename(filepath.Join(store.itemsRoot(testWorkspaceID), name), filepath.Join(store.itemsRoot(testWorkspaceID), orphan)); e != nil {
+			t.Fatal(e)
+		}
+		return interrupted
+	}
+	key := strings.Repeat("a", 64)
+	if _, err := store.CreateForSetup(key, testCreateInput()); !errors.Is(err, interrupted) || !staged {
+		t.Fatal("setup publication seam did not stop actual producer", err)
+	}
+	store.FaultPoint = nil
+	if items, e := store.List(testWorkspaceID); e != nil || len(items) != 0 {
+		t.Errorf("crash orphan broke item listing: %v %v", items, e)
+	}
+	first, err := store.CreateForSetup(key, testCreateInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay, err := store.CreateForSetup(key, testCreateInput())
+	if err != nil || replay.Contract.ItemID != first.Contract.ItemID {
+		t.Fatal("orphan retry duplicated stable item", replay, err)
+	}
+	if items, e := store.List(testWorkspaceID); e != nil || len(items) != 1 {
+		t.Errorf("completed setup did not coexist with orphan: %v %v", items, e)
+	}
+	bad := filepath.Join(store.itemsRoot(testWorkspaceID), "item-malformed")
+	if err = os.Mkdir(bad, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.List(testWorkspaceID); err == nil {
+		t.Error("malformed real item was ignored alongside staging")
+	}
+}
+
+func assertSetupLedgerRetainsAdmittedRoot(t *testing.T) {
+	t.Helper()
+	root := filepath.Join(t.TempDir(), "admitted")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	expected, err := os.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer expected.Close()
+	held, err := scheduler.HoldDirectory(root, expected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Close()
+	moved := root + "-retained"
+	err = os.Rename(root, moved)
+	if runtime.GOOS == "windows" {
+		if err == nil {
+			t.Fatal("Windows retained root allowed an ancestor rename")
+		}
+		moved = root
+	} else {
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.Mkdir(root, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(filepath.Join(root, "replacement-marker"), []byte("untouched"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	store := Store{Root: root, DataDirectory: held}
+	key := strings.Repeat("b", 64)
+	created, err := store.CreateForSetup(key, testCreateInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay, err := store.CreateForSetup(key, testCreateInput())
+	if err != nil || replay.State != created.State {
+		t.Fatal("held setup replay failed", replay, err)
+	}
+	started, err := store.Start(testWorkspaceID, created.Contract.ItemID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoint, err := store.Checkpoint(testWorkspaceID, created.Contract.ItemID, CheckpointInput{ExpectedRevision: 2, AttemptID: started.State.ActiveAttemptID, Summary: "retained root", NextStep: "inspect the same root", ArtifactRefs: []string{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	paused, err := store.Pause(testWorkspaceID, created.Contract.ItemID, checkpoint.State.StateRevision, started.State.ActiveAttemptID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Delete(testWorkspaceID, created.Contract.ItemID, paused.State.StateRevision, true); !errors.Is(err, ErrConfinementUnavailable) {
+		t.Fatal("held physical retirement did not refuse", err)
+	}
+	actual, err := (Store{Root: moved}).Inspect(testWorkspaceID, created.Contract.ItemID)
+	if err != nil || actual.State != paused.State {
+		t.Fatal("ledger effects left the retained root", actual, err)
+	}
+	if runtime.GOOS != "windows" {
+		entries, e := os.ReadDir(root)
+		if e != nil || len(entries) != 1 || entries[0].Name() != "replacement-marker" {
+			t.Fatal("ledger changed replacement root", entries, e)
+		}
+		body, e := os.ReadFile(filepath.Join(root, "replacement-marker"))
+		if e != nil || string(body) != "untouched" {
+			t.Fatal("replacement marker changed", e)
+		}
 	}
 }
