@@ -12,15 +12,19 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 const (
-	MaximumSourceSelectionInputBytes = 128 << 10
-	maximumSelectedFolders           = 32
-	SourceSelectionRequired          = "selection_required"
-	SourceSelected                   = "selected"
-	SourceDeferred                   = "deferred"
-	SourceSelectionUnavailable       = "unavailable"
+	MaximumSourceSelectionInputBytes  = 128 << 10
+	maximumSourceSelectionRecordBytes = 1 << 20 // Stored URLs may expand sixfold when JSON escapes HTML characters.
+	maximumSelectedFolders            = 32
+	SourceSelectionRequired           = "selection_required"
+	SourceSelected                    = "selected"
+	SourceDeferred                    = "deferred"
+	SourceRevoked                     = "revoked"
+	SourceSelectionUnavailable        = "unavailable"
 )
 
 var (
@@ -76,8 +80,10 @@ type SourceSelectionStatus struct {
 }
 
 type SourceSelectionStore struct {
-	Root  string
-	clock func() time.Time
+	Root string
+	// CustodyRoot is the admitted owner directory; it is never supplied by a model.
+	CustodyRoot string
+	clock       func() time.Time
 }
 
 // SelectedFolders returns the exact reviewed pointers for a workspace. It is
@@ -87,24 +93,15 @@ func (store SourceSelectionStore) SelectedFolders(workspaceID string) ([]string,
 	if err := validateWorkspaceID(workspaceID); err != nil {
 		return nil, err
 	}
-	status, err := store.Status(workspaceID)
+	review, err := store.PrepareSelection(workspaceID, SourceDeferred, nil)
 	if err != nil {
 		return nil, err
 	}
-	if status.State != SourceSelected {
+	defer review.Close()
+	if review.CurrentStatus.State != SourceSelected {
 		return nil, errors.New("SharePoint source folders are not selected")
 	}
-	active, err := loadJSONAt[sourceSelectionActive](store.Root, filepath.Join("source-selections", workspaceID, "active.json"))
-	if err != nil {
-		return nil, err
-	}
-	record, err := loadJSONAt[sourceSelection](store.Root, filepath.Join("source-selections", workspaceID, "versions", active.Version+".json"))
-	if err != nil {
-		return nil, err
-	}
-	if err := validateStoredSourceSelection(record, active, workspaceID); err != nil {
-		return nil, err
-	}
+	record := review.Current
 	for _, folder := range record.FolderURLs {
 		if isSharePointLibraryRoot(folder) {
 			// Keep the owner's pointer and let the conversational UI continue,
@@ -149,111 +146,27 @@ func (store SourceSelectionStore) now() time.Time {
 }
 
 func (store SourceSelectionStore) Status(workspaceID string) (SourceSelectionStatus, error) {
-	if err := validateWorkspaceID(workspaceID); err != nil {
-		return SourceSelectionStatus{}, err
-	}
-	base := baseSourceSelectionStatus(workspaceID)
-	if strings.TrimSpace(store.Root) == "" {
-		return SourceSelectionStatus{}, errors.New("prior-work root is required")
-	}
-	if _, err := os.Lstat(store.Root); errors.Is(err, os.ErrNotExist) {
-		return base, nil
-	} else if err != nil {
-		return SourceSelectionStatus{}, err
-	}
-	activePath := filepath.Join("source-selections", workspaceID, "active.json")
-	active, err := loadJSONAt[sourceSelectionActive](store.Root, activePath)
-	if errors.Is(err, os.ErrNotExist) {
-		return base, nil
-	}
+	review, err := store.PrepareSelection(workspaceID, SourceDeferred, nil)
 	if err != nil {
 		return SourceSelectionStatus{}, err
 	}
-	recordPath := filepath.Join("source-selections", workspaceID, "versions", active.Version+".json")
-	record, err := loadJSONAt[sourceSelection](store.Root, recordPath)
-	if err != nil {
-		return SourceSelectionStatus{}, err
-	}
-	if err := validateStoredSourceSelection(record, active, workspaceID); err != nil {
-		return SourceSelectionStatus{}, err
-	}
-	return statusFromSourceSelection(record, recordPath), nil
+	defer review.Close()
+	return review.CurrentStatus, nil
 }
 
 func (store SourceSelectionStore) Select(workspaceID string, folderURLs []string) (SourceSelectionStatus, error) {
-	canonical, err := canonicalFolderURLs(folderURLs)
-	if err != nil {
-		return SourceSelectionStatus{}, err
-	}
-	return store.record(workspaceID, SourceSelected, canonical)
+	return store.record(workspaceID, SourceSelected, folderURLs)
 }
-
 func (store SourceSelectionStore) Defer(workspaceID string) (SourceSelectionStatus, error) {
 	return store.record(workspaceID, SourceDeferred, nil)
 }
-
 func (store SourceSelectionStore) record(workspaceID, state string, folderURLs []string) (SourceSelectionStatus, error) {
-	if err := validateWorkspaceID(workspaceID); err != nil {
-		return SourceSelectionStatus{}, err
-	}
-	if state != SourceSelected && state != SourceDeferred {
-		return SourceSelectionStatus{}, errors.New("invalid SharePoint source selection state")
-	}
-	if state == SourceSelected && len(folderURLs) == 0 {
-		return SourceSelectionStatus{}, errors.New("at least one exact SharePoint project folder is required")
-	}
-	if state == SourceDeferred && len(folderURLs) != 0 {
-		return SourceSelectionStatus{}, errors.New("a deferred SharePoint source choice cannot contain folders")
-	}
-	record := sourceSelection{
-		SchemaVersion: 1,
-		WorkspaceID:   workspaceID,
-		State:         state,
-		Source:        "sharepoint",
-		Purpose:       "prior_work_retrieval",
-		FolderURLs:    append([]string(nil), folderURLs...),
-	}
-	fingerprint, err := sourceSelectionFingerprint(record)
+	review, err := store.PrepareSelection(workspaceID, state, folderURLs)
 	if err != nil {
 		return SourceSelectionStatus{}, err
 	}
-	record.Fingerprint = fingerprint
-	record.Version = "source-" + fingerprint[:20]
-	record.RecordedAt = store.now()
-
-	if err := (Store{Root: store.Root}).prepareRoot(); err != nil {
-		return SourceSelectionStatus{}, err
-	}
-	root, err := openAnchoredRoot(store.Root)
-	if err != nil {
-		return SourceSelectionStatus{}, err
-	}
-	defer root.Close()
-	for _, directory := range []string{
-		"source-selections",
-		filepath.Join("source-selections", workspaceID),
-		filepath.Join("source-selections", workspaceID, "versions"),
-	} {
-		if err := ensurePrivateDirectoryAt(root, directory); err != nil {
-			return SourceSelectionStatus{}, err
-		}
-	}
-	recordPath := filepath.Join("source-selections", workspaceID, "versions", record.Version+".json")
-	if existing, err := loadJSONRoot[sourceSelection](root, recordPath); err == nil {
-		if existing.Fingerprint != record.Fingerprint || existing.WorkspaceID != record.WorkspaceID || existing.State != record.State || !equalStrings(existing.FolderURLs, record.FolderURLs) {
-			return SourceSelectionStatus{}, errors.New("immutable SharePoint source selection collision")
-		}
-		record = existing
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return SourceSelectionStatus{}, err
-	} else if err := writePrivateExclusiveAt(root, recordPath, record); err != nil {
-		return SourceSelectionStatus{}, err
-	}
-	active := sourceSelectionActive{SchemaVersion: 1, WorkspaceID: workspaceID, Version: record.Version, Fingerprint: record.Fingerprint}
-	if err := atomicWriteAt(store.Root, filepath.Join("source-selections", workspaceID, "active.json"), active); err != nil {
-		return SourceSelectionStatus{}, err
-	}
-	return statusFromSourceSelection(record, recordPath), nil
+	defer review.Close()
+	return store.CommitSelection(review, review.Digest, nil)
 }
 
 func baseSourceSelectionStatus(workspaceID string) SourceSelectionStatus {
@@ -279,6 +192,8 @@ func statusFromSourceSelection(record sourceSelection, recordPath string) Source
 	status.FolderCount = len(record.FolderURLs)
 	if record.State == SourceSelected {
 		status.AuthorizationState = "pending_signed_enrollment"
+	} else if record.State == SourceRevoked {
+		status.AuthorizationState = "revoked_by_owner"
 	} else {
 		status.AuthorizationState = "deferred_by_owner"
 	}
@@ -287,12 +202,12 @@ func statusFromSourceSelection(record sourceSelection, recordPath string) Source
 
 func validateStoredSourceSelection(record sourceSelection, active sourceSelectionActive, workspaceID string) error {
 	if record.SchemaVersion != 1 || active.SchemaVersion != 1 || record.WorkspaceID != workspaceID || active.WorkspaceID != workspaceID ||
-		(record.State != SourceSelected && record.State != SourceDeferred) || record.Source != "sharepoint" || record.Purpose != "prior_work_retrieval" ||
+		(record.State != SourceSelected && record.State != SourceDeferred && record.State != SourceRevoked) || record.Source != "sharepoint" || record.Purpose != "prior_work_retrieval" ||
 		record.Version == "" || record.Version != active.Version || record.Fingerprint == "" || record.Fingerprint != active.Fingerprint || record.RecordedAt.IsZero() {
 		return errors.New("SharePoint source selection state is invalid")
 	}
 	canonical, err := canonicalFolderURLs(record.FolderURLs)
-	if record.State == SourceDeferred && len(record.FolderURLs) == 0 {
+	if (record.State == SourceDeferred || record.State == SourceRevoked) && len(record.FolderURLs) == 0 {
 		canonical, err = nil, nil
 	}
 	if err != nil || !equalStrings(canonical, record.FolderURLs) {
@@ -362,6 +277,9 @@ func canonicalFolderURLs(values []string) ([]string, error) {
 		parsed.RawQuery = ""
 		parsed.ForceQuery = false
 		value := parsed.String()
+		if len(value) > 4096 {
+			return nil, errors.New("canonical SharePoint folder pointer exceeds the safe limit")
+		}
 		if seen[value] {
 			return nil, errors.New("SharePoint source selection contains a duplicate folder pointer")
 		}
@@ -440,51 +358,6 @@ func isSharePointLibraryRoot(value string) bool {
 	return len(segments) == 3 && (strings.EqualFold(segments[0], "sites") || strings.EqualFold(segments[0], "teams"))
 }
 
-func ensurePrivateDirectoryAt(root *os.Root, relative string) error {
-	if err := root.Mkdir(relative, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
-		return err
-	}
-	info, err := root.Lstat(relative)
-	if err != nil {
-		return err
-	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-		return errors.New("SharePoint source selection path must be a real directory")
-	}
-	if info.Mode().Perm()&0o077 != 0 {
-		if err := root.Chmod(relative, 0o700); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func writePrivateExclusiveAt(root *os.Root, relative string, value any) error {
-	body, err := marshalPrivate(value)
-	if err != nil {
-		return err
-	}
-	file, err := root.OpenFile(relative, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(file, bytes.NewReader(body)); err != nil {
-		_ = file.Close()
-		_ = root.Remove(relative)
-		return err
-	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		_ = root.Remove(relative)
-		return err
-	}
-	if err := file.Close(); err != nil {
-		_ = root.Remove(relative)
-		return err
-	}
-	return syncRootDirectory(root, filepath.Dir(relative))
-}
-
 func equalStrings(left, right []string) bool {
 	if len(left) != len(right) {
 		return false
@@ -495,4 +368,221 @@ func equalStrings(left, right []string) bool {
 		}
 	}
 	return true
+}
+
+var ErrSourceSelectionChanged = errors.New("SharePoint source selection changed; review the current selection again")
+
+// SourceSelectionReview retains the admitted directory without taking a lock
+// while a native client presents the complete current and proposed records.
+type SourceSelectionReview struct {
+	CurrentStatus SourceSelectionStatus `json:"current_status"`
+	Current       *sourceSelection      `json:"current,omitempty"`
+	Proposed      sourceSelection       `json:"proposed"`
+	Digest        string                `json:"digest"`
+	held          *scheduler.HeldDirectory
+	anchor        os.FileInfo
+	directories   map[string]os.FileInfo
+	relative      string
+	activeBody    []byte
+}
+
+func (review *SourceSelectionReview) Close() error { return review.held.Close() }
+
+func (store SourceSelectionStore) PrepareSelection(workspaceID, state string, folders []string) (*SourceSelectionReview, error) {
+	if err := validateWorkspaceID(workspaceID); err != nil {
+		return nil, err
+	}
+	if state != SourceSelected && state != SourceDeferred && state != SourceRevoked {
+		return nil, errors.New("invalid SharePoint selection state")
+	}
+	var err error
+	if state == SourceSelected {
+		folders, err = canonicalFolderURLs(folders)
+		if err != nil {
+			return nil, err
+		}
+	} else if len(folders) != 0 {
+		return nil, errors.New("inactive SharePoint selection cannot contain folders")
+	}
+	custody := store.CustodyRoot
+	if custody == "" {
+		custody = filepath.Dir(store.Root)
+	}
+	if !filepath.IsAbs(store.Root) || filepath.Clean(store.Root) != store.Root || store.Root == custody {
+		return nil, errors.New("SharePoint source root is invalid")
+	}
+	held, err := scheduler.HoldDirectory(custody, nil)
+	if err != nil {
+		return nil, err
+	}
+	review := &SourceSelectionReview{held: held, directories: map[string]os.FileInfo{}, CurrentStatus: baseSourceSelectionStatus(workspaceID)}
+	fail := func(err error) (*SourceSelectionReview, error) { held.Close(); return nil, err }
+	review.anchor, err = held.StatDirectory(".")
+	if err != nil {
+		return fail(err)
+	}
+	review.relative, err = held.Relative(store.Root)
+	if err != nil {
+		return fail(err)
+	}
+	scope := filepath.Join(review.relative, "source-selections", workspaceID)
+	directories := []string{}
+	current := ""
+	for _, segment := range strings.Split(filepath.ToSlash(scope), "/") {
+		current = filepath.Join(current, segment)
+		directories = append(directories, current)
+	}
+	directories = append(directories, filepath.Join(scope, "versions"))
+	missing := false
+	for _, directory := range directories {
+		if missing {
+			break
+		}
+		info, e := held.StatDirectory(directory)
+		if errors.Is(e, os.ErrNotExist) {
+			missing = true
+			break
+		}
+		if e != nil {
+			return fail(e)
+		}
+		review.directories[directory] = info
+	}
+	if _, exists := review.directories[scope]; exists {
+		body, e := held.ReadFile(filepath.Join(scope, "active.json"), MaximumSourceSelectionInputBytes, true)
+		if e != nil {
+			return fail(e)
+		}
+		active, e := decodeStrictJSON[sourceSelectionActive](body)
+		if e != nil {
+			return fail(e)
+		}
+		if !regexp.MustCompile(`^source-[a-f0-9]{20}$`).MatchString(active.Version) {
+			return fail(errors.New("SharePoint selection pointer is invalid"))
+		}
+		review.activeBody = append([]byte(nil), body...)
+		body, e = held.ReadFile(filepath.Join(scope, "versions", active.Version+".json"), maximumSourceSelectionRecordBytes, true)
+		if e != nil {
+			return fail(e)
+		}
+		record, e := decodeStrictJSON[sourceSelection](body)
+		if e != nil {
+			return fail(e)
+		}
+		if e = validateStoredSourceSelection(record, active, workspaceID); e != nil {
+			return fail(e)
+		}
+		review.Current = &record
+		review.CurrentStatus = statusFromSourceSelection(record, filepath.Join("source-selections", workspaceID, "versions", active.Version+".json"))
+	}
+	review.Proposed = sourceSelection{SchemaVersion: 1, WorkspaceID: workspaceID, State: state, Source: "sharepoint", Purpose: "prior_work_retrieval", FolderURLs: append([]string(nil), folders...)}
+	review.Proposed.Fingerprint, err = sourceSelectionFingerprint(review.Proposed)
+	if err != nil {
+		return fail(err)
+	}
+	review.Proposed.Version = "source-" + review.Proposed.Fingerprint[:20]
+	review.Digest, err = fingerprintValue(review)
+	if err != nil {
+		return fail(err)
+	}
+	return review, nil
+}
+
+// CommitSelection never grants signed enrollment or external collection. A
+// revoked local choice fences SelectedFolders and preserves immutable versions.
+func (store SourceSelectionStore) CommitSelection(review *SourceSelectionReview, digest string, guard func() error) (SourceSelectionStatus, error) {
+	var status SourceSelectionStatus
+	if review == nil || review.held == nil || digest == "" || review.Digest != digest {
+		return status, ErrSourceSelectionChanged
+	}
+	err := review.held.WithPrivateLock(filepath.Join(review.relative, ".sharepoint-source-"+review.Proposed.WorkspaceID+".lock"), func() error {
+		if guard != nil {
+			if err := guard(); err != nil {
+				return err
+			}
+		}
+		currentAnchor, err := scheduler.HoldDirectory(review.held.Path(), nil)
+		if err != nil {
+			return err
+		}
+		info, err := currentAnchor.StatDirectory(".")
+		currentAnchor.Close()
+		if err != nil {
+			return err
+		}
+		if !os.SameFile(info, review.anchor) {
+			return ErrSourceSelectionChanged
+		}
+		for path, before := range review.directories {
+			now, e := review.held.StatDirectory(path)
+			if e != nil {
+				return e
+			}
+			if !os.SameFile(before, now) {
+				return ErrSourceSelectionChanged
+			}
+		}
+		fresh, err := store.PrepareSelection(review.Proposed.WorkspaceID, review.Proposed.State, review.Proposed.FolderURLs)
+		if err != nil {
+			return err
+		}
+		defer fresh.Close()
+		if fresh.Digest != digest {
+			return ErrSourceSelectionChanged
+		}
+		record := review.Proposed
+		if review.Current != nil && review.Current.Fingerprint == record.Fingerprint {
+			status = review.CurrentStatus
+			return nil
+		}
+		record.RecordedAt = store.now()
+		scope := filepath.Join(review.relative, "source-selections", record.WorkspaceID)
+		if err = review.held.EnsureDirectory(filepath.Join(scope, "versions")); err != nil {
+			return err
+		}
+		versionPath := filepath.Join(scope, "versions", record.Version+".json")
+		body, err := review.held.ReadFile(versionPath, maximumSourceSelectionRecordBytes, true)
+		if err == nil {
+			existing, e := decodeStrictJSON[sourceSelection](body)
+			active := sourceSelectionActive{SchemaVersion: 1, WorkspaceID: record.WorkspaceID, Version: record.Version, Fingerprint: record.Fingerprint}
+			if e != nil {
+				return e
+			}
+			if e = validateStoredSourceSelection(existing, active, record.WorkspaceID); e != nil {
+				return e
+			}
+			record = existing
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		} else {
+			body, err = marshalPrivate(record)
+			if err != nil {
+				return err
+			}
+			if err = review.held.PublishNewFile(versionPath, body); err != nil {
+				return err
+			}
+		}
+		active := sourceSelectionActive{SchemaVersion: 1, WorkspaceID: record.WorkspaceID, Version: record.Version, Fingerprint: record.Fingerprint}
+		body, err = marshalPrivate(active)
+		if err != nil {
+			return err
+		}
+		if guard != nil {
+			if err = guard(); err != nil {
+				return err
+			}
+		}
+		if err = review.held.UpdatePrivateFile(filepath.Join(scope, "active.json"), MaximumSourceSelectionInputBytes, func(current []byte) ([]byte, error) {
+			if !bytes.Equal(current, review.activeBody) {
+				return nil, ErrSourceSelectionChanged
+			}
+			return body, nil
+		}); err != nil {
+			return err
+		}
+		status = statusFromSourceSelection(record, filepath.Join("source-selections", record.WorkspaceID, "versions", record.Version+".json"))
+		return nil
+	})
+	return status, err
 }
