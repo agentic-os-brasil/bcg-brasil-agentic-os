@@ -196,6 +196,16 @@ Marker classifications are `malformed`, `missing`, `startup` or `other`;
 `nonce_matched` records only exact equality and never the nonce or message.
 A response's typed exit code remains null when unavailable. No raw hook output,
 messages, paths, authentication data or per-hook timing enters this diagnostic.
+The additive `read` object reports only attempts at the exact synthetic allowed
+Read, in observed call order. It counts attempts and retains at most eight
+per-attempt boolean records: `canonical_pre`, `post`, `result`,
+`synthetic_content`, `denied` and `error_result`; `truncated` marks overflow.
+`synthetic_content` reflects the verifier's successful-result marker check.
+Flags remain separate per call; evidence from different attempts cannot combine
+into a passing Read. Truncation limits diagnostics, never acceptance. The same
+4096-byte failure-record bound remains enforced, including combined startup and
+Read observations. No tool ID, path, content or timing is retained.
+
 `canonical_flow_check: not_reached` means an earlier control prevented that
 check; `unavailable` means it was reached without a complete observation, and
 `observed` accompanies the existing canonical-flow observation. A false
