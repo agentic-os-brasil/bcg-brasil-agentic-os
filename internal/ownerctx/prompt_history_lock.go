@@ -18,6 +18,9 @@ const promptHistoryLockName = ".lock"
 var ErrPromptHistoryLocked = errors.New("prompt history store is locked")
 
 func withPromptHistoryLock(root string, operation func(entriesPath, configPath string) error) error {
+	return withPromptHistoryLockPolicy(root, false, operation)
+}
+func withPromptHistoryLockPolicy(root string, allowPending bool, operation func(entriesPath, configPath string) error) error {
 	entriesPath, configPath, err := promptHistoryPaths(root)
 	if err != nil {
 		return err
@@ -35,6 +38,13 @@ func withPromptHistoryLock(root string, operation func(entriesPath, configPath s
 		return fmt.Errorf("prompt history transition lock: %w", err)
 	}
 	operationErr := initializePromptHistoryFiles(entriesPath, configPath, fresh)
+	if operationErr == nil && !allowPending {
+		if _, e := os.Lstat(filepath.Join(filepath.Dir(entriesPath), promptHistoryPending)); e == nil {
+			operationErr = ErrPromptHistoryRecovery
+		} else if !errors.Is(e, os.ErrNotExist) {
+			operationErr = e
+		}
+	}
 	if operationErr == nil {
 		operationErr = operation(entriesPath, configPath)
 	}

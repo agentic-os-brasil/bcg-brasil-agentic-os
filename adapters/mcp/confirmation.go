@@ -55,6 +55,8 @@ func (b *Bound) confirm(ctx context.Context, req *mcp.CallToolRequest, question 
 		maximum = 2 << 20
 	case KnowledgeReview, BrainReview:
 		maximum = 4 << 20
+	case historyReviewEnvelope:
+		maximum = maximumHistoryReviewBytes
 	case ownerAtlasReview:
 		// Preparation reviews four existing 256KiB scaffold pages: at most
 		// 6MiB after sixfold JSON escaping. Create/update bind at most three
