@@ -223,7 +223,7 @@ func productQuerySchema() map[string]any {
 		variant("execution.next", map[string]any{"item_id": strSchema(96)}, "item_id"),
 		variant("execution.contract", map[string]any{"item_id": strSchema(96)}, "item_id"),
 	}
-	for _, group := range [][]any{historyQueries(), sharepointEnrollmentQueries(), caseSetupQueries(), ownerQueries(), agentIdentityQueries(), memoryQueries(), methodsQueries(), contentQueries(), brainQueries(), maintenanceQueries(), wikiQueries()} {
+	for _, group := range [][]any{dailyQueries(), historyQueries(), sharepointEnrollmentQueries(), caseSetupQueries(), ownerQueries(), agentIdentityQueries(), memoryQueries(), methodsQueries(), contentQueries(), brainQueries(), maintenanceQueries(), wikiQueries()} {
 		variants = append(variants, group...)
 	}
 	return map[string]any{"type": "object", "oneOf": variants}
@@ -231,7 +231,16 @@ func productQuerySchema() map[string]any {
 
 type input struct {
 	historyArguments
-	FolderURLs                 []string `json:"folder_urls"`
+	FolderURLs    []string `json:"folder_urls"`
+	DailyScope    string   `json:"daily_scope"`
+	CheckpointID  string   `json:"checkpoint_id"`
+	SessionID     string   `json:"session_id"`
+	CapturedAt    string   `json:"captured_at"`
+	LocalDate     string   `json:"local_date"`
+	Decisions     []string `json:"decisions"`
+	NextActions   []string `json:"next_actions"`
+	CheckpointIDs []string `json:"checkpoint_ids"`
+
 	Mode                       string   `json:"mode"`
 	ProjectName                string   `json:"project_name"`
 	AccountID                  string   `json:"account_id"`
@@ -354,7 +363,7 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		if len(req.Params.Arguments) > 128<<10 && in.Operation != "history.record" && in.Operation != "knowledge.create" && in.Operation != "brain.create" && in.Operation != "brain.update" && in.Operation != "owner.atlas.create" && in.Operation != "owner.atlas.update" {
 			return result(nil, errors.New("input_size")), nil
 		}
-		if len(req.Params.Arguments) > 16<<10 && in.Operation != "sharepoint.enrollment.select" && in.Operation != "history.record" && in.Operation != "history.selection" && in.Operation != "history.read" && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" && in.Operation != "knowledge.create" && in.Operation != "knowledge.append" && in.Operation != "brain.append" && in.Operation != "brain.create" && in.Operation != "brain.update" && in.Operation != "owner.atlas.create" && in.Operation != "owner.atlas.update" && in.Operation != "owner.atlas.append" && in.Operation != "owner.atlas.collect" {
+		if len(req.Params.Arguments) > 16<<10 && in.Operation != "daily.enqueue" && in.Operation != "sharepoint.enrollment.select" && in.Operation != "history.record" && in.Operation != "history.selection" && in.Operation != "history.read" && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" && in.Operation != "knowledge.create" && in.Operation != "knowledge.append" && in.Operation != "brain.append" && in.Operation != "brain.create" && in.Operation != "brain.update" && in.Operation != "owner.atlas.create" && in.Operation != "owner.atlas.update" && in.Operation != "owner.atlas.append" && in.Operation != "owner.atlas.collect" {
 			return result(nil, errors.New("input_size")), nil
 		}
 		if kind == "context" {
@@ -365,6 +374,9 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		}
 		if strings.HasPrefix(in.Operation, "history.") {
 			return b.handleHistory(ctx, req), nil
+		}
+		if strings.HasPrefix(in.Operation, "daily.") {
+			return b.handleDaily(ctx, req), nil
 		}
 		if strings.HasPrefix(in.Operation, "case.setup.") {
 			return b.handleCaseSetup(ctx, req, in), nil
