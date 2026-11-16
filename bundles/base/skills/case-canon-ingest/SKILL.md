@@ -25,8 +25,11 @@ as `maestro://methods/maestro-operator/resources/authored-brain.md` through
    case prefix `accounts/<account-id>/cases/<case-id>/canon/` relative to its
    workspace brain. Agree `<type>-<kebab-title>.md`; the bound IDs, not a title,
    supply the prefix. Query `brain.status` before mutations and use `brain.read`
-   to inspect that named page. A typed missing page is absence; another refusal
-   is not permission to create or overwrite it.
+   to inspect that named page. A generic read refusal establishes no absence.
+   For an explicitly requested new named page, the create-only route below may
+   proceed to its complete current/proposed review; creation preserves existing
+   content. If review shows an existing page, preserve it and obtain a complete
+   revision-consistent read before proposing an append or replacement.
 3. For existing named workspace sources use `knowledge.collect` with `pages`
    and a declared `purpose`, or complete revision-consistent `brain.read`.
    Collection is bounded to 24 pages/128 KiB; a missing/omitted or truncated

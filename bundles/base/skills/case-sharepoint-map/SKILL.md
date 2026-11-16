@@ -67,8 +67,11 @@ Não tentar leitura sem conector. Não gravar nada.
    seleção, inferir binding nem criar pastas diretamente.
 2. O destino relativo ao brain do workspace é
    `accounts/<conta>/cases/<caso>/sources/sharepoint-map.md`, com os IDs desse
-   binding. Ler só essa página por `brain.read`; somente ausência tipada permite
-   criação. Falta de autoridade não é ausência.
+   binding. Ler só essa página por `brain.read`; recusa genérica não comprova
+   ausência. Para uma nova página nomeada pedida explicitamente, `brain.create`
+   pode seguir à revisão integral do estado atual/proposto; criação preserva
+   conteúdo existente. Se a revisão mostrar uma página existente, preservá-la e
+   obter leitura completa de revisão única antes de propor append ou substituição.
 3. Antes de salvar, consultar `brain.status` e ler a receita canônica
    [authored-brain](../maestro-operator/resources/authored-brain.md), disponível
    em `maestro://methods/maestro-operator/resources/authored-brain.md`.

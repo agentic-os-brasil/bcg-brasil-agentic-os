@@ -22,9 +22,14 @@ Use the intended Maestro connector and its current closed schemas.
    `accounts/<account-id>/cases/<case-id>/decisions/decision-log.md` under that
    binding. Query `brain.status` for mutation availability and `brain.read` for
    this exact page/purpose. Read every page through `next_offset: -1`, at one
-   unchanged revision. Only a typed missing-page result permits new creation.
+   unchanged revision. A generic read refusal establishes no absence. For an
+   explicitly requested new named log, `brain.create` may proceed to its complete
+   current/proposed review; creation preserves existing content. If review shows
+   an existing log, preserve it and obtain its complete revision-consistent read
+   before proposing an append or replacement.
 3. From the complete log, find the highest `D-NNN` heading and propose the next
-   number (D-001 when absent). Record the current revision with the proposal.
+   number. For a new-log request, D-001 stays a candidate until the create review
+   establishes no current page. Record the current revision with an edit proposal.
    A restart first inspects the saved log; it never allocates a second number
    merely because the prior response was interrupted.
 
