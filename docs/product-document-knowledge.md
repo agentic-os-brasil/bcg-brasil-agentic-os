@@ -1,6 +1,6 @@
 # Reviewed local document knowledge
 
-Use this guide when converting a selected local document, saving reviewed workspace
+Use this guide when converting a selected local document, saving reviewed workspace or explicitly admitted owner-private
 knowledge, or diagnosing a refusal. The MCP/plugin keeps the existing three tools;
 inspect their current schemas before choosing an operation. A method describes the
 workflow and grants no additional authority.
@@ -32,11 +32,45 @@ append preserves the current page and returns conflict metadata. Complete privat
 conflict proposals remain available to the private operator; the MCP response
 withholds that full-page draft.
 
+## Explicit owner-private document knowledge
+
+`knowledge.create` and `knowledge.append` accept the optional closed
+`knowledge_destination`: omitted/`workspace` retains the original request,
+review and journal identity; `owner` explicitly selects owner-global private
+professional knowledge. It is available only from the validated active internal
+workspace setup, with no client account/case or pending/conflicting selection.
+Sources in canonical `brain/accounts/` or `brain/clients/` namespaces refuse
+promotion. An internal document named `case-study.md` is not excluded by its name.
+These are structural checks plus the exact owner's review, not semantic
+classification or a model-supplied assertion that client data is absent.
+
+Prepare a missing corpus only through the existing separately reviewed
+`owner.atlas.prepare`. The destination page is relative to the existing owner
+`concepts/`, `learnings/` or `development/` subtree; SELF, generated memory and
+arbitrary roots are outside this route. Review names the owner-global private
+destination, original workspace, selected source/hash, artifact, full conversion
+provenance, current page and exact proposed text. Source/binding/provenance are
+rechecked after review and by the canonical engine's effect callback. Decline,
+stale review and changed source/scope preserve existing content.
+
+Read back through `owner.atlas.collect`, not workspace collection. Store source
+workspace, source hash, artifact ID and pack evidence in the approved synthesis;
+the canonical operation also retains opaque origin provenance. The artifact and
+raw source stay in their original workspace. A later unavailable workspace may
+make that source pointer unavailable; the owner page is not a promise of a
+permanently available artifact or a cross-workspace artifact read.
+
+Adapter fixtures labeled `SYNTHETIC_ADAPTER_NOT_REAL_CONVERSION` prove admission,
+review, source revalidation and real owner page effects only. They do not prove
+Docling transformation. The generic pilot build is unseeded and ships no runtime
+pack; an independently admitted pack and actual format/client qualification are
+still prerequisites for real document ingestion.
+
 ## Local operator fallback
 
 When the client cannot present trusted review, a local operator supplies the same
 closed mutation JSON to `knowledge-review` and `knowledge-apply`. Requests contain
-only operation, artifact ID, page, text and the append fields where required.
+only operation, artifact ID, page, text, the optional closed knowledge_destination and the append fields where required.
 Model-supplied approval, provenance, roots or workspace identity are refused.
 
 ```sh
@@ -53,8 +87,9 @@ for an agent to approve its own request.
 ## Storage and refusal boundaries
 
 Artifacts remain private under the admitted owner's
-`state/content/<workspace-id>/artifacts/`; authored pages stay in the exact
-registered workspace's `brain`. The immutable artifact binds source digest,
+`state/content/<workspace-id>/artifacts/`; authored pages normally stay in the exact
+registered workspace's `brain`. Explicit admitted owner promotion uses the existing
+`HOME/atlas/owner` corpus as described below, without moving artifacts. The immutable artifact binds source digest,
 workspace and authenticated pack evidence. Publication and reviewed application
 revalidate the original source using the canonical bounded same-handle reader.
 Changed, linked, foreign or tampered material refuses without replacing existing
