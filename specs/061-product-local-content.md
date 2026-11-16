@@ -200,8 +200,10 @@ from its fixed package prefix; no setup script, build backend or resolver runs.
 
 PDF uses Docling NativePdfPipeline with the explicit PyPdfium backend, one
 parser thread and no page/picture rendering. Every page must have native text;
-empty/scanned or mixed text/nontext documents, encrypted files and incomplete
-conversion refuse without publishing an artifact. Usable PDF reports textual
+empty/scanned or mixed text/nontext documents, encrypted files, interactive
+AcroForm/XFA documents, widget annotations and incomplete conversion refuse
+without publishing an artifact. Form XObjects and interactive fields are checked
+separately; field values are neither flattened nor silently discarded. Usable PDF reports textual
 fidelity and `pdf_native_text_only`, retaining page and bounding-box provenance.
 OCR, visual reconstruction, inferred reading order, headings and tables remain
 unavailable. No model package, artifact download or remote service is implied.

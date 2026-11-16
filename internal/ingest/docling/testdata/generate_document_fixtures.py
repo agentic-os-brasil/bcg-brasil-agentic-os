@@ -9,7 +9,7 @@ def rc4(key,data):
  for b in data:
   i=(i+1)%256;j=(j+s[i])%256;s[i],s[j]=s[j],s[i];result.append(b^s[(s[i]+s[j])%256])
  return bytes(result)
-def pdf(name,texts,protected=False,image_pages=()):
+def pdf(name,texts,protected=False,image_pages=(),interactive=False):
  objects=[b'<< /Type /Catalog /Pages 2 0 R >>',b'']
  pageids=[];key=None;identity=hashlib.md5(b'Maestro synthetic PDF').digest()
  if protected:
@@ -28,6 +28,12 @@ def pdf(name,texts,protected=False,image_pages=()):
   objects.append(f'<< /Length {len(stream)} >>\nstream\n'.encode()+stream+b'\nendstream')
   if page_index in image_pages:objects.append(b'<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Length 1 >>\nstream\n\x00\nendstream')
  objects[1]=f'<< /Type /Pages /Count {len(texts)} /Kids [{" ".join(str(n)+" 0 R" for n in pageids)}] >>'.encode()
+ if interactive:
+  widget=len(objects)+1;form=widget+1
+  objects[0]=f'<< /Type /Catalog /Pages 2 0 R /AcroForm {form} 0 R >>'.encode()
+  first=pageids[0];objects[first-1]=objects[first-1][:-2]+f'/Annots [{widget} 0 R] >>'.encode()
+  objects.append(f'<< /Type /Annot /Subtype /Widget /FT /Tx /T (MaestroField) /V (MAESTRO FIELD VALUE 859) /Rect [72 600 300 630] /P {first} 0 R /F 4 /DA (/Helv 12 Tf 0 g) >>'.encode())
+  objects.append(f'<< /Fields [{widget} 0 R] /NeedAppearances true /DA (/Helv 12 Tf 0 g) /DR << /Font << /Helv << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> >>'.encode())
  enc=''
  if protected:
   objects.append(f'<< /Filter /Standard /V 1 /R 2 /O <{owner.hex()}> /U <{user.hex()}> /P -4 >>'.encode());enc=f' /Encrypt {len(objects)} 0 R /ID [<{identity.hex()}> <{identity.hex()}>]'
@@ -36,6 +42,7 @@ def pdf(name,texts,protected=False,image_pages=()):
  xref=len(data);data+=f'xref\n0 {len(objects)+1}\n0000000000 65535 f \n'.encode()
  for n in offsets:data+=f'{n:010} 00000 n \n'.encode()
  data+=f'trailer\n<< /Size {len(objects)+1} /Root 1 0 R{enc} >>\nstartxref\n{xref}\n%%EOF\n'.encode();(out/name).write_bytes(data)
+pdf('interactive.pdf',['MAESTRO ACROFORM PAGE TEXT 613'],interactive=True)
 pdf('native.pdf',['MAESTRO NATIVE PAGE ONE 731','MAESTRO NATIVE PAGE TWO 947'])
 pdf('nontext.pdf',['']);pdf('mixed.pdf',['MAESTRO NATIVE PAGE ONE 731','']);pdf('protected.pdf',['MAESTRO PROTECTED 503'],True)
 pdf('scanned.pdf',[''],image_pages={0});pdf('mixed-image.pdf',['MAESTRO NATIVE PAGE ONE 731','MAESTRO NATIVE PAGE TWO 947'],image_pages={1})

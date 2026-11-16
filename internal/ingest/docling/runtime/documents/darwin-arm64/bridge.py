@@ -135,6 +135,10 @@ def native_document():
             with pdfium.PdfDocument(source) as pdf:
                 if pdfium.raw.FPDF_GetSecurityHandlerRevision(pdf.raw) != -1:
                     raise DocumentRefusal("pdf_protected_unavailable")
+                # AcroForm/XFA is distinct from a Form XObject. Native page
+                # text omits interactive field values, so this profile refuses it.
+                if pdfium.raw.FPDF_GetFormType(pdf.raw) != pdfium.raw.FORMTYPE_NONE:
+                    raise DocumentRefusal("pdf_native_text_unavailable")
                 if len(pdf) == 0 or len(pdf) > 4096:
                     raise DocumentRefusal("pdf_native_text_unavailable")
                 page_count = len(pdf)
@@ -142,8 +146,23 @@ def native_document():
                 for index in range(len(pdf)):
                     page = pdf[index]
                     try:
+                        # Also refuse standalone widgets even if the document
+                        # omits its AcroForm catalog entry. Every acquired native
+                        # annotation handle closes before refusal or continuation.
+                        annotations = pdfium.raw.FPDFPage_GetAnnotCount(page.raw)
+                        if annotations < 0 or annotations > 4096:
+                            raise DocumentRefusal("pdf_native_text_unavailable")
+                        for annotation_index in range(annotations):
+                            annotation = pdfium.raw.FPDFPage_GetAnnot(page.raw, annotation_index)
+                            if not annotation:
+                                raise DocumentRefusal("pdf_native_text_unavailable")
+                            try:
+                                if pdfium.raw.FPDFAnnot_GetSubtype(annotation) == pdfium.raw.FPDF_ANNOT_WIDGET:
+                                    raise DocumentRefusal("pdf_native_text_unavailable")
+                            finally:
+                                pdfium.raw.FPDFPage_CloseAnnot(annotation)
                         # The first profile admits encoded text only. Refuse
-                        # image/form-bearing pages instead of silently dropping
+                        # image/Form-XObject pages instead of silently dropping
                         # scanned regions or nested visual content.
                         if next(page.get_objects(filter=[pdfium.raw.FPDF_PAGEOBJ_IMAGE,
                                 pdfium.raw.FPDF_PAGEOBJ_FORM], max_depth=1), None) is not None:

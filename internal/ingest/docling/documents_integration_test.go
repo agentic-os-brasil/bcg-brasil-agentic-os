@@ -99,9 +99,14 @@ func TestAuthenticatedNativeDocuments(t *testing.T) {
 			t.Logf("actual %s parser=%s fidelity=%s document=%d markdown=%d", name, got.Result.Parser, got.Result.Fidelity, len(got.Document), len(got.Markdown))
 		})
 	}
-	for name, want := range map[string]string{"nontext.pdf": "pdf_native_text_unavailable", "scanned.pdf": "pdf_native_text_unavailable", "mixed-image.pdf": "pdf_native_text_unavailable", "mixed.pdf": "pdf_native_text_unavailable", "protected.pdf": "pdf_protected_unavailable"} {
+	for name, want := range map[string]string{"interactive.pdf": "pdf_native_text_unavailable", "nontext.pdf": "pdf_native_text_unavailable", "scanned.pdf": "pdf_native_text_unavailable", "mixed-image.pdf": "pdf_native_text_unavailable", "mixed.pdf": "pdf_native_text_unavailable", "protected.pdf": "pdf_protected_unavailable"} {
 		t.Run(name, func(t *testing.T) {
 			got := convert(t, name)
+			if name == "interactive.pdf" && got.Result.Status == ingest.StatusUsable {
+				pagePresent := bytes.Contains(got.Markdown, []byte("MAESTRO ACROFORM PAGE TEXT 613"))
+				fieldMissing := !bytes.Contains(got.Markdown, []byte("MAESTRO FIELD VALUE 859")) && !bytes.Contains(got.Document, []byte("MAESTRO FIELD VALUE 859"))
+				t.Fatalf("interactive PDF silently admitted: page_marker_present=%v distinct_field_value_omitted=%v result=%+v", pagePresent, fieldMissing, got.Result)
+			}
 			if got.Result.Status != ingest.StatusUnavailable || len(got.Result.Warnings) != 1 || got.Result.Warnings[0] != want || len(got.Document) != 0 || len(got.Markdown) != 0 {
 				t.Fatalf("finite PDF refusal: %+v", got)
 			}
