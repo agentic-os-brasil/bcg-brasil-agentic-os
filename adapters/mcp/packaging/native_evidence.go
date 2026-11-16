@@ -76,6 +76,20 @@ type nativeStartupDiagnostic struct {
 	Observations []nativeStartupObservation `json:"observations"`
 	Capped       bool                       `json:"capped"`
 }
+type nativeReadObservation struct {
+	CanonicalPre     bool `json:"canonical_pre"`
+	Post             bool `json:"post"`
+	Result           bool `json:"result"`
+	SyntheticContent bool `json:"synthetic_content"`
+	Denied           bool `json:"denied"`
+	ErrorResult      bool `json:"error_result"`
+}
+type nativeReadDiagnostic struct {
+	Attempts     int                     `json:"attempts"`
+	Observations []nativeReadObservation `json:"observations"`
+	Truncated    bool                    `json:"truncated"`
+}
+
 type nativeFailureDiagnostic struct {
 	SchemaVersion         int                     `json:"schema_version"`
 	AttemptIndex          int                     `json:"attempt_index"`
@@ -96,6 +110,7 @@ type nativeFailureDiagnostic struct {
 	StartupObserved       bool                    `json:"startup_observed"`
 	Startup               nativeStartupDiagnostic `json:"startup"`
 	ReadObserved          bool                    `json:"read_observed"`
+	Read                  nativeReadDiagnostic    `json:"read"`
 	WriteObserved         bool                    `json:"write_observed"`
 	GuardDenialObserved   bool                    `json:"guard_denial_observed"`
 	FaultAttemptObserved  bool                    `json:"fault_attempt_observed"`
@@ -124,6 +139,8 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 		return proof, reject("stream_too_large", errors.New("native stream too large"))
 	}
 	tools := map[string]*nativeTool{}
+	// Retain bounded references so final flags use the same correlated calls.
+	var reads []*nativeTool
 	hooks := map[string]nativeHook{}
 	seenMessages := map[string]bool{}
 	active := ""
@@ -133,6 +150,9 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 	defer func() {
 		observed := proof
 		observeNativeControls(&observed, tools, p)
+		for _, tool := range reads {
+			d.Read.Observations = append(d.Read.Observations, nativeReadObservation{CanonicalPre: tool.canonicalObserved, Post: tool.postObserved, Result: tool.result, SyntheticContent: tool.allowed, Denied: tool.denied, ErrorResult: tool.errorResult})
+		}
 		d.StartupObserved = observed.StartupUnchanged
 		d.ReadObserved, d.WriteObserved = observed.AllowedRead, observed.AllowedWrite
 		d.GuardDenialObserved = observed.GuardDenied
@@ -220,6 +240,14 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 					return proof, reject("tool_deviated_from_reviewed_protocol", errors.New("native tool deviated from reviewed protocol"))
 				}
 				tools[content.ID] = &nativeTool{name: content.Name, path: input.Path}
+				if content.Name == "Read" && filepath.Clean(path) == filepath.Join(p.challenge, "allowed.txt") {
+					d.Read.Attempts++
+					if len(reads) < 8 {
+						reads = append(reads, tools[content.ID])
+					} else {
+						d.Read.Truncated = true
+					}
+				}
 				active = content.ID
 			}
 		case "user":
