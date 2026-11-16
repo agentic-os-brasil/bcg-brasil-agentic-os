@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"testing"
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
@@ -70,8 +71,9 @@ func TestMCPOnlyPacketHasExplicitNativeBoundaryAndInventory(t *testing.T) {
 	if json.Unmarshal(body, &packet) != nil || packet.Mode != "mcp_only" || packet.Native.State != "unavailable" || packet.Native.Reason == "" || packet.Target.OS != runtime.GOOS || packet.Target.Arch != runtime.GOARCH {
 		t.Fatalf("invalid capability/target: %s", body)
 	}
-	if len(packet.CanonicalAgentIDs) != 7 {
-		t.Fatal("seven immutable canonical identities required")
+	wantAgentIDs := []string{"case-agent", "client-account-agent", "darwin", "gamma-guardian", "maestro", "pa-expert", "repository-spec-reviewer", "repository-standards-reviewer", "yoda"}
+	if !slices.Equal(packet.CanonicalAgentIDs, wantAgentIDs) {
+		t.Fatalf("canonical packet identities = %v; want %v", packet.CanonicalAgentIDs, wantAgentIDs)
 	}
 	missingHelper := false
 	for _, reference := range packet.References {
