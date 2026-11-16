@@ -220,10 +220,10 @@ func TestAuthenticatedRealDocling(t *testing.T) {
 		}
 	})
 	t.Run("explicit fallback only", func(t *testing.T) {
-		put(t, filepath.Join(space, "unsupported.pdf"), []byte("synthetic unsupported source"))
+		put(t, filepath.Join(space, "unsupported.doc"), []byte("synthetic unsupported source"))
 		r := request
-		r.SourcePath = "unsupported.pdf"
-		r.Policy.AllowedExts = map[string]bool{".pdf": true}
+		r.SourcePath = "unsupported.doc"
+		r.Policy.AllowedExts = map[string]bool{".doc": true}
 		got, _ := runtime.Convert(context.Background(), r, w.WorkspaceID)
 		if got.Result.Status != ingest.StatusUnavailable || got.Result.Adapter != "docling" || len(got.Result.Warnings) != 1 || got.Result.Warnings[0] != "format_unsupported" {
 			t.Fatal(got.Result)
