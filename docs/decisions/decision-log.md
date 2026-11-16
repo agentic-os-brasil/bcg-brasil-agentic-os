@@ -1638,3 +1638,15 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: The carrier can transfer Maestro-owned components without transferring third-party runtime bytes. This does not establish redistribution permission, legal clearance, production signing, native Windows operation or client readiness. Cache conflicts, stale consent, unknown profiles, changed public inputs and native qualification failures refuse explicitly. Preparation needs network; subsequent converter operation remains offline.
 - Refs: docs/windows-runtime-acquisition.md; internal/ingest/docling/acquisition; specs/010-local-ingestion-runtime.md; WDOC
 - Supersedes: none
+
+
+## EORC - Honor the explicitly selected readable owner-review channel in Code pilots
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Actual Code native forms collapse the complete review record in the observed client, while consent requires the person to read the full current/proposed text. The existing local browser can render that record but previously acted only as a missing-native fallback.
+- Decision: Honor explicit startup local-browser selection even when the foreground request advertises native forms; empty selection remains native-first. Reject native InputResponses whenever browser review is selected. Carry that selection only through explicitly prepared experimental Code pilot metadata and exact startup arguments, binding the admitted owner/workspace and preserving native qualification fingerprints. Reuse existing verified engineering runtime identity when the server is versioned and registry-pinned; keep stable, enrolled and source packet profiles separate.
+- Consequences: The person reads the full existing review before conscious local approval, with unchanged domain digest/revision revalidation and decline/cancel/expiry behavior. No model argument selects a channel, no error triggers a silent fallback, and old native responses cannot approve browser-selected records. Browser Code acceptance and native-form/Desktop UI qualification remain separate evidence.
+- Refs: docs/product-local-owner-review.md; adapters/mcp/confirmation.go; adapters/mcp/packaging/code_pilot.go; specs/063-product-native-plugin.md
+- Supersedes: LBRV

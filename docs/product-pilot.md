@@ -250,13 +250,16 @@ workspace, client profiles or participant-local generated packets/prompts.
 The explicit local preparation review discloses selection of `local-browser`
 before PREPARAR or digest confirmation. Both platform preparers build the
 ordinary Desktop pilot with `--owner-review-channel local-browser`; its typed
-inventory and canonical manifest retain that exact startup choice. Native forms
-remain first when advertised. Otherwise, a foreground protected request opens
+inventory and canonical manifest retain that exact startup choice. This explicit channel takes precedence even when native forms are advertised.
+A foreground protected request opens
 its complete review and approval schema in an ephemeral local browser page,
 requiring the initially unchecked checkbox and conscious exact-record approval.
 Decline, cancellation, closing, expiry after at most 150 seconds or opener error
 never approves. No URL or approval token is returned to the model. Generic,
-stable, native and lifecycle profiles remain unchanged. Read-only tool permission
+stable and source profiles remain unchanged. The separately selected experimental
+Code pilot may carry the same channel with `--code-pilot`; its exact local
+binding/channel is retained in immutable inventory, and its native fingerprints
+remain unchanged. Read-only tool permission
 never substitutes for review. See [the channel contract](product-local-owner-review.md).
 Actual Desktop presentation/effect/readback and native hooks remain separately
 observed evidence; this local channel does not qualify MCP native forms.

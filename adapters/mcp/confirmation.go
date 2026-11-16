@@ -38,10 +38,11 @@ func (b *Bound) confirm(ctx context.Context, req *mcp.CallToolRequest, question 
 	}
 	capabilities := req.ClientCapabilities()
 	form, _ := confirmationModes(capabilities)
-	if !form && len(req.Params.InputResponses) != 0 {
+	localBrowser := b.options.OwnerReviewChannel == "local-browser"
+	if (localBrowser || !form) && len(req.Params.InputResponses) != 0 {
 		return unavailable("native_continuation_unavailable")
 	}
-	if !form && b.options.OwnerReviewChannel != "local-browser" {
+	if !form && !localBrowser {
 		if capabilities == nil || capabilities.Elicitation == nil {
 			return unavailable("form_undeclared")
 		}
@@ -88,7 +89,7 @@ func (b *Bound) confirm(ctx context.Context, req *mcp.CallToolRequest, question 
 			"approved": {Type: "boolean", Title: "Aprovo este registro exato", Description: "Li o conteúdo completo e autorizo esta alteração."},
 		}, Required: []string{"approved"}},
 	}
-	if !form {
+	if localBrowser {
 		if req.Session == nil {
 			return unavailable("missing_session")
 		}

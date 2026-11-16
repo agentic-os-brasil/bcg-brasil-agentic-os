@@ -43,7 +43,9 @@ or transport error text. A diagnostic or passing SDK test is not native host pro
 
 An explicit local review/confirm command is a supported fallback for clients
 without elicitation. An operator may also explicitly select the foreground-only
-local-browser channel described in `docs/product-local-owner-review.md`; it
+local-browser channel described in `docs/product-local-owner-review.md`. Explicit
+startup selection takes precedence over advertised native forms and rejects
+native InputResponses; empty selection stays native-first. It
 reuses this exact review and canonical apply contract without claiming native
 form or lifecycle qualification. It uses the same canonical review and digest checks. Never
 silently convert a missing host capability into approval or claim native support

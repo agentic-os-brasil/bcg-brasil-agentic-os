@@ -68,7 +68,7 @@ func prepareDesktopPilot(o *Options, format string) error {
 		if o.EngineeringRuntimePilot {
 			return errors.New("engineering runtime selection requires the explicit Desktop pilot")
 		}
-		if o.Binding.OwnerReviewChannel != "" {
+		if o.Binding.OwnerReviewChannel != "" && !(o.CodePilot && format == "plugin") {
 			return errors.New("packaged local-browser owner review requires explicit Desktop pilot")
 		}
 		return nil

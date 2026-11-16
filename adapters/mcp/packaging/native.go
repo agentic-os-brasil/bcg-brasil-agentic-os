@@ -35,39 +35,40 @@ type NativeOptions struct {
 	MaxBudgetUSD                                float64
 }
 type NativePlan struct {
-	Protocol                        string   `json:"protocol"`
-	State                           string   `json:"state"`
-	Reason                          string   `json:"reason,omitempty"`
-	Profile                         string   `json:"profile"`
-	HostExecutable                  string   `json:"host_executable"`
-	HostSHA256                      string   `json:"host_sha256"`
-	HostVersion                     string   `json:"host_version,omitempty"`
-	Authentication                  string   `json:"authentication"`
-	AuthConfigurationLocationSHA256 string   `json:"auth_configuration_location_sha256,omitempty"`
-	NativeConfigurationDirectory    string   `json:"native_configuration_directory,omitempty"`
-	NativeConfigurationSHA256       string   `json:"native_configuration_sha256,omitempty"`
-	SessionSettingsOverride         string   `json:"session_settings_override,omitempty"`
-	ServerSHA256                    string   `json:"server_sha256"`
-	BindingSHA256                   string   `json:"binding_sha256"`
-	ProfileSHA256                   string   `json:"profile_sha256"`
-	Target                          Target   `json:"target"`
-	Destination                     string   `json:"destination"`
-	Version                         string   `json:"version"`
-	ScratchRoot                     string   `json:"scratch_root"`
-	ChallengeDirectory              string   `json:"challenge_directory"`
-	DeniedReadPath                  string   `json:"denied_read_path"`
-	ContextBoundary                 string   `json:"context_boundary"`
-	ManagedPolicyBoundary           string   `json:"managed_policy_boundary"`
-	MetadataWrites                  []string `json:"metadata_writes"`
-	DescendantCleanup               string   `json:"descendant_cleanup"`
-	MaximumCalls                    int      `json:"maximum_native_cli_sessions"`
-	MaximumTurnsPerCall             int      `json:"maximum_parent_turns_per_session"`
-	MaximumSecondsPerCall           int      `json:"maximum_seconds_per_session"`
-	MaxBudgetUSDPerCall             float64  `json:"max_budget_usd_per_call"`
-	AggregateEstimatedLimitUSD      float64  `json:"aggregate_estimated_limit_usd"`
-	BillingBoundary                 string   `json:"billing_boundary"`
-	VendorProvenance                string   `json:"vendor_provenance"`
-	Challenges                      []string `json:"challenges"`
+	CodePilot                       *CodePilotBinding `json:"code_pilot,omitempty"`
+	Protocol                        string            `json:"protocol"`
+	State                           string            `json:"state"`
+	Reason                          string            `json:"reason,omitempty"`
+	Profile                         string            `json:"profile"`
+	HostExecutable                  string            `json:"host_executable"`
+	HostSHA256                      string            `json:"host_sha256"`
+	HostVersion                     string            `json:"host_version,omitempty"`
+	Authentication                  string            `json:"authentication"`
+	AuthConfigurationLocationSHA256 string            `json:"auth_configuration_location_sha256,omitempty"`
+	NativeConfigurationDirectory    string            `json:"native_configuration_directory,omitempty"`
+	NativeConfigurationSHA256       string            `json:"native_configuration_sha256,omitempty"`
+	SessionSettingsOverride         string            `json:"session_settings_override,omitempty"`
+	ServerSHA256                    string            `json:"server_sha256"`
+	BindingSHA256                   string            `json:"binding_sha256"`
+	ProfileSHA256                   string            `json:"profile_sha256"`
+	Target                          Target            `json:"target"`
+	Destination                     string            `json:"destination"`
+	Version                         string            `json:"version"`
+	ScratchRoot                     string            `json:"scratch_root"`
+	ChallengeDirectory              string            `json:"challenge_directory"`
+	DeniedReadPath                  string            `json:"denied_read_path"`
+	ContextBoundary                 string            `json:"context_boundary"`
+	ManagedPolicyBoundary           string            `json:"managed_policy_boundary"`
+	MetadataWrites                  []string          `json:"metadata_writes"`
+	DescendantCleanup               string            `json:"descendant_cleanup"`
+	MaximumCalls                    int               `json:"maximum_native_cli_sessions"`
+	MaximumTurnsPerCall             int               `json:"maximum_parent_turns_per_session"`
+	MaximumSecondsPerCall           int               `json:"maximum_seconds_per_session"`
+	MaxBudgetUSDPerCall             float64           `json:"max_budget_usd_per_call"`
+	AggregateEstimatedLimitUSD      float64           `json:"aggregate_estimated_limit_usd"`
+	BillingBoundary                 string            `json:"billing_boundary"`
+	VendorProvenance                string            `json:"vendor_provenance"`
+	Challenges                      []string          `json:"challenges"`
 }
 type NativeReview struct {
 	Plan         NativePlan `json:"plan"`
@@ -142,6 +143,7 @@ func reviewNativeAt(ctx context.Context, in NativeOptions, run nativeCommand, ch
 	}
 	profile, profileErr := profileFingerprint(o)
 	p := NativePlan{Protocol: qualificationProtocol, State: "unavailable", Profile: nativeProfile, HostExecutable: in.Executable, ServerSHA256: digest(o.serverBody), BindingSHA256: binding, ProfileSHA256: profile, Target: o.target, Destination: o.Destination, Version: o.Version, ScratchRoot: in.ScratchRoot, Authentication: "unavailable", MaximumCalls: maximumNativeCalls, MaximumTurnsPerCall: maximumNativeTurns, MaximumSecondsPerCall: nativeCallSeconds, MaxBudgetUSDPerCall: in.MaxBudgetUSD, AggregateEstimatedLimitUSD: maximumNativeCalls * in.MaxBudgetUSD, BillingBoundary: "Provider billing and CLI caps are estimates, not hard ceilings. Stop remaining calls when an observed estimate exceeds the reviewed per-call limit.", VendorProvenance: "Explicitly operator-selected local installation; Anthropic vendor provenance is not independently attested.", Challenges: []string{"read_only_startup", "allowed_read", "allowed_write", "guard_denial", "sequential_case_gamma_correlation_and_stops", "missing_helper_blocks_edit", "crashing_helper_blocks_edit", "timed_out_helper_blocks_edit"}}
+	p.CodePilot = o.codePilot
 	p.ChallengeDirectory = in.ChallengeDirectory
 	if contains(o.Binding.WorkspacePath, o.Server) {
 		return out, errors.New("negative read control requires the selected public server outside the workspace")

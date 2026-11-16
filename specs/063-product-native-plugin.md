@@ -549,3 +549,21 @@ compact JSON preserves the aggregate size cap. These are diagnostic observations
 not importable qualification, signing, installation or owner authority. Source
 fixtures demonstrate correlation behavior only. Retained failed runtime trials
 remain failed; later instrumented native trials require their own reviewed plan.
+
+
+## Explicit readable owner review in experimental Code pilots
+
+An explicitly prepared `--code-pilot --owner-review-channel local-browser`
+packet binds that foreground channel, exact admitted owner/workspace and selection
+digest in its closed inventory and canonical MCP launch arguments. Serve rejects
+channel/binding substitution; ordinary hooks retain their existing no-review
+arguments and native fingerprints. Empty startup selection remains native-first.
+Browser-selected requests reject native InputResponses, including when native
+forms are advertised. Full current/proposed review and domain stale-state checks
+are unchanged. Generic, stable, enrolled and source packets cannot acquire this
+profile implicitly. The existing prepared short-lived engineering runtime identity
+owns versioned experiments; this profile creates no publisher authority.
+
+Qualification plans separately disclose/bind this Code selection. Actual native
+qualification remains independent; neither packet metadata nor browser readability
+qualifies hooks, native form rendering, Desktop UI or runtime conversions.
