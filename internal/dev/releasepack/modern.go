@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest/docling"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/rolemigration"
@@ -139,8 +140,8 @@ func BuildModernCandidate(ctx context.Context, o ModernOptions) (ModernCandidate
 	}
 	m := releasecontract.Manifest{SchemaVersion: 2, Product: "maestro", Release: o.Version, Channel: o.Channel, Issuer: releasecontract.Issuer{ID: "maestro-release-candidate", KeyID: "candidate-unavailable"}, Server: releasecontract.ServerComponent{Version: o.Version, CompatibleBundle: compatibleRange(o.Version), Protocol: releasecontract.ServerProtocol, ExecutionContract: identity.ExecutionContract, EmbeddedInputsSHA256: identity.EmbeddedInputsSHA256}, Bundle: releasecontract.BundleComponent{Version: o.Version, CompatibleServer: compatibleRange(o.Version)}, Delivery: releasecontract.DeliveryComponent{Profile: releasecontract.ModernProfile, InstallerVersion: o.InstallerVersion, InstallerProtocol: releasecontract.InstallerProtocol}, Artifacts: []releasecontract.Artifact{bundle, server}, Migrations: []releasecontract.Migration{}}
 	if o.DoclingPack != "" {
-		if o.Target.OS != "darwin" || o.Target.Arch != "arm64" {
-			return ModernCandidate{}, errors.New("Docling has no qualified pack for the selected target")
+		if !docling.SupportsTarget(o.Target.OS, o.Target.Arch) {
+			return ModernCandidate{}, errors.New("Docling has no source-supported pack for the selected target")
 		}
 		name := "docling-runtime_" + o.Version + "_" + o.Target.OS + "_" + o.Target.Arch + ".tar.gz"
 		if err = stageRegularFile(o.DoclingPack, filepath.Join(release, name), 0644); err != nil {
