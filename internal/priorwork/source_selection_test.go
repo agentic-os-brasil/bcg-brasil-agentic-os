@@ -3,15 +3,162 @@ package priorwork
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
+
+func TestReviewedSourceSelectionRejectsStaleReviewAndRevokesOnlyItsWorkspace(t *testing.T) {
+	store := SourceSelectionStore{Root: filepath.Join(t.TempDir(), "sharepoint-work")}
+	id, other := strings.Repeat("d", 32), strings.Repeat("e", 32)
+	folders := []string{"https://example.sharepoint.com/sites/project/Documents/Reviewed"}
+	review, err := store.PrepareSelection(id, SourceSelected, folders)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer review.Close()
+	if _, err := os.Stat(store.Root); !os.IsNotExist(err) {
+		t.Fatalf("review wrote state: %v", err)
+	}
+	if _, err := store.Select(id, []string{"https://example.sharepoint.com/sites/project/Documents/Changed"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CommitSelection(review, review.Digest, nil); !errors.Is(err, ErrSourceSelectionChanged) {
+		t.Fatalf("stale review accepted: %v", err)
+	}
+	selected, err := store.Select(other, folders)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(filepath.Join(store.Root, filepath.FromSlash(selected.Pointer)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	revoke, err := store.PrepareSelection(id, SourceRevoked, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer revoke.Close()
+	status, err := store.CommitSelection(revoke, revoke.Digest, nil)
+	if err != nil || status.State != SourceRevoked {
+		t.Fatalf("revoke: %+v %v", status, err)
+	}
+	if _, err := store.SelectedFolders(id); err == nil {
+		t.Fatal("revoked folders still available")
+	}
+	if got, err := store.SelectedFolders(other); err != nil || !equalStrings(got, folders) {
+		t.Fatalf("foreign selection changed: %v %v", got, err)
+	}
+	after, err := os.ReadFile(filepath.Join(store.Root, filepath.FromSlash(selected.Pointer)))
+	if err != nil || string(before) != string(after) {
+		t.Fatal("immutable history changed", err)
+	}
+}
+
+func TestReviewedSourceSelectionSerializesCompetingApprovals(t *testing.T) {
+	store := SourceSelectionStore{Root: filepath.Join(t.TempDir(), "sharepoint-work")}
+	id := strings.Repeat("f", 32)
+	a, err := store.PrepareSelection(id, SourceSelected, []string{"https://example.sharepoint.com/sites/project/Documents/A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+	b, err := store.PrepareSelection(id, SourceSelected, []string{"https://example.sharepoint.com/sites/project/Documents/B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	var wg sync.WaitGroup
+	results := make(chan error, 2)
+	for _, review := range []*SourceSelectionReview{a, b} {
+		wg.Add(1)
+		go func() { defer wg.Done(); _, err := store.CommitSelection(review, review.Digest, nil); results <- err }()
+	}
+	wg.Wait()
+	close(results)
+	success := 0
+	for err := range results {
+		if err == nil {
+			success++
+		}
+	}
+	if success != 1 {
+		t.Fatalf("competing approvals committed %d transitions", success)
+	}
+	if _, err := store.SelectedFolders(id); err != nil {
+		t.Fatal("winner not readable", err)
+	}
+}
+
+func TestReviewedSourceSelectionPreservesFailuresAndRejectsUnsafeCustody(t *testing.T) {
+	store := SourceSelectionStore{Root: filepath.Join(t.TempDir(), "sharepoint-work")}
+	id := strings.Repeat("1", 32)
+	review, err := store.PrepareSelection(id, SourceSelected, []string{"https://example.sharepoint.com/sites/project/Documents/A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer review.Close()
+	stop := errors.New("binding rejected")
+	if _, err := store.CommitSelection(review, review.Digest, func() error { return stop }); !errors.Is(err, stop) {
+		t.Fatal(err)
+	}
+	status, err := store.Status(id)
+	if err != nil || status.State != SourceSelectionRequired {
+		t.Fatal("failed guard published state", status, err)
+	}
+	if _, err := store.CommitSelection(review, review.Digest, nil); err != nil {
+		t.Fatal(err)
+	}
+	active := filepath.Join(store.Root, "source-selections", id, "active.json")
+	if err := os.Remove(active); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Status(id); err == nil {
+		t.Fatal("missing active pointer became fresh state")
+	}
+	if runtime.GOOS == "windows" {
+		return
+	}
+	outside := t.TempDir()
+	unsafeStore := SourceSelectionStore{Root: filepath.Join(t.TempDir(), "linked")}
+	if err := os.Symlink(outside, unsafeStore.Root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := unsafeStore.PrepareSelection(id, SourceDeferred, nil); err == nil {
+		t.Fatal("symlink source root admitted")
+	}
+	entries, err := os.ReadDir(outside)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("unsafe custody modified target", err)
+	}
+}
+
+func TestReviewedSourceSelectionReadsExistingMaximumEscapedRecord(t *testing.T) {
+	store := SourceSelectionStore{Root: filepath.Join(t.TempDir(), "sharepoint-work")}
+	urls := make([]string, 32)
+	for i := range urls {
+		urls[i] = "https://example.sharepoint.com/sites/project/Documents/" + strings.Repeat("&", 4000) + fmt.Sprint(i)
+	}
+	id := strings.Repeat("2", 32)
+	status, err := store.Select(id, urls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, err := store.Status(id)
+	if err != nil || status.Fingerprint != read.Fingerprint || read.FolderCount != 32 {
+		t.Fatal("valid expanded record unreadable", read, err)
+	}
+	if _, err := store.Select(id, []string{"https://example.sharepoint.com/sites/project/Documents/" + strings.Repeat("é", 1300)}); err == nil {
+		t.Fatal("canonical URL expansion exceeded stored pointer limit")
+	}
+}
 
 func TestGuidedSourceSelectionIsWorkspaceBoundVersionedAndPointerOnly(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "sharepoint-work")

@@ -580,7 +580,7 @@ func memoryLayerRank(layer string) int {
 }
 
 func validateSharePointSource(source SharePointSource) error {
-	if source.State != priorwork.SourceSelectionRequired && source.State != priorwork.SourceSelected && source.State != priorwork.SourceDeferred && source.State != priorwork.SourceSelectionUnavailable {
+	if source.State != priorwork.SourceSelectionRequired && source.State != priorwork.SourceSelected && source.State != priorwork.SourceDeferred && source.State != priorwork.SourceRevoked && source.State != priorwork.SourceSelectionUnavailable {
 		return errors.New("session context packet has an invalid SharePoint source selection state")
 	}
 	if source.SourceAuthority != "sharepoint" || source.LocalProjection != "metadata_and_source_pointers_only" || source.CollectionRuntime != "claude" || source.CollectionState != "unavailable" || source.CodexCollectionState != "unavailable/corporate_policy" {
@@ -598,6 +598,10 @@ func validateSharePointSource(source SharePointSource) error {
 	case priorwork.SourceDeferred:
 		if source.Pointer == "" || source.FolderCount != 0 || source.AuthorizationState != "deferred_by_owner" {
 			return errors.New("deferred SharePoint source selection is invalid")
+		}
+	case priorwork.SourceRevoked:
+		if source.Pointer == "" || source.FolderCount != 0 || source.AuthorizationState != "revoked_by_owner" {
+			return errors.New("revoked SharePoint source selection is invalid")
 		}
 	case priorwork.SourceSelectionUnavailable:
 		if source.FolderCount != 0 || source.AuthorizationState != "unavailable" {

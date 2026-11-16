@@ -165,6 +165,11 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 	if got := sessionDirective(deferred); strings.Contains(got, "Quer conectar uma pasta do SharePoint") || !strings.Contains(got, "SharePoint was left out of this workspace") {
 		t.Fatalf("deferred directive = %q", got)
 	}
+	revoked := deferred
+	revoked.SharePointSource.State = priorwork.SourceRevoked
+	if got := sessionDirective(revoked); !strings.Contains(got, "owner revoked") || !strings.Contains(got, "without reading or collecting") || strings.Contains(got, "SharePoint is connected") || strings.Contains(got, "Quer conectar uma pasta do SharePoint") {
+		t.Fatalf("revoked directive = %q", got)
+	}
 	unavailable := active
 	unavailable.MaestroCLIPath = "/Users/pilot/Library/Application Support/Maestro/bin/bcgos"
 	unavailable.SharePointSource = sessionctx.SharePointSource{State: priorwork.SourceSelectionUnavailable}
