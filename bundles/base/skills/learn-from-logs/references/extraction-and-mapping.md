@@ -63,6 +63,16 @@ recusados. Se o host não oferecer o leitor seguro, informar a limitação e seg
 a entrevista manual ou os trechos fornecidos pelo dono; não contornar com leitura
 bruta ou varredura.
 
+## Aplicação das facetas é um fluxo separado
+
+Extração gera candidatos efêmeros. Somente a escolha explícita de salvar chama
+`owner.propose`, `owner.review` e `owner.apply`; mudanças aceitas invalidam a
+aceitação final do perfil. Seguir o [fechamento de facetas aceitas](../SKILL.md#concluir-um-lote-de-facetas-aceitas)
+para revisão separada do perfil completo e leitura fresca paginada de
+`owner.context`. Uma faceta salva não prova perfil confirmado nem personalização
+entregue. Rascunhos devolvidos ao onboarding e zero mudanças aceitas não exigem
+uma confirmação extra; ler/guardar um prompt não confirma uma faceta.
+
 ## Controles de prompts retidos no produto
 
 Ler uma sessão não retém seus prompts. Guardar um prompt próprio requer pedido

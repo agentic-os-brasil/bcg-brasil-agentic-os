@@ -609,14 +609,13 @@
       "required_operations": [
         "history.read",
         "history.selection",
-        "owner.apply",
-        "owner.propose",
         "owner.status"
       ],
       "effects": [
-        "write_owner"
+        "read"
       ],
       "output_kinds": [
+        "reviewable_text",
         "owner_revision"
       ],
       "dependencies": [
@@ -637,9 +636,30 @@
           ]
         },
         {
+          "id": "domain.reviewed_owner_profile",
+          "kind": "domain",
+          "required": false,
+          "fulfillment_operations": [
+            "owner.apply",
+            "owner.confirm_onboarding",
+            "owner.context",
+            "owner.onboarding_review",
+            "owner.propose",
+            "owner.review",
+            "owner.status"
+          ]
+        },
+        {
           "id": "host.trusted_review",
           "kind": "host",
           "required": true
+        }
+      ],
+      "conditional_effects": [
+        {
+          "effect": "write_owner",
+          "condition": "When the owner explicitly chooses facet saving. owner.apply saves accepted facets; separate trusted whole-profile confirmation and complete fresh generation-bound owner.context readback are required to claim usable personalization. Draft-only extraction writes nothing.",
+          "dependency": "domain.reviewed_owner_profile"
         }
       ]
     },
