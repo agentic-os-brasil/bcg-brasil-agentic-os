@@ -180,6 +180,28 @@ packet files.
 | Incomplete challenge evidence | Retain the reported private scratch/session metadata and investigate the exact failed control. Assistant claims cannot promote the result. |
 | Timeout | Qualification is unavailable. Cancellation targets the owned Unix process group; independently detached descendants and cleanup remain unattested. Use the exact retained session metadata for diagnosis. |
 
+Each attempted session's valid reported cost estimate contributes to
+`estimated_spend_usd` and `estimated_spend_sessions`, including when execution or
+qualification fails. `estimated_spend_complete` means estimates were available
+for every attempted session; it does not mean qualification succeeded or that
+provider billing is complete. An unavailable estimate remains unknown rather
+than being counted as a known zero. Known estimates never turn an unavailable
+qualification into a qualified result.
+
+A failed attempt retains a private `failure.json` of at most 4096 bytes. Its
+`startup` object counts correlated SessionStart starts/responses (each capped at
+32) and retains at most eight response observations; `capped` identifies either
+truncation. Outcomes are closed to `success`, `error`, `cancelled` or `other`.
+Marker classifications are `malformed`, `missing`, `startup` or `other`;
+`nonce_matched` records only exact equality and never the nonce or message.
+A response's typed exit code remains null when unavailable. No raw hook output,
+messages, paths, authentication data or per-hook timing enters this diagnostic.
+`canonical_flow_check: not_reached` means an earlier control prevented that
+check; `unavailable` means it was reached without a complete observation, and
+`observed` accompanies the existing canonical-flow observation. A false
+`canonical_flow_observed` alone does not establish that the canonical route
+failed.
+
 The command does not install/register Code, suppress native permission prompts,
 clear a live fence or perform global process cleanup. A partial result may be
 printed before a nonzero exit when scratch already exists; assess both the

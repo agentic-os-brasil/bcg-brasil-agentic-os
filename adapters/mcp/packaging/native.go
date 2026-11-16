@@ -303,6 +303,11 @@ func qualifyAndBuildNative(ctx context.Context, in NativeOptions, reviewDigest s
 		cancel()
 		var diagnostic nativeFailureDiagnostic
 		evidence, err := verifyNativeProbeDetailed(output, probe, index == 0, &diagnostic)
+		if diagnostic.CostAvailable && diagnostic.EstimatedCostUSD != nil {
+			result.EstimatedSpendUSD += *diagnostic.EstimatedCostUSD
+			result.EstimatedSpendSessions++
+			result.EstimatedSpendComplete = result.EstimatedSpendSessions == result.CallsAttempted
+		}
 		if timedOut || callErr != nil || err != nil {
 			result.Reason = "native_challenge_evidence_incomplete"
 			if timedOut {
@@ -313,9 +318,6 @@ func qualifyAndBuildNative(ctx context.Context, in NativeOptions, reviewDigest s
 			}
 			return result, buildUnavailable(o, result.Reason)
 		}
-		result.EstimatedSpendUSD += evidence.Cost
-		result.EstimatedSpendSessions++
-		result.EstimatedSpendComplete = result.EstimatedSpendSessions == result.CallsAttempted
 		if evidence.Cost > in.MaxBudgetUSD {
 			result.Reason = "native_estimate_exceeded_reviewed_per_call_limit"
 			diagnostic.FailureCode = "reviewed_estimate_exceeded"
