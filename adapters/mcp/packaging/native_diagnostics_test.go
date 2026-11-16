@@ -224,11 +224,12 @@ func allowedReadDiagnosticStream(t *testing.T, p nativeProbe, variants []string,
 			if variant == "denied" {
 				decision = "deny"
 			}
-			output, _ := json.Marshal(map[string]any{"systemMessage": "maestro_native_canonical_hook:" + p.nonce, "hookSpecificOutput": map[string]string{"permissionDecision": decision}})
+			output, _ := json.Marshal(map[string]any{"systemMessage": qualificationHookMessage("PreToolUse", p.session, id, "Read", p.nonce), "hookSpecificOutput": map[string]string{"permissionDecision": decision}})
 			hook(id+"-pre", "PreToolUse", "success", string(output))
 		}
 		if variant != "no_post" && variant != "attempt_only" {
-			hook(id+"-post", "PostToolUse", "success", "PRIVATE_POST_BODY")
+			output, _ := json.Marshal(map[string]string{"systemMessage": qualificationHookMessage("PostToolUse", p.session, id, "Read", p.nonce)})
+			hook(id+"-post", "PostToolUse", "success", string(output))
 		}
 		if variant != "no_result" && variant != "attempt_only" {
 			content := "Synthetic native qualification control. PRIVATE_CONTENT"
@@ -338,4 +339,252 @@ func TestNativeReadAndStartupDiagnosticsShareExistingBound(t *testing.T) {
 		t.Fatal("combined diagnostic lost capped independent observations")
 	}
 	t.Logf("closed_failure_bytes=%d startup_observations=%d read_observations=%d", len(body), len(got.Startup.Observations), len(got.Read.Observations))
+}
+
+func TestNativePostHookFailureDiagnostics(t *testing.T) {
+	for _, tc := range []struct {
+		name, outcome, tool, lastResult, delayedTool string
+		post, delayed, observed                      bool
+	}{
+		{name: "absent"},
+		{name: "failed", post: true, outcome: "error", tool: "allowed_read", lastResult: "unbound"},
+		{name: "cancelled", post: true, outcome: "cancelled", tool: "allowed_read", lastResult: "unbound"},
+		{name: "matched", post: true, outcome: "success", tool: "allowed_read", lastResult: "unbound", observed: true},
+		{name: "delayed_after_write", post: true, delayed: true, outcome: "success", tool: "allowed_read", lastResult: "allowed_read", observed: true},
+		{name: "delayed_after_edit", post: true, delayed: true, delayedTool: "Edit", outcome: "success", tool: "allowed_read", lastResult: "allowed_read", observed: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			p := nativeProbe{root: root, challenge: filepath.Join(root, "PRIVATE_CHALLENGE"), session: "PRIVATE_SESSION", nonce: "PRIVATE_NONCE"}
+			var stream bytes.Buffer
+			var delayed []map[string]any
+			for _, line := range bytes.Split(bytes.TrimSpace(allowedReadDiagnosticStream(t, p, []string{"valid"}, 0)), []byte("\n")) {
+				var event map[string]any
+				if err := json.Unmarshal(line, &event); err != nil {
+					t.Fatal(err)
+				}
+				if event["hook_event"] == "PostToolUse" {
+					if !tc.post {
+						continue
+					}
+					if event["subtype"] == "hook_response" {
+						event["outcome"] = tc.outcome
+						if tc.outcome != "success" {
+							event["exit_code"] = 1
+						}
+					}
+					if tc.delayed {
+						delayed = append(delayed, event)
+						continue
+					}
+				}
+				if err := json.NewEncoder(&stream).Encode(event); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.delayed {
+				name, file := "Write", "allowed-write.txt"
+				if tc.delayedTool == "Edit" {
+					name, file = "Edit", "edit.txt"
+				}
+				if err := json.NewEncoder(&stream).Encode(map[string]any{"type": "assistant", "message": map[string]any{"content": []any{map[string]any{"type": "tool_use", "id": "PRIVATE_LATER_TOOL", "name": name, "input": map[string]any{"file_path": filepath.Join(p.challenge, file), "content": nativeAllowedWriteContent}}}}}); err != nil {
+					t.Fatal(err)
+				}
+				for _, event := range delayed {
+					if err := json.NewEncoder(&stream).Encode(event); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			var d nativeFailureDiagnostic
+			if _, err := verifyNativeProbeDetailed(stream.Bytes(), p, false, &d); err == nil {
+				t.Fatal("partial controls qualified")
+			}
+			if d.ReadObserved != tc.observed {
+				t.Fatalf("successful Read post criterion changed: %+v", d.Read)
+			}
+			if err := writeNativeFailure(p, d, 0, nil, nil); err != nil {
+				t.Fatal(err)
+			}
+			body, err := os.ReadFile(filepath.Join(root, "failure.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(body) > 4096 || bytes.Contains(body, []byte("PRIVATE_")) || bytes.Contains(body, []byte(root)) {
+				t.Fatal("post diagnostic exceeded privacy/size bounds")
+			}
+			var got struct {
+				Post *struct {
+					Starts, Responses int
+					Observations      []struct {
+						Outcome, Tool string
+						LastResult    string `json:"last_result"`
+						ExitCode      *int   `json:"exit_code"`
+					}
+				}
+			}
+			if err := json.Unmarshal(body, &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.Post == nil {
+				t.Fatal("post-hook absence/failure/association diagnostic missing")
+			}
+			want := 0
+			if tc.post {
+				want = 1
+			}
+			if got.Post.Starts != want || got.Post.Responses != want || len(got.Post.Observations) != want {
+				t.Fatalf("post-hook lifecycle counts lost: %s", body)
+			}
+			if tc.post {
+				o := got.Post.Observations[0]
+				if o.Outcome != tc.outcome || o.Tool != tc.tool || o.LastResult != tc.lastResult || o.ExitCode == nil {
+					t.Fatalf("post outcome/association lost: %s", body)
+				}
+			}
+		})
+	}
+}
+
+func TestNativeSameKindDelayedPostKeepsExactRead(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := nativeProbe{root: root, challenge: filepath.Join(root, "PRIVATE_CHALLENGE"), session: "PRIVATE_SESSION", nonce: "PRIVATE_NONCE"}
+	var stream bytes.Buffer
+	var delayed []map[string]any
+	for _, line := range bytes.Split(bytes.TrimSpace(allowedReadDiagnosticStream(t, p, []string{"complete", "attempt_only"}, 0)), []byte("\n")) {
+		var event map[string]any
+		if err := json.Unmarshal(line, &event); err != nil {
+			t.Fatal(err)
+		}
+		if event["hook_event"] == "PostToolUse" {
+			delayed = append(delayed, event)
+			continue
+		}
+		if err := json.NewEncoder(&stream).Encode(event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, event := range delayed {
+		if err := json.NewEncoder(&stream).Encode(event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var d nativeFailureDiagnostic
+	if _, err := verifyNativeProbeDetailed(stream.Bytes(), p, false, &d); err == nil {
+		t.Fatal("partial controls qualified")
+	}
+	if !d.ReadObserved || len(d.Read.Observations) != 2 || !d.Read.Observations[0].Post || d.Read.Observations[1].Post {
+		t.Fatalf("delayed post borrowed latest same-kind tool identity: %+v", d.Read)
+	}
+}
+
+func TestNativePostHookRejectsUnboundOrUnsuccessfulEvidence(t *testing.T) {
+	for _, kind := range []string{"session", "tool", "name", "event", "nonce", "missing_marker", "legacy_marker", "arbitrary_stdout", "failed", "cancelled", "other_outcome", "nonzero_success", "missing_exit", "no_response", "no_start"} {
+		t.Run(kind, func(t *testing.T) {
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			p := nativeProbe{root: root, challenge: filepath.Join(root, "PRIVATE_CHALLENGE"), session: "PRIVATE_SESSION", nonce: "PRIVATE_NONCE"}
+			var stream bytes.Buffer
+			for _, line := range bytes.Split(bytes.TrimSpace(allowedReadDiagnosticStream(t, p, []string{"complete"}, 0)), []byte("\n")) {
+				var m map[string]any
+				if err := json.Unmarshal(line, &m); err != nil {
+					t.Fatal(err)
+				}
+				if m["hook_event"] == "PostToolUse" {
+					if kind == "no_start" && m["subtype"] == "hook_started" {
+						continue
+					}
+					if m["subtype"] == "hook_response" {
+						if kind == "no_response" {
+							continue
+						}
+						event, session, tool, name, nonce := "PostToolUse", p.session, "PRIVATE_TOOL_0", "Read", p.nonce
+						switch kind {
+						case "session":
+							session = "PRIVATE_OTHER_SESSION"
+						case "tool":
+							tool = "PRIVATE_OTHER_TOOL"
+						case "name":
+							name = "Write"
+						case "event":
+							event = "PreToolUse"
+						case "nonce":
+							nonce = "PRIVATE_OTHER_NONCE"
+						case "failed":
+							m["outcome"], m["exit_code"] = "error", 1
+						case "cancelled":
+							m["outcome"], m["exit_code"] = "cancelled", 1
+						case "other_outcome":
+							m["outcome"] = "PRIVATE_OUTCOME"
+						case "nonzero_success":
+							m["exit_code"] = 1
+						case "missing_exit":
+							delete(m, "exit_code")
+						}
+						message := qualificationHookMessage(event, session, tool, name, nonce)
+						if kind == "missing_marker" {
+							message = ""
+						}
+						if kind == "legacy_marker" {
+							message = "maestro_native_canonical_hook:" + p.nonce
+						}
+						out, _ := json.Marshal(map[string]string{"systemMessage": message})
+						m["stdout"] = string(out)
+						if kind == "arbitrary_stdout" {
+							m["stdout"] = "PRIVATE_RESULT Synthetic native qualification control."
+						}
+					}
+				}
+				if err := json.NewEncoder(&stream).Encode(m); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var d nativeFailureDiagnostic
+			if _, err := verifyNativeProbeDetailed(stream.Bytes(), p, false, &d); err == nil || d.ReadObserved || len(d.Read.Observations) != 1 || d.Read.Observations[0].Post {
+				t.Fatalf("unbound/unsuccessful post acquired Read credit: %+v", d.Read)
+			}
+			if err := writeNativeFailure(p, d, 0, nil, nil); err != nil {
+				t.Fatal(err)
+			}
+			body, err := os.ReadFile(filepath.Join(root, "failure.json"))
+			if err != nil || len(body) > 4096 || bytes.Contains(body, []byte("PRIVATE_")) {
+				t.Fatal("post failure leaked raw evidence or exceeded bounds")
+			}
+		})
+	}
+}
+
+func TestNativePostDiagnosticsShareExistingFailureBound(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := nativeProbe{root: root, challenge: filepath.Join(root, "PRIVATE_CHALLENGE"), session: "PRIVATE_SESSION", nonce: "PRIVATE_NONCE"}
+	variants := make([]string, 40)
+	for i := range variants {
+		variants[i] = "complete"
+	}
+	var d nativeFailureDiagnostic
+	if _, err := verifyNativeProbeDetailed(allowedReadDiagnosticStream(t, p, variants, 40), p, false, &d); err == nil {
+		t.Fatal("diagnostic controls qualified")
+	}
+	if err := writeNativeFailure(p, d, 0, nil, nil); err != nil {
+		t.Fatal("combined capped diagnostic exceeded 4096 bytes", err)
+	}
+	body, err := os.ReadFile(filepath.Join(root, "failure.json"))
+	if err != nil || len(body) > 4096 || bytes.Contains(body, []byte("PRIVATE_")) {
+		t.Fatal("combined post diagnostic privacy/size bound")
+	}
+	if d.Post.Starts != 32 || d.Post.Responses != 32 || len(d.Post.Observations) != 4 || !d.Post.Capped || len(d.Read.Observations) != 8 || len(d.Startup.Observations) != 8 || !d.Read.Truncated || !d.Startup.Capped {
+		t.Fatalf("independent diagnostic caps lost: %+v", d.Post)
+	}
+	t.Logf("combined_failure_bytes=%d", len(body))
 }
