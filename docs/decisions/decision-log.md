@@ -1605,3 +1605,14 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: The same account registration shared across separately admitted workspaces reaches one narrative without copying it. First-case finish never writes it implicitly. Internal, pending, reconciliation, stale and tampered state refuses. This delivers the narrow account narrative owner, not broad account search/history, foreign brief linking, cross-case promotion, hiring or runtime activation; the broader account scaffold dependency remains unavailable.
 - Refs: docs/product-account-narrative.md; adapters/mcp/account_narrative.go; internal/atlasops/account_existing.go; bundles/base/skills/account-case-setup/resources/account-narrative-mcp.md
 - Supersedes: none
+
+## WACQ - Authenticate participant acquisition before assembling an offline Windows runtime
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: repository maintainers
+- Context: The experimental Windows carrier must omit third-party interpreters, wheels, DLLs and runtime archives while retaining the signed Maestro server, base bundle and release metadata. An incomplete carrier cannot satisfy the existing whole-release verification contract.
+- Decision: Keep acquisition in a separate preparation package, outside the offline converter. Verify the pinned public engineering authority and existing whole manifest signature first, then a canonical same-key detached recipe bound to purpose, exact manifest/server/target/profile descriptor, input count/bytes, runtime artifact and expiry. A separate conscious local review expires within 30 minutes. Apply revalidates it, fetches only exact compiled public HTTPS inputs with public-address pinning and bounded redirects, preserves a private no-clobber resumable cache, and invokes the canonical profile assembler without executing acquired code. Publish a new complete private release snapshot only after the resulting archive exactly matches its signed identity and ordinary VerifyDirectory succeeds. Existing runtime review and PlaceVerified remain responsible for installation and native qualification.
+- Consequences: The carrier can transfer Maestro-owned components without transferring third-party runtime bytes. This does not establish redistribution permission, legal clearance, production signing, native Windows operation or client readiness. Cache conflicts, stale consent, unknown profiles, changed public inputs and native qualification failures refuse explicitly. Preparation needs network; subsequent converter operation remains offline.
+- Refs: docs/windows-runtime-acquisition.md; internal/ingest/docling/acquisition; specs/010-local-ingestion-runtime.md; WDOC
+- Supersedes: none
