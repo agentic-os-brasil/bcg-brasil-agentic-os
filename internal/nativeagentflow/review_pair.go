@@ -68,10 +68,13 @@ func (pair *ReviewPair) validate(state *State, identities map[string]bool) error
 }
 func admitReview(state *State, token, target string) error {
 	index := reviewSlot(target)
-	if index < 0 || state.Finalized || state.PendingTool != "" || state.ActiveAgentID != "" || state.SystemHealthRoute || (state.AccountRoute && (!state.CaseStopObserved || !state.AccountReturnObserved)) || state.TransitionCount > 28 {
+	if index < 0 || state.Finalized || state.PendingTool != "" || state.ActiveAgentID != "" || state.SystemHealthRoute || (state.AccountRoute && (!state.CaseStopObserved || !state.AccountReturnObserved)) {
 		return ErrTransition
 	}
 	if state.ReviewPair == nil {
+		if state.TransitionCount > 28 {
+			return ErrTransition
+		}
 		state.ReviewPair = &ReviewPair{Slots: make([]ReviewWorker, 2)}
 	}
 	slot := &state.ReviewPair.Slots[index]
