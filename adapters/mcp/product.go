@@ -123,6 +123,7 @@ func mutationSchema() map[string]any {
 		variants = append(variants, variant("execution."+op, f, r...))
 	}
 	variants = append(variants, agentIdentityMutations()...)
+	variants = append(variants, sharepointEnrollmentMutations()...)
 	return map[string]any{"type": "object", "oneOf": variants}
 }
 
@@ -221,13 +222,14 @@ func productQuerySchema() map[string]any {
 		variant("execution.next", map[string]any{"item_id": strSchema(96)}, "item_id"),
 		variant("execution.contract", map[string]any{"item_id": strSchema(96)}, "item_id"),
 	}
-	for _, group := range [][]any{caseSetupQueries(), ownerQueries(), agentIdentityQueries(), memoryQueries(), methodsQueries(), contentQueries(), brainQueries(), maintenanceQueries(), wikiQueries()} {
+	for _, group := range [][]any{sharepointEnrollmentQueries(), caseSetupQueries(), ownerQueries(), agentIdentityQueries(), memoryQueries(), methodsQueries(), contentQueries(), brainQueries(), maintenanceQueries(), wikiQueries()} {
 		variants = append(variants, group...)
 	}
 	return map[string]any{"type": "object", "oneOf": variants}
 }
 
 type input struct {
+	FolderURLs                 []string `json:"folder_urls"`
 	Mode                       string   `json:"mode"`
 	ProjectName                string   `json:"project_name"`
 	AccountID                  string   `json:"account_id"`
@@ -347,11 +349,14 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		if len(req.Params.Arguments) > 128<<10 && in.Operation != "knowledge.create" && in.Operation != "brain.create" && in.Operation != "brain.update" && in.Operation != "owner.atlas.create" && in.Operation != "owner.atlas.update" {
 			return result(nil, errors.New("input_size")), nil
 		}
-		if len(req.Params.Arguments) > 16<<10 && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" && in.Operation != "knowledge.create" && in.Operation != "knowledge.append" && in.Operation != "brain.append" && in.Operation != "brain.create" && in.Operation != "brain.update" && in.Operation != "owner.atlas.create" && in.Operation != "owner.atlas.update" && in.Operation != "owner.atlas.append" && in.Operation != "owner.atlas.collect" {
+		if len(req.Params.Arguments) > 16<<10 && in.Operation != "sharepoint.enrollment.select" && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" && in.Operation != "knowledge.create" && in.Operation != "knowledge.append" && in.Operation != "brain.append" && in.Operation != "brain.create" && in.Operation != "brain.update" && in.Operation != "owner.atlas.create" && in.Operation != "owner.atlas.update" && in.Operation != "owner.atlas.append" && in.Operation != "owner.atlas.collect" {
 			return result(nil, errors.New("input_size")), nil
 		}
 		if kind == "context" {
 			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "agent_identity": b.managedIdentityContext(), "next_max_bytes": 2048, "owner": map[string]any{"context_operation": "owner.context", "reader": "session", "max_page_bytes": 4096, "requires": "current_confirmed_onboarding", "authority": "owner_profile_data_only"}, "memory": map[string]any{"context_operation": "memory.context", "max_page_bytes": 4096, "synthesis": "local_deterministic", "lifetime": "two_l3_generations_and_exact_owner_review"}, "methods": map[string]any{"list_operation": "methods.list", "read_operation": "methods.read", "plan_operation": "methods.plan", "max_page_bytes": 4096, "mode": "methods_not_authority"}}, nil), nil
+		}
+		if strings.HasPrefix(in.Operation, "sharepoint.enrollment.") {
+			return b.handleSharepointEnrollment(ctx, req, in), nil
 		}
 		if strings.HasPrefix(in.Operation, "case.setup.") {
 			return b.handleCaseSetup(ctx, req, in), nil

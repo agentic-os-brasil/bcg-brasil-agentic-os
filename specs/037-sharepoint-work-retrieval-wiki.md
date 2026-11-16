@@ -108,6 +108,32 @@ but collection remains `unavailable/corporate_policy`; it may query only an
 already verified local index. Session Start never resolves URLs, calls
 SharePoint, imports a snapshot or compiles the index.
 
+### Product MCP source-selection bridge
+
+The admitted product server exposes `maestro_query` operation
+`sharepoint.enrollment.status` without scope arguments. An explicit owner request
+may use `maestro_apply` operation `sharepoint.enrollment.select` with `folder_urls`
+(1–8 unique HTTPS SharePoint folder URLs, at most 2048 characters each) and the
+literal `purpose: "prior_work_retrieval"`. This product subset retains the
+128KiB outer request ceiling; other small operations retain their 16KiB limit.
+The server derives the owner destination and initialized workspace ID, presents
+the full current and proposed records through trusted owner review, and checks
+the current selection again before publishing. Decline or unavailable review
+preserves the source choice; a changed review requires a fresh request.
+
+`maestro_apply` operation `sharepoint.enrollment.revoke` takes no scope arguments
+and requires the same trusted review. Read `sharepoint.enrollment.status` again
+to observe the committed local state. Revocation prevents future reads of this
+workspace's selected pointers while preserving immutable history, earlier
+imports, independently signed organizational policy and other workspaces.
+
+These operations record local source control only. They neither admit a provider
+nor issue signed enrollment or execute ingestion. Their response keeps provider
+access unavailable and external/source-content verification false; the broader
+ingestion dependency remains unavailable. Product hooks do not currently inject
+this selection. Legacy session packet compatibility for the revoked state is a
+separate projection, not evidence of product-hook delivery.
+
 ## Owner-authorized rationale projection
 
 Folder selection is an explicit scope decision. When an active COFS
