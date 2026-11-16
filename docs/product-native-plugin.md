@@ -203,6 +203,16 @@ Marker classifications are `malformed`, `missing`, `startup` or `other`;
 `nonce_matched` records only exact equality and never the nonce or message.
 A response's typed exit code remains null when unavailable. No raw hook output,
 messages, paths, authentication data or per-hook timing enters this diagnostic.
+The additive `post` object counts correlated PostToolUse starts/responses and
+uncorrelated responses, with counters capped at 32. It retains at most four
+closed observations: normalized outcome, `exact`/`unattested` binding, tool kind,
+latest tool kind at hook start, last-result kind and nullable typed exit code.
+Tool kinds are `allowed_read`, `allowed_write`, `edit`, `other` or `unbound`;
+these buckets retain no identity or path. `capped` marks either limit. Missing,
+unsuccessful and delayed/interleaved post evidence remain distinguishable while
+actual successful Read PostToolUse is still required. Failure JSON uses compact
+encoding to retain the existing startup/read caps within the same 4096-byte cap.
+
 The additive `read` object reports only attempts at the exact synthetic allowed
 Read, in observed call order. It counts attempts and retains at most eight
 per-attempt boolean records: `canonical_pre`, `post`, `result`,
@@ -243,8 +253,19 @@ result.
 | Timed-out helper | A separate session reports the timeout and blocks the synthetic Edit. |
 | Case → Gamma | The bounded sequential dispatch, native-ID correlation and stops agree with canonical flow metadata. These observations establish neither artifact custody/delivery nor a Yoda verdict or completed work item. |
 
+Candidate pre/post hooks place an exact-call marker in the documented
+`systemMessage` field only after the canonical adapter succeeds. Its SHA256
+uses a versioned domain and a canonical JSON array of event, session, tool-use
+ID, tool name and probe nonce; raw identities and tool content are absent from
+the marker. The verifier binds successful native hook envelopes to that exact
+call instead of the latest assistant tool. An outcome of success, typed exit 0
+and the exact event-bound marker are all required; a marker alone, returned
+content, old nonce-only text or an untagged hook supplies no canonical success.
+This is candidate-local correlation, not signing or install authority; ordinary
+installed hooks remain marker-free. The prior failed trial is not reclassified.
+
 Candidate-only instrumentation checks startup, tags the unchanged canonical
-pre-tool decision using supported `systemMessage`, and adds a separate all-tool
+pre/post-tool result using supported `systemMessage`, and adds a separate all-tool
 scope fence. The scope fence permits only the reviewed controls and bounded
 Case/Gamma dispatch; it cannot supply PASS evidence for normal denial or helper
 failure. Fault injection targets synthetic Edit operations. The negative Read

@@ -250,13 +250,15 @@ func syntheticNativeStream(t *testing.T, p nativeProbe) []byte {
 		var err error
 		if event == "SessionStart" {
 			err = CheckNativeStartup(p.binding, p.nonce, bytes.NewReader(base(event, extra)), &out)
-		} else if event == "PreToolUse" {
-			var scoped bytes.Buffer
-			if err := QualificationScopeGuard(p.binding, p.challenge, p.outside, bytes.NewReader(base(event, extra)), &scoped); err != nil {
-				t.Fatal(err)
-			}
-			if string(bytes.TrimSpace(scoped.Bytes())) != "{}" {
-				t.Fatalf("scope instrumentation masked a reviewed control: %s", scoped.Bytes())
+		} else if event == "PreToolUse" || event == "PostToolUse" {
+			if event == "PreToolUse" {
+				var scoped bytes.Buffer
+				if err := QualificationScopeGuard(p.binding, p.challenge, p.outside, bytes.NewReader(base(event, extra)), &scoped); err != nil {
+					t.Fatal(err)
+				}
+				if string(bytes.TrimSpace(scoped.Bytes())) != "{}" {
+					t.Fatalf("scope instrumentation masked a reviewed control: %s", scoped.Bytes())
+				}
 			}
 			err = QualificationHook(p.binding, p.nonce, bytes.NewReader(base(event, extra)), &out)
 		} else {

@@ -85,7 +85,25 @@ func TestQualificationScopeCannotSupplyCanonicalOrFaultPass(t *testing.T) {
 			Decision string `json:"permissionDecision"`
 		} `json:"hookSpecificOutput"`
 	}
-	if json.Unmarshal(out.Bytes(), &value) != nil || value.Specific.Decision != "deny" || value.Message != "maestro_native_canonical_hook:"+p.nonce {
+	if json.Unmarshal(out.Bytes(), &value) != nil || value.Specific.Decision != "deny" || value.Message != qualificationHookMessage("PreToolUse", p.session, "scope-tool", "Read", p.nonce) {
 		t.Fatal("canonical adapter's own denial/marker was lost")
+	}
+}
+
+func TestQualificationHookMarkerHasFixedDomainSeparatedVector(t *testing.T) {
+	// Independently calculated with Python hashlib over this canonical JSON array:
+	// ["maestro.native.qualification-hook.v1","PostToolUse","session-a","tool-7","Read","0123456789abcdef0123456789abcdef"]
+	const expected = "maestro_native_canonical_hook:v1:6a8404e02c4de1c66d22fc03e80824c5ac75d8779eda45e0dcc9a0a35db6224d"
+	if got := qualificationHookMessage("PostToolUse", "session-a", "tool-7", "Read", "0123456789abcdef0123456789abcdef"); got != expected {
+		t.Fatalf("canonical marker vector changed: %s", got)
+	}
+}
+
+func TestQualificationHookCanonicalFailureHasNoMarker(t *testing.T) {
+	in := nativeFixture(t)
+	body, _ := json.Marshal(map[string]any{"hook_event_name": "PostToolUse", "session_id": "session-unreserved", "cwd": in.Packet.Binding.WorkspacePath, "tool_name": "Read", "tool_use_id": "tool-unreserved", "tool_input": map[string]any{"file_path": "allowed.txt"}, "agent_id": "unreserved", "agent_type": "maestro-product:case-agent"})
+	var out bytes.Buffer
+	if err := QualificationHook(in.Packet.Binding, "0123456789abcdef0123456789abcdef", bytes.NewReader(body), &out); err == nil || out.Len() != 0 {
+		t.Fatal("canonical failure emitted a success marker")
 	}
 }

@@ -33,7 +33,7 @@ type nativeTool struct {
 	name, path                                                                                  string
 	result, denied, allowed, postObserved, hookFailure, blocked, errorResult, canonicalObserved bool
 }
-type nativeHook struct{ event, name, tool string }
+type nativeHook struct{ event, name, tool, lastResult string }
 type streamMessage struct {
 	Type      string   `json:"type"`
 	Subtype   string   `json:"subtype"`
@@ -90,6 +90,22 @@ type nativeReadDiagnostic struct {
 	Truncated    bool                    `json:"truncated"`
 }
 
+type nativePostObservation struct {
+	Outcome    string `json:"outcome"`
+	Binding    string `json:"binding"`
+	Tool       string `json:"tool"`
+	LatestTool string `json:"latest_tool"`
+	LastResult string `json:"last_result"`
+	ExitCode   *int   `json:"exit_code"`
+}
+type nativePostDiagnostic struct {
+	Starts       int                     `json:"starts"`
+	Responses    int                     `json:"responses"`
+	Uncorrelated int                     `json:"uncorrelated"`
+	Observations []nativePostObservation `json:"observations"`
+	Capped       bool                    `json:"capped"`
+}
+
 type nativeFailureDiagnostic struct {
 	SchemaVersion         int                     `json:"schema_version"`
 	AttemptIndex          int                     `json:"attempt_index"`
@@ -111,6 +127,7 @@ type nativeFailureDiagnostic struct {
 	Startup               nativeStartupDiagnostic `json:"startup"`
 	ReadObserved          bool                    `json:"read_observed"`
 	Read                  nativeReadDiagnostic    `json:"read"`
+	Post                  nativePostDiagnostic    `json:"post"`
 	WriteObserved         bool                    `json:"write_observed"`
 	GuardDenialObserved   bool                    `json:"guard_denial_observed"`
 	FaultAttemptObserved  bool                    `json:"fault_attempt_observed"`
@@ -144,6 +161,8 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 	hooks := map[string]nativeHook{}
 	seenMessages := map[string]bool{}
 	active := ""
+	lastResult := ""
+	attestations := map[string]nativeHook{}
 	starts, stops := 0, 0
 	resultSeen := false
 	stopSeen := false
@@ -158,6 +177,12 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 		d.GuardDenialObserved = observed.GuardDenied
 		d.FaultAttemptObserved, d.FaultBlockObserved = observed.FaultAttempted, observed.FaultBlocked
 		d.StopObserved = stopSeen
+		for _, count := range []*int{&d.Post.Starts, &d.Post.Responses, &d.Post.Uncorrelated} {
+			if *count > 32 {
+				*count = 32
+				d.Post.Capped = true
+			}
+		}
 		if d.Startup.Starts > 32 {
 			d.Startup.Starts, d.Startup.Capped = 32, true
 		}
@@ -240,6 +265,9 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 					return proof, reject("tool_deviated_from_reviewed_protocol", errors.New("native tool deviated from reviewed protocol"))
 				}
 				tools[content.ID] = &nativeTool{name: content.Name, path: input.Path}
+				for _, event := range []string{"PreToolUse", "PostToolUse"} {
+					attestations[qualificationHookMessage(event, p.session, content.ID, content.Name, p.nonce)] = nativeHook{event: event, tool: content.ID}
+				}
 				if content.Name == "Read" && filepath.Clean(path) == filepath.Join(p.challenge, "allowed.txt") {
 					d.Read.Attempts++
 					if len(reads) < 8 {
@@ -263,6 +291,7 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 					return proof, reject("duplicate_tool_result", errors.New("native duplicate tool result"))
 				}
 				tool.result = true
+				lastResult = content.ToolUseID
 				if content.IsError {
 					tool.errorResult = true
 					marker := "native-fault"
@@ -281,7 +310,10 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 				if m.Session != p.session || m.UUID == "" || m.HookID == "" || m.HookName == "" || hooks[m.HookID].event != "" {
 					return proof, reject("hook_identity_invalid", errors.New("native hook identity invalid"))
 				}
-				hooks[m.HookID] = nativeHook{m.HookEvent, m.HookName, active}
+				hooks[m.HookID] = nativeHook{m.HookEvent, m.HookName, active, lastResult}
+				if m.HookEvent == "PostToolUse" {
+					d.Post.Starts++
+				}
 				if m.HookEvent == "SessionStart" {
 					d.Startup.Starts++
 				}
@@ -291,6 +323,9 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 			}
 			hook, ok := hooks[m.HookID]
 			if !ok || m.Session != p.session || m.UUID == "" || hook.event != m.HookEvent || hook.name != m.HookName {
+				if m.HookEvent == "PostToolUse" {
+					d.Post.Uncorrelated++
+				}
 				return proof, reject("uncorrelated_hook_response", errors.New("native uncorrelated hook response"))
 			}
 			delete(hooks, m.HookID)
@@ -331,32 +366,53 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 			if m.HookEvent == "Stop" && m.Outcome == "success" {
 				stopSeen = true
 			}
-			tool := tools[hook.tool]
-			if tool == nil {
-				continue
+			latest := tools[hook.tool]
+			var output struct {
+				Message  string `json:"systemMessage"`
+				Specific struct {
+					Decision string `json:"permissionDecision"`
+				} `json:"hookSpecificOutput"`
 			}
-			if m.HookEvent == "PreToolUse" && m.Outcome == "success" {
-				var output struct {
-					Message  string `json:"systemMessage"`
-					Specific struct {
-						Decision string `json:"permissionDecision"`
-					} `json:"hookSpecificOutput"`
+			var tool *nativeTool
+			if json.Unmarshal([]byte(m.Stdout), &output) == nil {
+				if attested, ok := attestations[output.Message]; ok && attested.event == m.HookEvent {
+					tool = tools[attested.tool]
 				}
-				if json.Unmarshal([]byte(m.Stdout), &output) == nil && output.Message == "maestro_native_canonical_hook:"+p.nonce {
+			}
+			if m.HookEvent == "PostToolUse" {
+				d.Post.Responses++
+				o := nativePostObservation{Outcome: "other", Binding: "unattested", Tool: nativeControlKind(tool, p), LatestTool: nativeControlKind(latest, p), LastResult: nativeControlKind(tools[hook.lastResult], p), ExitCode: m.ExitCode}
+				switch m.Outcome {
+				case "success", "error", "cancelled":
+					o.Outcome = m.Outcome
+				}
+				if tool != nil {
+					o.Binding = "exact"
+				}
+				if len(d.Post.Observations) < 4 {
+					d.Post.Observations = append(d.Post.Observations, o)
+				} else {
+					d.Post.Capped = true
+				}
+			}
+			if tool != nil && m.Outcome == "success" && m.ExitCode != nil && *m.ExitCode == 0 {
+				if m.HookEvent == "PreToolUse" {
 					tool.canonicalObserved = true
 					if output.Specific.Decision == "deny" {
 						tool.denied = true
 					}
 				}
+				if m.HookEvent == "PostToolUse" && (tool.name == "Read" || tool.name == "Write") {
+					tool.postObserved = true
+				}
 			}
-			if m.HookEvent == "PostToolUse" && m.Outcome == "success" && (tool.name == "Read" || tool.name == "Write") {
-				tool.postObserved = true
-			}
-			if m.HookEvent == "PostToolUse" && tool.name == "Edit" {
+			// Untagged experiment fault hooks retain only their conservative
+			// failure context; they never supply canonical pre/post success.
+			if m.HookEvent == "PostToolUse" && ((tool != nil && tool.name == "Edit") || (tool == nil && latest != nil && latest.name == "Edit")) {
 				return proof, reject("failed_guard_allowed_edit_execution", errors.New("native failed guard allowed edit execution"))
 			}
-			if m.HookEvent == "PreToolUse" && tool.name == "Edit" && (m.Outcome == "error" || m.Outcome == "cancelled") && (m.ExitCode != nil && *m.ExitCode != 0 || m.Outcome == "cancelled") {
-				tool.hookFailure = true
+			if m.HookEvent == "PreToolUse" && latest != nil && latest.name == "Edit" && (m.Outcome == "error" || m.Outcome == "cancelled") && (m.ExitCode != nil && *m.ExitCode != 0 || m.Outcome == "cancelled") {
+				latest.hookFailure = true
 			}
 
 		case "result":
@@ -451,4 +507,24 @@ func observeNativeControls(proof *nativeProof, tools map[string]*nativeTool, p n
 			proof.FaultBlocked = tool.canonicalObserved && !tool.denied && tool.hookFailure && tool.blocked && tool.result
 		}
 	}
+}
+
+func nativeControlKind(tool *nativeTool, p nativeProbe) string {
+	if tool == nil {
+		return "unbound"
+	}
+	path := tool.path
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(p.binding.WorkspacePath, path)
+	}
+	if tool.name == "Read" && filepath.Clean(path) == filepath.Join(p.challenge, "allowed.txt") {
+		return "allowed_read"
+	}
+	if tool.name == "Write" && filepath.Clean(path) == filepath.Join(p.challenge, "allowed-write.txt") {
+		return "allowed_write"
+	}
+	if tool.name == "Edit" {
+		return "edit"
+	}
+	return "other"
 }
