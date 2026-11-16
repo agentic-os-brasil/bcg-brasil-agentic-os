@@ -1,179 +1,117 @@
 ---
 name: case-canon-ingest
-description: Compile a document, interview synthesis, hypothesis, framework, or benchmark into the active case's canon layer as a frontmatter-indexed Markdown artifact. Builds persistent compiled knowledge per case so context survives session resets. Use whenever a document has been reviewed and its key insights need to be retained across sessions.
+description: Compile a reviewed document, interview synthesis, hypothesis, framework or benchmark into the admitted case canon through reviewed workspace operations. Use when distilled insights need to survive across sessions; save only when requested.
 ---
 
-# Skill: case-canon-ingest
+# Case Canon Ingest
 
-Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+Resolve [interaction-profile](../interaction-profile/SKILL.md) for presentation.
+Use the intended Maestro connector and its current schemas. Read the packaged
+[authored-page recipe](../maestro-operator/resources/authored-brain.md), available
+as `maestro://methods/maestro-operator/resources/authored-brain.md` through
+`methods.read`, before persistence. It owns review, bounded reads and recovery.
 
+## Bind the case and source
 
-Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) before starting. It controls verbosity during
-extraction, but never changes classification requirements, provenance rules, or the
-confirmation-before-save invariant.
+1. Query `case.setup.status` and verify the intended workspace and current
+   client binding. Use the returned `setup` and `setup.input` account/case IDs;
+   continue only when that exact case is admitted for reads and writes. An
+   absent, incomplete, conflicting or reconciliation-required setup goes to
+   [case-agent-setup](../case-agent-setup/SKILL.md). Preserve the draft meanwhile.
+   Never read selection files, infer a case from session history or hand-write
+   a marker. Internal project notes use their separate workspace scope, not an
+   invented client canon.
+2. Name only the authorized source and destination. Canon pages use the bound
+   case prefix `accounts/<account-id>/cases/<case-id>/canon/` relative to its
+   workspace brain. Agree `<type>-<kebab-title>.md`; the bound IDs, not a title,
+   supply the prefix. Query `brain.status` before mutations and use `brain.read`
+   to inspect that named page. A generic read refusal establishes no absence.
+   For an explicitly requested new named page, the create-only route below may
+   proceed to its complete current/proposed review; creation preserves existing
+   content. If review shows an existing page, preserve it and obtain a complete
+   revision-consistent read before proposing an append or replacement.
+3. For existing named workspace sources use `knowledge.collect` with `pages`
+   and a declared `purpose`, or complete revision-consistent `brain.read`.
+   Collection is bounded to 24 pages/128 KiB; a missing/omitted or truncated
+   source is a coverage limitation. For a current converted artifact, read its
+   returned `artifact_id` through `content.read` and retain the actual source
+   revision/hash and conversion provenance. Conversion itself belongs to
+   [ingest-content](../ingest-content/SKILL.md); unavailable conversion leaves
+   that source pending. A supplied message/interview synthesis is an authored
+   source, never a fabricated conversion artifact.
 
-## When to use
+Keep raw documents at their authorized source. Extract distilled evidence,
+separate inference and uncertainty, and keep every source inside this case.
+Structural choices belong to
+[case-decision-log-entry](../case-decision-log-entry/SKILL.md).
 
-A document, interview, dataset, framework, or benchmark has been reviewed and its distilled
-insights need to persist across sessions in the active case. The canon layer is the compiled
-knowledge base for the case — not raw documents, but extracted, structured, reusable context.
+## Distill one artifact
 
-Trigger phrases (invoke this skill when these appear):
-- "ingere isso no canon" / "ingest this into canon"
-- "adiciona ao canon do caso" / "add to case canon"
-- "salva isso como canon" / "save this as canon"
+Agree type, title and source reference. Keep the relevant content:
 
-Use for:
-- Interview synthesis (key themes, verbatim quotes, constraints surfaced)
-- Hypothesis distillation (hypothesis → evidence mapping)
-- Framework or methodology reference (applied to this case)
-- Benchmark or data reference (key numbers, sources, caveats)
-- External research synthesis (approved public sources only — no confidential client bodies)
+| Type | Required substance |
+| --- | --- |
+| `hypothesis` | Statement, sourced support, counter-evidence, assumptions and exploratory/supported/rejected assessment |
+| `interview` | Confirmed participant identity/role, date if known, themes, up to three literal source quotes, constraints and open questions |
+| `data` | Dataset/version, metrics, source locations, validity window and gaps |
+| `framework` | Origin, core logic, case application and supported recommendation |
+| `benchmark` | Source, comparable numbers, applicability, URL/retrieval date when known |
 
-Do NOT use for:
-- Structural decisions → use [`decision-log-entry`](../../tech-core/skills/decision-log-entry/SKILL.md)
-- Raw document storage → keep the source pointer in the case's own `sources/`, not the body in canon
-- Cross-case knowledge → each canon artifact is case-scoped; no cross-case lookup
+Preserve unknown dates, identities and versions as unknown. Quotes must be
+present in the authorized source. The evidence assessment belongs in the body;
+frontmatter `status` uses the authored-page vocabulary.
 
----
-
-## Canon artifact types
-
-| Type | Use when |
-|------|----------|
-| `hypothesis` | A structured hypothesis with evidence mapping |
-| `interview` | Synthesis of one or more stakeholder interviews |
-| `data` | Key numbers, data sources, or dataset description |
-| `framework` | A methodology or analytical framework applied to this case |
-| `benchmark` | Competitive, industry, or historical benchmark reference |
-
-Note: `decision` type is redirected to [`decision-log-entry`](../../tech-core/skills/decision-log-entry/SKILL.md).
-
----
-
-## Sequence
-
-### Step 1 — Confirm active case
-
-Read `brain/accounts/.active` (format `<account-id>/<case-id>`) to get the current account
-and case-id — split on the slash, because both halves are needed to build the path and the
-case id alone is not enough. If `.active` is absent, empty, **or holds no slash**, stop and
-ask the owner to activate a case first ([`/case-agent-setup`](../case-agent-setup/SKILL.md)).
-A marker without a slash is the pre-accounts format, and the isolation guard refuses it
-rather than guessing which client it meant.
-
-Canon dir: `brain/accounts/<account-id>/cases/<case-id>/canon/`
-
-Create the directory if it does not exist.
-
-### Step 2 — Determine artifact slug and type
-
-Ask the owner (or infer from context):
-- **Type** — from the canonical list above
-- **Title** — short descriptive title (used in slug and frontmatter)
-- **Source** — where the content came from (document name, interview participant role, URL, etc.)
-
-Generate slug: `<type>-<kebab-title>.md` (e.g., `hypothesis-corretor-conversion-gap.md`)
-
-Check if a file with this slug already exists. If yes, offer to update (append a new dated
-section) rather than overwrite — preserve history.
-
-### Step 3 — Extract distilled content
-
-Work with the owner to produce the canon content:
-
-**For `hypothesis`:**
-- Core hypothesis statement (one sentence)
-- Supporting evidence (bulleted, each with source reference)
-- Counter-evidence / assumptions to test
-- Status: `exploratory` | `supported` | `rejected`
-
-**For `interview`:**
-- Participant name and role (e.g. "Denis Güven, President Mercedes-Benz do Brasil") — this
-  is the owner's own private, single-user brain, not a shared or client-facing document;
-  redacting the name buys no real confidentiality and costs operational usefulness. The
-  hard boundary is cross-case: a name (or any other fact) from one account/case must never
-  appear in another's canon — that is enforced structurally (case-isolation guard on
-  `brain/accounts/`), not by anonymizing within a case's own correct workspace.
-- Date (YYYY-MM-DD)
-- Key themes (bulleted)
-- Verbatim quotes (at most 3, in `> "..."` blocks — never paraphrase)
-- Constraints or blockers surfaced
-- Open questions raised
-
-**For `data`:**
-- Dataset / source name and version
-- Key metrics (table or bulleted)
-- Caveats and known gaps
-- Validity window (if time-sensitive)
-
-**For `framework`:**
-- Framework name and origin
-- Core logic (2–4 bullet summary)
-- How applied to this case
-- Key output or recommendation it supports
-
-**For `benchmark`:**
-- Benchmark name / source
-- Key numbers (table preferred for ≥3 items)
-- Applicability to this case
-- Source URL and retrieval date
-
-### Step 4 — Write frontmatter-indexed artifact
+For a new page, show the complete body with these eight fields and real source
+metadata before Save:
 
 ```markdown
 ---
-title: <Title>
-type: <type>
-source: <source reference>
-date: <YYYY-MM-DD>
+id: accounts/<account-id>/cases/<case-id>/canon/<type>-<kebab-title>
+title: "<Title>"
+summary: "<What this evidence establishes and its limits>"
+type: <hypothesis|interview|data|framework|benchmark>
+scope: account/<account-id>/case/<case-id>
 status: active
-case: <case-id>
-tags: [<tag1>, <tag2>]
+sensitivity: client-confidential
+updated: <content date>
+source: "<authorized source reference and known version>"
 ---
 
 # <Title>
 
-<distilled content per type template above>
+<Distilled content>
+
+## Evidence
+
+<Source locations, actual revisions/hashes when returned, coverage and uncertainty>
+
+## Updates
 ```
 
-### Step 5 — Show before saving
+## Save through the owning operation
 
-Show the complete artifact to the owner before writing:
+- **Authored synthesis:** use `brain.create(page,text)` for a new page. For an
+  existing page preserve history with `brain.append` under an existing heading,
+  carrying `expected_page_revision` from the complete current read. A requested
+  full replacement uses `brain.update` with that current revision and complete
+  body; preserve unrelated prose and optional metadata.
+- **Converted-source synthesis:** when an actual current conversion artifact
+  supplies the evidence, use `knowledge.create(artifact_id,page,text)` or
+  `knowledge.append` with that ID, an existing `section` and current
+  `expected_page_revision`. The owner rechecks the source and binds its
+  conversion provenance. A source pointer alone does not create an artifact ID
+  or authorize conversion.
+- **Review and verify:** save only on the owner's persistence request and the
+  operation's exact native review. The server supplies provenance; arguments
+  never carry consent, roots, actor IDs or grants. Confirm the actual result and
+  read the complete named page back with `brain.read`, retaining one revision
+  across all pages. `proposed` is pending, not saved.
+- **Retry:** reuse the exact original operation, text, source ID and expected
+  revision after an interrupted response. Inspect returned state/readback before
+  numbering or appending again. A changed source/page/review requires a fresh
+  read and reviewed proposal; preserve newer work. Declined/unavailable review
+  leaves the draft pending, with no filesystem or CLI fallback.
 
-```
-Vou salvar esse canon artifact em brain/canon/<slug>:
-
-<artifact>
-
-OK?
-```
-
-On confirmation, write the file. On correction, adjust per feedback.
-
-### Step 6 — Suggest next action
-
-- If `type == hypothesis`: "Add this to the case brief's hypotheses section?"
-- If `type == interview`: "Any constraints surfaced that should become tasks in brain/tasks/?"
-- If `type == data`: "Flag any gaps as open questions in the case brief?"
-- If `type == benchmark`: "Link this benchmark in the relevant deliverable?"
-
----
-
-## Anti-patterns
-
-❌ **Copy client document bodies** — extract insights only; the source pointer goes in the case's own `sources/`
-❌ **Cross-case references** — each artifact is strictly scoped to its case
-❌ **Skip frontmatter** — frontmatter is what makes the canon machine-readable across sessions
-❌ **Save without confirming** — always show the owner before writing
-❌ **Redirect decisions here** — structural decisions go to [`decision-log-entry`](../../tech-core/skills/decision-log-entry/SKILL.md)
-
-## Contrato de página do brain
-
-Toda página escrita em `brain/` precisa do frontmatter definido em
-`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
-`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
-página, nunca depois.
-
-Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
-trabalho fica gravado e invisível.
+Return the saved page, revision, source coverage and next useful action. Linking
+it to the brief, creating tasks or recompiling navigation requires separate
+requested operations; a canon save does not perform them.
