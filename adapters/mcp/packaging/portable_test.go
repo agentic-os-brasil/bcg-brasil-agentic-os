@@ -23,6 +23,8 @@ import (
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
 	baseagents "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/agents"
+	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
+	techcoreskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/tech-core/skills"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -571,7 +573,39 @@ func assertEmittedAgentResources(t *testing.T, ctx context.Context, client *mcp.
 	if err != nil {
 		t.Fatal(err)
 	}
-	agents, methods := 0, 0
+	// Read the independent method-ID fixture and immutable source bundles, as the
+	// method discovery contract does; packet output cannot define its own oracle.
+	expectedMethods := map[string]bool{}
+	for _, name := range []string{"LICENSE.md", "pocock-upstream.json", "agent-skill-policy.json", "METHODS.md", "method-contracts.json", "catalog.json"} {
+		expectedMethods["maestro://methods/"+name] = true
+	}
+	fixture, err := os.ReadFile("testdata/method-ids.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := strings.Fields(string(fixture))
+	if len(ids) != 92 {
+		t.Fatal("canonical fixture must contain 92 method identities")
+	}
+	seenIDs := map[string]bool{}
+	for _, id := range ids {
+		if seenIDs[id] {
+			t.Fatalf("duplicate canonical method fixture identity %s", id)
+		}
+		seenIDs[id] = true
+		files, err := baseskills.Files(id)
+		if err != nil {
+			files, err = techcoreskills.Files(id)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		for path := range files {
+			expectedMethods["maestro://methods/"+id+"/"+path] = true
+		}
+	}
+	agents := 0
+	methods := map[string]bool{}
 	params := &mcp.ListResourcesParams{}
 	seen := map[string]bool{}
 	for {
@@ -581,7 +615,10 @@ func assertEmittedAgentResources(t *testing.T, ctx context.Context, client *mcp.
 		}
 		for _, resource := range list.Resources {
 			if strings.HasPrefix(resource.URI, "maestro://methods/") {
-				methods++
+				if !expectedMethods[resource.URI] || methods[resource.URI] {
+					t.Fatalf("unexpected or repeated emitted method URI %s", resource.URI)
+				}
+				methods[resource.URI] = true
 			}
 			if !strings.HasPrefix(resource.URI, "maestro://agents/") {
 				continue
@@ -610,8 +647,8 @@ func assertEmittedAgentResources(t *testing.T, ctx context.Context, client *mcp.
 		seen[list.NextCursor] = true
 		params.Cursor = list.NextCursor
 	}
-	if agents != 16 || methods != 250 {
-		t.Fatalf("emitted discovery: agents=%d methods=%d", agents, methods)
+	if agents != 16 || len(methods) != len(expectedMethods) {
+		t.Fatalf("emitted discovery: agents=%d methods=%d; want 16 agents and %d canonical method resources", agents, len(methods), len(expectedMethods))
 	}
 	for _, uri := range []string{"maestro://agents/../private.md", "maestro://agents/%2e%2e/private.md", "maestro://agents/maestro/AGENT.md?owner=true", "maestro://agents/brain/owner/self.md"} {
 		if _, err := client.ReadResource(ctx, &mcp.ReadResourceParams{URI: uri}); err == nil {
