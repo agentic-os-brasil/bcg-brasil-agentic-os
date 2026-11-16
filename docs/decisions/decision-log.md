@@ -1528,3 +1528,14 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: Unconfigured and unattended callers remain fail-closed. Decline, cancellation, expiry and browser errors grant no authority. Browser review is a local operator channel, not native MCP form or lifecycle qualification. The ephemeral listener installs no service and emits no reusable approval token. Rebuilding a local pilot is required to adopt its explicit startup selection.
 - Refs: docs/product-local-owner-review.md; adapters/mcp/confirmation.go; adapters/mcp/internal/localreview; adapters/mcp/packaging/desktop_pilot.go
 - Supersedes: none
+
+## OCTX - Deliver accepted owner preferences through a bounded session projection
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Onboarding persists reviewed SELF facets, but ordinary MCP metadata and immutable methods do not deliver their accepted text to a fresh Code or Desktop session. Exposing the whole private owner tree or treating model-supplied roles as reader authority would cross the existing privacy contract.
+- Decision: Add an explicit read-only projection of the current fully confirmed track, selecting only canonical facets whose readers include session. The admitted local MCP server fixes that reader; request arguments cannot select a role, path or broader profile. Reuse the canonical owner transition lock, bounded no-follow storage and explicit-facet snapshot projection. Bind the page generation to both body confirmation and canonical selected policy/content, and require the same generation on continuation pages. Keep ordinary context metadata-only with a discovery hint. Treat returned preferences as data without effect authority.
+- Consequences: Fresh sessions can retrieve accepted preferences through the same MCP in both clients. Missing, unconfirmed, stale, unsafe or reader-ineligible data remains unavailable. This local bound-session model does not attest hosted subagent identity, authorize writes or sends, enroll jobs, or export Yoda-only material. Native client delivery and distribution remain separately observed gates.
+- Refs: specs/060-product-owner-memory.md; internal/ownerctx; adapters/mcp/owner_context.go; docs/product-owner-context.md
+- Supersedes: none
