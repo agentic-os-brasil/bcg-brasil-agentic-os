@@ -115,6 +115,7 @@ type Engine struct {
 	root             string
 	dataRoot         string
 	now              func() time.Time
+	accountID        string
 	workspace        *workspaceScope
 	boundDirectories []os.FileInfo
 	workspacePolicy  WorkspacePolicy
