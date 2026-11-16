@@ -943,7 +943,11 @@
       ],
       "required_operations": [
         "owner.apply",
+        "owner.confirm_onboarding",
+        "owner.context",
+        "owner.onboarding_review",
         "owner.propose",
+        "owner.review",
         "owner.status"
       ],
       "effects": [
@@ -956,7 +960,16 @@
         {
           "id": "domain.owner_background",
           "kind": "domain",
-          "required": true
+          "required": true,
+          "fulfillment_operations": [
+            "owner.apply",
+            "owner.confirm_onboarding",
+            "owner.context",
+            "owner.onboarding_review",
+            "owner.propose",
+            "owner.review",
+            "owner.status"
+          ]
         },
         {
           "id": "host.trusted_review",
@@ -1399,7 +1412,11 @@
         {
           "id": "domain.owner_voice_read",
           "kind": "domain",
-          "required": false
+          "required": false,
+          "fulfillment_operations": [
+            "owner.context",
+            "owner.status"
+          ]
         }
       ]
     },
