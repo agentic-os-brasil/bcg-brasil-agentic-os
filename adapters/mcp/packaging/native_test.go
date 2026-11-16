@@ -89,8 +89,14 @@ func TestNativeReviewRequiresExactConfirmationWithoutWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if review.Plan.State != "reviewable" || review.Plan.MaximumCalls != 3 || review.Plan.MaximumTurnsPerCall != 8 || review.Plan.MaximumSecondsPerCall != 120 || review.Plan.AggregateEstimatedLimitUSD != 3*in.MaxBudgetUSD || review.ReviewDigest == "" {
+	if review.Plan.State != "reviewable" || review.Plan.MaximumCalls != 3 || review.Plan.MaximumTurnsPerCall != 8 || review.Plan.MaximumSecondsPerCall != 120 || review.Plan.StartupCheckSeconds != 45 || review.Plan.AggregateEstimatedLimitUSD != 3*in.MaxBudgetUSD || review.ReviewDigest == "" {
 		t.Fatalf("invalid exact plan: %+v", review)
+	}
+	changedPlan := review.Plan
+	changedPlan.StartupCheckSeconds--
+	changedBody, _ := json.Marshal(changedPlan)
+	if digest(changedBody) == review.ReviewDigest {
+		t.Fatal("startup deadline missing from exact reviewed digest")
 	}
 	if !strings.Contains(review.Plan.BillingBoundary, "not hard") || !strings.Contains(review.Plan.ContextBoundary, "additional provider requests") || review.Plan.ChallengeDirectory != in.ChallengeDirectory {
 		t.Fatal("plan concealed billing/context/write boundaries")
@@ -180,7 +186,8 @@ func probeFromArguments(t *testing.T, in NativeOptions, args []string, cwd strin
 	var config struct {
 		Hooks map[string][]struct {
 			Hooks []struct {
-				Args []string `json:"args"`
+				Args    []string `json:"args"`
+				Timeout int      `json:"timeout"`
 			} `json:"hooks"`
 		} `json:"hooks"`
 	}
@@ -192,6 +199,9 @@ func probeFromArguments(t *testing.T, in NativeOptions, args []string, cwd strin
 	inventoryBody, err := os.ReadFile(filepath.Join(plugin, InventoryName))
 	if err != nil || json.Unmarshal(inventoryBody, &packet) != nil {
 		t.Fatal("candidate inventory missing")
+	}
+	if config.Hooks["SessionStart"][0].Hooks[0].Timeout != 45 {
+		t.Fatal("qualification startup deadline differs from plan")
 	}
 	matched := false
 	for _, file := range packet.Files {
@@ -581,4 +591,198 @@ func TestNativeCommandRunnerBoundsOrdinaryOwnedProcessGroup(t *testing.T) {
 	}
 	// A detached host process is deliberately outside this test and the stated
 	// guarantee. The producer reports timeout cleanup unavailable, never PASS.
+}
+
+func TestNativeStartupSnapshotCoversLargeRuntimeState(t *testing.T) {
+	in := nativeFixture(t)
+	home, err := datahome.Resolve(datahome.Options{ProductRoot: in.Packet.Binding.ProductRoot, UserHome: in.Packet.Binding.UserHome, LookupEnv: in.Packet.Binding.LookupEnv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(home.Home, "state", "large-runtime")
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	archive := filepath.Join(dir, "00-runtime-archive")
+	f, err := os.OpenFile(archive, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block := bytes.Repeat([]byte("synthetic-runtime"), 65536)
+	for range 10 {
+		if _, err := f.Write(block); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for i := range 4100 {
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("input-%05d", i)), []byte("signed-input-fixture"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before, err := startupSnapshot(in.Packet.Binding)
+	if err != nil {
+		t.Fatalf("legitimate runtime-sized state refused: %v", err)
+	}
+	input, _ := json.Marshal(map[string]any{"hook_event_name": "SessionStart", "session_id": "aabbccdd-0011-2233-4455-66778899aabb", "cwd": in.Packet.Binding.WorkspacePath})
+	var output bytes.Buffer
+	if err := CheckNativeStartup(in.Packet.Binding, strings.Repeat("a", 32), bytes.NewReader(input), &output); err != nil {
+		t.Fatal("legitimate startup hook refused", err)
+	}
+	if !strings.Contains(output.String(), "maestro_native_startup_unchanged:") {
+		t.Fatal("startup marker absent")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "input-04099"), []byte("changed-final-input"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	after, err := startupSnapshot(in.Packet.Binding)
+	if err != nil || after == before {
+		t.Fatal("late runtime input excluded from coverage", err)
+	}
+	if err := os.Symlink(archive, filepath.Join(dir, "linked-input")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := startupSnapshot(in.Packet.Binding); err == nil {
+		t.Fatal("runtime alias admitted")
+	}
+}
+
+func TestNativeStartupSnapshotRefusesOversizeRuntimeFile(t *testing.T) {
+	in := nativeFixture(t)
+	home, err := datahome.Resolve(datahome.Options{ProductRoot: in.Packet.Binding.ProductRoot, UserHome: in.Packet.Binding.UserHome, LookupEnv: in.Packet.Binding.LookupEnv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(filepath.Join(home.Home, "state", "oversize-runtime"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.Truncate((512 << 20) + 1); err != nil {
+		t.Fatal(err)
+	}
+	if err = f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := startupSnapshot(in.Packet.Binding); err == nil {
+		t.Fatal("file beyond finite runtime bound admitted")
+	}
+}
+
+// Explicit opt-in uses only the fresh fictional participant state; it changes
+// no selected data and records no hook context or private file contents.
+func TestNativeStartupActualRuntimeState(t *testing.T) {
+	path := os.Getenv("MAESTRO_NATIVE_STARTUP_RUNTIME_ROUTE")
+	if path == "" {
+		t.Skip("explicit fresh synthetic runtime binding required")
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var route struct {
+		Command        string `json:"command"`
+		RegistryPath   string `json:"registry_path"`
+		RegistrySHA256 string `json:"registry_sha256"`
+		Version        string `json:"version"`
+	}
+	if err := json.Unmarshal(body, &route); err != nil {
+		t.Fatal(err)
+	}
+	productRoot := filepath.Dir(filepath.Dir(route.Command))
+	root := filepath.Dir(productRoot)
+	binding := product.Options{ProductRoot: productRoot, UserHome: filepath.Join(root, "owner"), WorkspacePath: filepath.Join(root, "workspace"), CLIVersion: route.Version, AuthorityRegistryPath: route.RegistryPath, AuthorityRegistrySHA256: route.RegistrySHA256, LookupEnv: func(string) (string, bool) { return "", false }}
+	var entries int
+	var size int64
+	for _, base := range []string{filepath.Join(binding.UserHome, ".maestro", "state"), filepath.Join(binding.WorkspacePath, ".bcgos")} {
+		if err := filepath.WalkDir(base, func(_ string, d os.DirEntry, e error) error {
+			if e != nil {
+				return e
+			}
+			entries++
+			if !d.IsDir() {
+				i, e := d.Info()
+				if e != nil {
+					return e
+				}
+				size += i.Size()
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	input, _ := json.Marshal(map[string]any{"hook_event_name": "SessionStart", "session_id": "53863738-8677-4cc5-9298-70748edc110b", "cwd": binding.WorkspacePath})
+	var output bytes.Buffer
+	started := time.Now()
+	err = CheckNativeStartup(binding, "5386373886774cc5929870748edc110b", bytes.NewReader(input), &output)
+	elapsed := time.Since(started)
+	marker := bytes.Contains(output.Bytes(), []byte("maestro_native_startup_unchanged:"))
+	result := map[string]any{"actual_synthetic_entries": entries, "actual_synthetic_bytes": size, "check_native_startup_seconds": elapsed.Seconds(), "ordinary_hook_deadline_seconds": 5, "within_deadline": elapsed < 5*time.Second, "qualification_startup_seconds": 45, "within_qualification_deadline": elapsed < 45*time.Second, "marker_found": marker, "state_unchanged_verified": err == nil && marker, "model": false, "execution": "direct canonical CheckNativeStartup API over real selected state; no CLI startup overhead"}
+	if err != nil {
+		result["error"] = err.Error()
+	}
+	if destination := os.Getenv("MAESTRO_NATIVE_STARTUP_RUNTIME_PROOF"); destination != "" {
+		b, _ := json.MarshalIndent(result, "", "  ")
+		if e := os.WriteFile(destination, append(b, '\n'), 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if err != nil || !marker {
+		t.Fatal("actual selected runtime startup failed", err)
+	}
+	t.Logf("actual full-state startup: entries=%d bytes=%d elapsed=%s under5s=%t", entries, size, elapsed, elapsed < 5*time.Second)
+}
+
+func TestNativeOrdinaryHookDeadlinesRemainFiveSeconds(t *testing.T) {
+	files, err := nativeProfilePayload(runtime.GOOS, strings.Repeat("a", 64))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config struct {
+		Hooks map[string][]struct {
+			Hooks []struct {
+				Timeout int `json:"timeout"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(files["hooks/hooks.json"], &config); err != nil {
+		t.Fatal(err)
+	}
+	if len(config.Hooks) != 7 {
+		t.Fatal("ordinary hook set changed")
+	}
+	for event, rows := range config.Hooks {
+		for _, row := range rows {
+			for _, hook := range row.Hooks {
+				if hook.Timeout != 5 {
+					t.Fatal("ordinary deadline changed", event)
+				}
+			}
+		}
+	}
+}
+
+func TestNativeStartupSnapshotRefusesAggregateBeyondRuntimeBound(t *testing.T) {
+	in := nativeFixture(t)
+	home, err := datahome.Resolve(datahome.Options{ProductRoot: in.Packet.Binding.ProductRoot, UserHome: in.Packet.Binding.UserHome, LookupEnv: in.Packet.Binding.LookupEnv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, size := range []int64{512 << 20, 512 << 20, 1} {
+		f, err := os.Create(filepath.Join(home.Home, "state", fmt.Sprintf("aggregate-%d", i)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = f.Truncate(size); err != nil {
+			t.Fatal(err)
+		}
+		if err = f.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := startupSnapshot(in.Packet.Binding); err == nil {
+		t.Fatal("aggregate beyond finite runtime bound admitted")
+	}
 }

@@ -154,6 +154,18 @@ estimated limit is `0.75` USD. Provider billing and CLI limits are estimates,
 not hard spending ceilings. An observed per-session estimate above the reviewed
 amount stops remaining sessions.
 
+The qualification-only read-only startup wrapper streams two complete snapshots
+of the selected owner state and workspace metadata. It covers every subtree,
+refusing aliases, unstable file reads or state beyond **32,768 entries, 512 MiB
+per file and 1 GiB total**. Its exact reviewed `startup_check_seconds` is **45**;
+ordinary seven-hook vectors retain their **5-second** deadlines. An actual
+420,384,047-byte/9,989-entry synthetic owner completed the direct source CLI check
+in 15.163 seconds. This is a measurement, not an availability guarantee at the
+finite limits or on another host. Larger state, including retained acquisition
+cache, may remain unavailable; no subtree is silently skipped. The three-session,
+eight-parent-turn and 120-second per-session limits remain unchanged.
+
+
 ## 3. Confirm that exact review and build
 
 Use the same arguments and the exact `review_digest` from the complete review:
