@@ -160,10 +160,17 @@ if ($null -ne $nativeItem) {
 $inspection = & $bin inspect --packet --product-root $packet --user-home (Join-Path $root 'owner') --workspace (Join-Path $root 'workspace')
 if ($LASTEXITCODE -ne 0) { throw 'Vínculo recusado; preserve os arquivos.' }
 $selected = ($inspection -join "`n") | ConvertFrom-Json
-if ($PSBoundParameters.ContainsKey('InitialPrompt')) {
+if ($selected.packet_server_sha256 -cne $expected) { throw 'O pacote selecionado usa outro executável; preserve o ensaio.' }
+function Assert-LocalCodeProfile {
+  foreach ($directory in @((Join-Path $root 'client'),(Join-Path $root 'client/code'))) {
+    $item = Get-Item -LiteralPath $directory -Force -ErrorAction Stop
+    if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Perfil Code ausente ou com reparse/link; preserve a preparação e o destino existente.' }
+  }
+}
+if ($PSBoundParameters.ContainsKey('InitialPrompt') -or ($selected.packet_mode -ceq 'native')) {
   $command = Get-Command claude.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($null -eq $command -or [IO.Path]::GetExtension($command.Source) -ine '.exe') {
-    throw 'O prompt automático requer a instalação nativa do Claude Code (claude.exe). Disponibilize-a pelo fluxo normal autorizado. Como alternativa manual, abra Abrir Code sem argumentos e use o prompt salvo em diagnostics deste teste.'
+    throw 'O prompt automático e o pacote nativo requerem a instalação nativa do Claude Code (claude.exe). Disponibilize-a pelo fluxo normal autorizado. Para um pacote MCP comum, abra Abrir Code sem argumentos e use o prompt salvo em diagnostics deste teste.'
   }
 } else {
   $command = Get-Command claude -ErrorAction Stop
@@ -182,6 +189,7 @@ try {
   $env:CLAUDE_CONFIG_DIR = Join-Path $root 'client/code'
   $selectionArgs = @()
   if ($selected.packet_mode -ceq 'native') {
+    Assert-LocalCodeProfile
     $selection = Join-Path $env:CLAUDE_CONFIG_DIR ('native-session.' + [Guid]::NewGuid().ToString('N') + '.json')
     $body = @{pluginConfigs=@{'maestro-product@inline'=@{options=@{user_home=(Join-Path $root 'owner');workspace=(Join-Path $root 'workspace')}}}} | ConvertTo-Json -Depth 5 -Compress
     $stream = [IO.File]::Open($selection, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
@@ -189,7 +197,7 @@ try {
     $selectionArgs = @('--settings', $selection)
   }
   Push-Location -LiteralPath (Join-Path $root 'workspace')
-  try { & $command.Source --plugin-dir $packet @selectionArgs @promptArgs } finally { Pop-Location }
+  try { Assert-LocalCodeProfile; & $command.Source --plugin-dir $packet @selectionArgs @promptArgs } finally { Pop-Location }
 } finally {
   if ($null -eq $old) { Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue } else { $env:CLAUDE_CONFIG_DIR = $old }
 }

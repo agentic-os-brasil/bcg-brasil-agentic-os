@@ -183,7 +183,7 @@ func TestMacOSPilotCodePromptHandoff(t *testing.T) {
 	checker := []byte(`#!/bin/bash
 case "$1" in
   pilot-check) cat "$PILOT_REPORT";;
-  inspect) printf '{"diagnostic":"ready","packet_mode":"mcp_lifecycle"}\n';;
+  inspect) printf '{"diagnostic":"ready","packet_mode":"mcp_lifecycle","packet_server_sha256":"%s"}\n' "$PILOT_SERVER_SHA";;
   native-review) printf '%s\0' "$@" > "$PILOT_REVIEW_ARGS"; printf '{"plan":{"state":"reviewable","complete_plan_marker":"FULL_CANONICAL_PLAN"},"review_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}\n';;
   native-qualify-and-build) printf '%s\0' "$@" > "$PILOT_QUALIFY_ARGS"; printf '{"state":"unavailable","reason":"synthetic_fixture_only"}\n';;
   *) exit 21;;
@@ -206,7 +206,7 @@ esac
 			}
 		}
 	}
-	for _, name := range []string{"workspace", "owner"} {
+	for _, name := range []string{"workspace", "owner", "client/code"} {
 		if err := os.MkdirAll(filepath.Join(root, name), 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -227,7 +227,7 @@ esac
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-		cmd.Env = append(os.Environ(), "PATH="+tools+":"+os.Getenv("PATH"), "PILOT_REPORT="+filepath.Join(base, "report.json"), "PILOT_ARGS="+witness, "PILOT_REVIEW_ARGS="+filepath.Join(base, "review-args"), "PILOT_QUALIFY_ARGS="+filepath.Join(base, "qualification-args"))
+		cmd.Env = append(os.Environ(), "PATH="+tools+":"+os.Getenv("PATH"), "PILOT_REPORT="+filepath.Join(base, "report.json"), "PILOT_ARGS="+witness, "PILOT_REVIEW_ARGS="+filepath.Join(base, "review-args"), "PILOT_QUALIFY_ARGS="+filepath.Join(base, "qualification-args"), fmt.Sprintf("PILOT_SERVER_SHA=%x", sha256.Sum256(checker)))
 		if input == "" {
 			return cmd.CombinedOutput()
 		}
@@ -361,7 +361,7 @@ func TestMacOSPilotLaunchesQualifiedCodeWithSessionSelection(t *testing.T) {
 	root := filepath.Join(base, "prepared space ' quote")
 	tools := filepath.Join(base, "tools")
 	witness := filepath.Join(base, "argv")
-	checker := []byte("#!/bin/bash\n[[ $1 == inspect ]] || exit 21\n[[ ${PILOT_REFUSE:-} != yes ]] || exit 19\nmode=mcp_lifecycle\nfor arg do if [[ $arg == */code-native-qualified ]]; then mode=${PILOT_NATIVE_MODE:-native}; fi; done\nprintf '{\"diagnostic\":\"ready\",\"packet_mode\":\"%s\",\"packet_server_sha256\":\"%s\"}\\n' \"$mode\" \"$PILOT_SERVER_SHA\"\n")
+	checker := []byte("#!/bin/bash\n[[ $1 == inspect ]] || exit 21\n[[ ${PILOT_REFUSE:-} != yes ]] || exit 19\nmode=mcp_lifecycle\nsha=${PILOT_BASE_SHA:-$PILOT_SERVER_SHA}\nfor arg do if [[ $arg == */code-native-qualified ]]; then mode=${PILOT_NATIVE_MODE:-native}; sha=$PILOT_SERVER_SHA; fi; done\nprintf '{\"diagnostic\":\"ready\",\"packet_mode\":\"%s\",\"packet_server_sha256\":\"%s\"}\\n' \"$mode\" \"$sha\"\n")
 	for path, body := range map[string][]byte{
 		filepath.Join(root, "product", "maestro-mcp"):                                     checker,
 		filepath.Join(root, "exports", "code", "scripts", "maestro-mcp"):                  checker,
@@ -444,6 +444,71 @@ func TestMacOSPilotLaunchesQualifiedCodeWithSessionSelection(t *testing.T) {
 				t.Fatalf("refused packet launched Code: %v %s", err, out)
 			}
 		})
+	}
+	for _, test := range []struct {
+		name     string
+		fallback bool
+	}{
+		{"foreign baseline refused", false}, {"foreign fallback refused", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			native := filepath.Join(root, "exports", "code-native-qualified")
+			if !test.fallback {
+				if err := os.Rename(native, native+".retained"); err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if err := os.Rename(native+".retained", native); err != nil {
+						t.Fatal(err)
+					}
+				}()
+			}
+			_ = os.Remove(witness)
+			out, err := run("PILOT_BASE_SHA="+strings.Repeat("0", 64), "PILOT_NATIVE_MODE=mcp_only")
+			if _, readErr := os.Stat(witness); err == nil || !os.IsNotExist(readErr) {
+				t.Fatalf("foreign selected packet launched Code: %v %s", err, out)
+			}
+		})
+	}
+	for _, name := range []string{"client", "client/code"} {
+		for _, mode := range []string{"native", "mcp_only"} {
+			t.Run("profile alias refused/"+name+"/"+mode, func(t *testing.T) {
+				alias := filepath.Join(root, filepath.FromSlash(name))
+				retained := filepath.Join(base, "retained-profile")
+				if err := os.Rename(alias, retained); err != nil {
+					t.Fatal(err)
+				}
+				foreign := t.TempDir()
+				target := foreign
+				if name == "client" {
+					target = filepath.Join(foreign, "code")
+				}
+				writePilotFixture(t, filepath.Join(target, "settings.json"), []byte("preserve foreign settings"))
+				if err := os.Symlink(foreign, alias); err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if err := os.Remove(alias); err != nil {
+						t.Error(err)
+					}
+					if err := os.Rename(retained, alias); err != nil {
+						t.Error(err)
+					}
+				}()
+				_ = os.Remove(witness)
+				out, err := run("PILOT_NATIVE_MODE=" + mode)
+				if _, readErr := os.Stat(witness); err == nil || !os.IsNotExist(readErr) {
+					t.Errorf("aliased profile launched Code: %v %s", err, out)
+				}
+				entries, err := os.ReadDir(target)
+				if err != nil || len(entries) != 1 || entries[0].Name() != "settings.json" {
+					t.Errorf("launcher wrote through profile alias: %v %v", entries, err)
+				}
+				if body, err := os.ReadFile(filepath.Join(target, "settings.json")); err != nil || string(body) != "preserve foreign settings" {
+					t.Error("foreign settings changed", err)
+				}
+			})
+		}
 	}
 	if got, err := os.ReadFile(profile); err != nil || string(got) != "{\"existing\":true}\n" {
 		t.Fatal("launcher changed existing profile", err)
