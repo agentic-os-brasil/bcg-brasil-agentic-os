@@ -1,13 +1,17 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"syscall"
@@ -165,5 +169,140 @@ exec /usr/bin/shasum "$@"
 		if unavailable {
 			return
 		}
+	}
+}
+
+func TestMacOSPilotCodePromptHandoff(t *testing.T) {
+	source := filepath.Join("..", "..", "..", "..", "dev", "pilot")
+	base := t.TempDir()
+	root := filepath.Join(base, "prepared space ' literal")
+	tools := filepath.Join(base, "tools")
+	witness := filepath.Join(base, "argv")
+	prompt := "Use exact \"quoted\" text, $HOME and $(touch NEVER_CREATED).\nSecond line."
+	report, _ := json.Marshal(map[string]any{"schema_version": 1, "status": "ready", "markdown": "synthetic report", "code_prompt": prompt + " complete", "desktop_prompt": "desktop", "code_ready_prompt": prompt + " connection", "desktop_ready_prompt": "desktop connection"})
+	checker := []byte("#!/bin/bash\nif [[ $1 == pilot-check ]]; then cat \"$PILOT_REPORT\"; fi\n")
+	for path, body := range map[string][]byte{
+		filepath.Join(root, "product", "maestro-mcp"):                    checker,
+		filepath.Join(root, "exports", "code", "scripts", "maestro-mcp"): checker,
+		filepath.Join(root, ".maestro-pilot-owned"):                      []byte("synthetic"),
+		filepath.Join(root, "pilot-binary.sha256"):                       []byte(fmt.Sprintf("%x  product/maestro-mcp\n", sha256.Sum256(checker))),
+		filepath.Join(base, "report.json"):                               report,
+		filepath.Join(tools, "claude"):                                   []byte("#!/bin/bash\nprintf '%s\\0' \"$PWD\" \"$CLAUDE_CONFIG_DIR\" \"$@\" > \"$PILOT_ARGS\"\n"),
+		filepath.Join(tools, "open"):                                     []byte("#!/bin/bash\nexit 0\n"),
+		filepath.Join(tools, "pbcopy"):                                   []byte("#!/bin/bash\necho 'Code must not use Clipboard' >&2\nexit 19\n"),
+	} {
+		writePilotFixture(t, path, body)
+		if strings.Contains(string(body), "#!/bin/bash") {
+			if err := os.Chmod(path, 0700); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(root, "workspace"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for original, name := range map[string]string{"open-code-macos.command": "Abrir Code.command", "test-macos.command": "Testar Maestro.command"} {
+		body, err := os.ReadFile(filepath.Join(source, original))
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(root, "launchers", name)
+		writePilotFixture(t, path, body)
+		if err := os.Chmod(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run := func(args []string, input string) ([]byte, error) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+		cmd.Env = append(os.Environ(), "PATH="+tools+":"+os.Getenv("PATH"), "PILOT_REPORT="+filepath.Join(base, "report.json"), "PILOT_ARGS="+witness)
+		if input == "" {
+			return cmd.CombinedOutput()
+		}
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer stdin.Close()
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		cmd.Stderr = cmd.Stdout
+		if err := cmd.Start(); err != nil {
+			return nil, err
+		}
+		reader := bufio.NewReader(stdout)
+		var output bytes.Buffer
+		for !strings.Contains(output.String(), "Escolha:") {
+			part, err := reader.ReadBytes(':')
+			output.Write(part)
+			if err != nil {
+				_ = cmd.Wait()
+				return output.Bytes(), err
+			}
+		}
+		if _, err := io.WriteString(stdin, input); err != nil {
+			t.Fatal(err)
+		}
+		rest, err := io.ReadAll(reader)
+		output.Write(rest)
+		waitErr := cmd.Wait()
+		if err != nil {
+			return output.Bytes(), err
+		}
+		return output.Bytes(), waitErr
+	}
+	assertArgs := func(want ...string) {
+		t.Helper()
+		body, err := os.ReadFile(witness)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := strings.Split(strings.TrimSuffix(string(body), "\x00"), "\x00")
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("literal launcher argv differs: got %q want %q", got, want)
+		}
+		if err := os.Remove(witness); err != nil {
+			t.Fatal(err)
+		}
+	}
+	launcher := filepath.Join(root, "launchers", "Abrir Code.command")
+	prefix := []string{filepath.Join(root, "workspace"), filepath.Join(root, "client", "code"), "--plugin-dir", filepath.Join(root, "exports", "code")}
+	if out, err := run([]string{"/bin/bash", launcher}, ""); err != nil {
+		t.Fatalf("ordinary open: %s %v", out, err)
+	}
+	assertArgs(prefix...)
+	if out, err := run([]string{"/bin/bash", launcher, prompt}, ""); err != nil {
+		t.Fatalf("prompt open: %s %v", out, err)
+	}
+	assertArgs(append(append([]string{}, prefix...), "--", prompt)...)
+	for _, invalid := range [][]string{{""}, {"one", "two"}} {
+		if out, err := run(append([]string{"/bin/bash", launcher}, invalid...), ""); err == nil {
+			t.Fatalf("invalid launcher arguments accepted: %s", out)
+		}
+	}
+	menu := filepath.Join(root, "launchers", "Testar Maestro.command")
+	if out, err := run([]string{"/bin/bash", menu, "--check-only"}, ""); err != nil {
+		t.Fatalf("check-only: %s %v", out, err)
+	}
+	if _, err := os.Stat(witness); !os.IsNotExist(err) {
+		t.Fatal("check-only or invalid arguments opened Code")
+	}
+	for _, choice := range []string{"1", "3"} {
+		transcript := filepath.Join(base, "menu-"+choice)
+		if out, err := run([]string{"/usr/bin/script", "-q", transcript, "/bin/bash", menu}, choice+"\n"); err != nil {
+			t.Fatalf("menu %s: %s %v", choice, out, err)
+		}
+		suffix := " complete"
+		if choice == "3" {
+			suffix = " connection"
+		}
+		assertArgs(append(append([]string{}, prefix...), "--", prompt+suffix)...)
+	}
+	if _, err := os.Stat(filepath.Join(root, "workspace", "NEVER_CREATED")); !os.IsNotExist(err) {
+		t.Fatal("prompt was interpreted by a shell")
 	}
 }

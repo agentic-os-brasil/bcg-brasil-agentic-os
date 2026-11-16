@@ -100,8 +100,9 @@ keeps the verified executable, test launcher and bounded diagnostic report;
 neither the preparer nor the checker repairs owner ACLs or removes partial data.
 
 The participant opens **Testar Maestro** and chooses a clearly named route.
-Options 3 (Code) and 4 (Desktop) are independent read-only connection checks. Each
-copies one prompt bound to the verified workspace and exact client connector;
+Options 3 (Code) and 4 (Desktop) are independent read-only connection checks. Code opens with its exact report prompt as one literal initial argument, without
+clipboard or manual paste. Desktop copies one prompt bound to the verified workspace
+and exact client connector;
 Desktop names the unique local extension and requires neither the Code CLI nor
 a Code work item. Each prompt calls only `maestro_context` once and reports the
 workspace and returned connection-health state. It neither queries work-item
@@ -113,7 +114,14 @@ Option 1 is the complete Code exercise; option 2 is the subsequent Desktop
 continuity/resume exercise. These prompts bind a synthetic trial marker. The
 Desktop continuity prompt discovers the single matching work item and uses its
 current revision, so the participant does not transport execution IDs/revisions.
-The launcher copies a prompt and opens a client only after that explicit choice.
+The launcher opens Code with the selected initial prompt, or copies the Desktop
+prompt and opens that client, only after the explicit menu choice. Ordinary
+**Abrir Code** without a prompt still opens an empty session. On Windows,
+automatic prompt delivery requires a native `claude.exe` application on PATH;
+`.cmd`, `.bat`, `.ps1`, functions and aliases never receive the automatic prompt.
+Use the authorized native installation, or open **Abrir Code.cmd** without arguments
+and manually paste the current diagnostic's CODE.txt or CODE-CONEXAO.txt. This kit
+does not install or rewrite the client; ordinary opening retains its prior resolver.
 For Desktop, the participant confirms installation of the named extension and
 pastes the copied prompt into a new conversation. No directory fields need
 copying or saving. Settings > Extensions > Configure > Enabled is conditional

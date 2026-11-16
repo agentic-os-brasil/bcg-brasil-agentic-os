@@ -47,18 +47,18 @@ read -r choice
 case "$choice" in
   1) [[ -s "$RUN/CODE.txt" ]] || fail 'O relatório ainda não liberou o ensaio no cliente.'
      command -v claude >/dev/null || fail 'Disponibilize o comando claude pelo fluxo normal do Code e abra Testar Maestro novamente.'
-     pbcopy < "$RUN/CODE.txt"
-     printf 'Prompt copiado. Cole uma vez na conversa do Code.\n'
-     exec "$ROOT/launchers/Abrir Code.command";;
+     prompt="$(cat "$RUN/CODE.txt" && printf .)" || fail 'Não foi possível ler o prompt deste relatório.'
+     printf 'Abrindo o Code com o ensaio completo. Conclua o login normal se solicitado.\n'
+     exec "$ROOT/launchers/Abrir Code.command" "${prompt%.}";;
   2) [[ -s "$RUN/DESKTOP.txt" ]] || fail 'O relatório ainda não liberou o ensaio no cliente.'
      pbcopy < "$RUN/DESKTOP.txt"
      printf 'Prompt copiado. Confirme a instalação da extensão deste ensaio. Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e, somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir. Preserve as demais permissões. ✓ / Sempre permitir libera só a leitura; gravações de conteúdo continuam exigindo revisão nativa disponível no cliente. Depois cole uma vez em uma conversa nova do Desktop.\n'
      exec "$ROOT/launchers/Abrir Desktop.command";;
   3) [[ -s "$RUN/CODE-CONEXAO.txt" ]] || fail 'O relatório ainda não liberou a conferência no Code.'
      command -v claude >/dev/null || fail 'Disponibilize o comando claude pelo fluxo normal do Code e abra Testar Maestro novamente.'
-     pbcopy < "$RUN/CODE-CONEXAO.txt"
-     printf 'Conferência copiada. Se esta janela pedir login, conclua o fluxo normal. Depois cole uma vez na conversa do Code.\n'
-     exec "$ROOT/launchers/Abrir Code.command";;
+     prompt="$(cat "$RUN/CODE-CONEXAO.txt" && printf .)" || fail 'Não foi possível ler o prompt deste relatório.'
+     printf 'Abrindo o Code com a conferência de conexão. Conclua o login normal se solicitado.\n'
+     exec "$ROOT/launchers/Abrir Code.command" "${prompt%.}";;
   4) [[ -s "$RUN/DESKTOP-CONEXAO.txt" ]] || fail 'O relatório ainda não liberou a conferência no Desktop.'
      pbcopy < "$RUN/DESKTOP-CONEXAO.txt"
      printf 'Conferência copiada. Confirme a instalação da extensão deste ensaio. Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e, somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir. Preserve as demais permissões. ✓ / Sempre permitir libera só a leitura; gravações de conteúdo continuam exigindo revisão nativa disponível no cliente. Depois cole uma vez em uma conversa nova do Desktop.\n'

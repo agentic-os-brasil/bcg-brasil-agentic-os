@@ -128,16 +128,34 @@ if ($LASTEXITCODE -ne 0) { Diagnose-Failure 'O pacote Code não foi concluído.'
 & $bin mcpb --desktop-pilot @common --server $bin --destination (Join-Path $Root 'exports/maestro-product.mcpb') --version 0.0.0
 if ($LASTEXITCODE -ne 0) { Diagnose-Failure 'O pacote Desktop não foi concluído.' }
 $code = @'
+param([string]$InitialPrompt)
 $ErrorActionPreference = 'Stop'
+if ($args.Count -ne 0 -or ($PSBoundParameters.ContainsKey('InitialPrompt') -and [string]::IsNullOrEmpty($InitialPrompt))) { throw 'Use zero argumentos ou um único prompt.' }
 $root = Split-Path -Parent $PSScriptRoot
 & (Join-Path $root 'exports/code/scripts/maestro-mcp.exe') inspect --packet --product-root (Join-Path $root 'exports/code') --user-home (Join-Path $root 'owner') --workspace (Join-Path $root 'workspace')
 if ($LASTEXITCODE -ne 0) { throw 'Vínculo recusado; preserve os arquivos.' }
-$command = Get-Command claude -ErrorAction Stop
+if ($PSBoundParameters.ContainsKey('InitialPrompt')) {
+  $command = Get-Command claude.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($null -eq $command -or [IO.Path]::GetExtension($command.Source) -ine '.exe') {
+    throw 'O prompt automático requer a instalação nativa do Claude Code (claude.exe). Disponibilize-a pelo fluxo normal autorizado. Como alternativa manual, abra Abrir Code sem argumentos e use o prompt salvo em diagnostics deste teste.'
+  }
+} else {
+  $command = Get-Command claude -ErrorAction Stop
+}
+$promptArgs = @()
+if ($PSBoundParameters.ContainsKey('InitialPrompt')) {
+  $literal = $InitialPrompt
+  if ($PSVersionTable.PSVersion -lt [version]'7.3') {
+    # The legacy native binder consumes quotes; preserve the prompt's literal argv.
+    $literal = $literal -replace '(\\*)"', '$1$1\"'
+  }
+  $promptArgs = @('--', $literal)
+}
 $old = $env:CLAUDE_CONFIG_DIR
 try {
   $env:CLAUDE_CONFIG_DIR = Join-Path $root 'client/code'
   Push-Location -LiteralPath (Join-Path $root 'workspace')
-  try { & $command.Source --plugin-dir (Join-Path $root 'exports/code') } finally { Pop-Location }
+  try { & $command.Source --plugin-dir (Join-Path $root 'exports/code') @promptArgs } finally { Pop-Location }
 } finally {
   if ($null -eq $old) { Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue } else { $env:CLAUDE_CONFIG_DIR = $old }
 }
@@ -157,11 +175,18 @@ $start = @"
 
 Abra **launchers/Testar Maestro.cmd**. Para conferir a conexão sem alterar dados,
 escolha **3 — Conferir conexão Code** ou **4 — Conferir conexão Desktop**. O texto
-com o workspace correto é copiado automaticamente: cole uma vez na conversa do
-cliente escolhido. O estado mostrado é a saúde da conexão, não o estado dos trabalhos.
+abre automaticamente no Code, sem copiar ou colar. No Desktop, o texto é copiado:
+cole uma vez em uma conversa nova. O estado mostrado é a saúde da conexão, não o estado dos trabalhos.
 
 Para o ensaio completo, escolha **1 — Ensaio completo no Code** e depois
-**2 — Retomar no Desktop**. O texto copiado conduz cada etapa e suas confirmações normais.
+**2 — Retomar no Desktop**. O Code recebe o prompt inicial automaticamente; no Desktop,
+cole o texto copiado. Cada etapa preserva as confirmações normais.
+
+No Windows, o prompt automático das opções 1 e 3 requer a instalação nativa
+claude.exe no PATH, obtida pelo fluxo normal autorizado. Com somente um shim
+.cmd/.bat/.ps1, o teste para antes de enviar o prompt. Para uso manual, abra
+Abrir Code sem argumentos e copie o texto CODE.txt ou CODE-CONEXAO.txt do
+relatório atual em diagnostics para a conversa. O kit não instala o cliente.
 
 O perfil Code é separado e pode pedir login normal nessa janela. O plugin e a
 extensão já usam as pastas aprovadas; não há diretórios para copiar ou preencher.

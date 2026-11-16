@@ -453,3 +453,201 @@ func writeWindowsPilotArtifactProof(t *testing.T, root, kit, sourceProbe string,
 		t.Fatal("exact artifact receipt unavailable", encodeErr, closeErr)
 	}
 }
+
+func TestPilotWindowsCodePromptHandoff(t *testing.T) {
+	shell := stockPilotPowerShell()
+	if runtime.GOOS != "windows" {
+		var err error
+		shell, err = exec.LookPath("pwsh")
+		if err != nil {
+			t.Skip("PowerShell is unavailable")
+		}
+	}
+	source := filepath.Join("..", "..", "..", "..", "dev", "pilot")
+	setup, err := os.ReadFile(filepath.Join(source, "setup-windows.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := strings.Index(string(setup), "$code = @'\n")
+	if start < 0 {
+		t.Fatal("Code launcher producer absent")
+	}
+	launcher := strings.SplitN(string(setup)[start+len("$code = @'\n"):], "\n'@", 2)[0]
+	base := t.TempDir()
+	root := filepath.Join(base, "prepared space ' literal")
+	tools := filepath.Join(base, "tools")
+	witness := filepath.Join(base, "argv.json")
+	prompt := "Use exact \"quoted\" text, $HOME and $(throw 'never'), C:\\path\\\"quoted\".\nSecond line."
+	report, _ := json.Marshal(map[string]any{"schema_version": 1, "status": "ready", "markdown": "synthetic report", "code_prompt": prompt + " complete", "desktop_prompt": "desktop", "code_ready_prompt": prompt + " connection", "desktop_ready_prompt": "desktop connection"})
+	helper := `package main
+import ("encoding/json";"os";"path/filepath";"fmt")
+func main(){if filepath.Base(os.Args[0])=="maestro-mcp.exe" {if len(os.Args)>1&&os.Args[1]=="pilot-check"{b,e:=os.ReadFile(os.Getenv("PILOT_REPORT"));if e!=nil{panic(e)};fmt.Print(string(b))};return};wd,_:=os.Getwd();f,e:=os.Create(os.Getenv("PILOT_ARGS"));if e!=nil{panic(e)};defer f.Close();json.NewEncoder(f).Encode(map[string]any{"args":os.Args[1:],"cwd":wd,"profile":os.Getenv("CLAUDE_CONFIG_DIR")})}
+`
+	helperSource := filepath.Join(base, "recorder.go")
+	writePilotFixture(t, helperSource, []byte(helper))
+	if err := os.MkdirAll(tools, 0700); err != nil {
+		t.Fatal(err)
+	}
+	recorder := filepath.Join(tools, "claude.exe")
+	build := exec.Command("go", "build", "-o", recorder, helperSource)
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("argument recorder: %s %v", out, err)
+	}
+	image, err := os.ReadFile(recorder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" {
+		ordinary := filepath.Join(tools, "claude")
+		writePilotFixture(t, ordinary, image)
+		if err := os.Chmod(ordinary, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for path, body := range map[string][]byte{
+		filepath.Join(root, "product", "maestro-mcp.exe"):                    image,
+		filepath.Join(root, "exports", "code", "scripts", "maestro-mcp.exe"): image,
+		filepath.Join(root, ".maestro-pilot-owned"):                          []byte("synthetic"),
+		filepath.Join(root, "pilot-binary.sha256"):                           []byte(fmt.Sprintf("%x  product/maestro-mcp.exe\n", sha256.Sum256(image))),
+		filepath.Join(base, "report.json"):                                   report,
+		filepath.Join(root, "launchers", "Abrir Code.ps1"):                   append([]byte{0xef, 0xbb, 0xbf}, []byte(launcher)...),
+	} {
+		writePilotFixture(t, path, body)
+		if strings.HasSuffix(path, ".exe") {
+			if err := os.Chmod(path, 0700); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(root, "workspace"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	menuBody, err := os.ReadFile(filepath.Join(source, "test-windows.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	menu := filepath.Join(root, "launchers", "Testar Maestro.ps1")
+	writePilotFixture(t, menu, append([]byte{0xef, 0xbb, 0xbf}, menuBody...))
+	run := func(args ...string) ([]byte, error) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, shell, append([]string{"-NoProfile", "-NonInteractive"}, args...)...)
+		cmd.Env = append(os.Environ(), "PATH="+tools, "PILOT_ARGS="+witness, "PILOT_REPORT="+filepath.Join(base, "report.json"), "PILOT_SHIM_WITNESS="+filepath.Join(base, "shim-invoked"))
+		if runtime.GOOS != "windows" {
+			cmd.Env = append(cmd.Env, "WINDIR="+base)
+		}
+		return cmd.CombinedOutput()
+	}
+	assertArgs := func(want ...string) {
+		t.Helper()
+		body, err := os.ReadFile(witness)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got struct {
+			Args    []string `json:"args"`
+			CWD     string   `json:"cwd"`
+			Profile string   `json:"profile"`
+		}
+		if err := json.Unmarshal(body, &got); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got.Args, want) || got.CWD != filepath.Join(root, "workspace") || got.Profile != filepath.Join(root, "client", "code") {
+			t.Fatalf("literal Code handoff differs: %#v want %q", got, want)
+		}
+		if err := os.Remove(witness); err != nil {
+			t.Fatal(err)
+		}
+	}
+	code := filepath.Join(root, "launchers", "Abrir Code.ps1")
+	prefix := []string{"--plugin-dir", filepath.Join(root, "exports", "code")}
+	if out, err := run("-File", code); err != nil {
+		t.Fatalf("ordinary open: %s %v", out, err)
+	}
+	assertArgs(prefix...)
+	if out, err := run("-File", code, prompt); err != nil {
+		t.Fatalf("prompt open: %s %v", out, err)
+	}
+	assertArgs(append(append([]string{}, prefix...), "--", prompt)...)
+	for _, invalid := range [][]string{{""}, {"one", "two"}} {
+		if out, err := run(append([]string{"-File", code}, invalid...)...); err == nil {
+			t.Fatalf("invalid arguments accepted: %s", out)
+		}
+	}
+	if out, err := run("-File", menu, "-CheckOnly"); err != nil {
+		t.Fatalf("check-only: %s %v", out, err)
+	}
+	if _, err := os.Stat(witness); !os.IsNotExist(err) {
+		t.Fatal("check-only or invalid arguments opened Code")
+	}
+	for _, choice := range []string{"1", "3"} {
+		wrapper := "function Read-Host { '" + choice + "' }; function Start-Process {}; function Set-Clipboard { throw 'Code must not use Clipboard' }; & '" + strings.ReplaceAll(menu, "'", "''") + "'"
+		if out, err := run("-Command", wrapper); err != nil {
+			t.Fatalf("menu %s: %s %v", choice, out, err)
+		}
+		suffix := " complete"
+		if choice == "3" {
+			suffix = " connection"
+		}
+		assertArgs(append(append([]string{}, prefix...), "--", prompt+suffix)...)
+	}
+	if err := os.Rename(recorder, recorder+".disabled"); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" {
+		if err := os.Remove(filepath.Join(tools, "claude")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shimWitness := filepath.Join(base, "shim-invoked")
+	refuse := func(args ...string) {
+		t.Helper()
+		body, err := run(args...)
+		if err == nil || !strings.Contains(string(body), "claude.exe") {
+			t.Fatalf("unsupported prompt transport did not refuse clearly: %s %v", body, err)
+		}
+		for _, path := range []string{witness, shimWitness} {
+			if _, err := os.Stat(path); !os.IsNotExist(err) {
+				t.Fatal("unsupported initial prompt dispatched a command", path)
+			}
+		}
+	}
+	for _, ext := range []string{".ps1", ".cmd", ".bat"} {
+		path := filepath.Join(tools, "claude"+ext)
+		body := "[IO.File]::WriteAllText($env:PILOT_SHIM_WITNESS, 'shim invoked')\n"
+		if ext != ".ps1" {
+			if runtime.GOOS == "windows" {
+				body = "@echo off\r\necho shim invoked> \"%PILOT_SHIM_WITNESS%\"\r\n"
+			} else {
+				body = "#!/bin/sh\nprintf invoked > \"$PILOT_SHIM_WITNESS\"\n"
+			}
+		}
+		writePilotFixture(t, path, []byte(body))
+		if err := os.Chmod(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+		refuse("-File", code, "protected prompt")
+		if runtime.GOOS == "windows" || ext == ".ps1" {
+			if out, err := run("-File", code); err != nil {
+				t.Fatalf("ordinary %s open lost compatibility: %s %v", ext, out, err)
+			}
+			if _, err := os.Stat(shimWitness); err != nil {
+				t.Fatal("ordinary shim was not invoked", err)
+			}
+			if err := os.Remove(shimWitness); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	quotedCode := "'" + strings.ReplaceAll(code, "'", "''") + "'"
+	for _, definition := range []string{
+		"function claude { [IO.File]::WriteAllText($env:PILOT_SHIM_WITNESS,'function invoked') }",
+		"function fixtureCode { [IO.File]::WriteAllText($env:PILOT_SHIM_WITNESS,'alias invoked') }; Set-Alias claude fixtureCode",
+	} {
+		refuse("-Command", definition+"; & "+quotedCode+" -InitialPrompt 'protected prompt'")
+	}
+}
