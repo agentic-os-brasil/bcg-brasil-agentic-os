@@ -1594,3 +1594,14 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: Source construction, cross-compilation and verified acquisition do not qualify native execution. Real ordinary-user Windows kernel denial controls and real Docling conversion must pass before native qualification or broader readiness claims; organization-owned production signing and modern signed release admission remain separate gates. Unsupported architectures and failed confinement refuse.
 - Refs: specs/010-local-ingestion-runtime.md; internal/ingest/docling; https://learn.microsoft.com/en-us/windows/win32/secauthz/implementing-an-appcontainer; https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute
 - Supersedes: none
+
+## ACNR - Bind shared account narrative saves to the active authenticated account
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: First-case setup registers immutable account/case identities and saves a workspace brief, while the promised shared account narrative has no admitted MCP owner. Reusing workspace pages or the private owner atlas would persist the narrative under a different scope.
+- Decision: Expose closed attended account narrative status/read/save operations for the sole HOME/brain/accounts/<account>/<account>.md page derived from the current active client setup and its authenticated registration. Reuse authored metadata and atlas operations for full current/proposed trusted review, provenance, revision fencing, publication and exact retry. Independently validate up to 32 named account-related case registrations, including the current case, and revalidate the exact binding/registrations before effects. Keep case references as explicit immutable registration tuples; foreign case briefs are not resolved or read.
+- Consequences: The same account registration shared across separately admitted workspaces reaches one narrative without copying it. First-case finish never writes it implicitly. Internal, pending, reconciliation, stale and tampered state refuses. This delivers the narrow account narrative owner, not broad account search/history, foreign brief linking, cross-case promotion, hiring or runtime activation; the broader account scaffold dependency remains unavailable.
+- Refs: docs/product-account-narrative.md; adapters/mcp/account_narrative.go; internal/atlasops/account_existing.go; bundles/base/skills/account-case-setup/resources/account-narrative-mcp.md
+- Supersedes: none

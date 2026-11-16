@@ -133,6 +133,9 @@ func (engine *Engine) validateScope(scope *workspaceScope) error {
 }
 
 func (engine *Engine) pointer(page string) string {
+	if engine.accountID != "" {
+		return "bcgos://atlas/account/" + engine.accountID + "/" + page
+	}
 	if engine.workspace != nil {
 		return "bcgos://atlas/workspace/" + engine.workspace.WorkspaceID + "/" + page
 	}
