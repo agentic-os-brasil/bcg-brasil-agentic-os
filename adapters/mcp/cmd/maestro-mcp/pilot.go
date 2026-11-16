@@ -231,6 +231,10 @@ func readPilotFile(path string, limit int64) ([]byte, error) {
 }
 
 func pilotPacketCommand(root string, o product.Options) (string, []string, error) {
+	status, err := packaging.ValidatePacket(root)
+	if err != nil || status.Format != "plugin" {
+		return "", nil, errors.New("pilot_packet_invalid")
+	}
 	body, err := readPilotFile(filepath.Join(root, ".mcp.json"), 32<<10)
 	if err != nil {
 		return "", nil, err
@@ -259,6 +263,12 @@ func pilotPacketCommand(root string, o product.Options) (string, []string, error
 		args[i] = replace.Replace(arg)
 	}
 	want := []string{"serve", "--packet", "--product-root", root, "--user-home", o.UserHome, "--workspace", o.WorkspacePath}
+	if selected := status.CodePilot; selected != nil {
+		if selected.UserHome != o.UserHome || selected.Workspace != o.WorkspacePath {
+			return "", nil, errors.New("pilot_binding_invalid")
+		}
+		want = append(want, "--owner-review-channel", selected.OwnerReviewChannel)
+	}
 	if !reflect.DeepEqual(args, want) {
 		return "", nil, errors.New("pilot_binding_invalid")
 	}

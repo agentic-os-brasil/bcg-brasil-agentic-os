@@ -125,6 +125,8 @@ func TestEngineeringRuntimePilotRealJourney(t *testing.T) {
 	}
 	if b, err := run("init"); err != nil {
 		t.Fatalf("actual seeded init: %v %s", err, b)
+	} else {
+		writePilotFixture(t, filepath.Join(root, "preparation.json"), b)
 	}
 	reviewBytes, err := run("pilot-runtime-review", "--release-directory", release)
 	if err != nil {
@@ -183,13 +185,31 @@ func TestEngineeringRuntimePilotRealJourney(t *testing.T) {
 	}
 	save("repeated-placement", outcome)
 	code := filepath.Join(root, "exports/code")
-	if b, err := run("plugin", "--lifecycle-context", "--server", server, "--destination", code, "--version", "0.1.43"); err != nil {
+	if b, err := run("plugin", "--code-pilot", "--owner-review-channel", "local-browser", "--lifecycle-context", "--server", server, "--destination", code, "--version", "0.1.43"); err != nil {
 		t.Fatalf("actual seeded Code export: %v %s", err, b)
 	}
 	mcpb := filepath.Join(root, "exports/maestro-product.mcpb")
 	if b, err := run("mcpb", "--desktop-pilot", "--engineering-runtime-pilot", "--owner-review-channel", "local-browser", "--server", server, "--destination", mcpb, "--version", "0.1.43"); err != nil {
 		t.Fatalf("actual engineering Desktop export: %v %s", err, b)
 	}
+	doctor, err := run("pilot-check")
+	if err != nil {
+		t.Fatalf("actual EPRT CodePilot doctor refused: %v %s", err, doctor)
+	}
+	var diagnostic pilotReport
+	if err := json.Unmarshal(doctor, &diagnostic); err != nil || diagnostic.Status == "blocked" || diagnostic.Runtime == nil || diagnostic.WorkspaceID != review.WorkspaceID {
+		t.Fatal("actual EPRT diagnostic incomplete", err, string(doctor))
+	}
+	converterVerified := false
+	for _, check := range diagnostic.Checks {
+		if check.Name == "document_runtime" && check.Status == "passed" {
+			converterVerified = true
+		}
+	}
+	if !converterVerified {
+		t.Fatal("actual CodePilot converter not verified by doctor")
+	}
+	save("actual-codepilot-doctor", diagnostic)
 	desktop := filepath.Join(base, "desktop-installed")
 	engineeringExtract(t, mcpb, desktop)
 	// Reuse the closed Desktop materialization and wrong-image/private-state refusals.

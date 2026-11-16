@@ -72,6 +72,47 @@ func TestPilotCodePacketSelectionPreservesCanonicalInventory(t *testing.T) {
 		}
 	}
 	assertBase()
+	t.Run("CodePilot exact reviewed channel", func(t *testing.T) {
+		selected := filepath.Join(root, "exports", "reviewed-code")
+		bound := o
+		bound.OwnerReviewChannel = "local-browser"
+		if err := packaging.BuildPlugin(packaging.Options{Destination: selected, Server: server, Version: "0.0.0", Binding: bound, CodePilot: true}); err != nil {
+			t.Fatal(err)
+		}
+		_, args, err := pilotPacketCommand(selected, o)
+		if err != nil || len(args) != 10 || args[8] != "--owner-review-channel" || args[9] != "local-browser" {
+			t.Fatalf("canonical CodePilot rejected: %v %v", args, err)
+		}
+		wrong := o
+		wrong.WorkspacePath = filepath.Join(root, "foreign-workspace")
+		if _, _, err := pilotPacketCommand(selected, wrong); err == nil {
+			t.Fatal("different workspace admitted")
+		}
+		path := filepath.Join(selected, ".mcp.json")
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, replacement := range []string{"unreviewed-channel", "local-browser --extra"} {
+			changed := bytes.ReplaceAll(body, []byte("local-browser"), []byte(replacement))
+			if err := os.WriteFile(path, changed, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, _, err := pilotPacketCommand(selected, o); err == nil {
+				t.Fatal("changed channel/inventory admitted")
+			}
+		}
+		unknown := bytes.ReplaceAll(body, []byte(`"local-browser"`), []byte(`"local-browser", "--unexpected"`))
+		if err := os.WriteFile(path, unknown, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := pilotPacketCommand(selected, o); err == nil {
+			t.Fatal("unknown argument/inventory admitted")
+		}
+		if err := os.WriteFile(path, body, 0600); err != nil {
+			t.Fatal(err)
+		}
+	})
 	if _, _, err := pilotCodePacket(o, host, strings.Repeat("0", 64)); err == nil {
 		t.Fatal("untrusted executable accepted")
 	}
