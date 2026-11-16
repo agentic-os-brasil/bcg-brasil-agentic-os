@@ -22,6 +22,7 @@ import (
 type verifiedPack struct {
 	entries          map[string]entry
 	sha, manifestSHA string
+	target           targetInputs
 }
 
 func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
@@ -102,6 +103,10 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 	if decode(metadata.body, &pack) != nil {
 		return empty, "pack_untrusted"
 	}
+	target, err = inputsForLock(runtime.GOOS, runtime.GOARCH, pack.LockSHA256)
+	if err != nil {
+		return empty, "pack_untrusted"
+	}
 	canonical, _ := json.Marshal(pack)
 	var expected []Input
 	_ = decode(target.inputs, &expected)
@@ -127,7 +132,7 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 		}
 		seen[file.Path] = true
 	}
-	if !bytes.Equal(entries["bridge.py"].body, target.bridge) || !bytes.Equal(entries["pylock.toml"].body, target.lock) || !bytes.Equal(entries["inputs.json"].body, target.inputs) || !bytes.Equal(entries["parser-licenses.json"].body, parserLicenses) {
+	if !bytes.Equal(entries["bridge.py"].body, target.bridge) || !bytes.Equal(entries["pylock.toml"].body, target.lock) || !bytes.Equal(entries["inputs.json"].body, target.inputs) || !bytes.Equal(entries["parser-licenses.json"].body, target.notices) {
 		return empty, "pack_untrusted"
 	}
 	if !nativeClosureValid(target, entries) {
@@ -137,7 +142,7 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 	if err := verifyInstalled(ctx, installed, entries); err != nil {
 		return empty, "installed_pack_changed"
 	}
-	return verifiedPack{entries: entries, sha: selected.SHA256, manifestSHA: digest(manifestBody)}, ""
+	return verifiedPack{entries: entries, sha: selected.SHA256, manifestSHA: digest(manifestBody), target: target}, ""
 }
 func archiveEntries(body []byte) (map[string]entry, error) {
 	compressed := bytes.NewReader(body)

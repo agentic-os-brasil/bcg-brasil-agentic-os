@@ -156,10 +156,15 @@ func AssembleProfile(inputDirectory, destination, goos, goarch, profile string) 
 			if strings.Contains(file.Name, ".data/") {
 				// Retain the exact authenticated xlrd CLI as inert inventory. It
 				// is outside PATH and never used by the closed BIFF route.
-				if inputs[i].Name != "xlrd" || inputs[i].Version != "2.0.2" || file.Name != "xlrd-2.0.2.data/scripts/runxlrd.py" {
+				switch {
+				case inputs[i].Name == "xlrd" && inputs[i].Version == "2.0.2" && file.Name == "xlrd-2.0.2.data/scripts/runxlrd.py":
+					name = "wheel-scripts/xlrd/runxlrd.py"
+				case target.profile == DocumentsProfile && inputs[i].Name == "xlsxwriter" && inputs[i].Version == "3.2.9" && file.Name == "xlsxwriter-3.2.9.data/scripts/vba_extract.py":
+					name = "wheel-scripts/xlsxwriter/vba_extract.py"
+				default:
 					return result, fmt.Errorf("wheel relocation unsupported: %s", inputs[i].Name)
 				}
-				name, relocatedScript = "wheel-scripts/xlrd/runxlrd.py", true
+				relocatedScript = true
 			}
 			if _, exists := entries[name]; exists {
 				return result, errors.New("wheel_collision")

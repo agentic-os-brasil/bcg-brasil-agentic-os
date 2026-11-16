@@ -22,8 +22,13 @@ func validateFormat(body []byte, extension string, maximum int64) error {
 		return errors.New("empty_source")
 	}
 	switch extension {
-	case ".docx", ".xlsx", ".epub":
+	case ".docx", ".xlsx", ".epub", ".pptx":
 		return validateArchive(body, extension, maximum)
+	case ".pdf":
+		if !bytes.HasPrefix(body, []byte("%PDF-")) {
+			return errors.New("pdf_header_invalid")
+		}
+		return nil
 	case ".xls":
 		if !bytes.HasPrefix(body, []byte{0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1}) {
 			return errors.New("biff_container_invalid")
@@ -170,7 +175,7 @@ func validateArchive(body []byte, extension string, maximum int64) error {
 				return errors.New("zip_xml_unsafe")
 			}
 		}
-		if extension == ".xlsx" {
+		if extension == ".xlsx" || extension == ".pptx" {
 			xlsxParts[f.Name] = data
 		}
 	}
@@ -181,6 +186,8 @@ func validateArchive(body []byte, extension string, maximum int64) error {
 		}
 	case ".xlsx":
 		return validateXLSXParts(xlsxParts)
+	case ".pptx":
+		return validatePPTXParts(xlsxParts)
 	case ".epub":
 		if !seen["mimetype"] || !seen["meta-inf/container.xml"] {
 			return errors.New("epub_missing_parts")

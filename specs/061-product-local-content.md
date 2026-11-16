@@ -190,9 +190,30 @@ Keep invalid input, parser tamper, output budgets, scope/rebinding and no-fetch
 refusals. Prove conversion, bounded read, exact reviewed named-page write and
 restarted readback through SDK and the rebuilt production stdio server.
 
-PDF/OCR and images require a separate full native/model closure. PPTX is a
-separate model-free extension needing its own parser inputs, explicit policy
-admission and real fixture; none is included in this completion claim.
+The NTXT contract decision admits a separate `model-free-documents-v1` profile
+for native encoded PDF text and modern PPTX. It extends the eleven PFMT formats;
+it does not relabel or rewrite the legacy `policy-formats-v1` archive. The exact
+new closure adds python-pptx, XlsxWriter, pylatexenc and platform-specific
+pypdfium2, including original licenses and PDFium's package-relative native
+library. The one authenticated pylatexenc source distribution is copied only
+from its fixed package prefix; no setup script, build backend or resolver runs.
+
+PDF uses Docling NativePdfPipeline with the explicit PyPdfium backend, one
+parser thread and no page/picture rendering. Every page must have native text;
+empty/scanned or mixed text/nontext documents, encrypted files and incomplete
+conversion refuse without publishing an artifact. Usable PDF reports textual
+fidelity and `pdf_native_text_only`, retaining page and bounding-box provenance.
+OCR, visual reconstruction, inferred reading order, headings and tables remain
+unavailable. No model package, artifact download or remote service is implied.
+
+PPTX uses the native SimplePipeline with chart rendering and external/local
+fetching disabled. Admission validates a unique canonical OPC presentation and
+its ordered, unique slide parts; duplicate/ambiguous selections, external
+relationships, macros, metafiles and legacy `.ppt`/`.pptm` refuse. The finite
+promise is native text/table content and slide provenance, not screenshots,
+Office rendering or reconstruction of arbitrary embedded objects. Real fixtures
+must independently verify PDF page markers/bounds and PPTX slide markers/table
+cells before the profile is claimed usable.
 
 ### Verified public coverage and complete product proof
 
@@ -200,11 +221,15 @@ The product status may mark a per-format route available only after the owning
 Runtime.Status verification succeeds. Public intended route/parser/fidelity
 descriptors may be listed beforehand, explicitly unavailable with the verifier
 reason; they assert no installed capability. That existing verifier
-binds the exact current embedded bridge, lock, full 51-input list, parser notices,
-model-free profile and complete authenticated installed inventory. A library
+binds the selected known embedded bridge, lock, complete target-specific input
+list, parser notices and complete authenticated installed inventory. The legacy
+profile has 51 Darwin / 52 Windows package inputs; the native-document profile
+has 55 / 56 respectively. Acquisition includes one additional interpreter file.
+Only a known embedded lock selects a profile; mixed and unknown closures refuse. A library
 version, DefaultPolicy entry, valid old signature or engineering archive hash
-cannot substitute for that profile. Missing/tampered/unknown/old profiles leave
-every route unavailable. Status runs no conversion, fetch, provisioning or repair.
+cannot substitute for that profile. Missing, tampered and unknown closures leave every route unavailable. A valid
+legacy profile remains usable for its original eleven formats and explicitly
+reports PDF/PPTX unavailable with `format_profile_unavailable`. Status runs no conversion, fetch, provisioning or repair.
 
 JSON coverage describes literal generic JSON as the default and validated
 Docling-export import as a conditional alternative. Only the actual conversion

@@ -12,7 +12,7 @@ func TestPolicyRoutesRemainClosedAndMarkItDownOptIn(t *testing.T) {
 			t.Fatalf("%s: %+v %v", ext, r, err)
 		}
 	}
-	for _, ext := range []string{".pdf", ".png", ".pptx", ".jats", ".xbrl", ".DOCX"} {
+	for _, ext := range []string{".ppt", ".png", ".pptm", ".jats", ".xbrl", ".DOCX"} {
 		if _, err := ingest.SelectFormat(ext, false); err == nil {
 			t.Fatalf("unadmitted route %s", ext)
 		}

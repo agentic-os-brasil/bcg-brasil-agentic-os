@@ -133,19 +133,33 @@ def native_document():
         from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
         try:
             with pdfium.PdfDocument(source) as pdf:
+                if pdfium.raw.FPDF_GetSecurityHandlerRevision(pdf.raw) != -1:
+                    raise DocumentRefusal("pdf_protected_unavailable")
                 if len(pdf) == 0 or len(pdf) > 4096:
                     raise DocumentRefusal("pdf_native_text_unavailable")
                 page_count = len(pdf)
                 characters = 0
                 for index in range(len(pdf)):
-                    with pdf[index] as page:
-                        with page.get_textpage() as text:
+                    page = pdf[index]
+                    try:
+                        # The first profile admits encoded text only. Refuse
+                        # image/form-bearing pages instead of silently dropping
+                        # scanned regions or nested visual content.
+                        if next(page.get_objects(filter=[pdfium.raw.FPDF_PAGEOBJ_IMAGE,
+                                pdfium.raw.FPDF_PAGEOBJ_FORM], max_depth=1), None) is not None:
+                            raise DocumentRefusal("pdf_native_text_unavailable")
+                        text = page.get_textpage()
+                        try:
                             count = text.count_chars()
                             if count <= 0:
                                 raise DocumentRefusal("pdf_native_text_unavailable")
                             characters += count
                             if characters > request["max_output"]:
                                 raise DocumentRefusal("output_limit")
+                        finally:
+                            text.close()
+                    finally:
+                        page.close()
         except pdfium.PdfiumError as error:
             if error.err_code == pdfium.raw.FPDF_ERR_PASSWORD:
                 raise DocumentRefusal("pdf_protected_unavailable") from error

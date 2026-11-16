@@ -41,6 +41,9 @@ func (b *Bound) contentStatus(ctx context.Context) contentAvailability {
 	for _, extension := range extensions {
 		route, err := ingest.SelectFormat(extension, false)
 		coverage := contentFormatCoverage{FormatRoute: route, Extension: extension, State: availability.State, Reason: availability.Reason}
+		if availability.State == "ready" && (extension == ".pdf" || extension == ".pptx") && availability.Profile != docling.DocumentsProfile {
+			coverage.State, coverage.Reason = "unavailable", "format_profile_unavailable"
+		}
 		if err != nil {
 			coverage.State, coverage.Reason = "unavailable", "format_unsupported"
 		}
