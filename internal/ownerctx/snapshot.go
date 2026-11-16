@@ -86,7 +86,7 @@ func ProjectSnapshot(root string, requested []string) (UserSelfSnapshot, error) 
 		if !ok {
 			return UserSelfSnapshot{}, errors.New("requested self facet is not registered")
 		}
-		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(definition.Path)))
+		body, err := readOwnerFile(filepath.Join(root, filepath.FromSlash(definition.Path)), maximumOwnerProjectionBytes)
 		if err != nil {
 			return UserSelfSnapshot{}, err
 		}

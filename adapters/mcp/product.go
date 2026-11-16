@@ -209,7 +209,7 @@ func (b *Bound) Server() *mcp.Server {
 	queryPresentation, queryContracts := toolPresentation(query)
 	apply := productApplySchema()
 	applyPresentation, applyContracts := toolPresentation(apply)
-	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read immutable methods and requirements, owner metadata/questions, execution continuation, eligible memory, authored pages, converted content, named workspace knowledge, maintenance status or private wiki through bounded pages. Private owner/legacy text requires trusted review." + queryContracts, InputSchema: queryPresentation, Annotations: readonly}, b.handle("query", query))
+	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read immutable methods and requirements, accepted session-readable owner context, owner metadata/questions, execution continuation, eligible memory, authored pages, converted content, named workspace knowledge, maintenance status or private wiki through bounded pages. Full private owner review and reader-restricted text remain protected." + queryContracts, InputSchema: queryPresentation, Annotations: readonly}, b.handle("query", query))
 	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Author reviewed workspace pages, convert documents, apply reviewed knowledge/owner/memory changes, qualify and enroll exact maintenance jobs, or run active due work. Maintenance lifecycle changes require trusted exact review; execution uses revision/attempt and artifact checks." + applyContracts, InputSchema: applyPresentation}, b.handle("apply", apply))
 	b.registerMethods(s)
 	return s
@@ -351,7 +351,7 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 			return result(nil, errors.New("input_size")), nil
 		}
 		if kind == "context" {
-			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "agent_identity": b.managedIdentityContext(), "next_max_bytes": 2048, "memory": map[string]any{"context_operation": "memory.context", "max_page_bytes": 4096, "synthesis": "local_deterministic", "lifetime": "two_l3_generations_and_exact_owner_review"}, "methods": map[string]any{"list_operation": "methods.list", "read_operation": "methods.read", "plan_operation": "methods.plan", "max_page_bytes": 4096, "mode": "methods_not_authority"}}, nil), nil
+			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "agent_identity": b.managedIdentityContext(), "next_max_bytes": 2048, "owner": map[string]any{"context_operation": "owner.context", "reader": "session", "max_page_bytes": 4096, "requires": "current_confirmed_onboarding", "authority": "owner_profile_data_only"}, "memory": map[string]any{"context_operation": "memory.context", "max_page_bytes": 4096, "synthesis": "local_deterministic", "lifetime": "two_l3_generations_and_exact_owner_review"}, "methods": map[string]any{"list_operation": "methods.list", "read_operation": "methods.read", "plan_operation": "methods.plan", "max_page_bytes": 4096, "mode": "methods_not_authority"}}, nil), nil
 		}
 		if strings.HasPrefix(in.Operation, "case.setup.") {
 			return b.handleCaseSetup(ctx, req, in), nil

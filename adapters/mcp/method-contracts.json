@@ -584,6 +584,7 @@
         "interaction-profile"
       ],
       "required_operations": [
+        "owner.context",
         "owner.status"
       ],
       "effects": [
@@ -596,7 +597,8 @@
         {
           "id": "domain.owner_profile_read",
           "kind": "domain",
-          "required": false
+          "required": false,
+          "fulfillment_operations": ["owner.context", "owner.status"]
         }
       ]
     },
@@ -700,6 +702,7 @@
         "maestro-onboarding"
       ],
       "required_operations": [
+        "owner.context",
         "owner.apply",
         "owner.confirm_onboarding",
         "owner.interview",
@@ -728,6 +731,8 @@
         "maestro-operator"
       ],
       "required_operations": [
+        "owner.context",
+        "owner.status",
         "execution.checkpoint",
         "execution.list",
         "execution.next",

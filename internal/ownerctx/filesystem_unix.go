@@ -152,12 +152,20 @@ func publishOwnerFile(path string, body []byte, exclusive bool) error {
 }
 
 func acquireOwnerTransition(path string) (func() error, error) {
-	dir, err := openOwnerDirectory(filepath.Dir(path), true)
+	return acquireOwnerTransitionFile(path, true)
+}
+
+func acquireOwnerTransitionFile(path string, create bool) (func() error, error) {
+	dir, err := openOwnerDirectory(filepath.Dir(path), create)
 	if err != nil {
 		return nil, err
 	}
 	defer dir.Close()
-	file, err := ownerOpenAt(dir, filepath.Base(path), os.O_RDWR|os.O_CREATE)
+	flags := os.O_RDWR
+	if create {
+		flags |= os.O_CREATE
+	}
+	file, err := ownerOpenAt(dir, filepath.Base(path), flags)
 	if err != nil {
 		return nil, err
 	}

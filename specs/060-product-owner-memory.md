@@ -49,10 +49,19 @@ form or lifecycle qualification. It uses the same canonical review and digest ch
 silently convert a missing host capability into approval or claim native support
 from an SDK test.
 
-Ordinary model queries return owner metadata and interview questions, not the
-body of sensitive SELF facets. Full profile/proposal review is delivered only to
-the trusted client review interaction or explicit local operator. Output receipts
-contain bounded state/digests and omit private paths, secrets and reviewed text.
+Ordinary model queries return owner metadata and interview questions. After
+current final onboarding confirmation, `owner.context` additionally delivers only
+the selected track's canonical facets whose Readers explicitly authorize the
+server-bound `session` reader. It uses bounded pages and a freshness generation;
+unconfirmed, out-of-track and reader-restricted facets remain unavailable. The
+local MCP session cannot attest an individual hosted subagent's identity. This
+projection is personalization data and grants no tool or effect authority. See
+[accepted owner context](../docs/product-owner-context.md).
+
+Full profile/proposal review remains available only through trusted client review
+or the explicit local operator. Review receipts contain bounded state/digests and
+omit private paths, secrets and reviewed text. `maestro_context` remains metadata
+only and advertises the separate explicit read operation.
 
 ## Canonical owner module
 

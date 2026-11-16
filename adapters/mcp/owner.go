@@ -17,6 +17,7 @@ func trackSchema() map[string]any {
 }
 func ownerQueries() []any {
 	return append([]any{
+		ownerContextQuery(),
 		variant("owner.status", map[string]any{}),
 		variant("owner.interview", map[string]any{"track": trackSchema()}, "track"),
 		variant("owner.review", map[string]any{"proposal_id": strSchema(96)}, "proposal_id"),
@@ -99,6 +100,8 @@ func (b *Bound) handleOwner(ctx context.Context, req *mcp.CallToolRequest, in in
 	var value any
 	var err error
 	switch in.Operation {
+	case "owner.context":
+		return b.readOwnerContext(in)
 	case "owner.status":
 		var s ownerctx.Status
 		s, err = ownerctx.Inspect(b.ownerRoot())
