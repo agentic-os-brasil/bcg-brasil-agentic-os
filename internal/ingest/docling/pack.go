@@ -38,7 +38,8 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 	if err != nil || !registry.HasActiveKey() {
 		return empty, "authority_unavailable"
 	}
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+	target, targetErr := inputsForTarget(runtime.GOOS, runtime.GOARCH)
+	if targetErr != nil {
 		return empty, "platform_unavailable"
 	}
 	if !filepath.IsAbs(o.DataRoot) || filepath.Clean(o.DataRoot) != o.DataRoot {
@@ -103,8 +104,8 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 	}
 	canonical, _ := json.Marshal(pack)
 	var expected []Input
-	_ = decode(lockedInputs, &expected)
-	if !bytes.Equal(canonical, metadata.body) || pack.SchemaVersion != 1 || pack.Adapter != "docling" || pack.Version != DoclingVersion || pack.OS != runtime.GOOS || pack.Arch != runtime.GOARCH || pack.Python != PythonVersion || pack.PythonArchiveSHA256 != PythonArchiveSHA256 || pack.LockSHA256 != LockSHA256 || pack.Models == nil || len(pack.Models) != 0 || !reflect.DeepEqual(pack.Inputs, expected) {
+	_ = decode(target.inputs, &expected)
+	if !bytes.Equal(canonical, metadata.body) || pack.SchemaVersion != 1 || pack.Adapter != "docling" || pack.Version != DoclingVersion || pack.OS != runtime.GOOS || pack.Arch != runtime.GOARCH || pack.Python != PythonVersion || pack.PythonArchiveSHA256 != target.pythonSHA || pack.LockSHA256 != target.lockSHA || pack.Models == nil || len(pack.Models) != 0 || !reflect.DeepEqual(pack.Inputs, expected) {
 		return empty, "pack_untrusted"
 	}
 	compatibility, err = releasecontract.ParseVersionRange(pack.CompatibleCLI)
@@ -126,7 +127,10 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 		}
 		seen[file.Path] = true
 	}
-	if !bytes.Equal(entries["bridge.py"].body, bridge) || !bytes.Equal(entries["pylock.toml"].body, rawLock) || !bytes.Equal(entries["inputs.json"].body, lockedInputs) || !bytes.Equal(entries["parser-licenses.json"].body, parserLicenses) {
+	if !bytes.Equal(entries["bridge.py"].body, target.bridge) || !bytes.Equal(entries["pylock.toml"].body, target.lock) || !bytes.Equal(entries["inputs.json"].body, target.inputs) || !bytes.Equal(entries["parser-licenses.json"].body, parserLicenses) {
+		return empty, "pack_untrusted"
+	}
+	if !nativeClosureValid(target, entries) {
 		return empty, "pack_untrusted"
 	}
 	installed := filepath.Join(base, "installed", selected.SHA256)

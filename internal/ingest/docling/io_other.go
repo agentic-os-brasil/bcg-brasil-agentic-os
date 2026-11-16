@@ -1,7 +1,8 @@
-//go:build !darwin && !linux
+//go:build !darwin && !linux && !windows
 
 package docling
 
 import "os"
 
-func singleLink(os.FileInfo) bool { return false }
+func fileReadSupported() bool               { return false }
+func singleLink(*os.File, os.FileInfo) bool { return false }

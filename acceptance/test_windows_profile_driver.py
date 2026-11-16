@@ -265,6 +265,84 @@ if ($env:USERPROFILE -cne $userHomeFixture -or $env:HOME -cne $userHomeFixture -
         self.assert_preaccount_refusal(result, "Inspection qualification requires exactly the four owning packages")
 
 
+
+
+class WindowsDoclingRuntimeProfile(unittest.TestCase):
+    """The new converter profile is closed before the shared account mechanism."""
+
+    def setUp(self):
+        self.pwsh = shutil.which("pwsh")
+        self.assertIsNotNone(self.pwsh)
+        self.temp = tempfile.TemporaryDirectory(dir=os.environ.get("MAESTRO_TEST_TMP"))
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.manifest = self.root / "docling.json"
+
+    def invoke(self, document, *extra):
+        self.manifest.write_text(json.dumps(document), encoding="utf-8")
+        return subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(DRIVER),
+                               "-DoclingManifest", str(self.manifest), "-OutputRoot", str(self.root / "proof"),
+                               *extra], text=True, capture_output=True, timeout=30)
+
+    def document(self):
+        public = "C:\\MaestroNativeEngine-" + "a" * 32
+        return dict(schema_version=1, qualification_profile="windows_docling_runtime_v1",
+                    source_revision="a" * 40, public_root=public, source_root=public + "\\source",
+                    sdk_go=public + "\\sdk\\bin\\go.exe", module_cache=public + "\\modules",
+                    raw_inputs=public + "\\raw", test_binary=public + "\\bin\\docling.test.exe",
+                    inventory_sha256="a" * 64,
+                    required_tests=["TestWindowsNativeConfinement", "TestWindowsNativeConfinementDeadline",
+                                    "TestWindowsSharedImplementationIdentityAcrossEntryModules",
+                                    "TestWindowsRealAuthenticatedDocling"])
+
+    def assert_preaccount_refusal(self, document):
+        result = self.invoke(document)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Docling requires the exact closed native runtime profile", result.stdout + result.stderr)
+        self.assertFalse((self.root / "proof").exists())
+        self.assertNotIn("New-LocalUser", result.stdout + result.stderr)
+
+    def test_docling_rejects_unknown_profile_before_account(self):
+        document = self.document()
+        document["qualification_profile"] = "arbitrary_commands"
+        self.assert_preaccount_refusal(document)
+
+    def test_docling_rejects_open_command_field_before_account(self):
+        document = self.document()
+        document["command"] = "anything"
+        self.assert_preaccount_refusal(document)
+
+    def test_docling_requires_all_native_tests_without_substitution(self):
+        document = self.document()
+        document["required_tests"] = document["required_tests"][:-1]
+        self.assert_preaccount_refusal(document)
+        document = self.document()
+        document["required_tests"][-1] = "TestDummyConverter"
+        self.assert_preaccount_refusal(document)
+
+    def test_docling_and_old_profiles_are_exclusive(self):
+        result = self.invoke(self.document(), "-InspectionManifest", str(self.manifest))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / "proof").exists())
+
+    def test_docling_helper_and_manual_workflow_parse(self):
+        helper = ROOT / "acceptance/windows-docling-profile.ps1"
+        script = self.root / "parse.ps1"
+        script.write_text("$errors=$null; [Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$errors)|Out-Null; if($errors.Count){throw ($errors|Out-String)}", encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-File", str(script), str(helper)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        workflow = (ROOT / ".github/workflows/windows-docling-runtime.yml").read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", workflow)
+        self.assertNotIn("pull_request:", workflow)
+        self.assertIn("./acceptance/windows-core-pilot.ps1 -DoclingManifest", workflow)
+
+    def test_docling_public_acquisition_python_parses_without_execution(self):
+        import ast
+        source = (ROOT / "acceptance/windows-engine-build.ps1").read_text(encoding="utf-8")
+        acquisition = source.split("@'\nimport hashlib,json,os,pathlib,urllib.request\n", 1)[1].split("\n'@ | python -", 1)[0]
+        ast.parse("import hashlib,json,os,pathlib,urllib.request\n" + acquisition)
+
+
 if __name__ == "__main__":
     unittest.main()
 
