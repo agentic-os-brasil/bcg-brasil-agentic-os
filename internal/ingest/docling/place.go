@@ -108,9 +108,18 @@ func PlaceVerified(ctx context.Context, o Options, release releaseverify.Verifie
 				return err
 			}
 			_, writeErr := file.Write(entry.body)
+			var modeErr error
+			if writeErr == nil {
+				// Creation honors the caller's private umask; the authenticated
+				// archive requires these exact sealed modes on this new handle.
+				modeErr = file.Chmod(os.FileMode(entry.mode))
+			}
 			closeErr := file.Close()
 			if writeErr != nil {
 				return writeErr
+			}
+			if modeErr != nil {
+				return modeErr
 			}
 			if closeErr != nil {
 				return closeErr

@@ -16,6 +16,18 @@ verify_kit() {
 }
 verify_kit
 REVIEWED_KIT_ID="$KIT_ID"
+RUNTIME_MODE=false
+PILOT_VERSION=0.0.0
+BINARY_RELATIVE=product/maestro-mcp
+if [[ -e "$KIT/RUNTIME.json" ]]; then
+  [[ -f "$KIT/RUNTIME.json" && ! -L "$KIT/RUNTIME.json" ]] || fail 'Metadado do runtime inválido; preserve o kit.'
+  [[ "$(/usr/bin/plutil -extract schema_version raw -o - "$KIT/RUNTIME.json")" == 1 && "$(/usr/bin/plutil -extract profile raw -o - "$KIT/RUNTIME.json")" == engineering-runtime-pilot-v1 ]] || fail 'Perfil do runtime desconhecido.'
+  [[ "$(/usr/bin/plutil -extract target raw -o - "$KIT/RUNTIME.json")" == "$TARGET" ]] || fail 'Este kit completo contém somente o runtime Mac Apple Silicon. Outros alvos continuam em validação.'
+  PILOT_VERSION="$(/usr/bin/plutil -extract version raw -o - "$KIT/RUNTIME.json")"
+  [[ "$PILOT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'Versão experimental inválida.'
+  RUNTIME_MODE=true
+  BINARY_RELATIVE=product/server/maestro-mcp
+fi
 ROOT="${1:-$HOME/Developer/MaestroPilot-${KIT_ID:0:12}}"
 MODE="${2:-interactive}"
 CONFIRM="${3:-}"
@@ -41,6 +53,9 @@ review="$(printf '%s\n' 'ordinary-engineering-rehearsal-v1' "$KIT_ID" "$TARGET" 
 printf '\nEnsaio local de engenharia; sem instalação/atualização assinada.\nProduto: %s/product\nEstado privado: %s/owner\nWorkspace: %s/workspace\nPerfil Code isolado: %s/client/code\nreview_digest=%s\n' "$ROOT" "$ROOT" "$ROOT" "$ROOT" "$review"
 printf '%s\n' 'Somente ao criar este perfil Code novo: autoMemoryEnabled:false e syncClaudeAiPlugins:false desativam a memória automática do cliente e o download/carregamento de plugins sincronizados da conta. Perfis existentes e suas escolhas são preservados.'
 printf '%s\n' 'O pacote Desktop usará revisão local no navegador quando não houver formulário nativo; cada alteração exige sua aprovação exata e expira em 150 segundos.'
+if [[ "$RUNTIME_MODE" == true ]]; then
+  printf '\nEste perfil inclui o conversor local verificado, sem Python, downloads ou serviço. O preparador copia um DOCX sintético para o workspace novo. Após criar o workspace, mostra uma segunda revisão completa para você aprovar a ativação do conversor.\nVersão experimental: %s\nEmissor: %s\nExpira em: %s\nManifesto: %s\nRuntime: %s\n' "$PILOT_VERSION" "$(/usr/bin/plutil -extract issuer raw -o - "$KIT/RUNTIME.json")" "$(/usr/bin/plutil -extract expires_at raw -o - "$KIT/RUNTIME.json")" "$(/usr/bin/plutil -extract manifest_sha256 raw -o - "$KIT/RUNTIME.json")" "$(/usr/bin/plutil -extract pack_sha256 raw -o - "$KIT/RUNTIME.json")"
+fi
 [[ "$MODE" != --review ]] || exit 0
 if [[ "$MODE" == --confirm ]]; then
   [[ "$CONFIRM" == "$review" ]] || fail 'Digest diferente; leia a revisão atual.'
@@ -74,13 +89,20 @@ mkdir "$ROOT"
 (set -o noclobber; printf '%s\n' "$KIT_ID" > "$ROOT/.maestro-pilot-owned") || fail 'Outra preparação já reivindicou o destino.'
 set -o noclobber
 mkdir "$ROOT/product" "$ROOT/owner" "$ROOT/exports" "$ROOT/launchers" "$ROOT/client" "$ROOT/client/code"
+if [[ "$RUNTIME_MODE" == true ]]; then
+  mkdir "$ROOT/product/server" "$ROOT/product/managed" "$ROOT/product/managed/trust"
+  cp -n "$KIT/runtime-registry.json" "$ROOT/product/managed/trust/release-authority-registry.json"
+  expected_registry="$(/usr/bin/plutil -extract registry_sha256 raw -o - "$KIT/RUNTIME.json")"
+  copied_registry="$(shasum -a 256 "$ROOT/product/managed/trust/release-authority-registry.json")"
+  [[ "$expected_registry" =~ ^[0-9a-f]{64}$ && "${copied_registry%% *}" == "$expected_registry" ]] || fail 'O registro público mudou; preserve a preparação.'
+fi
 printf '%s\n' '{"autoMemoryEnabled":false,"syncClaudeAiPlugins":false}' > "$ROOT/client/code/settings.json"
-cp -n "$KIT/bin/maestro-mcp-$TARGET" "$ROOT/product/maestro-mcp"
+cp -n "$KIT/bin/maestro-mcp-$TARGET" "$ROOT/$BINARY_RELATIVE"
 expected_binary="$(awk -v target="./bin/maestro-mcp-$TARGET" '$2==target { print $1 }' "$KIT/SHA256SUMS")"
-actual_binary="$(shasum -a 256 "$ROOT/product/maestro-mcp")"
+actual_binary="$(shasum -a 256 "$ROOT/$BINARY_RELATIVE")"
 [[ "$expected_binary" =~ ^[0-9a-f]{64}$ && "${actual_binary%% *}" == "$expected_binary" ]] || fail 'O executável copiado mudou; preserve o ensaio.'
-BIN="$ROOT/product/maestro-mcp"
-printf '%s  product/maestro-mcp\n' "$expected_binary" > "$ROOT/pilot-binary.sha256"
+BIN="$ROOT/$BINARY_RELATIVE"
+printf '%s  %s\n' "$expected_binary" "$BINARY_RELATIVE" > "$ROOT/pilot-binary.sha256"
 for pair in 'open-code-macos.command|Abrir Code.command' 'open-desktop-macos.command|Abrir Desktop.command' 'test-macos.command|Testar Maestro.command'; do
   source_name="${pair%%|*}"; target_name="${pair#*|}"
   cp -n "$KIT/templates/$source_name" "$ROOT/launchers/$target_name"
@@ -93,14 +115,30 @@ if ! "$BIN" init --product-root "$ROOT/product" --user-home "$ROOT/owner" --work
 fi
 cat "$ROOT/preparation.json"
 "$BIN" inspect --product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" || diagnose_failure 'O diagnóstico recusou o vínculo.'
-build_code() { "$BIN" plugin --product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" --server "$BIN" --destination "$ROOT/exports/code" --version 0.0.0 "$@"; }
+if [[ "$RUNTIME_MODE" == true ]]; then
+  cp -n "$KIT/test-documents/maestro-pilot.docx" "$ROOT/workspace/maestro-pilot.docx"
+  source_sample="$(shasum -a 256 "$KIT/test-documents/maestro-pilot.docx")"
+  copied_sample="$(shasum -a 256 "$ROOT/workspace/maestro-pilot.docx")"
+  [[ "${source_sample%% *}" == "${copied_sample%% *}" ]] || fail 'O DOCX sintético está ocupado ou mudou; preserve os arquivos.'
+  "$BIN" pilot-runtime-review --product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" --release-directory "$KIT/runtime-release" > "$ROOT/runtime-review.json" || diagnose_failure 'A revisão do conversor não foi concluída.'
+  cat "$ROOT/runtime-review.json"
+  runtime_review="$(/usr/bin/plutil -extract review_sha256 raw -o - "$ROOT/runtime-review.json")"
+  [[ "$runtime_review" =~ ^[0-9a-f]{64}$ ]] || fail 'Revisão do conversor incompleta; preserve a preparação.'
+  printf '\nLeia a revisão completa acima. Para ativar somente este conversor neste ensaio, digite ATIVAR CONVERSOR: '
+  read -r runtime_reply || diagnose_failure 'Ativação não aprovada; a preparação parcial foi preservada.'
+  [[ "$runtime_reply" == 'ATIVAR CONVERSOR' ]] || diagnose_failure 'Ativação recusada; o workspace inicializado foi preservado e o conversor não foi colocado.'
+  "$BIN" pilot-runtime-apply --product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" --release-directory "$KIT/runtime-release" --review-digest "$runtime_review" --confirm > "$ROOT/runtime-placement.json" || diagnose_failure 'A ativação do conversor não foi concluída.'
+fi
+build_code() { "$BIN" plugin --product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" --server "$BIN" --destination "$ROOT/exports/code" --version "$PILOT_VERSION" "$@"; }
 case "$(cat "$KIT/LIFECYCLE-CONTEXT.txt")" in enabled) build_code --lifecycle-context || diagnose_failure 'O pacote Code não foi concluído.';; disabled) build_code || diagnose_failure 'O pacote Code não foi concluído.';; *) fail 'Seleção de contexto desconhecida.';; esac
-"$BIN" mcpb --desktop-pilot --owner-review-channel local-browser --product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" --server "$BIN" --destination "$ROOT/exports/maestro-product.mcpb" --version 0.0.0 || diagnose_failure 'O pacote Desktop não foi concluído.'
+build_desktop() { "$BIN" mcpb --desktop-pilot --owner-review-channel local-browser --product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" --server "$BIN" --destination "$ROOT/exports/maestro-product.mcpb" --version "$PILOT_VERSION" "$@"; }
+if [[ "$RUNTIME_MODE" == true ]]; then build_desktop --engineering-runtime-pilot || diagnose_failure 'O pacote Desktop não foi concluído.'; else build_desktop || diagnose_failure 'O pacote Desktop não foi concluído.'; fi
 {
   printf '# Maestro MCP — teste guiado\n\nAbra **launchers/Testar Maestro.command**. Para conferir a conexão sem alterar dados, escolha **3 — Conferir conexão Code** ou **4 — Conferir conexão Desktop**. No Code, a opção abre a conversa com o texto exato deste relatório, sem copiar ou colar. No Desktop, o texto é copiado: cole uma vez em uma conversa nova. O estado mostrado é a saúde da conexão, não o estado dos trabalhos.\n\nPara o ensaio completo, escolha **1 — Ensaio completo no Code** e depois **2 — Retomar no Desktop**. O Code recebe o prompt inicial automaticamente; no Desktop, cole o texto copiado. Cada etapa preserva as confirmações normais.\n\nO perfil Code é separado e pode pedir login normal nessa janela. Ao criar um perfil novo, este ensaio desativa a memória automática do cliente e os plugins sincronizados da conta somente nesse perfil. Repetir a preparação preserva suas escolhas existentes. O plugin e a extensão já usam as pastas aprovadas; não há diretórios para copiar ou preencher. Se o cliente pedir configurar outros caminhos, preserve a mensagem e pare.\n\n'
   printf 'Para Desktop, escolha 4 para conferir somente a conexão ou 2 para retomar o ensaio completo em launchers/Testar Maestro.command e confirme a instalação da extensão Maestro MCP — Ensaio indicada no relatório. Ela já usa as pastas aprovadas; não há campos de caminho para salvar. Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e, somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir. Preserve as demais permissões. ✓ / Sempre permitir libera só a leitura; gravações de conteúdo exigem revisão exata no formulário nativo ou no navegador local selecionado neste ensaio. Abra uma conversa nova e cole o texto copiado. Se a extensão estiver desativada ou ausente, confira Configurações > Extensões > Configurar > Ativado nessa extensão. Preserve outras extensões Maestro; se o cliente propuser substituir outra extensão, pare.\n\nRevisão do dono no Desktop: Este ensaio seleciona explicitamente a revisão local no navegador para gravações protegidas. Quando o cliente não oferece formulário nativo, uma solicitação interativa abre o registro completo no navegador deste computador. Leia o conteúdo, marque a caixa inicialmente desmarcada e escolha Aprovar alteração exata ou Recusar. Fechar a aba, cancelar ou ultrapassar 150 segundos não aprova. Formulários nativos continuam tendo prioridade quando disponíveis. Este canal local não qualifica formulários MCP, hooks ou bloqueio nativo. Se receber confirmation_unavailable, deixe a ação pendente e use o Code com sua confirmação nativa. Não repita a chamada, não contorne o bloqueio nem use um sim no chat como aprovação. A permissão de leitura não aprova gravações.\n\nO workspace_id esperado vem desta criação real:\n\n'
   cat "$ROOT/preparation.json"
-  printf '\n\nOs relatórios ficam em diagnostics/, fora dos dados do Maestro. Compartilhe somente RELATORIO.md após conferir seu conteúdo. As chamadas reais nos clientes, login, confirmações e hooks continuam sendo verificados por você. O servidor é de engenharia sem versão de release; 0.0.0 é o rótulo dos pacotes.\n'
+  printf '\n\nOs relatórios ficam em diagnostics/, fora dos dados do Maestro. Compartilhe somente RELATORIO.md após conferir seu conteúdo. As chamadas reais nos clientes, login, confirmações e hooks continuam sendo verificados por você.\n'
+  if [[ "$RUNTIME_MODE" == true ]]; then printf 'Este ensaio usa o runtime local e uma autoridade experimental com validade curta. Consulte content.status para os formatos realmente disponíveis. O perfil não configura instalação ou atualização de produção. Ao expirar, preserve seus dados e solicite um kit novo; não altere datas nem permissões.\n'; else printf 'O servidor é de engenharia sem versão de release; 0.0.0 é o rótulo dos pacotes.\n'; fi
 } > "$ROOT/COMECE-AQUI.md"
 printf '\nPara testar os sete hooks nativos, primeiro use a opção 3 e conclua o login normal no perfil Code. Depois escolha **5 — Qualificar os sete hooks do Code**. Essa ação separada usa modelo e pode gerar cobrança: escolha sua estimativa por sessão, leia o plano completo e confirme QUALIFICAR somente se concordar. Preparar, abrir Code e conferir conexão não executam a qualificação. Após sucesso, o launcher seleciona o pacote qualificado e as duas pastas automaticamente. Resultado existente é preservado, sem repetição automática. Desktop continua como extensão MCP e não instala os sete hooks nativos do Code.\n' >> "$ROOT/COMECE-AQUI.md"
 inventory > "$ROOT/managed-files.sha256"

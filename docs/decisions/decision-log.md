@@ -1605,3 +1605,14 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: The same account registration shared across separately admitted workspaces reaches one narrative without copying it. First-case finish never writes it implicitly. Internal, pending, reconciliation, stale and tampered state refuses. This delivers the narrow account narrative owner, not broad account search/history, foreign brief linking, cross-case promotion, hiring or runtime activation; the broader account scaffold dependency remains unavailable.
 - Refs: docs/product-account-narrative.md; adapters/mcp/account_narrative.go; internal/atlasops/account_existing.go; bundles/base/skills/account-case-setup/resources/account-narrative-mcp.md
 - Supersedes: none
+
+## EPRT - Carry an explicitly selected engineering document runtime in the pilot
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The ordinary unversioned participant kit cannot carry the verified document converter, while production setup requires separate organizational publisher admission. The owner explicitly authorized a complete experimental team pilot with local confirmation before production distribution.
+- Decision: Add one closed engineering runtime pilot choice that reuses an independently pinned public registry, modern signed release verification and canonical explicit Docling placement. Use a fresh engineering-only authority with an at-most-fourteen-day lifetime; old signing secrets are never reused. Bind the exact current-target server, registry, manifest, runtime archive and selected owner/workspace destinations into local review and revalidate before effects. Extend only the corresponding bound Desktop carrier, preserving complete inventory, executing-image and physical-layout checks before authority seeding. Keep normal, stable, enrolled/source and production authority unchanged; preserve both native fingerprints and separately attended native qualification.
+- Consequences: The selected engineering package can prepare the converter without Python, downloads or a service. Declined, stale, expired, foreign or modified preparation remains preserved and unavailable. The fresh issuer is experimental consistency evidence, never organizational publisher admission or native platform signing. Actual target/client qualification, Windows redistribution rights, missing architectures/formats and production updates remain separate explicit gates.
+- Refs: docs/product-pilot.md; specs/010-local-ingestion-runtime.md; adapters/mcp/packaging/engineering_runtime.go; adapters/mcp/packaging/desktop_pilot.go; dev/pilot
+- Supersedes: none

@@ -6,12 +6,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -368,6 +370,95 @@ func assertPilotReadinessPrompt(t *testing.T, body []byte, workspaceID string, a
 	for _, forbidden := range []string{"maestro_apply", "maestro_query", "execution.", "brain.", "owner.", "memory.", "methods.", "--mcp-config", "--strict-mcp-config"} {
 		if strings.Contains(desktopPrompt, forbidden) {
 			t.Fatalf("read-only Desktop connection prompt expanded the journey: %s", forbidden)
+		}
+	}
+}
+
+func TestPilotRuntimePromptsMatchBundledDocument(t *testing.T) {
+	_, source, _, _ := runtime.Caller(0)
+	fixture := filepath.Join(filepath.Dir(source), "..", "..", "..", "..", "internal", "ingest", "docling", "testdata", "sample.docx")
+	archive, err := zip.OpenReader(fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer archive.Close()
+	var texts []string
+	var rows [][]string
+	for _, entry := range archive.File {
+		if entry.Name != "word/document.xml" {
+			continue
+		}
+		stream, err := entry.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		decoder := xml.NewDecoder(io.LimitReader(stream, 1<<20))
+		var row []string
+		cell := ""
+		inCell := false
+		for {
+			token, err := decoder.Token()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch element := token.(type) {
+			case xml.StartElement:
+				switch element.Name.Local {
+				case "tr":
+					row = nil
+				case "tc":
+					cell, inCell = "", true
+				case "t":
+					var text string
+					if err := decoder.DecodeElement(&text, &element); err != nil {
+						t.Fatal(err)
+					}
+					texts = append(texts, text)
+					if inCell {
+						cell += text
+					}
+				}
+			case xml.EndElement:
+				switch element.Name.Local {
+				case "tc":
+					row, inCell = append(row, cell), false
+				case "tr":
+					rows = append(rows, row)
+				}
+			}
+		}
+		if err := stream.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const marker = "MAESTRO_DOCLING_OFFLINE_20261101"
+	if !strings.Contains(strings.Join(texts, "\n"), marker) || len(rows) < 2 {
+		t.Fatal("bundled DOCX lost the independent marker/table fixture")
+	}
+	actualRows := map[string]bool{}
+	for _, row := range rows[1:] {
+		actualRows[strings.Join(row, "/")] = true
+	}
+	report := pilotReport{Status: "partial", WorkspaceID: strings.Repeat("a", 32), Runtime: &packaging.EngineeringRuntimeBinding{PackSHA256: strings.Repeat("b", 64)}}
+	var output bytes.Buffer
+	if err := finishPilotReport(&report, &output); err != nil {
+		t.Fatal(err)
+	}
+	for _, prompt := range []string{report.CodePrompt, report.DesktopPrompt} {
+		if !strings.Contains(prompt, marker) || !strings.Contains(prompt, "maestro-pilot.docx") {
+			t.Fatal("runtime prompt lost its bundled source/marker")
+		}
+		pairs := regexp.MustCompile(`[a-z]+/[0-9]+`).FindAllString(prompt, -1)
+		if len(pairs) != len(actualRows) {
+			t.Fatal("runtime prompt and actual DOCX have different table expectations", pairs, actualRows)
+		}
+		for _, pair := range pairs {
+			if !actualRows[pair] {
+				t.Fatal("runtime prompt requires a row absent from the bundled DOCX", pair)
+			}
 		}
 	}
 }

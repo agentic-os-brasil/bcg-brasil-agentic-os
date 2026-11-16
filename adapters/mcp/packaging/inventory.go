@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
@@ -257,7 +258,7 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 		}
 	}
 	if inventory.DesktopPilot != nil {
-		if inventory.Format != "mcpb" || inventory.Version != "0.0.0" || inventory.Stable != nil || inventory.Lifecycle != nil {
+		if inventory.Format != "mcpb" || inventory.Stable != nil || inventory.Lifecycle != nil || (inventory.DesktopPilot.Runtime == nil && inventory.Version != "0.0.0") || (inventory.DesktopPilot.Runtime != nil && inventory.DesktopPilot.Runtime.ClientVersion != inventory.Version) {
 			return status, errors.New("invalid Desktop pilot profile")
 		}
 		if err := inventory.DesktopPilot.validate(); err != nil {
@@ -315,7 +316,7 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 			return status, fmt.Errorf("canonical packet asset unavailable: %s", name)
 		}
 	}
-	if registry, found := expected["managed/trust/release-authority-registry.json"]; found && (registry.Mode != 0644 || registry.Bytes > 1<<20) {
+	if registry, found := expected["managed/trust/release-authority-registry.json"]; found && (registry.Mode != uint32(assetMode) || registry.Bytes > 1<<20) {
 		return status, errors.New("public registry role changed")
 	}
 	for name := range expected {
@@ -349,8 +350,22 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 		if diagnostic.Mode != "mcp_only" {
 			return PacketStatus{}, errors.New("Desktop pilot cannot carry native authority")
 		}
-		if _, exists := expected["managed/trust/release-authority-registry.json"]; exists {
+		if _, exists := expected["managed/trust/release-authority-registry.json"]; exists && inventory.DesktopPilot.Runtime == nil {
 			return PacketStatus{}, errors.New("Desktop pilot cannot carry release authority")
+		}
+		if pilot := inventory.DesktopPilot.Runtime; pilot != nil {
+			registry, found := expected["managed/trust/release-authority-registry.json"]
+			if !found || registry.SHA256 != pilot.RegistrySHA256 || pilot.ServerSHA256 != status.ServerSHA256 || pilot.Target != target {
+				return PacketStatus{}, errors.New("engineering Desktop inventory identities differ")
+			}
+			body, err := source.read("managed/trust/release-authority-registry.json", 1<<20)
+			if err != nil {
+				return PacketStatus{}, err
+			}
+			expires, err := engineeringRuntimeAuthority(body, pilot.RegistrySHA256, pilot.Issuer, pilot.KeyID, time.Now())
+			if err != nil || expires.UTC().Format(time.RFC3339) != pilot.ExpiresAt {
+				return PacketStatus{}, errors.New("engineering Desktop authority expired or changed; request a newly reviewed kit")
+			}
 		}
 		status.DesktopPilot = inventory.DesktopPilot
 	}

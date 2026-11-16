@@ -34,6 +34,7 @@ type Options struct {
 	NativeHost                   *NativeHost
 	LifecycleContext             bool
 	DesktopPilot                 bool
+	EngineeringRuntimePilot      bool
 	desktopPilot                 *DesktopPilotBinding
 	Carrier                      *StableCarrier
 	stableIdentity               releasecontract.ServerIdentity

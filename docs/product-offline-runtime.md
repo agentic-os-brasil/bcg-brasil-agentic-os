@@ -195,3 +195,15 @@ pull-request trigger: publishing source and dispatching it require separately
 approved scope. Until its actual ordinary-user result is inspected, native
 Windows converter, client loading, clean-device and production-release gates
 remain unattested.
+
+## Explicit short-lived engineering pilot
+
+The full-runtime participant carrier uses the same verifier and `PlaceVerified`,
+selected by a separate conscious local runtime review after isolated preparation.
+The closed engineering profile binds the actual server/version, one public
+registry, signed modern canary manifest, target/archive and private destination.
+Its fresh experimental issuer has at most fourteen days of validity; expiration
+refuses and requests a newly reviewed kit. No startup/query installs, renews,
+repairs or changes production enrollment. The initial bundled runtime targets
+Darwin ARM64; Windows redistribution/native gates and Intel runtime availability
+remain separate. See [the complete carrier flow](product-pilot.md#explicit-engineering-runtime-kit).
