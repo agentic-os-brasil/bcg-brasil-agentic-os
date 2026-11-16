@@ -1,9 +1,85 @@
 ---
 name: owner-background
-description: Capture the owner's background outside the current job — formal education, the path before BCG, and the wider ambitions for career and life — into one SELF facet. Use for "meu background", "minha formação", "onde estudei", "o que eu fazia antes do BCG", "minhas aspirações de carreira", "quero registrar minha trajetória", or when onboarding deferred this block and the owner comes back to it.
+description: Capture the owner's background outside the current job — formal education, the path before BCG, and the wider ambitions for career and life — through the confirmed owner context in product MCP, or one SELF facet on the explicit legacy ZIP host. Use for "meu background", "minha formação", "onde estudei", "o que eu fazia antes do BCG", "minhas aspirações de carreira", "quero registrar minha trajetória", or when onboarding deferred this block and the owner comes back to it.
 ---
 
 # Owner Background
+
+## Choose the admitted runtime
+
+For the product MCP/plugin, use the route below and stop after its readback.
+It enriches the existing canonical `personal-context` facet; it creates neither
+`background.md` nor a pending-task checkbox. The legacy ZIP route later in this
+file applies only when that installed host and its filesystem authority are
+explicitly identified. A missing product operation never selects that fallback.
+
+## Product MCP: preserve, enrich and reconfirm
+
+1. Query `owner.status`. Continue only when `onboarding.state` is `complete`;
+   otherwise resume [owner onboarding](../maestro-onboarding/SKILL.md) if the
+   owner chooses, keeping background capture pending. Metadata and
+   `owner.review` do not reveal the existing body and are not read fallbacks.
+2. Query `owner.context` and reconstruct every page, following `next_offset`
+   with the first page's exact `generation` until `next_offset: -1`. Discard the
+   whole read on refusal or generation change. Require `personal-context` in
+   the returned `facets`. Its complete body lies after its exact facet marker
+   and before the next advertised facet marker; preserve its original newlines
+   while removing only the projection's separator newline. Verify advertised
+   facet markers occur once and in returned order. Ambiguous/missing markers
+   leave preservation unavailable: stop rather than guess, truncate, read owner
+   files or replace unseen content.
+3. Explain the destination before collecting answers: this adds to the existing
+   **sensitive personal context**, whose canonical readers are Maestro sessions
+   and Yoda and whose updates require confirmation. Accepted text is returned
+   to the admitted model session; this is not a promise that it stays only in a
+   local file, nor an attestation of an individual hosted Yoda's identity. Ask
+   whether the owner authorizes this professional-personalization purpose and
+   reader scope for active use until revised or withdrawn, preserving stricter
+   existing limits. Existing private proposal/audit history keeps its canonical
+   retention; this route promises no automatic expiry or historical erasure.
+   An unsupported retention requirement or refusal keeps the discussion unsaved.
+4. Ask one optional question per turn: education/training; career before the
+   current organization; career or life aspirations the owner wants considered
+   at work. Use the three question prompts below as conversation guidance,
+   with ordinary chat if a host question tool is unavailable. Accept omissions
+   and uncertainty without inference. If all are skipped, finish without a
+   proposal. Do not import documents, old chats or reports through this route.
+5. Draft named `Formação`, `Trajetória anterior` and `Aspirações` subsections
+   from the explicit answers under a dated background addition. Preserve the
+   complete current `personal-context` body and its consent/retention limits;
+   revise a prior background section only as explicitly requested. Show the
+   complete merged candidate and the agreed purpose/readers/retention. Keep
+   its UTF-8 size at most 12KiB and evidence at most 4KiB. If it does not fit,
+   ask the owner to choose an explicitly reviewed reduction; never silently
+   drop existing history or split it into unauthorized facets.
+6. After the owner chooses to save that candidate, call `maestro_apply` with
+   `operation: "owner.propose"`, `facet: "personal-context"`, an `evidence`
+   summary of the actual answers and consent, and the complete `proposed_body`.
+   Use no invented question ID or consent/approval argument. Before application,
+   fetch all of `owner.context` again with the original exact generation and
+   compare the complete preserved body; a refused or changed read leaves this
+   proposal unapplied and requires fresh context and a new merged proposal.
+   This closes the gap between reading the old body and creating its proposal.
+   Query `owner.review` with the returned `proposal_id` for metadata, then call
+   `owner.apply` with that exact ID. The trusted host presents current and
+   proposed text, evidence, sensitivity, readers and policy for human approval.
+   Decline/unavailable review preserves the active facet. A conflict preserves
+   newer work: re-read current confirmed context, or finish reconfirmation via
+   onboarding before preparing another merged proposal.
+7. Applying a facet invalidates final profile acceptance. Query `owner.status`
+   and `owner.onboarding_review`, then explicitly call
+   `owner.confirm_onboarding` for a separate trusted review of the whole current
+   profile. Saved answers remain pending on decline or unavailable review;
+   report that state rather than claiming accepted-context delivery. Never
+   reselect a track just to complete this update.
+8. Require `owner.status` to return `complete`. Fetch the entire fresh
+   `owner.context` generation again and verify the preserved personal context
+   plus exactly the approved background addition. Only this readback completes
+   the product route. Claim canonical save/reconfirmation separately from any
+   native client or future-session delivery proof. This method grants no
+   filesystem, external-send, scheduling or automatic-memory authority.
+
+## Legacy ZIP host only
 
 Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
 

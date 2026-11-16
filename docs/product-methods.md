@@ -69,3 +69,25 @@ separate senior-review model authority. Desktop's ordinary MCP tools supply no
 dispatcher. Plans still leave host/provider/runtime capabilities unattested and
 execution `not_executed`; static registration, packaged instructions and these
 recipes are not fresh host or model-execution evidence.
+
+## Background and writing through accepted owner context
+
+`owner-background` enriches the existing `personal-context` facet. It requires
+current confirmed onboarding and a complete generation-bound `owner.context`
+read, preserves the existing body and privacy limits, and asks three optional
+background questions. An explicitly authorized candidate uses `owner.propose`
+and trusted `owner.apply`; the owner then separately reviews and reconfirms the
+whole profile through `owner.onboarding_review`/`owner.confirm_onboarding`.
+Completion requires `owner.status: complete` plus full accepted-context readback.
+An unknown/ambiguous body or a merged candidate exceeding 12KiB remains pending;
+there is no new background facet, direct owner-file write or task-checkbox effect.
+This sensitive context is readable by the admitted session and its canonical
+Yoda reader policy; a local file is not a promise of local-only model processing.
+
+`writing-tighten` can read the same confirmed context without saving anything.
+It uses external `voice` only when that facet is actually present in the selected
+track, and `communication-style` for internal text. Missing/unconfirmed context
+uses an explicitly uncalibrated editorial pass; it does not substitute another
+private file. Drafts stay in the conversation until a separate admitted Save.
+These registered owner routes fulfill static domain dependencies only. Trusted
+review, actual method invocation and native host qualification remain separate.
