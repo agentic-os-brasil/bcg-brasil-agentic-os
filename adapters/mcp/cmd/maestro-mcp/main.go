@@ -119,14 +119,17 @@ func run() error {
 	var hookEvent, nativeBinding string
 	var proposalID, reviewDigest, track string
 	var confirmed, packet, lifecycleContext, desktopPilot, engineeringRuntimePilot bool
-	var runtimeRelease string
+	var runtimeRelease, acquisitionReviewFile string
 	var selectedPacket packaging.PacketStatus
 	if os.Args[1] == "mcpb" {
 		flags.BoolVar(&desktopPilot, "desktop-pilot", false, "isolate this local engineering rehearsal and bind its exact prepared Desktop paths")
 		flags.BoolVar(&engineeringRuntimePilot, "engineering-runtime-pilot", false, "explicitly carry the prepared short-lived engineering converter identity")
 	}
-	if os.Args[1] == "pilot-runtime-review" || os.Args[1] == "pilot-runtime-apply" {
+	if os.Args[1] == "pilot-runtime-review" || os.Args[1] == "pilot-runtime-apply" || os.Args[1] == "pilot-acquisition-review" || os.Args[1] == "pilot-acquisition-apply" {
 		flags.StringVar(&runtimeRelease, "release-directory", "", "exact complete signed engineering release")
+	}
+	if os.Args[1] == "pilot-acquisition-apply" {
+		flags.StringVar(&acquisitionReviewFile, "acquisition-review-file", "", "exact full local acquisition review")
 	}
 	if os.Args[1] == "plugin" {
 		flags.BoolVar(&lifecycleContext, "lifecycle-context", false, "include explicitly selected passive lifecycle context hooks")
@@ -168,11 +171,11 @@ func run() error {
 		flags.StringVar(&proposalID, "proposal-id", "", "exact owner proposal ID")
 	}
 	switch os.Args[1] {
-	case "owner-apply", "owner-confirm-onboarding", "memory-apply", "knowledge-apply", "maintenance-apply", "native-qualify-and-build", "pilot-runtime-apply":
+	case "owner-apply", "owner-confirm-onboarding", "memory-apply", "knowledge-apply", "maintenance-apply", "native-qualify-and-build", "pilot-runtime-apply", "pilot-acquisition-apply":
 		flags.StringVar(&reviewDigest, "review-digest", "", "exact SHA-256 digest from the full local review")
 	}
 	switch os.Args[1] {
-	case "owner-apply", "owner-confirm-onboarding", "owner-track", "memory-apply", "knowledge-apply", "maintenance-apply", "native-qualify-and-build", "pilot-runtime-apply":
+	case "owner-apply", "owner-confirm-onboarding", "owner-track", "memory-apply", "knowledge-apply", "maintenance-apply", "native-qualify-and-build", "pilot-runtime-apply", "pilot-acquisition-apply":
 		flags.BoolVar(&confirmed, "confirm", false, "local operator confirms the reviewed operation")
 	}
 	if os.Args[1] == "owner-track" {
@@ -224,6 +227,23 @@ func run() error {
 		carrier = &packaging.StableCarrier{Profile: carrierProfile, Protocol: installer.StableClientProtocol, ID: carrierID, Version: carrierVersion}
 	}
 	switch os.Args[1] {
+	case "pilot-acquisition-review", "pilot-acquisition-apply":
+		if packet || server != "" || destination != "" || version != "" || carrier != nil || runtimeRelease == "" {
+			return errors.New("exact local acquisition arguments required")
+		}
+		var value any
+		var err error
+		if os.Args[1] == "pilot-acquisition-review" {
+			value, err = reviewPilotAcquisition(context.Background(), o, running.Path, runtimeRelease)
+		} else {
+			value, err = applyPilotAcquisition(context.Background(), o, running.Path, runtimeRelease, acquisitionReviewFile, reviewDigest, confirmed)
+		}
+		if err != nil {
+			return err
+		}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(value)
 	case "pilot-runtime-review", "pilot-runtime-apply":
 		if packet || server != "" || destination != "" || version != "" || carrier != nil || runtimeRelease == "" {
 			return errors.New("exact local engineering runtime arguments required")

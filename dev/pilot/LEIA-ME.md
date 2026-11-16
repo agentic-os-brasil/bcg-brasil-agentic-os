@@ -55,3 +55,27 @@ Outra identidade de kit usa outra pasta. Destino estrangeiro e material alterado
 Compartilhe somente o ZIP genérico. A pasta preparada contém estado e caminhos locais; não redistribua owner, workspace, perfil Code, MCPB ou plugin gerados.
 
 Retorne o **RELATORIO.md**, após conferir seu conteúdo, e o resultado real nos clientes conforme o roteiro. Use “não testado” ou “indisponível” quando couber. Não envie credenciais, memória ou documentos reais.
+
+## Kit Windows com aquisição guiada
+
+Quando RUNTIME.json indicar Windows, o ZIP contém o servidor e os recursos do
+Maestro, o registro público e uma receita assinada. Python, wheels, DLLs de
+terceiros e o archive do conversor não são distribuídos nesse ZIP. O preparador
+baixa as entradas públicas diretamente dos fornecedores somente após você ler
+a revisão e digitar **BAIXAR CONVERSOR**. A revisão mostra URLs, hashes,
+quantidades, bytes de entrada, reserva máxima, cache retido, tentativa e validade.
+Não exige credenciais dos fornecedores e não aceita licenças em seu nome.
+
+As tentativas são preservadas, limitadas a três, com retenção mais reserva de no
+máximo 2 GiB. A revisão expira em até 30 minutos. Falha não dispara repetição nem
+limpeza automática. Após a aquisição, uma segunda revisão completa pede
+**ATIVAR CONVERSOR** para colocar o runtime e verificar os controles locais do
+Windows. Recusar qualquer etapa preserva o estado e não autoriza a próxima.
+A aquisição não executa código baixado; a colocação/qualificação é separada.
+Só um resultado real no Windows comprova essa etapa; compilação e testes no Mac
+não a atestam. Instalação e atualização corporativas continuam fora deste piloto.
+
+No kit completo, mudanças protegidas do Code usam o navegador local escolhido
+na preparação, mesmo quando o cliente anuncia formulários nativos. Leia o
+registro atual/proposto, marque a caixa inicialmente vazia e aprove somente a
+alteração exata. Fechar, recusar, cancelar ou deixar expirar não aprova nada.

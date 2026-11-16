@@ -68,6 +68,7 @@ qualify_code() {
   [[ ! -L "$scratch" ]] || fail 'Scratch com link; preserve a pasta.'
   if [[ ! -e "$scratch" ]]; then mkdir -m 700 "$scratch"; fi
   local common=(--product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" --server "$BIN" --destination "$destination" --version "$PILOT_VERSION" --native-executable "$code" --native-scratch-root "$scratch" --native-challenge-directory "$ROOT/workspace/native-qualification-controls" --max-budget-usd "$budget")
+  if [[ "$BIN" == "$ROOT/product/server/maestro-mcp" ]]; then common+=(--code-pilot --owner-review-channel local-browser); fi
   export CLAUDE_CONFIG_DIR="$ROOT/client/code"
   "$BIN" native-review "${common[@]}" > "$RUN/native-review.json" || fail 'A revisão recusou a qualificação. Nenhum teste com modelo foi iniciado; preserve o diagnóstico privado e confira o login normal do perfil Code.'
   cat "$RUN/native-review.json"
