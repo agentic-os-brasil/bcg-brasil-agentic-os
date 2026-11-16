@@ -136,3 +136,45 @@ func TestSharePointEnrollmentRejectsChangedReview(t *testing.T) {
 		t.Fatal("stale review overwrote latest selection", folders, err)
 	}
 }
+
+func TestSharePointEnrollmentMaximumSelectionReachesReview(t *testing.T) {
+	f := newOwnerFixture(t, false)
+	folders := make([]string, 8)
+	for i := range folders {
+		prefix := "https://example.sharepoint.com/sites/project/Documents/" + string(rune('a'+i))
+		folders[i] = prefix + strings.Repeat("x", 2048-len(prefix))
+	}
+	input := map[string]any{"operation": "sharepoint.enrollment.select", "folder_urls": folders, "purpose": "prior_work_retrieval"}
+	body, err := json.Marshal(input)
+	if err != nil || len(body) <= 16<<10 || len(body) > 128<<10 {
+		t.Fatalf("maximum selection must exercise the admitted request boundary: bytes=%d err=%v", len(body), err)
+	}
+	var presentation string
+	cs := f.connect(t, func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		presentation = req.Params.Message
+		return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"approved": true}}, nil
+	})
+	out, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "maestro_apply", Arguments: input})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.IsError {
+		t.Fatalf("maximum selection rejected before review: %s", out.Content[0].(*mcp.TextContent).Text)
+	}
+	var selected map[string]any
+	if err := json.Unmarshal([]byte(out.Content[0].(*mcp.TextContent).Text), &selected); err != nil {
+		t.Fatal(err)
+	}
+	assertBoundedSharePointSelection(t, selected, "selected")
+	for _, folder := range folders {
+		if !strings.Contains(presentation, folder) {
+			t.Fatal("full maximum selection did not reach trusted review")
+		}
+	}
+	readback := contentCall(t, f.connect(t, nil), "maestro_query", map[string]any{"operation": "sharepoint.enrollment.status"}, false)
+	assertBoundedSharePointSelection(t, readback, "selected")
+	before, after := selected["selection"].(map[string]any), readback["selection"].(map[string]any)
+	if after["folder_count"] != float64(8) || before["fingerprint"] != after["fingerprint"] {
+		t.Fatal("maximum selection was not preserved on readback", readback)
+	}
+}

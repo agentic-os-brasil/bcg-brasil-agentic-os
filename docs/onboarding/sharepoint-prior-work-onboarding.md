@@ -10,6 +10,31 @@ qualificação do catálogo organizacional. Para o fluxo local, segue os índice
 virtuais pelo MCP e lê as páginas de origem; não varre arquivos nem inicia uma
 coleta para atender um pedido de leitura.
 
+### Indicar ou revogar pastas pelo MCP do produto
+
+Para configurar fontes deste workspace, o Maestro começa com `maestro_query`,
+operação `sharepoint.enrollment.status`. Se o owner pedir para indicar pastas,
+usa `maestro_apply`, operação `sharepoint.enrollment.select`, com `folder_urls`
+(1–8 URLs HTTPS únicas do SharePoint, até 2048 caracteres por URL) e
+`purpose: "prior_work_retrieval"`. O servidor define o workspace e o destino;
+o owner revisa os registros atual e proposto completos na confirmação confiável
+antes de qualquer seleção ser publicada. Recusa preserva a escolha atual;
+alteração concorrente exige nova revisão.
+
+Para retirar a escolha local, usa `maestro_apply`, operação
+`sharepoint.enrollment.revoke`, sem outros argumentos, e confirma a revisão.
+Depois consulta `sharepoint.enrollment.status` novamente. A revogação bloqueia
+futuras leituras dos ponteiros selecionados naquele workspace e preserva o
+histórico, materiais já importados, a política organizacional assinada e os
+demais workspaces.
+
+Esse fluxo salva apenas a escolha local. A resposta continua mostrando provider
+indisponível, inscrição assinada não atestada e ingestão não executada. Para
+buscar ou ingerir fontes reais, ainda faltam a conexão Claude aprovada, a
+autoridade de inscrição e o coletor qualificado. Os hooks do produto ainda não
+injetam essa seleção; a compatibilidade do estado revogado na sessão legada não
+qualifica essa entrega no produto.
+
 ## Resultado que esta capacidade entrega
 
 Uma pessoa pode pedir explicitamente:
