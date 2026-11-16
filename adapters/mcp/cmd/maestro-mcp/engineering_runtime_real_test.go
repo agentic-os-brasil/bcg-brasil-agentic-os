@@ -116,6 +116,11 @@ func TestEngineeringRuntimePilotRealJourney(t *testing.T) {
 	run := func(command string, extra ...string) ([]byte, error) {
 		args := append(append([]string{command}, common...), extra...)
 		cmd := exec.CommandContext(ctx, server, args...)
+		if command == "pilot-runtime-apply" {
+			// Real participant launchers intentionally retain a private umask.
+			vector := append([]string{"-c", `umask 077; exec "$@"`, "private-runtime-placement", server}, args...)
+			cmd = exec.CommandContext(ctx, "/bin/sh", vector...)
+		}
 		return cmd.CombinedOutput()
 	}
 	if b, err := run("init"); err != nil {
