@@ -9,7 +9,7 @@ initialization and ordinary MCP operation, use the
 
 | Packet | Native behavior |
 | --- | --- |
-| `plugin` | Builds the complete portable MCP Code packet, including six inert canonical specialist projections, with an explicit native-unavailable reason and no active hooks. Packaging starts no qualification or model session. |
+| `plugin` | Builds the complete portable MCP Code packet, including eight inert canonical specialist projections, with an explicit native-unavailable reason and no active hooks. Packaging starts no qualification or model session. |
 | `plugin --lifecycle-context` | Builds the explicit `mcp_lifecycle` Code packet with three non-enforcing context/observation hooks. It does not qualify native enforcement or project specialists. See the [lifecycle context guide](product-lifecycle-context.md). |
 | `native-qualify-and-build` | Reviews and exercises the exact local target, then immediately builds a native packet only after successful qualification. |
 | `mcpb` | Carries the same shared server and immutable resources for Desktop. It installs neither Code agents/hooks nor Desktop Skills. |
@@ -267,11 +267,13 @@ prevention guarantee; stop observations remain separate from verified results.
 
 `packet-inventory.json` remains the closed file inventory with exact hashes,
 sizes and modes. `maestro-packet.json` adds the selected OS/architecture,
-method/resource identities, all seven canonical identities and
-fourteen immutable agent assets, policy, provenance, licenses and any admitted
+method/resource identities, all nine canonical identities and
+sixteen immutable agent assets, policy, provenance, licenses and any admitted
 native files. Executable Agent calls use exact `maestro-product:<canonical-id>`
-names. Maestro is the main-session hub; the six specialist projections preserve
-their current tool contracts. Gamma currently performs tool-free bounded packet
+names. Maestro is the main-session hub; the eight specialist projections preserve
+their tool contracts. The repository Standards/Spec pair has only scoped
+Read/Glob/Grep and must run as complementary foreground workers; the ordinary
+Case/Account/refiner sequence remains sequential. Gamma currently performs tool-free bounded packet
 analysis, rather than source inspection or full review custody.
 
 Reference closure distinguishes embedded assets, external-source references and

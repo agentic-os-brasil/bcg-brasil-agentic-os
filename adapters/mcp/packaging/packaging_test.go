@@ -193,6 +193,15 @@ func TestCompleteMethodPackets(t *testing.T) {
 			t.Errorf("native Agent invocation lost the exact plugin namespace: %s", id)
 		}
 	}
+	review, err := os.ReadFile(filepath.Join(opts.Destination, "skills/pocock-code-review/SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, axis := range []string{"repository-spec-reviewer", "repository-standards-reviewer"} {
+		if !bytes.Contains(review, []byte("Agent(subagent_type=\"maestro-product:"+axis+"\"")) || bytes.Contains(review, []byte("Agent(subagent_type=\""+axis+"\"")) {
+			t.Fatalf("repository review axis lost native namespace: %s", axis)
+		}
+	}
 	grill, err := os.ReadFile(filepath.Join(opts.Destination, "skills/pocock-grill-with-docs/SKILL.md"))
 	if err != nil || !bytes.Contains(grill, []byte("Call the Skill tool twice, for \"maestro-product:pocock-grilling\" and \"maestro-product:pocock-domain-modeling\"")) {
 		t.Error("multiple quoted Skill invocations lost namespace")

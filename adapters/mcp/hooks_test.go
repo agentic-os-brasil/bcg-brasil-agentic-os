@@ -302,6 +302,70 @@ func TestCompiledClaudeHook(t *testing.T) {
 		hookAllow(t, f, toolFields("Write", "active", map[string]any{"file_path": "brain/accounts/acme/cases/one/new.md"}))
 		hookDeny(t, f, toolFields("Write", "foreign", map[string]any{"file_path": "brain/accounts/acme/cases/two/new.md"}))
 	})
+	t.Run("repository_review_pair", func(t *testing.T) {
+		f := newHookFixture(t, binary)
+		hookOK(t, f, "UserPromptSubmit", nil)
+		standards, spec := "maestro-product:repository-standards-reviewer", "maestro-product:repository-spec-reviewer"
+		background := dispatchFields("background", standards)
+		background["tool_input"].(map[string]any)["run_in_background"] = true
+		hookDeny(t, f, background)
+		hookAllow(t, f, dispatchFields("standards", standards))
+		hookDeny(t, f, dispatchFields("duplicate-axis", standards))
+		hookAllow(t, f, dispatchFields("spec", spec)) // Both actual pre-dispatch slots coexist.
+		hookDeny(t, f, dispatchFields("third", "maestro-product:case-agent"))
+		hookOK(t, f, "SubagentStart", agentFields("standards-worker", standards))
+		hookOK(t, f, "SubagentStart", agentFields("spec-worker", spec))
+		for _, worker := range []struct{ id, role string }{{"standards-worker", standards}, {"spec-worker", spec}} {
+			for _, tool := range []string{"Read", "Glob", "Grep", "Write", "Edit", "Bash", "Agent", "mcp__anything"} {
+				fields := toolFields(tool, worker.id+tool, map[string]any{"file_path": "safe.md", "path": f.work, "pattern": "*.go"})
+				fields["agent_id"], fields["agent_type"] = worker.id, worker.role
+				if tool == "Read" || tool == "Glob" || tool == "Grep" {
+					hookAllow(t, f, fields)
+				} else {
+					hookDeny(t, f, fields)
+				}
+			}
+			foreign := toolFields("Read", worker.id+"foreign", map[string]any{"file_path": filepath.Join(f.base, "outside.md")})
+			foreign["agent_id"], foreign["agent_type"] = worker.id, worker.role
+			hookDeny(t, f, foreign)
+		}
+		accounts := filepath.Join(f.work, "brain/accounts")
+		for _, id := range []string{"one", "two"} {
+			if err := os.MkdirAll(filepath.Join(accounts, "acme/cases", id), 0700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := os.WriteFile(filepath.Join(accounts, ".active"), []byte("acme/one"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		for _, worker := range []struct{ id, role string }{{"standards-worker", standards}, {"spec-worker", spec}} {
+			for _, path := range []string{"brain/accounts/acme/cases/one/note.md", "brain/accounts/acme/cases/two/note.md", filepath.Join(f.home, "state", "private.json")} {
+				fields := toolFields("Read", worker.id+"case-path", map[string]any{"file_path": path})
+				fields["agent_id"], fields["agent_type"] = worker.id, worker.role
+				if path == "brain/accounts/acme/cases/one/note.md" {
+					hookAllow(t, f, fields)
+				} else {
+					hookDeny(t, f, fields)
+				}
+			}
+			for _, tool := range []string{"Glob", "Grep"} {
+				fields := toolFields(tool, worker.id+tool+"foreign-case", map[string]any{"path": filepath.Join(accounts, "acme/cases/two"), "pattern": "*.go"})
+				fields["agent_id"], fields["agent_type"] = worker.id, worker.role
+				hookDeny(t, f, fields)
+			}
+		}
+		hookDeny(t, f, toolFields("Read", "omitted-actor", map[string]any{"file_path": "safe.md"}))
+		hookOK(t, f, "SubagentStop", agentFields("standards-worker", standards))
+		returned := dispatchFields("standards", standards)
+		hookOK(t, f, "PostToolUse", returned) // First foreground return while peer is live.
+		if out := hookOK(t, f, "Stop", map[string]any{"stop_hook_active": false}); !strings.Contains(out, `"decision":"block"`) {
+			t.Fatal("unfinished pair finalized")
+		}
+		hookOK(t, f, "SubagentStop", agentFields("spec-worker", spec))
+		hookOK(t, f, "PostToolUse", dispatchFields("spec", spec))
+		hookDeny(t, f, dispatchFields("reentrant", standards))
+		hookOK(t, f, "Stop", map[string]any{"stop_hook_active": false})
+	})
 	t.Run("namespace_and_predispatch", func(t *testing.T) {
 		f := newHookFixture(t, binary)
 		hookOK(t, f, "UserPromptSubmit", nil)

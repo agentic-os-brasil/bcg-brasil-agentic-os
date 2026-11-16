@@ -78,15 +78,18 @@ func (store Store) decodeBound(body []byte, session string) (State, error) {
 	}
 	if state.PendingTool != "" {
 		canonical, ok := claudeagents.CanonicalAgentID(state.PendingType)
-		if !ok || canonical != state.PendingType || !identities[state.PendingTool] {
+		if !ok || canonical != state.PendingType || claudeagents.RepositoryReviewer(canonical) || !identities[state.PendingTool] {
 			return State{}, ErrTransition
 		}
 	}
 	if state.ActiveAgentID != "" {
 		canonical, ok := claudeagents.CanonicalAgentID(state.ActiveAgentType)
-		if !ok || canonical != state.ActiveAgentType || !identities[state.ActiveAgentID] {
+		if !ok || canonical != state.ActiveAgentType || claudeagents.RepositoryReviewer(canonical) || !identities[state.ActiveAgentID] {
 			return State{}, ErrTransition
 		}
+	}
+	if err := state.ReviewPair.validate(&state, identities); err != nil {
+		return State{}, err
 	}
 	if state.Finalized && (state.PendingTool != "" || state.ActiveAgentID != "") {
 		return State{}, ErrTransition
@@ -158,7 +161,7 @@ func (store Store) BeginOccurrence(session, prompt string) error {
 			if prompt == "" {
 				return ErrTurnResetUnavailable
 			}
-			if state.ActiveAgentID != "" || state.PendingTool != "" {
+			if state.ActiveAgentID != "" || state.PendingTool != "" || state.ReviewPair.unresolved() {
 				return ErrTransition
 			}
 			if seen(state, occurrence) {
@@ -189,6 +192,12 @@ func (store Store) Admit(session, prompt, tool, target string) error {
 			return err
 		}
 		token := key("dispatch", tool, target)
+		if claudeagents.RepositoryReviewer(target) {
+			return admitReview(state, token, target)
+		}
+		if state.ReviewPair.unresolved() {
+			return ErrTransition
+		}
 		if state.PendingTool == token && state.PendingType == target && !state.Finalized {
 			return nil
 		}
@@ -217,6 +226,9 @@ func (store Store) Correlate(session, prompt, agent, target string) error {
 		if err := checkOccurrence(state, prompt); err != nil {
 			return err
 		}
+		if claudeagents.RepositoryReviewer(target) {
+			return correlateReview(state, agent, target)
+		}
 		native := key("native", agent)
 		if state.ActiveAgentID == native && state.ActiveAgentType == target {
 			return nil
@@ -243,6 +255,9 @@ func (store Store) Authorize(session, prompt, agent, target string) error {
 	if err := checkOccurrence(&state, prompt); err != nil {
 		return err
 	}
+	if claudeagents.RepositoryReviewer(target) {
+		return authorizeReview(&state, agent, target)
+	}
 	if state.Finalized || state.ActiveAgentID != key("native", agent) || state.ActiveAgentType != target {
 		return ErrTransition
 	}
@@ -256,6 +271,12 @@ func (store Store) ObserveStop(session, prompt, agent, target string) error {
 		token := key("stopped", agent, target)
 		if seen(state, token) {
 			return nil
+		}
+		if claudeagents.RepositoryReviewer(target) {
+			if err := stopReview(state, agent, target); err != nil {
+				return err
+			}
+			return remember(state, token)
 		}
 		native := key("native", agent)
 		if state.ActiveAgentID != native || state.ActiveAgentType != target || state.TransitionCount >= 32 {
@@ -288,7 +309,7 @@ func (store Store) ObserveFinalize(session, prompt string) error {
 		if err := checkOccurrence(state, prompt); err != nil {
 			return err
 		}
-		if state.PendingTool != "" || state.ActiveAgentID != "" || (state.AccountRoute && (!state.CaseStopObserved || !state.AccountReturnObserved)) {
+		if state.ReviewPair.unresolved() || state.PendingTool != "" || state.ActiveAgentID != "" || (state.AccountRoute && (!state.CaseStopObserved || !state.AccountReturnObserved)) {
 			return ErrTransition
 		}
 		state.Finalized = true
@@ -305,7 +326,7 @@ func (store Store) CheckMain(session, prompt string) error {
 	if err != nil {
 		return ErrTransition
 	}
-	if state.PendingTool != "" || state.ActiveAgentID != "" {
+	if state.ReviewPair.unresolved() || state.PendingTool != "" || state.ActiveAgentID != "" {
 		return ErrTransition
 	}
 	if prompt != "" && state.TurnDigest != "" && state.TurnDigest != key("prompt", prompt) {

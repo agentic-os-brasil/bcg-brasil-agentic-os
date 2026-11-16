@@ -478,7 +478,7 @@
         {
           "path": "SKILL.md",
           "upstream_sha256": "09eb147f793e4647949edd32dbad278f0554dfb56e0d46b699cd4c2c55bf0357",
-          "shipped_sha256": "75e108de175e90c5091deeed229b68df75c9d841ecab24001b1edd7e31d26374"
+          "shipped_sha256": "ec9a1c05e82b4ee5a974ba1e89f4a08e34fe8c420958b38f304ccda58168f0a3"
         },
         {
           "path": "agents/openai.yaml",
@@ -669,7 +669,7 @@
         {
           "path": "SKILL.md",
           "upstream_sha256": "550482c2d674b085c9043b87bfdc14a8f2ec453c736119e7fcbb1e9332bffeba",
-          "shipped_sha256": "740524d550e8bacb76b115068b9be55a24c8aaead220ee570c13ec9e65e50446"
+          "shipped_sha256": "dbba523acb905b6e315730474783f78752a4dd7b054a274a811c00f04530ad96"
         },
         {
           "path": "agents/openai.yaml",
