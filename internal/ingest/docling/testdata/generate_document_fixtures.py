@@ -9,7 +9,7 @@ def rc4(key,data):
  for b in data:
   i=(i+1)%256;j=(j+s[i])%256;s[i],s[j]=s[j],s[i];result.append(b^s[(s[i]+s[j])%256])
  return bytes(result)
-def pdf(name,texts,protected=False):
+def pdf(name,texts,protected=False,image_pages=()):
  objects=[b'<< /Type /Catalog /Pages 2 0 R >>',b'']
  pageids=[];key=None;identity=hashlib.md5(b'Maestro synthetic PDF').digest()
  if protected:
@@ -18,12 +18,15 @@ def pdf(name,texts,protected=False):
   owner=rc4(hashlib.md5(padded(b'owner')).digest()[:5],padded(b'secret'))
   key=hashlib.md5(padded(b'secret')+owner+struct.pack('<i',-4)+identity).digest()[:5]
   user=rc4(key,pad)
- for text in texts:
+ for page_index,text in enumerate(texts):
   n=len(objects)+1;pageids.append(n)
-  objects.append(f'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> /Contents {n+1} 0 R >>'.encode())
+  image_resource=f' /XObject << /Im1 {n+2} 0 R >>' if page_index in image_pages else ''
+  objects.append(f'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >>{image_resource} >> /Contents {n+1} 0 R >>'.encode())
   stream=(f'BT /F1 18 Tf 72 700 Td ({text}) Tj ET' if text else '').encode()
+  if page_index in image_pages:stream+=b' q 1 0 0 1 10 10 cm /Im1 Do Q'
   if key: stream=rc4(hashlib.md5(key+(n+1).to_bytes(3,'little')+b'\0\0').digest()[:10],stream)
   objects.append(f'<< /Length {len(stream)} >>\nstream\n'.encode()+stream+b'\nendstream')
+  if page_index in image_pages:objects.append(b'<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Length 1 >>\nstream\n\x00\nendstream')
  objects[1]=f'<< /Type /Pages /Count {len(texts)} /Kids [{" ".join(str(n)+" 0 R" for n in pageids)}] >>'.encode()
  enc=''
  if protected:
@@ -35,6 +38,7 @@ def pdf(name,texts,protected=False):
  data+=f'trailer\n<< /Size {len(objects)+1} /Root 1 0 R{enc} >>\nstartxref\n{xref}\n%%EOF\n'.encode();(out/name).write_bytes(data)
 pdf('native.pdf',['MAESTRO NATIVE PAGE ONE 731','MAESTRO NATIVE PAGE TWO 947'])
 pdf('nontext.pdf',['']);pdf('mixed.pdf',['MAESTRO NATIVE PAGE ONE 731','']);pdf('protected.pdf',['MAESTRO PROTECTED 503'],True)
+pdf('scanned.pdf',[''],image_pages={0});pdf('mixed-image.pdf',['MAESTRO NATIVE PAGE ONE 731','MAESTRO NATIVE PAGE TWO 947'],image_pages={1})
 p='http://schemas.openxmlformats.org/presentationml/2006/main';a='http://schemas.openxmlformats.org/drawingml/2006/main';r='http://schemas.openxmlformats.org/officeDocument/2006/relationships';pkg='http://schemas.openxmlformats.org/package/2006/relationships';ct='http://schemas.openxmlformats.org/package/2006/content-types'
 rels=lambda rows:f'<Relationships xmlns="{pkg}">'+''.join(f'<Relationship Id="{i}" Type="{r}/{t}" Target="{v}"/>' for i,t,v in rows)+'</Relationships>'
 shape=lambda text:f'<p:sp><p:nvSpPr><p:cNvPr id="2" name="TextBox"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="7000000" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>{text}</a:t></a:r></a:p></p:txBody></p:sp>'

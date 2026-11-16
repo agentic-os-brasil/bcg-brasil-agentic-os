@@ -82,3 +82,26 @@ func TestDocumentProfileSelectionIsClosedBeforeEffects(t *testing.T) {
 		}
 	}
 }
+
+func TestLegacyAssemblyRetainsArchiveIdentity(t *testing.T) {
+	inputs := os.Getenv("MAESTRO_LEGACY_PROFILE_INPUTS")
+	if inputs == "" {
+		t.Skip("explicit existing authenticated legacy input directory required")
+	}
+	root := t.TempDir()
+	t.Cleanup(func() {
+		_ = filepath.WalkDir(root, func(name string, item os.DirEntry, err error) error {
+			if err == nil && item.IsDir() {
+				return os.Chmod(name, 0700)
+			}
+			return err
+		})
+	})
+	assembly, err := docling.Assemble(inputs, filepath.Join(root, "legacy-pack"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if assembly.ArchiveSHA256 != "e961862e161d677cd3c473360f8552f108cc39a5bfea218d8c974f70712e13f9" {
+		t.Fatal("default legacy archive identity changed", assembly)
+	}
+}

@@ -99,7 +99,7 @@ func TestAuthenticatedNativeDocuments(t *testing.T) {
 			t.Logf("actual %s parser=%s fidelity=%s document=%d markdown=%d", name, got.Result.Parser, got.Result.Fidelity, len(got.Document), len(got.Markdown))
 		})
 	}
-	for name, want := range map[string]string{"nontext.pdf": "pdf_native_text_unavailable", "mixed.pdf": "pdf_native_text_unavailable", "protected.pdf": "pdf_protected_unavailable"} {
+	for name, want := range map[string]string{"nontext.pdf": "pdf_native_text_unavailable", "scanned.pdf": "pdf_native_text_unavailable", "mixed-image.pdf": "pdf_native_text_unavailable", "mixed.pdf": "pdf_native_text_unavailable", "protected.pdf": "pdf_protected_unavailable"} {
 		t.Run(name, func(t *testing.T) {
 			got := convert(t, name)
 			if got.Result.Status != ingest.StatusUnavailable || len(got.Result.Warnings) != 1 || got.Result.Warnings[0] != want || len(got.Document) != 0 || len(got.Markdown) != 0 {
