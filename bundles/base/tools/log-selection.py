@@ -39,7 +39,7 @@ def canonical(value, directory=True):
 
 def identity(p):
     s=p.lstat()
-    if not stat.S_ISREG(s.st_mode) or s.st_size>MAX_FILE_BYTES:
+    if not stat.S_ISREG(s.st_mode) or s.st_nlink!=1 or s.st_size>MAX_FILE_BYTES:
         raise SelectionError('session is not a bounded regular file')
     return [s.st_dev,s.st_ino,s.st_size,s.st_mtime_ns,s.st_ctime_ns]
 
@@ -89,7 +89,7 @@ def prepare(request):
     return result
 
 def secure_read(path, expected):
-    if not hasattr(os,'O_NOFOLLOW') or os.open not in os.supports_dir_fd:
+    if not hasattr(os,'O_NOFOLLOW') or not hasattr(os,'O_NONBLOCK') or os.open not in os.supports_dir_fd:
         raise SelectionError('secure bounded history reader unavailable on this host')
     parts=Path(path).parts
     fd=os.open(parts[0],os.O_RDONLY|os.O_DIRECTORY)
@@ -97,11 +97,12 @@ def secure_read(path, expected):
         for part in parts[1:-1]:
             nxt=os.open(part,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd)
             os.close(fd);fd=nxt
-        datafd=os.open(parts[-1],os.O_RDONLY|os.O_NOFOLLOW,dir_fd=fd)
+        # Nonblocking admission rejects a FIFO substituted after metadata review.
+        datafd=os.open(parts[-1],os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=fd)
         try:
             def stamp():
                 s=os.fstat(datafd)
-                if not stat.S_ISREG(s.st_mode):raise SelectionError('source is not regular')
+                if not stat.S_ISREG(s.st_mode) or s.st_nlink!=1:raise SelectionError('source is not single-link regular')
                 return [s.st_dev,s.st_ino,s.st_size,s.st_mtime_ns,s.st_ctime_ns]
             if stamp()!=expected:raise SelectionError('selected source changed; obtain fresh approval')
             chunks=[];size=0

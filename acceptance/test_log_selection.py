@@ -1,6 +1,9 @@
 """Offline behavioral privacy tests; these do not qualify an agent or host."""
 import importlib.util
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -33,6 +36,30 @@ class SelectionTests(unittest.TestCase):
         audit=json.dumps(result['audit'])
         self.assertNotIn('PRIVATE',audit)
         self.assertNotIn(str(self.workspace),audit)
+
+    def test_hardlink_selection_rejected_before_body_open(self):
+        try:
+            os.link(self.file,self.logs/'linked.jsonl')
+        except OSError as exc:
+            self.skipTest(f'hardlink unavailable: {exc}')
+        with self.assertRaises(m.SelectionError):
+            m.prepare(self.request)
+
+    @unittest.skipUnless(hasattr(os,'mkfifo') and hasattr(os,'O_NOFOLLOW'),'requires Unix FIFO reader')
+    def test_fifo_replacement_does_not_wait_for_writer(self):
+        expected=m.identity(self.file)
+        self.file.unlink()
+        os.mkfifo(self.file,0o600)
+        # The bounded child is killed by subprocess.run on the original blocking bug.
+        child="""import importlib.util,json,sys
+spec=importlib.util.spec_from_file_location('selector',sys.argv[1])
+m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+try:m.secure_read(sys.argv[2],json.loads(sys.argv[3]))
+except m.SelectionError:sys.exit(0)
+sys.exit(1)
+"""
+        result=subprocess.run([sys.executable,'-B','-c',child,str(MODULE),str(self.file),json.dumps(expected)],capture_output=True,text=True,timeout=2)
+        self.assertEqual(result.returncode,0,'selected FIFO must fail before waiting or emitting a body')
 
     def test_foreign_workspace_rejected_before_body_open(self):
         self.request['sources'][0]['workspace']=str(self.logs)
