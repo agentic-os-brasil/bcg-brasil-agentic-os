@@ -679,10 +679,16 @@
       "method_ids": [
         "ingest-content"
       ],
-      "required_operations": [],
+      "required_operations": [
+        "content.convert",
+        "content.read",
+        "content.status",
+        "knowledge.append",
+        "knowledge.collect",
+        "knowledge.create"
+      ],
       "effects": [
-        "write_workspace",
-        "write_owner"
+        "write_workspace"
       ],
       "output_kinds": [
         "knowledge_page"
@@ -696,7 +702,14 @@
         {
           "id": "domain.owner_knowledge_pages",
           "kind": "domain",
-          "required": true
+          "required": false,
+          "fulfillment_operations": [
+            "knowledge.append",
+            "knowledge.create",
+            "owner.atlas.collect",
+            "owner.atlas.prepare",
+            "owner.atlas.status"
+          ]
         },
         {
           "id": "host.trusted_review",
@@ -722,6 +735,13 @@
             "knowledge.collect",
             "knowledge.create"
           ]
+        }
+      ],
+      "conditional_effects": [
+        {
+          "effect": "write_owner",
+          "condition": "Only when the owner explicitly selects knowledge_destination owner from a validated active internal workspace and approves the exact source-bound promotion to owner-global private professional knowledge; client and unknown scope remain unavailable.",
+          "dependency": "domain.owner_knowledge_pages"
         }
       ]
     },

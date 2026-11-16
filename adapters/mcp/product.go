@@ -230,6 +230,7 @@ func productQuerySchema() map[string]any {
 }
 
 type input struct {
+	KnowledgeDestination string `json:"knowledge_destination,omitempty"`
 	historyArguments
 	FolderURLs                 []string `json:"folder_urls"`
 	Mode                       string   `json:"mode"`
