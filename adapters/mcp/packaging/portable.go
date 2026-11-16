@@ -74,6 +74,12 @@ func portableMetadata(format, platform, version string, stable *stablePacketBind
 			manifest["description"] = "Local engineering rehearsal; uses only its prepared owner and workspace."
 			delete(manifest, "user_config")
 			manifest["server"].(map[string]any)["mcp_config"].(map[string]any)["args"] = []string{"serve", "--packet", "--product-root", "${__dirname}", "--user-home", pilot.UserHome, "--workspace", pilot.Workspace}
+			if pilot.OwnerReviewChannel == "local-browser" {
+				config := manifest["server"].(map[string]any)["mcp_config"].(map[string]any)
+				config["args"] = append(config["args"].([]string), "--owner-review-channel", "local-browser")
+				manifest["description"] = "Local engineering rehearsal; protected changes require exact owner review in a temporary local browser page when native forms are unavailable."
+			}
+
 		}
 		body, err := json.MarshalIndent(manifest, "", "  ")
 		if err != nil {
@@ -86,6 +92,9 @@ func portableMetadata(format, platform, version string, stable *stablePacketBind
 	files["README-PACKET.md"] = []byte("# Portable Maestro packet\n\nSelect Owner directory and Workspace in the client configuration; no builder's private binding is included. Use only paths outside this packet. Startup never initializes state.\n\nPreparation: run the emitted " + server + " with `init --packet --product-root <this-packet> --user-home <selected-owner> --workspace <selected-workspace>`. Server uses `serve` with the same explicit selection. Doctor uses the existing `inspect` command with those arguments. Run preparation only after explicit approval; it does not install a service, acquire a model/runtime or change client settings.\n\nManaged files are immutable during these operations. The packet inventory records their bytes and modes and excludes itself. It is an integrity diagnostic, not publisher identity or owner approval. MCPB method files are inert canonical resources, not an assertion of native Desktop Skills installation.\n")
 	if pilot != nil {
 		files["README-PACKET.md"] = []byte("# Local Maestro Desktop rehearsal\n\nConfirm installation of the named rehearsal extension in the client. Its server uses the exact owner and workspace approved during preparation; no directory configuration is required. This engineering MCPB is bound to this machine and workspace: do not redistribute it. Share the generic pilot kit instead. The unique extension name keeps other Maestro installations separate. Inventory is an integrity diagnostic, not publisher authority or proof of native loading.\n")
+	}
+	if pilot != nil && pilot.OwnerReviewChannel == "local-browser" {
+		files["README-PACKET.md"] = append(files["README-PACKET.md"], []byte("\nOwner review channel: local-browser (explicit local operator selection). When the client has no native form, a foreground protected request opens the complete exact review in your browser on this computer. Read it, select the unchecked exact-record checkbox, then Approve or Decline. Closing, expiry (150 seconds), cancellation or opener failure does not approve. Native forms stay first when advertised. Tool permission and chat yes never approve a record. No service is installed; this channel does not qualify native forms, lifecycle hooks or enforcement.\n")...)
 	}
 	if lifecycle != nil && stable == nil {
 		if err := lifecycleLocalMetadata(files, platform, lifecycle); err != nil {

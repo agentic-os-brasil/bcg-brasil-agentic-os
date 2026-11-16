@@ -125,6 +125,9 @@ func run() error {
 	if os.Args[1] == "plugin" {
 		flags.BoolVar(&lifecycleContext, "lifecycle-context", false, "include explicitly selected passive lifecycle context hooks")
 	}
+	if os.Args[1] == "serve" || os.Args[1] == "mcpb" {
+		flags.StringVar(&o.OwnerReviewChannel, "owner-review-channel", "", "explicit local-browser owner review fallback for foreground protected requests")
+	}
 	flags.BoolVar(&packet, "packet", false, "validate the complete managed packet before runtime use")
 	flags.StringVar(&destination, "destination", "", "new packet destination")
 	flags.StringVar(&server, "server", "", "compiled native server binary")

@@ -25,9 +25,10 @@ func packetModes(platform string, pilot *DesktopPilotBinding) (os.FileMode, os.F
 // DesktopPilotBinding identifies one local engineering rehearsal, never a
 // release authority. Its paths make this MCPB unsuitable for redistribution.
 type DesktopPilotBinding struct {
-	WorkspaceID string `json:"workspace_id"`
-	UserHome    string `json:"user_home"`
-	Workspace   string `json:"workspace"`
+	WorkspaceID        string `json:"workspace_id"`
+	UserHome           string `json:"user_home"`
+	Workspace          string `json:"workspace"`
+	OwnerReviewChannel string `json:"owner_review_channel,omitempty"`
 }
 
 func (p DesktopPilotBinding) Name() string { return "maestro-pilot-" + p.WorkspaceID }
@@ -36,6 +37,9 @@ func (p DesktopPilotBinding) DisplayName() string {
 }
 
 func (p DesktopPilotBinding) validate() error {
+	if p.OwnerReviewChannel != "" && p.OwnerReviewChannel != "local-browser" {
+		return errors.New("Desktop pilot owner review channel unavailable")
+	}
 	if !regexp.MustCompile(`^[0-9a-f]{32}$`).MatchString(p.WorkspaceID) {
 		return errors.New("Desktop pilot workspace identity unavailable")
 	}
@@ -55,6 +59,9 @@ func (p DesktopPilotBinding) validate() error {
 
 func prepareDesktopPilot(o *Options, format string) error {
 	if !o.DesktopPilot {
+		if o.Binding.OwnerReviewChannel != "" {
+			return errors.New("packaged local-browser owner review requires explicit Desktop pilot")
+		}
 		return nil
 	}
 	if format != "mcpb" || o.Version != "0.0.0" || o.Carrier != nil || o.LifecycleContext || o.NativeHost != nil || o.native != nil || o.hookOverride != nil || o.Binding.CLIVersion != "" || o.Binding.AuthorityRegistryPath != "" || o.Binding.AuthorityRegistrySHA256 != "" || o.Binding.InstalledManifestSHA256 != "" || o.Binding.InstalledClientInputsSHA256 != "" {
@@ -74,7 +81,7 @@ func prepareDesktopPilot(o *Options, format string) error {
 	if err != nil || inspection.State != "ready" {
 		return errors.New("Desktop pilot workspace unavailable")
 	}
-	o.desktopPilot = &DesktopPilotBinding{WorkspaceID: inspection.WorkspaceID, UserHome: o.Binding.UserHome, Workspace: o.Binding.WorkspacePath}
+	o.desktopPilot = &DesktopPilotBinding{WorkspaceID: inspection.WorkspaceID, UserHome: o.Binding.UserHome, Workspace: o.Binding.WorkspacePath, OwnerReviewChannel: o.Binding.OwnerReviewChannel}
 	return o.desktopPilot.validate()
 }
 
@@ -84,7 +91,7 @@ func (p DesktopPilotBinding) ValidateSelection(o product.Options) error {
 	if err := p.validate(); err != nil {
 		return err
 	}
-	if p.UserHome != o.UserHome || p.Workspace != o.WorkspacePath {
+	if p.UserHome != o.UserHome || p.Workspace != o.WorkspacePath || (o.OwnerReviewChannel != "" && p.OwnerReviewChannel != o.OwnerReviewChannel) {
 		return errors.New("Desktop pilot selection mismatch")
 	}
 	home, err := datahome.Resolve(datahome.Options{ProductRoot: o.ProductRoot, UserHome: o.UserHome, LookupEnv: o.LookupEnv})

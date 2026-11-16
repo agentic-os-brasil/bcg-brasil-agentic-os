@@ -58,6 +58,7 @@ if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) { Fail 'Este artefato 
 $digest = Hash-Text ('ordinary-engineering-rehearsal-v1' + $nl + $KitID + $nl + $Target + $nl + $Root + $nl)
 Write-Host 'Ensaio local de engenharia; sem instalação/atualização assinada.'
 Write-Host ("Produto: $Root\product" + $nl + "Estado privado: $Root\owner" + $nl + "Workspace: $Root\workspace" + $nl + "Perfil Code isolado: $Root\client\code" + $nl + "review_digest=$digest")
+Write-Host 'O pacote Desktop usará revisão local no navegador quando não houver formulário nativo; cada alteração exige sua aprovação exata e expira em 150 segundos.'
 if ($Review) { return }
 if ($ConfirmDigest) {
   if ($ConfirmDigest -cne $digest) { Fail 'Digest diferente; leia a revisão atual.' }
@@ -125,7 +126,7 @@ switch ((Get-Content -LiteralPath (Join-Path $Kit 'LIFECYCLE-CONTEXT.txt') -Raw)
 }
 & $bin plugin @common --server $bin --destination (Join-Path $Root 'exports/code') --version 0.0.0 @extra
 if ($LASTEXITCODE -ne 0) { Diagnose-Failure 'O pacote Code não foi concluído.' }
-& $bin mcpb --desktop-pilot @common --server $bin --destination (Join-Path $Root 'exports/maestro-product.mcpb') --version 0.0.0
+& $bin mcpb --desktop-pilot --owner-review-channel local-browser @common --server $bin --destination (Join-Path $Root 'exports/maestro-product.mcpb') --version 0.0.0
 if ($LASTEXITCODE -ne 0) { Diagnose-Failure 'O pacote Desktop não foi concluído.' }
 $code = @'
 param([string]$InitialPrompt)
@@ -163,7 +164,7 @@ try {
 $desktop = @'
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-Write-Host 'Confirme a instalação da extensão Maestro MCP — Ensaio indicada no relatório. Ela já usa as pastas aprovadas, sem campos de caminho. Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e, somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir. Preserve as demais permissões. ✓ / Sempre permitir libera só a leitura; gravações de conteúdo continuam exigindo revisão nativa disponível no cliente. Abra uma conversa nova e cole o texto copiado por Testar Maestro. Se a extensão estiver desativada ou ausente, confira Configurações > Extensões > Configurar > Ativado. Preserve outras extensões Maestro.'
+Write-Host 'Confirme a instalação da extensão Maestro MCP — Ensaio indicada no relatório. Ela já usa as pastas aprovadas, sem campos de caminho. Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e, somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir. Preserve as demais permissões. ✓ / Sempre permitir libera só a leitura; gravações de conteúdo exigem revisão exata no formulário nativo ou no navegador local selecionado neste ensaio. Abra uma conversa nova e cole o texto copiado por Testar Maestro. Se a extensão estiver desativada ou ausente, confira Configurações > Extensões > Configurar > Ativado. Preserve outras extensões Maestro.'
 Start-Process -FilePath (Join-Path $root 'exports/maestro-product.mcpb')
 '@
 Write-New (Join-Path $Root 'launchers/Abrir Code.ps1') $code
@@ -199,16 +200,19 @@ pastas aprovadas; não há campos de caminho para salvar.
 Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e,
 somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir.
 Preserve as demais permissões. ✓ / Sempre permitir libera só a leitura; gravações
-de conteúdo continuam exigindo revisão nativa disponível no cliente. Abra uma conversa nova e cole o texto copiado. Se a extensão estiver desativada ou ausente, confira
+de conteúdo exigem revisão exata no formulário nativo ou no navegador local selecionado neste ensaio. Abra uma conversa nova e cole o texto copiado. Se a extensão estiver desativada ou ausente, confira
 Configurações > Extensões > Configurar > Ativado nessa extensão.
 Se o cliente propuser substituir outra extensão, pare.
 
-Limite atual do Desktop: leitura e continuidade 1 → 2 não comprovam todos os fluxos
-de gravação. Gravações de perfil, páginas ou memória com revisão exata exigem
-formulários do cliente. Se receber confirmation_unavailable, deixe a ação pendente
-e use o Code com sua confirmação nativa. Não repita a chamada, não contorne o
-bloqueio nem use um sim no chat como aprovação. A permissão de leitura não
-habilita esses formulários.
+Revisão do dono no Desktop: este ensaio seleciona explicitamente a revisão local
+no navegador para gravações protegidas. Sem formulário nativo, uma solicitação
+interativa abre o registro completo no navegador deste computador. Leia tudo,
+marque a caixa inicialmente desmarcada e escolha Aprovar alteração exata ou
+Recusar. Fechar, cancelar ou ultrapassar 150 segundos não aprova. Formulários
+nativos continuam tendo prioridade. Este canal não qualifica hooks nem bloqueio
+nativo. Se receber confirmation_unavailable, deixe a ação pendente e confira o
+navegador ou use o Code com sua confirmação nativa. Um sim no chat e a permissão
+de leitura não aprovam gravações.
 
 workspace_id da criação real:
 
