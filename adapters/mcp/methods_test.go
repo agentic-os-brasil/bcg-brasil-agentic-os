@@ -141,7 +141,7 @@ func runMethodDiscovery(t *testing.T, stdio bool) {
 	if index.SchemaVersion != 1 || len(index.Methods) != 92 {
 		t.Fatalf("invalid index: %+v", index)
 	}
-	expectedResources := 6 + 14 // method metadata plus fixed canonical agent resources
+	expectedResources := 6 + 16 // method metadata plus fixed canonical agent resources
 	for _, method := range index.Methods {
 		files, err := baseskills.Files(method.ID)
 		if err != nil {

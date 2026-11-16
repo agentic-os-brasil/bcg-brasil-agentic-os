@@ -195,3 +195,35 @@ func TestBoundAuthorityRejectsHardlinksWithoutWrites(t *testing.T) {
 		})
 	}
 }
+
+func TestBoundReviewPairStrictStateAndLegacyCompatibility(t *testing.T) {
+	for _, raw := range []string{
+		`{"slots":[]}`, `{"slots":[{},{}]}`, `{"slots":[{},{},{}]}`,
+		`{"slots":[{"stopped":true},{}]}`, `{"slots":[{"agent":"forged"},{}]}`,
+		`{"slots":[{},{}],"foreign":true}`, `{"slots":[{"dispatch":"forged"},{}]}`,
+	} {
+		t.Run(raw, func(t *testing.T) {
+			store, path := admittedFlowFixture(t, "workspace", "session", false)
+			var fields map[string]json.RawMessage
+			if err := json.Unmarshal(readFlowBytes(t, path), &fields); err != nil {
+				t.Fatal(err)
+			}
+			fields["repository_review_pair"] = json.RawMessage(raw)
+			body, err := json.Marshal(fields)
+			if err != nil {
+				t.Fatal(err)
+			}
+			replaceFlowBytes(t, path, body)
+			if store.CheckMain("session", "prompt") == nil {
+				t.Fatal("malformed pair accepted")
+			}
+			if !bytes.Equal(readFlowBytes(t, path), body) {
+				t.Fatal("read repaired malformed state")
+			}
+		})
+	}
+	store, _ := admittedFlowFixture(t, "workspace", "session", false)
+	if err := store.Admit("session", "prompt", "legacy-call", "case-agent"); err != nil {
+		t.Fatalf("schema-2 without pair no longer admitted: %v", err)
+	}
+}

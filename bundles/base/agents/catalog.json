@@ -16,6 +16,7 @@
       }
     ]
   },
+  "native_repository_review_pair": ["repository-spec-reviewer", "repository-standards-reviewer"],
   "native_advisory": {
     "mode": "host_runtime",
     "max_depth": 2,
@@ -123,6 +124,32 @@
       "default_emoji": "🧠",
       "ownership_scope": "pa_expert_registry",
       "customizable": true
+    },
+    {
+      "id": "repository-spec-reviewer",
+      "role": "repository_reviewer",
+      "direct_user_access": false,
+      "tool_access": "scoped",
+      "may_delegate": false,
+      "input_contract": "bounded_repository_review_packet",
+      "relative_path": "agents/repository-spec-reviewer/AGENT.md",
+      "display_name": "Repository Spec Reviewer",
+      "default_emoji": "🔎",
+      "ownership_scope": "repository_review",
+      "customizable": false
+    },
+    {
+      "id": "repository-standards-reviewer",
+      "role": "repository_reviewer",
+      "direct_user_access": false,
+      "tool_access": "scoped",
+      "may_delegate": false,
+      "input_contract": "bounded_repository_review_packet",
+      "relative_path": "agents/repository-standards-reviewer/AGENT.md",
+      "display_name": "Repository Standards Reviewer",
+      "default_emoji": "🔎",
+      "ownership_scope": "repository_review",
+      "customizable": false
     },
     {
       "id": "yoda",

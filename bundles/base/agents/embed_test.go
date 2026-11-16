@@ -46,12 +46,14 @@ func TestCanonicalPublicIdentityDefaultsAndFiles(t *testing.T) {
 		{"gamma-guardian", "quality_guardian", "Gamma Guardian", "🧪", "quality_longitudinal", "bounded_quality_packet"},
 		{"maestro", "hub", "Maestro", "🎼", "system", "session_context_packet"},
 		{"pa-expert", "pa_expert", "PA Expert", "🧠", "pa_expert_registry", "bounded_advisory_packet"},
+		{"repository-spec-reviewer", "repository_reviewer", "Repository Spec Reviewer", "🔎", "repository_review", "bounded_repository_review_packet"},
+		{"repository-standards-reviewer", "repository_reviewer", "Repository Standards Reviewer", "🔎", "repository_review", "bounded_repository_review_packet"},
 		{"yoda", "reviewer", "Yoda", "🧙", "governance", "sealed_review_packet"},
 	}
 	var got [][6]string
 	for _, a := range catalog.Agents {
 		got = append(got, [6]string{a.ID, a.Role, a.DisplayName, a.DefaultEmoji, a.OwnershipScope, a.InputContract})
-		if a.RelativePath != "agents/"+a.ID+"/AGENT.md" || !a.Customizable || a.DirectUserAccess != (a.ID == "maestro") {
+		if a.RelativePath != "agents/"+a.ID+"/AGENT.md" || a.Customizable != (a.Role != "repository_reviewer") || a.DirectUserAccess != (a.ID == "maestro") {
 			t.Fatalf("canonical identity metadata changed: %+v", a)
 		}
 	}
@@ -73,7 +75,7 @@ func TestCanonicalPublicIdentityDefaultsAndFiles(t *testing.T) {
 		}
 	}
 	sort.Strings(paths)
-	wantPaths := []string{"activation-policy.json", "case-agent/AGENT.md", "catalog.json", "client-account-agent/AGENT.md", "darwin/AGENT.md", "gamma-guardian/AGENT.md", "maestro/AGENT.md", "pa-expert-registry.json", "pa-expert/AGENT.md", "templates/case_agent/AGENT.md", "templates/client_account_agent/AGENT.md", "templates/pa_expert/AGENT.md", "templates/quality_guardian/AGENT.md", "yoda/AGENT.md"}
+	wantPaths := []string{"activation-policy.json", "case-agent/AGENT.md", "catalog.json", "client-account-agent/AGENT.md", "darwin/AGENT.md", "gamma-guardian/AGENT.md", "maestro/AGENT.md", "pa-expert-registry.json", "pa-expert/AGENT.md", "repository-spec-reviewer/AGENT.md", "repository-standards-reviewer/AGENT.md", "templates/case_agent/AGENT.md", "templates/client_account_agent/AGENT.md", "templates/pa_expert/AGENT.md", "templates/quality_guardian/AGENT.md", "yoda/AGENT.md"}
 	if !reflect.DeepEqual(paths, wantPaths) {
 		t.Fatalf("public files = %v", paths)
 	}

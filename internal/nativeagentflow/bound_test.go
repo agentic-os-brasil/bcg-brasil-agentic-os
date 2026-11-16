@@ -133,3 +133,84 @@ func TestBoundStrategicGraphCountsStopsNotVerdicts(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRepositoryPairFailureCorrelationAndResume(t *testing.T) {
+	s := boundStore(t)
+	const spec, standards = "repository-spec-reviewer", "repository-standards-reviewer"
+	if err := s.BeginOccurrence("session", "pair"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Admit("session", "pair", "spec-call", spec); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Correlate("session", "pair", "spec-worker", spec); err != nil {
+		t.Fatal(err)
+	}
+	if s.ObserveStop("session", "pair", "spec-worker", spec) == nil {
+		t.Fatal("sequential first return admitted")
+	}
+	if s.BeginOccurrence("session", "next") == nil || s.CheckMain("session", "pair") == nil || s.ObserveFinalize("session", "pair") == nil {
+		t.Fatal("incomplete pair lost its fence")
+	}
+	if s.Correlate("session", "pair", "spoofed", standards) == nil {
+		t.Fatal("unreserved complementary worker admitted")
+	}
+	if err := s.Admit("session", "pair", "standards-call", standards); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Admit("session", "pair", "standards-call", standards); err != nil {
+		t.Fatal("pending exact retry lost")
+	}
+	if s.Admit("session", "pair", "different-call", standards) == nil {
+		t.Fatal("different pending identity admitted")
+	}
+	if err := s.Correlate("session", "pair", "standards-worker", standards); err != nil {
+		t.Fatal(err)
+	}
+	if s.Authorize("session", "pair", "spec-worker", standards) == nil {
+		t.Fatal("axis spoof admitted")
+	}
+	if s.ObserveStop("session", "old", "spec-worker", spec) == nil {
+		t.Fatal("foreign occurrence stop admitted")
+	}
+	if err := s.ObserveStop("session", "pair", "spec-worker", spec); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ObserveStop("session", "pair", "spec-worker", spec); err != nil {
+		t.Fatal("exact stop retry lost")
+	}
+	if s.Authorize("session", "pair", "spec-worker", spec) == nil {
+		t.Fatal("stopped reviewer kept tools")
+	}
+	if s.ObserveReviewReturn("session", "pair", "spoofed", spec) == nil || s.ObserveReviewReturn("session", "pair", "standards-call", standards) == nil {
+		t.Fatal("unmatched or unfinished return admitted")
+	}
+	if err := s.ObserveReviewReturn("session", "pair", "spec-call", spec); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ObserveStop("session", "pair", "standards-worker", standards); err != nil {
+		t.Fatal(err)
+	}
+	// The pair does not manufacture Case completion or widen the ordinary route.
+	if s.Admit("session", "pair", "early-refiner", "gamma-guardian") == nil {
+		t.Fatal("pair impersonated Case completion")
+	}
+	if err := s.Admit("session", "pair", "case-call", "case-agent"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Correlate("session", "pair", "case-worker", "case-agent"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ObserveStop("session", "pair", "case-worker", "case-agent"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ObserveFinalize("session", "pair"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BeginOccurrence("session", "next"); err != nil {
+		t.Fatal(err)
+	}
+	if s.Correlate("session", "next", "spec-worker", spec) == nil || s.ObserveStop("session", "pair", "standards-worker", standards) == nil {
+		t.Fatal("late prior-pair event revived authority")
+	}
+}
