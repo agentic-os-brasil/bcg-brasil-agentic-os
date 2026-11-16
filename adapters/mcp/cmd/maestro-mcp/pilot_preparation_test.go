@@ -497,8 +497,19 @@ func TestPilotWindowsCodePromptHandoff(t *testing.T) {
 	prompt := "Use exact \"quoted\" text, $HOME and $(throw 'never'), C:\\path\\\"quoted\".\nSecond line."
 	report, _ := json.Marshal(map[string]any{"schema_version": 1, "status": "ready", "markdown": "synthetic report", "code_prompt": prompt + " complete", "desktop_prompt": "desktop", "code_ready_prompt": prompt + " connection", "desktop_ready_prompt": "desktop connection"})
 	helper := `package main
-import ("encoding/json";"os";"path/filepath";"fmt")
-func main(){if filepath.Base(os.Args[0])=="maestro-mcp.exe" {if len(os.Args)>1&&os.Args[1]=="pilot-check"{b,e:=os.ReadFile(os.Getenv("PILOT_REPORT"));if e!=nil{panic(e)};fmt.Print(string(b))};return};wd,_:=os.Getwd();f,e:=os.Create(os.Getenv("PILOT_ARGS"));if e!=nil{panic(e)};defer f.Close();json.NewEncoder(f).Encode(map[string]any{"args":os.Args[1:],"cwd":wd,"profile":os.Getenv("CLAUDE_CONFIG_DIR")})}
+import ("encoding/json";"os";"path/filepath";"fmt";"crypto/sha256";"strings")
+func record(path string) { f,e:=os.Create(path);if e!=nil{panic(e)};defer f.Close();json.NewEncoder(f).Encode(os.Args[1:]) }
+func main(){
+ if filepath.Base(os.Args[0])=="maestro-mcp.exe" {
+  switch os.Args[1] {
+  case "pilot-check": b,e:=os.ReadFile(os.Getenv("PILOT_REPORT"));if e!=nil{panic(e)};fmt.Print(string(b))
+  case "native-review": record(os.Getenv("PILOT_REVIEW_ARGS"));fmt.Print("{\"plan\":{\"state\":\"reviewable\",\"complete_plan_marker\":\"FULL_CANONICAL_PLAN\"},\"review_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}")
+  case "native-qualify-and-build": record(os.Getenv("PILOT_QUALIFY_ARGS"));fmt.Print("{\"state\":\"unavailable\",\"reason\":\"synthetic_fixture_only\"}")
+  default: mode:="mcp_lifecycle";native:=false;for _,a:=range os.Args{if strings.HasSuffix(a,"code-native-qualified"){native=true;mode="native";if v:=os.Getenv("PILOT_NATIVE_MODE");v!=""{mode=v}}};path,_:=os.Executable();body,_:=os.ReadFile(path);sha:=fmt.Sprintf("%x",sha256.Sum256(body));if !native&&os.Getenv("PILOT_BASE_SHA")!=""{sha=os.Getenv("PILOT_BASE_SHA")};json.NewEncoder(os.Stdout).Encode(map[string]string{"diagnostic":"ready","packet_mode":mode,"packet_server_sha256":sha})
+  };return
+ }
+ wd,_:=os.Getwd();f,e:=os.Create(os.Getenv("PILOT_ARGS"));if e!=nil{panic(e)};defer f.Close();json.NewEncoder(f).Encode(map[string]any{"args":os.Args[1:],"cwd":wd,"profile":os.Getenv("CLAUDE_CONFIG_DIR")})
+}
 `
 	helperSource := filepath.Join(base, "recorder.go")
 	writePilotFixture(t, helperSource, []byte(helper))
@@ -536,8 +547,10 @@ func main(){if filepath.Base(os.Args[0])=="maestro-mcp.exe" {if len(os.Args)>1&&
 			}
 		}
 	}
-	if err := os.MkdirAll(filepath.Join(root, "workspace"), 0700); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"workspace", "client/code"} {
+		if err := os.MkdirAll(filepath.Join(root, name), 0700); err != nil {
+			t.Fatal(err)
+		}
 	}
 	menuBody, err := os.ReadFile(filepath.Join(source, "test-windows.ps1"))
 	if err != nil {
@@ -545,12 +558,14 @@ func main(){if filepath.Base(os.Args[0])=="maestro-mcp.exe" {if len(os.Args)>1&&
 	}
 	menu := filepath.Join(root, "launchers", "Testar Maestro.ps1")
 	writePilotFixture(t, menu, append([]byte{0xef, 0xbb, 0xbf}, menuBody...))
+	var inspectionEnv []string
 	run := func(args ...string) ([]byte, error) {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, shell, append([]string{"-NoProfile", "-NonInteractive"}, args...)...)
-		cmd.Env = append(os.Environ(), "PATH="+tools, "PILOT_ARGS="+witness, "PILOT_REPORT="+filepath.Join(base, "report.json"), "PILOT_SHIM_WITNESS="+filepath.Join(base, "shim-invoked"))
+		cmd.Env = append(os.Environ(), "PATH="+tools, "PILOT_ARGS="+witness, "PILOT_REPORT="+filepath.Join(base, "report.json"), "PILOT_SHIM_WITNESS="+filepath.Join(base, "shim-invoked"), "PILOT_REVIEW_ARGS="+filepath.Join(base, "review-args.json"), "PILOT_QUALIFY_ARGS="+filepath.Join(base, "qualification-args.json"))
+		cmd.Env = append(cmd.Env, inspectionEnv...)
 		if runtime.GOOS != "windows" {
 			cmd.Env = append(cmd.Env, "WINDIR="+base)
 		}
@@ -608,6 +623,203 @@ func main(){if filepath.Base(os.Args[0])=="maestro-mcp.exe" {if len(os.Args)>1&&
 			suffix = " connection"
 		}
 		assertArgs(append(append([]string{}, prefix...), "--", prompt+suffix)...)
+	}
+	for _, file := range []string{"review-args.json", "qualification-args.json"} {
+		if _, err := os.Stat(filepath.Join(base, file)); !os.IsNotExist(err) {
+			t.Fatal("ordinary menu started native qualification", file)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(root, "owner"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name, budget, consent string
+		reviewed, qualified   bool
+	}{
+		{"budget cancelled", "", "", false, false},
+		{"plan cancelled", "0.25", "CANCELAR", true, false},
+		{"explicitly confirmed unavailable", "0.25", "QUALIFICAR", true, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for _, file := range []string{"review-args.json", "qualification-args.json"} {
+				_ = os.Remove(filepath.Join(base, file))
+			}
+			wrapper := "$global:answerIndex=0; function Read-Host { $global:answerIndex++; switch ($global:answerIndex) { 1 { '5' }; 2 { '" + test.budget + "' }; default { '" + test.consent + "' } } }; function Start-Process {}; & '" + strings.ReplaceAll(menu, "'", "''") + "'"
+			out, err := run("-Command", wrapper)
+			if (err != nil) != test.qualified {
+				t.Fatalf("unexpected qualification menu outcome: %v %s", err, out)
+			}
+			for file, want := range map[string]bool{"review-args.json": test.reviewed, "qualification-args.json": test.qualified} {
+				body, readErr := os.ReadFile(filepath.Join(base, file))
+				if (readErr == nil) != want {
+					t.Fatalf("%s called=%t want=%t: %v %s", file, readErr == nil, want, readErr, out)
+				}
+				if file == "qualification-args.json" && want {
+					var args []string
+					if json.Unmarshal(body, &args) != nil || len(args) < 3 || !reflect.DeepEqual(args[len(args)-3:], []string{"--review-digest", strings.Repeat("a", 64), "--confirm"}) {
+						t.Fatal("qualification omitted exact reviewed confirmation")
+					}
+				}
+			}
+			if test.reviewed && !bytes.Contains(out, []byte("FULL_CANONICAL_PLAN")) {
+				t.Fatal("complete returned plan was not displayed")
+			}
+			if _, err := os.Stat(witness); !os.IsNotExist(err) {
+				t.Fatal("cancelled or unavailable qualification opened Code")
+			}
+		})
+	}
+	// Exercise the emitted Windows launcher against a synthetic native packet,
+	// including literal paths and session options without altering stored settings.
+	native := filepath.Join(root, "exports", "code-native-qualified")
+	if err := os.MkdirAll(native, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "client", "code"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	settings := filepath.Join(root, "client", "code", "settings.json")
+	writePilotFixture(t, settings, []byte("{\"existing\":true}\n"))
+	if out, err := run("-File", code, prompt); err != nil {
+		t.Fatalf("native prompt open: %s %v", out, err)
+	}
+	captured, err := os.ReadFile(witness)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var nativeArgs struct {
+		Args []string `json:"args"`
+	}
+	if err := json.Unmarshal(captured, &nativeArgs); err != nil {
+		t.Fatal(err)
+	}
+	if len(nativeArgs.Args) != 6 || nativeArgs.Args[0] != "--plugin-dir" || nativeArgs.Args[1] != native || nativeArgs.Args[2] != "--settings" || nativeArgs.Args[4] != "--" || nativeArgs.Args[5] != prompt {
+		t.Fatalf("native argument vector differs: %q", nativeArgs.Args)
+	}
+	selection, err := os.ReadFile(nativeArgs.Args[3])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config map[string]map[string]struct {
+		Options map[string]string `json:"options"`
+	}
+	if err := json.Unmarshal(selection, &config); err != nil {
+		t.Fatal(err)
+	}
+	options := config["pluginConfigs"]["maestro-product@inline"].Options
+	if len(config) != 1 || len(config["pluginConfigs"]) != 1 || len(options) != 2 || options["user_home"] != filepath.Join(root, "owner") || options["workspace"] != filepath.Join(root, "workspace") {
+		t.Fatal("native session options differ")
+	}
+	if got, err := os.ReadFile(settings); err != nil || string(got) != "{\"existing\":true}\n" {
+		t.Fatal("native launcher modified stored profile", err)
+	}
+	if err := os.Remove(witness); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name     string
+		fallback bool
+	}{
+		{"foreign baseline refused", false}, {"foreign fallback refused", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if !test.fallback {
+				if err := os.Rename(native, native+".retained"); err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if err := os.Rename(native+".retained", native); err != nil {
+						t.Fatal(err)
+					}
+				}()
+			}
+			inspectionEnv = []string{"PILOT_BASE_SHA=" + strings.Repeat("0", 64), "PILOT_NATIVE_MODE=mcp_only"}
+			defer func() { inspectionEnv = nil }()
+			_ = os.Remove(witness)
+			out, err := run("-File", code)
+			if _, readErr := os.Stat(witness); err == nil || !os.IsNotExist(readErr) {
+				t.Fatalf("foreign selected packet launched Code: %v %s", err, out)
+			}
+		})
+	}
+	for _, name := range []string{"client", "client/code"} {
+		for _, mode := range []string{"native", "mcp_only"} {
+			t.Run("profile alias refused/"+name+"/"+mode, func(t *testing.T) {
+				alias := filepath.Join(root, filepath.FromSlash(name))
+				retained := filepath.Join(base, "retained-profile")
+				if err := os.Rename(alias, retained); err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if err := os.Remove(alias); err != nil && !os.IsNotExist(err) {
+						t.Error(err)
+					}
+					if err := os.Rename(retained, alias); err != nil {
+						t.Error(err)
+					}
+				}()
+				foreign := t.TempDir()
+				target := foreign
+				if name == "client" {
+					target = filepath.Join(foreign, "code")
+				}
+				writePilotFixture(t, filepath.Join(target, "settings.json"), []byte("preserve foreign settings"))
+				if runtime.GOOS == "windows" {
+					command := "New-Item -ItemType Junction -Path '" + strings.ReplaceAll(alias, "'", "''") + "' -Target '" + strings.ReplaceAll(foreign, "'", "''") + "' | Out-Null"
+					if out, err := run("-Command", command); err != nil {
+						t.Fatalf("ordinary junction fixture: %v %s", err, out)
+					}
+				} else if err := os.Symlink(foreign, alias); err != nil {
+					t.Fatal(err)
+				}
+				inspectionEnv = []string{"PILOT_NATIVE_MODE=" + mode}
+				defer func() { inspectionEnv = nil }()
+				_ = os.Remove(witness)
+				out, err := run("-File", code)
+				if _, readErr := os.Stat(witness); err == nil || !os.IsNotExist(readErr) {
+					t.Errorf("aliased profile launched Code: %v %s", err, out)
+				}
+				entries, err := os.ReadDir(target)
+				if err != nil || len(entries) != 1 || entries[0].Name() != "settings.json" {
+					t.Errorf("launcher wrote through profile alias: %v %v", entries, err)
+				}
+				if body, err := os.ReadFile(filepath.Join(target, "settings.json")); err != nil || string(body) != "preserve foreign settings" {
+					t.Error("foreign settings changed", err)
+				}
+			})
+		}
+	}
+	t.Run("native no prompt bypasses earlier shim", func(t *testing.T) {
+		defer os.Remove(witness)
+		defer os.Remove(filepath.Join(base, "shim-invoked"))
+		earlier := filepath.Join(base, "earlier-shim")
+		shim := filepath.Join(earlier, "claude.ps1")
+		writePilotFixture(t, shim, []byte("[IO.File]::WriteAllText($env:PILOT_SHIM_WITNESS, 'wrong shim')\n"))
+		_ = os.Remove(witness)
+		_ = os.Remove(filepath.Join(base, "shim-invoked"))
+		wrapper := "$env:PATH='" + strings.ReplaceAll(earlier, "'", "''") + "'+[IO.Path]::PathSeparator+$env:PATH; if ((Get-Command claude).Source -cne '" + strings.ReplaceAll(shim, "'", "''") + "') {throw 'fixture did not resolve earlier shim'}; & '" + strings.ReplaceAll(code, "'", "''") + "'"
+		if out, err := run("-Command", wrapper); err != nil {
+			t.Fatalf("no-prompt native open: %v %s", err, out)
+		}
+		body, err := os.ReadFile(witness)
+		if err != nil {
+			t.Fatal("native application was not launched", err)
+		}
+		var got struct {
+			Args []string `json:"args"`
+		}
+		if json.Unmarshal(body, &got) != nil || len(got.Args) != 4 || got.Args[0] != "--plugin-dir" || got.Args[1] != native || got.Args[2] != "--settings" {
+			t.Fatalf("native no-prompt argv differs: %s", body)
+		}
+		if _, err := os.Stat(filepath.Join(base, "shim-invoked")); !os.IsNotExist(err) {
+			t.Fatal("native open invoked earlier shim")
+		}
+		if err := os.Remove(witness); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if err := os.Remove(native); err != nil {
+		t.Fatal(err)
 	}
 	if err := os.Rename(recorder, recorder+".disabled"); err != nil {
 		t.Fatal(err)

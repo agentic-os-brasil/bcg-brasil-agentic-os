@@ -51,6 +51,7 @@ type PacketStatus struct {
 	RegistrySHA256       string               `json:"registry_sha256,omitempty"`
 	InventorySHA256      string               `json:"inventory_sha256"`
 	NativeMode           string               `json:"native_mode"`
+	NativeBindingSHA256  string               `json:"native_binding_sha256,omitempty"`
 	Stable               *StableCarrier       `json:"stable,omitempty"`
 	EmbeddedInputsSHA256 string               `json:"embedded_inputs_sha256,omitempty"`
 	NativeContractSHA256 string               `json:"native_contract_sha256,omitempty"`
@@ -343,6 +344,7 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 		return PacketStatus{}, err
 	}
 	status.NativeMode = diagnostic.Mode
+	status.NativeBindingSHA256 = diagnostic.BindingSHA256
 	if inventory.DesktopPilot != nil {
 		if diagnostic.Mode != "mcp_only" {
 			return PacketStatus{}, errors.New("Desktop pilot cannot carry native authority")

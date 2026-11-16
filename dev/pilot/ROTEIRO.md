@@ -4,7 +4,16 @@ Use somente dados sintéticos. Para conferir cada cliente de forma independente 
 
 Para conferir apenas a conexão no Code, abra **Testar Maestro** e escolha **3 — Conferir conexão Code (somente leitura)**. O Code abre com o texto exato da conferência como prompt inicial, sem copiar ou colar. O perfil separado pode pedir login: conclua o fluxo normal nessa janela. A resposta deve mostrar o workspace esperado e o estado `ready`, obtidos por uma única leitura do MCP declarado pelo plugin. O estado `ready` descreve a saúde da conexão, não o estado dos trabalhos. Você pode repetir essa consulta preservando trabalhos, páginas, onboarding e memória. Se o login, o plugin ou a leitura falhar, envie a mensagem real; abrir o cliente ou ter login em outro perfil não comprova esta conexão.
 
-No Windows, o início automático exige o executável nativo `claude.exe` no PATH. Se a mensagem indicar somente um shim, disponibilize a instalação nativa pelo fluxo autorizado ou abra **Abrir Code.cmd** sem argumentos e cole o `CODE-CONEXAO.txt` do diagnóstico atual. Para o ensaio completo, a alternativa manual usa `CODE.txt`. O kit preserva a instalação existente.
+Para qualificar os **sete hooks nativos do Code**, há um caminho opcional separado:
+
+1. Conclua o login e a conferência da opção **3** acima. Feche essa conversa antiga do Code e volte ao menu **Testar Maestro**.
+2. Escolha **5 — Qualificar os sete hooks do Code**. Essa ação usa modelo e pode gerar cobrança. A estimativa por sessão é uma escolha sua exigida para registrar o plano, não uma cotação de preço nem um teto garantido de cobrança; o menu explica os limites e mostra a soma estimada no plano completo.
+3. Leia **todo o plano retornado**. Digite `QUALIFICAR` somente se concordar com esses testes. Vazio ou outra resposta cancela. Se a revisão ou a qualificação recusar, preserve o resultado e a mensagem; não apague nem repita automaticamente.
+4. Após sucesso, reabra **Testar Maestro → 1** para o exercício com o pacote qualificado, ou **Abrir Code** para uma conversa vazia. O launcher seleciona o pacote e as pastas automaticamente. Use uma conversa nova; a antiga não ganha hooks retroativamente.
+
+O ensaio **1 → 2** abaixo verifica criação, pausa e retomada do trabalho entre clientes; ele não qualifica os hooks. Preparar, abrir Code normalmente e conferir conexão não executam a opção 5. No Desktop, o teste continua sendo da extensão MCP e seus recursos, sem hooks ou agentes nativos do Code.
+
+No Windows, o início automático e a qualificação da opção 5 exigem o executável nativo `claude.exe` no PATH. Se a mensagem indicar somente um shim, disponibilize a instalação nativa pelo fluxo autorizado ou abra **Abrir Code.cmd** sem argumentos e cole o `CODE-CONEXAO.txt` do diagnóstico atual. Para o ensaio completo, a alternativa manual usa `CODE.txt`; ela não executa a qualificação. O kit preserva a instalação existente.
 
 Para conferir apenas a conexão no Desktop, escolha **4 — Conferir conexão Desktop (somente leitura)**. Confirme a instalação da extensão **Maestro MCP — Ensaio …** indicada. Antes de colar, abra **Configurações → Extensões → a extensão deste ensaio** e, somente na linha **Maestro context** (`maestro_context`), selecione **✓ / Sempre permitir**. Preserve as demais permissões. ✓ / Sempre permitir libera só a leitura; gravações de conteúdo exigem revisão exata no formulário nativo ou no navegador local selecionado neste ensaio. Abra uma conversa nova e cole uma vez o texto copiado. Ele faz uma única leitura de contexto e mostra o workspace esperado e a saúde da conexão, sem consultar ou retomar trabalhos. O Desktop não exige o comando Code nem um trabalho criado no Code para essa conferência. Os pacotes já usam as pastas aprovadas; não há diretórios para copiar. Preserve outras extensões e pare se o cliente propuser substituir uma de outro ensaio.
 
@@ -24,6 +33,7 @@ Para devolver o teste, envie somente o `RELATORIO.md` mais recente, com este com
 - Code: abriu / MCP respondeu / skill funcionou / não testado.
 - Desktop: importou / MCP respondeu / retomou o mesmo trabalho / não testado.
 - Página e trabalho após reinício: passou / falhou / não testado.
+- Qualificação opcional (menu 5): não executada / cancelada / qualificada / indisponível; registre separadamente da continuidade do trabalho.
 - Memória aceita e recusada, hooks e mensagem de erro: resultado real.
 
 Confira o Markdown antes de compartilhar. Preserve `owner`, `workspace`, perfil Code, prompts e pacotes locais na sua máquina. O ZIP genérico é o material de distribuição; o ensaio preparado contém dados e caminhos locais.
