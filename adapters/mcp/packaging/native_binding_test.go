@@ -28,7 +28,7 @@ func controlledInspectionHost(t *testing.T, in NativeOptions, size int64) string
 	body := `package main
 import("encoding/json";"fmt";"os")
 func main(){
- if len(os.Args)==2 && os.Args[1]=="--version" {fmt.Println("2.1.295 (controlled inspection fixture)");return}
+ if len(os.Args)==2 && os.Args[1]=="--version" {version:=os.Getenv("MAESTRO_CONTROLLED_HOST_VERSION");if version=="" {version="2.1.295"};fmt.Println(version+" (controlled inspection fixture)");return}
  if len(os.Args)==3 && os.Args[1]=="auth" && os.Args[2]=="status" {json.NewEncoder(os.Stdout).Encode(map[string]any{"loggedIn":true,"authMethod":"controlled-fixture","configDirectory":os.Getenv("MAESTRO_CONTROLLED_PROFILE")});return}
  os.Exit(93)
 }`

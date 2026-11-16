@@ -338,7 +338,30 @@ When the verified installed Maestro would otherwise load too, the exact review
 and receipt bind a session-only settings override disabling that installed ID.
 This prevents duplicate hook execution without editing user/project settings.
 The inline candidate stays distinct. No other plugin is silently disabled or
-ignored, and a changed registry, source or override invalidates review. A
+ignored, and a changed registry, source or override invalidates review.
+
+A nonempty cloud-synced cache is inactive only when a pre-existing stored
+`syncClaudeAiPlugins:false` is applicable in user, local or managed settings.
+Shared-project false does not disable loading; an eligible false wins over true.
+Validate the setting as a boolean. This setting stops both downloading and
+loading already-synced plugins, supported since Code 2.1.273; the enforcement
+minimum 2.1.295 already includes that support. Preserve that relationship if the
+minimum changes. Bind the cache's bounded direct membership and reject unsafe
+roots, direct aliases, unsupported entry types and overflow, without reading
+inactive bodies. Absent/true/shared-only false retains the active-cache refusal.
+Other plugin and hook sources retain their existing admission. Qualification
+creates no sync override and never edits a profile to make it eligible.
+Stored settings and cache membership participate in the existing review and
+pre-final-build configuration fingerprint checks. Shipping hooks validate their
+packet/binding; they do not continuously recompute the host configuration hash.
+
+Both ordinary pilot preparers disclose, before confirmation, the creation of
+`autoMemoryEnabled:false` and `syncClaudeAiPlugins:false` in only their new
+dedicated `client/code/settings.json`. Create it exclusively as UTF-8 without a
+BOM. Existing rehearsals preserve settings and all other profile data, including
+an absent settings file. The profile remains outside managed inventory and the
+generic distributable ZIP. This deliberate pilot setup is separate from native
+qualification and does not establish active third-party-plugin parity. A
 configured passive carrier and full observed enforcement retain separate
 capability states; adapter-command context alone cannot promote qualification.
 

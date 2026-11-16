@@ -53,7 +53,11 @@ superset of supported local instruction files, rules, imports and startup-mode
 controls, including missing-source membership. Unbounded additional-directory
 or third-party-plugin sources, unsupported managed-settings directories,
 ambiguous import/alias layouts and unsupported Git worktree settings return
-unavailable. The qualifier never changes the owner's profile automatically.
+unavailable. The qualifier never changes the owner's profile automatically. A nonempty synced
+cache is supported only when an applicable stored user/local/managed
+`syncClaudeAiPlugins:false` already prevents loading; shared-project false alone
+does not. See the [finite plugin profile](product-native-hooks.md) for exact
+source and fingerprint boundaries.
 Implicit/default auto-memory is outside this native profile; ordinary MCP
 operation remains available. Host identity is streamed under a separate
 512-MiB bound, while the packet server retains its 128-MiB payload bound.

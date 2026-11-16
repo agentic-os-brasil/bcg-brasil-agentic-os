@@ -26,6 +26,15 @@ func nativeConfigurationReason(err error) string {
 	return "native_configuration_unavailable"
 }
 
+type nativeSettingsScope string
+
+const (
+	nativeSettingsUser    nativeSettingsScope = "user"
+	nativeSettingsProject nativeSettingsScope = "project"
+	nativeSettingsLocal   nativeSettingsScope = "local"
+	nativeSettingsManaged nativeSettingsScope = "managed"
+)
+
 // This is a conservative finite source superset, not a reimplementation of
 // Code's precedence/exclude glob engine. Both instruction alternatives and all
 // rules participate even when this particular prompt might not load them.
@@ -33,14 +42,15 @@ type instructionSources struct {
 	files         map[string]string
 	active        map[string]bool
 	parsed        map[string]bool
-	settingsFiles map[string]bool
+	settingsFiles map[string]nativeSettingsScope
 	plugins       map[string]bool
 	bytes, count  int
 	autoDisabled  bool
+	syncDisabled  bool
 }
 
 func newInstructionSources() *instructionSources {
-	return &instructionSources{files: map[string]string{}, active: map[string]bool{}, parsed: map[string]bool{}, settingsFiles: map[string]bool{}, plugins: map[string]bool{}}
+	return &instructionSources{files: map[string]string{}, active: map[string]bool{}, parsed: map[string]bool{}, settingsFiles: map[string]nativeSettingsScope{}, plugins: map[string]bool{}}
 }
 func sourceUnsupported(reason string) error {
 	return instructionSourceError("native_instruction_" + reason + "_unsupported")
@@ -54,8 +64,8 @@ func (s *instructionSources) file(path string, instruction bool, depth int) erro
 	mode := path + ":instruction"
 	if !instruction {
 		mode = path + ":snapshot"
-		if s.settingsFiles[path] {
-			mode = path + ":settings"
+		if scope := s.settingsFiles[path]; scope != "" {
+			mode = path + ":settings:" + string(scope)
 		}
 	}
 	if s.parsed[mode] {
@@ -102,8 +112,8 @@ func (s *instructionSources) file(path string, instruction bool, depth int) erro
 	s.files[path] = snapshot
 	s.parsed[mode] = true
 	if !instruction {
-		if s.settingsFiles[path] {
-			return s.settings(body)
+		if scope := s.settingsFiles[path]; scope != "" {
+			return s.settings(body, scope)
 		}
 		return nil
 	}
@@ -130,7 +140,7 @@ func (s *instructionSources) file(path string, instruction bool, depth int) erro
 	return nil
 }
 
-func (s *instructionSources) settings(body []byte) error {
+func (s *instructionSources) settings(body []byte, scope nativeSettingsScope) error {
 	var value map[string]json.RawMessage
 	if json.Unmarshal(body, &value) != nil {
 		return sourceUnsupported("settings_schema")
@@ -151,6 +161,18 @@ func (s *instructionSources) settings(body []byte) error {
 			return sourceUnsupported("auto_memory")
 		}
 		s.autoDisabled = true
+	}
+	if raw, ok := value["syncClaudeAiPlugins"]; ok {
+		switch strings.TrimSpace(string(raw)) {
+		case "false":
+			// Code ignores shared-project opt-outs; eligible false wins over true.
+			if scope == nativeSettingsUser || scope == nativeSettingsLocal || scope == nativeSettingsManaged {
+				s.syncDisabled = true
+			}
+		case "true":
+		default:
+			return sourceUnsupported("settings_schema")
+		}
 	}
 	for _, key := range []string{"autoMemoryDirectory", "additionalDirectories"} {
 		if raw, ok := value[key]; ok && string(raw) != "null" && string(raw) != `""` && string(raw) != "[]" {
@@ -223,7 +245,7 @@ func (s *instructionSources) environment() error {
 	return nil
 }
 
-func (s *instructionSources) root(root string, activeSettings ...string) error {
+func (s *instructionSources) root(root string, activeSettings map[string]nativeSettingsScope) error {
 	_, err := os.Lstat(root)
 	if errors.Is(err, os.ErrNotExist) {
 		s.files["root:"+root] = "missing"
@@ -240,8 +262,8 @@ func (s *instructionSources) root(root string, activeSettings ...string) error {
 		return sourceUnsupported("root")
 	}
 	s.files["root:"+root] = resolved
-	for _, name := range activeSettings {
-		s.settingsFiles[filepath.Join(resolved, name)] = true
+	for name, scope := range activeSettings {
+		s.settingsFiles[filepath.Join(resolved, name)] = scope
 	}
 	names := []string{"CLAUDE.md", "CLAUDE.local.md", "AGENTS.md"}
 	for _, name := range names {
@@ -322,11 +344,11 @@ func (s *instructionSources) ancestry(directory string, settingsPolicy bool) err
 				return err
 			}
 		}
-		activeSettings := []string{}
+		activeSettings := map[string]nativeSettingsScope{}
 		if settingsPolicy && root == directory {
-			activeSettings = []string{"settings.json", "settings.local.json"}
+			activeSettings = map[string]nativeSettingsScope{"settings.json": nativeSettingsProject, "settings.local.json": nativeSettingsLocal}
 		}
-		if err := s.root(filepath.Join(root, ".claude"), activeSettings...); err != nil {
+		if err := s.root(filepath.Join(root, ".claude"), activeSettings); err != nil {
 			return err
 		}
 		// Shared settings stay at cwd. The root local file also applies in a
@@ -339,7 +361,7 @@ func (s *instructionSources) ancestry(directory string, settingsPolicy bool) err
 			}
 			if configurationRoot != "missing" {
 				path := filepath.Join(configurationRoot, "settings.local.json")
-				s.settingsFiles[path] = true
+				s.settingsFiles[path] = nativeSettingsLocal
 				if err := s.file(path, false, 0); err != nil {
 					return err
 				}
@@ -430,7 +452,7 @@ func instructionConfiguration(directory string, o Options, paths ...string) (nat
 	if err := s.environment(); err != nil {
 		return nativeConfiguration{}, err
 	}
-	if err := s.root(directory, "settings.json"); err != nil {
+	if err := s.root(directory, map[string]nativeSettingsScope{"settings.json": nativeSettingsUser}); err != nil {
 		return nativeConfiguration{}, err
 	}
 	for index, path := range paths {
@@ -442,7 +464,7 @@ func instructionConfiguration(directory string, o Options, paths ...string) (nat
 	if err != nil {
 		return nativeConfiguration{}, sourceUnsupported("managed_location")
 	}
-	if err := s.root(managed); err != nil {
+	if err := s.root(managed, nil); err != nil {
 		return nativeConfiguration{}, err
 	}
 	managedRoot := managed
@@ -450,7 +472,7 @@ func instructionConfiguration(directory string, o Options, paths ...string) (nat
 		managedRoot = resolved
 	}
 	managedFile := filepath.Join(managedRoot, "managed-settings.json")
-	s.settingsFiles[managedFile] = true
+	s.settingsFiles[managedFile] = nativeSettingsManaged
 	if err := s.file(managedFile, false, 0); err != nil {
 		return nativeConfiguration{}, err
 	}

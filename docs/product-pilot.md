@@ -49,6 +49,16 @@ files. It preserves all private state. Foreign, changed and incomplete material
 remains in place; recovery chooses a fresh destination, without deleting a
 previous claim, resetting memory or altering another profile.
 
+Before confirmation, each preparer discloses the settings for its new dedicated
+Code profile. Exclusive creation writes `autoMemoryEnabled:false` and
+`syncClaudeAiPlugins:false` to `client/code/settings.json` as UTF-8 without a BOM.
+These choices disable the client's automatic memory and account-synced plugin
+loading/downloads only in this profile. They do not disable Maestro's governed
+memory. Existing roots preserve all settings/customizations/session data, even
+an absent settings file; preparation never repairs eligibility by overwriting a
+profile. Profiles remain outside managed inventory and the generic kit ZIP.
+This bootstrap does not qualify hooks or promise ordinary active-plugin parity.
+
 Code launches a session-local plugin using a separate CLAUDE_CONFIG_DIR and the
 client's normal login flow. Generic portable packets retain external userConfig
 selection; see the [official Code manifest reference](https://code.claude.com/docs/en/plugins-reference#user-configuration).

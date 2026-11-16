@@ -20,6 +20,15 @@ import (
 	"time"
 )
 
+func assertPilotFreshCodeSettings(t *testing.T, path string) {
+	t.Helper()
+	body, err := os.ReadFile(path)
+	var settings map[string]json.RawMessage
+	if err != nil || bytes.HasPrefix(body, []byte{0xef, 0xbb, 0xbf}) || json.Unmarshal(body, &settings) != nil || len(settings) != 2 || string(settings["autoMemoryEnabled"]) != "false" || string(settings["syncClaudeAiPlugins"]) != "false" {
+		t.Fatal("fresh dedicated Code profile lacks the exact UTF-8 settings", err)
+	}
+}
+
 // Exercise the actual Windows preparer inside the existing ordinary-account journey.
 func assertWindowsPilotPreparation(t *testing.T, binary string) {
 	t.Helper()
@@ -97,10 +106,18 @@ func assertWindowsPilotPreparation(t *testing.T, binary string) {
 	if len(match) != 2 {
 		t.Fatal("actual preparer did not produce one review digest")
 	}
+	if !bytes.Contains(review, []byte("autoMemoryEnabled:false")) || !bytes.Contains(review, []byte("syncClaudeAiPlugins:false")) {
+		t.Fatal("review did not disclose the scoped Code settings")
+	}
 	if _, err := os.Lstat(root); !os.IsNotExist(err) {
 		t.Fatal("review created or adopted the preparation target", err)
 	}
 	runPilotPowerShell(t, profile, prepare, "-Root", root, "-ConfirmDigest", string(match[1]))
+	settings := filepath.Join(root, "client", "code", "settings.json")
+	assertPilotFreshCodeSettings(t, settings)
+	// Existing profile choices and session data remain participant-owned.
+	writePilotFixture(t, settings, []byte(`{"autoMemoryEnabled":true,"syncClaudeAiPlugins":true,"custom":"preserve"}`))
+	writePilotFixture(t, filepath.Join(root, "client", "code", "customization.txt"), []byte("existing session fixture"))
 	before, err := os.ReadFile(filepath.Join(root, "managed-files.sha256"))
 	if err != nil {
 		t.Fatal("actual preparer did not finish managed inventory:", err)
@@ -309,7 +326,7 @@ func extractWindowsPilotArtifact(t *testing.T, selected, destination string, ide
 func windowsPilotState(t *testing.T, root string) map[string]string {
 	t.Helper()
 	state := map[string]string{}
-	for _, part := range []string{"owner", "workspace", "product", "exports", "launchers"} {
+	for _, part := range []string{"owner", "workspace", "product", "exports", "launchers", "client"} {
 		if err := filepath.WalkDir(filepath.Join(root, part), func(path string, entry os.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -649,5 +666,65 @@ func main(){if filepath.Base(os.Args[0])=="maestro-mcp.exe" {if len(os.Args)>1&&
 		"function fixtureCode { [IO.File]::WriteAllText($env:PILOT_SHIM_WITNESS,'alias invoked') }; Set-Alias claude fixtureCode",
 	} {
 		refuse("-Command", definition+"; & "+quotedCode+" -InitialPrompt 'protected prompt'")
+	}
+}
+
+// Run the emitted producer statement with its actual exclusive writer on each
+// available PowerShell. Full Windows preparation stays in its native journey.
+func TestPilotWindowsCodeProfileExclusiveCreation(t *testing.T) {
+	shell := stockPilotPowerShell()
+	if runtime.GOOS != "windows" {
+		var err error
+		shell, err = exec.LookPath("pwsh")
+		if err != nil {
+			t.Skip("PowerShell is unavailable")
+		}
+	}
+	setup, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "dev", "pilot", "setup-windows.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(setup)
+	start, end := strings.Index(text, "function Write-New("), strings.Index(text, "function Hash-Text(")
+	if start < 0 || end <= start {
+		t.Fatal("actual exclusive writer absent")
+	}
+	statement := ""
+	for _, line := range strings.Split(text, "\n") {
+		if strings.HasPrefix(line, "Write-New (Join-Path $Root 'client/code/settings.json') ") {
+			if statement != "" {
+				t.Fatal("ambiguous profile producer")
+			}
+			statement = line
+		}
+	}
+	if statement == "" {
+		t.Fatal("actual profile producer absent")
+	}
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "client", "code"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	script := filepath.Join(t.TempDir(), "profile.ps1")
+	writePilotFixture(t, script, []byte("param([string]$Root)\n$ErrorActionPreference='Stop'\n$nl=[string][char]10\n"+text[start:end]+statement+"\n"))
+	run := func() ([]byte, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		return exec.CommandContext(ctx, shell, "-NoProfile", "-NonInteractive", "-File", script, root).CombinedOutput()
+	}
+	if out, err := run(); err != nil {
+		t.Fatalf("emitted profile producer: %v\n%s", err, out)
+	}
+	settings := filepath.Join(root, "client", "code", "settings.json")
+	assertPilotFreshCodeSettings(t, settings)
+	custom := []byte(`{"custom":"preserve","syncClaudeAiPlugins":true}`)
+	if err := os.WriteFile(settings, custom, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(); err == nil {
+		t.Fatal("exclusive creation replaced existing settings")
+	}
+	if body, err := os.ReadFile(settings); err != nil || !bytes.Equal(body, custom) {
+		t.Fatal("existing settings were changed", err)
 	}
 }

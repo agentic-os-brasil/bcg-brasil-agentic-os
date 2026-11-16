@@ -65,9 +65,7 @@ func (s *instructionSources) managedPluginConfiguration(directory string, o Opti
 	if resolved == "" || resolved == "missing" {
 		return "", sourceUnsupported("configuration_location")
 	}
-	// Plugins discovered through skills/synced roots have no supported installed
-	// selection in this finite profile. Bind directory membership and refuse any
-	// executable plugin manifest rather than silently dropping another origin.
+	// Bind discovery membership; active unclosed origins remain unsupported.
 	// Skills-directory plugins load from the actual user configuration root
 	// and primary cwd, not every ancestor whose CLAUDE.md may be imported.
 	for _, root := range []string{resolved, filepath.Join(o.Binding.WorkspacePath, ".claude")} {
@@ -171,7 +169,14 @@ func (s *instructionSources) refuseDiscoveredPlugins(root string, skills bool) e
 			return sourceUnsupported("plugin_discovery")
 		}
 		if !skills {
-			return sourceUnsupported("synced_plugins")
+			if !s.syncDisabled {
+				return sourceUnsupported("synced_plugins")
+			}
+			if !entry.IsDir() && !entry.Type().IsRegular() {
+				return sourceUnsupported("plugin_discovery")
+			}
+			// Stored opt-out prevents loading; cache bodies are not sources.
+			continue
 		}
 		if !entry.IsDir() {
 			continue
