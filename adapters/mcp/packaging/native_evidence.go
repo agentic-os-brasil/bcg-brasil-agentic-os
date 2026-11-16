@@ -7,6 +7,7 @@ import (
 	"errors"
 	"math"
 	"path/filepath"
+	"strings"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/nativeagentflow"
@@ -63,34 +64,48 @@ type streamMessage struct {
 
 // Failure diagnostics contain only closed metadata derived by this same verifier.
 // They are observations, never importable qualification or permission authority.
+type nativeStartupObservation struct {
+	Outcome      string `json:"outcome"`
+	Marker       string `json:"marker"`
+	NonceMatched bool   `json:"nonce_matched"`
+	ExitCode     *int   `json:"exit_code"`
+}
+type nativeStartupDiagnostic struct {
+	Starts       int                        `json:"starts"`
+	Responses    int                        `json:"responses"`
+	Observations []nativeStartupObservation `json:"observations"`
+	Capped       bool                       `json:"capped"`
+}
 type nativeFailureDiagnostic struct {
-	SchemaVersion         int      `json:"schema_version"`
-	AttemptIndex          int      `json:"attempt_index"`
-	Phase                 string   `json:"phase"`
-	FailureCode           string   `json:"failure_code"`
-	TimedOut              bool     `json:"timed_out"`
-	Canceled              bool     `json:"canceled"`
-	RunnerError           bool     `json:"runner_error"`
-	ExitCode              *int     `json:"exit_code"`
-	StreamReceived        bool     `json:"stream_received"`
-	ParseComplete         bool     `json:"parse_complete"`
-	ResultSeen            bool     `json:"result_seen"`
-	ResultAccepted        bool     `json:"result_accepted"`
-	ResultIsError         bool     `json:"result_is_error"`
-	ResultKind            string   `json:"result_kind"`
-	CostAvailable         bool     `json:"cost_available"`
-	EstimatedCostUSD      *float64 `json:"estimated_cost_usd"`
-	StartupObserved       bool     `json:"startup_observed"`
-	ReadObserved          bool     `json:"read_observed"`
-	WriteObserved         bool     `json:"write_observed"`
-	GuardDenialObserved   bool     `json:"guard_denial_observed"`
-	FaultAttemptObserved  bool     `json:"fault_attempt_observed"`
-	FaultBlockObserved    bool     `json:"fault_block_observed"`
-	StopObserved          bool     `json:"stop_observed"`
-	CanonicalFlowObserved bool     `json:"canonical_flow_observed"`
-	SubagentStarts        int      `json:"subagent_starts"`
-	SubagentStops         int      `json:"subagent_stops"`
-	LifecycleCountsCapped bool     `json:"lifecycle_counts_capped"`
+	SchemaVersion         int                     `json:"schema_version"`
+	AttemptIndex          int                     `json:"attempt_index"`
+	Phase                 string                  `json:"phase"`
+	FailureCode           string                  `json:"failure_code"`
+	TimedOut              bool                    `json:"timed_out"`
+	Canceled              bool                    `json:"canceled"`
+	RunnerError           bool                    `json:"runner_error"`
+	ExitCode              *int                    `json:"exit_code"`
+	StreamReceived        bool                    `json:"stream_received"`
+	ParseComplete         bool                    `json:"parse_complete"`
+	ResultSeen            bool                    `json:"result_seen"`
+	ResultAccepted        bool                    `json:"result_accepted"`
+	ResultIsError         bool                    `json:"result_is_error"`
+	ResultKind            string                  `json:"result_kind"`
+	CostAvailable         bool                    `json:"cost_available"`
+	EstimatedCostUSD      *float64                `json:"estimated_cost_usd"`
+	StartupObserved       bool                    `json:"startup_observed"`
+	Startup               nativeStartupDiagnostic `json:"startup"`
+	ReadObserved          bool                    `json:"read_observed"`
+	WriteObserved         bool                    `json:"write_observed"`
+	GuardDenialObserved   bool                    `json:"guard_denial_observed"`
+	FaultAttemptObserved  bool                    `json:"fault_attempt_observed"`
+	FaultBlockObserved    bool                    `json:"fault_block_observed"`
+	StopObserved          bool                    `json:"stop_observed"`
+	CanonicalFlowObserved bool                    `json:"canonical_flow_observed"`
+	CanonicalFlowCheck    string                  `json:"canonical_flow_check"`
+	SubagentStarts        int                     `json:"subagent_starts"`
+	SubagentStops         int                     `json:"subagent_stops"`
+	LifecycleCountsCapped bool                    `json:"lifecycle_counts_capped"`
 }
 
 func verifyNativeProbe(body []byte, p nativeProbe, full bool) (nativeProof, error) {
@@ -98,7 +113,7 @@ func verifyNativeProbe(body []byte, p nativeProbe, full bool) (nativeProof, erro
 }
 func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic *nativeFailureDiagnostic) (nativeProof, error) {
 	proof := nativeProof{Protocol: qualificationProtocol, Fault: p.fault}
-	d := nativeFailureDiagnostic{SchemaVersion: 1, Phase: "stream", ResultKind: "absent", StreamReceived: len(body) != 0}
+	d := nativeFailureDiagnostic{SchemaVersion: 1, Phase: "stream", ResultKind: "absent", CanonicalFlowCheck: "not_reached", StreamReceived: len(body) != 0}
 	reject := func(code string, err error) error { d.FailureCode = code; return err }
 	defer func() {
 		if diagnostic != nil {
@@ -123,6 +138,12 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 		d.GuardDenialObserved = observed.GuardDenied
 		d.FaultAttemptObserved, d.FaultBlockObserved = observed.FaultAttempted, observed.FaultBlocked
 		d.StopObserved = stopSeen
+		if d.Startup.Starts > 32 {
+			d.Startup.Starts, d.Startup.Capped = 32, true
+		}
+		if d.Startup.Responses > 32 {
+			d.Startup.Responses, d.Startup.Capped = 32, true
+		}
 		d.SubagentStarts, d.SubagentStops = starts, stops
 		if d.SubagentStarts > 32 {
 			d.SubagentStarts = 32
@@ -233,6 +254,9 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 					return proof, reject("hook_identity_invalid", errors.New("native hook identity invalid"))
 				}
 				hooks[m.HookID] = nativeHook{m.HookEvent, m.HookName, active}
+				if m.HookEvent == "SessionStart" {
+					d.Startup.Starts++
+				}
 			}
 			if m.Subtype != "hook_response" {
 				continue
@@ -242,12 +266,32 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 				return proof, reject("uncorrelated_hook_response", errors.New("native uncorrelated hook response"))
 			}
 			delete(hooks, m.HookID)
-			if m.HookEvent == "SessionStart" && m.Outcome == "success" {
+			if m.HookEvent == "SessionStart" {
+				d.Startup.Responses++
+				observation := nativeStartupObservation{Outcome: "other", Marker: "malformed", ExitCode: m.ExitCode}
+				switch m.Outcome {
+				case "success", "error", "cancelled":
+					observation.Outcome = m.Outcome
+				}
 				var output struct {
 					Message string `json:"systemMessage"`
 				}
-				if json.Unmarshal([]byte(m.Stdout), &output) == nil && output.Message == "maestro_native_startup_unchanged:"+p.nonce {
+				if json.Unmarshal([]byte(m.Stdout), &output) == nil {
+					observation.Marker = "other"
+					if output.Message == "" {
+						observation.Marker = "missing"
+					} else if strings.HasPrefix(output.Message, "maestro_native_startup_unchanged:") {
+						observation.Marker = "startup"
+					}
+					observation.NonceMatched = output.Message == "maestro_native_startup_unchanged:"+p.nonce
+				}
+				if m.Outcome == "success" && observation.NonceMatched {
 					proof.StartupUnchanged = true
+				}
+				if len(d.Startup.Observations) < 8 {
+					d.Startup.Observations = append(d.Startup.Observations, observation)
+				} else {
+					d.Startup.Capped = true
 				}
 			}
 			if m.HookEvent == "SubagentStart" && m.Outcome == "success" {
@@ -328,6 +372,7 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 	}
 
 	d.Phase = "canonical_flow"
+	d.CanonicalFlowCheck = "unavailable"
 	h, err := datahome.Resolve(datahome.Options{ProductRoot: p.binding.ProductRoot, UserHome: p.binding.UserHome, LookupEnv: p.binding.LookupEnv})
 	if err != nil {
 		return proof, reject("canonical_home_unavailable", err)
@@ -348,6 +393,7 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 		return proof, reject("canonical_route_incomplete", errors.New("native canonical route incomplete"))
 	}
 	d.CanonicalFlowObserved = true
+	d.CanonicalFlowCheck = "observed"
 	if full {
 		if !proof.GuardDenied || starts != 2 || stops != 2 || !state.CaseStopObserved || state.LastAgentType != "gamma-guardian" || state.TransitionCount != 4 {
 			return proof, reject("route_events_incomplete", errors.New("native route events incomplete"))
