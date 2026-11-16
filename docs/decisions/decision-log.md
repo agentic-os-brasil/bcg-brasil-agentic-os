@@ -1561,3 +1561,15 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: Ordinary prepare/open/check-only remains free of model qualification. A canonical MCP-only failure result preserves the baseline route without claiming native capability; malformed or mismatched optional material refuses. Existing results are preserved rather than retried or replaced. Desktop continues its independent MCP extension flow. Source/offline evidence, packet qualification and actual client delivery remain separate; this does not continuously revalidate runtime configuration or qualify active third-party plugins.
 - Refs: specs/063-product-native-plugin.md; docs/product-pilot.md; adapters/mcp/cmd/maestro-mcp/pilot.go; dev/pilot/test-macos.command; dev/pilot/test-windows.ps1; https://code.claude.com/docs/en/settings#change-a-setting-for-one-session; https://code.claude.com/docs/en/settings-reference#pluginconfigs
 - Supersedes: none
+
+
+## ACNR - Bind shared account narrative saves to the active authenticated account
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: First-case setup registers immutable account/case identities and saves a workspace brief, while the promised shared account narrative has no admitted MCP owner. Reusing workspace pages or the private owner atlas would persist the narrative under a different scope.
+- Decision: Expose closed attended account narrative status/read/save operations for the sole HOME/brain/accounts/<account>/<account>.md page derived from the current active client setup and its authenticated registration. Reuse authored metadata and atlas operations for full current/proposed trusted review, provenance, revision fencing, publication and exact retry. Independently validate up to 32 named account-related case registrations, including the current case, and revalidate the exact binding/registrations before effects. Keep case references as explicit immutable registration tuples; foreign case briefs are not resolved or read.
+- Consequences: The same account registration shared across separately admitted workspaces reaches one narrative without copying it. First-case finish never writes it implicitly. Internal, pending, reconciliation, stale and tampered state refuses. This delivers the narrow account narrative owner, not broad account search/history, foreign brief linking, cross-case promotion, hiring or runtime activation; the broader account scaffold dependency remains unavailable.
+- Refs: docs/product-account-narrative.md; adapters/mcp/account_narrative.go; internal/atlasops/account_existing.go; bundles/base/skills/account-case-setup/resources/account-narrative-mcp.md
+- Supersedes: none

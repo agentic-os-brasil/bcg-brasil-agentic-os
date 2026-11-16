@@ -17,8 +17,12 @@ and finish with a checkpoint only when work was requested. Reuse returned
 bindings, paths and revisions; never hand-write an identity or account marker.
 The workspace alias follows that same owner, not a second workflow.
 
-This first-case bridge does not deliver the broader account narrative,
-relationship history, cross-case recall/promotion or arbitrary agent hiring.
+After the first client case is active, the separate account narrative owner can
+save the explicitly requested shared account page through
+[the account narrative workflow](resources/account-narrative-mcp.md).
+First-case setup itself never creates or appends that page. This bridge still
+does not deliver relationship-history recall, cross-case knowledge/promotion or
+arbitrary agent hiring.
 Keep those effects pending unless their separate owning capability is actually
 available and explicitly requested. A local HMAC-authenticated registration is
 instance integrity, not release signing, runtime activation or a tool grant.
@@ -78,13 +82,22 @@ renaming; this first-case unit does not silently rebind it to another mode/case.
 1. Confirmar o espaço de trabalho atual do Maestro e ajustar o tom e o nível de detalhe ao perfil do usuário.
 2. Ask for the account or project name, what success looks like and the first useful outcome. Do not request a schema, agent ID or a folder plan.
 3. Explain the client-account/case relation, or the direct internal Case choice, in everyday language. Keep optional names/avatars as a draft until their owning reviewed capability is available. First-case registration uses the admitted setup route and its native review, not direct identity files or a generic scaffold request.
-4. If an account narrative is separately requested, draft only authorized relationship context: stakeholders, concepts, strategic view and intended use. Its persistence needs its own admitted operation/review; the first-case registration is not proof that this broader account workflow is delivered. Do not import client material, crawl SharePoint or infer a cross-project mandate.
+4. If an account narrative is separately requested, draft only supplied relationship context: stakeholders, concepts, strategic view and intended use. Once the client setup is active, follow [the account narrative workflow](resources/account-narrative-mcp.md) to inspect, separately review and save the full account page. Use only returned account/case identities. Do not import client material, crawl SharePoint or infer a cross-project mandate.
 5. Use `$case-agent-setup` for the complete reviewed project brief and first plan at the returned destination. New client cases default to `accounts/<account-id>/cases/<workspace-id>/<workspace-id>.md` relative to the workspace brain; internal projects use `projects/<workspace-id>.md`. Existing exact destinations win. No automatic promotion back to account context occurs.
 6. End with the actual saved brief and next owner/step. Create a checkpoint only if requested/accepted, using the setup owner's stable work identity; do not duplicate work on a retry. Report pending effects rather than declaring a fictional transaction complete.
 
 ## Keep the roles honest
 
 PA Experts (especialistas de área do BCG) são consultores transversais em conhecimento funcional e de indústria. Não são agentes de projeto, não possuem o contexto do cliente e são consultados de forma continuada quando a perspectiva deles agrega valor.
+
+## Account case references
+
+The narrow MCP account narrative route records exact authenticated case-agent IDs
+and immutable account/case tuples as code references in `## Cases`. It does not
+claim those references are resolvable links to another workspace's brief. The
+current admitted case's brief is returned separately; foreign brief linking and
+cross-case knowledge retrieval remain pending. A separately registered workspace
+with the same exact account identity sees the same shared narrative, never a copy.
 
 ## Definição de conclusão
 
