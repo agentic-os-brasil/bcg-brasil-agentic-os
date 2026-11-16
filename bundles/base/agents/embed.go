@@ -22,7 +22,7 @@ var activationPolicyJSON []byte
 //go:embed templates/*/AGENT.md
 var templates embed.FS
 
-//go:embed case-agent/AGENT.md client-account-agent/AGENT.md darwin/AGENT.md gamma-guardian/AGENT.md maestro/AGENT.md pa-expert/AGENT.md yoda/AGENT.md
+//go:embed case-agent/AGENT.md client-account-agent/AGENT.md darwin/AGENT.md gamma-guardian/AGENT.md maestro/AGENT.md pa-expert/AGENT.md repository-spec-reviewer/AGENT.md repository-standards-reviewer/AGENT.md yoda/AGENT.md
 var definitions embed.FS
 
 func Catalog() (agentcatalog.Catalog, error) {
@@ -76,7 +76,7 @@ func Template(role string) ([]byte, error) {
 // Availability as immutable content does not make an identity dispatchable.
 func Definition(id string) ([]byte, error) {
 	switch id {
-	case "case-agent", "client-account-agent", "darwin", "gamma-guardian", "maestro", "pa-expert", "yoda":
+	case "case-agent", "client-account-agent", "darwin", "gamma-guardian", "maestro", "pa-expert", "repository-spec-reviewer", "repository-standards-reviewer", "yoda":
 	default:
 		return nil, fmt.Errorf("no managed native definition for %q", id)
 	}

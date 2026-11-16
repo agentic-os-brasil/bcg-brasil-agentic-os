@@ -22,13 +22,14 @@ import (
 const maximumStateBytes = 8 << 10
 
 type State struct {
-	Profile     string   `json:"profile,omitempty"`
-	Revision    uint64   `json:"revision,omitempty"`
-	TurnDigest  string   `json:"turn_digest,omitempty"`
-	PendingTool string   `json:"pending_tool,omitempty"`
-	PendingType string   `json:"pending_type,omitempty"`
-	Finalized   bool     `json:"finalized,omitempty"`
-	Seen        []string `json:"seen,omitempty"`
+	ReviewPair  *ReviewPair `json:"repository_review_pair,omitempty"`
+	Profile     string      `json:"profile,omitempty"`
+	Revision    uint64      `json:"revision,omitempty"`
+	TurnDigest  string      `json:"turn_digest,omitempty"`
+	PendingTool string      `json:"pending_tool,omitempty"`
+	PendingType string      `json:"pending_type,omitempty"`
+	Finalized   bool        `json:"finalized,omitempty"`
+	Seen        []string    `json:"seen,omitempty"`
 
 	SchemaVersion          int    `json:"schema_version"`
 	WorkspaceID            string `json:"workspace_id"`

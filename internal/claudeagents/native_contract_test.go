@@ -17,7 +17,7 @@ func TestNativeSpecialistInventoryAndFrontmatter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"case-agent", "client-account-agent", "darwin", "gamma-guardian", "pa-expert", "yoda"}
+	want := []string{"case-agent", "client-account-agent", "darwin", "gamma-guardian", "pa-expert", "repository-spec-reviewer", "repository-standards-reviewer", "yoda"}
 	if !reflect.DeepEqual(status.Agents, want) {
 		t.Errorf("specialists = %v; want %v", status.Agents, want)
 	}
@@ -31,6 +31,9 @@ func TestNativeSpecialistInventoryAndFrontmatter(t *testing.T) {
 			t.Errorf("%s: native frontmatter must start at byte zero", id)
 		}
 		tools := "tools: []\n"
+		if claudeagents.RepositoryReviewer(id) {
+			tools = "tools: Read, Glob, Grep\n"
+		}
 		if id == "case-agent" {
 			tools = "tools: Read, Write, Edit, Glob, Grep\n"
 		}
@@ -43,8 +46,8 @@ func TestNativeSpecialistInventoryAndFrontmatter(t *testing.T) {
 	}
 }
 
-func TestAllSevenCanonicalDefinitionsAvailable(t *testing.T) {
-	for _, id := range []string{"case-agent", "client-account-agent", "darwin", "gamma-guardian", "maestro", "pa-expert", "yoda"} {
+func TestAllCanonicalDefinitionsAvailable(t *testing.T) {
+	for _, id := range []string{"case-agent", "client-account-agent", "darwin", "gamma-guardian", "maestro", "pa-expert", "repository-spec-reviewer", "repository-standards-reviewer", "yoda"} {
 		body, err := baseagents.Definition(id)
 		if err != nil || len(body) == 0 {
 			t.Errorf("canonical definition %s unavailable: %v", id, err)
@@ -65,14 +68,14 @@ func TestPureProjectionNamesAndInvocationReferences(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(plugin, again) {
 		t.Fatal("projection is nondeterministic")
 	}
-	if len(plugin) != 6 || len(workspace) != 6 {
+	if len(plugin) != 8 || len(workspace) != 8 {
 		t.Fatal("wrong specialist inventory")
 	}
 	installed := t.TempDir()
 	if _, err := claudeagents.Install(installed); err != nil {
 		t.Fatal(err)
 	}
-	for i, id := range []string{"case-agent", "client-account-agent", "darwin", "gamma-guardian", "pa-expert", "yoda"} {
+	for i, id := range []string{"case-agent", "client-account-agent", "darwin", "gamma-guardian", "pa-expert", "repository-spec-reviewer", "repository-standards-reviewer", "yoda"} {
 		p := plugin[i]
 		if p.ID != id || p.Name != "maestro-product:"+id || p.Path != "agents/"+id+".md" {
 			t.Fatalf("wrong native identity: %+v", p)
@@ -129,7 +132,7 @@ func TestPureProjectionNamesAndInvocationReferences(t *testing.T) {
 
 func TestExactNativeNamespaceAndToolPolicies(t *testing.T) {
 	workspace := t.TempDir()
-	for _, id := range []string{"case-agent", "client-account-agent", "darwin", "gamma-guardian", "pa-expert", "yoda"} {
+	for _, id := range []string{"case-agent", "client-account-agent", "darwin", "gamma-guardian", "pa-expert", "repository-spec-reviewer", "repository-standards-reviewer", "yoda"} {
 		for _, name := range []string{id, "maestro-product:" + id} {
 			canonical, ok := claudeagents.CanonicalAgentID(name)
 			if canonical != id || !ok || !claudeagents.Managed(name) {
@@ -140,7 +143,7 @@ func TestExactNativeNamespaceAndToolPolicies(t *testing.T) {
 				t.Fatalf("shell authority gained by %s", name)
 			}
 			reason, recognized = claudeagents.GuardTool(name, "Read", []byte(`{"file_path":"note.md"}`), workspace, workspace)
-			if !recognized || (reason == "") != (id == "case-agent") {
+			if !recognized || (reason == "") != (id == "case-agent" || claudeagents.RepositoryReviewer(id)) {
 				t.Fatalf("wrong file tools for %s: %s", name, reason)
 			}
 		}
@@ -247,5 +250,21 @@ func TestEditedManagedAgentRefusesReplaceAndRemoval(t *testing.T) {
 		if err != nil || string(after) != string(body) {
 			t.Fatal("edited owned content changed", err)
 		}
+	}
+}
+
+func TestStandaloneNativeAgentPropertyProjection(t *testing.T) {
+	input := []byte("actual Agent dispatch uses `subagent_type: \"yoda\"`\n`subagent_type: \"repository-spec-reviewer\"`\n`subagent_type: \"external:yoda\"`\n{\"subagent_type\":\"yoda\"}\n.claude/agents/yoda.md\n")
+	want := "actual Agent dispatch uses `subagent_type: \"maestro-product:yoda\"`\n`subagent_type: \"maestro-product:repository-spec-reviewer\"`\n`subagent_type: \"external:yoda\"`\n{\"subagent_type\":\"yoda\"}\n.claude/agents/yoda.md\n"
+	got, err := claudeagents.ProjectAgentInvocations(input, "maestro-product")
+	if err != nil || string(got) != want {
+		t.Fatalf("standalone property not projected: %s %v", got, err)
+	}
+	again, err := claudeagents.ProjectAgentInvocations(got, "maestro-product")
+	if err != nil || string(again) != want {
+		t.Fatal("standalone property projection not idempotent")
+	}
+	if _, err := claudeagents.ProjectAgentInvocations([]byte("`subagent_type: \"maestro-product:unknown\"`"), "maestro-product"); err == nil {
+		t.Fatal("unknown own standalone property accepted")
 	}
 }
