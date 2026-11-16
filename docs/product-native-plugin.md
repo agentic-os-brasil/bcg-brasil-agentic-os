@@ -14,10 +14,13 @@ initialization and ordinary MCP operation, use the
 | `native-qualify-and-build` | Reviews and exercises the exact local target, then immediately builds a native packet only after successful qualification. |
 | `mcpb` | Carries the same shared server and immutable resources for Desktop. It installs neither Code agents/hooks nor Desktop Skills. |
 
-The implemented native profile is bounded sequential `maestro_planner`.
-`native_advisory` remains unavailable. This construction supplies an executable
-qualification path; controlled source tests have not established actual native
-CLI, Code-tab or Desktop acceptance.
+The implemented `maestro_planner` profile keeps ordinary specialists sequential,
+with one closed foreground parallel exception: `repository-standards-reviewer`
+and `repository-spec-reviewer`. `native_advisory` remains unavailable. The existing
+Case → Gamma qualifier does not qualify the review pair's actual overlap or
+verdict quality. This construction supplies an executable qualification path;
+controlled source tests have not established actual native CLI, Code-tab or
+Desktop acceptance.
 
 ## 1. Select the actual target
 
