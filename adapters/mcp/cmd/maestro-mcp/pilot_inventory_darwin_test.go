@@ -180,7 +180,15 @@ func TestMacOSPilotCodePromptHandoff(t *testing.T) {
 	witness := filepath.Join(base, "argv")
 	prompt := "Use exact \"quoted\" text, $HOME and $(touch NEVER_CREATED).\nSecond line."
 	report, _ := json.Marshal(map[string]any{"schema_version": 1, "status": "ready", "markdown": "synthetic report", "code_prompt": prompt + " complete", "desktop_prompt": "desktop", "code_ready_prompt": prompt + " connection", "desktop_ready_prompt": "desktop connection"})
-	checker := []byte("#!/bin/bash\nif [[ $1 == pilot-check ]]; then cat \"$PILOT_REPORT\"; fi\n")
+	checker := []byte(`#!/bin/bash
+case "$1" in
+  pilot-check) cat "$PILOT_REPORT";;
+  inspect) printf '{"diagnostic":"ready","packet_mode":"mcp_lifecycle"}\n';;
+  native-review) printf '%s\0' "$@" > "$PILOT_REVIEW_ARGS"; printf '{"plan":{"state":"reviewable","complete_plan_marker":"FULL_CANONICAL_PLAN"},"review_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}\n';;
+  native-qualify-and-build) printf '%s\0' "$@" > "$PILOT_QUALIFY_ARGS"; printf '{"state":"unavailable","reason":"synthetic_fixture_only"}\n';;
+  *) exit 21;;
+esac
+`)
 	for path, body := range map[string][]byte{
 		filepath.Join(root, "product", "maestro-mcp"):                    checker,
 		filepath.Join(root, "exports", "code", "scripts", "maestro-mcp"): checker,
@@ -198,8 +206,10 @@ func TestMacOSPilotCodePromptHandoff(t *testing.T) {
 			}
 		}
 	}
-	if err := os.MkdirAll(filepath.Join(root, "workspace"), 0700); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"workspace", "owner"} {
+		if err := os.MkdirAll(filepath.Join(root, name), 0700); err != nil {
+			t.Fatal(err)
+		}
 	}
 	for original, name := range map[string]string{"open-code-macos.command": "Abrir Code.command", "test-macos.command": "Testar Maestro.command"} {
 		body, err := os.ReadFile(filepath.Join(source, original))
@@ -214,10 +224,10 @@ func TestMacOSPilotCodePromptHandoff(t *testing.T) {
 	}
 	run := func(args []string, input string) ([]byte, error) {
 		t.Helper()
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-		cmd.Env = append(os.Environ(), "PATH="+tools+":"+os.Getenv("PATH"), "PILOT_REPORT="+filepath.Join(base, "report.json"), "PILOT_ARGS="+witness)
+		cmd.Env = append(os.Environ(), "PATH="+tools+":"+os.Getenv("PATH"), "PILOT_REPORT="+filepath.Join(base, "report.json"), "PILOT_ARGS="+witness, "PILOT_REVIEW_ARGS="+filepath.Join(base, "review-args"), "PILOT_QUALIFY_ARGS="+filepath.Join(base, "qualification-args"))
 		if input == "" {
 			return cmd.CombinedOutput()
 		}
@@ -302,7 +312,140 @@ func TestMacOSPilotCodePromptHandoff(t *testing.T) {
 		}
 		assertArgs(append(append([]string{}, prefix...), "--", prompt+suffix)...)
 	}
+	for _, file := range []string{"review-args", "qualification-args"} {
+		if _, err := os.Stat(filepath.Join(base, file)); !os.IsNotExist(err) {
+			t.Fatal("ordinary menu started native qualification", file)
+		}
+	}
+	for _, test := range []struct {
+		name, input         string
+		reviewed, qualified bool
+	}{
+		{"budget cancelled", "5\n\n", false, false},
+		{"plan cancelled", "5\n0.25\nCANCELAR\n", true, false},
+		{"explicitly confirmed unavailable", "5\n0.25\nQUALIFICAR\n", true, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for _, file := range []string{"review-args", "qualification-args"} {
+				_ = os.Remove(filepath.Join(base, file))
+			}
+			out, err := run([]string{"/usr/bin/script", "-q", filepath.Join(base, "qualification-menu"), "/bin/bash", menu}, test.input)
+			if (err != nil) != test.qualified {
+				t.Fatalf("unexpected qualification menu outcome: %v %s", err, out)
+			}
+			for file, want := range map[string]bool{"review-args": test.reviewed, "qualification-args": test.qualified} {
+				body, readErr := os.ReadFile(filepath.Join(base, file))
+				if (readErr == nil) != want {
+					t.Fatalf("%s called=%t want=%t: %v %s", file, readErr == nil, want, readErr, out)
+				}
+				if file == "qualification-args" && want && !bytes.Contains(body, []byte("--review-digest\x00"+strings.Repeat("a", 64)+"\x00--confirm\x00")) {
+					t.Fatal("qualification omitted exact reviewed confirmation")
+				}
+			}
+			if test.reviewed && !bytes.Contains(out, []byte("FULL_CANONICAL_PLAN")) {
+				t.Fatal("complete returned plan was not displayed")
+			}
+			if _, err := os.Stat(witness); !os.IsNotExist(err) {
+				t.Fatal("cancelled or unavailable qualification opened Code")
+			}
+		})
+	}
 	if _, err := os.Stat(filepath.Join(root, "workspace", "NEVER_CREATED")); !os.IsNotExist(err) {
 		t.Fatal("prompt was interpreted by a shell")
+	}
+}
+
+func TestMacOSPilotLaunchesQualifiedCodeWithSessionSelection(t *testing.T) {
+	source := filepath.Join("..", "..", "..", "..", "dev", "pilot")
+	base := t.TempDir()
+	root := filepath.Join(base, "prepared space ' quote")
+	tools := filepath.Join(base, "tools")
+	witness := filepath.Join(base, "argv")
+	checker := []byte("#!/bin/bash\n[[ $1 == inspect ]] || exit 21\n[[ ${PILOT_REFUSE:-} != yes ]] || exit 19\nmode=mcp_lifecycle\nfor arg do if [[ $arg == */code-native-qualified ]]; then mode=${PILOT_NATIVE_MODE:-native}; fi; done\nprintf '{\"diagnostic\":\"ready\",\"packet_mode\":\"%s\",\"packet_server_sha256\":\"%s\"}\\n' \"$mode\" \"$PILOT_SERVER_SHA\"\n")
+	for path, body := range map[string][]byte{
+		filepath.Join(root, "product", "maestro-mcp"):                                     checker,
+		filepath.Join(root, "exports", "code", "scripts", "maestro-mcp"):                  checker,
+		filepath.Join(root, "exports", "code-native-qualified", "scripts", "maestro-mcp"): checker,
+		filepath.Join(tools, "claude"):                                                    []byte("#!/bin/bash\nprintf '%s\\0' \"$PWD\" \"$CLAUDE_CONFIG_DIR\" \"$@\" > \"$PILOT_ARGS\"\n"),
+	} {
+		writePilotFixture(t, path, body)
+		if err := os.Chmod(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(root, "workspace"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "client", "code"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	writePilotFixture(t, filepath.Join(root, "pilot-binary.sha256"), []byte(fmt.Sprintf("%x  product/maestro-mcp\n", sha256.Sum256(checker))))
+	body, err := os.ReadFile(filepath.Join(source, "open-code-macos.command"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	launcher := filepath.Join(root, "launchers", "Abrir Code.command")
+	writePilotFixture(t, launcher, body)
+	profile := filepath.Join(root, "client", "code", "settings.json")
+	writePilotFixture(t, profile, []byte("{\"existing\":true}\n"))
+	run := func(extra ...string) ([]byte, error) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "/bin/bash", launcher)
+		cmd.Env = append(os.Environ(), "PATH="+tools+":"+os.Getenv("PATH"), "PILOT_ARGS="+witness, fmt.Sprintf("PILOT_SERVER_SHA=%x", sha256.Sum256(checker)))
+		cmd.Env = append(cmd.Env, extra...)
+		return cmd.CombinedOutput()
+	}
+	if out, err := run(); err != nil {
+		t.Fatalf("Code opener: %v %s", err, out)
+	}
+	got, err := os.ReadFile(witness)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := strings.Split(strings.TrimSuffix(string(got), "\x00"), "\x00")
+	if len(args) != 6 || args[2] != "--plugin-dir" || args[3] != filepath.Join(root, "exports", "code-native-qualified") || args[4] != "--settings" {
+		t.Fatalf("colleague opener did not choose the qualified packet and session selection: %q", args)
+	}
+	selection, err := os.ReadFile(args[5])
+	var value struct {
+		Plugins map[string]struct {
+			Options map[string]string `json:"options"`
+		} `json:"pluginConfigs"`
+	}
+	if err != nil || json.Unmarshal(selection, &value) != nil {
+		t.Fatal("session selection is not a regular JSON file", err)
+	}
+	options := value.Plugins["maestro-product@inline"].Options
+	if len(value.Plugins) != 1 || len(options) != 2 || options["user_home"] != filepath.Join(root, "owner") || options["workspace"] != filepath.Join(root, "workspace") {
+		t.Fatal("session selection changed the exact prepared scope")
+	}
+	for _, test := range []struct {
+		name     string
+		env      []string
+		fallback bool
+	}{
+		{"mcp_only fallback", []string{"PILOT_NATIVE_MODE=mcp_only"}, true},
+		{"engineering fixture refused", []string{"PILOT_NATIVE_MODE=native_engineering_fixture"}, false},
+		{"other executable refused", []string{"PILOT_SERVER_SHA=" + strings.Repeat("0", 64)}, false},
+		{"canonical inspection refused", []string{"PILOT_REFUSE=yes"}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_ = os.Remove(witness)
+			out, err := run(test.env...)
+			got, readErr := os.ReadFile(witness)
+			if test.fallback {
+				args := strings.Split(strings.TrimSuffix(string(got), "\x00"), "\x00")
+				if err != nil || readErr != nil || len(args) != 4 || args[3] != filepath.Join(root, "exports", "code") {
+					t.Fatalf("fallback changed: %v %s %q", err, out, args)
+				}
+			} else if err == nil || !os.IsNotExist(readErr) {
+				t.Fatalf("refused packet launched Code: %v %s", err, out)
+			}
+		})
+	}
+	if got, err := os.ReadFile(profile); err != nil || string(got) != "{\"existing\":true}\n" {
+		t.Fatal("launcher changed existing profile", err)
 	}
 }

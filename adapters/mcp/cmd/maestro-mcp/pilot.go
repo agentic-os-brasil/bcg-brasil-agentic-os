@@ -57,7 +57,8 @@ func (r *pilotReport) add(name, status, reason, action string) {
 // report files; this command never initializes, repairs or writes participant state.
 func runPilotCheck(ctx context.Context, args []string, output io.Writer) error {
 	r := pilotReport{SchemaVersion: 1, Status: "partial", Checks: []pilotCheck{}, ReferenceHost: packaging.Target{OS: runtime.GOOS, Arch: runtime.GOARCH}}
-	if _, err := processidentity.Current(); err != nil {
+	running, err := processidentity.Current()
+	if err != nil {
 		r.add("process_identity", "failed", "process_identity_unavailable", "Execute Testar Maestro a partir do kit verificado e preserve os arquivos existentes.")
 		return finishPilotReport(&r, output)
 	}
@@ -88,12 +89,12 @@ func runPilotCheck(ctx context.Context, args []string, output io.Writer) error {
 	} else {
 		r.add("kit_identity", "not_tested", "kit_identifier_unavailable", "Inclua a identificação do kit ao compartilhar o diagnóstico.")
 	}
-	codeRoot := filepath.Join(root, "exports", "code")
-	packet, packetErr := packaging.ValidatePacket(codeRoot)
-	codeOK := packetErr == nil && packet.Format == "plugin" && packet.Target == r.ReferenceHost
+	codeRoot, packet, packetErr := pilotCodePacket(o, r.ReferenceHost, running.SHA256)
+	codeOK := packetErr == nil
 	if codeOK {
 		r.Target = packet.Target
 		r.add("code_packet", "passed", "packet_integrity_verified", "")
+		r.add("code_profile", "passed", packet.NativeMode, "O perfil descreve o pacote selecionado; o carregamento no cliente continua sendo verificado separadamente.")
 	} else {
 		r.add("code_packet", "failed", "code_packet_unavailable", "Preserve o ensaio e compartilhe este diagnóstico; prepare um novo ensaio com o kit verificado.")
 	}
@@ -166,6 +167,35 @@ func runPilotCheck(ctx context.Context, args []string, output io.Writer) error {
 
 var pilotWorkspaceID = regexp.MustCompile(`^[a-f0-9]{32}$`)
 var pilotKitID = regexp.MustCompile(`^[a-f0-9]{64}$`)
+
+func pilotCodePacket(o product.Options, host packaging.Target, serverSHA string) (string, packaging.PacketStatus, error) {
+	root := filepath.Join(filepath.Dir(o.ProductRoot), "exports", "code")
+	base, err := packaging.ValidatePacket(root)
+	if err != nil || base.Format != "plugin" || base.Target != host || base.ServerSHA256 != serverSHA {
+		return "", packaging.PacketStatus{}, errors.New("pilot Code packet unavailable")
+	}
+	native := filepath.Join(filepath.Dir(o.ProductRoot), "exports", "code-native-qualified")
+	if _, err := os.Lstat(native); errors.Is(err, os.ErrNotExist) {
+		return root, base, nil
+	} else if err != nil {
+		return "", packaging.PacketStatus{}, err
+	}
+	selected, err := packaging.ValidatePacket(native)
+	if err != nil || selected.Format != "plugin" || selected.Target != host || selected.ServerSHA256 != serverSHA {
+		return "", packaging.PacketStatus{}, errors.New("pilot native export unavailable")
+	}
+	switch selected.NativeMode {
+	case "native":
+		if err := packaging.ValidateNativeSelection(o, selected.NativeBindingSHA256); err != nil {
+			return "", packaging.PacketStatus{}, err
+		}
+		return native, selected, nil
+	case "mcp_only":
+		return root, base, nil
+	default:
+		return "", packaging.PacketStatus{}, errors.New("pilot native export is not qualified")
+	}
+}
 
 func readPilotFile(path string, limit int64) ([]byte, error) {
 	f, err := scheduler.OpenRegularFile(path)

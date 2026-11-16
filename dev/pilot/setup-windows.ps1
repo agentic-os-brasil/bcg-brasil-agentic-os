@@ -73,6 +73,8 @@ function Inventory {
       if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Fail 'Material gerenciado contém reparse/link; preservado.' }
       if (-not $item.PSIsContainer) {
         $relative = $item.FullName.Substring($Root.Length + 1).Replace('\','/')
+        # This one optional export has its own canonical inventory and binding check.
+        if ($relative.StartsWith('exports/code-native-qualified/', [StringComparison]::OrdinalIgnoreCase)) { continue }
         $rows += ((Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $relative)
       }
     }
@@ -135,8 +137,29 @@ param([string]$InitialPrompt)
 $ErrorActionPreference = 'Stop'
 if ($args.Count -ne 0 -or ($PSBoundParameters.ContainsKey('InitialPrompt') -and [string]::IsNullOrEmpty($InitialPrompt))) { throw 'Use zero argumentos ou um único prompt.' }
 $root = Split-Path -Parent $PSScriptRoot
-& (Join-Path $root 'exports/code/scripts/maestro-mcp.exe') inspect --packet --product-root (Join-Path $root 'exports/code') --user-home (Join-Path $root 'owner') --workspace (Join-Path $root 'workspace')
+$bin = Join-Path $root 'product/maestro-mcp.exe'
+$identity = (Get-Content -LiteralPath (Join-Path $root 'pilot-binary.sha256') -Raw).Trim()
+if ($identity -cnotmatch '^([0-9a-f]{64})  product/maestro-mcp\.exe$') { throw 'Identidade do executável inválida.' }
+$expected = $Matches[1]
+if ((Get-FileHash -LiteralPath $bin -Algorithm SHA256).Hash.ToLowerInvariant() -cne $expected) { throw 'O executável mudou; preserve a preparação.' }
+$packet = Join-Path $root 'exports/code'
+$native = Join-Path $root 'exports/code-native-qualified'
+$nativeItem = Get-Item -LiteralPath $native -Force -ErrorAction SilentlyContinue
+if ($null -ne $nativeItem) {
+  if (($nativeItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Export nativo com reparse/link; preserve o ensaio.' }
+  $inspection = & $bin inspect --packet --product-root $native --user-home (Join-Path $root 'owner') --workspace (Join-Path $root 'workspace')
+  if ($LASTEXITCODE -ne 0) { throw 'Export nativo recusado; preserve os arquivos.' }
+  $nativeStatus = ($inspection -join "`n") | ConvertFrom-Json
+  if ($nativeStatus.packet_server_sha256 -cne $expected) { throw 'O export nativo usa outro executável; preserve o ensaio.' }
+  switch ($nativeStatus.packet_mode) {
+    'native' { $packet = $native }
+    'mcp_only' { }
+    default { throw 'Export nativo não qualificado; preserve o ensaio.' }
+  }
+}
+$inspection = & $bin inspect --packet --product-root $packet --user-home (Join-Path $root 'owner') --workspace (Join-Path $root 'workspace')
 if ($LASTEXITCODE -ne 0) { throw 'Vínculo recusado; preserve os arquivos.' }
+$selected = ($inspection -join "`n") | ConvertFrom-Json
 if ($PSBoundParameters.ContainsKey('InitialPrompt')) {
   $command = Get-Command claude.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($null -eq $command -or [IO.Path]::GetExtension($command.Source) -ine '.exe') {
@@ -157,8 +180,16 @@ if ($PSBoundParameters.ContainsKey('InitialPrompt')) {
 $old = $env:CLAUDE_CONFIG_DIR
 try {
   $env:CLAUDE_CONFIG_DIR = Join-Path $root 'client/code'
+  $selectionArgs = @()
+  if ($selected.packet_mode -ceq 'native') {
+    $selection = Join-Path $env:CLAUDE_CONFIG_DIR ('native-session.' + [Guid]::NewGuid().ToString('N') + '.json')
+    $body = @{pluginConfigs=@{'maestro-product@inline'=@{options=@{user_home=(Join-Path $root 'owner');workspace=(Join-Path $root 'workspace')}}}} | ConvertTo-Json -Depth 5 -Compress
+    $stream = [IO.File]::Open($selection, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    try { $bytes = [Text.UTF8Encoding]::new($false).GetBytes($body); $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
+    $selectionArgs = @('--settings', $selection)
+  }
   Push-Location -LiteralPath (Join-Path $root 'workspace')
-  try { & $command.Source --plugin-dir (Join-Path $root 'exports/code') @promptArgs } finally { Pop-Location }
+  try { & $command.Source --plugin-dir $packet @selectionArgs @promptArgs } finally { Pop-Location }
 } finally {
   if ($null -eq $old) { Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue } else { $env:CLAUDE_CONFIG_DIR = $old }
 }
@@ -184,6 +215,15 @@ cole uma vez em uma conversa nova. O estado mostrado é a saúde da conexão, n�
 Para o ensaio completo, escolha **1 — Ensaio completo no Code** e depois
 **2 — Retomar no Desktop**. O Code recebe o prompt inicial automaticamente; no Desktop,
 cole o texto copiado. Cada etapa preserva as confirmações normais.
+
+Para testar os sete hooks nativos, primeiro use a opção 3 e conclua o login normal
+no perfil Code. Depois escolha **5 — Qualificar os sete hooks do Code**. Essa ação
+separada usa modelo e pode gerar cobrança: escolha sua estimativa por sessão,
+leia o plano completo e confirme QUALIFICAR somente se concordar. Preparar,
+abrir Code e conferir conexão não executam a qualificação. Após sucesso, o
+launcher seleciona o pacote qualificado e as duas pastas automaticamente.
+Resultado existente é preservado, sem repetição automática. Desktop continua
+como extensão MCP e não instala os sete hooks nativos do Code.
 
 No Windows, o prompt automático das opções 1 e 3 requer a instalação nativa
 claude.exe no PATH, obtida pelo fluxo normal autorizado. Com somente um shim

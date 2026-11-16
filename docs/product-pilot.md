@@ -60,8 +60,46 @@ profile. Profiles remain outside managed inventory and the generic kit ZIP.
 This bootstrap does not qualify hooks or promise ordinary active-plugin parity.
 
 Code launches a session-local plugin using a separate CLAUDE_CONFIG_DIR and the
-client's normal login flow. Generic portable packets retain external userConfig
-selection; see the [official Code manifest reference](https://code.claude.com/docs/en/plugins-reference#user-configuration).
+client's normal login flow. Ordinary preparation remains MCP-only or passive
+lifecycle context. **Testar Maestro → 5** is the separate, optional seven-hook
+qualification route. It calls the existing `native-review`, displays its full
+plan and requires an explicit per-session estimate and `QUALIFICAR` confirmation
+before `native-qualify-and-build`. Preparation, ordinary open, connection checks
+and check-only never start model qualification. The current canonical plan allows
+at most three CLI sessions, eight parent turns and 120 seconds per session, with
+an explicitly selected estimated per-session limit in `(0, 1]` USD. Provider
+estimates are not hard billing ceilings; child agents may make further requests.
+There is no canonical price recommendation or default. The participant chooses
+the estimate required to bind the reviewed plan, rather than guessing a quoted
+model price; the complete plan displays its aggregate estimate before consent.
+Admission, normal login and supported-host checks can still refuse before any
+model session. Existing results and private profiles are preserved rather than
+deleted or automatically retried.
+
+A successful result is written to `exports/code-native-qualified`. The checker
+and opener select it only after canonical packet validation, matching host target
+and server SHA, and exact admitted owner/workspace binding. A valid `mcp_only`
+fallback keeps using the ordinary `exports/code`; engineering fixtures, malformed
+exports and changed bindings refuse. The baseline managed inventory excludes only
+this named optional export, which retains its own closed canonical inventory;
+unknown files elsewhere still refuse. Repeating preparation preserves and checks
+both the original managed material and this optional result.
+
+For the qualified packet, the opener supplies exactly `user_home` and `workspace`
+through a new private session settings file under `client/code`, passed as
+`--settings` with `pluginConfigs["maestro-product@inline"].options`. It does not
+rewrite the sealed export, existing settings, credentials, permissions or hook
+configuration. Code supports this session selection through its
+[settings input](https://code.claude.com/docs/en/settings#change-a-setting-for-one-session)
+and [plugin options](https://code.claude.com/docs/en/settings-reference#pluginconfigs).
+Generic portable packets retain external userConfig selection; see the
+[official Code manifest reference](https://code.claude.com/docs/en/plugins-reference#user-configuration).
+The full plan and result are retained as private `native-*.json` diagnostics;
+share only the reviewed `RELATORIO.md`. This delivery path does not continuously
+recompute the qualification configuration fingerprint or establish active
+third-party-plugin parity. Packet qualification and actual client observation
+remain distinct gates.
+
 The prepared Desktop MCPB uses `mcpb --desktop-pilot`: an explicit engineering-only
 profile with a full workspace-ID extension name, a short visible rehearsal label
 and the exact prepared owner/workspace paths in its server argument vector. It
@@ -110,6 +148,12 @@ keeps the verified executable, test launcher and bounded diagnostic report;
 neither the preparer nor the checker repairs owner ACLs or removes partial data.
 
 The participant opens **Testar Maestro** and chooses a clearly named route.
+For the complete native Code trial, first use option 3 to open the dedicated Code
+profile and finish its normal login, then return to option 5, review the actual
+plan and consciously authorize its model checks. After qualification, the same
+ordinary Code routes select the validated seven-hook export automatically.
+Desktop continues using the separate MCP extension; it does not install Code's
+seven native hooks or claim Code subagent/skill execution parity.
 Options 3 (Code) and 4 (Desktop) are independent read-only connection checks. Code opens with its exact report prompt as one literal initial argument, without
 clipboard or manual paste. Desktop copies one prompt bound to the verified workspace
 and exact client connector;

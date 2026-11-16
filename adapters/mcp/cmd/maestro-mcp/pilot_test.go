@@ -19,8 +19,88 @@ import (
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// This exercises canonical packet selection without launching an MCP server or
+// client. A qualifier's MCP-only fallback never promotes native capabilities.
+func TestPilotCodePacketSelectionPreservesCanonicalInventory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("ordinary native owner admission runs in the Windows qualification journey")
+	}
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := product.Options{ProductRoot: filepath.Join(root, "product"), UserHome: filepath.Join(root, "owner"), WorkspacePath: filepath.Join(root, "workspace"), LookupEnv: func(string) (string, bool) { return "", false }}
+	for _, path := range []string{o.ProductRoot, o.UserHome, filepath.Join(root, "exports")} {
+		if err := os.Mkdir(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	home, err := datahome.InitializeFresh(datahome.Options{ProductRoot: o.ProductRoot, UserHome: o.UserHome, LookupEnv: o.LookupEnv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: o.WorkspacePath, DataRoot: filepath.Join(home.Home, "state")}); err != nil {
+		t.Fatal(err)
+	}
+	server, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	image, err := os.ReadFile(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverSHA := fmt.Sprintf("%x", sha256.Sum256(image))
+	host := packaging.Target{OS: runtime.GOOS, Arch: runtime.GOARCH}
+	base := filepath.Join(root, "exports", "code")
+	options := packaging.Options{Destination: base, Server: server, Version: "0.0.0", Binding: o}
+	if err := packaging.BuildPlugin(options); err != nil {
+		t.Fatal(err)
+	}
+	assertBase := func() {
+		t.Helper()
+		selected, status, err := pilotCodePacket(o, host, serverSHA)
+		if err != nil || selected != base || status.NativeMode != "mcp_only" {
+			t.Fatalf("ordinary MCP selection changed: %s %#v %v", selected, status, err)
+		}
+	}
+	assertBase()
+	if _, _, err := pilotCodePacket(o, host, strings.Repeat("0", 64)); err == nil {
+		t.Fatal("untrusted executable accepted")
+	}
+	if _, _, err := pilotCodePacket(o, packaging.Target{OS: "other", Arch: host.Arch}, serverSHA); err == nil {
+		t.Fatal("other target accepted")
+	}
+	native := filepath.Join(root, "exports", "code-native-qualified")
+	options.Destination = native
+	if err := packaging.BuildPlugin(options); err != nil {
+		t.Fatal(err)
+	}
+	assertBase()
+	extra := filepath.Join(native, "untracked")
+	writePilotFixture(t, extra, []byte("untracked"))
+	if _, _, err := pilotCodePacket(o, host, serverSHA); err == nil {
+		t.Fatal("optional export bypassed its closed inventory")
+	}
+	if err := os.Remove(extra); err != nil {
+		t.Fatal(err)
+	}
+	assertBase()
+	if err := os.Rename(native, native+".retained"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(base, native); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := pilotCodePacket(o, host, serverSHA); err == nil {
+		t.Fatal("optional export symlink accepted")
+	}
+}
 
 // Invoked inside the existing ordinary-account command admission on Windows.
 func assertPilotCheckPackets(t *testing.T) {
