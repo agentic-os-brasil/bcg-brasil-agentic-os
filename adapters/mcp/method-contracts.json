@@ -607,6 +607,8 @@
         "learn-from-logs"
       ],
       "required_operations": [
+        "history.read",
+        "history.selection",
         "owner.apply",
         "owner.propose",
         "owner.status"
@@ -621,7 +623,18 @@
         {
           "id": "domain.opt_in_prompt_history",
           "kind": "domain",
-          "required": true
+          "required": true,
+          "fulfillment_operations": [
+            "history.configure",
+            "history.delete",
+            "history.export",
+            "history.read",
+            "history.record",
+            "history.recover",
+            "history.reset",
+            "history.selection",
+            "history.status"
+          ]
         },
         {
           "id": "host.trusted_review",
