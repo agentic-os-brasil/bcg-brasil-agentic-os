@@ -13,9 +13,18 @@ done
 [[ -f "$ROOT/pilot-binary.sha256" && ! -L "$ROOT/pilot-binary.sha256" ]] || fail 'Falta a identidade do executável; preserve a preparação.'
 [[ -z "$(find "$ROOT/product" "$ROOT/launchers" "$ROOT/exports" -type l -print -quit)" ]] || fail 'Material gerenciado com link; preserve a preparação.'
 identity="$(cat "$ROOT/pilot-binary.sha256")"
-[[ "$identity" =~ ^([0-9a-f]{64})\ \ product/maestro-mcp$ ]] || fail 'Identidade do executável inválida.'
+[[ "$identity" =~ ^([0-9a-f]{64})\ \ (product/(server/)?maestro-mcp)$ ]] || fail 'Identidade do executável inválida.'
 expected="${BASH_REMATCH[1]}"
-actual="$(shasum -a 256 "$ROOT/product/maestro-mcp")"
+BIN="$ROOT/${BASH_REMATCH[2]}"
+PILOT_VERSION=0.0.0
+if [[ "$BIN" == "$ROOT/product/server/maestro-mcp" ]]; then
+  PILOT_VERSION=''
+  if [[ -f "$ROOT/product/managed/trust/engineering-runtime-pilot.json" && ! -L "$ROOT/product/managed/trust/engineering-runtime-pilot.json" ]]; then
+    PILOT_VERSION="$(/usr/bin/plutil -extract binding.client_version raw -o - "$ROOT/product/managed/trust/engineering-runtime-pilot.json")"
+    [[ "$PILOT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'Versão do runtime experimental inválida.'
+  fi
+fi
+actual="$(shasum -a 256 "$BIN")"
 [[ "${actual%% *}" == "$expected" ]] || fail 'O executável mudou; preserve a preparação.'
 if [[ -f "$ROOT/.maestro-pilot-complete" ]]; then
   [[ -f "$ROOT/managed-files.sha256" && ! -L "$ROOT/managed-files.sha256" ]] || fail 'Falta o inventário gerenciado.'
@@ -28,7 +37,7 @@ if [[ ! -e "$ROOT/diagnostics" ]]; then mkdir "$ROOT/diagnostics"; fi
 [[ -d "$ROOT/diagnostics" && "$(stat -f '%u' "$ROOT/diagnostics")" == "$(id -u)" ]] || fail 'Pasta de diagnóstico indisponível.'
 RUN="$(mktemp -d "$ROOT/diagnostics/teste-$(date +%Y%m%d-%H%M%S).XXXXXXXX")"
 status=0
-"$ROOT/product/maestro-mcp" pilot-check --product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" > "$RUN/report.json" 2>/dev/null || status=$?
+"$BIN" pilot-check --product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" > "$RUN/report.json" 2>/dev/null || status=$?
 if ! /usr/bin/plutil -extract schema_version raw -o - "$RUN/report.json" 2>/dev/null | /usr/bin/grep -qx 1; then
   printf '# Maestro MCP — diagnóstico incompleto\n\nO verificador não produziu um relatório reconhecido. Preserve esta pasta e envie este arquivo ao time. Nenhum cliente foi aberto.\n' > "$RUN/RELATORIO.md"
   printf 'Relatório: %s/RELATORIO.md\n' "$RUN"
@@ -58,9 +67,9 @@ qualify_code() {
   [[ -n "$budget" ]] || return 0
   [[ ! -L "$scratch" ]] || fail 'Scratch com link; preserve a pasta.'
   if [[ ! -e "$scratch" ]]; then mkdir -m 700 "$scratch"; fi
-  local common=(--product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" --server "$ROOT/product/maestro-mcp" --destination "$destination" --version 0.0.0 --native-executable "$code" --native-scratch-root "$scratch" --native-challenge-directory "$ROOT/workspace/native-qualification-controls" --max-budget-usd "$budget")
+  local common=(--product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" --server "$BIN" --destination "$destination" --version "$PILOT_VERSION" --native-executable "$code" --native-scratch-root "$scratch" --native-challenge-directory "$ROOT/workspace/native-qualification-controls" --max-budget-usd "$budget")
   export CLAUDE_CONFIG_DIR="$ROOT/client/code"
-  "$ROOT/product/maestro-mcp" native-review "${common[@]}" > "$RUN/native-review.json" || fail 'A revisão recusou a qualificação. Nenhum teste com modelo foi iniciado; preserve o diagnóstico privado e confira o login normal do perfil Code.'
+  "$BIN" native-review "${common[@]}" > "$RUN/native-review.json" || fail 'A revisão recusou a qualificação. Nenhum teste com modelo foi iniciado; preserve o diagnóstico privado e confira o login normal do perfil Code.'
   cat "$RUN/native-review.json"
   state="$(/usr/bin/plutil -extract plan.state raw -o - "$RUN/native-review.json")"
   [[ "$state" == reviewable ]] || fail 'O plano está indisponível. Nenhuma qualificação foi iniciada; preserve o diagnóstico privado.'
@@ -69,10 +78,10 @@ qualify_code() {
   printf '\nLi o plano completo e autorizo estes testes com modelo. Para executar, digite QUALIFICAR (qualquer outra resposta cancela): '
   read -r consent
   [[ "$consent" == QUALIFICAR ]] || return 0
-  "$ROOT/product/maestro-mcp" native-qualify-and-build "${common[@]}" --review-digest "$review_digest" --confirm > "$RUN/native-result.json" || fail 'A qualificação não terminou. Preserve os diagnósticos privados e confira o relatório antes de voltar ao ensaio MCP comum.'
+  "$BIN" native-qualify-and-build "${common[@]}" --review-digest "$review_digest" --confirm > "$RUN/native-result.json" || fail 'A qualificação não terminou. Preserve os diagnósticos privados e confira o relatório antes de voltar ao ensaio MCP comum.'
   state="$(/usr/bin/plutil -extract state raw -o - "$RUN/native-result.json")"
   [[ "$state" == qualified ]] || fail 'Os testes não qualificaram os sete hooks. O resultado foi preservado; o ensaio MCP comum continua disponível. Compartilhe somente RELATORIO.md após conferir seu conteúdo.'
-  inspection="$("$ROOT/product/maestro-mcp" inspect --packet --product-root "$destination" --user-home "$ROOT/owner" --workspace "$ROOT/workspace")" || fail 'O pacote resultante não foi admitido; preserve os diagnósticos privados.'
+  inspection="$("$BIN" inspect --packet --product-root "$destination" --user-home "$ROOT/owner" --workspace "$ROOT/workspace")" || fail 'O pacote resultante não foi admitido; preserve os diagnósticos privados.'
   [[ "$(/usr/bin/plutil -extract packet_mode raw -o - - <<< "$inspection")" == native ]] || fail 'O pacote resultante não é nativo qualificado; nenhum cliente foi aberto.'
   printf 'Qualificação concluída. O launcher verificará o pacote e abrirá o Code com os sete hooks. Os diagnósticos native-*.json são privados; não os compartilhe com o relatório.\n'
   exec "$ROOT/launchers/Abrir Code.command"

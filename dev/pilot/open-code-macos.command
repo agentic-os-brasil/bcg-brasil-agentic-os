@@ -3,9 +3,12 @@ set -euo pipefail
 umask 077
 [[ $# -eq 0 || ( $# -eq 1 && -n "$1" ) ]] || { echo 'Use zero argumentos ou um único prompt.' >&2; exit 1; }
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-(cd "$ROOT" && /usr/bin/shasum -a 256 -c pilot-binary.sha256 >/dev/null)
-expected="$(awk '{print $1}' "$ROOT/pilot-binary.sha256")"
-BIN="$ROOT/product/maestro-mcp"
+identity="$(cat "$ROOT/pilot-binary.sha256")"
+[[ "$identity" =~ ^([0-9a-f]{64})\ \ (product/(server/)?maestro-mcp)$ ]] || { echo 'Identidade do executável inválida; preserve o ensaio.' >&2; exit 1; }
+expected="${BASH_REMATCH[1]}"
+BIN="$ROOT/${BASH_REMATCH[2]}"
+actual_binary="$(/usr/bin/shasum -a 256 "$BIN")"
+[[ "${actual_binary%% *}" == "$expected" ]] || { echo 'O executável mudou; preserve o ensaio.' >&2; exit 1; }
 PACKET="$ROOT/exports/code"
 if [[ -e "$ROOT/exports/code-native-qualified" || -L "$ROOT/exports/code-native-qualified" ]]; then
   inspection="$("$BIN" inspect --packet --product-root "$ROOT/exports/code-native-qualified" --user-home "$ROOT/owner" --workspace "$ROOT/workspace")"

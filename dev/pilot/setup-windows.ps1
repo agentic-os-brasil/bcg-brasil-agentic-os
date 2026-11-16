@@ -34,6 +34,9 @@ function Verify-Kit {
 }
 Verify-Kit
 $ReviewedKitID = $KitID
+if (Test-Path -LiteralPath (Join-Path $Kit 'RUNTIME.json')) {
+  Fail 'Este piloto completo contém o runtime Mac Apple Silicon. O runtime Windows continua aguardando qualificação nativa e autoridade de redistribuição; nenhum ensaio foi criado.'
+}
 $dev = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE 'Developer'))
 if (-not (Test-Path -LiteralPath $dev -PathType Container)) { Fail 'Crie uma pasta local Developer no seu perfil antes de preparar.' }
 if (-not $Root) { $Root = Join-Path $dev ('MaestroPilot-' + $KitID.Substring(0,12)) }

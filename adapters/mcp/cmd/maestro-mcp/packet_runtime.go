@@ -39,8 +39,15 @@ func runtimePacketRoot(root string, pin processidentity.Identity) (string, packa
 	if err != nil {
 		return "", status, err
 	}
-	if status.Format != "mcpb" || status.Version != "0.0.0" || status.DesktopPilot == nil || status.Stable != nil || status.RegistrySHA256 != "" || status.NativeMode != "mcp_only" {
+	if status.Format != "mcpb" || status.DesktopPilot == nil || status.Stable != nil || status.NativeMode != "mcp_only" {
 		return "", status, errors.New("local Desktop packet alias unavailable")
+	}
+	if status.DesktopPilot.Runtime == nil {
+		if status.Version != "0.0.0" || status.RegistrySHA256 != "" {
+			return "", status, errors.New("local Desktop packet alias unavailable")
+		}
+	} else if err := packaging.ValidateEngineeringPacketSelection(physical, status, pin.Path, pin.SHA256, Version, AuthorityRegistrySHA256); err != nil {
+		return "", status, err
 	}
 	server := filepath.Join(physical, "server", "maestro-mcp")
 	if status.Target.OS == "windows" {

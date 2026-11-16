@@ -118,10 +118,15 @@ func run() error {
 	}
 	var hookEvent, nativeBinding string
 	var proposalID, reviewDigest, track string
-	var confirmed, packet, lifecycleContext, desktopPilot bool
+	var confirmed, packet, lifecycleContext, desktopPilot, engineeringRuntimePilot bool
+	var runtimeRelease string
 	var selectedPacket packaging.PacketStatus
 	if os.Args[1] == "mcpb" {
 		flags.BoolVar(&desktopPilot, "desktop-pilot", false, "isolate this local engineering rehearsal and bind its exact prepared Desktop paths")
+		flags.BoolVar(&engineeringRuntimePilot, "engineering-runtime-pilot", false, "explicitly carry the prepared short-lived engineering converter identity")
+	}
+	if os.Args[1] == "pilot-runtime-review" || os.Args[1] == "pilot-runtime-apply" {
+		flags.StringVar(&runtimeRelease, "release-directory", "", "exact complete signed engineering release")
 	}
 	if os.Args[1] == "plugin" {
 		flags.BoolVar(&lifecycleContext, "lifecycle-context", false, "include explicitly selected passive lifecycle context hooks")
@@ -163,11 +168,11 @@ func run() error {
 		flags.StringVar(&proposalID, "proposal-id", "", "exact owner proposal ID")
 	}
 	switch os.Args[1] {
-	case "owner-apply", "owner-confirm-onboarding", "memory-apply", "knowledge-apply", "maintenance-apply", "native-qualify-and-build":
+	case "owner-apply", "owner-confirm-onboarding", "memory-apply", "knowledge-apply", "maintenance-apply", "native-qualify-and-build", "pilot-runtime-apply":
 		flags.StringVar(&reviewDigest, "review-digest", "", "exact SHA-256 digest from the full local review")
 	}
 	switch os.Args[1] {
-	case "owner-apply", "owner-confirm-onboarding", "owner-track", "memory-apply", "knowledge-apply", "maintenance-apply", "native-qualify-and-build":
+	case "owner-apply", "owner-confirm-onboarding", "owner-track", "memory-apply", "knowledge-apply", "maintenance-apply", "native-qualify-and-build", "pilot-runtime-apply":
 		flags.BoolVar(&confirmed, "confirm", false, "local operator confirms the reviewed operation")
 	}
 	if os.Args[1] == "owner-track" {
@@ -176,6 +181,7 @@ func run() error {
 	if err := flags.Parse(os.Args[2:]); err != nil {
 		return err
 	}
+	authoritySeeded := false
 	if packet {
 		switch os.Args[1] {
 		case "init", "serve", "inspect", "hook", "lifecycle-hook", "native-startup-check", "native-qualification-hook", "native-scope-guard":
@@ -185,6 +191,13 @@ func run() error {
 			}
 			o.ProductRoot = root
 			selectedPacket = status
+			if status.DesktopPilot != nil && status.DesktopPilot.Runtime != nil {
+				if err := packaging.ValidateEngineeringPacketSelection(root, status, running.Path, running.SHA256, Version, AuthorityRegistrySHA256); err != nil {
+					return err
+				}
+				seedDoclingAuthority(&o)
+				authoritySeeded = true
+			}
 			if status.NativeMode == "native" {
 				if err := packaging.ValidateNativeSelection(o, status.NativeBindingSHA256); err != nil {
 					return err
@@ -199,7 +212,9 @@ func run() error {
 			return errors.New("packet validation is available only for init, serve, inspect and hook")
 		}
 	}
-	seedDoclingAuthority(&o)
+	if !authoritySeeded {
+		seedDoclingAuthority(&o)
+	}
 	o.GuardProcess = Version != ""
 	if flags.NArg() != 0 {
 		return errors.New("unexpected_arguments")
@@ -209,6 +224,23 @@ func run() error {
 		carrier = &packaging.StableCarrier{Profile: carrierProfile, Protocol: installer.StableClientProtocol, ID: carrierID, Version: carrierVersion}
 	}
 	switch os.Args[1] {
+	case "pilot-runtime-review", "pilot-runtime-apply":
+		if packet || server != "" || destination != "" || version != "" || carrier != nil || runtimeRelease == "" {
+			return errors.New("exact local engineering runtime arguments required")
+		}
+		var value any
+		var err error
+		if os.Args[1] == "pilot-runtime-review" {
+			value, err = packaging.ReviewEngineeringRuntime(o, running.Path, runtimeRelease)
+		} else {
+			value, err = packaging.ApplyEngineeringRuntime(context.Background(), o, running.Path, runtimeRelease, reviewDigest, confirmed)
+		}
+		if err != nil {
+			return err
+		}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(value)
 	case "packet-verify":
 		if carrier == nil || destination == "" || server != "" || version != "" || o.ProductRoot != "" || o.UserHome != "" || o.WorkspacePath != "" {
 			return errors.New("exact read-only packet verification arguments required")
@@ -272,7 +304,7 @@ func run() error {
 	case "plugin":
 		return packaging.BuildPlugin(packaging.Options{Destination: destination, Server: server, Version: version, Binding: o, Carrier: carrier, LifecycleContext: lifecycleContext})
 	case "mcpb":
-		return packaging.BuildExtension(packaging.Options{Destination: destination, Server: server, Version: version, Binding: o, Carrier: carrier, DesktopPilot: desktopPilot})
+		return packaging.BuildExtension(packaging.Options{Destination: destination, Server: server, Version: version, Binding: o, Carrier: carrier, DesktopPilot: desktopPilot, EngineeringRuntimePilot: engineeringRuntimePilot})
 	case "inspect":
 		h, err := datahome.Resolve(datahome.Options{ProductRoot: o.ProductRoot, UserHome: o.UserHome})
 		diagnostic := h.Diagnostic

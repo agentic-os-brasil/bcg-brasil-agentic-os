@@ -34,19 +34,20 @@ type pilotCheck struct {
 
 // This is shareable diagnostic metadata, never a dump of context, logs or paths.
 type pilotReport struct {
-	SchemaVersion      int              `json:"schema_version"`
-	Status             string           `json:"status"`
-	Checks             []pilotCheck     `json:"checks"`
-	WorkspaceID        string           `json:"workspace_id"`
-	KitID              string           `json:"kit_id"`
-	ReferenceHost      packaging.Target `json:"reference_host"`
-	Target             packaging.Target `json:"target"`
-	Markdown           string           `json:"markdown"`
-	CodePrompt         string           `json:"code_prompt"`
-	CodeReadyPrompt    string           `json:"code_ready_prompt"`
-	DesktopPrompt      string           `json:"desktop_prompt"`
-	DesktopReadyPrompt string           `json:"desktop_ready_prompt"`
-	DesktopExtension   string           `json:"desktop_extension,omitempty"`
+	SchemaVersion      int                                  `json:"schema_version"`
+	Status             string                               `json:"status"`
+	Checks             []pilotCheck                         `json:"checks"`
+	WorkspaceID        string                               `json:"workspace_id"`
+	KitID              string                               `json:"kit_id"`
+	ReferenceHost      packaging.Target                     `json:"reference_host"`
+	Target             packaging.Target                     `json:"target"`
+	Markdown           string                               `json:"markdown"`
+	CodePrompt         string                               `json:"code_prompt"`
+	CodeReadyPrompt    string                               `json:"code_ready_prompt"`
+	DesktopPrompt      string                               `json:"desktop_prompt"`
+	DesktopReadyPrompt string                               `json:"desktop_ready_prompt"`
+	DesktopExtension   string                               `json:"desktop_extension,omitempty"`
+	Runtime            *packaging.EngineeringRuntimeBinding `json:"runtime,omitempty"`
 }
 
 func (r *pilotReport) add(name, status, reason, action string) {
@@ -141,6 +142,22 @@ func runPilotCheck(ctx context.Context, args []string, output io.Writer) error {
 		} else {
 			r.DesktopExtension = pilot.DisplayName()
 			r.add("desktop_binding", "passed", "isolated_desktop_binding_matches_preparation", "")
+		}
+		if experiment := pilot.Runtime; experiment != nil {
+			expectedServer := filepath.Join(o.ProductRoot, "server", "maestro-mcp")
+			if runtime.GOOS == "windows" {
+				expectedServer += ".exe"
+			}
+			if !codeOK || !bindingOK || !preparedOK || running.Path != expectedServer || running.SHA256 != experiment.ServerSHA256 || Version != experiment.ClientVersion || AuthorityRegistrySHA256 != experiment.RegistrySHA256 {
+				r.add("document_runtime", "failed", "engineering_runtime_image_or_binding_mismatch", "Preserve o ensaio e solicite um kit experimental novo; não altere os caminhos ou as permissões.")
+			} else {
+				seedDoclingAuthority(&o)
+				if err := experiment.ValidateSelection(o); err != nil {
+					r.add("document_runtime", "failed", "engineering_runtime_expired_or_changed", "Preserve seus dados e solicite um kit experimental novo; a verificação não repara nem amplia a validade.")
+				} else {
+					r.Runtime = experiment
+				}
+			}
 		}
 	}
 	if _, err := exec.LookPath("claude"); err == nil {
@@ -274,6 +291,17 @@ func probePilotPacket(ctx context.Context, root string, o product.Options, id st
 	}
 	r.WorkspaceID = id
 	r.add("mcp_connection", "passed", "actual_packet_sdk_context_verified", "")
+	if r.Runtime != nil {
+		var availability struct {
+			State string `json:"state"`
+			Pack  string `json:"pack_sha256"`
+		}
+		if err := pilotCall(ctx, session, "maestro_query", map[string]any{"operation": "content.status"}, &availability); err != nil || availability.State != "ready" || availability.Pack != r.Runtime.PackSHA256 {
+			r.add("document_runtime", "failed", "actual_engineering_converter_unavailable", "Preserve o ensaio e compartilhe o relatório; nenhuma instalação ou requalificação foi executada.")
+		} else {
+			r.add("document_runtime", "passed", "actual_packet_converter_verified_no_conversion_performed", "Consulte content.status para os formatos disponíveis; este diagnóstico não é um teste de conversão ou de cliente.")
+		}
+	}
 	tools := map[string]bool{}
 	toolParams := &mcp.ListToolsParams{}
 	seen := map[string]bool{}
@@ -414,6 +442,11 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 			r.DesktopReadyPrompt = fmt.Sprintf("Use somente a extensão %q deste ensaio, vinculada às pastas aprovadas na preparação. Identifique com segurança o servidor MCP dessa extensão; não escolha outra extensão ou conector de nome semelhante. Chame maestro_context uma única vez, sem parâmetros. Confirme workspace_id exatamente %s e state ready. Mostre somente o workspace_id e o estado de saúde da conexão retornados e encerre após essa leitura. O estado dos trabalhos não foi consultado. Se essa extensão estiver ausente, ambígua ou recusada, se não conseguir identificar seu conector, se houver erro ou se os valores divergirem, pare e explique. Esta conferência autoriza somente essa leitura de contexto.", r.DesktopExtension, r.WorkspaceID)
 			r.DesktopPrompt = fmt.Sprintf("Use a extensão %q deste ensaio, vinculada às pastas aprovadas na preparação. ", r.DesktopExtension) + r.DesktopPrompt
 		}
+		if r.Runtime != nil {
+			documents := fmt.Sprintf(" Depois da jornada acima, teste também o conversor local deste ensaio. Reconfirme o mesmo workspace com maestro_context e consulte content.status. Continue somente com state ready e pack_sha256 exatamente %s; divergência ou indisponibilidade encerra esta parte sem instalar ou reparar nada. Converta apenas o arquivo sintético maestro-pilot.docx, já preparado no workspace, por maestro_apply content.convert. Leia o artifact_ref realmente retornado usando content.read nos formatos markdown e document, em páginas de até 4096 bytes e seguindo a paginação real. Verifique o marcador MAESTRO_DOCLING_OFFLINE_20261101 e a tabela sintética com alpha/7 e beta/11. Mostre a rota, o artefato e o resultado observado. Essa parte autoriza conversão e leitura de artefatos derivados; não altera o estado do trabalho, não captura memória, não salva conhecimento nem usa conversor externo. Registre o que faltou em vez de inferir sucesso da presença do pacote.", r.Runtime.PackSHA256)
+			r.CodePrompt += documents
+			r.DesktopPrompt += documents
+		}
 	}
 	var md strings.Builder
 	fmt.Fprintf(&md, "# Maestro MCP — diagnóstico do ensaio\n\nStatus: **%s**.\n\n", r.Status)
@@ -431,6 +464,9 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 	}
 	if r.DesktopExtension != "" {
 		fmt.Fprintf(&md, "Extensão Desktop deste ensaio: **%s**. Confirme sua instalação; ela já está vinculada às pastas aprovadas na preparação.\n\n", r.DesktopExtension)
+	}
+	if r.Runtime != nil {
+		fmt.Fprintf(&md, "Runtime experimental: versão `%s`, alvo `%s/%s`, expiração `%s`. Identidade do pack: `%s`. A conferência apenas verificou sua disponibilidade; a conversão real fica na jornada guiada com o DOCX sintético. A chave experimental não é assinatura organizacional nem atualização de produção.\n\n", r.Runtime.ClientVersion, r.Runtime.Target.OS, r.Runtime.Target.Arch, r.Runtime.ExpiresAt, r.Runtime.PackSHA256)
 	}
 	md.WriteString("| Verificação | Estado | Motivo | Próxima ação |\n| --- | --- | --- | --- |\n")
 	for _, check := range r.Checks {

@@ -79,6 +79,9 @@ func portableMetadata(format, platform, version string, stable *stablePacketBind
 				config["args"] = append(config["args"].([]string), "--owner-review-channel", "local-browser")
 				manifest["description"] = "Local engineering rehearsal; protected changes require exact owner review in a temporary local browser page when native forms are unavailable."
 			}
+			if pilot.Runtime != nil {
+				manifest["description"] = "Explicit short-lived engineering runtime pilot; verified local converter, fixed workspace and exact owner review. Organizational signing and production updates are separate."
+			}
 
 		}
 		body, err := json.MarshalIndent(manifest, "", "  ")
@@ -95,6 +98,9 @@ func portableMetadata(format, platform, version string, stable *stablePacketBind
 	}
 	if pilot != nil && pilot.OwnerReviewChannel == "local-browser" {
 		files["README-PACKET.md"] = append(files["README-PACKET.md"], []byte("\nOwner review channel: local-browser (explicit local operator selection). When the client has no native form, a foreground protected request opens the complete exact review in your browser on this computer. Read it, select the unchecked exact-record checkbox, then Approve or Decline. Closing, expiry (150 seconds), cancellation or opener failure does not approve. Native forms stay first when advertised. Tool permission and chat yes never approve a record. No service is installed; this channel does not qualify native forms, lifecycle hooks or enforcement.\n")...)
+	}
+	if pilot != nil && pilot.Runtime != nil {
+		files["README-PACKET.md"] = append(files["README-PACKET.md"], []byte("\nEngineering runtime: explicitly selected short-lived experimental issuer, independently pinned public registry and exact signed converter identity. The prepared private runtime remains outside this extension and startup never installs or repairs it. Check content.status for actual supported formats; upstream package presence is not format support. Expiry requires a newly reviewed engineering kit. This profile grants no organizational publisher authority, production enrollment/update or native Code hook qualification.\n")...)
 	}
 	if lifecycle != nil && stable == nil {
 		if err := lifecycleLocalMetadata(files, platform, lifecycle); err != nil {
