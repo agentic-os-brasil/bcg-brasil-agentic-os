@@ -81,6 +81,9 @@ func (r *Runtime) Convert(ctx context.Context, source ingest.Request, workspaceI
 	if reason != "" {
 		return fail(ingest.StatusUnavailable, reason)
 	}
+	if (extension == ".pdf" || extension == ".pptx") && pack.target.profile != DocumentsProfile {
+		return fail(ingest.StatusUnavailable, "format_profile_unavailable")
+	}
 	work, snapshot, err := prepareExecution(r.options.DataRoot, pack)
 	if err != nil {
 		if errors.Is(err, errExecutionSnapshot) {
@@ -128,6 +131,9 @@ func (r *Runtime) Convert(ctx context.Context, source ingest.Request, workspaceI
 		}
 		return fail(ingest.StatusUnavailable, "offline_conversion_failed")
 	}
+	if extension == ".pdf" && (response.Refusal == "pdf_native_text_unavailable" || response.Refusal == "pdf_protected_unavailable") && len(response.Markdown) == 0 && len(response.Document) == 0 {
+		return fail(ingest.StatusUnavailable, response.Refusal)
+	}
 	if response.Refusal == "output_limit" && len(response.Markdown) == 0 && len(response.Document) == 0 {
 		return fail(ingest.StatusDegraded, "output_limit")
 	}
@@ -164,6 +170,11 @@ func (r *Runtime) Convert(ctx context.Context, source ingest.Request, workspaceI
 	}
 	for _, warning := range response.Warnings {
 		switch warning {
+		case "pdf_native_text_only":
+			if extension != ".pdf" {
+				return fail(ingest.StatusDegraded, "converter_output_invalid")
+			}
+			result.Result.Warnings = append(result.Result.Warnings, warning)
 		case "xls_cached_values_only", "xlsx_cached_values_only":
 			result.Result.Warnings = append(result.Result.Warnings, warning)
 		default:
@@ -173,7 +184,7 @@ func (r *Runtime) Convert(ctx context.Context, source ingest.Request, workspaceI
 	result.Result.OutputBytes = int64(len(response.Markdown) + len(response.Document))
 	result.Markdown = response.Markdown
 	result.Document = response.Document
-	result.Provenance = Provenance{PackSHA256: pack.sha, ManifestSHA256: pack.manifestSHA, MarkdownSHA256: digest(response.Markdown), DocumentSHA256: digest(response.Document), LockSHA256: targetLockSHA(), Python: PythonVersion, Docling: DoclingVersion, NetworkDenied: true}
+	result.Provenance = Provenance{PackSHA256: pack.sha, ManifestSHA256: pack.manifestSHA, MarkdownSHA256: digest(response.Markdown), DocumentSHA256: digest(response.Document), LockSHA256: pack.target.lockSHA, Python: PythonVersion, Docling: DoclingVersion, NetworkDenied: true}
 	return result, nil
 }
 

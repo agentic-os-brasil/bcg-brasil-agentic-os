@@ -20,7 +20,8 @@ var windowsBridge []byte
 
 type targetInputs struct {
 	os, arch, pythonArchive, pythonSHA, lockSHA string
-	inputs, lock, bridge                        []byte
+	inputs, lock, bridge, notices               []byte
+	profile                                     string
 	count                                       int
 }
 
@@ -33,9 +34,9 @@ func SupportsTarget(goos, goarch string) bool {
 func inputsForTarget(goos, goarch string) (targetInputs, error) {
 	switch {
 	case goos == "darwin" && goarch == "arm64":
-		return targetInputs{goos, goarch, PythonArchive, PythonArchiveSHA256, LockSHA256, lockedInputs, rawLock, bridge, 51}, nil
+		return targetInputs{goos, goarch, PythonArchive, PythonArchiveSHA256, LockSHA256, lockedInputs, rawLock, bridge, parserLicenses, LegacyProfile, 51}, nil
 	case goos == "windows" && goarch == "amd64":
-		return targetInputs{goos, goarch, WindowsPythonArchive, WindowsPythonArchiveSHA256, WindowsLockSHA256, windowsInputs, windowsLock, windowsBridge, 52}, nil
+		return targetInputs{goos, goarch, WindowsPythonArchive, WindowsPythonArchiveSHA256, WindowsLockSHA256, windowsInputs, windowsLock, windowsBridge, parserLicenses, LegacyProfile, 52}, nil
 	default:
 		return targetInputs{}, errors.New("platform_unavailable")
 	}

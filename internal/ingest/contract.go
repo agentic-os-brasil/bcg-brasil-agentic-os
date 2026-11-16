@@ -49,7 +49,7 @@ func DefaultPolicy() Policy {
 		MaxInputBytes:  50 << 20,
 		MaxOutputBytes: 100 << 20,
 		AllowedExts: map[string]bool{
-			".csv": true, ".docx": true, ".epub": true, ".html": true,
+			".csv": true, ".docx": true, ".pdf": true, ".pptx": true, ".epub": true, ".html": true,
 			".htm": true, ".json": true, ".md": true, ".txt": true,
 			".xls": true, ".xlsx": true, ".xml": true,
 		},

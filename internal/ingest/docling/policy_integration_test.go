@@ -70,7 +70,11 @@ func policyFixtureRuntime(t *testing.T) (*docling.Runtime, string, string, strin
 	if err := os.MkdirAll(filepath.Dir(base), 0700); err != nil {
 		t.Fatal(err)
 	}
-	assembled, err := docling.Assemble(inputs, base)
+	profile := os.Getenv("MAESTRO_POLICY_TEST_PROFILE")
+	if profile == "" {
+		profile = docling.LegacyProfile
+	}
+	assembled, err := docling.AssembleProfile(inputs, base, "darwin", "arm64", profile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +83,12 @@ func policyFixtureRuntime(t *testing.T) (*docling.Runtime, string, string, strin
 	if err != nil {
 		t.Fatal(err)
 	}
-	registry, _ := json.Marshal(map[string]any{"schema_version": 1, "product": "maestro", "authorities": []any{map[string]any{"issuer": "engineering-fixture", "key_id": "ephemeral", "algorithm": "ed25519", "public_key": base64.StdEncoding.EncodeToString(public), "status": "active", "valid_from": "2020-01-01T00:00:00Z", "valid_until": "2100-01-01T00:00:00Z"}}})
+	validFrom, validUntil := "2020-01-01T00:00:00Z", "2100-01-01T00:00:00Z"
+	if profile == docling.DocumentsProfile {
+		validFrom = time.Now().UTC().Add(-time.Minute).Format(time.RFC3339)
+		validUntil = time.Now().UTC().Add(14 * 24 * time.Hour).Format(time.RFC3339)
+	}
+	registry, _ := json.Marshal(map[string]any{"schema_version": 1, "product": "maestro", "authorities": []any{map[string]any{"issuer": "engineering-fixture", "key_id": "ephemeral", "algorithm": "ed25519", "public_key": base64.StdEncoding.EncodeToString(public), "status": "active", "valid_from": validFrom, "valid_until": validUntil}}})
 	registryPath := filepath.Join(root, "authority.json")
 	put(t, registryPath, registry)
 	manifest := releasecontract.Manifest{SchemaVersion: 1, Product: "maestro", Release: "0.1.0", Channel: "canary", Issuer: releasecontract.Issuer{ID: "engineering-fixture", KeyID: "ephemeral"}, CLI: releasecontract.CLIComponent{Version: "0.1.0", CompatibleBundle: ">=0.1.0 <0.2.0"}, Bundle: releasecontract.BundleComponent{Version: "0.1.0", CompatibleCLI: ">=0.1.0 <0.2.0"}, Migrations: []releasecontract.Migration{}, ReleaseNotes: releasecontract.ReleaseNotes{Name: "notes-0.1.0.md", SHA256: sum([]byte("engineering only"))}, Artifacts: []releasecontract.Artifact{{Kind: "bundle", OS: "any", Arch: "any", Name: "bundle-0.1.0.tar.gz", Size: 1, SHA256: sum([]byte("b")), SignatureRef: "bundle-0.1.0.tar.gz.sig"}, {Kind: "runtime_pack", OS: "darwin", Arch: "arm64", Name: filepath.Base(assembled.ArchivePath), Size: int64(len(archive)), SHA256: assembled.ArchiveSHA256, SignatureRef: filepath.Base(assembled.ArchivePath) + ".sig"}}}
@@ -88,7 +97,11 @@ func policyFixtureRuntime(t *testing.T) (*docling.Runtime, string, string, strin
 	put(t, filepath.Join(base, "release-manifest.json.sig"), ed25519.Sign(private, body))
 	put(t, assembled.ArchivePath+".sig", ed25519.Sign(private, archive))
 	r := docling.New(docling.Options{DataRoot: data, AuthorityRegistryPath: registryPath, AuthorityRegistrySHA256: sum(registry), CLIVersion: "0.1.0"})
-	identity, _ := json.Marshal(map[string]any{"assembly": assembled, "registry_sha256": sum(registry), "manifest_sha256": sum(body), "lock_sha256": docling.LockSHA256, "engineering_only": true})
+	descriptor, err := docling.DescribeProfile("darwin", "arm64", profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, _ := json.Marshal(map[string]any{"assembly": assembled, "registry_sha256": sum(registry), "manifest_sha256": sum(body), "lock_sha256": descriptor.LockSHA256, "profile": profile, "engineering_only": true})
 	put(t, filepath.Join(root, "runtime-identity.json"), identity)
 	t.Logf("authenticated policy fixture files=%d expanded=%d archive=%s registry=%s", assembled.Files, assembled.ExpandedBytes, assembled.ArchiveSHA256, sum(registry))
 	return r, root, space, w.WorkspaceID
