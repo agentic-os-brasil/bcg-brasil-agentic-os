@@ -1561,3 +1561,14 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: Ordinary prepare/open/check-only remains free of model qualification. A canonical MCP-only failure result preserves the baseline route without claiming native capability; malformed or mismatched optional material refuses. Existing results are preserved rather than retried or replaced. Desktop continues its independent MCP extension flow. Source/offline evidence, packet qualification and actual client delivery remain separate; this does not continuously revalidate runtime configuration or qualify active third-party plugins.
 - Refs: specs/063-product-native-plugin.md; docs/product-pilot.md; adapters/mcp/cmd/maestro-mcp/pilot.go; dev/pilot/test-macos.command; dev/pilot/test-windows.ps1; https://code.claude.com/docs/en/settings#change-a-setting-for-one-session; https://code.claude.com/docs/en/settings-reference#pluginconfigs
 - Supersedes: none
+
+## WDOC - Target-specific offline Windows Docling confinement
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: repository maintainers
+- Context: The real offline Docling producer and authenticated runtime only admit Apple Silicon macOS, leaving the Windows product without its canonical converter.
+- Decision: Preserve the existing Darwin closure byte-for-byte and add a separate immutable CPython 3.12 Windows amd64 interpreter/wheel closure. Execute only an authenticated per-conversion copy under an ordinary-user, unique zero-capability AppContainer with snapshot-only read/execute access, bounded writable scratch, stdio-only inherited handles, prohibited child creation and a timeout-controlled kill-on-close Job. Original documents and installed pack ACLs remain unchanged. AppContainer profile creation/removal is a disclosed per-conversion Windows-local effect; no service, firewall, global ACL, model or ambient Python dependency is introduced.
+- Consequences: Source construction, cross-compilation and verified acquisition do not qualify native execution. Real ordinary-user Windows kernel denial controls and real Docling conversion must pass before native qualification or broader readiness claims; organization-owned production signing and modern signed release admission remain separate gates. Unsupported architectures and failed confinement refuse.
+- Refs: specs/010-local-ingestion-runtime.md; internal/ingest/docling; https://learn.microsoft.com/en-us/windows/win32/secauthz/implementing-an-appcontainer; https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute
+- Supersedes: none

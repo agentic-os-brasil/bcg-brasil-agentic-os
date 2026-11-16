@@ -12,7 +12,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -57,10 +56,10 @@ func readOpenedFile(f *os.File, maximum int64) ([]byte, os.FileInfo, error) {
 	}
 	// Unsupported link inspection cannot establish safe source bytes. Preserve
 	// the opened identity for the caller's scope check without reading content.
-	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
+	if !fileReadSupported() {
 		return nil, before, errFileReadUnavailable
 	}
-	if !singleLink(before) {
+	if !singleLink(f, before) {
 		return nil, nil, errors.New("file_not_bounded_single_link")
 	}
 	body, err := io.ReadAll(io.LimitReader(f, maximum+1))
@@ -71,7 +70,7 @@ func readOpenedFile(f *os.File, maximum int64) ([]byte, os.FileInfo, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	if !os.SameFile(before, after) || !after.Mode().IsRegular() || int64(len(body)) > maximum || before.Size() != int64(len(body)) || after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime()) || !singleLink(after) {
+	if !os.SameFile(before, after) || !after.Mode().IsRegular() || int64(len(body)) > maximum || before.Size() != int64(len(body)) || after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime()) || !singleLink(f, after) {
 		return nil, nil, errors.New("file_changed")
 	}
 	return body, after, nil

@@ -155,6 +155,9 @@ func PlaceVerified(ctx context.Context, o Options, release releaseverify.Verifie
 			return err
 		}
 	}
+	if err = qualifyPlaced(ctx, o); err != nil {
+		return err
+	}
 	availability := New(o).Status(ctx)
 	if availability.State != "ready" {
 		return fmt.Errorf("placed converter unavailable: %s", availability.Reason)

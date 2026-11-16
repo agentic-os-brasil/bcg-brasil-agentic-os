@@ -85,22 +85,32 @@ type Assembly struct {
 // them. Destination must be new; the result is unsigned until the existing
 // release authority signs its archive and release manifest.
 func Assemble(inputDirectory, destination string) (Assembly, error) {
+	return AssembleTarget(inputDirectory, destination, "darwin", "arm64")
+}
+
+// AssembleTarget constructs only an authenticated, target-specific unsigned pack.
+// It never executes the interpreter, and does not establish native qualification.
+func AssembleTarget(inputDirectory, destination, goos, goarch string) (Assembly, error) {
 	var result Assembly
+	target, err := inputsForTarget(goos, goarch)
+	if err != nil {
+		return result, err
+	}
 	if err := scheduler.ValidateDirectory(inputDirectory); err != nil {
 		return result, err
 	}
 	inputs := []Input{}
-	if err := decode(lockedInputs, &inputs); err != nil {
+	if err := decode(target.inputs, &inputs); err != nil {
 		return result, err
 	}
-	if len(inputs) != 51 || digest(rawLock) != LockSHA256 {
+	if len(inputs) != target.count || digest(target.lock) != target.lockSHA {
 		return result, errors.New("embedded_lock_invalid")
 	}
-	python, _, err := readFile(filepath.Join(inputDirectory, PythonArchive), maximumArchiveBytes)
+	python, _, err := readFile(filepath.Join(inputDirectory, target.pythonArchive), maximumArchiveBytes)
 	if err != nil {
 		return result, err
 	}
-	if digest(python) != PythonArchiveSHA256 {
+	if digest(python) != target.pythonSHA {
 		return result, errors.New("python_archive_digest")
 	}
 	// Authenticate all raw wheels before extracting any of them.
@@ -168,11 +178,14 @@ func Assemble(inputDirectory, destination string) (Assembly, error) {
 			}
 		}
 	}
-	entries["bridge.py"] = entry{bridge, 0444}
-	entries["pylock.toml"] = entry{rawLock, 0444}
-	entries["inputs.json"] = entry{lockedInputs, 0444}
+	if err := addNativeClosure(target, entries); err != nil {
+		return result, err
+	}
+	entries["bridge.py"] = entry{target.bridge, 0444}
+	entries["pylock.toml"] = entry{target.lock, 0444}
+	entries["inputs.json"] = entry{target.inputs, 0444}
 	entries["parser-licenses.json"] = entry{parserLicenses, 0444}
-	manifest := packManifest{SchemaVersion: 1, Adapter: "docling", Version: DoclingVersion, OS: "darwin", Arch: "arm64", CompatibleCLI: ">=0.1.0 <0.2.0", Python: PythonVersion, PythonArchiveSHA256: PythonArchiveSHA256, LockSHA256: LockSHA256, Models: []string{}, Inputs: inputs, Files: []inventoryFile{}}
+	manifest := packManifest{SchemaVersion: 1, Adapter: "docling", Version: DoclingVersion, OS: target.os, Arch: target.arch, CompatibleCLI: ">=0.1.0 <0.2.0", Python: PythonVersion, PythonArchiveSHA256: target.pythonSHA, LockSHA256: target.lockSHA, Models: []string{}, Inputs: inputs, Files: []inventoryFile{}}
 	names := entryNames(entries)
 	for _, name := range names {
 		e := entries[name]
@@ -215,7 +228,7 @@ func Assemble(inputDirectory, destination string) (Assembly, error) {
 		return result, err
 	}
 	result.ArchiveSHA256 = digest(compressed.Bytes())
-	result.ArchivePath = filepath.Join(destination, "docling-runtime-"+DoclingVersion+"-darwin-arm64.tar.gz")
+	result.ArchivePath = filepath.Join(destination, "docling-runtime-"+DoclingVersion+"-"+target.os+"-"+target.arch+".tar.gz")
 	if err := writeExclusive(result.ArchivePath, compressed.Bytes(), 0444); err != nil {
 		return result, err
 	}
