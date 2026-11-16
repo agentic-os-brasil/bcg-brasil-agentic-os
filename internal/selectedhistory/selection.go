@@ -88,6 +88,7 @@ func Prepare(manifest Manifest) (Plan, error) {
 		allowed[path] = true
 	}
 	seen := map[string]bool{}
+	physicalSeen := map[string]bool{}
 	for _, source := range manifest.Sources {
 		if !allowed[source.Workspace] || (source.Kind != "claude_code" && source.Kind != "claude_export") || canonicalDirectory(source.Root) != nil || len(source.Sessions) < 1 {
 			return p, ErrSelection
@@ -115,12 +116,16 @@ func Prepare(manifest Manifest) (Plan, error) {
 				return p, ErrSelection
 			}
 			info, statErr := f.Stat()
-			stamp, identityErr := fileIdentity(f)
+			physical, stamp, identityErr := fileIdentity(f)
 			linkErr := scheduler.ValidateSingleLink(f)
 			closeErr := f.Close()
 			if statErr != nil || identityErr != nil || linkErr != nil || closeErr != nil || info.Size() > MaxFileBytes {
 				return p, ErrSelection
 			}
+			if physicalSeen[physical] {
+				return p, ErrSelection
+			}
+			physicalSeen[physical] = true
 			p.Count++
 			p.Bytes += info.Size()
 			if p.Count > 20 || p.Bytes > MaxTotalBytes {
@@ -155,13 +160,13 @@ func Read(plan Plan, expected string, start, limit int) (Batch, error) {
 			if e != nil {
 				return Batch{}, ErrSelection
 			}
-			before, e := fileIdentity(f)
+			_, before, e := fileIdentity(f)
 			if e != nil || before != session.Identity || scheduler.ValidateSingleLink(f) != nil {
 				f.Close()
 				return Batch{}, ErrSelection
 			}
 			body, e := io.ReadAll(io.LimitReader(f, MaxFileBytes+1))
-			after, stampErr := fileIdentity(f)
+			_, after, stampErr := fileIdentity(f)
 			closeErr := f.Close()
 			if e != nil || stampErr != nil || closeErr != nil || before != after || int64(len(body)) != session.Bytes || len(body) > MaxFileBytes {
 				return Batch{}, ErrSelection

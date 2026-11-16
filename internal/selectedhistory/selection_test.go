@@ -2,6 +2,8 @@ package selectedhistory
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -123,5 +125,90 @@ func TestSelectedHistoryAllSourcesRevalidatedAndExportsBounded(t *testing.T) {
 	}
 	if _, err = Read(plan, plan.Digest, 0, 5); err == nil {
 		t.Fatal("unbounded container admitted")
+	}
+}
+
+func TestSelectedHistoryRejectsPhysicalCaseSpellingAliases(t *testing.T) {
+	for _, split := range []bool{false, true} {
+		t.Run(fmt.Sprint("separate_sources=", split), func(t *testing.T) {
+			manifest, path := selectionFixture(t)
+			alias := filepath.Join(filepath.Dir(path), "SESSION.jsonl")
+			original, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			aliased, err := os.Stat(alias)
+			if errors.Is(err, os.ErrNotExist) {
+				t.Skip("filesystem distinguishes case spellings")
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !os.SameFile(original, aliased) {
+				t.Fatal("fixture must use the same physical file")
+			}
+			other := Session{Path: "SESSION.jsonl", ID: "independent-looking-session"}
+			if split {
+				source := manifest.Sources[0]
+				source.Sessions = []Session{other}
+				manifest.Sources = append(manifest.Sources, source)
+			} else {
+				manifest.Sources[0].Sessions = append(manifest.Sources[0].Sessions, other)
+			}
+			if _, err := Prepare(manifest); err == nil {
+				t.Fatal("same physical source admitted twice under case spelling aliases")
+			}
+		})
+	}
+}
+func TestSelectedHistoryKeepsDifferentPhysicalFiles(t *testing.T) {
+	for _, caseSensitive := range []bool{false, true} {
+		t.Run(fmt.Sprint("case_sensitive_names=", caseSensitive), func(t *testing.T) {
+			manifest, path := selectionFixture(t)
+			otherPath := filepath.Join(filepath.Dir(path), "other.jsonl")
+			if caseSensitive {
+				otherPath = filepath.Join(filepath.Dir(path), "SESSION.jsonl")
+			}
+			other, err := os.OpenFile(otherPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+			if caseSensitive && errors.Is(err, os.ErrExist) {
+				t.Skip("filesystem aliases different-case spellings")
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, err := os.ReadFile(path)
+			if err != nil {
+				other.Close()
+				t.Fatal(err)
+			}
+			_, writeErr := other.Write(body)
+			closeErr := other.Close()
+			if err = errors.Join(writeErr, closeErr); err != nil {
+				t.Fatal(err)
+			}
+			originalInfo, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			otherInfo, err := os.Stat(otherPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if os.SameFile(originalInfo, otherInfo) {
+				t.Fatal("positive fixture must have distinct physical files")
+			}
+			manifest.Sources[0].Sessions = append(manifest.Sources[0].Sessions, Session{Path: filepath.Base(otherPath), ID: "second-physical-session"})
+			plan, err := Prepare(manifest)
+			if err != nil {
+				t.Fatal("distinct physical files were merged by path spelling", err)
+			}
+			batch, err := Read(plan, plan.Digest, 0, 5)
+			if err != nil || len(batch.Sessions) != 2 || batch.Sessions[0].Body != string(body) || batch.Sessions[1].Body != string(body) {
+				t.Fatal("two physical sources were not preserved", err)
+			}
+			if batch.Sessions[0].Session == batch.Sessions[1].Session {
+				t.Fatal("distinct sources lost their provenance")
+			}
+		})
 	}
 }
