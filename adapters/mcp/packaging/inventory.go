@@ -40,6 +40,7 @@ type packetInventory struct {
 	Stable        *stablePacketBinding    `json:"stable,omitempty"`
 	Lifecycle     *lifecyclePacketBinding `json:"lifecycle,omitempty"`
 	DesktopPilot  *DesktopPilotBinding    `json:"desktop_pilot,omitempty"`
+	CodePilot     *CodePilotBinding       `json:"code_pilot,omitempty"`
 }
 
 // PacketStatus is integrity evidence only, never publisher or owner authority.
@@ -57,6 +58,7 @@ type PacketStatus struct {
 	EmbeddedInputsSHA256 string               `json:"embedded_inputs_sha256,omitempty"`
 	NativeContractSHA256 string               `json:"native_contract_sha256,omitempty"`
 	DesktopPilot         *DesktopPilotBinding `json:"desktop_pilot,omitempty"`
+	CodePilot            *CodePilotBinding    `json:"code_pilot,omitempty"`
 }
 
 type packetSource struct {
@@ -189,7 +191,7 @@ func scanPacket(root string) ([]packetFile, error) {
 	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
 	return result, err
 }
-func writeInventory(root, format, version, platform, server string, stable *stablePacketBinding, lifecycle *lifecyclePacketBinding, pilot *DesktopPilotBinding) error {
+func writeInventory(root, format, version, platform, server string, stable *stablePacketBinding, lifecycle *lifecyclePacketBinding, pilot *DesktopPilotBinding, code *CodePilotBinding) error {
 	files, err := scanPacket(root)
 	if err != nil {
 		return err
@@ -203,7 +205,7 @@ func writeInventory(root, format, version, platform, server string, stable *stab
 			}
 		}
 	}
-	body, err := json.MarshalIndent(packetInventory{SchemaVersion: packetSchema(stable), Format: format, Version: version, Platform: platform, Server: server, Files: files, Stable: stable, Lifecycle: lifecycle, DesktopPilot: pilot}, "", "  ")
+	body, err := json.MarshalIndent(packetInventory{SchemaVersion: packetSchema(stable), Format: format, Version: version, Platform: platform, Server: server, Files: files, Stable: stable, Lifecycle: lifecycle, DesktopPilot: pilot, CodePilot: code}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -258,6 +260,9 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 		}
 	}
 	if inventory.DesktopPilot != nil {
+		if inventory.CodePilot != nil {
+			return status, errors.New("Code and Desktop pilots are separate")
+		}
 		if inventory.Format != "mcpb" || inventory.Stable != nil || inventory.Lifecycle != nil || (inventory.DesktopPilot.Runtime == nil && inventory.Version != "0.0.0") || (inventory.DesktopPilot.Runtime != nil && inventory.DesktopPilot.Runtime.ClientVersion != inventory.Version) {
 			return status, errors.New("invalid Desktop pilot profile")
 		}
@@ -288,7 +293,7 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 	if file, found := expected[inventory.Server]; !found || file.Mode != uint32(serverMode) {
 		return status, errors.New("packet server unavailable")
 	}
-	required, server, err := requiredPacketFiles(inventory.Format, inventory.Platform, inventory.Version, inventory.Stable, inventory.Lifecycle, inventory.DesktopPilot)
+	required, server, err := requiredPacketFiles(inventory.Format, inventory.Platform, inventory.Version, inventory.Stable, inventory.Lifecycle, inventory.DesktopPilot, inventory.CodePilot)
 	if err != nil {
 		return status, err
 	}
@@ -386,6 +391,12 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 	}
 	if registry, found := expected["managed/trust/release-authority-registry.json"]; found {
 		status.RegistrySHA256 = registry.SHA256
+	}
+	if inventory.CodePilot != nil {
+		if err := validateCodePilotInventory(inventory.CodePilot, status, inventory.Lifecycle, source.read); err != nil {
+			return PacketStatus{}, err
+		}
+		status.CodePilot = inventory.CodePilot
 	}
 	return status, nil
 }
