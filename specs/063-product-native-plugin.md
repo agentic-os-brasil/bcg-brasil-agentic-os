@@ -527,3 +527,25 @@ reading model workers, foreground overlap, host permission enforcement and usefu
 Standards/Spec reports require separate attended runtime evidence against the
 frozen source and packet. Adding these public role assets grants no installation,
 model-spend, distribution or signing authority.
+
+
+### Exact-call qualification post evidence
+
+Candidate-only canonical PreToolUse and PostToolUse wrappers use validated native
+session/tool-use/tool-name identities to emit a versioned, domain-separated
+SHA256 over a canonical JSON array with event and probe nonce. The documented
+systemMessage transports this correlation marker after canonical success; no
+raw identity or tool content enters it. Verify the actual matching native
+hook_started/response envelopes, event, success outcome, typed zero exit and
+exact call marker. Latest assistant position, another same-kind tool, marker
+text alone, old nonce-only markers and returned content cannot replace this
+successful canonical post observation. Ordinary installed hooks remain unchanged.
+
+The existing private 4096-byte failure record adds capped PostToolUse counts
+(32) and at most four normalized metadata observations of outcome, exact versus
+unattested binding, derived tool/latest/last-result kind and typed exit code.
+Retain the existing eight-startup/eight-read bounds and private-body exclusion;
+compact JSON preserves the aggregate size cap. These are diagnostic observations,
+not importable qualification, signing, installation or owner authority. Source
+fixtures demonstrate correlation behavior only. Retained failed runtime trials
+remain failed; later instrumented native trials require their own reviewed plan.
