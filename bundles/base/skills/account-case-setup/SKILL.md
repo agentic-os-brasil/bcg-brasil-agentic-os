@@ -7,7 +7,10 @@ description: Create the right Maestro workspace context for a client account and
 
 ## MCP first-case boundary
 
-For the first case in the current admitted workspace, use
+Read `case.setup.status` through the intended Maestro connector first. It is
+noncreating; use its current binding, exact setup input, destinations and revisions.
+An existing binding wins. Never read selection files or infer another account
+from a project label. For the first case in this workspace, use
 [case-agent-setup](../case-agent-setup/SKILL.md): inspect current setup, review its
 canonical registration, explicitly save the full brief through brain operations
 and finish with a checkpoint only when work was requested. Reuse returned
@@ -85,7 +88,12 @@ PA Experts (especialistas de área do BCG) são consultores transversais em conh
 
 ## Definição de conclusão
 
-O setup está completo quando o owner tem um contexto de trabalho nomeado, sabe qual é o próximo passo concreto e recebeu uma primeira entrega ou checkpoint útil.
+The first-case bridge is complete only when its actual reviewed registration,
+explicitly saved full brief and readback are returned, with a checkpoint only
+when requested. Report those effects individually. Broader account setup is
+complete only when its separately admitted narrative/relationship and cross-case
+owners fulfill the requested scope. A saved first-case brief alone leaves that
+broader work pending; `domain.account_case_scaffold` remains unavailable.
 
 ## Contrato de página do brain
 

@@ -67,6 +67,21 @@ as a rubber-stamp before every response. Overuse degrades the signal.
 - Yoda never speaks to the owner directly. His verdict returns to the
   producing agent, which decides how to act on it.
 
+## Admitted host route
+
+Use the existing `host.subagents` capability in the qualified Code host: the
+actual Agent dispatch uses `subagent_type: "yoda"` and the sealed packet above.
+The selected host must separately admit its senior-review model/configuration
+and execution authority. A packaged agent, method plan or static dependency
+mapping does not attest either capability or perform the review.
+
+Desktop's ordinary Maestro MCP tools do not provide an Agent dispatcher. Without
+an independently admitted host subagent capability, report review unavailable
+and keep the requested review pending. Do not invent `domain.review_dispatch`
+operations, execute a model inside MCP or call packet composition a verdict.
+Keep the producing agent's delivery authority and any required review gate
+unchanged; never label an unavailable review approved.
+
 ## Typed review contract
 
 Maestro declares review_type before dispatch. An IntentReviewPacket requests

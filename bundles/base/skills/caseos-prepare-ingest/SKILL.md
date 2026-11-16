@@ -5,11 +5,18 @@ description: Use when the owner supplies or selects professional notes, a docume
 
 # Preparar ingestão — proposta local, sem publicação
 
-Before owner-state file operations, follow [admitted owner-state paths](../interaction-profile/resources/owner-paths.md). Owner `brain/` paths are logical; confirmed case/workspace-local paths retain their scope.
+Use the intended Maestro connector and current schemas. Query
+`case.setup.status` for current workspace/case binding; use returned
+`setup`/`setup.input`, never selection files or inferred paths. If no exact
+binding is admitted, keep the intended case unconfirmed and the conversational
+draft unsaved; setup follows [case-agent-setup](../case-agent-setup/SKILL.md).
+Read authorized named workspace sources through `knowledge.collect(pages,purpose)`
+or complete revision-consistent `brain.read`, retaining actual revisions and
+omissions. A source supplied in conversation needs no fabricated file reference.
 
 
-Esta receita organiza material novo autorizado. Não chama ferramentas de escrita,
-upload, aprovação remota ou fila de envio, mesmo se o pedido disser “publique”.
+Esta receita organiza material novo autorizado. Não chama ferramentas de escrita
+remota, upload, aprovação remota ou fila de envio, mesmo se o pedido disser “publique”.
 Para conexão/leitura, siga [caseos-connect](../caseos-connect/SKILL.md), sem
 duplicar ou relaxar sua política. Para entender conceitos, leia
 [o guia](../caseos-tutorial/references/guide.md).
@@ -49,11 +56,40 @@ Exemplo sintético: uma nota diz “piloto aprovado em 12/9; prazo indefinido”
 a aprovação já existe, proponha comparação/complemento, não uma duplicata; não
 invente o ano nem transforme prazo indefinido em atraso.
 
-Entregue na conversa. Só grave se solicitado, em destino privado confirmado;
-se for `brain/`, leia e aplique `bundles/base/brain-contract.md`. Nunca salve no
-core gerenciado. Para lotes longos, registre cobertura e próximo passo; retomar
+Entregue na conversa. Só grave se solicitado, pela rota autoral abaixo.
+Nunca salve no core gerenciado. Para lotes longos, registre cobertura e próximo passo; retomar
 não autoriza envio. A publicação é um fluxo separado, suportado e explicitamente
 aprovado, não uma continuação automática desta skill.
+
+## Explicit local save through the existing owner
+
+The proposal is conversational by default. When the owner requests Save, agree
+one named page under the current bound case, for example
+`accounts/<account-id>/cases/<case-id>/canon/caseos-prepare-ingest-<slug>.md`.
+For an admitted internal workspace, agree a workspace-relative project page
+with `workspace/<workspace-id>` scope instead. Local scope never proves remote
+case identity. Do not persist an unconfirmed destination or private owner data.
+
+Read [authored-brain](../maestro-operator/resources/authored-brain.md)
+(`maestro://methods/maestro-operator/resources/authored-brain.md`) and query
+`brain.status`. Inspect the named destination with complete `brain.read`.
+Create an absent page with `brain.create(page,text)`; replace only an explicitly
+reviewed existing proposal with `brain.update(page,text,expected_page_revision)`.
+Preserve unrelated prose and metadata. Use all eight authored fields (`id`,
+`title`, `summary`, `type: canon`, matching `scope`, `status: draft`, scoped
+`sensitivity`, content `updated`). Include the full proposal, source references
+and actual revisions, coverage/omissions, remote reconciliation limits and
+`remote_write: not_attempted` in the saved body. Never invent remote IDs or
+conversion provenance for authored notes.
+
+Native review binds the complete current/proposed body, scope and revision;
+MCP arguments supply no consent, roots or grants. Read the complete saved page
+back at one revision. Report `written`/`unchanged` and the actual page/revision;
+`proposed` or declined/unavailable review leaves Save pending. After interruption
+retry the exact original request and expected revision. A conflict requires a
+fresh read and review, preserving newer work. There is no direct-file/CLI
+fallback. Local persistence leaves `remote_write: not_attempted` unchanged;
+connector publication is a separate supported, content-specific authorized action.
 
 ## Interaction profile
 
