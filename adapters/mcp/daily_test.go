@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -236,6 +238,13 @@ func TestDailyQueueAdmittedScopesAndLateSelectionChange(t *testing.T) {
 				expected = "scope: workspace/" + id
 				sensitivity = "internal"
 			}
+			pageRelative := "daily/2026-11-15.md"
+			if mode == "client" {
+				pageRelative = "accounts/synthetic/cases/" + id + "/" + pageRelative
+			}
+			if _, e = atlas.ValidateAuthoredPage(pageRelative, id, string(body)); e != nil {
+				t.Fatal("daily is not a canonical authored page", e)
+			}
 			if !strings.Contains(string(body), expected) || !strings.Contains(string(body), "sensitivity: "+sensitivity) {
 				t.Fatal("daily scope metadata incorrect", string(body))
 			}
@@ -261,5 +270,36 @@ func TestDailyQueueEscapedReviewBudgetPreservesQueue(t *testing.T) {
 	out := dailySDK(t, client, "drain", "owner", map[string]any{"checkpoint_ids": []string{"budget"}}, true)
 	if out["code"] != "daily_review_too_large" || calls != 1 || !reflect.DeepEqual(before, methodTreeSnapshot(t, filepath.Dir(f.root))) {
 		t.Fatal("escaped oversized review reached effects", out, calls)
+	}
+}
+
+func TestDailyQueueSharedOwnerAcrossRegisteredWorkspaces(t *testing.T) {
+	first := newOwnerFixture(t, false)
+	one := first.connect(t, dailyApprove)
+	dailySDK(t, one, "enqueue", "owner", dailyFields("workspace-one"), false)
+	foreign := filepath.Join(first.root, ".maestro/daily-pending/workspace-one.json")
+	before, e := os.ReadFile(foreign)
+	if e != nil {
+		t.Fatal(e)
+	}
+	second := first
+	second.options.WorkspacePath = filepath.Join(filepath.Dir(first.options.WorkspacePath), "workspace-two")
+	if _, e = workspace.Initialize(workspace.Options{WorkspacePath: second.options.WorkspacePath, DataRoot: filepath.Join(filepath.Dir(first.root), "state")}); e != nil {
+		t.Fatal(e)
+	}
+	two := second.connect(t, dailyApprove)
+	status := dailySDK(t, two, "status", "owner", nil, false)
+	if status["pending"] != float64(0) {
+		t.Fatal("foreign workspace input became eligible", status)
+	}
+	dailySDK(t, two, "enqueue", "owner", dailyFields("workspace-two"), false)
+	dailySDK(t, two, "drain", "owner", map[string]any{"checkpoint_ids": []string{"workspace-two"}}, false)
+	after, e := os.ReadFile(foreign)
+	if e != nil || string(before) != string(after) {
+		t.Fatal("foreign pending bytes changed", e)
+	}
+	status = dailySDK(t, one, "status", "owner", nil, false)
+	if status["pending"] != float64(1) {
+		t.Fatal("original workspace pending input lost", status)
 	}
 }

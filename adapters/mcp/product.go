@@ -356,7 +356,7 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		if len(req.Params.Arguments) > 128<<10 && in.Operation != "knowledge.create" && in.Operation != "brain.create" && in.Operation != "brain.update" && in.Operation != "owner.atlas.create" && in.Operation != "owner.atlas.update" {
 			return result(nil, errors.New("input_size")), nil
 		}
-		if len(req.Params.Arguments) > 16<<10 && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" && in.Operation != "knowledge.create" && in.Operation != "knowledge.append" && in.Operation != "brain.append" && in.Operation != "brain.create" && in.Operation != "brain.update" && in.Operation != "owner.atlas.create" && in.Operation != "owner.atlas.update" && in.Operation != "owner.atlas.append" && in.Operation != "owner.atlas.collect" {
+		if len(req.Params.Arguments) > 16<<10 && in.Operation != "daily.enqueue" && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" && in.Operation != "knowledge.create" && in.Operation != "knowledge.append" && in.Operation != "brain.append" && in.Operation != "brain.create" && in.Operation != "brain.update" && in.Operation != "owner.atlas.create" && in.Operation != "owner.atlas.update" && in.Operation != "owner.atlas.append" && in.Operation != "owner.atlas.collect" {
 			return result(nil, errors.New("input_size")), nil
 		}
 		if kind == "context" {

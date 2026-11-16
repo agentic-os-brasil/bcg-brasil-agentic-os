@@ -100,10 +100,13 @@ func (b *Bound) dailyOwner(choice string) (*zipruntime.DailyQueue, func() error,
 		closeOwner()
 		return nil, nil, nil, e
 	}
+	if b.observeWorkspaceTransition != nil {
+		queue.FaultPoint = func(stage string) error { b.observeWorkspaceTransition("daily_"+stage, scope); return nil }
+	}
 	return queue, guard, func() { queue.Close(); closeOwner() }, nil
 }
 func (b *Bound) handleDaily(ctx context.Context, req *mcp.CallToolRequest) *mcp.CallToolResult {
-	failure := func(e error) *mcp.CallToolResult {
+	failure := func(e error, outcomes ...zipruntime.DailyResult) *mcp.CallToolResult {
 		var pending *confirmationPending
 		if errors.As(e, &pending) {
 			return pending.result
@@ -122,7 +125,16 @@ func (b *Bound) handleDaily(ctx context.Context, req *mcp.CallToolRequest) *mcp.
 		if code == "daily_review_too_large" {
 			next = "Keep the queue unchanged. Select fewer checkpoints or a smaller explicitly reviewed daily page before retrying; no hidden batching or synthesis is authorized."
 		}
-		out := result(map[string]any{"code": code, "retryable": false, "next_action": next}, nil)
+		value := map[string]any{"code": code, "retryable": false, "next_action": next}
+		if len(outcomes) == 1 {
+			outcome := outcomes[0]
+			value["state"] = outcome.State
+			value["committed"] = outcome.Entries
+			value["unconfirmed"] = outcome.Unconfirmed
+			value["generation_state"] = "not_verified"
+			value["next_action"] = "Retain the exact committed IDs as completed evidence. Preserve unconfirmed inputs and retry the same explicit selection after resolving the prerequisite; query current status separately before describing its generation."
+		}
+		out := result(value, nil)
 		out.IsError = true
 		return out
 	}
@@ -181,6 +193,13 @@ func (b *Bound) handleDaily(ctx context.Context, req *mcp.CallToolRequest) *mcp.
 		e = guard()
 	}
 	if e != nil {
+		if in.Operation == "daily.drain" {
+			out.Generation = ""
+			if len(out.Entries) > 0 {
+				out.State = "partial"
+			}
+			return failure(e, out)
+		}
 		return failure(e)
 	}
 	return result(out, nil)

@@ -26,15 +26,17 @@ type DailyEntry struct {
 	LocalDate string `json:"local_date"`
 }
 type DailyStatus struct {
-	State        string       `json:"state"`
-	Scope        string       `json:"scope"`
-	Generation   string       `json:"generation"`
-	Dream        string       `json:"dream"`
-	Acknowledged string       `json:"acknowledged"`
-	Pending      int          `json:"pending"`
-	Entries      []DailyEntry `json:"entries"`
-	More         bool         `json:"more"`
-	Recovery     string       `json:"recovery,omitempty"`
+	State                 string       `json:"state"`
+	Scope                 string       `json:"scope"`
+	Generation            string       `json:"generation"`
+	Dream                 string       `json:"dream"`
+	Acknowledged          string       `json:"acknowledged"`
+	Pending               int          `json:"pending"`
+	PendingTotal          int          `json:"pending_total"`
+	OtherWorkspacePending int          `json:"other_workspace_pending"`
+	Entries               []DailyEntry `json:"entries"`
+	More                  bool         `json:"more"`
+	Recovery              string       `json:"recovery,omitempty"`
 }
 
 // DailyReviewMax bounds the complete serialized current/proposed review.
@@ -64,11 +66,12 @@ type DailyReview struct {
 	Digest           string                     `json:"digest"`
 }
 type DailyResult struct {
-	State      string       `json:"state"`
-	ID         string       `json:"id,omitempty"`
-	Generation string       `json:"generation"`
-	Entries    []DailyEntry `json:"committed,omitempty"`
-	Evidence   string       `json:"evidence,omitempty"`
+	State       string       `json:"state"`
+	ID          string       `json:"id,omitempty"`
+	Generation  string       `json:"generation,omitempty"`
+	Entries     []DailyEntry `json:"committed,omitempty"`
+	Unconfirmed []string     `json:"unconfirmed,omitempty"`
+	Evidence    string       `json:"evidence,omitempty"`
 }
 
 // DailyQueue retains one already admitted storage scope; Workspace is capture
@@ -313,6 +316,16 @@ func (q *DailyQueue) Status() (DailyStatus, error) {
 		body, e := q.read(".maestro/daily-pending/"+entry.Name(), dailyInputMax)
 		if e != nil {
 			return out, e
+		}
+		out.PendingTotal++
+		var capture DailyCheckpoint
+		if e = strictDaily(body, &capture); e != nil {
+			return out, e
+		}
+		// A shared owner queue keeps other workspace captures opaque and untouched.
+		if q.scope == "owner" && capture.Scope == "owner" && filepath.IsAbs(capture.Workspace) && capture.Workspace != q.workspace {
+			out.OtherWorkspacePending++
+			continue
 		}
 		c, e := q.checkpoint(body, id)
 		if e != nil {
@@ -589,7 +602,7 @@ func (q *DailyQueue) Enqueue(review DailyReview, guard func() error) (DailyResul
 			return e
 		}
 		if committed != nil {
-			if e = q.verify(c); e != nil {
+			if e = q.ensureProof(c); e != nil {
 				return e
 			}
 			out.State = "replayed"
@@ -606,7 +619,7 @@ func (q *DailyQueue) Enqueue(review DailyReview, guard func() error) (DailyResul
 		if status.Recovery != "" {
 			return errors.New("daily_recovery_required")
 		}
-		if status.Pending >= 256 {
+		if status.PendingTotal >= 256 {
 			return errors.New("daily_queue_limit")
 		}
 		body := dailyCheckpointBytes(c)
@@ -666,6 +679,26 @@ func (q *DailyQueue) Drain(review DailyReview, guard func() error) (DailyResult,
 		out.State = "persisted"
 		return q.validate()
 	})
+	if e != nil {
+		out.Generation = ""
+		if len(out.Entries) > 0 {
+			out.State = "partial"
+		}
+		confirmed := map[string]bool{}
+		for _, entry := range out.Entries {
+			confirmed[entry.ID] = true
+		}
+		for _, c := range review.Checkpoints {
+			if !confirmed[c.ID] {
+				out.Unconfirmed = append(out.Unconfirmed, c.ID)
+			}
+		}
+		for _, entry := range review.Replays {
+			if !confirmed[entry.ID] {
+				out.Unconfirmed = append(out.Unconfirmed, entry.ID)
+			}
+		}
+	}
 	return out, e
 }
 
@@ -726,7 +759,7 @@ func (q *DailyQueue) save(c DailyCheckpoint, expectedPage string) error {
 			return e
 		}
 		if committed != nil {
-			if e = q.verify(c); e != nil {
+			if e = q.ensureProof(c); e != nil {
 				return e
 			}
 			body, e := q.optional(pendingPath, dailyInputMax)
@@ -845,18 +878,8 @@ func (q *DailyQueue) save(c DailyCheckpoint, expectedPage string) error {
 	if e = q.fail("committed"); e != nil {
 		return e
 	}
-	proof, _ := json.Marshal(dailyCommitProof{DailyEntry: q.entry(c), BlockSHA256: dailyHash([]byte(dailyBlock(c)))})
-	proofPath := ".maestro/daily-proofs/" + c.ID + ".json"
-	prior, e := q.optional(proofPath, 512)
-	if e != nil {
+	if e = q.ensureProof(c); e != nil {
 		return e
-	}
-	if prior == nil {
-		if e = q.create(proofPath, proof); e != nil {
-			return e
-		}
-	} else if !bytes.Equal(prior, proof) {
-		return errors.New("daily_id_conflict")
 	}
 	if e = q.fail("proof"); e != nil {
 		return e
@@ -904,6 +927,27 @@ func (q *DailyQueue) save(c DailyCheckpoint, expectedPage string) error {
 		return e
 	}
 	return q.remove(transitionPath, transition)
+}
+
+// Proof completion requires a known reviewed checkpoint and its exact live block.
+func (q *DailyQueue) ensureProof(c DailyCheckpoint) error {
+	if e := q.verify(c); e != nil {
+		return e
+	}
+	proof, _ := json.Marshal(dailyCommitProof{DailyEntry: q.entry(c), BlockSHA256: dailyHash([]byte(dailyBlock(c)))})
+	proofPath := ".maestro/daily-proofs/" + c.ID + ".json"
+	prior, e := q.optional(proofPath, 512)
+	if e != nil {
+		return e
+	}
+	if prior == nil {
+		if e = q.create(proofPath, proof); e != nil {
+			return e
+		}
+	} else if !bytes.Equal(prior, proof) {
+		return errors.New("daily_id_conflict")
+	}
+	return nil
 }
 func (q *DailyQueue) verify(c DailyCheckpoint) error {
 	binding := q.binding(c)
@@ -1011,7 +1055,7 @@ func dailyRender(c DailyCheckpoint, scope string, old []byte) ([]byte, error) {
 				}
 			}
 		}
-		old = []byte(fmt.Sprintf("---\nid: %s\ntitle: Daily %s\nsummary: Agent-authored daily checkpoints\ntype: daily\nscope: %s\nstatus: active\nsensitivity: %s\nupdated: %s\n---\n", id, c.LocalDate, scope, sensitivity, c.LocalDate))
+		old = []byte(fmt.Sprintf("---\nid: %s\ntitle: Daily %s\nsummary: Agent-authored daily checkpoints\ntype: daily\nscope: %s\nstatus: active\nsensitivity: %s\nupdated: %s\n---\n\n# Daily %s\n", id, c.LocalDate, scope, sensitivity, c.LocalDate, c.LocalDate))
 	}
 	if len(old)+len(block) > dailyPageMax {
 		return nil, errors.New("daily_page_full")

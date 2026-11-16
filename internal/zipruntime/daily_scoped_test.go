@@ -432,3 +432,46 @@ func TestDailyScopedEscapedPayloadRecovery(t *testing.T) {
 		t.Fatal(e)
 	}
 }
+
+func TestDailyScopedLegacyCommittedPendingBuildsProof(t *testing.T) {
+	q, root := scopedQueue(t)
+	c := scopedCheckpoint(root, "legacy")
+	enqueueScoped(t, q, c)
+	r, e := q.ReviewDrain([]string{c.ID})
+	if e != nil {
+		t.Fatal(e)
+	}
+	out, e := q.Drain(r, dailyGuard)
+	if e != nil {
+		t.Fatal(e)
+	}
+	generation := out.Generation
+	if e = os.Remove(filepath.Join(root, "brain/.maestro/daily-proofs/legacy.json")); e != nil {
+		t.Fatal(e)
+	}
+	dailyPut(t, filepath.Join(root, "brain/.maestro/daily-pending/legacy.json"), string(dailyCheckpointBytes(c)))
+	page, e := os.ReadFile(filepath.Join(root, "brain/daily/2026-11-15.md"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	r, e = q.ReviewDrain([]string{c.ID})
+	if e != nil {
+		t.Fatal(e)
+	}
+	out, e = q.Drain(r, dailyGuard)
+	if e != nil || out.Generation != generation {
+		t.Fatal("legacy pending replay changed generation", out, e)
+	}
+	after, e := os.ReadFile(filepath.Join(root, "brain/daily/2026-11-15.md"))
+	if e != nil || !bytes.Equal(page, after) {
+		t.Fatal("legacy page changed", e)
+	}
+	r, e = q.ReviewDrain([]string{c.ID})
+	if e != nil {
+		t.Fatal("completed legacy retry lacks compact proof", e)
+	}
+	out, e = q.Drain(r, dailyGuard)
+	if e != nil || out.Generation != generation {
+		t.Fatal("legacy ID-only retry failed", out, e)
+	}
+}
