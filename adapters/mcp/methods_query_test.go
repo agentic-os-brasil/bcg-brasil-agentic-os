@@ -819,8 +819,9 @@ func TestMethodPlansReflectRegisteredContentWithoutRuntimeAuthority(t *testing.T
 	registered := map[string][]string{
 		"domain.document_conversion_operations": {"content.convert", "content.read", "content.status"},
 		"domain.workspace_knowledge_operations": {"knowledge.append", "knowledge.collect", "knowledge.create"},
+		"domain.owner_knowledge_pages":          {"knowledge.append", "knowledge.create", "owner.atlas.collect", "owner.atlas.prepare", "owner.atlas.status"},
 	}
-	unattested := map[string]bool{"runtime.document_conversion": true, "domain.owner_knowledge_pages": true, "host.trusted_review": true}
+	unattested := map[string]bool{"runtime.document_conversion": true, "host.trusted_review": true}
 	for _, dependency := range plan.Dependencies {
 		if operations, ok := registered[dependency.ID]; ok {
 			if dependency.State != "available" || dependency.Reason != "owning_operations_registered" || !reflect.DeepEqual(dependency.Fulfillment, operations) || len(dependency.Missing) != 0 || dependency.Action == "" {

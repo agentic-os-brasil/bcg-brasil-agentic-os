@@ -27,11 +27,24 @@ Resolver [`interaction-profile`](../interaction-profile/SKILL.md) se disponível
 
 A receita e seus recursos são orientação inerte. Permissões do host e política continuam autoritativas; a receita não concede acesso a arquivos, instalação ou aprovação.
 
-## Produto MCP/Code: documento para conhecimento da workspace
+## Produto MCP/Code: documento para conhecimento local revisado
 
 1. **Confirmar binding e capacidade.** Ler `maestro_context` e os schemas atuais de `maestro_query`/`maestro_apply`. Usar somente a workspace já admitida. Consultar `maestro_query` com `operation="content.status"`; reportar o estado real se o conversor verificado estiver indisponível. Raízes, workspace, comando do conversor, reader, origem, sessão e aprovação são derivados pelo servidor, nunca argumentos fornecidos pelo modelo.
 
    `formats` informa extensão, estado e rota/parser/fidelidade previstos para o perfil autenticado instalado. Cada rota fica indisponível quando a verificação falha, inclusive para pack antigo, alterado ou desconhecido. Estado `ready` não comprova conversão de uma fonte. O resultado efetivo vem de `content.convert` e permanece em `content.read`.
+
+   O destino padrão continua sendo conhecimento da workspace. Somente um pedido
+   explícito de conhecimento privado do dono seleciona `knowledge_destination="owner"`.
+   Nesse ramo, consultar `case.setup.status`: exigir setup ativo `internal`, sem
+   conta/caso de cliente ou seleção pendente/conflitante. Uma fonte em namespace
+   canônico `brain/accounts/` ou `brain/clients/` não pode ser promovida. O servidor
+   verifica o escopo estrutural; isso não classifica semanticamente um documento
+   nem transforma uma declaração do modelo em autorização para retirar dados de
+   cliente. Binding de cliente ou proveniência não admitida exige preservar esse
+   escopo, sem mover/renomear a fonte ou trocar de binding para contornar a recusa.
+   Se faltar corpus do dono, consultar `owner.atlas.status` e usar somente a
+   preparação explícita `owner.atlas.prepare`, com sua revisão confiável própria.
+   Não inicializar o atlas como efeito oculto de leitura ou ingestão.
 
 2. **Selecionar a fonte.** Obter um `source_path` relativo à workspace admitida (até 256 caracteres). Se faltar, perguntar pelo caminho relativo. Caminho absoluto, URL, fonte fora da workspace ou seleção recusada exige próximo passo seguro dentro do escopo; não resolver por leitura direta. O formato aceito depende da política e do runtime verificado, não da extensão ou do suporte anunciado por uma biblioteca.
 
@@ -41,17 +54,22 @@ A receita e seus recursos são orientação inerte. Permissões do host e polít
 
 4. **Ler o artefato imutável.** Usar `maestro_query` com `operation="content.read"`, `artifact_id=result.artifact_ref` e `format="markdown"` (ou `"document"` para a representação estruturada). Cada chamada admite `offset` em bytes (padrão 0) e `max_bytes` de 4 a 16384 (padrão 16384). Continuar pelo `next_offset` retornado enquanto `has_more` indicar conteúdo necessário à síntese; não inventar trechos não lidos. Preservar os hashes da fonte e a proveniência do pack retornados. O ID identifica um artefato privado da workspace; não abrir seu caminho nem copiar artefatos ou controles de outra workspace.
 
-5. **Preparar o texto e a página exatos.** Sintetizar título, 3 a 8 bullets, decisões, números e trechos úteis, distinguindo limites ou perda de fidelidade observados. Incluir no texto proposto a fonte relativa, seu SHA-256, o ID do artefato e a identidade/SHA-256 do pack conforme retornados, para manter o vínculo verificável na leitura futura. Confirmar o tópico se faltar e escolher `page` relativo ao corpus `brain` da workspace, por exemplo `knowledge/<topico>/<slug>.md`, sem prefixar `brain/` nem escolher memória global do owner. Consultar `knowledge.collect` em `maestro_query` com `purpose` explícito e `pages=[page]`. Uma omissão "page does not exist" permite propor criação; outras omissões ou falhas conservam seu estado real. Para acrescentar a uma página existente, usar a revisão retornada e uma seção de cabeçalho explícita, sem substituir conteúdo anterior.
+5. **Preparar o texto e a página exatos.** Sintetizar título, 3 a 8 bullets, decisões, números e trechos úteis, distinguindo limites ou perda de fidelidade observados. Incluir no texto proposto a fonte relativa, seu SHA-256, o ID do artefato e a identidade/SHA-256 do pack conforme retornados, para manter o vínculo verificável na leitura futura. Confirmar o tópico se faltar. No destino padrão, escolher `page` relativo ao `brain` da workspace, como `knowledge/<topico>/<slug>.md`, sem prefixar `brain/`, e consultar `knowledge.collect`. No ramo privado explicitamente escolhido, a página pertence ao atlas profissional global do dono, em `concepts/`, `learnings/` ou `development/`, e a coleta é `owner.atlas.collect`. Ambos usam `purpose` explícito e `pages=[page]`; SELF, memória gerada e outras raízes não são destinos desta promoção. Incluir também o workspace de origem na referência e avisar que o artefato permanece nele e pode ficar indisponível depois; a síntese não copia nem move o documento ou o artefato. Uma omissão "page does not exist" permite propor criação; outras omissões ou falhas conservam seu estado real. Para acrescentar a uma página existente, usar a revisão retornada e uma seção de cabeçalho explícita, sem substituir conteúdo anterior.
 
 6. **Submeter a mudança à revisão humana confiável.** Chamar `maestro_apply` com um dos contratos fechados:
    - `knowledge.create`: `artifact_id`, `page` terminado em `.md` e `text` completo (até 256 KiB), somente para página nova.
    - `knowledge.append`: `artifact_id`, `page`, `section` iniciado por `#`, `text` (até 8 KiB) e `expected_page_revision` exata obtida na coleta.
 
-   A revisão confiável precisa mostrar operação, workspace, fonte e hash, artefato, pack, página, seção, página atual completa, texto proposto completo e revisão esperada. Aprovação pertence ao fluxo confiável do host. Se o formulário completo não estiver disponível, houver recusa ou a fonte, artefato, texto, destino, escopo ou revisão mudar, parar ou obter nova revisão pelo mesmo fluxo. Mensagem no chat, campo de consentimento e metadados não substituem aprovação; não automatizar `--confirm` do operador. Conservar o estado, a revisão, `operation_id` e a proveniência retornados pela aplicação.
+   Ambos aceitam `knowledge_destination`: omitir ou usar `workspace` preserva o
+   comportamento anterior; `owner` exige o ramo privado admitido acima e deve ser
+   mantido na criação e nos acréscimos. Nunca fornecer raiz, reader, proveniência
+   ou booleano de aprovação/classificação.
 
-7. **Concluir por leitura nominal.** Após uma aplicação confirmada, chamar `maestro_query` com `operation="knowledge.collect"`, `purpose` de verificação e `pages=[page]`. A coleta admite 1 a 24 páginas e até 128 KiB no total; preferir esta única página. Concluir somente se ela estiver presente, a `revision` corresponder à aplicação e o `content` contiver a síntese e os vínculos de fonte/artefato/pack aprovados. Relatar em uma linha página relativa, revisão e proveniência da operação; usar também o `pointer` retornado para retomada. Em nova sessão, repetir a coleta nominal sob o binding admitido. Omissão, conteúdo divergente ou leitura indisponível exige relatar o efeito já confirmado e a verificação parcial ou pendente, sem declarar ausência de escrita nem repetir uma escrita concluída.
+   A revisão confiável precisa mostrar operação, workspace, fonte e hash, artefato, pack, página, seção, página atual completa, texto proposto completo e revisão esperada. No ramo privado, deve mostrar também a promoção para conhecimento profissional privado global do dono, o workspace da fonte, a proveniência completa da conversão e a disponibilidade condicionada do artefato original. A aprovação é separada da preparação do corpus e não desclassifica material de cliente por inferência. Aprovação pertence ao fluxo confiável do host. Se o formulário completo não estiver disponível, houver recusa ou a fonte, artefato, texto, destino, escopo ou revisão mudar, parar ou obter nova revisão pelo mesmo fluxo. Mensagem no chat, campo de consentimento e metadados não substituem aprovação; não automatizar `--confirm` do operador. Conservar o estado, a revisão, `operation_id` e a proveniência retornados pela aplicação.
 
-No produto, todos os efeitos e leituras de estado passam por essas operações. Não usar Read/Write, helpers de caminhos do owner, extração nativa, instalação ou promoção para owner-global como alternativa. Uma recusa segura informa o motivo e o próximo passo admitido; um arquivo convertido ou uma alegação de escrita isolada nunca encerra a ingestão.
+7. **Concluir por leitura nominal.** Após uma aplicação confirmada, chamar `maestro_query` com `operation="knowledge.collect"` para a workspace ou `operation="owner.atlas.collect"` para o destino privado escolhido, `purpose` de verificação e `pages=[page]`. A coleta admite 1 a 24 páginas e até 128 KiB no total; preferir esta única página. Concluir somente se ela estiver presente, a `revision` corresponder à aplicação e o `content` contiver a síntese e os vínculos de fonte/artefato/pack aprovados. Relatar em uma linha página relativa, revisão e proveniência da operação; usar também o `pointer` retornado para retomada. Em nova sessão, repetir a coleta nominal sob o binding admitido. Omissão, conteúdo divergente ou leitura indisponível exige relatar o efeito já confirmado e a verificação parcial ou pendente, sem declarar ausência de escrita nem repetir uma escrita concluída.
+
+No produto, todos os efeitos e leituras de estado passam por essas operações. Não usar Read/Write, helpers de caminhos do owner, extração nativa, instalação ou promoção para owner-global como alternativa a uma recusa. O destino privado só existe pelo ramo explícito admitido, com o artefato e o binding originais. Uma recusa segura informa o motivo e o próximo passo admitido; um arquivo convertido ou uma alegação de escrita isolada nunca encerra a ingestão.
 
 ## Legado ZIP
 

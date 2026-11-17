@@ -17,6 +17,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest/docling"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceagent"
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -32,8 +33,8 @@ func contentQueries() []any {
 }
 func knowledgeMutations() []any {
 	return []any{
-		variant("knowledge.create", map[string]any{"artifact_id": strSchema(64), "page": strSchema(256), "text": strSchema(256 << 10)}, "artifact_id", "page", "text"),
-		variant("knowledge.append", map[string]any{"artifact_id": strSchema(64), "page": strSchema(256), "section": strSchema(256), "text": strSchema(8 << 10), "expected_page_revision": strSchema(64)}, "artifact_id", "page", "section", "text", "expected_page_revision"),
+		variant("knowledge.create", map[string]any{"knowledge_destination": map[string]any{"type": "string", "enum": []string{"workspace", "owner"}}, "artifact_id": strSchema(64), "page": strSchema(256), "text": strSchema(256 << 10)}, "artifact_id", "page", "text"),
+		variant("knowledge.append", map[string]any{"knowledge_destination": map[string]any{"type": "string", "enum": []string{"workspace", "owner"}}, "artifact_id": strSchema(64), "page": strSchema(256), "section": strSchema(256), "text": strSchema(8 << 10), "expected_page_revision": strSchema(64)}, "artifact_id", "page", "section", "text", "expected_page_revision"),
 	}
 }
 func contentMutations() []any {
@@ -48,6 +49,7 @@ type KnowledgeMutation struct {
 	Section              string `json:"section,omitempty"`
 	Text                 string `json:"text"`
 	ExpectedPageRevision string `json:"expected_page_revision,omitempty"`
+	KnowledgeDestination string `json:"knowledge_destination,omitempty"`
 }
 
 func DecodeKnowledgeMutation(body []byte) (KnowledgeMutation, error) {
@@ -78,6 +80,9 @@ func DecodeKnowledgeMutation(body []byte) (KnowledgeMutation, error) {
 	}
 	if decoder.Decode(new(any)) != io.EOF {
 		return in, errors.New("knowledge_trailing_input")
+	}
+	if in.KnowledgeDestination == "workspace" {
+		in.KnowledgeDestination = ""
 	}
 	return in, nil
 }
@@ -195,16 +200,60 @@ func (b *Bound) checkSelectedContentSource(ctx context.Context, source, digest s
 }
 func (b *Bound) knowledgeEngine() (*atlasops.Engine, error) { return b.workspaceEngine(nil) }
 
+type ownerKnowledgePromotion struct {
+	Destination       string `json:"destination"`
+	SourceWorkspaceID string `json:"source_workspace_id"`
+	SetupRevision     string `json:"setup_revision"`
+	CaseAgentID       string `json:"case_agent_id"`
+}
+
+// Promotion uses registered scope and exact owner review, not a classification claim.
+func (b *Bound) ownerKnowledgeAdmission(source, page string) (*ownerKnowledgePromotion, error) {
+	if err := b.validate(); err != nil {
+		return nil, err
+	}
+	parts := strings.Split(page, "/")
+	if len(parts) < 2 || (parts[0] != "concepts" && parts[0] != "learnings" && parts[0] != "development") {
+		return nil, errors.New("owner_knowledge_destination_unavailable")
+	}
+	lower := strings.ToLower(source)
+	for _, namespace := range []string{"brain/accounts", "brain/clients"} {
+		if lower == namespace || strings.HasPrefix(lower, namespace+"/") {
+			return nil, errors.New("owner_knowledge_source_scope_unavailable")
+		}
+	}
+	setup, err := workspaceagent.OpenSetup(filepath.Join(b.home, "state"), b.options.WorkspacePath, b.workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer setup.Close()
+	current, err := setup.Status()
+	if err != nil {
+		return nil, err
+	}
+	if current.State != "active" || current.Setup == nil || current.Setup.Input.Mode != "internal" || current.Setup.Input.AccountID != "" || current.Setup.AccountAgentID != "" || current.Markers.Active != "" || current.Markers.Pending != "" {
+		return nil, errors.New("owner_knowledge_requires_active_internal_setup")
+	}
+	return &ownerKnowledgePromotion{Destination: "owner_global_private_professional_atlas", SourceWorkspaceID: b.workspaceID, SetupRevision: current.SetupRevision, CaseAgentID: current.Setup.CaseAgentID}, nil
+}
+func (b *Bound) selectedKnowledgeEngine(in KnowledgeMutation, effect func() error) (*atlasops.Engine, error) {
+	if in.KnowledgeDestination == "owner" {
+		return b.ownerAtlasEngine(effect)
+	}
+	return b.workspaceEngine(effect)
+}
+
 type KnowledgeReview struct {
-	Scope        string                   `json:"scope"`
-	WorkspaceID  string                   `json:"workspace_id"`
-	Mutation     KnowledgeMutation        `json:"mutation"`
-	SourcePath   string                   `json:"source_path"`
-	SourceSHA256 string                   `json:"source_sha256"`
-	Conversion   docling.Provenance       `json:"conversion"`
-	Current      *atlasops.PageProjection `json:"current,omitempty"`
-	Provenance   atlasops.Provenance      `json:"provenance"`
-	ReviewDigest string                   `json:"review_digest"`
+	Scope          string                   `json:"scope"`
+	WorkspaceID    string                   `json:"workspace_id"`
+	Mutation       KnowledgeMutation        `json:"mutation"`
+	SourcePath     string                   `json:"source_path"`
+	SourceSHA256   string                   `json:"source_sha256"`
+	Conversion     docling.Provenance       `json:"conversion"`
+	Current        *atlasops.PageProjection `json:"current,omitempty"`
+	Provenance     atlasops.Provenance      `json:"provenance"`
+	ReviewDigest   string                   `json:"review_digest"`
+	OwnerPromotion *ownerKnowledgePromotion `json:"owner_promotion,omitempty"`
 }
 
 func (b *Bound) KnowledgeReview(in KnowledgeMutation) (KnowledgeReview, error) {
@@ -212,6 +261,9 @@ func (b *Bound) KnowledgeReview(in KnowledgeMutation) (KnowledgeReview, error) {
 }
 func (b *Bound) knowledgeReview(ctx context.Context, in KnowledgeMutation) (KnowledgeReview, error) {
 	var r KnowledgeReview
+	if in.KnowledgeDestination == "workspace" {
+		in.KnowledgeDestination = ""
+	}
 	encoded, err := json.Marshal(in)
 	if err != nil {
 		return r, err
@@ -222,23 +274,38 @@ func (b *Bound) knowledgeReview(ctx context.Context, in KnowledgeMutation) (Know
 	if artifactPath(in.Page) != nil || !strings.HasSuffix(in.Page, ".md") || !utf8.ValidString(in.Text) || strings.ContainsRune(in.Text, 0) || strings.TrimSpace(in.Text) == "" || len(in.Text) > 256<<10 || in.Operation == "knowledge.append" && (len(in.Text) > 8<<10 || !validContentDigest(in.ExpectedPageRevision) || !strings.HasPrefix(in.Section, "#")) {
 		return r, errors.New("knowledge_invalid_input")
 	}
-	if err := b.workspacePage(in.Page); err != nil {
+	if in.KnowledgeDestination != "owner" {
+		if err := b.workspacePage(in.Page); err != nil {
+			return r, err
+		}
+	} else if _, err := b.ownerKnowledgeAdmission("", in.Page); err != nil {
 		return r, err
 	}
 	a, err := b.readContent(in.ArtifactID)
 	if err != nil {
 		return r, err
 	}
+	var promotion *ownerKnowledgePromotion
+	if in.KnowledgeDestination == "owner" {
+		promotion, err = b.ownerKnowledgeAdmission(a.SourcePath, in.Page)
+		if err != nil {
+			return r, err
+		}
+	}
 	if err = b.checkContentSource(ctx, a); err != nil {
 		return r, err
 	}
-	r = KnowledgeReview{Scope: b.home, WorkspaceID: b.workspaceID, Mutation: in, SourcePath: a.SourcePath, SourceSHA256: a.Result.SourceSHA256, Conversion: a.Provenance}
+	r = KnowledgeReview{Scope: b.home, WorkspaceID: b.workspaceID, Mutation: in, SourcePath: a.SourcePath, SourceSHA256: a.Result.SourceSHA256, Conversion: a.Provenance, OwnerPromotion: promotion}
+
 	// Intent identity excludes the transport and current page: retries reach the
 	// canonical journal with exactly the original request and provenance.
 	intent, _ := json.Marshal(r)
 	id := contentDigest(intent)
 	r.Provenance = atlasops.Provenance{Origin: atlasops.OriginAttended, SessionID: "content-" + id, IdempotencyKey: id, Ritual: "content:" + in.ArtifactID}
-	engine, err := b.knowledgeEngine()
+	if r.OwnerPromotion != nil {
+		r.Provenance.OccurrenceID = "workspace:" + b.workspaceID + ";source:" + r.SourceSHA256 + ";pack:" + r.Conversion.PackSHA256 + ";manifest:" + r.Conversion.ManifestSHA256 + ";lock:" + r.Conversion.LockSHA256
+	}
+	engine, err := b.selectedKnowledgeEngine(in, nil)
 	if err != nil {
 		return r, err
 	}
@@ -269,7 +336,27 @@ func (b *Bound) applyKnowledgeReview(ctx context.Context, in KnowledgeMutation, 
 	if digest == "" || digest != r.ReviewDigest {
 		return atlasops.Result{}, errOwnerReviewChanged
 	}
-	engine, err := b.workspaceEngine(func() error { return b.checkSelectedContentSource(ctx, r.SourcePath, r.SourceSHA256) })
+	effect := func() error { return b.checkSelectedContentSource(ctx, r.SourcePath, r.SourceSHA256) }
+	if r.OwnerPromotion != nil {
+		effect = func() error {
+			promotion, err := b.ownerKnowledgeAdmission(r.SourcePath, r.Mutation.Page)
+			if err != nil {
+				return err
+			}
+			if *promotion != *r.OwnerPromotion {
+				return errOwnerReviewChanged
+			}
+			artifact, err := b.readContent(r.Mutation.ArtifactID)
+			if err != nil {
+				return err
+			}
+			if artifact.Result.SourceSHA256 != r.SourceSHA256 || artifact.Provenance != r.Conversion {
+				return errOwnerReviewChanged
+			}
+			return b.checkContentSource(ctx, artifact)
+		}
+	}
+	engine, err := b.selectedKnowledgeEngine(r.Mutation, effect)
 	if err != nil {
 		return atlasops.Result{}, err
 	}
@@ -286,7 +373,15 @@ func knowledgePresentation(r KnowledgeReview) map[string]any {
 	if r.Current != nil {
 		current = r.Current.Content
 	}
-	return map[string]any{"Operation": r.Mutation.Operation, "Workspace": r.WorkspaceID, "Source document": r.SourcePath, "Source SHA-256": r.SourceSHA256, "Converted artifact": r.Mutation.ArtifactID, "Runtime pack SHA-256": r.Conversion.PackSHA256, "Page": r.Mutation.Page, "Section": r.Mutation.Section, "Current page": current, "Exact proposed text": r.Mutation.Text, "Expected page revision": r.Mutation.ExpectedPageRevision}
+	presentation := map[string]any{"Operation": r.Mutation.Operation, "Workspace": r.WorkspaceID, "Source document": r.SourcePath, "Source SHA-256": r.SourceSHA256, "Converted artifact": r.Mutation.ArtifactID, "Runtime pack SHA-256": r.Conversion.PackSHA256, "Page": r.Mutation.Page, "Section": r.Mutation.Section, "Current page": current, "Exact proposed text": r.Mutation.Text, "Expected page revision": r.Mutation.ExpectedPageRevision}
+	if r.OwnerPromotion != nil {
+		presentation["Destination"] = "Owner-global private professional atlas; this page is available outside the originating workspace."
+		presentation["Promotion"] = "Explicitly selected internal source to owner knowledge; structural scope checks are not semantic classification or permission to promote client data."
+		presentation["Source workspace"] = r.WorkspaceID
+		presentation["Artifact availability"] = "The original source and converted artifact remain in their originating workspace; their pointer may later be unavailable. No raw artifact is copied or moved."
+		presentation["Conversion provenance"] = r.Conversion
+	}
+	return presentation
 }
 func contentProgress(ctx context.Context, req *mcp.CallToolRequest, progress float64, message string) {
 	if req.Session != nil && req.Params.GetProgressToken() != nil {
@@ -349,11 +444,15 @@ func (b *Bound) handleContent(ctx context.Context, req *mcp.CallToolRequest, in 
 				value, err = engine.Collect(atlasops.CollectRequest{Purpose: in.Purpose, Reader: atlasops.ReaderOwnerSession, Pages: in.Pages})
 			}
 		case "knowledge.create", "knowledge.append":
-			mutation := KnowledgeMutation{Operation: in.Operation, ArtifactID: in.ArtifactID, Page: in.Page, Section: in.Section, Text: in.Text, ExpectedPageRevision: in.ExpectedPageRevision}
+			mutation := KnowledgeMutation{Operation: in.Operation, ArtifactID: in.ArtifactID, Page: in.Page, Section: in.Section, Text: in.Text, ExpectedPageRevision: in.ExpectedPageRevision, KnowledgeDestination: in.KnowledgeDestination}
 			var review KnowledgeReview
 			review, err = b.knowledgeReview(ctx, mutation)
 			if err == nil {
-				err = b.confirm(ctx, req, "Authorize this exact workspace knowledge change?", review, knowledgePresentation(review))
+				question := "Authorize this exact workspace knowledge change?"
+				if review.OwnerPromotion != nil {
+					question = "Authorize this exact promotion of the selected internal document into owner-global private professional knowledge?"
+				}
+				err = b.confirm(ctx, req, question, review, knowledgePresentation(review))
 			}
 			if err == nil {
 				var applied atlasops.Result

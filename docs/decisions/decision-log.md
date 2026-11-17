@@ -1572,3 +1572,14 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: Missing, failed or unmatched starts/stops keep the pair unresolved and block closure/reset; retry only the exact pending dispatch. A completed pair cannot reenter the same turn. Old schema-2 state without the optional pair field remains valid, while older binaries reject the new field. Source and CLI-hook tests do not attest actual model overlap, verdict quality, host enforcement or installation authority.
 - Refs: specs/063-product-native-plugin.md; internal/nativeagentflow; internal/claudeagents; adapters/mcp/hooks.go; bundles/tech-core/skills/pocock-code-review/SKILL.md
 - Supersedes: none
+
+## OPKI - Promote explicitly reviewed internal document knowledge to the owner atlas
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product engineering
+- Context: Verified local-content artifacts belong to one registered workspace, while the existing professional owner atlas is owner-global private knowledge. Copying an artifact's text through an unrelated authored-page operation loses the source-bound ingestion contract; selecting an owner destination must never declassify client material or initialize another store silently.
+- Decision: Extend only existing knowledge.create/knowledge.append with an optional closed knowledge_destination of workspace or owner. Omission and explicit workspace normalize to the existing workspace request so old review, journal and replay identities remain unchanged. Owner promotion requires a currently validated active internal setup, no account/case selection or pending/reconciliation state, and a source outside canonical account/client namespaces. Reuse immutable artifact/source/output/runtime-pack validation and the existing owner atlas engine. A separate full trusted review names the selected source, its workspace/artifact/hash provenance, exact owner-global private destination and proposed text. Recheck admission and source at review and effect. Missing owner scaffolding requires the existing separately reviewed owner.atlas.prepare operation. No model assertion supplies source classification or consent.
+- Consequences: The page belongs to the owner's existing concepts/learnings/development corpus; original sources and converted artifacts remain bound to their original workspace, without a raw copy, new store or cross-workspace artifact read. The promotion is a structural admission plus explicit owner decision, not a semantic guarantee that arbitrary text contains no client data. Artifact pointers may become unavailable when the originating workspace is unavailable. No owner SELF, generated memory, automatic classification, installation or native/runtime qualification follows from this change.
+- Refs: specs/061-product-local-content.md; specs/014-human-atlas-bootstrap.md; specs/007-content-navigation.md; adapters/mcp/content.go; adapters/mcp/owner_atlas.go; issue #464
+- Supersedes: none
