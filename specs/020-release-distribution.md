@@ -557,6 +557,26 @@ implausibly future publication (bounded five-minute skew). Do not claim protecti
 against owner-controlled clock tampering beyond that contract. Test-clock seams
 remain trusted in-process composition only.
 
+### Routine availability and deliberate update (SFRD)
+
+Offer `update-availability` as an opt-in owner/managed-installation job on the
+existing maintenance worker. After genuine qualification and reviewed enrollment,
+observe the enrolled source once per local calendar day on first active use;
+coalesce missed days and concurrent/reconnected workspaces. This metadata-only
+observation alone may bypass idle. Reuse bounded authenticated `ReviewSynced`
+reads, with no source discovery/enrollment, custody advancement, payload staging,
+activation or model call. Preserve the configured private brain location.
+
+Keep bounded local scheduler/diagnostic records distinct from source-content
+writes and installation custody. Availability reports retain observation time,
+leave payload `not_checked` and never describe offline/partial/expired/recalled
+input as current. The conversational update entry uses the existing exact reviewed
+installer and a deliberate supported reconnect boundary. An old running session,
+copied instruction library or retained qualification is not evidence that the new
+complete product is loaded and functional. Preserve stale-proof refusal and
+report the actual revalidation/client phases. Spec062 owns this job lifecycle;
+the separate attended `update-check` below retains all its existing effects.
+
 ### 8. Real attended update-check and focused complete proof
 
 The existing `update-check` job remains unattended-never and cannot enroll as

@@ -46,7 +46,11 @@ func (b *Bound) maintain(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		err := b.backgroundMaintenance(ctx)
+		service, availabilityErr := b.maintenanceService()
+		if availabilityErr == nil {
+			_, availabilityErr = service.RunUpdateAvailability(ctx)
+		}
+		err := errors.Join(availabilityErr, b.backgroundMaintenance(ctx))
 		if ctx.Err() != nil {
 			return
 		}

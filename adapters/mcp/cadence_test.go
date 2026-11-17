@@ -104,7 +104,7 @@ func TestMaintenanceFreshStatusReadOnly(t *testing.T) {
 			before := cadenceTree(t, f)
 			cs := f.connect(t, nil)
 			status := cadenceCall(t, cs, "status", nil, false)
-			if len(status["jobs"].([]any)) != 18 {
+			if len(status["jobs"].([]any)) != 19 {
 				t.Fatal(status)
 			}
 			for _, raw := range status["jobs"].([]any) {
@@ -112,6 +112,10 @@ func TestMaintenanceFreshStatusReadOnly(t *testing.T) {
 				if job["revision"] != float64(0) || job["state"] != "inactive" || job["qualification_state"] != "unqualified" {
 					t.Fatal(job)
 				}
+			}
+			cadenceJob(t, status, maintenance.UpdateAvailabilityJobID)
+			if missing := cadenceCall(t, cs, "report", map[string]any{"job_id": maintenance.UpdateAvailabilityJobID}, true); missing["code"] != "maintenance_rejected" {
+				t.Fatalf("new metadata job did not reach its read-only report owner: %v", missing)
 			}
 			if got := cadenceCall(t, cs, "run", nil, false); got["state"] != "no_due_work" {
 				t.Fatal(got)
