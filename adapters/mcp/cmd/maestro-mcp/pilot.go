@@ -49,6 +49,7 @@ type pilotReport struct {
 	DesktopReadyPrompt string                               `json:"desktop_ready_prompt"`
 	DesktopExtension   string                               `json:"desktop_extension,omitempty"`
 	Runtime            *packaging.EngineeringRuntimeBinding `json:"runtime,omitempty"`
+	Conversion         *pilotConversionExpectation          `json:"conversion,omitempty"`
 }
 
 func (r *pilotReport) add(name, status, reason, action string) {
@@ -441,6 +442,14 @@ func pilotCall(ctx context.Context, s *mcp.ClientSession, name string, args map[
 }
 
 func finishPilotReport(r *pilotReport, output io.Writer) error {
+	if r.Conversion != nil {
+		if r.Conversion.State == "blocked_identity_mismatch" {
+			r.Status = "blocked"
+		}
+		if err := r.Conversion.validate(); err != nil {
+			r.add("conversion", "failed", "conversion_expectation_invalid", "Preserve o diagnóstico; nenhuma conversão foi autorizada pelo menu.")
+		}
+	}
 	for _, check := range r.Checks {
 		if check.Status == "failed" {
 			r.Status = "blocked"
@@ -457,6 +466,17 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 			documents := fmt.Sprintf(" Depois da jornada acima, teste também o conversor local deste ensaio. Reconfirme o mesmo workspace com maestro_context e consulte content.status. Continue somente com state ready e pack_sha256 exatamente %s; divergência ou indisponibilidade encerra esta parte sem instalar ou reparar nada. Converta apenas o arquivo sintético maestro-pilot.docx, já preparado no workspace, por maestro_apply content.convert. Leia o artifact_ref realmente retornado usando content.read nos formatos markdown e document, em páginas de até 4096 bytes e seguindo a paginação real. Verifique o marcador MAESTRO_DOCLING_OFFLINE_20261101 e a tabela sintética com alpha/7. Mostre a rota, o artefato e o resultado observado. Essa parte autoriza conversão e leitura de artefatos derivados; não altera o estado do trabalho, não captura memória, não salva conhecimento nem usa conversor externo. Registre o que faltou em vez de inferir sucesso da presença do pacote.", r.Runtime.PackSHA256)
 			r.CodePrompt += documents
 			r.DesktopPrompt += documents
+		}
+		if r.Conversion != nil {
+			if r.Conversion.State == "ready_for_participant_test" {
+				documents := installedConversionJourney(*r.Conversion)
+				r.CodePrompt += documents
+				r.DesktopPrompt += documents
+			} else {
+				pending := " Conversão de documento: não testada, pois o runtime atual está pendente ou indisponível. Não execute content.convert, não instale ou repare componentes e não use outro conversor; registre essa parte como não testada. As demais etapas acima continuam separadas dessa pendência."
+				r.CodePrompt += pending
+				r.DesktopPrompt += pending
+			}
 		}
 	}
 	var md strings.Builder
@@ -478,6 +498,9 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 	}
 	if r.Runtime != nil {
 		fmt.Fprintf(&md, "Runtime experimental: versão `%s`, alvo `%s/%s`, expiração `%s`. Identidade do pack: `%s`. A conferência apenas verificou sua disponibilidade; a conversão real fica na jornada guiada com o DOCX sintético. A chave experimental não é assinatura organizacional nem atualização de produção.\n\n", r.Runtime.ClientVersion, r.Runtime.Target.OS, r.Runtime.Target.Arch, r.Runtime.ExpiresAt, r.Runtime.PackSHA256)
+	}
+	if r.Conversion != nil {
+		fmt.Fprintf(&md, "Jornada de conversão: `%s`. Expectativas do Current autenticado: manifest `%s`, pack `%s`; documento público `%s`, SHA256 `%s`. Metadados de diagnóstico e roteiro, sem autoridade de instalação ou prova de conversão. O verificador não cria o documento no workspace; somente a ação explícita de teste completo prepara uma cópia sem substituir arquivos. Conversão e leitura paginada reais continuam pendentes até o ensaio no cliente.\n\n", r.Conversion.State, r.Conversion.ManifestSHA256, r.Conversion.PackSHA256, r.Conversion.Source, r.Conversion.SourceSHA256)
 	}
 	md.WriteString("| Verificação | Estado | Motivo | Próxima ação |\n| --- | --- | --- | --- |\n")
 	for _, check := range r.Checks {

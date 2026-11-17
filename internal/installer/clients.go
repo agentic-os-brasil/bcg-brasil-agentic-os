@@ -442,7 +442,7 @@ func MaterializeClientsSeeded(ctx context.Context, o ClientOptions, digest strin
 		} else if !errors.Is(e, os.ErrNotExist) {
 			return e
 		}
-		material, e := build(ctx, s, review.Binding, previous)
+		material, e := buildClientsWithSeedFence(ctx, o, s, review.Binding, previous, build)
 		if e != nil {
 			return fmt.Errorf("activation-applied/client-materialization-pending: %w", e)
 		}
@@ -495,6 +495,9 @@ func ReadClientsSeeded(ctx context.Context, o ClientOptions) (ClientStatus, erro
 	}
 	if !sameClientCurrent(record.Materialization, s) {
 		status.Reason = "current_release_changed"
+		if err := recheckExperimentalOperation(o.SeededOperationOptions); err != nil {
+			return status, err
+		}
 		return status, nil
 	}
 	if o.Request.Workspace == "" {
@@ -528,6 +531,9 @@ func ReadClientsSeeded(ctx context.Context, o ClientOptions) (ClientStatus, erro
 		status.CodeRegistration = "historical_registered_readback"
 	}
 	status.SessionLoading = "native_loading_unattested"
+	if err := recheckExperimentalOperation(o.SeededOperationOptions); err != nil {
+		return status, err
+	}
 	return status, nil
 }
 func PrepareStableLaunch(ctx context.Context, o ClientOptions) (QualifiedLaunch, error) {
@@ -592,6 +598,7 @@ func observeClientsSeeded(ctx context.Context, o ClientOptions, expectedRecord s
 		return ClientRecord{}, err
 	}
 	var r ClientRecord
+	registrationCompleted := false
 	err := installtx.GuardQualifiedCurrent(o.ManagedRoot, o.DataRoot, installtx.ReleaseBinding{}, time.Now(), func() error {
 		var body []byte
 		var e error
@@ -613,10 +620,14 @@ func observeClientsSeeded(ctx context.Context, o ClientOptions, expectedRecord s
 			return e
 		}
 		if register != nil {
+			if err := recheckExperimentalOperation(o.SeededOperationOptions); err != nil {
+				return err
+			}
 			observation, err := register(r)
 			if err != nil {
 				return err
 			}
+			registrationCompleted = true
 			code = &observation
 		}
 		if code != nil {
@@ -636,6 +647,9 @@ func observeClientsSeeded(ctx context.Context, o ClientOptions, expectedRecord s
 		}
 		return writeClientRecord(o.SeededOperationOptions, r)
 	})
+	if err != nil && registrationCompleted && o.ExperimentalSeed != nil {
+		return r, fmt.Errorf("Code registration callback completed; current record remains pending and the prior record is preserved; inspect native state before retrying: %w", err)
+	}
 	return r, err
 }
 func ClientRecordDigest(r ClientRecord) string {
@@ -652,6 +666,9 @@ func writeClientRecord(o SeededOperationOptions, r ClientRecord) error {
 	if err != nil || len(body) > 64<<10 {
 		return errors.New("bounded client record required")
 	}
+	if err := recheckExperimentalOperation(o); err != nil {
+		return err
+	}
 	directory := filepath.Dir(p)
 	if err = os.MkdirAll(directory, 0700); err != nil {
 		return err
@@ -664,6 +681,9 @@ func writeClientRecord(o SeededOperationOptions, r ClientRecord) error {
 			return e
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := recheckExperimentalOperation(o); err != nil {
 		return err
 	}
 	return scheduler.WritePrivateFileAtomic(p, body)

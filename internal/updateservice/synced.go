@@ -17,6 +17,9 @@ import (
 )
 
 type SyncedOptions struct {
+	// Admission is an additional, narrowing constraint supplied by a verified
+	// experimental owner. It never replaces registry or source verification.
+	Admission                                   SyncedAdmission
 	UserHome, ManagedRoot, DataRoot, SourceRoot string
 	ExpectedSource                              releasecontract.SourceTuple
 	Registry                                    releaseverify.KeyRegistry
@@ -26,6 +29,12 @@ type SyncedOptions struct {
 	BeforeObserve func(func() error) error
 	BeforeEffect  func(func() error) error
 	AfterObserve  func(installtx.State) error
+}
+
+type SyncedAdmission interface {
+	VerifySource(releasecontract.SourceTuple) error
+	VerifyReleaseIdentity(string, string) error
+	VerifyRelease(releaseverify.VerifiedRelease) error
 }
 
 // SyncedReview is private trusted-form data. Ordinary MCP results must project
@@ -59,6 +68,14 @@ func ReviewSynced(o SyncedOptions) (SyncedReview, error) {
 	if err != nil {
 		return SyncedReview{}, err
 	}
+	if o.Admission != nil {
+		if err := o.Admission.VerifySource(o.ExpectedSource); err != nil {
+			return SyncedReview{}, err
+		}
+		if err := o.Admission.VerifyReleaseIdentity(current.Binding.ManifestSHA256, current.Binding.ClientInputsSHA256); err != nil {
+			return SyncedReview{}, err
+		}
+	}
 	if current.SchemaVersion != 4 || current.Server.ExecutionContract != releasecontract.SyncedSourceContract {
 		return SyncedReview{}, errors.New("source enrollment upgrade/migration unavailable: authenticate and install a compatible source-aware release")
 	}
@@ -71,6 +88,11 @@ func ReviewSynced(o SyncedOptions) (SyncedReview, error) {
 	g, err := releaseprovider.ReadSyncedMetadata(o.SourceRoot, o.ExpectedSource, o.Registry)
 	if err != nil {
 		return SyncedReview{}, err
+	}
+	if o.Admission != nil {
+		if err := o.Admission.VerifyReleaseIdentity(g.Generation.ManifestSHA256, g.Generation.ClientInputsSHA256); err != nil {
+			return SyncedReview{}, err
+		}
 	}
 	r := SyncedReview{Generation: g.Generation, CurrentSHA256: installtx.StateDigest(current), SourceRoot: o.SourceRoot, Source: o.ExpectedSource, GenerationSHA256: g.SHA256, Sequence: g.Generation.Sequence, CandidateRelease: g.Generation.Release, ManifestSHA256: g.Generation.ManifestSHA256, ClientInputsSHA256: g.Generation.ClientInputsSHA256, ExpiresAt: g.Generation.ExpiresAt, Effects: []string{"installation_source_custody", "verified_candidate_snapshot", "local_update_plan"}}
 	r.ManagedRoot = o.ManagedRoot
@@ -111,6 +133,14 @@ func CheckSynced(o SyncedOptions, confirmedDigest string) (CheckResult, error) {
 	}
 	var current installtx.State
 	observe := func() error {
+		if o.Admission != nil {
+			if err := o.Admission.VerifySource(o.ExpectedSource); err != nil {
+				return err
+			}
+			if err := o.Admission.VerifyReleaseIdentity(g.Generation.ManifestSHA256, g.Generation.ClientInputsSHA256); err != nil {
+				return err
+			}
+		}
 		var err error
 		current, err = installtx.ObserveSourceWithRegistry(o.DataRoot, o.ManagedRoot, o.SourceRoot, g, r.CurrentSHA256, now, o.Registry)
 		if err != nil {
@@ -171,6 +201,9 @@ func CheckSynced(o SyncedOptions, confirmedDigest string) (CheckResult, error) {
 			verified, err = releaseprovider.SnapshotSyncedRelease(o.SourceRoot, destination, g, o.Registry)
 		} else {
 			err = statErr
+		}
+		if err == nil && o.Admission != nil {
+			err = o.Admission.VerifyRelease(verified)
 		}
 		return err
 	}

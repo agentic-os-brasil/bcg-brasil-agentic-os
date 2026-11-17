@@ -159,5 +159,8 @@ func CurrentClientPluginPath(ctx context.Context, o ClientOptions) (string, erro
 	if err != nil || clientDigest(before) != clientDigest(after) {
 		return "", errors.New("current client record changed during readback")
 	}
+	if err := recheckExperimentalOperation(o.SeededOperationOptions); err != nil {
+		return "", err
+	}
 	return filepath.Join(r.Materialization.CodeRoot, "plugins", "maestro-product"), nil
 }

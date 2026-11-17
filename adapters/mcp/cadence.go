@@ -73,6 +73,7 @@ func (b *Bound) maintenanceServiceWithEligibility(eligibility func() error) (*ma
 	// Foreground and serve-owned work share local authority. ClientInfo cannot
 	// qualify a native Code/Desktop adapter or an operating-system wake.
 	return maintenance.NewService(maintenance.ServiceOptions{
+		SourceAdmission:  b.experimentalSourceAdmission(),
 		EligibilityGuard: eligibility,
 		WeeklyCandidate:  b.options.WeeklyCandidate, WeeklyNativeExecutor: b.options.WeeklyNativeExecutor,
 		ProductRoot: b.options.ProductRoot, UserHome: b.options.UserHome,

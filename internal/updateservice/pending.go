@@ -233,6 +233,17 @@ func ReconcilePending(
 	dataRoot, managedRoot, planID string,
 	registry releaseverify.KeyRegistry,
 ) (Pending, bool, error) {
+	return ReconcilePendingWithAdmission(dataRoot, managedRoot, planID, registry, nil)
+}
+
+// ReconcilePendingWithAdmission adds only a narrowing source/release fence to
+// the existing recovery owner. Recovery authenticates its original prepared
+// transaction; it must not rebuild a new update from an already committed target.
+func ReconcilePendingWithAdmission(
+	dataRoot, managedRoot, planID string,
+	registry releaseverify.KeyRegistry,
+	admission SyncedAdmission,
+) (Pending, bool, error) {
 	if managedRoot == "" || !pendingPlanIDPattern.MatchString(planID) || registry == nil {
 		return Pending{}, false, errors.New("managed root, pending plan ID and release-key registry are required")
 	}
@@ -270,8 +281,14 @@ func ReconcilePending(
 		options.Source = pending.Plan.Source
 		options.SourceStateSHA256 = pending.Plan.FromStateSHA256
 	}
+	if err := verifyReconciliationAdmission(admission, pending, verified); err != nil {
+		return Pending{}, false, err
+	}
 	if _, err := installtx.ValidatePrepared(pending.ActivationPlanPath, verified, options); err != nil {
 		return Pending{}, false, fmt.Errorf("validate reconciled activation: %w", err)
+	}
+	if err := verifyReconciliationAdmission(admission, pending, verified); err != nil {
+		return Pending{}, false, err
 	}
 	reconciled, err := installtx.ReconcileActivated(
 		pending.ActivationPlanPath,
@@ -281,6 +298,16 @@ func ReconcilePending(
 		return Pending{}, false, err
 	}
 	return pending, reconciled, nil
+}
+
+func verifyReconciliationAdmission(admission SyncedAdmission, pending Pending, verified releaseverify.VerifiedRelease) error {
+	if admission == nil {
+		return nil
+	}
+	if err := admission.VerifySource(pending.Plan.Source.Tuple); err != nil {
+		return err
+	}
+	return admission.VerifyRelease(verified)
 }
 
 func LoadPending(dataRoot string) (Pending, error) {

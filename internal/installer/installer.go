@@ -69,7 +69,8 @@ type commandRunner func(context.Context, string, ...string) ([]byte, error)
 type NativeTrustMode string
 
 const (
-	NativeTrustStrict NativeTrustMode = "strict"
+	NativeTrustStrict                NativeTrustMode = "strict"
+	NativeTrustExperimentalInstalled NativeTrustMode = "engineering-installed-seed-v1"
 	// NativeTrustCanarySimple keeps the signed release-manifest verification but
 	// deliberately omits platform certificate and factory-pin gates for the
 	// controlled Windows Canary installer.
@@ -91,6 +92,7 @@ type LocalBetaPins struct {
 // come from the same immutable release package. AuthorityRegistry is the
 // public registry that the seeded bootstrapper is compiled to pin.
 type Options struct {
+	ExperimentalSeed   *VerifiedExperimentalSeed
 	UserHome           string
 	ReleaseDir         string
 	Bootstrapper       string
@@ -110,30 +112,32 @@ type Options struct {
 // Plan is the result shown by the wizard before it allows the one install
 // confirmation. No filesystem mutation happens while producing a Plan.
 type Plan struct {
-	UserHome             string                        `json:"user_home,omitempty"`
-	Server               *installtx.ExecutableIdentity `json:"server,omitempty"`
-	Profile              string                        `json:"profile,omitempty"`
-	ServerVersion        string                        `json:"server_version,omitempty"`
-	InstallerProtocol    string                        `json:"installer_protocol,omitempty"`
-	ClientInputsSHA256   string                        `json:"client_inputs_sha256,omitempty"`
-	EmbeddedInputsSHA256 string                        `json:"embedded_inputs_sha256,omitempty"`
-	Release              string                        `json:"release"`
-	Channel              string                        `json:"channel"`
-	TargetOS             string                        `json:"target_os"`
-	TargetArch           string                        `json:"target_arch"`
-	ManagedRoot          string                        `json:"managed_root"`
-	DataRoot             string                        `json:"data_root"`
-	ReleaseDir           string                        `json:"release_dir"`
-	Bootstrapper         string                        `json:"bootstrapper"`
-	AuthorityRegistry    string                        `json:"authority_registry"`
-	ManifestSHA256       string                        `json:"manifest_sha256"`
-	RegistrySHA256       string                        `json:"registry_sha256"`
-	BootstrapperSHA256   string                        `json:"bootstrapper_sha256"`
-	BootstrapperVersion  string                        `json:"bootstrapper_version"`
-	ReleaseIssuer        string                        `json:"release_issuer"`
-	ReleaseKeyID         string                        `json:"release_key_id"`
-	NativeTrustMode      string                        `json:"native_trust_mode"`
-	PlanDigest           string                        `json:"plan_digest"`
+	ExperimentalSeed      *ExperimentalSeedIdentity     `json:"experimental_seed,omitempty"`
+	ExperimentalBrainHome string                        `json:"experimental_brain_home,omitempty"`
+	UserHome              string                        `json:"user_home,omitempty"`
+	Server                *installtx.ExecutableIdentity `json:"server,omitempty"`
+	Profile               string                        `json:"profile,omitempty"`
+	ServerVersion         string                        `json:"server_version,omitempty"`
+	InstallerProtocol     string                        `json:"installer_protocol,omitempty"`
+	ClientInputsSHA256    string                        `json:"client_inputs_sha256,omitempty"`
+	EmbeddedInputsSHA256  string                        `json:"embedded_inputs_sha256,omitempty"`
+	Release               string                        `json:"release"`
+	Channel               string                        `json:"channel"`
+	TargetOS              string                        `json:"target_os"`
+	TargetArch            string                        `json:"target_arch"`
+	ManagedRoot           string                        `json:"managed_root"`
+	DataRoot              string                        `json:"data_root"`
+	ReleaseDir            string                        `json:"release_dir"`
+	Bootstrapper          string                        `json:"bootstrapper"`
+	AuthorityRegistry     string                        `json:"authority_registry"`
+	ManifestSHA256        string                        `json:"manifest_sha256"`
+	RegistrySHA256        string                        `json:"registry_sha256"`
+	BootstrapperSHA256    string                        `json:"bootstrapper_sha256"`
+	BootstrapperVersion   string                        `json:"bootstrapper_version"`
+	ReleaseIssuer         string                        `json:"release_issuer"`
+	ReleaseKeyID          string                        `json:"release_key_id"`
+	NativeTrustMode       string                        `json:"native_trust_mode"`
+	PlanDigest            string                        `json:"plan_digest"`
 }
 
 // Result is the durable handoff summary returned after bootstrapper success.
@@ -288,11 +292,17 @@ func Prepare(options Options) (Plan, releaseverify.VerifiedRelease, error) {
 	if err := validateNativeTrustPolicy(options, verified, registryDigest, bootstrapperDigest); err != nil {
 		return Plan{}, releaseverify.VerifiedRelease{}, err
 	}
-	if err := options.VerifyNative(context.Background(), options.Bootstrapper); err != nil {
+	if err := verifyInstallerArtifact(context.Background(), options, options.Bootstrapper); err != nil {
 		return Plan{}, releaseverify.VerifiedRelease{}, fmt.Errorf("native bootstrapper trust check: %w", err)
 	}
 	bootstrapperVersion := verified.Manifest.Release
-	if options.NativeTrustMode == NativeTrustStrict {
+	if options.ExperimentalSeed != nil {
+		status, seedErr := readExperimentalSeedStatus(context.Background(), options.Bootstrapper, options.Run)
+		if seedErr != nil || !experimentalStatusMatchesIdentity(status, options.ExperimentalSeed.Identity()) || status.InstallerVersion != verified.Manifest.Delivery.InstallerVersion {
+			return Plan{}, releaseverify.VerifiedRelease{}, errors.New("experimental child seed differs from exact release role")
+		}
+		bootstrapperVersion = status.InstallerVersion
+	} else if options.NativeTrustMode == NativeTrustStrict {
 		status, seedErr := readSeedStatus(context.Background(), options.Bootstrapper, options.Run)
 		if seedErr != nil {
 			return Plan{}, releaseverify.VerifiedRelease{}, seedErr
@@ -335,6 +345,9 @@ func Prepare(options Options) (Plan, releaseverify.VerifiedRelease, error) {
 		plan.InstallerProtocol = verified.Manifest.Delivery.InstallerProtocol
 		plan.ClientInputsSHA256 = verified.Manifest.Delivery.ClientInputsSHA256
 		plan.EmbeddedInputsSHA256 = verified.Manifest.Server.EmbeddedInputsSHA256
+	}
+	if err := verifyExperimentalPreparation(options, &plan); err != nil {
+		return Plan{}, releaseverify.VerifiedRelease{}, err
 	}
 	plan.PlanDigest = PlanDigest(plan)
 	return plan, verified, nil
@@ -394,6 +407,9 @@ func Install(ctx context.Context, options Options) (Result, error) {
 	if err := copyRegular(plan.AuthorityRegistry, filepath.Join(plan.ManagedRoot, "trust", "release-authority-registry.json"), 0o600); err != nil {
 		return pending(err)
 	}
+	if err := stageExperimentalSeed(plan, options.ExperimentalSeed); err != nil {
+		return pending(err)
+	}
 	bootstrapperName := "bcgos-bootstrap"
 	if plan.Profile != "" {
 		bootstrapperName = "maestro-install"
@@ -420,15 +436,12 @@ func Install(ctx context.Context, options Options) (Result, error) {
 		}
 		return pending(err)
 	}
-	if err := options.VerifyNative(ctx, installedBootstrapper); err != nil {
+	if err := verifyInstallerArtifact(ctx, options, installedBootstrapper); err != nil {
 		return pending(fmt.Errorf("installed bootstrapper trust check: %w", err))
 	}
-	status, err := readSeedStatus(ctx, installedBootstrapper, runCommand(options.Run))
-	if err != nil || !seedMatchesPlan(status, plan) {
-		if err != nil {
-			return pending(fmt.Errorf("installed bootstrapper seed binding changed during staging: %w", err))
-		}
-		return pending(errors.New("installed bootstrapper seed binding changed during staging"))
+	err = readReviewedSeedStatus(ctx, installedBootstrapper, runCommand(options.Run), plan, options.ExperimentalSeed)
+	if err != nil {
+		return pending(fmt.Errorf("installed bootstrapper seed binding changed during staging: %w", err))
 	}
 	run := options.Run
 	if run == nil {
@@ -636,7 +649,7 @@ func verifyExistingInstallTrust(ctx context.Context, plan Plan, options Options)
 	if bootstrapperDigest != plan.BootstrapperSHA256 {
 		return errors.New("installed bootstrapper does not match the confirmed release package")
 	}
-	if err := options.VerifyNative(ctx, bootstrapper); err != nil {
+	if err := verifyInstallerArtifact(ctx, options, bootstrapper); err != nil {
 		return fmt.Errorf("installed bootstrapper trust check: %w", err)
 	}
 	registryPath := filepath.Join(plan.ManagedRoot, "trust", "release-authority-registry.json")
@@ -647,14 +660,7 @@ func verifyExistingInstallTrust(ctx context.Context, plan Plan, options Options)
 	if digest != plan.RegistrySHA256 {
 		return errors.New("installed authority registry does not match the confirmed release package")
 	}
-	status, err := readSeedStatus(ctx, bootstrapper, options.Run)
-	if err != nil {
-		return err
-	}
-	if !seedMatchesPlan(status, plan) {
-		return errors.New("installed bootstrapper seed does not match the confirmed release package")
-	}
-	return nil
+	return readReviewedSeedStatus(ctx, bootstrapper, options.Run, plan, options.ExperimentalSeed)
 }
 
 func validateCommittedInstallation(plan Plan) error {
@@ -955,6 +961,9 @@ func runCommand(run commandRunner) commandRunner {
 func withDefaults(options Options) Options {
 	if options.NativeTrustMode == "" {
 		options.NativeTrustMode = NativeTrustStrict
+		if options.ExperimentalSeed != nil {
+			options.NativeTrustMode = NativeTrustExperimentalInstalled
+		}
 	}
 	if options.Clock == nil {
 		options.Clock = time.Now
@@ -968,7 +977,7 @@ func withDefaults(options Options) Options {
 	if options.Run == nil {
 		options.Run = execCommand
 	}
-	if options.VerifyNative == nil {
+	if options.VerifyNative == nil && options.ExperimentalSeed == nil {
 		mode := options.NativeTrustMode
 		options.VerifyNative = func(ctx context.Context, path string) error {
 			return nativeSignatureCheck(ctx, path, mode)
@@ -978,6 +987,12 @@ func withDefaults(options Options) Options {
 }
 
 func validateNativeTrustPolicy(options Options, verified releaseverify.VerifiedRelease, registryDigest, bootstrapperDigest string) error {
+	if options.ExperimentalSeed != nil {
+		if options.NativeTrustMode != NativeTrustExperimentalInstalled || options.VerifyNative != nil || !emptyLocalBetaPins(options.LocalBetaPins) || registryDigest != options.ExperimentalSeed.Identity().RegistrySHA256 || bootstrapperDigest != options.ExperimentalSeed.Identity().InstallerSHA256 {
+			return errors.New("explicit experimental installed-seed admission differs")
+		}
+		return options.ExperimentalSeed.VerifyRelease(verified)
+	}
 	if verified.Manifest.Modern() && options.NativeTrustMode != NativeTrustStrict {
 		return errors.New("modern installation requires independent strict native trust")
 	}
