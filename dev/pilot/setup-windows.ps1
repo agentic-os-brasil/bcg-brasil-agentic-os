@@ -69,7 +69,7 @@ $digest = Hash-Text ('ordinary-engineering-rehearsal-v1' + $nl + $KitID + $nl + 
 Write-Host 'Ensaio local de engenharia; sem instalação/atualização assinada.'
 Write-Host ("Produto: $Root\product" + $nl + "Estado privado: $Root\owner" + $nl + "Workspace: $Root\workspace" + $nl + "Perfil Code isolado: $Root\client\code" + $nl + "review_digest=$digest")
 Write-Host 'Somente ao criar este perfil Code novo: autoMemoryEnabled:false e syncClaudeAiPlugins:false desativam a memória automática do cliente e o download/carregamento de plugins sincronizados da conta. Perfis existentes e suas escolhas são preservados.'
-Write-Host 'O pacote Desktop usará revisão local no navegador quando não houver formulário nativo; cada alteração exige sua aprovação exata e expira em 150 segundos.'
+Write-Host 'O pacote Desktop seleciona revisão local no navegador mesmo quando houver formulário nativo; cada alteração exige sua aprovação exata e expira em 150 segundos.'
 if ($RuntimeMode) { Write-Host 'No Code deste ensaio, gravações protegidas usam o navegador local explicitamente selecionado, mesmo com formulários nativos. Leia o registro completo atual/proposto; a caixa começa desmarcada. Recusar, fechar, cancelar ou deixar expirar nunca aprova.'; Write-Host ('Conversor experimental via aquisição direta dos fornecedores: versão ' + $PilotVersion + '; validade ' + $runtime.expires_at + '. O ZIP não contém Python, wheels, DLLs ou archive do runtime. Após inicializar, você verá duas revisões separadas: download/cache e colocação/qualificação local. Nenhuma delas é aprovada por PREPARAR.') }
 if ($Review) { return }
 if ($ConfirmDigest) {
@@ -302,15 +302,16 @@ de conteúdo exigem revisão exata no formulário nativo ou no navegador local s
 Configurações > Extensões > Configurar > Ativado nessa extensão.
 Se o cliente propuser substituir outra extensão, pare.
 
-Revisão do dono no Desktop: este ensaio seleciona explicitamente a revisão local
-no navegador para gravações protegidas. Sem formulário nativo, uma solicitação
-interativa abre o registro completo no navegador deste computador. Leia tudo,
-marque a caixa inicialmente desmarcada e escolha Aprovar alteração exata ou
-Recusar. Fechar, cancelar ou ultrapassar 150 segundos não aprova. Formulários
-nativos continuam tendo prioridade. Este canal não qualifica hooks nem bloqueio
-nativo. Se receber confirmation_unavailable, deixe a ação pendente e confira o
-navegador ou use o Code com sua confirmação nativa. Um sim no chat e a permissão
-de leitura não aprovam gravações.
+Revisão do dono: O Desktop deste ensaio e o Code do kit completo selecionam
+explicitamente a revisão local no navegador para gravações protegidas. Uma
+solicitação interativa abre o registro completo no navegador deste computador,
+mesmo quando o cliente oferece formulário nativo. Leia o conteúdo, marque a caixa
+inicialmente desmarcada e escolha Aprovar alteração exata ou Recusar. Fechar a
+aba, cancelar ou ultrapassar 150 segundos não aprova. Este canal local não
+qualifica formulários MCP, hooks ou bloqueio nativo. Se receber
+confirmation_unavailable, deixe a ação pendente, preserve a mensagem e envie o
+RELATORIO.md ao time. Não repita a chamada, não contorne o bloqueio nem use um sim
+no chat como aprovação. A permissão de leitura não aprova gravações.
 
 workspace_id da criação real:
 
