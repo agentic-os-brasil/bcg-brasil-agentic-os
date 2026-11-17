@@ -246,11 +246,15 @@ func policyContentOracle(t *testing.T, extension string, source, markdown, docum
 		markers(strings.TrimSpace(string(source)))
 		return
 	}
-	wantParser := map[string]string{".docx": "docling.docx", ".csv": "docling.csv", ".html": "docling.html", ".htm": "docling.html", ".md": "docling.markdown", ".epub": "docling.epub", ".xlsx": "docling.xlsx", "export": "docling.json", ".xls": "xlrd.biff"}[extension]
+	wantParser := map[string]string{".docx": "docling.docx", ".pdf": "docling.pdf_native_text", ".pptx": "docling.pptx", ".csv": "docling.csv", ".html": "docling.html", ".htm": "docling.html", ".md": "docling.markdown", ".epub": "docling.epub", ".xlsx": "docling.xlsx", "export": "docling.json", ".xls": "xlrd.biff"}[extension]
 	if result["parser"] != wantParser {
 		t.Fatal("actual parser missing", result)
 	}
-	if extension == ".xls" {
+	if extension == ".pdf" {
+		if result["route"] != "docling_local" || result["fidelity"] != "textual" || !reflect.DeepEqual(result["warnings"], []any{"pdf_native_text_only"}) {
+			t.Fatal("PDF fidelity misrepresented", result)
+		}
+	} else if extension == ".xls" {
 		if result["route"] != "maestro_biff_v1" || result["fidelity"] != "textual" || result["fallback_reason"] != "native_xls_requires_unmanaged_office" {
 			t.Fatal("BIFF fidelity misrepresented", result)
 		}
@@ -258,6 +262,41 @@ func policyContentOracle(t *testing.T, extension string, source, markdown, docum
 		t.Fatal("native route misrepresented", result)
 	}
 	switch extension {
+	case ".pdf":
+		markers("PAGE ONE 731", "PAGE TWO 947")
+		if len(d.Tables) != 0 {
+			t.Fatal("native text profile invented tables")
+		}
+		var native struct {
+			Pages map[string]json.RawMessage `json:"pages"`
+			Texts []struct {
+				Prov []struct {
+					Page int            `json:"page_no"`
+					BBox map[string]any `json:"bbox"`
+				} `json:"prov"`
+			} `json:"texts"`
+		}
+		if json.Unmarshal(document, &native) != nil || len(native.Pages) != 2 {
+			t.Fatal("PDF pages missing")
+		}
+		pages := map[int]bool{}
+		for _, item := range native.Texts {
+			for _, p := range item.Prov {
+				if len(p.BBox) > 0 {
+					pages[p.Page] = true
+				}
+			}
+		}
+		if !pages[1] || !pages[2] {
+			t.Fatal("native PDF bbox provenance absent")
+		}
+	case ".pptx":
+		markers("FIRST 421", "SECOND 683", "alpha", "41")
+		if len(d.Tables) != 1 || d.Tables[0].Data.Rows != 2 || d.Tables[0].Data.Cols != 2 {
+			t.Fatal("native PPTX table shape")
+		}
+		cell(0, 1, 0, "alpha")
+		cell(0, 1, 1, "41")
 	case ".docx", "export":
 		if len(d.Tables) != 1 || d.Tables[0].Data.Rows != 2 || d.Tables[0].Data.Cols != 2 {
 			t.Fatal("DOCX table shape")
@@ -400,7 +439,16 @@ func TestContentPolicyRealJourneys(t *testing.T) {
 			policyResources(t, cs)
 			cs.Close()
 			sources := policySyntheticSources(t, modeRoot)
+			nativeDocuments := status["profile"] == "model-free-documents-v1"
+			if nativeDocuments {
+				for _, name := range []string{"native.pdf", "native.pptx"} {
+					sources[name] = readContentFile(t, "../../internal/ingest/docling/testdata/documents/"+name)
+				}
+			}
 			fixtures := []struct{ extension, name string }{{".csv", "quoted.csv"}, {".docx", "sample.docx"}, {".epub", "spine.epub"}, {".htm", "page.htm"}, {".html", "page.html"}, {".json", "generic.json"}, {".md", "structured.md"}, {".txt", "literal.txt"}, {".xls", "legacy.xls"}, {".xlsx", "sheets.xlsx"}, {".xml", "generic.xml"}, {"export", "export.json"}}
+			if nativeDocuments {
+				fixtures = append(fixtures, struct{ extension, name string }{".pdf", "native.pdf"}, struct{ extension, name string }{".pptx", "native.pptx"})
+			}
 			var firstID string
 			var firstSource []byte
 			var exportOrigin map[string]any
@@ -741,6 +789,22 @@ func policyMCPB(t *testing.T, f ownerFixture, binary, root, id, packSHA string) 
 	assertPolicyCoverage(t, status, "ready", "")
 	if status["pack_sha256"] != packSHA {
 		t.Fatal(status)
+	}
+	if status["profile"] == "model-free-documents-v1" {
+		for _, name := range []string{"native.pdf", "native.pptx"} {
+			source := readContentFile(t, "../../internal/ingest/docling/testdata/documents/"+name)
+			putContentFile(t, filepath.Join(f.options.WorkspacePath, name), source)
+			converted := contentCall(t, client, "maestro_apply", map[string]any{"operation": "content.convert", "source_path": name}, false)
+			receipt := converted["result"].(map[string]any)
+			if receipt["status"] != "usable" {
+				t.Fatal("MCPB native conversion", converted)
+			}
+			id := receipt["artifact_ref"].(string)
+			markdown, _ := policyRead(t, client, id, "markdown", 4096)
+			document, _ := policyRead(t, client, id, "document", 4096)
+			policyContentOracle(t, filepath.Ext(name), source, markdown, document, receipt)
+			policySave(t, root, "mcpb-"+strings.TrimPrefix(filepath.Ext(name), "."), converted)
+		}
 	}
 	policyResources(t, client)
 	contentCall(t, client, "maestro_query", map[string]any{"operation": "content.read", "artifact_id": id, "format": "document", "max_bytes": 97}, false)

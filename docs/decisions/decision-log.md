@@ -1617,6 +1617,17 @@ filesystem surface or stronger marker-transaction claim.
 - Refs: docs/product-pilot.md; specs/010-local-ingestion-runtime.md; adapters/mcp/packaging/engineering_runtime.go; adapters/mcp/packaging/desktop_pilot.go; dev/pilot
 - Supersedes: none
 
+## NTXT - Admit native-text PDF and modern PowerPoint through a separate verified profile
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The complete converter pilot needs PDF and PPTX, while the verified eleven-format profile deliberately excludes them. The pinned Docling version supplies a model-free NativePdfPipeline and a SimplePipeline PowerPoint backend, but their parser inputs are not in the legacy closure.
+- Decision: Add one closed, fully pinned document profile for native encoded PDF text and modern PPTX. PDF uses the native Docling pipeline with an explicit PDFium backend, page provenance and textual fidelity; OCR, table/layout inference, rendered images and a reading-order promise remain unavailable. Protected, nontext or incomplete sources cannot become apparently complete usable artifacts. PPTX uses the native declarative backend with external fetch, processes, macros and unmanaged rendering refused. Select only known embedded profile closures through authenticated lock identity. Preserve the original bridge, locks, inputs, notices, default producer and legacy artifact/review/replay identities, and report availability per actually verified profile.
+- Consequences: Four additional pinned parser packages and real public-interface fixtures are required; no model, remote service, ambient package manager or build script is activated. New archives use fresh engineering authority in the approved pilot and retain the originals. Native client/platform, Windows loader/redistribution and production authority remain separate evidence. Existing source, output, workspace, process and privacy bounds remain unchanged.
+- Refs: PFMT; DOCL; MIDO; specs/010-local-ingestion-runtime.md; specs/061-product-local-content.md; internal/ingest/docling; adapters/mcp/content_status.go
+- Supersedes: none
+
 ## EORC - Honor the explicitly selected readable owner-review channel in Code pilots
 
 - Date: 2026-11-16

@@ -16,6 +16,10 @@ type FormatRoute struct {
 func SelectFormat(extension string, doclingJSONCandidate bool) (FormatRoute, error) {
 	r := FormatRoute{Route: "docling_local", Fidelity: FidelityStructured}
 	switch extension {
+	case ".pdf":
+		r.Parser, r.Fidelity = "docling.pdf_native_text", FidelityTextual
+	case ".pptx":
+		r.Parser = "docling.pptx"
 	case ".docx":
 		r.Parser = "docling.docx"
 	case ".csv":

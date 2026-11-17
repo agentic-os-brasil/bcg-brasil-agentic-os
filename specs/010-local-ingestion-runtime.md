@@ -127,3 +127,14 @@ release authority must be observed before claiming the broader platform promise.
 - [Docling installation](https://docling-project.github.io/docling/getting_started/installation/)
 - [Docling offline models and artifact paths](https://docling-project.github.io/docling/usage/advanced_options/)
 - [Docling supported formats and local execution](https://github.com/docling-project/docling)
+
+## NTXT model-free document extension
+
+Spec061 and decision NTXT admit encoded-text PDF and modern PPTX through the
+separate authenticated `model-free-documents-v1` closure. NativePdfPipeline uses
+PyPdfium explicitly, with rendering/model/OCR/remote paths disabled; the result
+is textual fidelity with page/bounding-box provenance. This does not authorize
+full visual PDF parsing, model downloads, OCR or implicit MarkItDown fallback.
+The legacy eleven-format profile and its archive bytes remain supported exactly.
+Per-format status follows the verified installed profile, not the global policy
+allowlist. Read Spec061 for the closed refusal and acceptance boundaries.
