@@ -285,6 +285,9 @@ func revertRefinementLocked(root, auditID string, confirmed bool) (RefinementRec
 	if subtle.ConstantTimeCompare([]byte(digest(string(current))), []byte(item.AfterSHA256)) != 1 {
 		return RefinementReceipt{}, ErrRevisionConflict
 	}
+	if _, err := invalidateWeeklySelfSourcesLocked(root, weeklySelfSourceChange{Facets: []string{item.Facet}}); err != nil {
+		return RefinementReceipt{}, err
+	}
 	reversionID := "revert-" + auditID
 	event := reversion{ID: reversionID, AuditID: auditID, Facet: item.Facet, CurrentSHA256: digest(string(current)), RestoredSHA256: digest(string(before)), CreatedAt: time.Now().UTC(), State: "prepared"}
 	if err := writePrivateJSON(reversionPath(root, reversionID), event); err != nil {
@@ -316,6 +319,9 @@ func apply(root string, p proposal, definition facetRecord, confirmed bool) (Ref
 		if readErr != nil || (item.State != "prepared" && item.State != "applied") || item.ID != auditID || item.ProposalID != p.ID || item.Facet != p.Facet || item.BeforeSHA256 != p.SourceSHA256 || item.AfterSHA256 != currentSHA || item.EvidenceSHA256 != digest(p.Evidence) {
 			return RefinementReceipt{}, ErrRevisionConflict
 		}
+		if _, err := invalidateWeeklySelfSourcesLocked(root, weeklySelfSourceChange{Facets: []string{p.Facet}}); err != nil {
+			return RefinementReceipt{}, err
+		}
 		item.State = "applied"
 		if err := refinementWriteJSON(auditPath(root, auditID), item); err != nil {
 			return RefinementReceipt{}, err
@@ -328,6 +334,11 @@ func apply(root string, p proposal, definition facetRecord, confirmed bool) (Ref
 	}
 	if p.SourceSHA256 == "" || currentSHA != p.SourceSHA256 {
 		return RefinementReceipt{}, ErrRevisionConflict
+	}
+	if currentSHA != digest(p.ProposedBody) {
+		if _, err := invalidateWeeklySelfSourcesLocked(root, weeklySelfSourceChange{Facets: []string{p.Facet}}); err != nil {
+			return RefinementReceipt{}, err
+		}
 	}
 	beforePath := filepath.ToSlash(filepath.Join("owner", "refinement", "versions", p.Facet, p.ID+".before.md"))
 	if err := writePrivateFile(filepath.Join(root, filepath.FromSlash(beforePath)), before); err != nil {
@@ -410,6 +421,22 @@ func writeOwnerRegistry(root string, value registry) error {
 	body = append(body, '\n')
 	if len(body) > maximumOwnerRegistryBytes {
 		return errors.New("owner context registry exceeds the bounded JSON limit")
+	}
+	before, err := readRegistry(root)
+	if err != nil {
+		return err
+	}
+	change := weeklySelfSourceChange{}
+	for id, facet := range before.Facets {
+		next, exists := value.Facets[id]
+		if !exists || digestJSON(facet) != digestJSON(next) {
+			change.Facets = append(change.Facets, id)
+		}
+	}
+	if len(change.Facets) > 0 {
+		if _, err := invalidateWeeklySelfSourcesLocked(root, change); err != nil {
+			return err
+		}
 	}
 	return atomicPrivateWrite(filepath.Join(root, "owner", "registry.json"), body)
 }

@@ -30,6 +30,9 @@ type Options struct {
 	// Explicit operator startup selection; never admitted from tool arguments.
 	OwnerReviewChannel string
 	GuardProcess       bool
+	// Explicit native startup inputs; declarations never qualify or activate a job.
+	WeeklyCandidate      *maintenance.WeeklyModelRegistration
+	WeeklyNativeExecutor maintenance.WeeklyNativeExecutor
 }
 type Bound struct {
 	options           Options

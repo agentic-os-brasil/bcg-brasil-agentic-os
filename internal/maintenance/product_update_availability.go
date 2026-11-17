@@ -16,11 +16,11 @@ func updateAvailabilityScope(home, managed string) (string, string) {
 }
 
 func (s *Service) updateAvailabilityService() *Service {
-	if s.updateScoped {
+	if s.updateScoped && !s.ownerScoped && !s.weeklyScoped {
 		return s
 	}
 	owner := *s
-	owner.updateScoped, owner.ownerScoped = true, false
+	owner.updateScoped, owner.ownerScoped, owner.weeklyScoped = true, false, false
 	owner.workspaceID, owner.binding = updateAvailabilityScope(s.home, s.options.ProductRoot)
 	return &owner
 }

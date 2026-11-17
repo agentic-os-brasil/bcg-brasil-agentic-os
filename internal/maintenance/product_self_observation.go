@@ -17,11 +17,11 @@ const SelfObservationCaptureJobID = "self-observation-capture"
 
 // Only this owner job shares its existing worker/control namespace across workspaces.
 func (s *Service) selfObservationService() *Service {
-	if s.ownerScoped {
+	if s.ownerScoped && !s.updateScoped && !s.weeklyScoped {
 		return s
 	}
 	owner := *s
-	owner.ownerScoped = true
+	owner.ownerScoped, owner.updateScoped, owner.weeklyScoped = true, false, false
 	owner.workspaceID, _ = ownerctx.SelfObservationOwnerScope(filepath.Join(s.home, "brain"))
 	owner.binding = productDigest([]string{"owner-self-observation-v1", owner.workspaceID})
 	return &owner

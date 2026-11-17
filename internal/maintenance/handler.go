@@ -18,12 +18,14 @@ type ExecutionGrant interface {
 }
 
 type executionGrant struct {
+	attemptID        string
 	commandID        string
 	occurrenceDigest string
 	workspaceID      string
 	deadline         time.Time
 	nonce            [16]byte
 	publication      func(func() error) error
+	weekly           *weeklyModelBinding
 }
 
 func newExecutionGrant(command Command) (ExecutionGrant, error) {
@@ -40,7 +42,20 @@ func newExecutionGrant(command Command) (ExecutionGrant, error) {
 	}, nil
 }
 
+func (grant executionGrant) weeklyModelBinding() weeklyModelBinding {
+	if grant.weekly == nil {
+		return weeklyModelBinding{}
+	}
+	return *grant.weekly
+}
+
 func (grant executionGrant) validate(command Command) error {
+	if command.WeeklyMode != "" && (grant.weekly == nil || grant.weekly.Mode != command.WeeklyMode || command.JobID != YodaSelfReviewWeeklyJobID || command.ProposalOnly) {
+		return ErrQualificationRequired
+	}
+	if grant.weekly != nil && command.WeeklyMode != "" && grant.weekly.Mode != command.WeeklyMode {
+		return ErrQualificationRequired
+	}
 	if grant.commandID == "" || grant.occurrenceDigest == "" || grant.workspaceID == "" || grant.nonce == ([16]byte{}) {
 		return errors.New("maintenance execution grant is empty")
 	}
@@ -87,6 +102,12 @@ type Handler interface {
 }
 
 func publishWithGrant(ctx context.Context, grant ExecutionGrant, command Command, publish func() error) error {
+	// Probe isolation must not remove grant.publication: validation still calls
+	// that closure to check current control/lease. Deny only DOMAIN publication.
+	if bounded, ok := grant.(executionGrant); ok && bounded.weekly != nil && bounded.weekly.Mode == WeeklyNativeProbe {
+		return errors.New("native weekly probe may publish qualification evidence only through its owning transaction")
+	}
+
 	if err := ctx.Err(); err != nil {
 		return err
 	}

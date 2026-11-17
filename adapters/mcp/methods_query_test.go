@@ -535,7 +535,7 @@ func TestMethodPlansResolveRegisteredMaintenanceAndWiki(t *testing.T) {
 		t.Fatalf("unattested host dependencies were presented as admitted: %+v", plan)
 	}
 	want := map[string][]string{
-		"domain.maintenance_lifecycle": {"maintenance.enroll", "maintenance.pause", "maintenance.qualify", "maintenance.report", "maintenance.resume", "maintenance.revoke", "maintenance.run", "maintenance.status"},
+		"domain.maintenance_lifecycle": {"maintenance.enroll", "maintenance.pause", "maintenance.qualify", "maintenance.register", "maintenance.report", "maintenance.resume", "maintenance.revoke", "maintenance.run", "maintenance.status"},
 		"domain.workspace_navigation":  {"wiki.read", "wiki.source", "wiki.status"},
 	}
 	unattested := map[string]bool{"host.trusted_review": true, "host.background_wake": true}
