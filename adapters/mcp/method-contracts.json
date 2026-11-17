@@ -10,7 +10,10 @@
         "case.setup.prepare",
         "brain.create",
         "brain.read",
-        "case.setup.finish"
+        "case.setup.finish",
+        "account.narrative.status",
+        "account.narrative.read",
+        "account.narrative.save"
       ],
       "effects": [
         "write_workspace"
@@ -37,9 +40,26 @@
           ]
         },
         {
+          "id": "domain.account_narrative",
+          "kind": "domain",
+          "required": false,
+          "fulfillment_operations": [
+            "account.narrative.status",
+            "account.narrative.read",
+            "account.narrative.save"
+          ]
+        },
+        {
           "id": "host.trusted_review",
           "kind": "host",
           "required": true
+        }
+      ],
+      "conditional_effects": [
+        {
+          "effect": "write_owner",
+          "condition": "Only after the owner explicitly requests saving the complete shared account narrative and its exact registered case references.",
+          "dependency": "domain.account_narrative"
         }
       ]
     },
