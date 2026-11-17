@@ -1650,3 +1650,15 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: The person reads the full existing review before conscious local approval, with unchanged domain digest/revision revalidation and decline/cancel/expiry behavior. No model argument selects a channel, no error triggers a silent fallback, and old native responses cannot approve browser-selected records. Browser Code acceptance and native-form/Desktop UI qualification remain separate evidence.
 - Refs: docs/product-local-owner-review.md; adapters/mcp/confirmation.go; adapters/mcp/packaging/code_pilot.go; specs/063-product-native-plugin.md
 - Supersedes: LBRV
+
+
+## DMFP - Separate public Desktop method instructions from native execution
+
+- Date: 2026-11-17
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Desktop method discovery needs a generic instruction carrier that can coexist with the canonical Code plugin and participant-local MCP extension. Reusing their plugin identity or exporting their private selections would conflate instruction distribution, local execution custody and host qualification.
+- Decision: Add a content-only frontend with the fixed plugin and invocation namespace maestro-desktop-methods. Generate its complete public canonical methods and resources through a shared deterministic packaging factory and reference parser, preserving canonical method IDs, frontmatter, explicit-only restrictions, shared authority/policy, licenses and provenance while recomputing projected hashes and the exact closed inventory. Namespace projection changes instruction references only; existing Code/native identities, normalizers, guards and qualification fingerprints remain authoritative and unchanged. Its manifest carries no MCP configuration, hooks, native agent projections, executable binaries, runtime, private owner/workspace binding, local state or qualification proof. Actual domain effects continue through the separately admitted MCP and its canonical review/custody owners.
+- Consequences: The distinct public identity avoids replacing the existing Code plugin or workspace-derived Desktop MCP extension. Account installation or synchronization may carry only this generic public payload and requires actual host/surface and sync qualification before a delivery claim; it never synchronizes private bindings or grants tools, consent, native-role recognition or runtime authority. Complete shared-authority reads, dependency checks and unavailable behavior remain required. No Chat-versus-Cowork choice, model worker, background executor, second memory, new signing authority or full-parity claim follows. MCPB remains a server/resource carrier rather than an installation of these native instructions. Preserve the current experimental pilot separately until its exact artifacts and acceptance are reviewed.
+- Refs: MQRY; RPKT; NPHK; DPFX; DPMT; NSYN; specs/056-pocock-product-skillset.md; specs/060-product-owner-memory.md; specs/063-product-native-plugin.md; specs/065-product-method-discovery.md
+- Supersedes: none
