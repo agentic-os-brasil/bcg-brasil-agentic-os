@@ -156,6 +156,10 @@ provenance. Normalize only the exact admitted namespace. Unknown own-namespace
 IDs and spoofed prefixes cannot become managed specialists. Tools do not gain
 authority from a prompt, a metadata file or successful name resolution.
 
+DMFP adds a separate `maestro-desktop-methods` instruction/resource carrier
+(Spec 065). Its projected references do not extend these native identities,
+normalizers, plugin admission checks or qualification fingerprints.
+
 ## Bound hook adapter
 
 The existing MCP executable exposes a narrow hook command with an event and
