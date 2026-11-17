@@ -88,7 +88,7 @@ func updatePrivateFileGuarded(path string, maximum int64, guard func(func() erro
 }
 
 func updatePrivateFileInDirectory(directory *secureDirectory, name string, maximum int64, guard func(func() error) error, update func([]byte) ([]byte, error), remove bool) error {
-	if maximum < 1 || maximum > 1<<20 {
+	if maximum < 1 || maximum > 4<<20 {
 		return errors.New("invalid private update limit")
 	}
 	if err := validateSecureLeaf(name); err != nil {

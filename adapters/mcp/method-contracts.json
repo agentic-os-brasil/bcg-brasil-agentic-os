@@ -916,7 +916,11 @@
         "execution.list",
         "execution.next",
         "execution.pause",
-        "execution.resume"
+        "execution.resume",
+        "daily.status",
+        "daily.enqueue",
+        "daily.drain",
+        "daily.ack"
       ],
       "effects": [
         "write_workspace",
@@ -930,7 +934,13 @@
         {
           "id": "domain.daily_checkpoint_queue",
           "kind": "domain",
-          "required": true
+          "required": true,
+          "fulfillment_operations": [
+            "daily.status",
+            "daily.enqueue",
+            "daily.drain",
+            "daily.ack"
+          ]
         },
         {
           "id": "domain.maintenance_lifecycle",

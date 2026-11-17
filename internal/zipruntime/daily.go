@@ -161,113 +161,41 @@ func dailyValidate(b []byte, root string, scope dailyScope, name string) (dailyC
 	return c, nil
 }
 func dailySave(root string, scope dailyScope, name string) (bool, error) {
-	path := filepath.Join(scope.path, ".maestro/daily-pending", name)
-	b, e := dailyRead(root, path, dailyInputMax)
-	if e != nil {
-		return false, e
+	queue, err := OpenDailyQueue(scope.path, root, scope.id)
+	if err != nil {
+		return false, err
 	}
-	c, e := dailyValidate(b, root, scope, name)
-	if e != nil {
-		return false, e
+	defer queue.Close()
+	body, err := queue.optional(filepath.Join(".maestro/daily-pending", name), dailyInputMax)
+	if err != nil {
+		return false, err
 	}
-	canonical, _ := json.Marshal(c)
-	sum := sha256.Sum256(canonical)
-	digest := hex.EncodeToString(sum[:])
-	generationPath := filepath.Join(scope.path, ".maestro/daily-generation")
-	generation, ge := dailyRead(root, generationPath, 128)
-	if ge != nil && !os.IsNotExist(ge) {
-		return false, ge
-	}
-	if ge == nil && !dailyGenerationValid(generation) {
-		return false, errors.New("invalid daily generation")
-	}
-	intent := filepath.Join(scope.path, ".maestro/daily-ids", c.ID+".json")
-	binding := []byte(c.LocalDate + " " + digest + "\n")
-	prior, e := dailyRead(root, intent, 256)
-	if e == nil && !bytes.Equal(prior, binding) {
-		return false, errors.New("conflicting ID")
-	}
-	if e != nil && !os.IsNotExist(e) {
-		return false, e
-	}
-	page := filepath.Join(scope.path, "daily", c.LocalDate+".md")
-	old, e := dailyRead(root, page, dailyPageMax)
-	if e != nil && !os.IsNotExist(e) {
-		return false, e
-	}
-	start := "<!-- maestro:daily-id " + c.ID + " " + digest + " -->"
-	end := "<!-- maestro:daily-end " + c.ID + " -->"
-	replay := bytes.Contains(old, []byte(start)) && bytes.Contains(old, []byte(end))
-	if !replay && bytes.Contains(old, []byte("<!-- maestro:daily-id "+c.ID+" ")) {
-		return false, errors.New("incomplete or conflicting page")
-	}
-	if e = dailyAtomic(root, intent, binding); e != nil {
-		return false, e
-	}
-	if !replay {
-		var block strings.Builder
-		fmt.Fprintf(&block, "\n%s\n### %s — checkpoint\n\n%s\n\n", start, c.CapturedAt, c.Summary)
-		for _, group := range []struct {
-			title string
-			items []string
-		}{{"Decisions", c.Decisions}, {"Next actions", c.NextActions}} {
-			if len(group.items) > 0 {
-				fmt.Fprintf(&block, "%s:\n", group.title)
-				for _, v := range group.items {
-					fmt.Fprintf(&block, "- %s\n", v)
-				}
-			}
+	var checkpoint dailyCheckpoint
+	if body == nil {
+		transition, err := queue.read(".maestro/daily-transition.json", dailyTransitionMax)
+		if err != nil {
+			return false, err
 		}
-		fmt.Fprintf(&block, "\nProvenance: agent-authored; session=%s; scope=%s. Not semantic attestation.\n%s\n", c.SessionID, c.Scope, end)
-		if len(old) == 0 {
-			relative, _ := filepath.Rel(filepath.Join(root, "brain"), page)
-			id := strings.TrimSuffix(filepath.ToSlash(relative), ".md")
-			sensitivity := "owner-private"
-			if scope.id != "owner" {
-				sensitivity = "client-confidential"
-			}
-			old = []byte(fmt.Sprintf("---\nid: %s\ntitle: Daily %s\nsummary: Agent-authored daily checkpoints\ntype: daily\nscope: %s\nstatus: active\nsensitivity: %s\nupdated: %s\n---\n", id, c.LocalDate, c.Scope, sensitivity, c.LocalDate))
+		var tr dailyTransition
+		if strictDaily(transition, &tr) != nil || queue.validateTransition(tr) != nil || tr.Checkpoint.ID+".json" != name {
+			return false, errors.New("daily_transition_invalid")
 		}
-		if len(old)+block.Len() > dailyPageMax {
-			return false, errors.New("page full")
-		}
-		if e = dailyAtomic(root, page, append(old, block.String()...)); e != nil {
-			return false, e
-		}
-	}
-	// Write the content-sensitive request before consuming input; retry after a
-	// crash is safe because the complete page block already carries the digest.
-	request := filepath.Join(scope.path, "memory/.dream-requested")
-	committedPath := filepath.Join(scope.path, ".maestro/daily-committed", c.ID+".json")
-	committed, ce := dailyRead(root, committedPath, 256)
-	if ce != nil && !os.IsNotExist(ce) {
-		return false, ce
-	}
-	if ce == nil {
-		if !bytes.Equal(committed, binding) || ge != nil {
-			return false, errors.New("invalid daily generation")
-		}
+		checkpoint = tr.Checkpoint
 	} else {
-		next := sha256.Sum256(append(append(generation, []byte(c.ID+" ")...), binding...))
-		generation = []byte(hex.EncodeToString(next[:]) + "\n")
-		if e = dailyAtomic(root, generationPath, generation); e != nil {
-			return false, e
-		}
-		if e = dailyAtomic(root, committedPath, binding); e != nil {
-			return false, e
+		checkpoint, err = dailyValidate(body, root, scope, name)
+		if err != nil {
+			return false, err
 		}
 	}
-	ack, _ := dailyRead(root, filepath.Join(scope.path, "memory/.dream-ack"), 128)
-	if !bytes.Equal(ack, generation) {
-		if e = dailyAtomic(root, request, generation); e != nil {
-			return false, e
-		}
+	page, err := queue.optional("daily/"+checkpoint.LocalDate+".md", dailyPageMax)
+	if err != nil {
+		return false, err
 	}
-	if e = os.Remove(path); e != nil {
-		return false, e
-	}
-	return replay, nil
+	replay := bytes.Contains(page, []byte(dailyBlock(checkpoint)))
+	// The ZIP caller already holds this scope's daily.lock directory.
+	return replay, queue.save(checkpoint, dailyHash(page))
 }
+
 func dailyStop(root string, out io.Writer) error {
 	requestedRoot := root
 	root, e := dailyRoot(root)
@@ -308,6 +236,33 @@ func dailyStop(root string, out io.Writer) error {
 		}
 		legacy, legacyErr := dailyRead(root, filepath.Join(scope.path, "memory/.dream-requested"), 128)
 		legacyPending := legacyErr == nil && !dailyDigest(legacy)
+		filtered := names[:0]
+		for _, name := range names {
+			if !strings.HasSuffix(name, ".tmp") && !strings.HasSuffix(name, ".json.lock") {
+				filtered = append(filtered, name)
+			}
+		}
+		names = filtered
+		transition, te := dailyRead(root, filepath.Join(scope.path, ".maestro/daily-transition.json"), dailyTransitionMax)
+		if te != nil && !os.IsNotExist(te) {
+			r.Failed++
+			continue
+		}
+		if te == nil {
+			var tr dailyTransition
+			if strictDaily(transition, &tr) != nil || !dailyToken.MatchString(tr.Checkpoint.ID) {
+				r.Failed++
+				continue
+			}
+			pendingName := tr.Checkpoint.ID + ".json"
+			selected := []string{pendingName}
+			for _, name := range names {
+				if name != pendingName && len(selected) < remaining {
+					selected = append(selected, name)
+				}
+			}
+			names = selected
+		}
 		if len(names) == 0 && !legacyPending {
 			continue
 		}
