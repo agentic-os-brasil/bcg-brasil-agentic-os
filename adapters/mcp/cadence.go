@@ -22,7 +22,7 @@ import (
 )
 
 func maintenanceQueries() []any {
-	return []any{variant("maintenance.status", map[string]any{}), variant("maintenance.report", map[string]any{"job_id": map[string]any{"type": "string", "enum": []string{maintenance.DarwinDailyJobID, maintenance.DarwinWeeklyJobID, maintenance.DarwinMonthlyJobID, maintenance.UpdateCheckJobID, maintenance.MemoryDeepDreamJobID, maintenance.MemoryCaptureJobID, "memory-retention-check", "skills-index-refresh", "runtime-health-check", "capability-recheck", "runtime-drift-check", maintenance.WikiIncrementalJobID, maintenance.WikiReconcileJobID, maintenance.WikiIntegrityJobID}}}, "job_id")}
+	return []any{variant("maintenance.status", map[string]any{}), variant("maintenance.report", map[string]any{"job_id": map[string]any{"type": "string", "enum": []string{maintenance.DarwinDailyJobID, maintenance.DarwinWeeklyJobID, maintenance.DarwinMonthlyJobID, maintenance.UpdateCheckJobID, maintenance.MemoryDeepDreamJobID, maintenance.MemoryCaptureJobID, maintenance.SelfObservationCaptureJobID, "memory-retention-check", "skills-index-refresh", "runtime-health-check", "capability-recheck", "runtime-drift-check", maintenance.WikiIncrementalJobID, maintenance.WikiReconcileJobID, maintenance.WikiIntegrityJobID}}}, "job_id")}
 }
 
 func maintenanceTransitions() []any {
@@ -197,6 +197,8 @@ type maintenanceQualificationMetadata struct {
 }
 
 type maintenanceJobMetadataView struct {
+	Scope              string                            `json:"scope,omitempty"`
+	ScopeID            string                            `json:"scope_id,omitempty"`
 	Diagnosis          *maintenance.DarwinSource         `json:"diagnosis,omitempty"`
 	JobID              string                            `json:"job_id"`
 	Revision           uint64                            `json:"revision"`
@@ -210,7 +212,7 @@ type maintenanceJobMetadataView struct {
 }
 
 func maintenanceJobMetadata(job maintenance.ProductJobStatus) maintenanceJobMetadataView {
-	out := maintenanceJobMetadataView{Diagnosis: job.Diagnosis, JobID: job.JobID, Revision: job.Revision, State: job.State, Schedule: job.Schedule, Boundary: job.Boundary, Writes: job.Writes, QualificationState: job.QualificationState, Reason: job.Reason}
+	out := maintenanceJobMetadataView{Scope: job.Scope, ScopeID: job.ScopeID, Diagnosis: job.Diagnosis, JobID: job.JobID, Revision: job.Revision, State: job.State, Schedule: job.Schedule, Boundary: job.Boundary, Writes: job.Writes, QualificationState: job.QualificationState, Reason: job.Reason}
 	if q := job.Qualification; q != nil {
 		out.Qualification = &maintenanceQualificationMetadata{ID: q.ID, Adapter: q.Adapter, Platform: q.Platform, Implementation: q.Implementation, Configuration: q.Configuration, ArtifactRef: q.Artifact, ArtifactSHA256: q.ArtifactSHA256, ScheduledFor: q.ScheduledFor, RequestedAt: q.RequestedAt, VerifiedAt: q.VerifiedAt}
 	}
@@ -255,6 +257,9 @@ func maintenancePresentation(review maintenance.ProductReview) any {
 		"qualification_id": review.QualificationID, "implementation": review.Implementation,
 		"configuration": review.Configuration, "source_state": review.SourceState,
 		"scope": "This exact job and workspace only. Qualification executes once; enrollment authorizes only this schedule and write set. Operating-system wake installation remains separate.",
+	}
+	if review.Operation.JobID == maintenance.SelfObservationCaptureJobID {
+		presentation["scope"] = "This exact owner and self-observation job across admitted workspaces, with one shared owner control and occurrence. Consume only exact owner-reviewed professional declarations as versioned proposal input; never capture conversations, infer native interaction episodes, corroborate or change active SELF. Declaration intake is separate from this job's qualification and enrollment. Qualification must commit and read back a new canonical observation; replay or no-op cannot qualify. Rejection, redaction, pause and revocation remain authoritative."
 	}
 	if review.Operation.JobID == maintenance.MemoryCaptureJobID {
 		presentation["scope"] = "Admit only body-free, workspace-bound adapter observations and witnessed canonical completed-record metadata through this exact capture job. Adapter observations are observed_only; committed records do not attest an original host or native invocation. No prompts, transcripts, tool bodies, objectives, summaries or document paths enter memory. Qualification runs once; enrollment separately authorizes this cadence. Source state, producer version and permanent correction/deletion denials are revalidated before each publication."

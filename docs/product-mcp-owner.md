@@ -19,6 +19,27 @@ interview, refinement and observation controls remain inactive history until
 their owning workflows create fresh authority. Ordinary reads do not initialize
 or enroll a producer. Keep owner content outside managed product directories.
 
+## Admit an existing observation store after upgrade
+
+Older Unix writers leave valid canonical observation logs without a persistent
+selection lock after releasing their token lock. Observation status/intake and
+capture review refuse this state until explicit local setup. Ordinary queries,
+startup and hooks never repair it.
+
+Close older Maestro writers, then repeat the same `maestro-mcp init` command
+above with the already admitted owner/workspace binding. It works for an already
+initialized owner: the canonical owner initializer validates the bounded private
+log and admits its persistent native selection lock without rewriting canonical
+observation bytes, recreating owner data or granting capture authority. Reconnect
+and read observation status again; review intake, qualification and enrollment
+separately as usual.
+
+An active native lock, nonempty legacy token, unsafe alias or malformed/oversized
+store refuses intact. Preserve those files and resolve the active writer or
+underlying unsafe state explicitly. Do not delete a lock, reset owner data or
+use a query as an installation workaround. Fresh owners without an observation
+store retain that absence until an explicit observation mutation needs it.
+
 ## Complete the interview
 
 Read `owner.status` first and follow the canonical `maestro-onboarding` method
@@ -167,3 +188,56 @@ Only sanitized professional reflection and pointers belong here. A scheduled
 marker cannot replace an attended review; without its separately admitted
 adapter, a scheduled result remains an unrecorded proposal. No command or raw
 filesystem fallback is available for this MCP family.
+
+## Review a professional self declaration
+
+The optional `interaction-profile` self-observation recipe uses the same admitted
+owner through Code and Desktop. Read `owner.observation.status` first. Its bounded
+pages contain intake IDs, revisions, states and capture metadata, without claims.
+Status, startup and hooks never create intake, capture evidence or authority.
+
+When the owner explicitly supplies an instruction, correction or endorsement,
+`owner.observation.intake` accepts only `signal`, `facet`, a normalized bounded
+`claim` code, `confidence` and `expires_at`. A fresh future expiry must be within
+90 days. Raw prose, prompt/document content, inferred patterns, hypotheses,
+source hashes, episode IDs, scope, approval and authority flags are refused.
+Do not invent a preference or translate a generic acknowledgement into one.
+The exact supported codes and public call shape are in the method recipe.
+
+Full trusted review shows the normalized declaration, its owner-global
+professional proposal-input scope and the unchanged active SELF. The owner must
+attest that this is their relevant/useful declaration without client, document
+or conversation material and explicitly authorize that scope. This is owner
+attestation, not an automatic sanitizer or native-history claim. Decline,
+cancellation, unsupported review or changed source leaves no approved intake.
+A missing confirmation channel requires returning to an available trusted review
+channel; no model-provided boolean replaces it.
+
+Approval stores a bounded eligible pending envelope only. The server derives its
+stable identity from canonical owner binding and the exact closed declaration;
+reconnecting or repeating review cannot create independent interaction episodes.
+All such declarations share one conservative cohort and cannot corroborate each
+other or enter weekly Yoda selection as independent observations. Actual capture
+requires the separately reviewed, qualified and enrolled
+[`self-observation-capture` maintenance job](product-mcp-maintenance.md#capture-an-explicitly-reviewed-owner-declaration).
+Its result is a new canonical observation version as proposal input, never an
+active facet or native delegation permission.
+
+Use `owner.observation.reject` with the intake ID and `next: rejected` or
+`next: redacted` for exact trusted control review. Current intake and canonical
+states are displayed separately. Terminal replay cannot revive a declaration.
+Redaction retains the existing append-only denial/tombstone semantics; it is not
+a promise of physical historical-body erasure. Derived-self reset also denies
+pending intake and preserves the existing refusal for promoted canonical facets.
+An explicit new declaration does not erase or contradict an older one by itself;
+review the old record's control when replacing it. Ordinary query and report
+output remain body-free. Local source/SDK tests do not qualify native client
+privacy or Windows operation.
+
+Cancellation remains effective through binding validation and observation-lock
+acquisition: the owning mutation checks it again immediately before its first
+persisted declaration/control change. After a canonical control append commits,
+its coupled denial metadata is completed; a later I/O failure retains real
+partial evidence rather than a rollback claim. Legacy digest-case normalization
+also preserves the old owner's canonical IDs and read/CAS revisions without
+rewriting the source log.

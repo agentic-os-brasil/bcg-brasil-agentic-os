@@ -2,10 +2,13 @@ package ownerctx
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -100,7 +103,7 @@ type ObservationReceipt struct {
 // evidence. Weekly self evolution is explicit-signal-first: corroboration
 // alone, observed patterns and inferred hypotheses never qualify.
 func IsYodaWeeklyEligible(observation ObservationReceipt) bool {
-	if observation.State != ObservationCorroborated || !observation.OwnerConfirmed {
+	if observation.State != ObservationCorroborated || !observation.OwnerConfirmed || observation.SourceEvent == "owner.reviewed_declaration" {
 		return false
 	}
 	switch observation.Signal {
@@ -200,10 +203,26 @@ func AppendObservation(root string, input ObservationInput) (ObservationReceipt,
 	}
 	now := time.Now().UTC()
 	record := observationRecord{ObservationInput: input, ID: observationID(input), State: ObservationCaptured, RecordedAt: now, StateChangedAt: now}
-	if err := appendObservation(root, record); err != nil {
-		return ObservationReceipt{}, evaluation, err
-	}
-	return observationReceipt(record, evaluation.Reason), evaluation, nil
+	var receipt ObservationReceipt
+	err = withObservationLock(root, func(path string) error {
+		records, err := readObservationRecords(root)
+		if err != nil {
+			return err
+		}
+		if current, found := latestObservations(records)[record.ID]; found {
+			if !sameObservationInput(current.ObservationInput, record.ObservationInput) {
+				return errors.New("observation occurrence was reused with different content")
+			}
+			receipt = observationReceipt(current, "capture_idempotent")
+			return nil
+		}
+		if err := appendObservationRecord(path, record); err != nil {
+			return fmt.Errorf("observation append: %w", err)
+		}
+		receipt = observationReceipt(record, evaluation.Reason)
+		return nil
+	})
+	return receipt, evaluation, err
 }
 
 func ListObservations(root string) ([]ObservationReceipt, error) {
@@ -297,7 +316,7 @@ func TransitionObservation(root string, input ObservationTransitionInput) (Obser
 			if existing.ID != input.ObservationID || existing.State != input.Next || existing.ExpectedState != input.ExpectedState || existing.ExpectedRevision != input.ExpectedRevision || existing.ExpectedCanonicalDigest != input.ExpectedCanonicalDigest || existing.OwnerAction != input.OwnerAction {
 				return errors.New("observation transition occurrence was reused with different content")
 			}
-			receipt = observationReceipt(existing, "state_transition_idempotent")
+			receipt = observationReceipt(latestObservations(records)[existing.ID], "state_transition_idempotent")
 			return nil
 		}
 		current, ok := latestObservations(records)[input.ObservationID]
@@ -374,6 +393,9 @@ func ResetDerivedSelf(root string, confirmed bool) error {
 				return errors.New("reset requires reverting promoted canonical facets first")
 			}
 		}
+		if err := revokeSelfObservationIntakes(root); err != nil {
+			return err
+		}
 		for _, record := range latestObservations(records) {
 			if record.State == ObservationRejected || record.State == ObservationContradicted || record.State == ObservationExpired || record.State == ObservationRedacted {
 				continue
@@ -422,7 +444,7 @@ func validateObservationInput(input ObservationInput) error {
 	if input.Facet != "" && (!observationIdentifier.MatchString(input.Facet) || !validObservationFacet(input.Facet)) {
 		return errors.New("self observation facet is invalid")
 	}
-	if !validDigest(input.SourceDigest) || input.Confidence < 0 || input.Confidence > 1 || input.ExpiresAt.IsZero() {
+	if !validDigest(input.SourceDigest) || math.IsNaN(input.Confidence) || math.IsInf(input.Confidence, 0) || input.Confidence < 0 || input.Confidence > 1 || input.ExpiresAt.IsZero() {
 		return errors.New("self observation provenance, confidence or expiry is invalid")
 	}
 	if input.ScopeID == "" || !validScope(input.ScopeKind) || !observationIdentifier.MatchString(input.ScopeID) {
@@ -460,7 +482,7 @@ func isGenericEndorsementClaim(claim string) bool {
 
 func validSourceEvent(value string) bool {
 	switch value {
-	case "interaction.completed", "owner.explicit_instruction", "owner.explicit_correction", "owner.explicit_endorsement", "maestro.loop_completed", "maestro.feedback":
+	case "owner.reviewed_declaration", "interaction.completed", "owner.explicit_instruction", "owner.explicit_correction", "owner.explicit_endorsement", "maestro.loop_completed", "maestro.feedback":
 		return true
 	default:
 		return false
@@ -492,12 +514,15 @@ func validateTransition(current observationRecord, next ObservationState, record
 			return errors.New("observation is not eligible")
 		}
 	case ObservationCorroborated:
+		if current.SourceEvent == "owner.reviewed_declaration" {
+			return errors.New("owner declaration has no independently qualified interaction episode")
+		}
 		if current.State != ObservationEligible && current.State != ObservationCorroborated {
 			return errors.New("observation must be eligible before corroboration")
 		}
 		episodes := map[string]bool{}
-		for _, record := range records {
-			if record.ID != current.ID && record.EpisodeID != current.EpisodeID && record.Facet == current.Facet && record.Claim == current.Claim && record.SourceDigest != current.SourceDigest && record.State != ObservationRejected && record.State != ObservationRedacted && record.State != ObservationContradicted {
+		for _, record := range latestObservations(records) {
+			if record.SourceEvent != "owner.reviewed_declaration" && !observationTerminal(record.State) && record.ExpiresAt.After(time.Now().UTC()) && record.ID != current.ID && record.EpisodeID != current.EpisodeID && record.Facet == current.Facet && record.Claim == current.Claim && record.SourceDigest != current.SourceDigest {
 				episodes[record.EpisodeID] = true
 			}
 		}
@@ -534,82 +559,88 @@ func canonicalDigestForFacet(root, facet string) (string, error) {
 	return digest(string(body)), nil
 }
 
-func withObservationLock(root string, operation func(path string) error) error {
-	rootPath, err := filepath.Abs(root)
+const maximumObservationBytes = 2 << 20
+const maximumObservationRecords = 4096
+
+func observationDirectory(root string) string { return filepath.Join(root, "owner", "observations") }
+
+// Explicit owner setup also admits released legacy token-lock stores. Never
+// recreate a selection lock from a query, and never rewrite canonical log bytes.
+func initializeObservationStore(root string) error {
+	directory := observationDirectory(root)
+	_, err := readOwnerFile(filepath.Join(directory, "observations.jsonl"), maximumObservationBytes)
+	if errors.Is(err, os.ErrNotExist) {
+		_, err = readOwnerFile(filepath.Join(directory, promptHistoryLockName), 4096)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil // Fresh owners have no observation store to migrate.
+		}
+	}
 	if err != nil {
 		return err
 	}
-	if err := ensurePromptDirectory(rootPath, false); err != nil {
+	return withObservationLock(root, func(string) error {
+		_, err := readObservationRecords(root)
 		return err
-	}
-	ownerPath := filepath.Join(rootPath, "owner")
-	if err := ensurePromptDirectory(ownerPath, true); err != nil {
-		return err
-	}
-	directory := filepath.Join(ownerPath, "observations")
-	if err := ensurePromptDirectory(directory, true); err != nil {
-		return err
-	}
-	lock, err := acquirePromptHistoryLock(filepath.Join(directory, promptHistoryLockName))
-	if err != nil {
-		return err
-	}
-	operationErr := operation(filepath.Join(directory, "observations.jsonl"))
-	unlockErr := lock()
-	if operationErr != nil {
-		return operationErr
-	}
-	return unlockErr
-}
-
-func appendObservation(root string, record observationRecord) error {
-	return appendObservationWithMode(root, record, true)
-}
-
-func appendObservationTransition(root string, record observationRecord) error {
-	return appendObservationWithMode(root, record, false)
-}
-
-func appendObservationWithMode(root string, record observationRecord, idempotent bool) error {
-	return withObservationLock(root, func(path string) error {
-		records, err := readObservationRecords(root)
-		if err != nil {
-			return err
-		}
-		for _, existing := range records {
-			if existing.ID != record.ID {
-				continue
-			}
-			if idempotent {
-				if sameObservationInput(existing.ObservationInput, record.ObservationInput) {
-					return nil
-				}
-				return errors.New("observation occurrence was reused with different content")
-			}
-		}
-		return appendObservationRecord(path, record)
 	})
 }
 
-func appendObservationRecord(path string, record observationRecord) error {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+func withObservationLock(root string, operation func(path string) error) error {
+	directory := observationDirectory(root)
+	if err := ensureOwnerDirectory(directory); err != nil {
+		return fmt.Errorf("observation directory: %w", err)
+	}
+	lockPath := filepath.Join(directory, promptHistoryLockName)
+	unlock, err := acquireOwnerTransition(lockPath)
+	if err != nil {
+		return fmt.Errorf("observation lock: %w", err)
+	}
+	lockBody, readErr := readOwnerFile(lockPath, 4096)
+	if readErr != nil || len(lockBody) != 0 {
+		return errors.Join(errors.New("legacy observation lock is active; preserve it"), readErr, unlock())
+	}
+	return errors.Join(operation(filepath.Join(directory, "observations.jsonl")), unlock())
+}
+
+// A missing observation store is an immutable empty selection, never setup.
+func withObservationReadSnapshot(root string, operation func([]observationRecord) error) error {
+	unlock, err := acquireOwnerTransitionFile(filepath.Join(observationDirectory(root), promptHistoryLockName), false)
+	if errors.Is(err, os.ErrNotExist) {
+		records, readErr := readObservationRecords(root)
+		if readErr != nil {
+			return readErr
+		}
+		if len(records) != 0 {
+			return errors.New("observation selection lock is missing")
+		}
+		return operation(nil)
+	}
 	if err != nil {
 		return err
+	}
+	lockBody, readErr := readOwnerFile(filepath.Join(observationDirectory(root), promptHistoryLockName), 4096)
+	if readErr != nil || len(lockBody) != 0 {
+		return errors.Join(errors.New("legacy observation lock is active; preserve it"), readErr, unlock())
+	}
+	records, readErr := readObservationRecords(root)
+	if readErr != nil {
+		return errors.Join(readErr, unlock())
+	}
+	return errors.Join(operation(records), unlock())
+}
+
+func appendObservationRecord(path string, record observationRecord) error {
+	existing, err := readOwnerFile(path, maximumObservationBytes)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if bytes.Count(existing, []byte{'\n'}) >= maximumObservationRecords {
+		return errors.New("owner observation record limit reached")
 	}
 	body, err := json.Marshal(record)
 	if err != nil {
-		_ = file.Close()
 		return err
 	}
-	if _, err := file.Write(append(body, '\n')); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return err
-	}
-	return file.Close()
+	return appendOwnerFile(path, append(body, '\n'), maximumObservationBytes)
 }
 
 func sameObservationInput(left, right ObservationInput) bool {
@@ -617,28 +648,67 @@ func sameObservationInput(left, right ObservationInput) bool {
 }
 
 func readObservationRecords(root string) ([]observationRecord, error) {
-	path := filepath.Join(root, "owner", "observations", "observations.jsonl")
-	file, err := os.Open(path)
+	body, err := readOwnerFile(filepath.Join(observationDirectory(root), "observations.jsonl"), maximumObservationBytes)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	if len(body) != 0 && body[len(body)-1] != '\n' {
+		return nil, errors.New("owner observation append is incomplete; preserve the log")
+	}
 	var records []observationRecord
-	scanner := bufio.NewScanner(file)
+	legacyInputs := map[string]ObservationInput{}
+	previous := map[string]observationRecord{}
+	scanner := bufio.NewScanner(bytes.NewReader(body))
+	scanner.Buffer(make([]byte, 4096), 16<<10)
 	for scanner.Scan() {
+		if len(records) == maximumObservationRecords {
+			return nil, errors.New("owner observation record limit reached")
+		}
 		var record observationRecord
-		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
+		decoder := json.NewDecoder(bytes.NewReader(scanner.Bytes()))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&record); err != nil {
 			return nil, err
 		}
+		if decoder.Decode(new(any)) != io.EOF {
+			return nil, errors.New("owner observation has trailing data")
+		}
+
 		if err := validateObservationInput(record.ObservationInput); err != nil {
 			return nil, fmt.Errorf("owner observation log contains invalid metadata: %w", err)
 		}
+		rawIdentity := record.ID == observationID(record.ObservationInput)
+		rawDigest := record.SourceDigest
+		// The base reader normalized digest case before revision/CAS and its
+		// transition writer retained the original captured ID. Recognize only
+		// that anchored history; never accept an arbitrary mismatched ID.
 		record.SourceDigest = strings.ToLower(record.SourceDigest)
-		record.ID = strings.TrimSpace(record.ID)
+		if !rawIdentity {
+			anchor, anchored := legacyInputs[record.ID]
+			prior, exists := previous[record.ID]
+			if !anchored || !exists || record.SourceEvent == "owner.reviewed_declaration" || !sameObservationInput(anchor, record.ObservationInput) || record.ExpectedState != prior.State || record.ExpectedRevision != observationRevision(prior) || !observationIdentifier.MatchString(record.TransitionID) || record.State == ObservationCaptured {
+				return nil, errors.New("owner observation log identity is invalid")
+			}
+		}
+		if record.RecordedAt.IsZero() || record.StateChangedAt.IsZero() {
+			return nil, errors.New("owner observation log identity is invalid")
+		}
+		if rawIdentity && record.State == ObservationCaptured && rawDigest != record.SourceDigest && record.SourceEvent != "owner.reviewed_declaration" {
+			legacyInputs[record.ID] = record.ObservationInput
+		}
+		if record.SourceEvent == "owner.reviewed_declaration" && (record.State == ObservationCorroborated || record.State == ObservationProposed || record.State == ObservationPromoted) {
+			return nil, errors.New("owner declaration cannot claim independent corroboration")
+		}
+		switch record.State {
+		case ObservationCaptured, ObservationEligible, ObservationCorroborated, ObservationProposed, ObservationPromoted, ObservationRejected, ObservationContradicted, ObservationExpired, ObservationRedacted:
+		default:
+			return nil, errors.New("owner observation lifecycle state is invalid")
+		}
 		records = append(records, record)
+		previous[record.ID] = record
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, err
