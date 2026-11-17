@@ -98,9 +98,8 @@ switch ($choice) {
   '1' {
     if (-not $report.code_prompt) { Fail 'O relatório ainda não liberou o ensaio no cliente.' }
     if (-not (Get-Command claude -ErrorAction SilentlyContinue)) { Fail 'Disponibilize o comando claude pelo fluxo normal do Code e abra Testar Maestro novamente.' }
-    Set-Clipboard -Value $report.code_prompt
-    Write-Host 'Prompt copiado. Cole uma vez na conversa do Code.'
-    & (Join-Path $root 'launchers/Abrir Code.ps1')
+    Write-Host 'Abrindo o Code com o ensaio completo. Conclua o login normal se solicitado.'
+    & (Join-Path $root 'launchers/Abrir Code.ps1') -InitialPrompt ([string]$report.code_prompt)
   }
   '2' {
     if (-not $report.desktop_prompt) { Fail 'O relatório ainda não liberou o ensaio no cliente.' }
@@ -111,9 +110,8 @@ switch ($choice) {
   '3' {
     if (-not $report.code_ready_prompt) { Fail 'O relatório ainda não liberou a conferência no Code.' }
     if (-not (Get-Command claude -ErrorAction SilentlyContinue)) { Fail 'Disponibilize o comando claude pelo fluxo normal do Code e abra Testar Maestro novamente.' }
-    Set-Clipboard -Value $report.code_ready_prompt
-    Write-Host 'Conferência copiada. Se esta janela pedir login, conclua o fluxo normal. Depois cole uma vez na conversa do Code.'
-    & (Join-Path $root 'launchers/Abrir Code.ps1')
+    Write-Host 'Abrindo o Code com a conferência de conexão. Conclua o login normal se solicitado.'
+    & (Join-Path $root 'launchers/Abrir Code.ps1') -InitialPrompt ([string]$report.code_ready_prompt)
   }
   '4' {
     if (-not $report.desktop_ready_prompt) { Fail 'O relatório ainda não liberou a conferência no Desktop.' }
