@@ -30,9 +30,15 @@ foreach ($folder in @('product','exports','launchers','diagnostics')) {
   }
 }
 $identity = Get-Content -LiteralPath (Join-Path $root 'pilot-binary.sha256') -Raw
-$bin = Join-Path $root 'product/maestro-mcp.exe'
-if ($identity.Trim() -cnotmatch '^([0-9a-f]{64})  product/maestro-mcp\.exe$') { Fail 'Identidade do executável inválida.' }
-if ((Get-FileHash -LiteralPath $bin -Algorithm SHA256).Hash.ToLowerInvariant() -cne $Matches[1]) { Fail 'O executável mudou; preserve a preparação.' }
+if ($identity.Trim() -cnotmatch '^([0-9a-f]{64})  (product/(server/)?maestro-mcp\.exe)$') { Fail 'Identidade do executável inválida.' }
+$expectedBinary = $Matches[1]
+$bin = Join-Path $root $Matches[2]
+$pilotVersion = '0.0.0'
+if ($Matches[2] -ceq 'product/server/maestro-mcp.exe') {
+  $recordPath = Join-Path $root 'product/managed/trust/engineering-runtime-pilot.json'
+  if (Test-Path -LiteralPath $recordPath) { $pilotVersion = (Get-Content -LiteralPath $recordPath -Raw | ConvertFrom-Json).binding.client_version }
+}
+if ((Get-FileHash -LiteralPath $bin -Algorithm SHA256).Hash.ToLowerInvariant() -cne $expectedBinary) { Fail 'O executável mudou; preserve a preparação.' }
 if (Test-Path -LiteralPath (Join-Path $root '.maestro-pilot-complete')) {
   $rows = @()
   foreach ($folder in @('product','exports','launchers')) {
@@ -104,10 +110,11 @@ function Qualify-Code {
   if ([string]::IsNullOrEmpty($budget)) { return }
   $scratch = Join-Path $root 'owner/native-scratch'
   if (-not (Test-Path -LiteralPath $scratch)) { New-Item -ItemType Directory -Path $scratch | Out-Null }
-  $arguments = @('--product-root',(Join-Path $root 'product'),'--user-home',(Join-Path $root 'owner'),'--workspace',(Join-Path $root 'workspace'),'--server',$bin,'--destination',$destination,'--version','0.0.0','--native-executable',$code.Source,'--native-scratch-root',$scratch,'--native-challenge-directory',(Join-Path $root 'workspace/native-qualification-controls'),'--max-budget-usd',$budget)
+  $arguments = @('--product-root',(Join-Path $root 'product'),'--user-home',(Join-Path $root 'owner'),'--workspace',(Join-Path $root 'workspace'),'--server',$bin,'--destination',$destination,'--version',$pilotVersion,'--native-executable',$code.Source,'--native-scratch-root',$scratch,'--native-challenge-directory',(Join-Path $root 'workspace/native-qualification-controls'),'--max-budget-usd',$budget)
   $old = $env:CLAUDE_CONFIG_DIR
   try {
-    $env:CLAUDE_CONFIG_DIR = Join-Path $root 'client/code'
+    if ($bin.EndsWith('product/server/maestro-mcp.exe'.Replace('/',[IO.Path]::DirectorySeparatorChar),[StringComparison]::OrdinalIgnoreCase)) { $arguments += @('--code-pilot','--owner-review-channel','local-browser') }
+  $env:CLAUDE_CONFIG_DIR = Join-Path $root 'client/code'
     $review = & $bin native-review @arguments
     if ($LASTEXITCODE -ne 0) { Fail 'A revisão recusou a qualificação. Nenhum teste com modelo foi iniciado; preserve o diagnóstico privado e confira o login normal do perfil Code.' }
     Write-New (Join-Path $run 'native-review.json') (($review -join "`n") + "`n")

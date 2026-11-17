@@ -34,8 +34,15 @@ function Verify-Kit {
 }
 Verify-Kit
 $ReviewedKitID = $KitID
+$RuntimeMode = $false
+$PilotVersion = '0.0.0'
+$BinaryRelative = 'product/maestro-mcp.exe'
 if (Test-Path -LiteralPath (Join-Path $Kit 'RUNTIME.json')) {
-  Fail 'Este piloto completo contém o runtime Mac Apple Silicon. O runtime Windows continua aguardando qualificação nativa e autoridade de redistribuição; nenhum ensaio foi criado.'
+  $runtime = Get-Content -LiteralPath (Join-Path $Kit 'RUNTIME.json') -Raw | ConvertFrom-Json
+  if ($runtime.schema_version -ne 1 -or $runtime.profile -cne 'engineering-runtime-pilot-v1' -or $runtime.target -cne 'windows-amd64' -or $runtime.acquisition -ne $true -or $runtime.version -cnotmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { Fail 'Este kit não oferece aquisição Windows autenticada; nenhum ensaio foi criado.' }
+  $RuntimeMode = $true
+  $PilotVersion = $runtime.version
+  $BinaryRelative = 'product/server/maestro-mcp.exe'
 }
 $dev = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE 'Developer'))
 if (-not (Test-Path -LiteralPath $dev -PathType Container)) { Fail 'Crie uma pasta local Developer no seu perfil antes de preparar.' }
@@ -63,6 +70,7 @@ Write-Host 'Ensaio local de engenharia; sem instalação/atualização assinada.
 Write-Host ("Produto: $Root\product" + $nl + "Estado privado: $Root\owner" + $nl + "Workspace: $Root\workspace" + $nl + "Perfil Code isolado: $Root\client\code" + $nl + "review_digest=$digest")
 Write-Host 'Somente ao criar este perfil Code novo: autoMemoryEnabled:false e syncClaudeAiPlugins:false desativam a memória automática do cliente e o download/carregamento de plugins sincronizados da conta. Perfis existentes e suas escolhas são preservados.'
 Write-Host 'O pacote Desktop seleciona revisão local no navegador mesmo quando houver formulário nativo; cada alteração exige sua aprovação exata e expira em 150 segundos.'
+if ($RuntimeMode) { Write-Host 'No Code deste ensaio, gravações protegidas usam o navegador local explicitamente selecionado, mesmo com formulários nativos. Leia o registro completo atual/proposto; a caixa começa desmarcada. Recusar, fechar, cancelar ou deixar expirar nunca aprova.'; Write-Host ('Conversor experimental via aquisição direta dos fornecedores: versão ' + $PilotVersion + '; validade ' + $runtime.expires_at + '. O ZIP não contém Python, wheels, DLLs ou archive do runtime. Após inicializar, você verá duas revisões separadas: download/cache e colocação/qualificação local. Nenhuma delas é aprovada por PREPARAR.') }
 if ($Review) { return }
 if ($ConfirmDigest) {
   if ($ConfirmDigest -cne $digest) { Fail 'Digest diferente; leia a revisão atual.' }
@@ -85,7 +93,7 @@ function Inventory {
   return (($rows | Sort-Object -CaseSensitive) -join $nl) + $nl
 }
 $marker = Join-Path $Root '.maestro-pilot-owned'
-$bin = Join-Path $Root 'product/maestro-mcp.exe'
+$bin = Join-Path $Root $BinaryRelative
 $common = @('--product-root',(Join-Path $Root 'product'),'--user-home',(Join-Path $Root 'owner'),'--workspace',(Join-Path $Root 'workspace'))
 function Diagnose-Failure([string]$Message) {
   try { & (Join-Path $Root 'launchers/Testar Maestro.ps1') -CheckOnly } catch { Write-Warning 'O relatório do teste está na pasta diagnostics deste ensaio.' }
@@ -104,10 +112,17 @@ New-Item -ItemType Directory -Path $Root | Out-Null
 Write-New $marker ($KitID + $nl)
 foreach ($folder in @('product','owner','exports','launchers','client','client/code')) { New-Item -ItemType Directory -Path (Join-Path $Root $folder) | Out-Null }
 Write-New (Join-Path $Root 'client/code/settings.json') ('{"autoMemoryEnabled":false,"syncClaudeAiPlugins":false}' + $nl)
+if ($RuntimeMode) {
+  New-Item -ItemType Directory -Path (Join-Path $Root 'product/server') | Out-Null
+  New-Item -ItemType Directory -Path (Join-Path $Root 'product/managed/trust') -Force | Out-Null
+  $registry = Join-Path $Root 'product/managed/trust/release-authority-registry.json'
+  [IO.File]::Copy((Join-Path $Kit 'runtime-registry.json'), $registry, $false)
+  if ((Get-FileHash -LiteralPath $registry -Algorithm SHA256).Hash.ToLowerInvariant() -cne $runtime.registry_sha256) { Fail 'Registro público divergente; preserve o ensaio.' }
+}
 [IO.File]::Copy($binary, $bin, $false)
 $binaryLine = @(Get-Content -LiteralPath (Join-Path $Kit 'SHA256SUMS') | Where-Object { $_ -cmatch '^[0-9a-f]{64}  \./bin/maestro-mcp-windows-amd64\.exe$' })
 if ($binaryLine.Count -ne 1 -or (Get-FileHash -LiteralPath $bin -Algorithm SHA256).Hash.ToLowerInvariant() -cne $binaryLine[0].Substring(0,64)) { Fail 'O executável copiado mudou; preserve o ensaio.' }
-Write-New (Join-Path $Root 'pilot-binary.sha256') ($binaryLine[0].Substring(0,64) + '  product/maestro-mcp.exe' + $nl)
+Write-New (Join-Path $Root 'pilot-binary.sha256') ($binaryLine[0].Substring(0,64) + '  ' + $BinaryRelative + $nl)
 foreach ($pair in @(@('test-windows.ps1','Testar Maestro.ps1'),@('test-windows.cmd','Testar Maestro.cmd'))) {
   $source = Join-Path $Kit ('templates/' + $pair[0])
   $target = Join-Path $Root ('launchers/' + $pair[1])
@@ -125,25 +140,53 @@ if ($initExit -ne 0) { Diagnose-Failure 'A inicialização não foi concluída.'
 Write-New (Join-Path $Root 'preparation.json') (($result -join $nl) + $nl)
 & $bin inspect @common
 if ($LASTEXITCODE -ne 0) { Diagnose-Failure 'O diagnóstico recusou o vínculo.' }
+if ($RuntimeMode) {
+  [IO.File]::Copy((Join-Path $Kit 'test-documents/maestro-pilot.docx'), (Join-Path $Root 'workspace/maestro-pilot.docx'), $false)
+  $carrier = Join-Path $Kit 'runtime-release'
+  $acquisitionReviewFile = Join-Path $Root 'acquisition-review.json'
+  $review = & $bin pilot-acquisition-review @common --release-directory $carrier
+  if ($LASTEXITCODE -ne 0) { Diagnose-Failure 'A revisão autenticada de aquisição foi recusada.' }
+  Write-New $acquisitionReviewFile (($review -join $nl) + $nl)
+  Write-Host ($review -join $nl)
+  $record = ($review -join $nl) | ConvertFrom-Json
+  Write-Host ('Entradas: ' + $record.plan.recipe.input_count + '; bytes de entrada: ' + $record.plan.recipe.total_input_bytes + '; reserva adicional máxima: ' + $record.plan.maximum_additional_bytes + '; retidos: ' + $record.plan.retained_bytes + '; tentativa: ' + $record.plan.attempt + '; revisão válida até: ' + $record.plan.valid_until)
+  if ((Read-Host 'Leia toda a revisão acima. Para baixar somente essas entradas públicas e manter o cache privado, digite BAIXAR CONVERSOR') -cne 'BAIXAR CONVERSOR') { Diagnose-Failure 'Aquisição recusada; nenhum download foi iniciado.' }
+  $acquired = & $bin pilot-acquisition-apply @common --release-directory $carrier --acquisition-review-file $acquisitionReviewFile --review-digest $record.review_sha256 --confirm
+  if ($LASTEXITCODE -ne 0) { Diagnose-Failure 'Aquisição incompleta; cache e tentativas foram preservados. Não repita automaticamente.' }
+  Write-New (Join-Path $Root 'acquisition-result.json') (($acquired -join $nl) + $nl)
+  $complete = (($acquired -join $nl) | ConvertFrom-Json).release_directory
+  $placement = & $bin pilot-runtime-review @common --release-directory $complete
+  if ($LASTEXITCODE -ne 0) { Diagnose-Failure 'A revisão do release completo foi recusada.' }
+  Write-New (Join-Path $Root 'runtime-review.json') (($placement -join $nl) + $nl)
+  Write-Host ($placement -join $nl)
+  $placementRecord = ($placement -join $nl) | ConvertFrom-Json
+  if ((Read-Host 'Esta etapa coloca o conversor e testa os controles Windows locais descritos. Digite ATIVAR CONVERSOR somente após ler a revisão completa') -cne 'ATIVAR CONVERSOR') { Diagnose-Failure 'Colocação recusada; entradas adquiridas foram preservadas.' }
+  $placed = & $bin pilot-runtime-apply @common --release-directory $complete --review-digest $placementRecord.review_sha256 --confirm
+  if ($LASTEXITCODE -ne 0) { Diagnose-Failure 'Colocação ou qualificação local recusada; preserve os recibos e arquivos.' }
+  Write-New (Join-Path $Root 'runtime-placement.json') (($placed -join $nl) + $nl)
+}
 $extra = @()
 switch ((Get-Content -LiteralPath (Join-Path $Kit 'LIFECYCLE-CONTEXT.txt') -Raw).Trim()) {
   'enabled' { $extra = @('--lifecycle-context') }
   'disabled' { }
   default { Fail 'Seleção de contexto desconhecida.' }
 }
-& $bin plugin @common --server $bin --destination (Join-Path $Root 'exports/code') --version 0.0.0 @extra
+if ($RuntimeMode) { $extra += @('--code-pilot','--owner-review-channel','local-browser') }
+& $bin plugin @common --server $bin --destination (Join-Path $Root 'exports/code') --version $PilotVersion @extra
 if ($LASTEXITCODE -ne 0) { Diagnose-Failure 'O pacote Code não foi concluído.' }
-& $bin mcpb --desktop-pilot --owner-review-channel local-browser @common --server $bin --destination (Join-Path $Root 'exports/maestro-product.mcpb') --version 0.0.0
+$desktopExtra = @()
+if ($RuntimeMode) { $desktopExtra = @('--engineering-runtime-pilot') }
+& $bin mcpb --desktop-pilot --owner-review-channel local-browser @common --server $bin --destination (Join-Path $Root 'exports/maestro-product.mcpb') --version $PilotVersion @desktopExtra
 if ($LASTEXITCODE -ne 0) { Diagnose-Failure 'O pacote Desktop não foi concluído.' }
 $code = @'
 param([string]$InitialPrompt)
 $ErrorActionPreference = 'Stop'
 if ($args.Count -ne 0 -or ($PSBoundParameters.ContainsKey('InitialPrompt') -and [string]::IsNullOrEmpty($InitialPrompt))) { throw 'Use zero argumentos ou um único prompt.' }
 $root = Split-Path -Parent $PSScriptRoot
-$bin = Join-Path $root 'product/maestro-mcp.exe'
 $identity = (Get-Content -LiteralPath (Join-Path $root 'pilot-binary.sha256') -Raw).Trim()
-if ($identity -cnotmatch '^([0-9a-f]{64})  product/maestro-mcp\.exe$') { throw 'Identidade do executável inválida.' }
+if ($identity -cnotmatch '^([0-9a-f]{64})  (product/(server/)?maestro-mcp\.exe)$') { throw 'Identidade do executável inválida.' }
 $expected = $Matches[1]
+$bin = Join-Path $root $Matches[2]
 if ((Get-FileHash -LiteralPath $bin -Algorithm SHA256).Hash.ToLowerInvariant() -cne $expected) { throw 'O executável mudou; preserve a preparação.' }
 $packet = Join-Path $root 'exports/code'
 $native = Join-Path $root 'exports/code-native-qualified'
@@ -276,8 +319,9 @@ $($result -join $nl)
 
 Os relatórios ficam em diagnostics/, fora dos dados do Maestro. Compartilhe somente
 RELATORIO.md após conferir seu conteúdo. Login, confirmações, chamadas reais nos
-clientes e hooks continuam sendo verificados por você. Servidor de engenharia sem
-versão de release; 0.0.0 é o rótulo dos pacotes.
+clientes e hooks continuam sendo verificados por você. No kit básico, 0.0.0 é o
+rótulo dos pacotes. No kit completo, RUNTIME.json informa a versão e a validade
+experimental; o diagnóstico verifica a disponibilidade, sem converter documentos.
 "@
 Write-New (Join-Path $Root 'COMECE-AQUI.md') $start
 Write-New (Join-Path $Root 'managed-files.sha256') (Inventory)

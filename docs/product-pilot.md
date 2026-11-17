@@ -314,3 +314,35 @@ journeys and direct emitted-preparer verification cover source behavior; full
 affected hosted checks and independent reviews remain promotion gates.
 
 Native Desktop form qualification remains `unavailable` until an actual client advertises and renders the form. Local-browser review is a separate supported channel and does not close a native-form qualification gate.
+
+## Windows participant acquisition adapter
+
+The clean Mac builder accepts `--engineering-acquisition COMPLETE_SIGNED_RELEASE
+PUBLIC_REGISTRY`. Its local complete release is verified normally, but only the
+signed non-runtime basebundle/server, notes, manifest, signatures and the two
+signed sidecars from sibling `runtime-recipe/` enter the Windows ZIP. No runtime
+archive, CPython, wheel or third-party DLL is copied. The development-only
+`dev/pilot/verify-carrier` calls canonical acquisition.Review against the emitted
+closed carrier, including every declared hash and signature, without downloading,
+executing, placing or claiming whole-directory release admission.
+
+The native preparer initializes only the isolated layout, then presents
+`pilot-acquisition-review`: admitted owner/workspace ID, fixed private cache,
+all public inputs, aggregate bytes, worst additional retention, attempt and
+expiry. BAIXAR CONVERSOR approves that complete record. The native apply command
+requires its exact digest/file, rejects altered destination/workspace, and hands
+the original reviewed Plan to acquisition.Acquire. Only Windows/amd64 may acquire.
+The core preserves its finite lock/cache/attempt/expiry rules and returns a new
+complete private snapshot, leaving the incomplete carrier unchanged. The caller
+performs whole VerifyDirectory again. A separate pilot-runtime-review and
+ATIVAR CONVERSOR consent then own canonical PlaceVerified and Windows confinement
+qualification; no download approval grants placement or model execution.
+
+The same preparer exports Code with explicit CodePilot/local-browser selection
+and Desktop with the existing engineering runtime profile. This adapter depends
+on the independently reviewed CodePilot owner-review implementation. The test
+menu preserves optional native-hook qualification as another conscious action.
+Read-only doctor/startup never acquires, places, retries or repairs. Interrupted
+preparations/cache remain private and preserved; choosing a fresh rehearsal is
+the current guided recovery, without claiming automatic resume. Organization
+signing, native Windows acceptance and actual client presentation remain distinct.
