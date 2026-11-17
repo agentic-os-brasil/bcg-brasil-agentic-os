@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
+
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeagents"
 )
@@ -112,7 +114,7 @@ func TestCodeMethodPayloadBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := fmt.Sprintf("%x", sha256.Sum256(body)); got != "17de28afe7a8067cb35d9a0285e2293ad90d4f50a2eb01facd670da08f7941c1" {
+	if got := fmt.Sprintf("%x", sha256.Sum256(body)); got != "f52cfb36fbbbd08638a1809207db41f2dc3c0726a56094362b06967e615e4d68" {
 		t.Fatal("Code method bytes changed", got)
 	}
 	agents, err := claudeagents.Project("maestro-product")
@@ -186,6 +188,7 @@ func TestBuildDesktopMethodFrontendClosedDeterministicOutput(t *testing.T) {
 			t.Fatal("archive not closed against inventory")
 		}
 		total := 0
+		skillDescriptions := 0
 		publicFiles := map[string][]byte{}
 		for i, row := range inv {
 			if i > 0 && inv[i-1].Path >= row.Path {
@@ -211,8 +214,31 @@ func TestBuildDesktopMethodFrontendClosedDeterministicOutput(t *testing.T) {
 			if readErr != nil || closeErr != nil || !bytes.Equal(packed, body) {
 				t.Fatal("archive bytes differ", row.Path)
 			}
+			if strings.HasPrefix(row.Path, "skills/") && strings.HasSuffix(row.Path, "/SKILL.md") {
+				skillDescriptions++
+				if !bytes.HasPrefix(packed, []byte("---\n")) {
+					t.Fatal("skill frontmatter missing", row.Path)
+				}
+				end := bytes.Index(packed[4:], []byte("\n---\n"))
+				if end < 0 {
+					t.Fatal("skill frontmatter incomplete", row.Path)
+				}
+				var metadata struct {
+					Description string `yaml:"description"`
+				}
+				if err := yaml.Unmarshal(packed[4:4+end], &metadata); err != nil || metadata.Description == "" {
+					t.Fatal("skill description unavailable", row.Path, err)
+				}
+				if strings.ContainsAny(metadata.Description, "<>") {
+					t.Errorf("Desktop skill description contains XML markup: %s: %s", row.Path, metadata.Description)
+				}
+			}
 			publicFiles[row.Path] = body
 			total += len(body)
+		}
+		t.Logf("checked %d emitted skill descriptions in %s archive", skillDescriptions, dest)
+		if skillDescriptions != 94 {
+			t.Fatalf("wrong emitted skill description count: %d", skillDescriptions)
 		}
 		assertPublicMethodPrivacy(t, publicFiles)
 		if total != report.PayloadBytes {

@@ -1,6 +1,6 @@
 ---
 name: case-sharepoint-map
-description: Percorre a árvore de pastas do SharePoint do caso ativo em profundidade limitada, amostra um arquivo por pasta para reconhecer o tipo de conteúdo, e grava um mapa de navegação único em brain/accounts/<conta>/cases/<caso>/sources/sharepoint-map.md. Use quando o pedido for "mapeia o sharepoint do caso", "monta um mapa da pasta do projeto", "onde fica cada coisa no sharepoint desse caso" ou equivalente.
+description: Percorre a árvore de pastas do SharePoint do caso ativo em profundidade limitada, amostra um arquivo por pasta para reconhecer o tipo de conteúdo, e grava um mapa de navegação único em brain/accounts/{conta}/cases/{caso}/sources/sharepoint-map.md. Use quando o pedido for "mapeia o sharepoint do caso", "monta um mapa da pasta do projeto", "onde fica cada coisa no sharepoint desse caso" ou equivalente.
 ---
 
 # Case SharePoint Map
