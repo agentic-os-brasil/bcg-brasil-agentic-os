@@ -1539,3 +1539,14 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: The qualifier creates no sync override or profile repair and does not inspect inactive plugin bodies. Active or ambiguous sources still refuse; malformed settings and unsafe roots remain unsupported. The current enforcement minimum 2.1.295 exceeds the setting support minimum 2.1.273. This does not continuously validate configuration after packet construction or qualify ordinary active third-party plugins, native clients or managed remote policy.
 - Refs: specs/063-product-native-plugin.md; docs/product-native-plugin.md; docs/product-pilot.md; adapters/mcp/packaging/native_instructions.go; adapters/mcp/packaging/native_plugins.go; dev/pilot/setup-macos.command; dev/pilot/setup-windows.ps1; https://code.claude.com/docs/en/settings-reference#syncclaudeaiplugins; https://code.claude.com/docs/en/settings#exceptions-to-managed-settings-precedence
 - Supersedes: none
+
+## OCTX - Deliver accepted owner preferences through a bounded session projection
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Onboarding persists reviewed SELF facets, but ordinary MCP metadata and immutable methods do not deliver their accepted text to a fresh Code or Desktop session. Exposing the whole private owner tree or treating model-supplied roles as reader authority would cross the existing privacy contract.
+- Decision: Add an explicit read-only projection of the current fully confirmed track, selecting only canonical facets whose readers include session. The admitted local MCP server fixes that reader; request arguments cannot select a role, path or broader profile. Reuse the canonical owner transition lock, bounded no-follow storage and explicit-facet snapshot projection. Bind the page generation to both body confirmation and canonical selected policy/content, and require the same generation on continuation pages. Keep ordinary context metadata-only with a discovery hint. Treat returned preferences as data without effect authority.
+- Consequences: Fresh sessions can retrieve accepted preferences through the same MCP in both clients. Missing, unconfirmed, stale, unsafe or reader-ineligible data remains unavailable. This local bound-session model does not attest hosted subagent identity, authorize writes or sends, enroll jobs, or export Yoda-only material. Native client delivery and distribution remain separately observed gates.
+- Refs: specs/060-product-owner-memory.md; internal/ownerctx; adapters/mcp/owner_context.go; docs/product-owner-context.md
+- Supersedes: none
