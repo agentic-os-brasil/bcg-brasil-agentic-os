@@ -30,6 +30,23 @@ reader identity. Never read owner files as a fallback. Unavailable/unconfirmed
 context uses standard communication and preserves the owner's current task.
 Follow the onboarding route only when the owner chooses to begin or resume it.
 
+## SharePoint source choice in product MCP
+
+For an explicit request to configure this workspace's SharePoint folders, query
+`sharepoint.enrollment.status` first. Use `maestro_apply` operation
+`sharepoint.enrollment.select` with `folder_urls` (1–8 unique HTTPS SharePoint
+folder URLs, each at most 2048 characters) and literal
+`purpose: "prior_work_retrieval"`; let the trusted host present the full current
+and proposed records for owner review. To remove the local choice, use
+`sharepoint.enrollment.revoke` without scope arguments and obtain the same
+review. Query status again to confirm the committed state. Decline preserves the
+selection; changed review requires a fresh request. Revocation preserves earlier
+imports, immutable history, signed policy and other workspaces. These operations
+record local source choice only: provider access, signed enrollment and ingestion
+remain unavailable or unattested. Stop there when asked to ingest while those
+dependencies are unavailable; follow the existing approved-source flow only once
+they are admitted. Product hooks do not currently inject this source selection.
+
 ## Authored workspace pages in product MCP
 
 When a product-MCP request creates a workspace page, reads a named brief,

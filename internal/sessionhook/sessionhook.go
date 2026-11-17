@@ -335,6 +335,8 @@ func sessionDirective(packet sessionctx.Packet) string {
 			}
 		case priorwork.SourceDeferred:
 			lines = append(lines, "SharePoint was left out of this workspace. Continue normally and offer it only when the owner asks for prior work or project-source setup.")
+		case priorwork.SourceRevoked:
+			lines = append(lines, "The owner revoked this workspace's SharePoint folder selection. Continue without reading or collecting those folders. Offer source setup only when the owner explicitly asks; previously ingested local material remains unchanged.")
 		case priorwork.SourceSelectionUnavailable:
 			lines = append(lines, "SharePoint setup is not available in this workspace yet. Offer to continue without it; do not expose internal status or troubleshooting commands unless the owner explicitly asks for technical support.")
 		}
