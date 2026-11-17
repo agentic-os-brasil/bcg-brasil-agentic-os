@@ -77,6 +77,9 @@ func run() error {
 	if len(os.Args) < 2 {
 		return errors.New("command_required")
 	}
+	if handled, err := experimentalEarlyCommand(context.Background(), os.Args[1], os.Args[2:], os.Stdout); handled {
+		return err
+	}
 	if os.Args[1] == "identity" {
 		if len(os.Args) != 2 {
 			return errors.New("unexpected_arguments")
@@ -104,6 +107,7 @@ func run() error {
 		flags.SetOutput(io.Discard)
 	}
 	var o product.Options
+	bindExperimental := experimentalCommandFlags(flags, &o)
 	if os.Args[1] == "serve" {
 		flags.StringVar(&o.ManagementCarrierID, "management-carrier-id", "", "fixed independently admitted client carrier")
 		flags.StringVar(&o.ManagementInstallerVersion, "management-installer-version", "", "fixed validated installed manager version")
@@ -194,6 +198,9 @@ func run() error {
 		flags.StringVar(&track, "track", "", "quick or complete")
 	}
 	if err := flags.Parse(os.Args[2:]); err != nil {
+		return err
+	}
+	if err := bindExperimental(); err != nil {
 		return err
 	}
 	authoritySeeded := false

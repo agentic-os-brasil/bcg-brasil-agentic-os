@@ -34,6 +34,7 @@ func inspectCurrentPacket(ctx context.Context, path, format string, o installer.
 		return packaging.PacketStatus{}, errors.New("current packet verifier executable changed")
 	}
 	args := []string{"packet-verify", "--destination", path, "--packet-format", format, "--carrier-profile", installer.StableClientProfile, "--carrier-id", o.Request.CarrierID, "--carrier-version", installer.StableCarrierVersion}
+	args = installer.ExperimentalChildArgs(args, o.ExperimentalSeed, o.ManagedRoot)
 	body, err := clientCommand(ctx, server, args, o.Request.Workspace)
 	if err != nil {
 		return packaging.PacketStatus{}, err

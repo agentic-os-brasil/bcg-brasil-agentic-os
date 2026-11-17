@@ -251,7 +251,7 @@ func currentGeneratorArgs(command, destination, server string, o installer.Clien
 	if command == "plugin" && o.Request.LifecycleContext {
 		args = append(args, "--lifecycle-context")
 	}
-	return args
+	return installer.ExperimentalChildArgs(args, o.ExperimentalSeed, o.ManagedRoot)
 }
 func writeMarketplaceAndLauncher(root string, o installer.ClientOptions) error {
 	if err := os.Mkdir(filepath.Join(root, ".claude-plugin"), 0700); err != nil {

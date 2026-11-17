@@ -39,7 +39,7 @@ func runClientsWithNativeVerifier(ctx context.Context, command, self string, f l
 	default:
 		return false, nil
 	}
-	o := installer.ClientOptions{SeededOperationOptions: installer.SeededOperationOptions{Self: self, Version: Version, AuthorityRegistrySHA256: AuthorityRegistrySHA256, ManagedRoot: f.ManagedRoot, UserHome: f.UserHome, DataRoot: filepath.Join(f.UserHome, ".maestro-install"), VerifyNative: verifyNative}, Request: installer.ClientRequest{CarrierID: f.CarrierID, Workspace: f.Workspace}}
+	o := installer.ClientOptions{SeededOperationOptions: installer.SeededOperationOptions{ExperimentalSeed: f.ExperimentalSeed, Self: self, Version: Version, AuthorityRegistrySHA256: AuthorityRegistrySHA256, ManagedRoot: f.ManagedRoot, UserHome: f.UserHome, DataRoot: filepath.Join(f.UserHome, ".maestro-install"), VerifyNative: verifyNative}, Request: installer.ClientRequest{CarrierID: f.CarrierID, Workspace: f.Workspace}}
 	if command == "manage" {
 		o.Request.CodeRoot = f.ClientCodeRoot
 		o.Request.DesktopPath = f.ClientDesktopPath

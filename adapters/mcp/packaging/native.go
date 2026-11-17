@@ -501,6 +501,7 @@ func prepareNativeProbe(o Options, root, challenge string, index int, fault stri
 		return p, err
 	}
 	startup := config.Hooks["SessionStart"][0].Hooks[0]
+	startup["command"] = "${CLAUDE_PLUGIN_ROOT}/scripts/" + binaryName(o.target.Platform())
 	startup["args"] = append([]string{"native-startup-check", "--nonce", p.nonce}, args(candidate)[1:]...)
 	startup["timeout"] = nativeStartupCheckSeconds
 	failureCommand := "${CLAUDE_PLUGIN_ROOT}/scripts/" + binaryName(o.target.Platform())
@@ -519,13 +520,7 @@ func prepareNativeProbe(o Options, root, challenge string, index int, fault stri
 	hooks := complete["hooks"].(map[string]any)
 	// Qualification candidates are private local probes. Their actual selected
 	// paths never enter the final portable packet's hook vectors.
-	for event, rows := range hooks {
-		for _, row := range rows.([]any) {
-			for _, command := range row.(map[string]any)["hooks"].([]any) {
-				command.(map[string]any)["args"] = append([]string{"hook", "--event", event}, args(candidate)[1:]...)
-			}
-		}
-	}
+	instrumentNativeProbeRows(hooks, o.target.Platform(), args(candidate))
 	startup["args"] = append([]string{"native-startup-check", "--nonce", p.nonce}, args(candidate)[1:]...)
 	startup["timeout"] = nativeStartupCheckSeconds
 	hooks["SessionStart"] = []any{map[string]any{"hooks": []any{startup}}}
@@ -537,11 +532,11 @@ func prepareNativeProbe(o Options, root, challenge string, index int, fault stri
 	scopeArgs := append([]string{"native-scope-guard", "--challenge-directory", p.challenge, "--outside-probe-path", p.outside}, args(candidate)[1:]...)
 	scope := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/" + binaryName(o.target.Platform()), "args": scopeArgs, "timeout": 5, "onFailure": "block"}}}
 	hooks["PreToolUse"] = append(pre, scope, hook)
-	body, err := json.MarshalIndent(complete, "", "  ")
+	body, err := marshalNativeProbeHooks(complete, o.target.Platform())
 	if err != nil {
 		return p, err
 	}
-	if err := buildNativeCandidate(candidate, capability, append(body, '\n')); err != nil {
+	if err := buildNativeCandidate(candidate, capability, body); err != nil {
 		return p, err
 	}
 	accepted = true

@@ -773,6 +773,88 @@ runtime/converter ZIP is not an installed-seed/source-update authority. A bounde
 experimental N-to-N+1 rehearsal needs its exact separate installer-owned admission;
 organization production signing and production verification remain separate.
 
+### Closed experimental installed-seed rehearsal (EISA)
+
+A separate compile-time experimental installer entry may consume only a closed
+verified installed-seed admission. Its paired shared-MCP build uses the same
+closed engineering class and fixed installed role; the default production MCP
+entry accepts no engineering input or override. Bind each exact child artifact
+and refuse mixed production/experimental children. Keep the production command,
+strict native verifier and default wire bytes unchanged; it must refuse the same unsigned
+installer and must not acquire an experimental trust override. The existing
+runtime/converter pilot remains a distinct profile and keeps its enrolled-source
+refusals. Signature validity in a general registry does not confer this new role.
+
+The experimental admission has a literal purpose/protocol, a pinned public
+engineering registry, exact installer digest/version/target, exactly bounded
+release N/N+1 manifest/client/server/bundle/runtime identities, fixed source tuple
+and finite expiry no later than the existing accepted authority window. No
+arbitrary commands, alternate executable or source selection, key renewal or
+new issuer is admitted. The record and exact local review are independently
+verified; generic publisher records contain no participant-private path. Preserve
+the existing physical Developer brain/workspace binding and all user data.
+
+Use an opaque verified type at the owning boundary and retain the explicit
+engineering evidence class through plan, installed custody/status, child process
+composition, first activation, source enrollment/check/stage/apply/recovery/
+rollback, stable launch, current plugin provider and update-manager handoff.
+Do not inject an engineering callback into a path that then reports native-strict.
+Production readers refuse the distinct engineering status/profile. Existing
+production installations cannot be adopted or relabeled. Reuse the original
+transactions, source custody, reviews, client slots and independently verified
+current records; this profile introduces no replacement updater or service.
+The actual native client qualifier, its exact host evidence and D3 custody remain
+unchanged; a role record cannot qualify a missing host or native Agent execution.
+
+In this experimental build, final full-native hooks use the existing installed
+stable binding and a closed native-hook route through the independently admitted
+installer. One canonical recipe owns generation, fingerprinting and inspection
+of all seven events; ordinary builds retain their exact recipe and command
+surface. Private qualification probes still execute the actual MCP directly,
+with the verified experimental arguments, before any native client record is
+published. Subsequent final hooks require the current native materialization,
+its exact files/carrier/workspace and the existing qualified launch. The schema1
+native bit alone is no proof: only the existing genuine qualifier, exact candidate
+inspection and guarded publication can establish that materialization. Keep the
+three-event passive owner separate; introduce no packet schema, proof importer
+or D3 bridge.
+
+The participant entry reuses the existing prepare/test/report flow and manager.
+Prefill authenticated source metadata and admitted local selections; retain
+necessary human choices and exact reviews. Distribution is read from the selected
+synced source using the existing admitted ingress, while private state remains in
+Developer. Do not reuse the runtime-only KIT-ID/raw-init path for an existing
+brain or weaken that old profile's cloud-input refusal. Reuse the selected
+absolute Code executable after the once-only choice.
+
+The installed-profile checker derives current paths, binding and packet/native
+contract currency from the verified current client record. A compatible reused
+MCPB may contain historical inert server provenance; it must not fail merely
+because that bundled server hash differs from the current backend. Preserve the
+original profile's exact archive checks and all installed contract checks. Reuse
+the existing test menu and automatic prompts, collect its existing host-observation
+answers into the report and label them participant attestations. Distinguish
+preparation, registration, actual loading, native qualification and functional
+results; automated file/SDK checks cannot stand in for host observations.
+Desktop instructions identify the exact admitted stable connector, including a
+compatible retained MCPB; a generic or legacy product name is insufficient.
+The complete test action prepares the existing public synthetic DOCX in the
+selected workspace without replacing any existing file and includes conversion
+and paginated artifact readback against the independently verified Current
+manifest and pack. An unavailable runtime remains explicitly pending. The
+read-only checker does not prepare workspace files. Shared conversion-test
+expectations are diagnostics, never admission to the separate old runtime-pilot
+profile or evidence that a real conversion has succeeded.
+
+Source acceptance uses ephemeral test keys and private synthetic fixtures, covers
+closed-parser/purpose/target/hash/source/expiry/revocation negatives, production
+unsigned refusal, actual child role propagation and bounded N-to-N+1/rollback
+readback through the existing owners. These tests issue no real role. Actual
+signed-purpose issuance/use, exact reviewed artifact placement, native clients
+and activation remain separate gates. Build artifacts and present exact hashes
+and effects before requesting any outstanding real action; never infer that
+source approval authorizes signing or placement.
+
 ### Construction acceptance
 
 Provide exact reviewed clients-review/apply/status/reconcile, explicit

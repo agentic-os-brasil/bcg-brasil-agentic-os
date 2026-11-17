@@ -16,6 +16,7 @@ import (
 )
 
 type lifecycleFlags struct {
+	ExperimentalSeed                                                                                                                                                                                              *installer.VerifiedExperimentalSeed
 	ManagementIntent                                                                                                                                                                                              string
 	ManagedRoot, UserHome, Workspace, ManifestSHA256, ClientInputsSHA256, PlanID, CarrierID, PackageSHA256, NativeContractSHA256, ClientCodeRoot, ClientDesktopPath, ClientCodeExecutable, ClientScope, HookEvent string
 	LifecycleContext                                                                                                                                                                                              bool
@@ -33,7 +34,7 @@ func runLifecycle(ctx context.Context, command, self, registryPath string, flags
 	default:
 		return false, nil
 	}
-	operation := installer.SeededOperationOptions{Self: self, Version: Version, AuthorityRegistrySHA256: AuthorityRegistrySHA256, UserHome: flags.UserHome, ManagedRoot: flags.ManagedRoot, DataRoot: filepath.Join(flags.UserHome, ".maestro-install")}
+	operation := installer.SeededOperationOptions{ExperimentalSeed: flags.ExperimentalSeed, Self: self, Version: Version, AuthorityRegistrySHA256: AuthorityRegistrySHA256, UserHome: flags.UserHome, ManagedRoot: flags.ManagedRoot, DataRoot: filepath.Join(flags.UserHome, ".maestro-install")}
 	if command == "launch" {
 		launch, err := installer.PrepareQualifiedLaunch(ctx, installer.QualifiedLaunchOptions{SeededOperationOptions: operation, ExpectedBinding: installtx.ReleaseBinding{ManifestSHA256: flags.ManifestSHA256, ClientInputsSHA256: flags.ClientInputsSHA256}, Workspace: flags.Workspace})
 		if err != nil {
