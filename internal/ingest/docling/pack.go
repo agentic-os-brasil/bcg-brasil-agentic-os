@@ -46,7 +46,20 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 	if !filepath.IsAbs(o.DataRoot) || filepath.Clean(o.DataRoot) != o.DataRoot {
 		return empty, "pack_unavailable"
 	}
-	base := filepath.Join(o.DataRoot, "ingestion", "docling")
+	required, err := r.currentRequirement(ctx)
+	if err != nil {
+		return empty, "current_release_unavailable"
+	}
+	if o.ResolveRequirement != nil {
+		if required.PackSHA256 == "" {
+			return empty, "current_pack_not_declared"
+		}
+		o.CLIVersion = required.ServerVersion
+	}
+	base, err := metadataBase(o)
+	if err != nil {
+		return empty, "pack_selection_unavailable"
+	}
 	manifestBody, _, err := readFile(filepath.Join(base, releaseverify.ManifestName), 1<<20)
 	if err != nil {
 		return empty, "pack_unavailable"
@@ -58,6 +71,9 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 	manifest, key, err := releaseverify.VerifyManifest(manifestBody, signature, registry)
 	if err != nil {
 		return empty, "pack_untrusted"
+	}
+	if o.ResolveRequirement != nil && digest(manifestBody) != required.ManifestSHA256 {
+		return empty, "current_pack_pending"
 	}
 	compatibility, err := releasecontract.ParseVersionRange(manifest.CompatibleExecutable())
 	if err != nil {
@@ -76,6 +92,9 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 			}
 			selected = a
 		}
+	}
+	if selected != nil && o.ResolveRequirement != nil && selected.SHA256 != required.PackSHA256 {
+		return empty, "current_pack_pending"
 	}
 	if selected == nil || selected.Size > maximumArchiveBytes {
 		return empty, "pack_unavailable"
@@ -138,9 +157,15 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 	if !nativeClosureValid(target, entries) {
 		return empty, "pack_untrusted"
 	}
-	installed := filepath.Join(base, "installed", selected.SHA256)
+	installed := filepath.Join(o.DataRoot, "ingestion", "docling", "installed", selected.SHA256)
 	if err := verifyInstalled(ctx, installed, entries); err != nil {
 		return empty, "installed_pack_changed"
+	}
+	if o.ResolveRequirement != nil {
+		after, err := r.currentRequirement(ctx)
+		if err != nil || after != required {
+			return empty, "current_release_changed"
+		}
 	}
 	return verifiedPack{entries: entries, sha: selected.SHA256, manifestSHA: digest(manifestBody), target: target}, ""
 }

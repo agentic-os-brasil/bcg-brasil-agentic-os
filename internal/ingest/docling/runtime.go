@@ -13,6 +13,11 @@ type Options struct {
 	AuthorityRegistryPath   string
 	AuthorityRegistrySHA256 string
 	CLIVersion              string
+	// Trusted constructor callbacks, never decoded from model/tool arguments.
+	ResolveRequirement func(context.Context) (Requirement, error) `json:"-"`
+	GuardSelection     func(func() error) error                   `json:"-"`
+	metadataGeneration string
+	legacyMetadata     bool
 }
 type Runtime struct{ options Options }
 type Availability struct {

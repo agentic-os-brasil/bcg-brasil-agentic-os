@@ -87,7 +87,10 @@ func qualificationStatus(ctx context.Context, o Options, pack verifiedPack) stri
 	if err != nil {
 		return "requalification_required"
 	}
-	name := filepath.Join(o.DataRoot, "ingestion", "docling", "windows-qualification.dpapi")
+	name, err := qualificationPath(o, pack, expected)
+	if err != nil {
+		return "requalification_required"
+	}
 	ciphertext, err := winprivate.ReadFile(name, 64<<10)
 	if err != nil || len(ciphertext) == 0 {
 		return "requalification_required"
@@ -114,6 +117,9 @@ func qualifyPlaced(ctx context.Context, o Options) error {
 	pack, reason := New(o).verify(ctx)
 	if reason != "" {
 		return fmt.Errorf("placed converter unavailable: %s", reason)
+	}
+	if qualificationStatus(ctx, o, pack) == "" {
+		return nil
 	}
 	binding, err := qualificationBinding(o, pack)
 	if err != nil {
@@ -181,5 +187,28 @@ func qualifyPlaced(ctx context.Context, o Options) error {
 	if output.Size == 0 || output.Size > 64<<10 {
 		return errors.New("qualification_proof_invalid")
 	}
-	return scheduler.WritePrivateFileAtomic(filepath.Join(o.DataRoot, "ingestion", "docling", "windows-qualification.dpapi"), unsafe.Slice(output.Data, int(output.Size)))
+	path, err := qualificationPath(o, pack, binding)
+	if err != nil {
+		return err
+	}
+	if o.metadataGeneration != "" {
+		if err := scheduler.EnsurePrivateDirectory(filepath.Dir(path)); err != nil {
+			return err
+		}
+		return scheduler.WriteNewPrivateFile(path, unsafe.Slice(output.Data, int(output.Size)))
+	}
+	return scheduler.WritePrivateFileAtomic(path, unsafe.Slice(output.Data, int(output.Size)))
+}
+
+func qualificationPath(o Options, pack verifiedPack, binding nativeQualification) (string, error) {
+	base, err := metadataBase(o)
+	if err != nil {
+		return "", err
+	}
+	legacy := filepath.Join(o.DataRoot, "ingestion", "docling")
+	if base == legacy {
+		return filepath.Join(base, "windows-qualification.dpapi"), nil
+	}
+	body, _ := json.Marshal(binding)
+	return filepath.Join(base, "qualifications", digest(body)+".dpapi"), nil
 }
