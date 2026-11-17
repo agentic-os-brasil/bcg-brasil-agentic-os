@@ -1,6 +1,6 @@
 ---
 name: interaction-profile
-description: Resolve the active Maestro interaction profile before selecting language, explanation depth and optional technical suggestions in a professional workflow. Called by other skills as a preflight step; also for "set my interaction profile", "switch to advanced mode".
+description: Resolve the active Maestro interaction profile before selecting language, explanation depth and optional technical suggestions in a professional workflow. Called by other skills as a preflight step; also for "set my interaction profile", "switch to advanced mode", or an explicit request to remember/correct a professional interaction preference.
 ---
 
 # Interaction Profile
@@ -18,6 +18,8 @@ preference does not set a structured `standard`/`advanced`/`power` profile ID;
 keep `standard` unless that ID is explicitly available through an admitted
 structured source. Never inspect owner files as an MCP fallback or infer a
 reader role. A new conversation retrieves current context again.
+
+When the owner explicitly requests recording or withdrawing a professional preference, follow [reviewed self declarations](resources/self-observation.md). Ordinary profile resolution never queues observations or enrolls maintenance.
 
 The following file route applies only to the legacy admitted filesystem host.
 Resolve the admitted owner brain first, then read `owner/style.json` under its `brain_root` (preferred key: `interaction_profile`). If that admitted file or key is absent, fall back to `owner/identity.json` under the same root. An unavailable binding uses the standard profile without probing a product-relative directory. Do not infer the profile from a role, project, client, memory or the user's current wording.

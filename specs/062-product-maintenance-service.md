@@ -304,3 +304,35 @@ unavailable; no current native kernel or profile is replaced by old stubs.
 
 Issue #498 remains partial until its automatic preservation and native/hosted
 acceptance gates are met. Source preparation is not installed-client acceptance.
+
+### Owner declaration capture binding (OSIN)
+
+Bind `self-observation-capture` to the fixed ownerctx approved-pending declaration
+source, not the already captured canonical log. Reuse the existing reviewed
+qualification/control, worker grant, scheduler lease, attempt and publication
+owners. This job alone uses a deterministic canonical-owner namespace shared
+across admitted workspaces: one qualification/control and one scheduled owner
+occurrence. Other jobs keep existing namespace behavior; no implicit migration
+of old receipts or authority is allowed.
+
+Intake review is distinct from job qualification and later enrollment. Successful
+qualification must commit and read back at least one new canonical observation
+version linked to its exact reviewed intake. Store bounded body-free immutable
+version evidence and a guarded pointer; verify the underlying canonical record,
+not an enqueue receipt or timestamp. Already captured/no-op/replayed input cannot
+qualify. Source fingerprint includes reviewed input and terminal denials, excludes
+its own captured outputs, and is held stable through final metadata publication.
+
+Acquire existing control/grant before the observation lock. Keep pause/revoke,
+source changes, deletion/expiry and concurrent owner workers fenced. Partial
+canonical commit remains real retained evidence if later publication fails; do
+not roll it back or mint qualification by replaying it. A report proves only its
+historical proposal-input capture, never current content permission, active SELF,
+independent native episodes, Windows availability or client qualification.
+
+Pass the actual handler context into canonical capture and check cancellation
+under the observation lock immediately before append. The enclosing worker grant
+may have been validated before an owner-lock wait. Likewise check context inside
+the final source-lock report publication; never reacquire the installed/control
+guard from the observation lock. Cancellation before first canonical publication
+leaves input pending and cannot produce successful report/qualification evidence.

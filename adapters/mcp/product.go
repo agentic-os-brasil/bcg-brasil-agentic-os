@@ -234,6 +234,7 @@ type input struct {
 	KnowledgeDestination string   `json:"knowledge_destination,omitempty"`
 	CaseAgentIDs         []string `json:"case_agent_ids"`
 	historyArguments
+	selfObservationArguments
 	FolderURLs    []string `json:"folder_urls"`
 	DailyScope    string   `json:"daily_scope"`
 	CheckpointID  string   `json:"checkpoint_id"`

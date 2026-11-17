@@ -1673,3 +1673,15 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: Startup and Stop continue to deliver context or diagnostic observations without capturing memory, dreaming, indexing or enrolling. Queries remain read-only. Source metadata never carries prompt, transcript, tool body, objective, summary, document or path text. Provenance attestation grants no native execution authority and does not alter native Agent admission. Actual client qualification remains separate from source and SDK evidence.
 - Refs: MEMO; NPHK; specs/006-memory-persistence.md; specs/060-product-owner-memory.md; specs/062-product-maintenance-service.md; specs/063-product-native-plugin.md; #465
 - Supersedes: none
+
+
+## OSIN - Capture explicitly reviewed owner declarations through one owner job
+
+- Date: 2026-11-17
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The declared self-observation job had no actual producer. Consuming already captured observations would be a no-op, and treating model-supplied source hashes or new review sessions as independent interaction evidence would fabricate provenance.
+- Decision: Add one fixed ownerctx approved-pending declaration envelope with exact trusted review. Derive source identity from canonical owner binding and the closed normalized declaration only, with one conservative fixed declaration cohort. Only explicit owner instruction/correction/endorsement is admitted; the person separately attests relevance, absence of client/document/conversation material and owner-global professional proposal-input use. Use the existing maintenance qualification, enrollment, grant and lease chain in one canonical-owner namespace shared across admitted workspaces. Qualification requires new canonical append/readback/version evidence, not intake, timestamp or replay. Preserve private bounded storage, current terminal denials, reset and existing installed-source publication fences.
+- Consequences: The result is versioned proposal input, never active SELF, independent corroboration, weekly Yoda evidence or native execution authority. Queries/hooks do not create intake or grants. Existing explicit owner initialization admits released legacy observation logs into the persistent native selection-lock scheme without rewriting canonical bytes; active/nonempty legacy locks and unsafe state refuse intact, while ordinary reads remain noncreating. Declines/stale reviews preserve state; source changes and pause/revoke fence publication. A partial canonical append stays truthful and cannot qualify from replay alone. No generic queue, second profile, authorization/key framework, native acceptance, Windows claim or pilot activation is introduced.
+- Refs: specs/013-owner-context.md; specs/060-product-owner-memory.md; specs/062-product-maintenance-service.md; docs/product-mcp-owner.md; docs/product-mcp-maintenance.md; internal/ownerctx/observation_intake.go; internal/maintenance/product_self_observation.go
+- Supersedes: none

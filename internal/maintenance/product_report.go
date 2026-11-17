@@ -40,11 +40,24 @@ type ProductDomainReport struct {
 // Report is a closed, read-only projection of independently verified domain
 // output. It never opens an argument-selected path or returns captured text.
 func (s *Service) Report(job string) (ProductDomainReport, error) {
+	if job == SelfObservationCaptureJobID && !s.ownerScoped {
+		return s.selfObservationService().Report(job)
+	}
 	out := ProductDomainReport{JobID: job, WorkspaceID: s.workspaceID}
 	if err := s.validate(); err != nil {
 		return out, err
 	}
 	switch {
+	case job == SelfObservationCaptureJobID:
+		report, _, err := s.readSelfObservationReport("")
+		if err != nil {
+			return out, err
+		}
+		out.Finding = "reviewed_owner_declarations_captured_as_proposal_input"
+		out.ObservedAt = report.RecordedAt
+		out.Counts = map[string]int{"observations": len(report.Observations)}
+		out.NativeObservation = "not_observed"
+		return out, nil
 	case job == MemoryCaptureJobID:
 		r, _, err := s.readCaptureReport("")
 		if err != nil {

@@ -212,3 +212,40 @@ MCPB still installs a server/manifest, not the Code plugin's Skills.
 Use synthetic data and focused local tests. Four independent source review lenses
 and hosted CI precede eligible integration. Real clients/models, corporate signing,
 publication and pilot acceptance are distinct and remain explicit.
+
+## Reviewed self-declaration product route (OSIN)
+
+Expose `owner.observation.status` as bounded body-free read-only metadata and
+`owner.observation.intake` / `owner.observation.reject` as closed reviewed writes.
+Intake accepts exactly the five-field normalized declaration described by
+Spec013; the server derives stable owner-bound payload identity and a single
+non-independent declaration cohort. Never accept model trust, source, episode or
+scope assertions. Full review distinguishes declared preference from native
+observed evidence and explicitly obtains material relevance, no-client-material
+and owner-global professional proposal-input attestation.
+
+Hold no owner lock while awaiting the person. Revalidate canonical review/source
+and admitted binding after confirmation, and execute owning mutations inside the
+existing installed-source publication fence. Cancellation, recall, changed source
+or stale review cannot publish approval/control. A successful intake queues only;
+maintenance qualification and enrollment are independent exact reviews. Controls
+preserve canonical terminal denial and unchanged active SELF. The canonical
+`interaction-profile` conditional recipe must discover the available route;
+method packaging alone grants no consent, scheduled work or native proof.
+
+For already initialized owners with released legacy observation logs, the existing
+explicit local `init` route must reach canonical owner initialization and admit
+its persistent selection lock without recreating data. Observation queries and
+review refuse missing required locks without repair. Expose the explicit setup
+prerequisite in the operator guide and conditional method; it is not model
+permission to delete locks or reset the owner.
+
+Propagate the actual request context into both owning declaration mutations.
+After acquiring the observation lock and revalidating current input/review, check
+cancellation immediately before the first authoritative write. Installation
+custody validation alone does not supply this check, and a pre-closure check does
+not cover cancellation during binding validation or owner-lock wait. Keep the
+installed-source fence outside the owner lock; never reacquire it inside. The
+first canonical control append is the commit point: finish its coupled pending
+denial metadata, and retain/report real partial state if a later I/O error occurs.
+Cancellation before that point cannot approve, reject or redact an observation.

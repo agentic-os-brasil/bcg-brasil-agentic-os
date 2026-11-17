@@ -65,3 +65,7 @@ _Avoid_: fotografia histórica da origem
 **Linhagem**:
 Evidência histórica que vincula transações e origens sem conceder nova autoridade de escrita.
 _Avoid_: permissão atual
+
+**Declaração do dono**:
+Preferência profissional normalizada que o próprio dono revisa e autoriza como entrada de proposta. Repetir a declaração não demonstra episódios independentes nem altera o perfil ativo.
+_Avoid_: histórico observado, aprovação automática

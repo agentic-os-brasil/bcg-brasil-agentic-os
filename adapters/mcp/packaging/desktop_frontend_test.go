@@ -114,7 +114,7 @@ func TestCodeMethodPayloadBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := fmt.Sprintf("%x", sha256.Sum256(body)); got != "f52cfb36fbbbd08638a1809207db41f2dc3c0726a56094362b06967e615e4d68" {
+	if got := fmt.Sprintf("%x", sha256.Sum256(body)); got != "696142f51e893229bbfe39cbc0944ba17d569f6e3fbc24feddc46b8b6785d4a8" {
 		t.Fatal("Code method bytes changed", got)
 	}
 	agents, err := claudeagents.Project("maestro-product")
