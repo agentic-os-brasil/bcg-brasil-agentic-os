@@ -299,8 +299,8 @@ ADDITIONAL COMMENTS AND SPECIAL CIRCUMSTANCES
 ## Rubrica de referência
 
 Fontes:
-- `Associates & Consultants - Grading Rubrics 2023.pdf` (Brazil Career Development, Out/2023), salvo em `C:\Users\Ribeiro Julia\OneDrive - The Boston Consulting Group, Inc\Private\Training\Associates & Consultants - Grading Rubrics 2023.pdf` — rubrica com descritores de grade 1-4 por dimensão (não inclui Role model nem as subnotas de Communication and Presence / Practicality & effectiveness).
-- `Competencies in Action vFINAL (2).pdf`, salvo em `C:\Users\Ribeiro Julia\OneDrive - The Boston Consulting Group, Inc\Private\Training\Case Leader Readiness\Competencies in Action vFINAL (2).pdf` — confirma as subnotas oficiais de Problem solving & Insight, Communication and Presence e Practicality & effectiveness, e é a fonte da dimensão **Role model** (subitens abaixo). Competências são idênticas entre Associate e Consultant, exceto onde uma nota de rodapé indicar divergência.
+- `Associates & Consultants - Grading Rubrics 2023.pdf` (Brazil Career Development, Out/2023) — rubrica com descritores de grade 1-4 por dimensão (não inclui Role model nem as subnotas de Communication and Presence / Practicality & effectiveness).
+- `Competencies in Action vFINAL (2).pdf` — confirma as subnotas oficiais de Problem solving & Insight, Communication and Presence e Practicality & effectiveness, e é a fonte da dimensão **Role model** (subitens abaixo). Competências são idênticas entre Associate e Consultant, exceto onde uma nota de rodapé indicar divergência.
 
 Todo o texto abaixo (exceto a dimensão Expertise, que não existe em nenhum dos dois PDFs) é **citação literal**, sem tradução ou paráfrase — citar sempre assim para Julia, palavra por palavra.
 
