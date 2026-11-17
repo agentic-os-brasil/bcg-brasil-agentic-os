@@ -375,7 +375,8 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 		status.DesktopPilot = inventory.DesktopPilot
 	}
 	if inventory.Stable != nil {
-		if (diagnostic.Mode != "mcp_only" && diagnostic.Mode != "mcp_lifecycle") || inventory.Stable.BootstrapServerSHA256 != status.ServerSHA256 {
+		validMode := diagnostic.Mode == "mcp_only" || diagnostic.Mode == "mcp_lifecycle" || inventory.Format == "plugin" && (diagnostic.Mode == "native" || diagnostic.Mode == "qualification_candidate" || diagnostic.Mode == "native_engineering_fixture")
+		if !validMode || inventory.Stable.BootstrapServerSHA256 != status.ServerSHA256 {
 			return PacketStatus{}, errors.New("stable bootstrap identity changed")
 		}
 		embedded, err := packetEmbeddedDigest(diagnostic.Resources)

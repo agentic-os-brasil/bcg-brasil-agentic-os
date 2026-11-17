@@ -29,6 +29,7 @@ func ownerQueries() []any {
 func applySchema() map[string]any {
 	s := mutationSchema()
 	s["oneOf"] = append(s["oneOf"].([]any),
+		variant("installation.update_handoff", map[string]any{}),
 		variant("owner.track", map[string]any{"track": trackSchema()}, "track"),
 		variant("owner.propose", map[string]any{"facet": strSchema(64), "evidence": strSchema(4 << 10), "proposed_body": strSchema(12 << 10)}, "facet", "evidence", "proposed_body"),
 		variant("owner.apply", map[string]any{"proposal_id": strSchema(96)}, "proposal_id"),

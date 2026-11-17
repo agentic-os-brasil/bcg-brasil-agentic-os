@@ -90,6 +90,7 @@ func run() error {
 		flags.StringVar(&launch.HookEvent, "event", "", "exact passive lifecycle event")
 	}
 	if os.Args[1] == "manage" {
+		flags.StringVar(&launch.ManagementIntent, "management-intent", "", "closed foreground participant intent: update")
 		flags.BoolVar(&launch.LifecycleContext, "client-lifecycle-context", false, "explicit passive Code lifecycle selection")
 	}
 	if err = flags.Parse(os.Args[2:]); err != nil {

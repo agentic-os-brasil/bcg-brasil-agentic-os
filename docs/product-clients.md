@@ -28,6 +28,91 @@ client regeneration and native registration are separate effects, so the console
 shows the exact review at each required transition. It never grants blanket
 approval, rewrites a raw client profile or installs a recurring updater.
 
+## Versioned complete-client source workflow
+
+New console setups select private manifest-bound packet generations and a fixed
+local Code command-source provider. The selected workspace and canonical brain
+binding are retained. Each release gets new packet slots; previous generations,
+legacy fixed-slot records and occupied foreign paths remain unchanged. The
+private current client record selects the exact verified current plugin. The
+provider only reads this record through the admitted installed launcher. It
+cannot select a source, repair a tree, update code or grant approval.
+
+In Code or Desktop, an explicit "Atualizar Maestro" request uses the closed
+`maestro_apply` operation `installation.update_handoff`, with no other arguments.
+The stable launcher supplies the validated carrier as trusted startup context.
+The backend repeats independent installer/current-record admission and verifies
+the fixed update launcher before the normal host opener receives it. The console
+opens directly into its existing update action. The handoff accepts no model
+path, source, command, plan or approval; normal host permission governs opening.
+Its `handoff_requested` result leaves activation pending native installer review.
+Missing, ambiguous or unqualified context refuses and retains the independent
+manager recovery route.
+
+Full native preparation uses a reviewed bounded packet-generation identifier.
+Carrier, manifest and generation determine finite sibling-slot names. A failed
+qualifier retains its candidate; an explicit retry receives a fresh reviewed
+generation, preserving failed candidates and their evidence.
+
+Code uses the documented [command plugin source](https://code.claude.com/docs/en/plugins/marketplace-reference#command-plugin-source)
+in COPY mode. Its native install/update commands own the host cache. Current
+registration requires supported scoped readback and exact copied payload
+identity against the recorded source, allowing host permission normalization.
+Command-source policy and actual native compatibility remain host acceptance
+checks; a rejected command source does not enable another updater.
+
+The complete Code choice requires the existing real native qualifier for the
+selected current executable and profile before current-record publication.
+Qualification runs outside installer publication serialization. Only its
+same-call `native_observed` result and unchanged canonically verified candidate
+enter the existing guarded publisher. The qualification fingerprint binds the
+stable carrier. An unavailable login, policy, input, proof or native capability
+keeps the complete profile pending, preserving previous packets. The separate
+resources-only choice reports native enforcement unavailable; an existing
+complete profile cannot silently downgrade to that choice.
+
+The same current server prepares a complete Desktop method bootstrap and verifies
+its archive against its own canonical methods. Install this bootstrap once using
+the normal host flow. Each invocation reads the live catalog, policy, selected
+plan, current complete method instructions and referenced resources through the
+existing admitted `methods.list`, `methods.plan` and `methods.read` operations.
+Read every page with consistent resource/hash/length identities. Packaged
+snapshots are reference content. New methods remain discoverable through the
+operator entry even without a new installed slash alias. Ordinary instruction
+changes need no reimport while `maestro-live-method-bootstrap-v1` stays compatible.
+The bootstrap package version, live backend method identities and actual host
+installation/loading are separate observations. Changed bootstrap contracts or
+native permissions retain normal host review.
+
+The console's update action composes the existing source review/update, full
+native preparation, current packet publication, supported Code registration and
+maintenance requalification owners. Each original exact review still requires
+conscious confirmation. A deliberate reload/reconnect/new session follows;
+the update does not terminate a running client to imply activation. A compatible
+Desktop native-facing contract retains the exact previously admitted connector
+bytes in a new private slot, preserving installation confirmation while requiring
+a new connection/functional check.
+
+Maintenance proof binds each job to the whole current executable and CLI
+configuration. Preserved enrollment alone therefore does not preserve
+qualification after an executable update. The console selects only previously
+qualified jobs now reported stale, obtains each real existing job review and
+runs that original qualifier after confirmation. It leaves enrollment, timezone,
+opt-in and pause/revocation state with their owning service. Missing real inputs
+remain waiting/pending. `revalidate-maintenance` retries this phase without
+replacing the updater or relabeling old proof.
+
+This is source construction, not acceptance of the distributed experimental kit.
+The existing 0.1.50 experimental kit has no enrolled installer/source update
+route. Testing this complete N-to-N+1 flow needs a separately reviewed
+experimental installation/source admission under the existing short-lived
+engineering authority, with its exact supported purpose and scope. Production
+organization signing is a later distribution gate. Neither this source nor
+the Desktop bootstrap changes that authority or clears the retained native
+Agent proof/custody boundary. Current materialization, registration, reload,
+native qualification, maintenance qualification and functional acceptance remain
+separate status phases.
+
 The resulting participant-local launcher reopens management for this exact
 installation/workspace/carrier. Preserve its selected paths. Moving a packet,
 changing the binding or editing the current record is not an update procedure.
@@ -91,7 +176,7 @@ carrier and cannot bypass that restriction. An ordinary unmanaged MCPB is a
 separate installation profile; it is not a source-managed fallback. Preserve
 this limitation in participant status until the actual client is qualified.
 
-## Update the server and preserve the client binding
+## Legacy fixed-slot updates and shared source recovery
 
 Use the same console and [signed-source update/recovery workflow](product-synced-source.md).
 SharePoint/OneDrive supplies distribution bytes. The current source can materialize
