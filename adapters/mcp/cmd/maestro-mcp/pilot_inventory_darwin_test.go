@@ -179,7 +179,7 @@ func TestMacOSPilotCodePromptHandoff(t *testing.T) {
 	tools := filepath.Join(base, "tools")
 	witness := filepath.Join(base, "argv")
 	prompt := "Use exact \"quoted\" text, $HOME and $(touch NEVER_CREATED).\nSecond line."
-	report, _ := json.Marshal(map[string]any{"schema_version": 1, "status": "ready", "markdown": "synthetic report", "code_prompt": prompt + " complete", "desktop_prompt": "desktop", "code_ready_prompt": prompt + " connection", "desktop_ready_prompt": "desktop connection"})
+	report, _ := json.Marshal(map[string]any{"schema_version": 1, "status": "ready", "markdown": "synthetic report", "code_prompt": prompt + " complete", "code_readback_prompt": prompt + " readback", "desktop_prompt": "desktop", "code_ready_prompt": prompt + " connection", "desktop_ready_prompt": "desktop connection"})
 	checker := []byte(`#!/bin/bash
 case "$1" in
   pilot-check) cat "$PILOT_REPORT";;
@@ -301,7 +301,7 @@ esac
 	if _, err := os.Stat(witness); !os.IsNotExist(err) {
 		t.Fatal("check-only or invalid arguments opened Code")
 	}
-	for _, choice := range []string{"1", "3"} {
+	for _, choice := range []string{"1", "3", "6"} {
 		transcript := filepath.Join(base, "menu-"+choice)
 		if out, err := run([]string{"/usr/bin/script", "-q", transcript, "/bin/bash", menu}, choice+"\n"); err != nil {
 			t.Fatalf("menu %s: %s %v", choice, out, err)
@@ -309,6 +309,8 @@ esac
 		suffix := " complete"
 		if choice == "3" {
 			suffix = " connection"
+		} else if choice == "6" {
+			suffix = " readback"
 		}
 		assertArgs(append(append([]string{}, prefix...), "--", prompt+suffix)...)
 	}

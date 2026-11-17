@@ -495,7 +495,7 @@ func TestPilotWindowsCodePromptHandoff(t *testing.T) {
 	tools := filepath.Join(base, "tools")
 	witness := filepath.Join(base, "argv.json")
 	prompt := "Use exact \"quoted\" text, $HOME and $(throw 'never'), C:\\path\\\"quoted\".\nSecond line."
-	report, _ := json.Marshal(map[string]any{"schema_version": 1, "status": "ready", "markdown": "synthetic report", "code_prompt": prompt + " complete", "desktop_prompt": "desktop", "code_ready_prompt": prompt + " connection", "desktop_ready_prompt": "desktop connection"})
+	report, _ := json.Marshal(map[string]any{"schema_version": 1, "status": "ready", "markdown": "synthetic report", "code_prompt": prompt + " complete", "code_readback_prompt": prompt + " readback", "desktop_prompt": "desktop", "code_ready_prompt": prompt + " connection", "desktop_ready_prompt": "desktop connection"})
 	helper := `package main
 import ("encoding/json";"os";"path/filepath";"fmt";"crypto/sha256";"strings")
 func record(path string) { f,e:=os.Create(path);if e!=nil{panic(e)};defer f.Close();json.NewEncoder(f).Encode(os.Args[1:]) }
@@ -613,7 +613,7 @@ func main(){
 	if _, err := os.Stat(witness); !os.IsNotExist(err) {
 		t.Fatal("check-only or invalid arguments opened Code")
 	}
-	for _, choice := range []string{"1", "3"} {
+	for _, choice := range []string{"1", "3", "6"} {
 		wrapper := "function Read-Host { '" + choice + "' }; function Start-Process {}; function Set-Clipboard { throw 'Code must not use Clipboard' }; & '" + strings.ReplaceAll(menu, "'", "''") + "'"
 		if out, err := run("-Command", wrapper); err != nil {
 			t.Fatalf("menu %s: %s %v", choice, out, err)
@@ -621,6 +621,8 @@ func main(){
 		suffix := " complete"
 		if choice == "3" {
 			suffix = " connection"
+		} else if choice == "6" {
+			suffix = " readback"
 		}
 		assertArgs(append(append([]string{}, prefix...), "--", prompt+suffix)...)
 	}

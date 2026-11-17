@@ -88,6 +88,7 @@ try {
   if ($report.schema_version -ne 1 -or $report.status -notin @('ready','partial','blocked')) { throw 'schema' }
   Write-New (Join-Path $run 'RELATORIO.md') ([string]$report.markdown)
   Write-New (Join-Path $run 'CODE.txt') ([string]$report.code_prompt)
+  Write-New (Join-Path $run 'CODE-RELEITURA.txt') ([string]$report.code_readback_prompt)
   Write-New (Join-Path $run 'DESKTOP.txt') ([string]$report.desktop_prompt)
   Write-New (Join-Path $run 'CODE-CONEXAO.txt') ([string]$report.code_ready_prompt)
   Write-New (Join-Path $run 'DESKTOP-CONEXAO.txt') ([string]$report.desktop_ready_prompt)
@@ -135,7 +136,7 @@ function Qualify-Code {
     if ($null -eq $old) { Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue } else { $env:CLAUDE_CONFIG_DIR = $old }
   }
 }
-Write-Host "1 — Ensaio completo no Code`n2 — Retomar no Desktop`n3 — Conferir conexão Code (somente leitura)`n4 — Conferir conexão Desktop (somente leitura)`n5 — Qualificar os sete hooks do Code (testes com modelo; confirmação separada)`nEnter — Sair"
+Write-Host "1 — Ensaio completo no Code`n2 — Retomar no Desktop`n3 — Conferir conexão Code (somente leitura)`n4 — Conferir conexão Desktop (somente leitura)`n5 — Qualificar os sete hooks do Code (testes com modelo; confirmação separada)`n6 — Conferir persistência no Code (somente leitura)`nEnter — Sair"
 $choice = Read-Host 'Escolha'
 switch ($choice) {
   '1' {
@@ -163,6 +164,12 @@ switch ($choice) {
     & (Join-Path $root 'launchers/Abrir Desktop.ps1')
   }
   '5' { Qualify-Code }
+  '6' {
+    if (-not $report.code_readback_prompt) { Fail 'O relatório ainda não liberou a releitura no cliente.' }
+    if (-not (Get-Command claude -ErrorAction SilentlyContinue)) { Fail 'Disponibilize o comando claude pelo fluxo normal do Code e abra Testar Maestro novamente.' }
+    Write-Host 'Abrindo uma sessão nova do Code para conferir página, memória e trabalho sem alterações. Para testar um reinício frio, feche antes somente as sessões e conexões deste ensaio pelo fluxo normal, preserve outros trabalhos e volte a esta opção. Uma conversa nova não comprova reinício do servidor; registre o reinício informado separadamente.'
+    & (Join-Path $root 'launchers/Abrir Code.ps1') -InitialPrompt ([string]$report.code_readback_prompt)
+  }
   '' { }
-  default { Fail 'Escolha 1, 2, 3, 4, 5 ou Enter.' }
+  default { Fail 'Escolha 1, 2, 3, 4, 5, 6 ou Enter.' }
 }
