@@ -9,6 +9,7 @@ import (
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest/docling"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
@@ -30,6 +31,7 @@ func placeInitialRuntime(ctx context.Context, binding product.Options, c Config,
 	}
 	executable := filepath.Join(binding.ProductRoot, "bin", name)
 	args := []string{"runtime-review", "--product-root", binding.ProductRoot, "--user-home", binding.UserHome, "--workspace", binding.WorkspacePath, "--installed-manifest", state.Binding.ManifestSHA256, "--installed-client-inputs", state.Binding.ClientInputsSHA256, "--release-directory", verified.Directory}
+	args = installer.ExperimentalChildArgs(args, binding.ExperimentalSeed, binding.ExperimentalSeedRoot)
 	run := func(args []string) ([]byte, error) {
 		if c.Run == nil {
 			return runRuntimeConsumer(ctx, executable, args, binding.WorkspacePath)

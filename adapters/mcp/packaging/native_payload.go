@@ -164,7 +164,7 @@ func nativePacketPayload(o Options, format string) (map[string][]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		files, err = nativeProfilePayload(o.target.Platform(), p.BindingSHA256)
+		files, err = canonicalNativeProfile(o.target.Platform(), p.BindingSHA256, stableBinding(o))
 		if err != nil {
 			return nil, err
 		}
@@ -262,7 +262,7 @@ func nativeRequiredPayload(read func(string, int64) ([]byte, error), format stri
 		if p.Native.EvidenceClass != "native_observed" && p.Native.EvidenceClass != "engineering_fixture" {
 			return nil, errors.New("native diagnostic evidence unavailable")
 		}
-		files, err = nativeProfilePayload(target.Platform(), p.BindingSHA256)
+		files, err = canonicalNativeProfile(target.Platform(), p.BindingSHA256, stable)
 		if err != nil {
 			return nil, err
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"time"
@@ -20,6 +21,7 @@ import (
 // supply their compiled version/pin and strict native verifier; no command-line
 // trust override is accepted. The engineering verifier seam remains in process.
 type SeededOperationOptions struct {
+	ExperimentalSeed                       *VerifiedExperimentalSeed
 	Self, Version, AuthorityRegistrySHA256 string
 	UserHome, ManagedRoot, DataRoot        string
 	VerifyNative                           nativeVerifier
@@ -37,6 +39,12 @@ func admitOperationSeed(ctx context.Context, o SeededOperationOptions) (releasev
 	}
 	if err := validateModernInputFiles([]string{o.Self, filepath.Join(o.ManagedRoot, "trust", "release-authority-registry.json")}); err != nil {
 		return releaseverify.AuthorityRegistry{}, err
+	}
+	if o.ExperimentalSeed != nil {
+		return admitExperimentalOperationSeed(ctx, o)
+	}
+	if _, err := os.Lstat(filepath.Join(o.ManagedRoot, "trust", experimentalSeedOriginName)); !errors.Is(err, os.ErrNotExist) {
+		return releaseverify.AuthorityRegistry{}, errors.New("production installer cannot consume experimental installation custody")
 	}
 	verifyNative := o.VerifyNative
 	if verifyNative == nil {
@@ -86,8 +94,14 @@ func PrepareQualifiedLaunch(ctx context.Context, o QualifiedLaunchOptions) (Qual
 		return QualifiedLaunch{}, errors.New("qualified carrier requires exact immutable installed release binding")
 	}
 	args := []string{"serve", "--product-root", o.ManagedRoot, "--user-home", o.UserHome, "--installed-manifest", state.Binding.ManifestSHA256, "--installed-client-inputs", state.Binding.ClientInputsSHA256}
+	if o.ExperimentalSeed != nil {
+		args = ExperimentalChildArgs(args, o.ExperimentalSeed, o.ManagedRoot)
+	}
 	if o.Workspace != "" {
 		args = append(args, "--workspace", o.Workspace)
+	}
+	if err := recheckExperimentalOperation(o.SeededOperationOptions); err != nil {
+		return QualifiedLaunch{}, err
 	}
 	return QualifiedLaunch{Executable: installedExecutablePath(o.ManagedRoot, state.TargetOS, state.Profile), Args: args, State: state}, nil
 }
@@ -123,6 +137,14 @@ func ReviewPendingSeeded(ctx context.Context, o SeededUpdateOptions) (updateserv
 	if pending.SchemaVersion != 2 || pending.Plan.InstallerVersion != o.Version {
 		return updateservice.Pending{}, errors.New("pending update requires another independently admitted installer")
 	}
+	if o.ExperimentalSeed != nil {
+		if err := o.ExperimentalSeed.VerifySource(pending.Plan.Source.Tuple); err != nil {
+			return updateservice.Pending{}, err
+		}
+		if err := o.ExperimentalSeed.VerifyReleaseIdentity(pending.Plan.ManifestSHA256, pending.Plan.ClientInputsSHA256); err != nil {
+			return updateservice.Pending{}, err
+		}
+	}
 	return pending, nil
 }
 
@@ -143,7 +165,18 @@ func UpdateSeeded(ctx context.Context, o SeededUpdateOptions) (installtx.State, 
 	if pending.SchemaVersion != 2 || verified.Manifest.Delivery.InstallerVersion != o.Version {
 		return installtx.State{}, errors.New("signed update requires a different independently admitted installer version")
 	}
+	if o.ExperimentalSeed != nil {
+		if err := o.ExperimentalSeed.VerifySource(pending.Plan.Source.Tuple); err != nil {
+			return installtx.State{}, err
+		}
+		if err := o.ExperimentalSeed.VerifyRelease(verified); err != nil {
+			return installtx.State{}, err
+		}
+	}
 	options := installtx.PrepareOptions{UserHome: o.UserHome, Transition: "update", ConfirmationPlanID: pending.Plan.ID, FromRelease: pending.Plan.FromRelease, FromChannel: pending.Plan.FromChannel, FromCLIVersion: pending.Plan.FromCLIVersion, FromBundleVersion: pending.Plan.FromBundleVersion, TargetOS: pending.Plan.TargetOS, TargetArch: pending.Plan.TargetArch, ManagedRoot: o.ManagedRoot, DataRoot: o.DataRoot, Source: pending.Plan.Source, SourceStateSHA256: pending.Plan.FromStateSHA256}
+	if err := recheckExperimentalOperation(o.SeededOperationOptions); err != nil {
+		return installtx.State{}, err
+	}
 	if err := installtx.Activate(pending.ActivationPlanPath, verified, installtx.ActivateOptions{PrepareOptions: options}); err != nil {
 		return installtx.State{}, err
 	}
@@ -155,6 +188,9 @@ func UpdateSeeded(ctx context.Context, o SeededUpdateOptions) (installtx.State, 
 		return state, err
 	}
 	_, err = installtx.ValidateQualifiedLaunch(o.ManagedRoot, o.DataRoot, state.Binding, time.Now())
+	if err == nil {
+		err = recheckExperimentalOperation(o.SeededOperationOptions)
+	}
 	return state, err
 }
 
@@ -166,7 +202,10 @@ func ReconcileSeeded(ctx context.Context, o SeededUpdateOptions) (installtx.Stat
 	if err := validateSeededPending(o); err != nil {
 		return installtx.State{}, false, err
 	}
-	_, applied, err := updateservice.ReconcilePending(o.DataRoot, o.ManagedRoot, o.PlanID, r)
+	if err := recheckExperimentalOperation(o.SeededOperationOptions); err != nil {
+		return installtx.State{}, false, err
+	}
+	_, applied, err := updateservice.ReconcilePendingWithAdmission(o.DataRoot, o.ManagedRoot, o.PlanID, r, experimentalSyncedAdmission(o.ExperimentalSeed))
 	state, readErr := installtx.ReadSourceState(o.DataRoot, o.ManagedRoot)
 	if err != nil {
 		return state, applied, err
@@ -176,6 +215,9 @@ func ReconcileSeeded(ctx context.Context, o SeededUpdateOptions) (installtx.Stat
 	}
 	if applied {
 		_, err = installtx.ValidateQualifiedLaunch(o.ManagedRoot, o.DataRoot, state.Binding, time.Now())
+	}
+	if err == nil {
+		err = recheckExperimentalOperation(o.SeededOperationOptions)
 	}
 	return state, applied, err
 }
@@ -187,6 +229,9 @@ type SeededRollbackOptions struct {
 
 func ReviewRollbackSeeded(ctx context.Context, o SeededOperationOptions) (installtx.RollbackReview, error) {
 	if _, err := admitOperationSeed(ctx, o); err != nil {
+		return installtx.RollbackReview{}, err
+	}
+	if err := verifyExperimentalRollback(o); err != nil {
 		return installtx.RollbackReview{}, err
 	}
 	return installtx.ReviewRollback(o.ManagedRoot, o.DataRoot)
@@ -202,10 +247,16 @@ func RollbackSeeded(ctx context.Context, o SeededRollbackOptions) (installtx.Sta
 	if review.Digest != o.ReviewDigest {
 		return installtx.State{}, errors.New("exact rollback review changed")
 	}
+	if err := verifyExperimentalRollback(o.SeededOperationOptions); err != nil {
+		return installtx.State{}, err
+	}
 	if err := installtx.RollbackQualified(o.ManagedRoot, o.DataRoot, o.ReviewDigest); err != nil {
 		return installtx.State{}, err
 	}
 	state, err := installtx.ValidateQualifiedLaunch(o.ManagedRoot, o.DataRoot, installtx.ReleaseBinding{}, time.Now())
+	if err == nil {
+		err = recheckExperimentalOperation(o.SeededOperationOptions)
+	}
 	return state, err
 }
 
@@ -221,12 +272,18 @@ func ReviewSourceSeeded(ctx context.Context, o SeededSourceOptions) (updateservi
 	if err != nil {
 		return updateservice.SyncedReview{}, err
 	}
-	return updateservice.ReviewSynced(updateservice.SyncedOptions{UserHome: o.UserHome, ManagedRoot: o.ManagedRoot, DataRoot: o.DataRoot, SourceRoot: o.SourceRoot, ExpectedSource: o.ExpectedSource, Registry: r})
+	return updateservice.ReviewSynced(updateservice.SyncedOptions{UserHome: o.UserHome, ManagedRoot: o.ManagedRoot, DataRoot: o.DataRoot, SourceRoot: o.SourceRoot, ExpectedSource: o.ExpectedSource, Registry: r, Admission: experimentalSyncedAdmission(o.ExperimentalSeed)})
 }
 func CheckSourceSeeded(ctx context.Context, o SeededSourceOptions) (updateservice.CheckResult, error) {
 	r, err := admitOperationSeed(ctx, o.SeededOperationOptions)
 	if err != nil {
 		return updateservice.CheckResult{}, err
 	}
-	return updateservice.CheckSynced(updateservice.SyncedOptions{UserHome: o.UserHome, ManagedRoot: o.ManagedRoot, DataRoot: o.DataRoot, SourceRoot: o.SourceRoot, ExpectedSource: o.ExpectedSource, Registry: r}, o.ReviewDigest)
+	result, checkErr := updateservice.CheckSynced(updateservice.SyncedOptions{UserHome: o.UserHome, ManagedRoot: o.ManagedRoot, DataRoot: o.DataRoot, SourceRoot: o.SourceRoot, ExpectedSource: o.ExpectedSource, Registry: r, Admission: experimentalSyncedAdmission(o.ExperimentalSeed)}, o.ReviewDigest)
+	if checkErr == nil || errors.Is(checkErr, updateservice.ErrCurrent) {
+		if err := recheckExperimentalOperation(o.SeededOperationOptions); err != nil {
+			return result, fmt.Errorf("source observation completed; preserve observed custody and review the changed experimental admission: %w", err)
+		}
+	}
+	return result, checkErr
 }

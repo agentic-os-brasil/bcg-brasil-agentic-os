@@ -95,6 +95,9 @@ func ReviewRuntimeRecoverySource(ctx context.Context, o installer.ClientOptions)
 	}
 	sum := sha256.Sum256(body)
 	review.Digest = hex.EncodeToString(sum[:])
+	if err := verifyRuntimeExperimentalOperation(o.SeededOperationOptions, &state); err != nil {
+		return review, err
+	}
 	return review, nil
 }
 
@@ -122,6 +125,9 @@ func ApplyRuntimeRecoverySource(ctx context.Context, o installer.ClientOptions, 
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if err := verifyRuntimeExperimentalOperation(o.SeededOperationOptions, nil); err != nil {
+			return err
+		}
 		fresh, err := ReviewRuntimeRecoverySource(ctx, o)
 		if err != nil {
 			return err
@@ -140,6 +146,9 @@ func ApplyRuntimeRecoverySource(ctx context.Context, o installer.ClientOptions, 
 		if generation.SHA256 != review.GenerationSHA256 {
 			return errors.New("accepted Current source changed before staging")
 		}
+		if err := verifyRuntimeExperimentalOperation(o.SeededOperationOptions, nil); err != nil {
+			return err
+		}
 		verified, err := releaseprovider.SnapshotSyncedRelease(review.SourceRoot, review.Destination, generation, registry)
 		if err != nil {
 			return err
@@ -147,10 +156,13 @@ func ApplyRuntimeRecoverySource(ctx context.Context, o installer.ClientOptions, 
 		if verified.ManifestSHA256 != review.Current.ManifestSHA256 || verified.Manifest.Delivery.ClientInputsSHA256 != review.ClientInputsSHA256 {
 			return errors.New("staged snapshot differs from exact reviewed Current; staged bytes preserved")
 		}
-		return nil
+		return verifyRuntimeExperimentalOperation(o.SeededOperationOptions, nil)
 	})
 	if err != nil {
 		return pending, fmt.Errorf("source-updated/runtime-pending; snapshot staging failed or changed; existing/staged bytes preserved; retry manage reconcile after inspection: %w", err)
+	}
+	if err := verifyRuntimeExperimentalOperation(o.SeededOperationOptions, nil); err != nil {
+		return pending, err
 	}
 	return RuntimeRecoveryResult{State: "current_snapshot_staged_runtime_pending", ManifestSHA256: review.Current.ManifestSHA256, Destination: review.Destination}, nil
 }

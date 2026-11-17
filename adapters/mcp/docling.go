@@ -23,7 +23,7 @@ import (
 // original verifier and cannot acquire installed placement authority.
 func (b *Bound) DoclingRuntime() *docling.Runtime { return docling.New(b.doclingOptions()) }
 func (b *Bound) doclingOptions() docling.Options {
-	return b.doclingOptionsWithReader(installtx.ReadSourceState)
+	return b.doclingOptionsWithReader(b.readInstalledSourceState)
 }
 
 func (b *Bound) doclingOptionsWithReader(read sourceStateReader) docling.Options {
@@ -48,7 +48,7 @@ func (b *Bound) doclingOptionsWithReader(read sourceStateReader) docling.Options
 					if err := b.validate(); err != nil {
 						return err
 					}
-					return publish()
+					return b.withExperimentalSeedFence(publish)
 				})
 			}
 		}
@@ -59,12 +59,12 @@ func (b *Bound) currentDoclingRequirement() (docling.Requirement, error) {
 	if err := b.validateInstalledSource(); err != nil {
 		return docling.Requirement{}, err
 	}
-	state, err := installtx.ReadSourceState(filepath.Join(b.options.UserHome, ".maestro-install"), b.options.ProductRoot)
+	state, err := b.readInstalledSourceState(filepath.Join(b.options.UserHome, ".maestro-install"), b.options.ProductRoot)
 	if err != nil {
 		return docling.Requirement{}, err
 	}
 	if state.Source == nil {
-		state, err = installtx.ValidateActivatedCurrent(b.options.ProductRoot, filepath.Join(b.options.UserHome, ".maestro-install"), state.Binding)
+		state, err = b.validatedActivatedState(state.Binding)
 		if err != nil {
 			return docling.Requirement{}, err
 		}
@@ -114,6 +114,9 @@ func (b *Bound) currentDoclingRequirement() (docling.Requirement, error) {
 	if err != nil || required.ServerVersion != state.Server.Version {
 		return docling.Requirement{}, errors.New("current converter source/server differs")
 	}
+	if err := b.fenceExperimentalState(state); err != nil {
+		return docling.Requirement{}, err
+	}
 	return required, nil
 }
 
@@ -138,7 +141,7 @@ type RuntimeUpdateReview struct {
 // enrollment. It requires that activation's retained signed immutable binding;
 // it cannot replace source-aware validation after enrollment.
 func installedRuntimeBound(o Options) (*Bound, installtx.State, error) {
-	state, err := installtx.ReadSourceState(filepath.Join(o.UserHome, ".maestro-install"), o.ProductRoot)
+	state, err := (&Bound{options: o}).readInstalledSourceState(filepath.Join(o.UserHome, ".maestro-install"), o.ProductRoot)
 	if err != nil {
 		return nil, state, err
 	}
@@ -235,6 +238,9 @@ func ReviewInstalledRuntime(ctx context.Context, o Options, releaseDirectory str
 	}
 	sum := sha256.Sum256(body)
 	review.Digest = hex.EncodeToString(sum[:])
+	if err := b.validateExperimentalSeed(); err != nil {
+		return review, err
+	}
 	return review, nil
 }
 
@@ -255,7 +261,11 @@ func ApplyInstalledRuntime(ctx context.Context, o Options, releaseDirectory, dig
 		return pending, err
 	}
 	if review.State == "not_declared" || len(review.Effects) == 0 {
-		return b.DoclingRuntime().Status(ctx), nil
+		status := b.DoclingRuntime().Status(ctx)
+		if err := b.validateExperimentalSeed(); err != nil {
+			return pending, err
+		}
+		return status, nil
 	}
 	options := b.doclingOptions()
 	if review.ReleaseDirectory == "" {
@@ -281,13 +291,16 @@ func ApplyInstalledRuntime(ctx context.Context, o Options, releaseDirectory, dig
 	if e != nil {
 		return pending, e
 	}
-	latest, e := installtx.ReadSourceState(filepath.Join(o.UserHome, ".maestro-install"), o.ProductRoot)
+	latest, e := b.readInstalledSourceState(filepath.Join(o.UserHome, ".maestro-install"), o.ProductRoot)
 	if e != nil || latest.Binding.ManifestSHA256 != state.Binding.ManifestSHA256 {
 		return pending, errors.New("current changed during converter placement; retry manage reconcile")
 	}
 	result := b.DoclingRuntime().Status(ctx)
 	if result.State != "ready" {
 		return result, errors.New("source-updated/runtime-pending; retry manage reconcile")
+	}
+	if err := b.validateExperimentalSeed(); err != nil {
+		return pending, err
 	}
 	return result, nil
 }

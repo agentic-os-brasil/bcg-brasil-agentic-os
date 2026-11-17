@@ -1697,6 +1697,17 @@ filesystem surface or stronger marker-transaction claim.
 - Refs: SCAR; MPDI; specs/020-release-distribution.md; specs/062-product-maintenance-service.md; specs/063-product-native-plugin.md; specs/065-product-method-discovery.md; docs/product-synced-source.md; docs/product-clients.md; docs/plans/2026-11-03-synced-product-distribution.md
 - Supersedes: none
 
+## EISA - Admit one explicit experimental installed-seed rehearsal profile
+
+- Date: 2026-11-17
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The complete synced-source distribution requires exercising the existing installer and update owners, while the runtime-only experimental pilot deliberately refuses installed or enrolled inputs. Production strict admission is separate. A test-only verifier callback is not a participant installation route.
+- Decision: Construct one closed experimental installed-seed profile with its own literal signed-record purpose/protocol, pinned public engineering registry, exact installer/target and two finite release/source bindings with expiry bounded by the existing authority window. Only a verified opaque admission may enter the separate compile-time experimental command entry. Carry explicit engineering identity through local exact review, plan, installed custody, status, children, source/update/rollback, stable launch, current provider and manager handoff. Reuse the existing installer and client transaction owners. Production entry, strict verifier, default serialization and refusal of the unsigned engineering installer remain unchanged. Preserve the existing admitted physical Developer brain and all owner/workspace state.
+- Consequences: This decision permits source construction and synthetic ephemeral-key tests only; it issues no signed purpose, key, issuer, platform trust, native Agent proof or runtime placement. A valid old runtime-pilot signature is not installed-seed permission. Engineering identity must never be reported as native-strict or used to adopt a production installation. The genuine native client qualifier and retained D3 remain effective; existing runtime pilot exclusions stay intact. Actual role issuance/use, exact artifact placement and activation require their concrete separate review. Production signing and distribution remain separate, with no renewed expiry, general trust override, second updater or background service.
+- Refs: EPRT; SFRD; specs/020-release-distribution.md; specs/063-product-native-plugin.md; internal/installer; adapters/mcp/cmd/maestro-install; adapters/mcp/setup; adapters/mcp/packaging
+- Supersedes: none
+
 ## PCRU - Keep authenticated converter updates current without replacing prior metadata
 
 - Date: 2026-11-17

@@ -53,7 +53,7 @@ func (s *Service) updateOptions() (updateservice.SyncedOptions, error) {
 	if err != nil {
 		return updateservice.SyncedOptions{}, err
 	}
-	return updateservice.SyncedOptions{UserHome: s.options.UserHome, ManagedRoot: s.options.ProductRoot, DataRoot: dataRoot, SourceRoot: state.Source.Locator, ExpectedSource: state.Source.Tuple, Registry: registry, Clock: s.now}, nil
+	return updateservice.SyncedOptions{UserHome: s.options.UserHome, ManagedRoot: s.options.ProductRoot, DataRoot: dataRoot, SourceRoot: state.Source.Locator, ExpectedSource: state.Source.Tuple, Registry: registry, Clock: s.now, Admission: s.options.SourceAdmission}, nil
 }
 
 func (s *Service) updateReview() (updateservice.SyncedReview, error) {

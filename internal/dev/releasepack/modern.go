@@ -21,6 +21,9 @@ import (
 )
 
 type ModernOptions struct {
+	// Construction-only selection. It produces separate compiled entries and
+	// grants no signed experimental role or runtime installer authority.
+	ExperimentalInstalledSeed                                           bool
 	Root, Output, Version, InstallerVersion, Channel, AuthorityRegistry string
 	Target                                                              Target
 	DoclingPack                                                         string
@@ -50,6 +53,9 @@ func BuildModernCandidate(ctx context.Context, o ModernOptions) (ModernCandidate
 	}
 	if o.Channel != "canary" && o.Channel != "beta" && o.Channel != "stable" {
 		return ModernCandidate{}, errors.New("unsupported modern release channel")
+	}
+	if o.ExperimentalInstalledSeed && o.Channel != "canary" {
+		return ModernCandidate{}, errors.New("experimental installed-seed factory requires canary channel")
 	}
 	moduleMode, err := ReadOnlyModuleMode(filepath.Join(o.Root, "adapters", "mcp"))
 	if err != nil {
@@ -91,7 +97,12 @@ func BuildModernCandidate(ctx context.Context, o ModernOptions) (ModernCandidate
 		if build.command == "maestro-mcp" {
 			ldflags += " -X 'main.CompatibleBundle=" + compatibleRange(o.Version) + "'"
 		}
-		command := exec.CommandContext(ctx, "go", "build", moduleMode, "-buildvcs=false", "-trimpath", "-ldflags", ldflags, "-o", build.output, "./cmd/"+build.command)
+		arguments := []string{"build", moduleMode, "-buildvcs=false", "-trimpath", "-ldflags", ldflags, "-o", build.output}
+		if o.ExperimentalInstalledSeed {
+			arguments = append(arguments, "-tags", "maestro_experimental_installed_seed")
+		}
+		arguments = append(arguments, "./cmd/"+build.command)
+		command := exec.CommandContext(ctx, "go", arguments...)
 		command.Dir = filepath.Join(o.Root, "adapters", "mcp")
 		command.Env = append(filteredEnvironment(os.Environ(), "GOOS", "GOARCH", "CGO_ENABLED"), "CGO_ENABLED=0")
 		if body, buildErr := command.CombinedOutput(); buildErr != nil {
@@ -166,6 +177,9 @@ func BuildModernCandidate(ctx context.Context, o ModernOptions) (ModernCandidate
 		m.Migrations = append(m.Migrations, releasecontract.Migration{ID: rolemigration.MigrationID, Component: "bundle", From: rolemigration.SourceRange, To: o.Version, Required: true, FromRole: rolemigration.LegacyRole, ToRole: rolemigration.CanonicalRole, AliasExpiresAfter: rolemigration.AliasExpiresAfter, BundleSHA256: bundle.SHA256, CatalogSHA256: catalog, PolicySHA256: policy})
 	}
 	notes := []byte("# Maestro " + o.Version + " engineering candidate\n\nUnsigned factory output. Production signing, independent seed admission and native/client/device acceptance remain separate.\n")
+	if o.ExperimentalInstalledSeed {
+		notes = append(notes, []byte("\nExplicit experimental installed-seed build. A separately reviewed finite signed role is required; this factory grants no production native trust.\n")...)
+	}
 	m.ReleaseNotes = releasecontract.ReleaseNotes{Name: "release-notes-" + o.Version + ".md", SHA256: SHA256(notes)}
 	m.Delivery.ClientInputsSHA256, err = m.ClientInputsDigest()
 	if err != nil {

@@ -32,6 +32,7 @@ var ErrQualificationRequired = errors.New("current actual maintenance qualificat
 // ServiceOptions is a native constructor boundary, never a tool schema.
 // Catalog must come from bundles/base/runtime.Maintenance (which imports this package).
 type ServiceOptions struct {
+	SourceAdmission                                updateservice.SyncedAdmission            `json:"-"`
 	WeeklyNativeExecutor                           WeeklyNativeExecutor                     `json:"-"`
 	WeeklyCandidate                                *WeeklyModelRegistration                 `json:"-"`
 	DarwinFactory                                  func(DarwinScope) (DarwinBinding, error) `json:"-"`

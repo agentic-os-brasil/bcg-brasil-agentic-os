@@ -36,7 +36,7 @@ func prepareCurrentDesktopMethods(ctx context.Context, o installer.ClientOptions
 		if err != nil || before != state.Server.SHA256 {
 			return nil, errors.New("current Desktop methods generator changed")
 		}
-		body, err := clientCommand(ctx, server, []string{command, "--destination", destination}, o.Request.Workspace)
+		body, err := clientCommand(ctx, server, installer.ExperimentalChildArgs([]string{command, "--destination", destination}, o.ExperimentalSeed, o.ManagedRoot), o.Request.Workspace)
 		if err != nil {
 			return nil, err
 		}
