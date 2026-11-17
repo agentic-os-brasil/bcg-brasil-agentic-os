@@ -261,7 +261,7 @@ func ApplyReviewedPromptHistoryGuarded(root string, r PromptHistoryReview, confi
 			if historyRevision(journal.Before.Config, journal.Before.Entries) != r.BeforeRevision || historyRevision(journal.After.Config, journal.After.Entries) != r.AfterRevision {
 				return ErrPromptHistoryRecovery
 			}
-			return finishHistoryPair(dir, journal, pending, nil)
+			return finishHistoryPair(dir, journal, pending, nil, guard)
 		} else if !errors.Is(e, os.ErrNotExist) {
 			return e
 		}
@@ -279,7 +279,7 @@ func ApplyReviewedPromptHistoryGuarded(root string, r PromptHistoryReview, confi
 			return ErrRevisionConflict
 		}
 		journal := promptHistoryJournal{Version: 1, Review: r, Before: current, After: promptHistoryPair{r.ProposedConfig, r.after}}
-		return publishHistoryPair(dir, journal, nil)
+		return publishHistoryPair(dir, journal, nil, guard)
 	})
 }
 func ReviewPendingPromptHistory(root string) (PromptHistoryReview, error) {
@@ -395,7 +395,7 @@ func decodeHistoryJournal(body []byte, j *promptHistoryJournal) error {
 	}
 	return validateHistoryPair(j.After)
 }
-func publishHistoryPair(dir *scheduler.HeldDirectory, j promptHistoryJournal, fault func(string) error) error {
+func publishHistoryPair(dir *scheduler.HeldDirectory, j promptHistoryJournal, fault func(string) error, beforeCommit ...func() error) error {
 	current, err := readHistoryPairHeld(dir)
 	if err != nil {
 		return err
@@ -432,9 +432,27 @@ func publishHistoryPair(dir *scheduler.HeldDirectory, j promptHistoryJournal, fa
 	if err = dir.PublishNewFile(promptHistoryPending, body); err != nil {
 		return err
 	}
-	return finishHistoryPair(dir, j, body, fault)
+	return finishHistoryPair(dir, j, body, fault, beforeCommit...)
 }
-func finishHistoryPair(dir *scheduler.HeldDirectory, j promptHistoryJournal, raw []byte, fault func(string) error) error {
+func invalidateWeeklyHistoryChange(root string, before, after promptHistoryPair) error {
+	change := weeklySelfSourceChange{All: digestJSON(before.Config) != digestJSON(after.Config)}
+	retained := map[string]string{}
+	for _, entry := range after.Entries {
+		retained[entry.ID] = digestJSON(entry)
+	}
+	for _, entry := range before.Entries {
+		if retained[entry.ID] != digestJSON(entry) {
+			change.Prompts = append(change.Prompts, entry.ID)
+		}
+	}
+	if !change.All && len(change.Prompts) == 0 {
+		return nil
+	}
+	_, err := invalidateWeeklySelfSourcesLocked(root, change)
+	return err
+}
+
+func finishHistoryPair(dir *scheduler.HeldDirectory, j promptHistoryJournal, raw []byte, fault func(string) error, beforeCommit ...func() error) error {
 	config, err := json.MarshalIndent(j.After.Config, "", "  ")
 	if err != nil {
 		return err
@@ -458,6 +476,20 @@ func finishHistoryPair(dir *scheduler.HeldDirectory, j promptHistoryJournal, raw
 	entriesAfter := bytes.Equal(currentEntries, entries)
 	if !(configBefore && entriesBefore || configAfter && entriesBefore || configAfter && entriesAfter) {
 		return ErrPromptHistoryRecovery
+	}
+	// The exact journal binds before/after even when recovery sees a partial pair.
+	root := filepath.Dir(filepath.Dir(dir.Path()))
+	if err := invalidateWeeklyHistoryChange(root, j.Before, j.After); err != nil {
+		return err
+	}
+	// The first pair write commits this recoverable operation. Recheck the
+	// existing request condition after derived purge, then finish the pair.
+	for _, guard := range beforeCommit {
+		if guard != nil {
+			if err := guard(); err != nil {
+				return err
+			}
+		}
 	}
 	for _, item := range []struct {
 		name string

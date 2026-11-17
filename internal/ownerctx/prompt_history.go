@@ -304,6 +304,7 @@ func RecordUserPrompt(root string, input PromptHistoryInput) (PromptHistoryRecei
 		if err != nil {
 			return err
 		}
+		before := promptHistoryPair{Config: config, Entries: append([]PromptHistoryEntry(nil), entries...)}
 		if config.OwnerID == "" && len(entries) > 0 {
 			config.OwnerID = entries[0].OwnerID
 		}
@@ -312,9 +313,6 @@ func RecordUserPrompt(root string, input PromptHistoryInput) (PromptHistoryRecei
 		}
 		if config.OwnerID == "" {
 			config.OwnerID = input.OwnerID
-			if err := writePrivateJSON(configPath, config); err != nil {
-				return err
-			}
 		}
 		now := time.Now().UTC()
 		if input.RecordedAt.IsZero() {
@@ -362,6 +360,14 @@ func RecordUserPrompt(root string, input PromptHistoryInput) (PromptHistoryRecei
 		}
 		if !found {
 			return errors.New("prompt was excluded by configured history retention")
+		}
+		if err := invalidateWeeklyHistoryChange(root, before, promptHistoryPair{config, entries}); err != nil {
+			return err
+		}
+		if digestJSON(before.Config) != digestJSON(config) {
+			if err := writePrivateJSON(configPath, config); err != nil {
+				return err
+			}
 		}
 		if err := writePromptHistoryEntries(entriesPath, entries); err != nil {
 			return err
@@ -434,6 +440,9 @@ func DeletePromptHistory(root, id string, confirmed bool) error {
 		if !found {
 			return os.ErrNotExist
 		}
+		if _, err := invalidateWeeklySelfSourcesLocked(root, weeklySelfSourceChange{Prompts: []string{id}}); err != nil {
+			return err
+		}
 		return writePromptHistoryEntries(entriesPath, filtered)
 	})
 }
@@ -443,6 +452,9 @@ func ResetPromptHistory(root string, confirmed bool) error {
 		return ErrConfirmationRequired
 	}
 	return withPromptHistoryLock(root, func(entriesPath, _ string) error {
+		if _, err := invalidateWeeklySelfSourcesLocked(root, weeklySelfSourceChange{All: true}); err != nil {
+			return err
+		}
 		return writePromptHistoryEntries(entriesPath, nil)
 	})
 }

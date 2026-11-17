@@ -30,16 +30,17 @@ const (
 )
 
 type Command struct {
-	SchemaVersion int       `json:"schema_version"`
-	CommandID     string    `json:"command_id"`
-	JobID         string    `json:"job_id"`
-	WorkspaceID   string    `json:"workspace_id"`
-	Trigger       Trigger   `json:"trigger"`
-	EventID       string    `json:"event_id,omitempty"`
-	ScheduledFor  time.Time `json:"scheduled_for"`
-	RequestedAt   time.Time `json:"requested_at"`
-	Deadline      time.Time `json:"deadline"`
-	ProposalOnly  bool      `json:"proposal_only"`
+	WeeklyMode    WeeklyModelMode `json:"weekly_mode,omitempty"`
+	SchemaVersion int             `json:"schema_version"`
+	CommandID     string          `json:"command_id"`
+	JobID         string          `json:"job_id"`
+	WorkspaceID   string          `json:"workspace_id"`
+	Trigger       Trigger         `json:"trigger"`
+	EventID       string          `json:"event_id,omitempty"`
+	ScheduledFor  time.Time       `json:"scheduled_for"`
+	RequestedAt   time.Time       `json:"requested_at"`
+	Deadline      time.Time       `json:"deadline"`
+	ProposalOnly  bool            `json:"proposal_only"`
 }
 
 type ReceiptState string
@@ -58,25 +59,26 @@ const (
 )
 
 type Receipt struct {
-	SchemaVersion        int          `json:"schema_version"`
-	AttemptID            string       `json:"attempt_id"`
-	OccurrenceDigest     string       `json:"occurrence_digest"`
-	CommandID            string       `json:"command_id"`
-	JobID                string       `json:"job_id"`
-	WorkspaceID          string       `json:"workspace_id"`
-	Trigger              Trigger      `json:"trigger"`
-	EventID              string       `json:"event_id,omitempty"`
-	State                ReceiptState `json:"state"`
-	RecordedAt           time.Time    `json:"recorded_at"`
-	Deadline             time.Time    `json:"deadline"`
-	ProposalOnly         bool         `json:"proposal_only"`
-	ProposalCount        int          `json:"proposal_count,omitempty"`
-	ProposalDigest       string       `json:"proposal_digest,omitempty"`
-	ProposalArtifactID   string       `json:"proposal_artifact_id,omitempty"`
-	RecoveryPhase        string       `json:"recovery_phase,omitempty"`
-	RecoveryIntentDigest string       `json:"recovery_intent_digest,omitempty"`
-	FenceTokenDigest     string       `json:"fence_token_digest,omitempty"`
-	ReasonCode           ReasonCode   `json:"reason_code"`
+	WeeklyMode           WeeklyModelMode `json:"weekly_mode,omitempty"`
+	SchemaVersion        int             `json:"schema_version"`
+	AttemptID            string          `json:"attempt_id"`
+	OccurrenceDigest     string          `json:"occurrence_digest"`
+	CommandID            string          `json:"command_id"`
+	JobID                string          `json:"job_id"`
+	WorkspaceID          string          `json:"workspace_id"`
+	Trigger              Trigger         `json:"trigger"`
+	EventID              string          `json:"event_id,omitempty"`
+	State                ReceiptState    `json:"state"`
+	RecordedAt           time.Time       `json:"recorded_at"`
+	Deadline             time.Time       `json:"deadline"`
+	ProposalOnly         bool            `json:"proposal_only"`
+	ProposalCount        int             `json:"proposal_count,omitempty"`
+	ProposalDigest       string          `json:"proposal_digest,omitempty"`
+	ProposalArtifactID   string          `json:"proposal_artifact_id,omitempty"`
+	RecoveryPhase        string          `json:"recovery_phase,omitempty"`
+	RecoveryIntentDigest string          `json:"recovery_intent_digest,omitempty"`
+	FenceTokenDigest     string          `json:"fence_token_digest,omitempty"`
+	ReasonCode           ReasonCode      `json:"reason_code"`
 }
 
 var (
@@ -106,7 +108,7 @@ func (command Command) Validate(now time.Time) error {
 	if command.Trigger != TriggerEvent && command.Trigger != TriggerContinuous && command.EventID != "" {
 		return errors.New("scheduled maintenance command cannot carry an event ID")
 	}
-	if command.ProposalOnly != isProposalOnlyJob(command.JobID) {
+	if !weeklyProposalContract(command.JobID, command.WeeklyMode, command.ProposalOnly) {
 		return errors.New("proposal-only flag does not match the maintenance job")
 	}
 	if err := validateReservedJobTrigger(command.JobID, command.Trigger); err != nil {
@@ -122,7 +124,7 @@ func (receipt Receipt) Validate() error {
 	if !validReasonCode(receipt.ReasonCode) {
 		return errors.New("maintenance receipt reason code is not allowlisted")
 	}
-	if receipt.ProposalOnly != isProposalOnlyJob(receipt.JobID) {
+	if !weeklyProposalContract(receipt.JobID, receipt.WeeklyMode, receipt.ProposalOnly) {
 		return errors.New("maintenance receipt proposal flag does not match the job")
 	}
 	if err := validateReservedJobTrigger(receipt.JobID, receipt.Trigger); err != nil {
@@ -300,4 +302,14 @@ func validateReservedJobTrigger(jobID string, trigger Trigger) error {
 		}
 	}
 	return nil
+}
+
+// An absent mode preserves the legacy proposal-only contract. Explicit mode is
+// merely serialized transaction identity; only the private matching grant may
+// execute it, and standalone receipts cannot reconstruct that live authority.
+func weeklyProposalContract(job string, mode WeeklyModelMode, proposal bool) bool {
+	if mode == "" {
+		return proposal == isProposalOnlyJob(job)
+	}
+	return job == YodaSelfReviewWeeklyJobID && (mode == WeeklyNativeProbe || mode == WeeklyWorking) && !proposal
 }

@@ -360,6 +360,9 @@ func TransitionObservation(root string, input ObservationTransitionInput) (Obser
 		current.OwnerAction = input.OwnerAction
 		current.Tombstone = input.Next == ObservationRedacted
 		current.StateChangedAt = time.Now().UTC()
+		if _, err := invalidateWeeklySelfSourcesLocked(root, weeklySelfSourceChange{Observations: []string{current.ID}}); err != nil {
+			return err
+		}
 		if err := appendObservationRecord(path, current); err != nil {
 			return err
 		}
@@ -392,6 +395,9 @@ func ResetDerivedSelf(root string, confirmed bool) error {
 			if record.State == ObservationPromoted {
 				return errors.New("reset requires reverting promoted canonical facets first")
 			}
+		}
+		if _, err := invalidateWeeklySelfSourcesLocked(root, weeklySelfSourceChange{All: true}); err != nil {
+			return err
 		}
 		if err := revokeSelfObservationIntakes(root); err != nil {
 			return err

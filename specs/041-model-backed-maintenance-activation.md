@@ -4,6 +4,10 @@ Status: contract only. No model-backed maintenance job is activated by this
 specification. The shipped catalog remains fail-closed and `unavailable` until
 every precondition below has executable, reviewed evidence.
 
+The [weekly source-core construction](../docs/weekly-yoda-core.md) describes the
+unbound frozen-input/working-projection seams and their remaining integration
+gates. That construction does not change this unavailable activation status.
+
 ## Intent
 
 The maintenance plane already identifies jobs whose deterministic boundary

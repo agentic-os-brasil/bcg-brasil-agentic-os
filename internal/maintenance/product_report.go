@@ -19,6 +19,8 @@ type SourceCoverage struct {
 	State  string `json:"state"`
 }
 type ProductDomainReport struct {
+	Scope                string                       `json:"scope,omitempty"`
+	Weekly               *WeeklyReportMetadata        `json:"weekly,omitempty"`
 	Darwin               *DarwinReport                `json:"darwin,omitempty"`
 	CurrentPending       *UpdatePendingReadback       `json:"current_pending,omitempty"`
 	Update               *UpdateDiagnosis             `json:"update,omitempty"`
@@ -40,6 +42,9 @@ type ProductDomainReport struct {
 // Report is a closed, read-only projection of independently verified domain
 // output. It never opens an argument-selected path or returns captured text.
 func (s *Service) Report(job string) (ProductDomainReport, error) {
+	if job == YodaSelfReviewWeeklyJobID {
+		return s.weeklyModelService().weeklyReport()
+	}
 	if job == SelfObservationCaptureJobID && !s.ownerScoped {
 		return s.selfObservationService().Report(job)
 	}
