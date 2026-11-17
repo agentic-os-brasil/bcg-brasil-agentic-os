@@ -51,7 +51,7 @@ else
 fi
 verify_kit
 [[ "$KIT_ID" == "$REVIEWED_KIT_ID" ]] || fail 'O kit mudou após a revisão; leia uma revisão nova.'
-inventory() { (cd "$ROOT" && LC_ALL=C find -s product exports launchers -type f -exec shasum -a 256 '{}' +); }
+inventory() { (cd "$ROOT" && LC_ALL=C find -s product exports launchers -path exports/code-native-qualified -prune -o -type f -exec shasum -a 256 '{}' +); }
 diagnose_failure() {
   "$ROOT/launchers/Testar Maestro.command" --check-only || true
   fail "$* Preparação preservada; consulte o relatório e não apague a pasta."
@@ -102,6 +102,7 @@ case "$(cat "$KIT/LIFECYCLE-CONTEXT.txt")" in enabled) build_code --lifecycle-co
   cat "$ROOT/preparation.json"
   printf '\n\nOs relatórios ficam em diagnostics/, fora dos dados do Maestro. Compartilhe somente RELATORIO.md após conferir seu conteúdo. As chamadas reais nos clientes, login, confirmações e hooks continuam sendo verificados por você. O servidor é de engenharia sem versão de release; 0.0.0 é o rótulo dos pacotes.\n'
 } > "$ROOT/COMECE-AQUI.md"
+printf '\nPara testar os sete hooks nativos, primeiro use a opção 3 e conclua o login normal no perfil Code. Depois escolha **5 — Qualificar os sete hooks do Code**. Essa ação separada usa modelo e pode gerar cobrança: escolha sua estimativa por sessão, leia o plano completo e confirme QUALIFICAR somente se concordar. Preparar, abrir Code e conferir conexão não executam a qualificação. Após sucesso, o launcher seleciona o pacote qualificado e as duas pastas automaticamente. Resultado existente é preservado, sem repetição automática. Desktop continua como extensão MCP e não instala os sete hooks nativos do Code.\n' >> "$ROOT/COMECE-AQUI.md"
 inventory > "$ROOT/managed-files.sha256"
 printf '%s\n' "$KIT_ID" > "$ROOT/.maestro-pilot-complete"
 "$ROOT/launchers/Testar Maestro.command" --check-only

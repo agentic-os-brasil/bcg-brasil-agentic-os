@@ -119,6 +119,7 @@ func run() error {
 	var hookEvent, nativeBinding string
 	var proposalID, reviewDigest, track string
 	var confirmed, packet, lifecycleContext, desktopPilot bool
+	var selectedPacket packaging.PacketStatus
 	if os.Args[1] == "mcpb" {
 		flags.BoolVar(&desktopPilot, "desktop-pilot", false, "isolate this local engineering rehearsal and bind its exact prepared Desktop paths")
 	}
@@ -183,6 +184,12 @@ func run() error {
 				return err
 			}
 			o.ProductRoot = root
+			selectedPacket = status
+			if status.NativeMode == "native" {
+				if err := packaging.ValidateNativeSelection(o, status.NativeBindingSHA256); err != nil {
+					return err
+				}
+			}
 			if status.DesktopPilot != nil {
 				if err := status.DesktopPilot.ValidateSelection(o); err != nil {
 					return err
@@ -272,7 +279,11 @@ func run() error {
 		if diagnostic == "" {
 			diagnostic = "unavailable"
 		}
-		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"diagnostic": diagnostic, "writable": h.Writable, "origin": h.Origin})
+		result := map[string]any{"diagnostic": diagnostic, "writable": h.Writable, "origin": h.Origin}
+		if packet {
+			result["packet_mode"], result["packet_server_sha256"] = selectedPacket.NativeMode, selectedPacket.ServerSHA256
+		}
+		_ = json.NewEncoder(os.Stdout).Encode(result)
 		return err
 	case "init":
 		if err := product.Preflight(o); err != nil {

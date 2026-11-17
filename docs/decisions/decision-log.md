@@ -1550,3 +1550,14 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: Fresh sessions can retrieve accepted preferences through the same MCP in both clients. Missing, unconfirmed, stale, unsafe or reader-ineligible data remains unavailable. This local bound-session model does not attest hosted subagent identity, authorize writes or sends, enroll jobs, or export Yoda-only material. Native client delivery and distribution remain separately observed gates.
 - Refs: specs/060-product-owner-memory.md; internal/ownerctx; adapters/mcp/owner_context.go; docs/product-owner-context.md
 - Supersedes: none
+
+## QCDL - Deliver qualified Code packets through the existing pilot
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Ordinary pilot launchers select only the baseline Code export. A separately qualified seven-hook export retains required userConfig options, and adding it after preparation changes the outer inventory. Colleagues need a reviewed route without editing sealed exports, entering private paths or silently starting model checks.
+- Decision: Add an explicit pilot menu action that calls the canonical native review and qualification commands, displays the full current plan and requires separate conscious spend confirmation. Select only a valid native export at the single canonical optional leaf after closed inventory, trusted server, target and exact native binding checks. Exclude only that separately checked subtree from the baseline managed snapshot. Pass the two exact directory options through Code's supported private session settings input; preserve stored profiles and sealed packet bytes.
+- Consequences: Ordinary prepare/open/check-only remains free of model qualification. A canonical MCP-only failure result preserves the baseline route without claiming native capability; malformed or mismatched optional material refuses. Existing results are preserved rather than retried or replaced. Desktop continues its independent MCP extension flow. Source/offline evidence, packet qualification and actual client delivery remain separate; this does not continuously revalidate runtime configuration or qualify active third-party plugins.
+- Refs: specs/063-product-native-plugin.md; docs/product-pilot.md; adapters/mcp/cmd/maestro-mcp/pilot.go; dev/pilot/test-macos.command; dev/pilot/test-windows.ps1; https://code.claude.com/docs/en/settings#change-a-setting-for-one-session; https://code.claude.com/docs/en/settings-reference#pluginconfigs
+- Supersedes: none

@@ -443,3 +443,29 @@ continuity/resume exercise. Guides distinguish quick 3/4 from complete 1→2 and
 not ask participants to re-enter prepared owner/workspace paths. Normal login,
 installation, permissions and actual native-client observation remain required;
 a generated prompt or SDK check does not attest that the client executed it.
+
+### Qualified Code delivery in the ordinary pilot
+
+Ordinary preparation and opening never run paid qualification. Menu option 5
+invokes the existing native review/qualification commands with the exact local
+binding, selected Code executable and dedicated profile. It displays the complete
+returned plan, requests the existing estimated per-session limit and requires a
+separate explicit confirmation. The canonical command retains all admission,
+budget/count/time and proof predicates. Refusal or an existing result does not
+trigger deletion, profile repair, hidden retry or native capability promotion.
+
+The sole optional export `exports/code-native-qualified` is validated through its
+closed packet inventory, host target, trusted pilot executable SHA and exact
+native binding. Only its `native` mode is selected; a valid `mcp_only` result keeps
+the baseline MCP packet, and other modes or invalid material refuse. The outer
+prepared inventory continues to protect baseline product/exports/launchers while
+excluding only this separately validated optional subtree. Unknown additions
+elsewhere remain changes to managed material.
+
+The Code launcher passes a private per-session `--settings` file containing only
+`pluginConfigs["maestro-product@inline"].options.user_home` and `.workspace`.
+These values select the already validated binding for retained MCP and seven-hook
+userConfig vectors. It changes no sealed packet, stored settings, authentication,
+permissions or hooks. Session selection is a delivery condition distinct from
+qualification; neither proves continuous runtime configuration revalidation.
+Desktop retains its separate bound MCP extension and no Code-hook parity claim.
