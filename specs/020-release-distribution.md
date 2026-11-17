@@ -370,17 +370,23 @@ expiry or add recalls. It cannot redefine that version's artifact identity.
 
 ### 2. Explicit local source enrollment and private snapshots
 
-Trusted operator review selects one source ID/channel/target and an ordinary local
-folder locator for the real installation. The path supplies transport, not trust.
-For the current Windows pilot, direct OneDrive/Files On-Demand source paths are
-unavailable: confinement rejects every reparse point, including hydrated Cloud
-Files. Download and extract a signed generation from SharePoint into an ordinary
-local mirror, then apply the same confinement checks. Hydration is insufficient;
-direct synchronization needs separate native qualification and is not claimed.
+Trusted operator review selects one source ID/channel/target and an exact local
+distribution-folder locator for the real installation. The path supplies transport,
+not trust. Under SFRD, Windows distribution input may traverse held ordinary objects
+or the finite documented Cloud Files tags. Resolve only the authenticated finite
+file set; bound each leaf before requesting hydration of its measured range through
+the operating system. Cloud directories may remain partially populated, while every
+required file must be fully ready before and after reading. Junctions, symlinks,
+unknown reparse types, aliases and partial/offline/error files remain unavailable.
+Copy accepted bytes into disjoint ordinary private staging and retain the existing
+complete signature verification. This source-input extension does not relax any
+private owner/workspace/installation reader or authorize execution from the share.
+Hydration bounds bytes, not provider/kernel wall time. Actual native Windows/OneDrive
+qualification remains separate; the earlier experimental pilot artifacts are unchanged.
 Later metadata cannot silently rebind that tuple or its independently pinned
 registry. No SharePoint destination, endpoint or account is guessed.
 
-Read bounded ordinary no-follow/unaliasable source files and copy the exact
+Read bounded no-follow/unaliasable source files under the platform rule above and copy the exact
 manifest-authorized release set into private install-state staging. Verify the
 complete snapshot through the canonical directory verifier; execute no synced
 file. Review reads metadata/manifests within finite in-memory bounds and grants
