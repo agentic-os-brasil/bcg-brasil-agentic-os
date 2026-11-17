@@ -236,7 +236,7 @@ func Apply(ctx context.Context, r Request, c Config, digest string, confirmed bo
 	}
 	for _, artifact := range verified.Manifest.Artifacts {
 		if artifact.Kind == "runtime_pack" && artifact.OS == runtime.GOOS && artifact.Arch == runtime.GOARCH {
-			if err = docling.PlaceVerified(ctx, docling.Options{DataRoot: filepath.Join(home.Home, "state"), AuthorityRegistryPath: registry, AuthorityRegistrySHA256: review.Installation.RegistrySHA256, CLIVersion: review.Installation.ServerVersion}, verified); err != nil {
+			if err = placeInitialRuntime(ctx, binding, c, state, verified); err != nil {
 				return pending(err)
 			}
 		}

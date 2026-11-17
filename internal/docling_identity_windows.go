@@ -37,6 +37,8 @@ import (
 //go:embed ingest/docling/profiles.go
 //go:embed ingest/docling/pylatexenc.go
 //go:embed ingest/docling/qualification_windows.go
+//go:embed ingest/docling/required.go
+//go:embed ingest/docling/selection.go
 //go:embed ingest/docling/runtime.go
 //go:embed ingest/docling/runtime/bridge.py
 //go:embed ingest/docling/runtime/documents/darwin-arm64/bridge.py

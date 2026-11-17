@@ -134,7 +134,7 @@ func run() error {
 		flags.BoolVar(&desktopPilot, "desktop-pilot", false, "isolate this local engineering rehearsal and bind its exact prepared Desktop paths")
 		flags.BoolVar(&engineeringRuntimePilot, "engineering-runtime-pilot", false, "explicitly carry the prepared short-lived engineering converter identity")
 	}
-	if os.Args[1] == "pilot-runtime-review" || os.Args[1] == "pilot-runtime-apply" || os.Args[1] == "pilot-acquisition-review" || os.Args[1] == "pilot-acquisition-apply" {
+	if os.Args[1] == "runtime-review" || os.Args[1] == "runtime-apply" || os.Args[1] == "pilot-runtime-review" || os.Args[1] == "pilot-runtime-apply" || os.Args[1] == "pilot-acquisition-review" || os.Args[1] == "pilot-acquisition-apply" {
 		flags.StringVar(&runtimeRelease, "release-directory", "", "exact complete signed engineering release")
 	}
 	if os.Args[1] == "pilot-acquisition-apply" {
@@ -183,11 +183,11 @@ func run() error {
 		flags.StringVar(&proposalID, "proposal-id", "", "exact owner proposal ID")
 	}
 	switch os.Args[1] {
-	case "owner-apply", "owner-confirm-onboarding", "memory-apply", "knowledge-apply", "maintenance-apply", "native-qualify-and-build", "pilot-runtime-apply", "pilot-acquisition-apply":
+	case "owner-apply", "owner-confirm-onboarding", "memory-apply", "knowledge-apply", "maintenance-apply", "native-qualify-and-build", "runtime-apply", "pilot-runtime-apply", "pilot-acquisition-apply":
 		flags.StringVar(&reviewDigest, "review-digest", "", "exact SHA-256 digest from the full local review")
 	}
 	switch os.Args[1] {
-	case "owner-apply", "owner-confirm-onboarding", "owner-track", "memory-apply", "knowledge-apply", "maintenance-apply", "native-qualify-and-build", "pilot-runtime-apply", "pilot-acquisition-apply":
+	case "owner-apply", "owner-confirm-onboarding", "owner-track", "memory-apply", "knowledge-apply", "maintenance-apply", "native-qualify-and-build", "runtime-apply", "pilot-runtime-apply", "pilot-acquisition-apply":
 		flags.BoolVar(&confirmed, "confirm", false, "local operator confirms the reviewed operation")
 	}
 	if os.Args[1] == "owner-track" {
@@ -258,6 +258,11 @@ func run() error {
 		carrier = &packaging.StableCarrier{Profile: carrierProfile, Protocol: installer.StableClientProtocol, ID: carrierID, Version: carrierVersion}
 	}
 	switch os.Args[1] {
+	case "runtime-review", "runtime-apply":
+		if packet || server != "" || destination != "" || version != "" || carrier != nil {
+			return errors.New("installed runtime accepts only fixed current owner selection")
+		}
+		return runInstalledRuntime(context.Background(), os.Args[1], o, runtimeRelease, reviewDigest, confirmed, os.Stdout)
 	case "desktop-methods", "desktop-methods-verify":
 		if packet || destination == "" || server != "" || version != "" || carrier != nil || o.ProductRoot != "" || o.UserHome != "" || o.WorkspacePath != "" {
 			return errors.New("exact current Desktop methods destination required")
