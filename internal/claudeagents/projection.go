@@ -110,6 +110,22 @@ func ProjectAgentInvocations(body []byte, namespace string) ([]byte, error) {
 	if namespace != "" && namespace != PluginNamespace {
 		return nil, errors.New("unsupported native agent namespace")
 	}
+	return projectAgentReferences(body, func(id string) (string, error) { return NativeAgentID(id, namespace) })
+}
+
+// DesktopMethodNamespace identifies inert account-synced instructions, never a
+// managed native plugin or an admitted specialist execution namespace.
+const DesktopMethodNamespace = "maestro-desktop-methods"
+
+// ProjectDesktopMethodInvocations projects explicit instruction references only.
+// NativeAgentID, CanonicalAgentID and Project retain their Code-only admission.
+func ProjectDesktopMethodInvocations(body []byte) ([]byte, error) {
+	return projectAgentReferences(body, func(id string) (string, error) {
+		return DesktopMethodNamespace + ":" + id, nil
+	})
+}
+
+func projectAgentReferences(body []byte, qualify func(string) (string, error)) ([]byte, error) {
 	var projectionErr error
 	projected := executableAgentReference.ReplaceAllFunc(body, func(call []byte) []byte {
 		parts := executableAgentReference.FindSubmatch(call)
@@ -120,7 +136,7 @@ func ProjectAgentInvocations(body []byte, namespace string) ([]byte, error) {
 			}
 			return call
 		}
-		name, err := NativeAgentID(id, namespace)
+		name, err := qualify(id)
 		if err != nil {
 			projectionErr = err
 			return call

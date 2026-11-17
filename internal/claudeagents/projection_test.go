@@ -246,3 +246,25 @@ func TestRepositoryReviewDispatchAndProjectionUpgrade(t *testing.T) {
 		}
 	}
 }
+
+func TestDesktopMethodReferencesDoNotAdmitNativeIdentities(t *testing.T) {
+	input := []byte(`Agent(subagent_type="repository-spec-reviewer") and Skill tool with "pocock-codebase-design"; managed/agents/yoda/AGENT.md`)
+	body, err := ProjectDesktopMethodInvocations(input)
+	if err != nil || !strings.Contains(string(body), `Agent(subagent_type="maestro-desktop-methods:repository-spec-reviewer")`) || !strings.Contains(string(body), `Skill tool with "pocock-codebase-design"`) {
+		t.Fatalf("inert projection: %s %v", body, err)
+	}
+	for _, name := range []string{DesktopMethodNamespace + ":case-agent", "prefix:" + DesktopMethodNamespace + ":case-agent"} {
+		if _, ok := CanonicalAgentID(name); ok {
+			t.Fatal("Desktop identity became native", name)
+		}
+	}
+	if _, err := NativeAgentID("case-agent", DesktopMethodNamespace); err == nil {
+		t.Fatal("Desktop native ID admitted")
+	}
+	if _, err := Project(DesktopMethodNamespace); err == nil {
+		t.Fatal("Desktop native projection admitted")
+	}
+	if _, err := ProjectAgentInvocations(input, DesktopMethodNamespace); err == nil {
+		t.Fatal("Desktop admitted through native renderer")
+	}
+}

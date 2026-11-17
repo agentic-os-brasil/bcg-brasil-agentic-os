@@ -174,7 +174,11 @@ func methodPayload(namespace string) (map[string][]byte, error) {
 			path := "skills/" + method.ID + "/" + relative
 			if namespace != "" && strings.HasSuffix(relative, ".md") {
 				body = namespaceMethodReferences(body, namespace, reference)
-				body, err = claudeagents.ProjectAgentInvocations(body, namespace)
+				if namespace == claudeagents.DesktopMethodNamespace {
+					body, err = claudeagents.ProjectDesktopMethodInvocations(body)
+				} else {
+					body, err = claudeagents.ProjectAgentInvocations(body, namespace)
+				}
 				if err != nil {
 					return nil, err
 				}

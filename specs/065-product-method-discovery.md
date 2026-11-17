@@ -55,3 +55,24 @@ catalog interface. Resolve the continuation method's real operation requirements
 create/start/checkpoint/pause one synthetic work item, restart the packet server
 and resume the same item with the actual revision. Keep model execution, client
 UI discovery and all-method functional parity separate from these proofs.
+
+## Separate Desktop instruction carrier (DMFP)
+
+The offline factory may deliver the complete public method/resource set with the
+fixed `maestro-desktop-methods` plugin identity, separate from the Code plugin and
+participant-local MCP extension. Reuse canonical inputs and the selective
+reference parser; preserve canonical IDs, frontmatter, policy, licenses and
+source provenance. Recompute projected hashes and a closed sorted file inventory.
+The canonical index retains its explicit pre-projection hash scope.
+
+The carrier has no MCP configuration, hooks, native agent projections, binary,
+runtime, owner/workspace binding, private state or qualification proof. Explicit
+Agent references are inert instructions; emitting this namespace must not admit
+it through native ID normalization, native plugin recognition or qualification.
+Existing Code and default/MCPB method bytes stay unchanged. Factory output uses a
+fresh exclusive destination and can be generated without opening bound state.
+
+Delivering all method instructions does not fulfill host/provider dependencies
+or qualify graphical protected review. Account sync/coexistence and actual
+chosen-host loading require separate acceptance. See
+[factory and delivery boundary](../docs/product-desktop-methods.md).
