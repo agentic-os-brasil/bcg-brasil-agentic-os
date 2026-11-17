@@ -22,7 +22,7 @@ import (
 )
 
 func maintenanceQueries() []any {
-	return []any{variant("maintenance.status", map[string]any{}), variant("maintenance.report", map[string]any{"job_id": map[string]any{"type": "string", "enum": []string{maintenance.DarwinDailyJobID, maintenance.DarwinWeeklyJobID, maintenance.DarwinMonthlyJobID, maintenance.UpdateCheckJobID, maintenance.MemoryDeepDreamJobID, "memory-retention-check", "skills-index-refresh", "runtime-health-check", "capability-recheck", "runtime-drift-check", maintenance.WikiIncrementalJobID, maintenance.WikiReconcileJobID, maintenance.WikiIntegrityJobID}}}, "job_id")}
+	return []any{variant("maintenance.status", map[string]any{}), variant("maintenance.report", map[string]any{"job_id": map[string]any{"type": "string", "enum": []string{maintenance.DarwinDailyJobID, maintenance.DarwinWeeklyJobID, maintenance.DarwinMonthlyJobID, maintenance.UpdateCheckJobID, maintenance.MemoryDeepDreamJobID, maintenance.MemoryCaptureJobID, "memory-retention-check", "skills-index-refresh", "runtime-health-check", "capability-recheck", "runtime-drift-check", maintenance.WikiIncrementalJobID, maintenance.WikiReconcileJobID, maintenance.WikiIntegrityJobID}}}, "job_id")}
 }
 
 func maintenanceTransitions() []any {
@@ -255,6 +255,12 @@ func maintenancePresentation(review maintenance.ProductReview) any {
 		"qualification_id": review.QualificationID, "implementation": review.Implementation,
 		"configuration": review.Configuration, "source_state": review.SourceState,
 		"scope": "This exact job and workspace only. Qualification executes once; enrollment authorizes only this schedule and write set. Operating-system wake installation remains separate.",
+	}
+	if review.Operation.JobID == maintenance.MemoryCaptureJobID {
+		presentation["scope"] = "Admit only body-free, workspace-bound adapter observations and witnessed canonical completed-record metadata through this exact capture job. Adapter observations are observed_only; committed records do not attest an original host or native invocation. No prompts, transcripts, tool bodies, objectives, summaries or document paths enter memory. Qualification runs once; enrollment separately authorizes this cadence. Source state, producer version and permanent correction/deletion denials are revalidated before each publication."
+	}
+	if review.Operation.JobID == maintenance.MemoryLightDreamJobID {
+		presentation["scope"] = "Generate deterministic L1 from the oldest pending eligible ingestion day in this workspace's bounded canonical memory cohort, at most one day per occurrence. Historical input days remain pending across client downtime; source fingerprints and current correction/deletion denials are revalidated before publication. The artifact records actual synthesis time. Qualification executes once and binds that selected period and fingerprint; enrollment separately authorizes this cadence. No capture, raw history ingestion, lifetime promotion or native invocation proof is granted."
 	}
 	if review.Operation.JobID == maintenance.UpdateCheckJobID {
 		presentation["signed_source_review"] = review.SourceReview

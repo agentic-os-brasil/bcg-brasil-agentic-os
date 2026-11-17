@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
 )
 
 const (
@@ -35,7 +37,7 @@ func (attestor CaptureAttestor) Seal(capture Capture) (Capture, error) {
 	if err := validateAttestedCaptureEnvelope(capture); err != nil {
 		return Capture{}, err
 	}
-	key, err := attestor.key(capture.WorkspaceID, true)
+	key, err := attestor.key(capture.WorkspaceID, capture.Observation == nil)
 	if err != nil {
 		return Capture{}, err
 	}
@@ -69,6 +71,15 @@ func (attestor CaptureAttestor) Verify(capture Capture) error {
 }
 
 func validateAttestedCaptureEnvelope(capture Capture) error {
+	if capture.Kind == "observed_signal" {
+		if capture.SchemaVersion != AttestedCaptureSchemaVersion || !capture.Sanitized || capture.Observation == nil || capture.Observation.Validate() != nil || capture.WorkspaceID != capture.Observation.WorkspaceID || capture.RecordedAt.IsZero() || capture.RecordedAt.Before(capture.Observation.OccurredAt) || capture.ProducerID != capture.Observation.Producer || capture.SanitizerID != lifecycle.SignalVersion || capture.SourceDigest != capture.Observation.SourceDigest || capture.Text != signalText(*capture.Observation) {
+			return errors.New("capture-v2 observation envelope invalid")
+		}
+		return nil
+	}
+	if capture.Observation != nil {
+		return errors.New("capture-v2 unexpected observation")
+	}
 	if capture.SchemaVersion != AttestedCaptureSchemaVersion || !capture.Sanitized || capture.WorkspaceID == "" || capture.RecordedAt.IsZero() || strings.TrimSpace(capture.Kind) != "skill_route" || strings.TrimSpace(capture.Text) == "" || len(capture.SourceDigest) != 64 {
 		return errors.New("capture-v2 requires a sanitized, digest-bound skill route")
 	}

@@ -69,7 +69,10 @@ func (b *Bound) InitializeMemory() error {
 	if err != nil {
 		return err
 	}
-	return e.PrepareOwnedCaptureAuthority(b.workspaceID)
+	if err := e.PrepareOwnedCaptureAuthority(b.workspaceID); err != nil {
+		return err
+	}
+	return (memory.CaptureAttestor{Root: e.Root}).Prepare(b.workspaceID)
 }
 
 // MemoryMutation is an operator request, not a capability or a sealed capture.

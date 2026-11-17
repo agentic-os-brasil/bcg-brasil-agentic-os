@@ -81,6 +81,10 @@ func (engine *Engine) capturePage(workspaceID, query string, offset, limit int) 
 
 // Envelope identity survives journal rewriting and does not alter capture-v2 MACs.
 func journalCaptureID(c Capture) string {
+	if c.Observation != nil {
+		sum := sha256.Sum256([]byte("maestro-observed-capture-identity-v1\x00" + c.WorkspaceID + "\x00" + c.Observation.OccurrenceID()))
+		return hex.EncodeToString(sum[:16])
+	}
 	body, _ := json.Marshal(c)
 	sum := sha256.Sum256(append([]byte("maestro-capture-identity-v1\x00"), body...))
 	return hex.EncodeToString(sum[:16])

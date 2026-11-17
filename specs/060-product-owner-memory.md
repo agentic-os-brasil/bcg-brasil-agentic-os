@@ -27,6 +27,13 @@ Prepare owner metadata and fixed product capture authority only through explicit
 local initialization. Ordinary context/query/startup remains read-only. Existing
 migrated state is preserved; old relocated credentials remain inactive.
 
+Explicit memory initialization also prepares the existing capture-v2
+provenance key for body-free observations. This key attests only closed
+metadata; it grants no tool, agent, client or native-execution authority.
+Runtime producers never bootstrap it. Observations retain their own evidence
+class and cannot borrow `owner_reviewed` provenance. Text capture/correction
+continues to require the exact review below.
+
 Server-originated MCP form elicitation may obtain explicit human confirmation.
 Keep the reviewed envelope server-side, display the full bounded review to the
 client, require action=accept and an explicit approved=true in returned content,

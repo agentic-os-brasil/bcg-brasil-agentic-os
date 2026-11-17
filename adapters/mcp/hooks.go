@@ -81,9 +81,11 @@ func (b *Bound) HandleClaudeHook(event string, in io.Reader, out io.Writer) erro
 			return errors.New("hook_receipt_unavailable")
 		}
 		r.IdempotencyKey = lifecycle.IdempotencyKey(r.IdempotencyKey, input.PromptID)
-		if _, err := lifecycle.RecordConfined(dataRoot, b.workspaceID, r); err != nil {
+		r, err = lifecycle.RecordConfined(dataRoot, b.workspaceID, r)
+		if err != nil {
 			return errors.New("hook_receipt_unavailable")
 		}
+		b.queueLifecycleSignal(r)
 		return nil
 	}
 	switch event {
