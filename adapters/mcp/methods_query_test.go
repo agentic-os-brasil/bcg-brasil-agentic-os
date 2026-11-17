@@ -846,7 +846,7 @@ func TestMethodPlansReflectRegisteredContentWithoutRuntimeAuthority(t *testing.T
 	}
 	plan.Dependencies = nil
 	methodQueryDecode(t, client, "maestro_query", map[string]any{"operation": "methods.plan", "method_id": "yoda"}, &plan)
-	provider := map[string]bool{"provider.senior_review_model": true, "domain.review_dispatch": true}
+	provider := map[string]bool{"provider.senior_review_model": true, "host.subagents": true}
 	if plan.State != "requirements_unavailable" || plan.Execution != "not_executed" {
 		t.Fatalf("content registration granted provider execution: %+v", plan)
 	}

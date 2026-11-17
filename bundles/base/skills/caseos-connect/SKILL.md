@@ -12,8 +12,13 @@ For source preparation, use [caseos-prepare-ingest](../caseos-prepare-ingest/SKI
 for an existing graph slice, use [caseos-prepare-enrichment](../caseos-prepare-enrichment/SKILL.md).
 Those methods return local proposals, not remote writes or approval submissions.
 
-1. Resolve the owner's explicit consent, exact local workspace and exact case
-   identifier. Existing access to another case does not authorize this one.
+1. Query `case.setup.status` through the intended Maestro connector to resolve
+   the current admitted workspace and exact local case from returned
+   `setup`/`setup.input`. An absent, incomplete, conflicting or reconciliation-
+   required binding needs [case-agent-setup](../case-agent-setup/SKILL.md);
+   never read selection files or infer a case from a path or remembered title.
+   Establish the explicit mapping to the confirmed remote case identifier and
+   the owner's consent; local registration alone is not remote enrollment. Existing access to another case does not authorize this one.
    Obtain the complete official production endpoint from the case lead or
    official service onboarding. Read references/native-setup.md before setup.
 2. Validate HTTPS and the exact host caseos.production.mcp.bcg.com. Never guess
@@ -24,9 +29,13 @@ Those methods return local proposals, not remote writes or approval submissions.
    that cannot verify without persistence, leave setup pending for the official
    administrator-supported flow.
 3. Use native host OAuth authentication with Okta and ZPA. Never request, print,
-   copy or store a raw token. Record only consent, workspace/case scope, verified
+   copy or store a raw token. Through the admitted host configuration flow,
+   record only consent, workspace/case scope, verified
    endpoint, allowed read tools and evidence time in an owner-local configuration.
    Do not add a case ID, personal allowlist or credential to managed product files.
+   If the host has no authorized configuration capability, keep setup pending;
+   `case.setup.status` does not supply OAuth, a remote connector or permission
+   for filesystem/CLI configuration fallback.
 4. Before each query, use current native MCP health and tool discovery. Select a
    tool from its live schema and read-only semantics. Historical query examples
    do not prove a current capability. Verify the selected case parameter equals

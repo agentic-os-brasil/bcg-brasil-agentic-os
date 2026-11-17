@@ -174,7 +174,7 @@ func methodPayload(namespace string) (map[string][]byte, error) {
 				}
 				end += 9
 				prefix := append([]byte(nil), body[:end]...)
-				prefix = append(prefix, []byte("\nBefore applying this method, read [Maestro product authority](../../METHODS.md) and its [canonical policy](../../agent-skill-policy.json). Use the admitted implemented MCP operations for domain effects; an instruction does not grant filesystem, native CLI, installation or external-action authority.\n")...)
+				prefix = append(prefix, []byte("\nBefore applying this method through Maestro MCP, use maestro_query with operation methods.read and resource_uri to read maestro://methods/METHODS.md and maestro://methods/agent-skill-policy.json on this same admitted connector; follow next_offset while has_more is true. These exact URIs are also available through MCP resources/read. If either required reference cannot be read, stop this method and report unavailable. For an admitted filesystem-only host, read [Maestro product authority](../../METHODS.md) and its [canonical policy](../../agent-skill-policy.json). Use the admitted implemented MCP operations for domain effects; an instruction does not grant filesystem, native CLI, installation or external-action authority.\n")...)
 				body = append(prefix, body[end:]...)
 			}
 			files[path] = append([]byte(nil), body...)

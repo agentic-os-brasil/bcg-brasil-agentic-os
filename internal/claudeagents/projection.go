@@ -99,10 +99,10 @@ func Project(namespace string) ([]Projection, error) {
 	return result, nil
 }
 
-var executableAgentReference = regexp.MustCompile("(Agent\\(\\s*subagent_type\\s*=\\s*[\"']|Agent\\s+tool,\\s*`subagent_type:\\s*[\"'])([^\"'\\r\\n]+)([\"'])")
+var executableAgentReference = regexp.MustCompile("(Agent\\(\\s*subagent_type\\s*=\\s*[\"']|Agent\\s+tool,\\s*`subagent_type:\\s*[\"']|`subagent_type:\\s*[\"'])([^\"'\\r\\n]+)([\"'])")
 
 // ProjectAgentInvocations rewrites explicit Agent calls and the bundled methods'
-// "Agent tool, `subagent_type: ...`" instruction. Canonical JSON, paths and
+// explicit `subagent_type: ...` instruction properties. Canonical JSON, paths and
 // skill references remain byte-identical.
 func ProjectAgentInvocations(body []byte, namespace string) ([]byte, error) {
 	if namespace != "" && namespace != PluginNamespace {
