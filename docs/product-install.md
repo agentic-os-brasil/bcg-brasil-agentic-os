@@ -32,11 +32,13 @@ for organization-owned native signing and exact-byte release signing before any
 production distribution. Historical beta or personal keys cannot establish that
 authority.
 
-SharePoint can host bytes after that admission. For the current Windows pilot,
-download and extract them into an ordinary local directory: direct OneDrive/
-Files On-Demand paths are unavailable, including hydrated Cloud Files, because
-source confinement refuses reparse points. Cloud synchronization remains
-unqualified. A file, successful download or checksum alone is not release authority. Signed
+SharePoint can host bytes after that admission. Current source supports the finite
+Windows Cloud Files distribution-input route described in the signed-source guide:
+hydrate bounded named files and copy their authenticated complete release into
+ordinary private staging. Private owner-state reparse protections are unchanged.
+Native Windows/OneDrive execution remains unqualified, and existing experimental
+kits do not gain this source behavior retroactively. A file, successful download
+or checksum alone is not release authority. Signed
 generations and guarded update are being constructed under the
 [signed-source guide](product-synced-source.md); registration follows in the
 [complete delivery plan](plans/2026-11-03-synced-product-distribution.md). The

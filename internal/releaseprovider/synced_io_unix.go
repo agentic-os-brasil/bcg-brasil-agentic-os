@@ -9,5 +9,5 @@ import (
 
 func syncedSingleLink(_ *os.File, info os.FileInfo) bool {
 	s, ok := info.Sys().(*syscall.Stat_t)
-	return ok && s.Nlink == 1
+	return ok && info.Mode().IsRegular() && s.Nlink == 1
 }

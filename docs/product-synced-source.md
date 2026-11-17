@@ -6,7 +6,7 @@
 > registration/recovery are delivered by the separately reviewed client unit.
 > Existing #497 remains open until both units and their required evidence pass.
 
-# Distribute signed Maestro generations through an ordinary local mirror
+# Distribute signed Maestro generations through an enrolled synced folder
 
 This guide covers the signed-source publisher, participant update and compatible
 rollback interfaces. Local engineering evidence, independent source review,
@@ -20,13 +20,22 @@ to checked current regeneration, scoped Code registration and Desktop's explicit
 native flow. An activated server alone does not prove current client loading.
 
 The publisher places immutable signed releases and generation records in a
-folder. SharePoint may host the distribution. Participants download and extract
-the signed generation into an ordinary local directory before using it. Direct
-Windows OneDrive/Files On-Demand source folders are unavailable in this pilot:
-Windows source confinement refuses every reparse point, including hydrated Cloud
-Files. Hydration alone does not make such a path admissible. A browser or approved
-OS download may produce ordinary local files; their actual metadata must pass the
-same source checks. Automated cloud synchronization remains unqualified.
+folder. SharePoint/OneDrive may carry that distribution. The current source
+implements finite Windows Cloud Files ingress: held ordinary or documented cloud
+objects only, exact named files, bounded operating-system hydration and complete
+ready-file checks before and after reading. Cloud parent directories may remain
+virtual; a missing, partial, offline or failed required file refuses the snapshot.
+Junctions, symlinks and unknown reparse types remain refused. Ordinary local
+mirrors retain their existing behavior. Native Windows/OneDrive execution is still
+unqualified; source tests and cross-compilation do not prove it. Previously built
+experimental kits retain their original source support and update limitations.
+
+On macOS the held input must be regular, single-link and non-dataless at the
+existing checks. POSIX access may cause the operating system to materialize a
+cloud item; the reader does not guarantee that an arbitrary placeholder finishes
+materializing before those checks. Keeping the distribution folder available
+locally improves predictability. Actual OneDrive placeholder behavior on both
+platforms remains a separate native qualification.
 
 Each participant's admitted
 local installer authenticates the source, copies a complete release into private
@@ -115,11 +124,11 @@ own bounds.
 
 ## Keep participant authority local
 
-The participant enrolls an exact source tuple and ordinary local mirror locator
+The participant enrolls an exact source tuple and local distribution-folder locator
 through a trusted operator action. A URL, an authenticated OneDrive account or
 the model's choice of a directory cannot enroll a source. No SharePoint library
-or endpoint has been selected for the team yet. The local implementation must
-not guess it or obtain cloud credentials.
+or endpoint is selected by the software. The participant selects the local
+synchronized path; the implementation does not guess it or obtain cloud credentials.
 
 Private installation custody stays outside the synced share, managed payload
 and generated client packets. Source-aware install state retains the accepted
