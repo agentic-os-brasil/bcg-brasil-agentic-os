@@ -11,9 +11,21 @@ param(
     [Parameter(ParameterSetName = 'Pilot')][string]$CanonicalManifest,
     [Parameter(ParameterSetName = 'Pilot')][switch]$AuthoredBrain,
     [Parameter(ParameterSetName = 'Pilot')][switch]$PrivateWiki,
-    [Parameter(Mandatory = $true, ParameterSetName = 'Inspection')][string]$InspectionManifest
+    [Parameter(Mandatory = $true, ParameterSetName = 'Inspection')][string]$InspectionManifest,
+    [Parameter(Mandatory = $true, ParameterSetName = 'Docling')][string]$DoclingManifest
 )
 $ErrorActionPreference = 'Stop'
+$withDocling = $PSCmdlet.ParameterSetName -eq 'Docling'
+$doclingRuntime = $null
+if ($withDocling) {
+    if (Test-Path -LiteralPath $OutputRoot) { throw 'Use a new Docling qualification output; previous proof is preserved.' }
+    . (Join-Path $PSScriptRoot 'windows-docling-profile.ps1')
+    $doclingRuntime = Read-DoclingRuntimeManifest $DoclingManifest
+    $revision = (git rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0 -or $doclingRuntime.source_revision -cne $revision) { throw 'Docling manifest differs from the exact current source revision.' }
+    $doclingProfile = Join-Path $doclingRuntime.source_root 'acceptance/windows-docling-profile.ps1'
+    $doclingProfileSHA = (Get-FileHash -LiteralPath $doclingProfile -Algorithm SHA256).Hash.ToLowerInvariant()
+}
 $kitInputs = @($Kit, $KitIdentity, $MethodFixture)
 $kitInputCount = @($kitInputs | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
 if ($kitInputCount -ne 0 -and $kitInputCount -ne $kitInputs.Count) {
@@ -385,7 +397,7 @@ try {
     New-Item -ItemType Directory -Path $payload | Out-Null
     $nativeTest = Join-Path $payload 'windows-core.test.exe'
     $nativeServer = Join-Path $payload 'maestro-mcp.exe'
-    if (-not $withInspection) {
+    if (-not $withInspection -and -not $withDocling) {
         Copy-Item -LiteralPath $TestBinary -Destination $nativeTest
         Copy-Item -LiteralPath $Server -Destination $nativeServer
         if ($withEngine -and ((Get-FileHash -LiteralPath $nativeTest -Algorithm SHA256).Hash.ToLowerInvariant() -cne $canonical.public_test_binary_sha256 -or
@@ -446,7 +458,7 @@ try {
         $nativeCanonical = Join-Path $payload $manifestName
         $canonical | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $nativeCanonical -Encoding utf8
     }
-    if (-not $withInspection) {
+    if (-not $withInspection -and -not $withDocling) {
         $env:MAESTRO_WINDOWS_CORE_PROOF = '1'
         $env:MAESTRO_WINDOWS_CORE_SERVER = $nativeServer
         $env:MAESTRO_WINDOWS_CORE_PROOF_ROOT = $OutputRoot
@@ -458,13 +470,21 @@ try {
     # owner is the standard user; never grant that user access to runner data.
     $launcher = Join-Path $payload 'native-user-launcher.ps1'
     @'
-param([string]$TestBinary, [string]$ProofRoot, [string]$Kit, [string]$AtlasTestBinary, [string]$DoclingTestBinary, [string]$DoclingTestSHA256, [switch]$AuthoredBrain, [switch]$PrivateWiki, [string]$CanonicalManifest, [switch]$Inspection, [string]$ExpectedUserSID)
+param([string]$TestBinary, [string]$ProofRoot, [string]$Kit, [string]$AtlasTestBinary, [string]$DoclingTestBinary, [string]$DoclingTestSHA256, [switch]$AuthoredBrain, [switch]$PrivateWiki, [string]$CanonicalManifest, [switch]$Inspection, [string]$ExpectedUserSID, [string]$DoclingManifest, [string]$DoclingProfile, [string]$DoclingProfileSHA256)
 $ErrorActionPreference = 'Stop'
 try {
     $temporary = Join-Path $ProofRoot 'user-temp'
     New-Item -ItemType Directory -Path $temporary | Out-Null
     $env:TEMP = $temporary
     $env:TMP = $temporary
+    if ($DoclingManifest) {
+        if ((Get-FileHash -LiteralPath $DoclingProfile -Algorithm SHA256).Hash.ToLowerInvariant() -cne $DoclingProfileSHA256) { throw 'Docling typed profile changed before ordinary-account admission.' }
+        . $DoclingProfile
+        $manifest = Read-DoclingRuntimeManifest $DoclingManifest
+        if (-not [string]::Equals($DoclingProfile, (Join-Path $manifest.source_root 'acceptance/windows-docling-profile.ps1'), [StringComparison]::OrdinalIgnoreCase)) { throw 'Docling typed profile path differs.' }
+        Invoke-DoclingRuntimeProof $manifest $ProofRoot $ExpectedUserSID
+        exit 0
+    }
     if ($Inspection) {
         $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
         $admin = [Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')
@@ -876,7 +896,8 @@ try {
 '@ | Set-Content -LiteralPath $launcher -Encoding utf8
     $powershell = Join-Path $PSHOME 'pwsh.exe'
     $arguments = @('-NoLogo', '-NoProfile', '-NonInteractive', '-File', "`"$launcher`"", '-ProofRoot', "`"$OutputRoot`"")
-    if ($withInspection) { $arguments += @('-Inspection', '-ExpectedUserSID', $account.SID.Value) }
+    if ($withDocling) { $arguments += @('-DoclingManifest', "`"$DoclingManifest`"", '-DoclingProfile', "`"$doclingProfile`"", '-DoclingProfileSHA256', $doclingProfileSHA, '-ExpectedUserSID', $account.SID.Value) }
+    elseif ($withInspection) { $arguments += @('-Inspection', '-ExpectedUserSID', $account.SID.Value) }
     else { $arguments += @('-TestBinary', "`"$nativeTest`"") }
     if ($AtlasTestBinary) { $arguments += @('-AtlasTestBinary', "`"$nativeAtlasTest`"") }
     if ($DoclingTestBinary) { $arguments += @('-DoclingTestBinary', "`"$nativeDoclingTest`"", '-DoclingTestSHA256', $doclingHash) }
@@ -896,15 +917,28 @@ try {
         if ($hadModulePath) { $env:PSModulePath = $priorModulePath }
         else { Remove-Item Env:PSModulePath -ErrorAction SilentlyContinue }
     }
-    if ($withKit -or $AuthoredBrain -or $AtlasTestBinary -or $DoclingTestBinary -or $withInspection) {
+    if ($withKit -or $AuthoredBrain -or $AtlasTestBinary -or $DoclingTestBinary -or $withInspection -or $withDocling) {
         foreach ($path in @($stdout, $stderr)) {
-            if ((Get-Item -LiteralPath $path).Length -gt 2097152) { throw 'Native proof output exceeded its bounded synthetic log contract.' }
+            if ((Get-Item -LiteralPath $path).Length -gt $(if ($withDocling) { 4194304 } else { 2097152 })) { throw 'Native proof output exceeded its bounded synthetic log contract.' }
         }
     }
     Get-Content -LiteralPath $stdout
     if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr }
     if ($process.ExitCode -ne 0) { throw "Native core test failed with exit $($process.ExitCode); retain the actual log." }
     $log = Get-Content -LiteralPath $stdout -Raw
+    if ($withDocling) {
+        $proof = Get-Content -LiteralPath (Join-Path $OutputRoot 'docling-native-proof.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $expectedSID = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($account.SID.Value))).ToLowerInvariant()
+        if ($proof.qualification_profile -cne 'windows_docling_runtime_v1' -or $proof.source_revision -cne $doclingRuntime.source_revision -or
+            $proof.inventory_sha256 -cne $doclingRuntime.inventory_sha256 -or $proof.effective_sid_sha256 -cne $expectedSID -or
+            $proof.actual_standard_user -ne $true -or $proof.elevated -ne $false -or $proof.admin_member -ne $false -or $proof.real_formats -ne 11 -or
+            @($proof.passed_tests).Count -ne $script:DoclingRuntimeTests.Count -or @((Compare-Object ($script:DoclingRuntimeTests | Sort-Object) (@($proof.passed_tests) | Sort-Object))).Count -ne 0 -or
+            $proof.test_binary_sha256 -cne (Get-FileHash -LiteralPath $doclingRuntime.test_binary -Algorithm SHA256).Hash.ToLowerInvariant() -or
+            $proof.log_sha256 -cne (Get-FileHash -LiteralPath (Join-Path $OutputRoot 'docling-native-tests.log') -Algorithm SHA256).Hash.ToLowerInvariant() -or
+            $proof.shared_implementation_attested -ne $true -or $proof.mcp_server_execution -cne 'not_attested' -or $proof.native_client -cne 'not_run' -or $proof.publisher_authority -cne 'not_granted') { throw 'Docling exact-source ordinary-account proof is incomplete or differs.' }
+        Read-DoclingRuntimeManifest $DoclingManifest | Out-Null
+        return
+    }
     if ($withInspection) {
         $reportPath = Join-Path $OutputRoot 'inspection-contract-results.json'
         $reportFile = Get-Item -LiteralPath $reportPath -Force

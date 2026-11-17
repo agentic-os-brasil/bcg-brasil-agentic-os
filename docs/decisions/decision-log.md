@@ -1583,3 +1583,14 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: The page belongs to the owner's existing concepts/learnings/development corpus; original sources and converted artifacts remain bound to their original workspace, without a raw copy, new store or cross-workspace artifact read. The promotion is a structural admission plus explicit owner decision, not a semantic guarantee that arbitrary text contains no client data. Artifact pointers may become unavailable when the originating workspace is unavailable. No owner SELF, generated memory, automatic classification, installation or native/runtime qualification follows from this change.
 - Refs: specs/061-product-local-content.md; specs/014-human-atlas-bootstrap.md; specs/007-content-navigation.md; adapters/mcp/content.go; adapters/mcp/owner_atlas.go; issue #464
 - Supersedes: none
+
+## WDOC - Target-specific offline Windows Docling confinement
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: repository maintainers
+- Context: The real offline Docling producer and authenticated runtime only admit Apple Silicon macOS, leaving the Windows product without its canonical converter.
+- Decision: Preserve the existing Darwin closure byte-for-byte and add a separate immutable CPython 3.12 Windows amd64 interpreter/wheel closure. Execute only an authenticated per-conversion copy under an ordinary-user, unique zero-capability AppContainer with snapshot-only read/execute access, bounded writable scratch, stdio-only inherited handles, prohibited child creation and a timeout-controlled kill-on-close Job. Original documents and installed pack ACLs remain unchanged. AppContainer profile creation/removal is a disclosed per-conversion Windows-local effect; no service, firewall, global ACL, model or ambient Python dependency is introduced.
+- Consequences: Source construction, cross-compilation and verified acquisition do not qualify native execution. Real ordinary-user Windows kernel denial controls and real Docling conversion must pass before native qualification or broader readiness claims; organization-owned production signing and modern signed release admission remain separate gates. Unsupported architectures and failed confinement refuse.
+- Refs: specs/010-local-ingestion-runtime.md; internal/ingest/docling; https://learn.microsoft.com/en-us/windows/win32/secauthz/implementing-an-appcontainer; https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute
+- Supersedes: none

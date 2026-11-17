@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "target": "windows/amd64",
+  "app_local_alias": {
+    "source_wheel": "numpy-2.5.4-cp312-cp312-win_amd64.whl",
+    "source_member": "numpy.libs/msvcp140-a4c2229bdc2a2a630acdc095b4d86008.dll",
+    "destination": "python/msvcp140.dll",
+    "size": 575056,
+    "sha256": "a4c2229bdc2a2a630acdc095b4d86008e5c3e3bc7773174354f3da4f5beb9cde",
+    "pe_export_library": "MSVCP140.dll",
+    "reason": "Rtree spatialindex imports the unmangled MSVCP140.dll basename; preserve exact authenticated bytes and prevent ambient redist fallback."
+  },
+  "redistribution_authority": "unattested",
+  "redistribution_terms": "https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files",
+  "publication_requirement": "A properly licensed distributor must qualify Microsoft runtime redistribution rights before any team or public runtime publication. NumPy BSD notices do not grant Microsoft rights; this source construction accepts no license.",
+  "upstream_notices": "Retain all NumPy/Pandas/CPython wheel/archive notices unchanged; the acquired NumPy/Pandas wheels supply no Microsoft redistribution terms."
+}

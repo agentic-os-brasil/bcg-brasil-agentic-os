@@ -43,5 +43,8 @@ func (r *Runtime) Status(ctx context.Context) Availability {
 	if reason != "" {
 		return Availability{State: "unavailable", Reason: reason}
 	}
+	if reason := qualificationStatus(ctx, r.options, pack); reason != "" {
+		return Availability{State: "unqualified", Reason: reason, PackSHA256: pack.sha}
+	}
 	return Availability{State: "ready", PackSHA256: pack.sha}
 }
