@@ -28,6 +28,16 @@ func TestProductSessionMemoryBudgetAndPromptPrivacy(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := start.HookSpecificOutput.AdditionalContext
+	for _, required := range []string{
+		"only the explicitly admitted repository Standards/Spec pair may overlap",
+		"defaults to one foreground specialist",
+		"no child delegation",
+		"maestro://agents/activation-policy.json",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("product SessionStart omits native activation boundary %q", required)
+		}
+	}
 	index := strings.Index(text, "MAESTRO LOCAL MEMORY")
 	if index < 0 || len(text)-index > MaximumMemoryContextBytes || len(text) > MaximumAdditionalContextBytes || !utf8.ValidString(text) || !strings.Contains(text, "memory context truncated") {
 		t.Fatalf("product memory budget/UTF8 contract failed: bytes=%d memory_index=%d", len(text), index)

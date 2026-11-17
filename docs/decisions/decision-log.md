@@ -1561,3 +1561,14 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: Ordinary prepare/open/check-only remains free of model qualification. A canonical MCP-only failure result preserves the baseline route without claiming native capability; malformed or mismatched optional material refuses. Existing results are preserved rather than retried or replaced. Desktop continues its independent MCP extension flow. Source/offline evidence, packet qualification and actual client delivery remain separate; this does not continuously revalidate runtime configuration or qualify active third-party plugins.
 - Refs: specs/063-product-native-plugin.md; docs/product-pilot.md; adapters/mcp/cmd/maestro-mcp/pilot.go; dev/pilot/test-macos.command; dev/pilot/test-windows.ps1; https://code.claude.com/docs/en/settings#change-a-setting-for-one-session; https://code.claude.com/docs/en/settings-reference#pluginconfigs
 - Supersedes: none
+
+## RPAR - Admit a closed native repository review pair
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Pocock code review requires independent foreground Standards and Spec workers, while the native planner admits one specialist and existing refiners cannot inspect files.
+- Decision: Project two canonical repository reviewers with workspace-confined Read, Glob and Grep. Extend only the bound native planner with two fixed correlated slots for these complementary axes. Maestro freezes the actual diff, commits and review sources before submitting both foreground calls together. Both native starts must be observed before either stop advances the pair. Other roles retain their sequential route and no child may delegate. Persist only hashed lifecycle identifiers and axis state, never review content.
+- Consequences: Missing, failed or unmatched starts/stops keep the pair unresolved and block closure/reset; retry only the exact pending dispatch. A completed pair cannot reenter the same turn. Old schema-2 state without the optional pair field remains valid, while older binaries reject the new field. Source and CLI-hook tests do not attest actual model overlap, verdict quality, host enforcement or installation authority.
+- Refs: specs/063-product-native-plugin.md; internal/nativeagentflow; internal/claudeagents; adapters/mcp/hooks.go; bundles/tech-core/skills/pocock-code-review/SKILL.md
+- Supersedes: none

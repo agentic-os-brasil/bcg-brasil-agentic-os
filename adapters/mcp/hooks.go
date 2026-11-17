@@ -130,6 +130,9 @@ func (b *Bound) HandleClaudeHook(event string, in io.Reader, out io.Writer) erro
 			// Admit permits only the original tool ID and canonical target to
 			// retry a pending dispatch; no general hub tools bypass its fence.
 			target, ok := claudeagents.CanonicalAgentID(input.ToolInput.SubagentType)
+			if ok && claudeagents.RepositoryReviewer(target) && !claudeagents.ForegroundReviewDispatch(input.ToolInputJSON()) {
+				return deny()
+			}
 			if !ok || input.AgentID != "" || flow.Admit(input.SessionID, input.PromptID, input.ToolUseID, target) != nil {
 				return deny()
 			}
@@ -151,6 +154,15 @@ func (b *Bound) HandleClaudeHook(event string, in io.Reader, out io.Writer) erro
 	case "PostToolUse":
 		if input.AgentID != "" || input.AgentType != "" {
 			if !managed || flow.Authorize(input.SessionID, input.PromptID, input.AgentID, canonical) != nil {
+				return errors.New("hook_correlation_unavailable")
+			}
+		} else if input.ToolName == "Agent" || input.ToolName == "Task" {
+			target, ok := claudeagents.CanonicalAgentID(input.ToolInput.SubagentType)
+			if ok && claudeagents.RepositoryReviewer(target) {
+				if flow.ObserveReviewReturn(input.SessionID, input.PromptID, input.ToolUseID, target) != nil {
+					return errors.New("hook_correlation_unavailable")
+				}
+			} else if flow.CheckMain(input.SessionID, input.PromptID) != nil {
 				return errors.New("hook_correlation_unavailable")
 			}
 		} else if flow.CheckMain(input.SessionID, input.PromptID) != nil {

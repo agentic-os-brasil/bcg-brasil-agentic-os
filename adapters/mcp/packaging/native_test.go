@@ -380,7 +380,7 @@ func testNativeControlledSessions(t *testing.T, managed bool) {
 	if json.Unmarshal(body, &packet) != nil || packet.Mode != "native_engineering_fixture" {
 		t.Fatal("fixture evidence label absent")
 	}
-	for _, id := range []string{"case-agent", "client-account-agent", "darwin", "gamma-guardian", "pa-expert", "yoda"} {
+	for _, id := range []string{"case-agent", "client-account-agent", "darwin", "gamma-guardian", "pa-expert", "repository-spec-reviewer", "repository-standards-reviewer", "yoda"} {
 		if _, err := os.Stat(filepath.Join(in.Packet.Destination, "agents", id+".md")); err != nil {
 			t.Fatal(err)
 		}

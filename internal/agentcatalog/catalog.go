@@ -13,13 +13,14 @@ import (
 )
 
 type Catalog struct {
-	SchemaVersion  int                          `json:"schema_version"`
-	Hub            string                       `json:"hub"`
-	Delegation     DelegationPolicy             `json:"delegation"`
-	NativeAdvisory NativeAdvisoryPolicy         `json:"native_advisory"`
-	LegacyAliases  map[string]LegacyRoleAlias   `json:"legacy_aliases"`
-	LegacyIDs      map[string]LegacyIDMigration `json:"legacy_ids"`
-	Agents         []Agent                      `json:"agents"`
+	NativeRepositoryReviewPair []string                     `json:"native_repository_review_pair,omitempty"`
+	SchemaVersion              int                          `json:"schema_version"`
+	Hub                        string                       `json:"hub"`
+	Delegation                 DelegationPolicy             `json:"delegation"`
+	NativeAdvisory             NativeAdvisoryPolicy         `json:"native_advisory"`
+	LegacyAliases              map[string]LegacyRoleAlias   `json:"legacy_aliases"`
+	LegacyIDs                  map[string]LegacyIDMigration `json:"legacy_ids"`
+	Agents                     []Agent                      `json:"agents"`
 }
 
 // NativeAdvisoryPolicy describes bounded consultations that a model-backed
@@ -98,6 +99,7 @@ var roleContracts = map[string]struct {
 	"hub":                  {true, "none", true, "session_context_packet"},
 	"pa_expert":            {false, "none", false, "bounded_advisory_packet"},
 	"quality_guardian":     {false, "scoped", false, "bounded_quality_packet"},
+	"repository_reviewer":  {false, "scoped", false, "bounded_repository_review_packet"},
 	"reviewer":             {false, "none", false, "sealed_review_packet"},
 	"workspace_agent":      {false, "scoped", false, "bounded_workspace_packet"}, // compatibility only
 }
@@ -210,6 +212,9 @@ func (catalog Catalog) Validate() error {
 	if err := validateNativeAdvisoryEdges(catalog.NativeAdvisory.AllowedEdges); err != nil {
 		return err
 	}
+	if catalog.NativeRepositoryReviewPair != nil && (len(catalog.NativeRepositoryReviewPair) != 2 || catalog.NativeRepositoryReviewPair[0] != "repository-spec-reviewer" || catalog.NativeRepositoryReviewPair[1] != "repository-standards-reviewer") {
+		return errors.New("agent catalog must declare the closed repository review pair")
+	}
 	if len(catalog.Agents) < 3 {
 		return errors.New("agent catalog is missing the Maestro core")
 	}
@@ -223,6 +228,9 @@ func (catalog Catalog) Validate() error {
 		}
 		if agent.RelativePath != "agents/"+agent.ID+"/AGENT.md" {
 			return fmt.Errorf("agent %s has an invalid role, input contract or definition pointer", agent.ID)
+		}
+		if agent.Role == "repository_reviewer" && (catalog.NativeRepositoryReviewPair == nil || (agent.ID != "repository-spec-reviewer" && agent.ID != "repository-standards-reviewer")) {
+			return errors.New("repository reviewer must belong to the declared closed pair")
 		}
 		contract, ok := roleContracts[agent.Role]
 		if !ok {
@@ -254,15 +262,20 @@ func (catalog Catalog) Validate() error {
 		mayDelegate   bool
 		inputContract string
 	}{
-		"maestro":              {"hub", true, "none", true, "session_context_packet"},
-		"yoda":                 {"reviewer", false, "none", false, "sealed_review_packet"},
-		"darwin":               {"governance_analyst", false, "scoped", false, "bounded_health_packet"},
-		"case-agent":           {"case_agent", false, "scoped", false, "bounded_case_packet"},
-		"client-account-agent": {"client_account_agent", false, "scoped", false, "bounded_client_account_packet"},
-		"pa-expert":            {"pa_expert", false, "none", false, "bounded_advisory_packet"},
-		"gamma-guardian":       {"quality_guardian", false, "scoped", false, "bounded_quality_packet"},
+		"maestro":                       {"hub", true, "none", true, "session_context_packet"},
+		"yoda":                          {"reviewer", false, "none", false, "sealed_review_packet"},
+		"darwin":                        {"governance_analyst", false, "scoped", false, "bounded_health_packet"},
+		"case-agent":                    {"case_agent", false, "scoped", false, "bounded_case_packet"},
+		"client-account-agent":          {"client_account_agent", false, "scoped", false, "bounded_client_account_packet"},
+		"pa-expert":                     {"pa_expert", false, "none", false, "bounded_advisory_packet"},
+		"gamma-guardian":                {"quality_guardian", false, "scoped", false, "bounded_quality_packet"},
+		"repository-spec-reviewer":      {"repository_reviewer", false, "scoped", false, "bounded_repository_review_packet"},
+		"repository-standards-reviewer": {"repository_reviewer", false, "scoped", false, "bounded_repository_review_packet"},
 	}
 	for id, contract := range wanted {
+		if catalog.NativeRepositoryReviewPair == nil && (id == "repository-spec-reviewer" || id == "repository-standards-reviewer") {
+			continue
+		}
 		agent, ok := seen[id]
 		if !ok {
 			return fmt.Errorf("agent catalog is missing core agent %s", id)

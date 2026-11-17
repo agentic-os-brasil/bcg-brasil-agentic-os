@@ -137,8 +137,9 @@ diagnosable without silently becoming isolated extensions.
 
 ## Canonical identities and projection
 
-Maestro remains the main-session hub. Project the six canonical specialists:
-case-agent, client-account-agent, darwin, gamma-guardian, pa-expert and yoda.
+Maestro remains the main-session hub. Project the canonical ordinary specialists:
+case-agent, client-account-agent, darwin, gamma-guardian, pa-expert and yoda,
+plus the closed repository review pair described under RPAR below.
 Reuse embedded definitions/catalog/templates and one pure projection shared
 with the existing workspace renderer. Frontmatter must be first; preserve
 ownership recognition and conflict-safe replacement of older managed files.
@@ -293,7 +294,7 @@ and [command fields](https://code.claude.com/docs/en/hooks#command-hook-fields).
 The admission path must withhold native activation when the host/profile is
 unknown, unsupported, stale or unqualified. It must emit a functional MCP-only
 packet with an explicit native capability reason and no active native hooks.
-The six canonical specialist projections remain inert instructions as required
+The eight canonical specialist projections remain inert instructions as required
 by the portable agent contract. Their presence never establishes native admission.
 Do not invent a plugin-manifest compatibility field or a native client identity.
 Windows native admission is currently refused; compiled/source tests do not
@@ -469,3 +470,60 @@ userConfig vectors. It changes no sealed packet, stored settings, authentication
 permissions or hooks. Session selection is a delivery condition distinct from
 qualification; neither proves continuous runtime configuration revalidation.
 Desktop retains its separate bound MCP extension and no Code-hook parity claim.
+
+## Closed foreground repository review pair (RPAR)
+
+The same `maestro_planner` profile additionally projects
+`repository-spec-reviewer` and `repository-standards-reviewer`. These are fixed
+repository axes with Read, Glob and Grep confined by the existing workspace
+policy, including existing symlink resolution and structured selected-case .active/.pending
+path checks. Searches inherit descendant case checks; a repository-wide search
+covering foreign case trees refuses rather than broadening authority. They have no shell, write, MCP,
+child delegation, resumed-agent or team authority. The canonical catalog declares
+this exact pair separately from the unchanged ordinary sequential role graph.
+A catalog without the optional declaration retains its prior sequential model.
+
+Before dispatch Maestro freezes the actual three-dot diff, resolved base/head,
+commit list, standards with smell baseline, and spec (or explicit absence). The
+independent bounded packets carry actual diff text and repository-relative source
+references; each worker may read needed files independently. Live source drift
+must be reported, not treated as frozen evidence. No generic repository RPC or
+shell grant is introduced. Submit both explicit canonical Agent calls in one
+foreground parallel batch. A missing spec produces an explicit absent-spec
+response from its worker, preserving the closed pair.
+
+Bound schema-2 state adds only an optional `repository_review_pair` containing
+exactly two axis slots. Each slot stores hashed dispatch/native identities and
+its stop flag; it stores no packet, diff, source path, result or private content.
+The strict decoder validates slot shape, replay membership, uniqueness, active
+ordinary-route exclusion and both-starts-before-first-stop. Existing schema-2
+bytes with no pair remain valid; old strict binaries reject pair-bearing bytes,
+so an in-flight pair must not be downgraded to an old binary. Schema-1 passive
+observations still grant no bound authority.
+
+The first admission fences ordinary hub work, turn reset and closure. Only the
+complementary axis can join, pending or already active; no third branch, repeated
+axis or child dispatch is admitted. Each observed native start correlates to its
+reserved canonical axis exactly once. Both starts must precede either stop. Each
+stop revokes that worker's tools; the first matching foreground Agent return may
+arrive while its peer remains active. Unknown IDs, altered tool IDs, stale prompt
+IDs and late prior-turn events refuse. Exact pending admission/start/stop retries
+are idempotent; an already started axis cannot be re-dispatched. Completion does
+not synthesize Case, Account, Gamma or Yoda route observations, and the same pair
+cannot reenter that turn.
+
+A failed/missing dispatch, start or stop leaves the pair unresolved. Keep its
+metadata across process resumption, report the diagnostic and preserve partial
+axis evidence without claiming a complete review. An exact pending call can retry;
+there is no silent timeout, reset, repair or new identity that clears authority.
+A host session may be ended explicitly, but its abandoned state is not evidence
+of successful completion. Both native stop observations release the pair fence;
+ordinary routes then retain all their existing sequencing requirements.
+
+Focused source/compiled-CLI hook tests establish only these local contracts.
+The existing native-planner-v2 qualification experiment remains the finite
+Case-to-Gamma control and does not attest the review pair. Actual independently
+reading model workers, foreground overlap, host permission enforcement and useful
+Standards/Spec reports require separate attended runtime evidence against the
+frozen source and packet. Adding these public role assets grants no installation,
+model-spend, distribution or signing authority.
