@@ -1516,3 +1516,15 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: Preserve exact legacy bindings and truthful partial receipts instead of claiming a transaction across domains. Changed pending bytes remain untouched after active publication. Unpublished stages remain private and non-authoritative; safe physical move/archive stays pending under its separate custody contract. Wider account narratives and multi-case management remain separate. Source/SDK/stdio evidence does not replace hosted or actual client qualification.
 - Refs: issue #545; specs/017-workspace-agent-initialization.md; specs/033-workspace-first-value.md; docs/product-case-setup.md; internal/workspaceagent/setup.go; adapters/mcp/case_setup.go
 - Supersedes: none
+
+
+## LBRV - Offer an explicit local-browser owner review channel
+
+- Date: 2026-11-15
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: A Desktop MCP client may declare no native form elicitation although the canonical protected operations and full current review already exist. Tool permission and chat text cannot confer exact-record owner consent.
+- Decision: Allow a local operator to opt into a short-lived loopback browser review channel at foreground server startup, or explicitly select it while building an ordinary local Desktop pilot. Native form elicitation remains first when advertised. Only a live foreground MCP tool request may use the fallback. Render the complete existing review presentation and approval schema, require an unchecked exact-record checkbox plus conscious approval, and preserve every domain's canonical digest, revision and post-review revalidation. Use an unpredictable single-use URL, independent CSRF secret, exact local Host/Origin validation and a context-bound listener; disclose neither URL nor private review in MCP output or logs.
+- Consequences: Unconfigured and unattended callers remain fail-closed. Decline, cancellation, expiry and browser errors grant no authority. Browser review is a local operator channel, not native MCP form or lifecycle qualification. The ephemeral listener installs no service and emits no reusable approval token. Rebuilding a local pilot is required to adopt its explicit startup selection.
+- Refs: docs/product-local-owner-review.md; adapters/mcp/confirmation.go; adapters/mcp/internal/localreview; adapters/mcp/packaging/desktop_pilot.go
+- Supersedes: none

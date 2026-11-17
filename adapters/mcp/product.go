@@ -27,7 +27,9 @@ type Options struct {
 	AuthorityRegistryPath, AuthorityRegistrySHA256, CLIVersion string
 	// Fixed carrier inputs come from canonical packaging, never MCP arguments.
 	InstalledManifestSHA256, InstalledClientInputsSHA256 string
-	GuardProcess                                         bool
+	// Explicit operator startup selection; never admitted from tool arguments.
+	OwnerReviewChannel string
+	GuardProcess       bool
 }
 type Bound struct {
 	options           Options
@@ -36,11 +38,15 @@ type Bound struct {
 	// Deterministic test seams; neither is exposed as runtime configuration or tool authority.
 	afterBrainPrepareEffect    func() error
 	observeWorkspaceTransition func(stage, page string)
+	localOwnerReview           func(context.Context, string, any) (bool, error)
 	maintenanceClock           func() time.Time
 	maintenanceActivity        func(context.Context) (maintenance.IdleState, error)
 }
 
 func Open(o Options) (*Bound, error) {
+	if o.OwnerReviewChannel != "" && o.OwnerReviewChannel != "local-browser" {
+		return nil, errors.New("owner_review_channel_unavailable")
+	}
 	b := &Bound{options: o}
 	if err := b.validate(); err != nil {
 		return nil, err

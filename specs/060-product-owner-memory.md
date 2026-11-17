@@ -41,8 +41,11 @@ contain only bounded protocol labels, capability-presence booleans and a closed
 failure stage. Never log reviewed content, raw capabilities, identities, paths
 or transport error text. A diagnostic or passing SDK test is not native host proof.
 
-An explicit local review/confirm command is the supported fallback for clients
-without elicitation. It uses the same canonical review and digest checks. Never
+An explicit local review/confirm command is a supported fallback for clients
+without elicitation. An operator may also explicitly select the foreground-only
+local-browser channel described in `docs/product-local-owner-review.md`; it
+reuses this exact review and canonical apply contract without claiming native
+form or lifecycle qualification. It uses the same canonical review and digest checks. Never
 silently convert a missing host capability into approval or claim native support
 from an SDK test.
 

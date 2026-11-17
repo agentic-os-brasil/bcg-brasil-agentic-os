@@ -141,6 +141,22 @@ hooks and confirmation as `not_tested`; participants record those observations
 after using the clients. Share only the reviewed Markdown report, not owner,
 workspace, client profiles or participant-local generated packets/prompts.
 
+## Desktop owner review channel
+
+The explicit local preparation review discloses selection of `local-browser`
+before PREPARAR or digest confirmation. Both platform preparers build the
+ordinary Desktop pilot with `--owner-review-channel local-browser`; its typed
+inventory and canonical manifest retain that exact startup choice. Native forms
+remain first when advertised. Otherwise, a foreground protected request opens
+its complete review and approval schema in an ephemeral local browser page,
+requiring the initially unchecked checkbox and conscious exact-record approval.
+Decline, cancellation, closing, expiry after at most 150 seconds or opener error
+never approves. No URL or approval token is returned to the model. Generic,
+stable, native and lifecycle profiles remain unchanged. Read-only tool permission
+never substitutes for review. See [the channel contract](product-local-owner-review.md).
+Actual Desktop presentation/effect/readback and native hooks remain separately
+observed evidence; this local channel does not qualify MCP native forms.
+
 ## Trust and platform limits
 
 This is an unsigned, unversioned engineering rehearsal. Server release identity,
@@ -188,3 +204,5 @@ Keep prepared exports/private state local and preserve any policy refusal.
 No new smoke/canary framework or CI band is introduced. Existing focused product
 journeys and direct emitted-preparer verification cover source behavior; full
 affected hosted checks and independent reviews remain promotion gates.
+
+Native Desktop form qualification remains `unavailable` until an actual client advertises and renders the form. Local-browser review is a separate supported channel and does not close a native-form qualification gate.
