@@ -127,7 +127,7 @@ func TestProductServiceFreshReadAndDeclineAreReadOnly(t *testing.T) {
 	s := productFixture(t)
 	before := productSnapshot(t, s.home)
 	status, err := s.Status()
-	if err != nil || len(status.Jobs) != 18 {
+	if err != nil || len(status.Jobs) != 19 {
 		t.Fatalf("status %+v %v", status, err)
 	}
 	for _, j := range status.Jobs {
