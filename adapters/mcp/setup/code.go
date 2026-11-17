@@ -176,7 +176,7 @@ func observeCode(ctx context.Context, r installer.ClientRecord, run ClientComman
 		if source != "directory" && source != "file" && source != "local" {
 			return o, false, false, errors.New("foreign marketplace source; preserved unchanged")
 		}
-		if m.Path != r.Materialization.CodeRoot {
+		if m.Path != installer.ClientMarketplaceRoot(r) {
 			return o, false, false, errors.New("foreign marketplace path; preserved unchanged")
 		}
 		o.SourcePath = m.Path
@@ -196,7 +196,11 @@ func observeCode(ctx context.Context, r installer.ClientRecord, run ClientComman
 		}
 		// Cached unrelated plugins need no local-in-place fields. Require all
 		// explicit observations only after selecting the exact Maestro identity.
-		for _, name := range []string{"version", "scope", "enabled", "installPath", "folderVersion", "readFromFolder"} {
+		required := []string{"version", "scope", "enabled", "installPath", "readFromFolder"}
+		if r.Materialization.Selection == nil {
+			required = append(required, "folderVersion")
+		}
+		for _, name := range required {
 			value, ok := p.fields[name]
 			if !ok || bytes.Equal(value, []byte("null")) {
 				return o, false, false, errors.New("Code readback lacks explicit " + name)
@@ -207,8 +211,31 @@ func observeCode(ctx context.Context, r installer.ClientRecord, run ClientComman
 		}
 		present = true
 		expected := filepath.Join(r.Materialization.CodeRoot, "plugins", "maestro-product")
-		if p.InstallPath != expected || !p.ReadFromFolder {
-			return o, false, false, errors.New("plugin does not read expected local source")
+		if r.Materialization.Selection == nil {
+			if p.InstallPath != expected || !p.ReadFromFolder {
+				return o, false, false, errors.New("plugin does not read expected local source")
+			}
+		} else {
+			// COPY is the cross-platform native command-source contract. Code owns
+			// its cache. A current-version observation is accepted only after an
+			// exact byte/mode inventory matches the recorded current packet.
+			if p.ReadFromFolder || !filepath.IsAbs(p.InstallPath) || filepath.Clean(p.InstallPath) != p.InstallPath {
+				return o, false, false, errors.New("plugin does not use the expected native copy source")
+			}
+			if p.Version == r.Materialization.Release {
+				whole, err := installer.ClientTreeDigest(r.Materialization.CodeRoot)
+				if err != nil || whole != r.Materialization.CodeTreeSHA256 {
+					return o, false, false, errors.New("recorded current Code source changed")
+				}
+				source, err := installer.ClientPayloadDigest(expected)
+				if err != nil {
+					return o, false, false, err
+				}
+				copy, err := installer.ClientPayloadDigest(p.InstallPath)
+				if err != nil || copy != source {
+					return o, false, false, errors.New("native Code copy differs from current canonical packet; preserved")
+				}
+			}
 		}
 		o.InstallPath = p.InstallPath
 		o.InstalledVersion = p.Version
@@ -217,7 +244,11 @@ func observeCode(ctx context.Context, r installer.ClientRecord, run ClientComman
 		o.Enabled = p.Enabled
 		o.Errors = len(p.Errors)
 		o.Notes = len(p.Notes)
-		if o.Errors == 0 && o.FolderVersion == r.Materialization.Release {
+		current := o.FolderVersion == r.Materialization.Release
+		if r.Materialization.Selection != nil {
+			current = o.InstalledVersion == r.Materialization.Release
+		}
+		if o.Errors == 0 && current {
 			o.State = "registered"
 		}
 	}
@@ -233,7 +264,7 @@ func ReviewCodeRegistration(ctx context.Context, r installer.ClientRecord, run C
 	}
 	review := CodeReview{Observation: o, BeforePresent: present, BeforeEnabled: o.Enabled, ExpectedVersion: r.Materialization.Release, Actions: [][]string{}}
 	if !market {
-		review.Actions = append(review.Actions, []string{"plugin", "marketplace", "add", r.Materialization.CodeRoot, "--scope", o.Scope, "--json"})
+		review.Actions = append(review.Actions, []string{"plugin", "marketplace", "add", installer.ClientMarketplaceRoot(r), "--scope", o.Scope, "--json"})
 	}
 	if !present {
 		review.Actions = append(review.Actions, []string{"plugin", "install", o.PluginID, "--scope", o.Scope, "--json"})

@@ -30,6 +30,8 @@ type Options struct {
 	// Explicit operator startup selection; never admitted from tool arguments.
 	OwnerReviewChannel string
 	GuardProcess       bool
+	// Fixed by the validated stable launcher, never by an MCP argument.
+	ManagementCarrierID, ManagementInstallerVersion string
 }
 type Bound struct {
 	options           Options
@@ -41,6 +43,7 @@ type Bound struct {
 	localOwnerReview           func(context.Context, string, any) (bool, error)
 	maintenanceClock           func() time.Time
 	maintenanceActivity        func(context.Context) (maintenance.IdleState, error)
+	managementOpen             func(context.Context, string) error
 }
 
 func Open(o Options) (*Bound, error) {
@@ -372,6 +375,9 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		}
 		if kind == "context" {
 			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "agent_identity": b.managedIdentityContext(), "next_max_bytes": 2048, "owner": map[string]any{"context_operation": "owner.context", "reader": "session", "max_page_bytes": 4096, "requires": "current_confirmed_onboarding", "authority": "owner_profile_data_only"}, "memory": map[string]any{"context_operation": "memory.context", "max_page_bytes": 4096, "synthesis": "local_deterministic", "lifetime": "two_l3_generations_and_exact_owner_review"}, "methods": map[string]any{"list_operation": "methods.list", "read_operation": "methods.read", "plan_operation": "methods.plan", "max_page_bytes": 4096, "mode": "methods_not_authority"}}, nil), nil
+		}
+		if in.Operation == "installation.update_handoff" {
+			return b.handleManagementHandoff(ctx, req), nil
 		}
 		if strings.HasPrefix(in.Operation, "sharepoint.enrollment.") {
 			return b.handleSharepointEnrollment(ctx, req, in), nil

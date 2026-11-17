@@ -695,6 +695,58 @@ bypass a rejecting client policy. In that policy the stable source-managed
 carrier is unavailable. An ordinary unmanaged MCPB is a separate profile,
 not a source-managed fallback. Never claim MCPB automatic updating.
 
+### Complete versioned clients from one synced source (SFRD)
+
+New reviewed selections may use private versioned client slots. Carrier, signed
+manifest and a bounded reviewed preparation-generation ID determine finite sibling
+names; the private current record selects the exact verified generation. Publish
+that record last. Preserve previous, failed, occupied and foreign candidates;
+never replace an unknown shared tree to make an update succeed. Legacy records
+without this explicit selection retain their original serialization and behavior.
+The admitted workspace and physical Developer brain binding survive every phase.
+
+For this profile, Code uses its supported command plugin source in COPY mode.
+A fixed participant-local provider invokes only the independently admitted
+installed client's current-plugin-path reader. Before and after readback validate
+Current, source custody and exact private-record identity; this reader cannot
+repair, stage, approve or activate anything. It does not reacquire the native
+registration owner's lock. Supported scoped install/update and canonical copied
+payload readback preserve disabled state and refuse foreign entries. Host policy
+may reject command sources; no alternate updater or profile edit bypasses it.
+The existing relative local source remains the legacy selected profile.
+
+A complete native selection uses the existing genuine review/qualify producer,
+with stable carrier and destination generation bound before the probe. Run the
+qualifier outside installer publication serialization, then publish only its
+same-call native_observed result and unchanged canonically inspected candidate
+under the existing guards. Imported proof, engineering witnesses or missing
+native capabilities cannot qualify it. Do not silently downgrade a complete
+selection to resources-only. A failed attempt remains preserved; an explicit
+new review selects a fresh bounded generation. Existing D3 custody stays pending
+where its independent requirements are unmet.
+
+The actual current server also generates and verifies the complete Desktop live
+method bootstrap described in Spec063. Compatible external-launch MCPB bytes may
+remain exact while current backend resources change. Distinguish connector
+installation, bootstrap installation, current backend, current live methods,
+loaded session and functional acceptance. Native contract or bootstrap protocol
+changes still require the host's normal review; external launch needs actual
+Desktop qualification and cannot be inferred from packaging or an opener.
+
+The fixed manage/update intent composes existing source, native, packet,
+registration and per-job review owners. Whole-executable and CLI-version changes
+make maintenance proof stale. Offer only previously qualified stale jobs to their
+original real qualifiers, preserving opt-ins, enrollment/timezone and paused or
+revoked state; absent real inputs remain pending. No old proof is relabeled.
+Reload/reconnect at a deliberate safe point; do not terminate an active client or
+move the brain to create an activation claim. The closed MCP handoff in Spec057
+opens this manager without granting any of those subsequent approvals.
+
+Construction tests do not admit an experimental installation. The existing
+runtime/converter ZIP is not an installed-seed/source-update authority. A bounded
+experimental N-to-N+1 rehearsal needs its exact separate installer-owned admission;
+organization production signing and production verification remain separate.
+
 ### Construction acceptance
 
 Provide exact reviewed clients-review/apply/status/reconcile, explicit

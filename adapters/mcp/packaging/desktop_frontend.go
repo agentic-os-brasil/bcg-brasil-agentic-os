@@ -20,7 +20,10 @@ import (
 
 // DesktopFrontendOptions selects only a fresh factory output and public version.
 // It cannot select a runtime, namespace, product binding or installation profile.
-type DesktopFrontendOptions struct{ Destination, Version string }
+type DesktopFrontendOptions struct {
+	Destination, Version string
+	LiveMethods          bool
+}
 
 // DesktopFrontendFile describes one public payload resource.
 type DesktopFrontendFile struct {
@@ -31,6 +34,7 @@ type DesktopFrontendFile struct {
 
 // DesktopFrontendReport describes content integrity, never publisher or host trust.
 type DesktopFrontendReport struct {
+	BootstrapProtocol   string `json:"bootstrap_protocol,omitempty"`
 	SchemaVersion       int    `json:"schema_version"`
 	Name                string `json:"name"`
 	Version             string `json:"version"`
@@ -108,6 +112,10 @@ Inventory hashes describe bytes, not publisher authority, installation or approv
 func BuildDesktopMethodFrontend(o DesktopFrontendOptions) (DesktopFrontendReport, error) {
 	report := DesktopFrontendReport{SchemaVersion: 1, Name: claudeagents.DesktopMethodNamespace, Version: o.Version, Mode: "instructions_only", NativeQualification: "unavailable"}
 	files, err := desktopFrontendPayload(o.Version)
+	if err == nil && o.LiveMethods {
+		files, err = desktopLiveFrontendPayload(o.Version)
+		report.BootstrapProtocol = DesktopLiveMethodProtocol
+	}
 	if err != nil {
 		return report, err
 	}

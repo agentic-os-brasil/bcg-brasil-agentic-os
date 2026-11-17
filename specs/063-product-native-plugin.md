@@ -577,3 +577,34 @@ owns versioned experiments; this profile creates no publisher authority.
 Qualification plans separately disclose/bind this Code selection. Actual native
 qualification remains independent; neither packet metadata nor browser readability
 qualifies hooks, native form rendering, Desktop UI or runtime conversions.
+
+## Live Desktop method bootstrap and complete source-managed clients (SFRD)
+
+The optional maestro-live-method-bootstrap-v1 Desktop library retains existing
+entry identities and frontmatter while resolving instructions from the actual
+admitted backend. It adds no native agent, hook, approval or filesystem authority.
+An MCPB and this separately installed library remain distinct components.
+
+Each invocation positively identifies the workspace connector, then reads the
+current methods index and agent-skill policy, discovers the complete paged catalog,
+selects an exact current method and obtains its plan. Read every instruction and
+referenced canonical resource through existing methods.read/resource APIs, with
+consistent URI, hash, total length and contiguous page offsets. Discard and reread
+if identities change. Use a genuine host hashing facility when available; never
+claim an independent calculation otherwise. Plans describe effects but grant none.
+Cached auxiliary snapshots cannot override current instructions. New methods are
+reachable through operator even without a newly installed slash alias.
+
+Ordinary method/catalog updates require no library reimport while the bootstrap
+protocol stays compatible. A changed bootstrap contract or native permission
+still needs normal host review. Bootstrap package version, current backend method
+identities and actual loaded/functional client evidence remain separate. Missing
+runtime dependencies or native capabilities stay unavailable after reading an
+updated method. This profile does not turn Desktop into an enforcing Code host.
+
+The versioned complete Code route in Spec020 retains this specification's genuine
+exact-host qualifier and all canonical specialists and seven-event enforcement.
+Stable carrier identity is included in the reviewed qualification fingerprint
+before the producer runs. Current packet publication cannot reuse an imported
+native proof or silently fall back to the non-enforcing lifecycle/resources-only
+profiles. Existing native custody and qualification requirements remain effective.

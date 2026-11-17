@@ -104,9 +104,13 @@ func run() error {
 		flags.SetOutput(io.Discard)
 	}
 	var o product.Options
+	if os.Args[1] == "serve" {
+		flags.StringVar(&o.ManagementCarrierID, "management-carrier-id", "", "fixed independently admitted client carrier")
+		flags.StringVar(&o.ManagementInstallerVersion, "management-installer-version", "", "fixed validated installed manager version")
+	}
 	var destination, server, version string
 	var carrierProfile, carrierID, carrierVersion, packetFormat string
-	if os.Args[1] == "plugin" || os.Args[1] == "mcpb" || os.Args[1] == "packet-verify" {
+	if os.Args[1] == "plugin" || os.Args[1] == "mcpb" || os.Args[1] == "packet-verify" || os.Args[1] == "native-review" || os.Args[1] == "native-qualify-and-build" {
 		flags.StringVar(&carrierProfile, "carrier-profile", "", "explicit stable packet profile")
 		flags.StringVar(&carrierID, "carrier-id", "", "fixed opaque stable carrier ID")
 		flags.StringVar(&carrierVersion, "carrier-version", "", "fixed stable carrier version")
@@ -244,6 +248,21 @@ func run() error {
 		carrier = &packaging.StableCarrier{Profile: carrierProfile, Protocol: installer.StableClientProtocol, ID: carrierID, Version: carrierVersion}
 	}
 	switch os.Args[1] {
+	case "desktop-methods", "desktop-methods-verify":
+		if packet || destination == "" || server != "" || version != "" || carrier != nil || o.ProductRoot != "" || o.UserHome != "" || o.WorkspacePath != "" {
+			return errors.New("exact current Desktop methods destination required")
+		}
+		var report packaging.DesktopFrontendReport
+		var err error
+		if os.Args[1] == "desktop-methods" {
+			report, err = packaging.BuildDesktopMethodFrontend(packaging.DesktopFrontendOptions{Destination: destination, Version: Version, LiveMethods: true})
+		} else {
+			report, err = packaging.VerifyDesktopLiveMethodFrontend(destination, Version)
+		}
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(report)
 	case "pilot-acquisition-review", "pilot-acquisition-apply":
 		if packet || server != "" || destination != "" || version != "" || carrier != nil || runtimeRelease == "" {
 			return errors.New("exact local acquisition arguments required")
@@ -296,7 +315,7 @@ func run() error {
 		}
 		return json.NewEncoder(os.Stdout).Encode(status)
 	case "native-review", "native-qualify-and-build":
-		request := packaging.NativeOptions{Packet: packaging.Options{Destination: destination, Server: server, Version: version, Binding: o, CodePilot: codePilot}, Executable: nativeExecutable, ScratchRoot: nativeScratch, ChallengeDirectory: nativeChallenge, MaxBudgetUSD: nativeBudget}
+		request := packaging.NativeOptions{Packet: packaging.Options{Destination: destination, Server: server, Version: version, Binding: o, CodePilot: codePilot, Carrier: carrier}, Executable: nativeExecutable, ScratchRoot: nativeScratch, ChallengeDirectory: nativeChallenge, MaxBudgetUSD: nativeBudget}
 		var value any
 		var err error
 		if os.Args[1] == "native-review" {
