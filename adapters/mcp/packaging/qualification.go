@@ -2,8 +2,10 @@ package packaging
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"path/filepath"
 	"regexp"
@@ -15,7 +17,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspacepolicy"
 )
 
-// QualificationHook tags the unchanged canonical pre-tool result in the
+// QualificationHook tags an unchanged canonical pre/post-tool result in the
 // documented systemMessage field. It never supplies a decision of its own.
 // Active product packets call hook directly and remain marker-free.
 func QualificationHook(binding product.Options, nonce string, in io.Reader, out io.Writer) error {
@@ -26,16 +28,31 @@ func QualificationHook(binding product.Options, nonce string, in io.Reader, out 
 	if err != nil {
 		return err
 	}
+	raw, err := io.ReadAll(io.LimitReader(in, claudeadapter.MaximumNativeInputBytes+1))
+	if err != nil {
+		return err
+	}
+	input, err := claudeadapter.ParseReader(bytes.NewReader(raw))
+	if err != nil || (input.HookEventName != "PreToolUse" && input.HookEventName != "PostToolUse") || claudeadapter.ValidateEvent(input.HookEventName, input) != nil {
+		return errors.New("qualification hook identity unavailable")
+	}
 	var body bytes.Buffer
-	if err := bound.HandleClaudeHook("PreToolUse", in, &body); err != nil {
+	if err := bound.HandleClaudeHook(input.HookEventName, bytes.NewReader(raw), &body); err != nil {
 		return err
 	}
 	var output map[string]any
 	if json.Unmarshal(body.Bytes(), &output) != nil {
 		return errors.New("canonical hook output unavailable")
 	}
-	output["systemMessage"] = "maestro_native_canonical_hook:" + nonce
+	output["systemMessage"] = qualificationHookMessage(input.HookEventName, input.SessionID, input.ToolUseID, input.ToolName, nonce)
 	return json.NewEncoder(out).Encode(output)
+}
+
+// The canonical JSON array is length-delimited and binds only validated native
+// identities. Neither tool content nor a raw identity enters the marker.
+func qualificationHookMessage(event, session, tool, name, nonce string) string {
+	body, _ := json.Marshal([6]string{"maestro.native.qualification-hook.v1", event, session, tool, name, nonce})
+	return fmt.Sprintf("maestro_native_canonical_hook:v1:%x", sha256.Sum256(body))
 }
 
 // QualificationScopeGuard limits only the experiment's effects. Its permitted

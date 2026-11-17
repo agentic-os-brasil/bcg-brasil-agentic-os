@@ -250,13 +250,15 @@ func syntheticNativeStream(t *testing.T, p nativeProbe) []byte {
 		var err error
 		if event == "SessionStart" {
 			err = CheckNativeStartup(p.binding, p.nonce, bytes.NewReader(base(event, extra)), &out)
-		} else if event == "PreToolUse" {
-			var scoped bytes.Buffer
-			if err := QualificationScopeGuard(p.binding, p.challenge, p.outside, bytes.NewReader(base(event, extra)), &scoped); err != nil {
-				t.Fatal(err)
-			}
-			if string(bytes.TrimSpace(scoped.Bytes())) != "{}" {
-				t.Fatalf("scope instrumentation masked a reviewed control: %s", scoped.Bytes())
+		} else if event == "PreToolUse" || event == "PostToolUse" {
+			if event == "PreToolUse" {
+				var scoped bytes.Buffer
+				if err := QualificationScopeGuard(p.binding, p.challenge, p.outside, bytes.NewReader(base(event, extra)), &scoped); err != nil {
+					t.Fatal(err)
+				}
+				if string(bytes.TrimSpace(scoped.Bytes())) != "{}" {
+					t.Fatalf("scope instrumentation masked a reviewed control: %s", scoped.Bytes())
+				}
 			}
 			err = QualificationHook(p.binding, p.nonce, bytes.NewReader(base(event, extra)), &out)
 		} else {
@@ -428,7 +430,11 @@ func testNativeControlledSessions(t *testing.T, managed bool) {
 			if kind == "partial" {
 				wantCalls = 2
 			}
-			if err != nil || result.State != "unavailable" || result.EvidenceClass != "not_observed" || calls != wantCalls || result.EstimatedSpendComplete || result.EstimatedSpendSessions != wantCalls-1 {
+			wantSessions, wantComplete := wantCalls, true
+			if kind == "transport" || kind == "typed_exit" {
+				wantSessions, wantComplete = wantCalls-1, false
+			}
+			if err != nil || result.State != "unavailable" || result.EvidenceClass != "not_observed" || calls != wantCalls || result.EstimatedSpendComplete != wantComplete || result.EstimatedSpendSessions != wantSessions {
 				t.Fatalf("failed %s session changed fallback/cost availability or retried: %+v %v", kind, result, err)
 			}
 			path := filepath.Join(result.ScratchDirectory, fmt.Sprint(calls-1), "failure.json")
@@ -461,8 +467,8 @@ func testNativeControlledSessions(t *testing.T, managed bool) {
 			if kind == "result" && (diagnostic["result_kind"] != "other" || diagnostic["result_seen"] != true || diagnostic["result_accepted"] != false) {
 				t.Fatal("rejected result lost safe closed diagnostic kind")
 			}
-			if kind == "partial" && (diagnostic["phase"] != "controls" || diagnostic["read_observed"] != false || diagnostic["write_observed"] != true || result.EstimatedSpendUSD != 0.01) {
-				t.Fatal("partial controls or verified-only aggregate became misleading")
+			if kind == "partial" && (diagnostic["phase"] != "controls" || diagnostic["read_observed"] != false || diagnostic["write_observed"] != true || result.EstimatedSpendUSD != 0.02) {
+				t.Fatal("partial controls or known aggregate became misleading")
 			}
 			packet, err := os.ReadFile(filepath.Join(failed.Packet.Destination, "maestro-packet.json"))
 			var manifest nativePacketManifest
@@ -496,7 +502,7 @@ func TestNativeProofRejectsAssistantClaimsAndMissingPositiveEvidence(t *testing.
 	}
 	var diagnostic nativeFailureDiagnostic
 	detailed, err := verifyNativeProbeDetailed(body, p, true, &diagnostic)
-	if err != nil || detailed != proof || !diagnostic.ResultAccepted || !diagnostic.CostAvailable || diagnostic.EstimatedCostUSD == nil || !diagnostic.CanonicalFlowObserved {
+	if err != nil || detailed != proof || !diagnostic.ResultAccepted || !diagnostic.CostAvailable || diagnostic.EstimatedCostUSD == nil || !diagnostic.CanonicalFlowObserved || diagnostic.CanonicalFlowCheck != "observed" {
 		t.Fatal("diagnostic path changed accepted proof or lost observations")
 	}
 	zeroCost := bytes.ReplaceAll(body, []byte(`"total_cost_usd":0.01`), []byte(`"total_cost_usd":0`))

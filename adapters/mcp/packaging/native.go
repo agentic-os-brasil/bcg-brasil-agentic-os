@@ -303,6 +303,11 @@ func qualifyAndBuildNative(ctx context.Context, in NativeOptions, reviewDigest s
 		cancel()
 		var diagnostic nativeFailureDiagnostic
 		evidence, err := verifyNativeProbeDetailed(output, probe, index == 0, &diagnostic)
+		if diagnostic.CostAvailable && diagnostic.EstimatedCostUSD != nil {
+			result.EstimatedSpendUSD += *diagnostic.EstimatedCostUSD
+			result.EstimatedSpendSessions++
+			result.EstimatedSpendComplete = result.EstimatedSpendSessions == result.CallsAttempted
+		}
 		if timedOut || callErr != nil || err != nil {
 			result.Reason = "native_challenge_evidence_incomplete"
 			if timedOut {
@@ -313,9 +318,6 @@ func qualifyAndBuildNative(ctx context.Context, in NativeOptions, reviewDigest s
 			}
 			return result, buildUnavailable(o, result.Reason)
 		}
-		result.EstimatedSpendUSD += evidence.Cost
-		result.EstimatedSpendSessions++
-		result.EstimatedSpendComplete = result.EstimatedSpendSessions == result.CallsAttempted
 		if evidence.Cost > in.MaxBudgetUSD {
 			result.Reason = "native_estimate_exceeded_reviewed_per_call_limit"
 			diagnostic.FailureCode = "reviewed_estimate_exceeded"
@@ -373,7 +375,7 @@ func writeNativeFailure(probe nativeProbe, d nativeFailureDiagnostic, attempt in
 	} else if runnerErr != nil {
 		d.Phase, d.FailureCode = "execution", "runner_failed"
 	}
-	body, err := json.MarshalIndent(d, "", "  ")
+	body, err := json.Marshal(d)
 	if err != nil || len(body)+1 > 4096 {
 		return errors.New("native failure diagnostic unavailable")
 	}
@@ -522,6 +524,8 @@ func prepareNativeProbe(o Options, root, challenge string, index int, fault stri
 	pre := hooks["PreToolUse"].([]any)
 	canonical := pre[0].(map[string]any)["hooks"].([]any)[0].(map[string]any)
 	canonical["args"] = append([]string{"native-qualification-hook", "--nonce", p.nonce}, args(candidate)[1:]...)
+	post := hooks["PostToolUse"].([]any)[0].(map[string]any)["hooks"].([]any)[0].(map[string]any)
+	post["args"] = append([]string{"native-qualification-hook", "--nonce", p.nonce}, args(candidate)[1:]...)
 	scopeArgs := append([]string{"native-scope-guard", "--challenge-directory", p.challenge, "--outside-probe-path", p.outside}, args(candidate)[1:]...)
 	scope := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/" + binaryName(o.target.Platform()), "args": scopeArgs, "timeout": 5, "onFailure": "block"}}}
 	hooks["PreToolUse"] = append(pre, scope, hook)

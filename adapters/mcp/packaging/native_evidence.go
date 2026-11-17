@@ -7,6 +7,7 @@ import (
 	"errors"
 	"math"
 	"path/filepath"
+	"strings"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/nativeagentflow"
@@ -32,7 +33,7 @@ type nativeTool struct {
 	name, path                                                                                  string
 	result, denied, allowed, postObserved, hookFailure, blocked, errorResult, canonicalObserved bool
 }
-type nativeHook struct{ event, name, tool string }
+type nativeHook struct{ event, name, tool, lastResult string }
 type streamMessage struct {
 	Type      string   `json:"type"`
 	Subtype   string   `json:"subtype"`
@@ -63,34 +64,80 @@ type streamMessage struct {
 
 // Failure diagnostics contain only closed metadata derived by this same verifier.
 // They are observations, never importable qualification or permission authority.
+type nativeStartupObservation struct {
+	Outcome      string `json:"outcome"`
+	Marker       string `json:"marker"`
+	NonceMatched bool   `json:"nonce_matched"`
+	ExitCode     *int   `json:"exit_code"`
+}
+type nativeStartupDiagnostic struct {
+	Starts       int                        `json:"starts"`
+	Responses    int                        `json:"responses"`
+	Observations []nativeStartupObservation `json:"observations"`
+	Capped       bool                       `json:"capped"`
+}
+type nativeReadObservation struct {
+	CanonicalPre     bool `json:"canonical_pre"`
+	Post             bool `json:"post"`
+	Result           bool `json:"result"`
+	SyntheticContent bool `json:"synthetic_content"`
+	Denied           bool `json:"denied"`
+	ErrorResult      bool `json:"error_result"`
+}
+type nativeReadDiagnostic struct {
+	Attempts     int                     `json:"attempts"`
+	Observations []nativeReadObservation `json:"observations"`
+	Truncated    bool                    `json:"truncated"`
+}
+
+type nativePostObservation struct {
+	Outcome    string `json:"outcome"`
+	Binding    string `json:"binding"`
+	Tool       string `json:"tool"`
+	LatestTool string `json:"latest_tool"`
+	LastResult string `json:"last_result"`
+	ExitCode   *int   `json:"exit_code"`
+}
+type nativePostDiagnostic struct {
+	Starts       int                     `json:"starts"`
+	Responses    int                     `json:"responses"`
+	Uncorrelated int                     `json:"uncorrelated"`
+	Observations []nativePostObservation `json:"observations"`
+	Capped       bool                    `json:"capped"`
+}
+
 type nativeFailureDiagnostic struct {
-	SchemaVersion         int      `json:"schema_version"`
-	AttemptIndex          int      `json:"attempt_index"`
-	Phase                 string   `json:"phase"`
-	FailureCode           string   `json:"failure_code"`
-	TimedOut              bool     `json:"timed_out"`
-	Canceled              bool     `json:"canceled"`
-	RunnerError           bool     `json:"runner_error"`
-	ExitCode              *int     `json:"exit_code"`
-	StreamReceived        bool     `json:"stream_received"`
-	ParseComplete         bool     `json:"parse_complete"`
-	ResultSeen            bool     `json:"result_seen"`
-	ResultAccepted        bool     `json:"result_accepted"`
-	ResultIsError         bool     `json:"result_is_error"`
-	ResultKind            string   `json:"result_kind"`
-	CostAvailable         bool     `json:"cost_available"`
-	EstimatedCostUSD      *float64 `json:"estimated_cost_usd"`
-	StartupObserved       bool     `json:"startup_observed"`
-	ReadObserved          bool     `json:"read_observed"`
-	WriteObserved         bool     `json:"write_observed"`
-	GuardDenialObserved   bool     `json:"guard_denial_observed"`
-	FaultAttemptObserved  bool     `json:"fault_attempt_observed"`
-	FaultBlockObserved    bool     `json:"fault_block_observed"`
-	StopObserved          bool     `json:"stop_observed"`
-	CanonicalFlowObserved bool     `json:"canonical_flow_observed"`
-	SubagentStarts        int      `json:"subagent_starts"`
-	SubagentStops         int      `json:"subagent_stops"`
-	LifecycleCountsCapped bool     `json:"lifecycle_counts_capped"`
+	SchemaVersion         int                     `json:"schema_version"`
+	AttemptIndex          int                     `json:"attempt_index"`
+	Phase                 string                  `json:"phase"`
+	FailureCode           string                  `json:"failure_code"`
+	TimedOut              bool                    `json:"timed_out"`
+	Canceled              bool                    `json:"canceled"`
+	RunnerError           bool                    `json:"runner_error"`
+	ExitCode              *int                    `json:"exit_code"`
+	StreamReceived        bool                    `json:"stream_received"`
+	ParseComplete         bool                    `json:"parse_complete"`
+	ResultSeen            bool                    `json:"result_seen"`
+	ResultAccepted        bool                    `json:"result_accepted"`
+	ResultIsError         bool                    `json:"result_is_error"`
+	ResultKind            string                  `json:"result_kind"`
+	CostAvailable         bool                    `json:"cost_available"`
+	EstimatedCostUSD      *float64                `json:"estimated_cost_usd"`
+	StartupObserved       bool                    `json:"startup_observed"`
+	Startup               nativeStartupDiagnostic `json:"startup"`
+	ReadObserved          bool                    `json:"read_observed"`
+	Read                  nativeReadDiagnostic    `json:"read"`
+	Post                  nativePostDiagnostic    `json:"post"`
+	WriteObserved         bool                    `json:"write_observed"`
+	GuardDenialObserved   bool                    `json:"guard_denial_observed"`
+	FaultAttemptObserved  bool                    `json:"fault_attempt_observed"`
+	FaultBlockObserved    bool                    `json:"fault_block_observed"`
+	StopObserved          bool                    `json:"stop_observed"`
+	CanonicalFlowObserved bool                    `json:"canonical_flow_observed"`
+	CanonicalFlowCheck    string                  `json:"canonical_flow_check"`
+	SubagentStarts        int                     `json:"subagent_starts"`
+	SubagentStops         int                     `json:"subagent_stops"`
+	LifecycleCountsCapped bool                    `json:"lifecycle_counts_capped"`
 }
 
 func verifyNativeProbe(body []byte, p nativeProbe, full bool) (nativeProof, error) {
@@ -98,7 +145,7 @@ func verifyNativeProbe(body []byte, p nativeProbe, full bool) (nativeProof, erro
 }
 func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic *nativeFailureDiagnostic) (nativeProof, error) {
 	proof := nativeProof{Protocol: qualificationProtocol, Fault: p.fault}
-	d := nativeFailureDiagnostic{SchemaVersion: 1, Phase: "stream", ResultKind: "absent", StreamReceived: len(body) != 0}
+	d := nativeFailureDiagnostic{SchemaVersion: 1, Phase: "stream", ResultKind: "absent", CanonicalFlowCheck: "not_reached", StreamReceived: len(body) != 0}
 	reject := func(code string, err error) error { d.FailureCode = code; return err }
 	defer func() {
 		if diagnostic != nil {
@@ -109,20 +156,39 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 		return proof, reject("stream_too_large", errors.New("native stream too large"))
 	}
 	tools := map[string]*nativeTool{}
+	// Retain bounded references so final flags use the same correlated calls.
+	var reads []*nativeTool
 	hooks := map[string]nativeHook{}
 	seenMessages := map[string]bool{}
 	active := ""
+	lastResult := ""
+	attestations := map[string]nativeHook{}
 	starts, stops := 0, 0
 	resultSeen := false
 	stopSeen := false
 	defer func() {
 		observed := proof
 		observeNativeControls(&observed, tools, p)
+		for _, tool := range reads {
+			d.Read.Observations = append(d.Read.Observations, nativeReadObservation{CanonicalPre: tool.canonicalObserved, Post: tool.postObserved, Result: tool.result, SyntheticContent: tool.allowed, Denied: tool.denied, ErrorResult: tool.errorResult})
+		}
 		d.StartupObserved = observed.StartupUnchanged
 		d.ReadObserved, d.WriteObserved = observed.AllowedRead, observed.AllowedWrite
 		d.GuardDenialObserved = observed.GuardDenied
 		d.FaultAttemptObserved, d.FaultBlockObserved = observed.FaultAttempted, observed.FaultBlocked
 		d.StopObserved = stopSeen
+		for _, count := range []*int{&d.Post.Starts, &d.Post.Responses, &d.Post.Uncorrelated} {
+			if *count > 32 {
+				*count = 32
+				d.Post.Capped = true
+			}
+		}
+		if d.Startup.Starts > 32 {
+			d.Startup.Starts, d.Startup.Capped = 32, true
+		}
+		if d.Startup.Responses > 32 {
+			d.Startup.Responses, d.Startup.Capped = 32, true
+		}
 		d.SubagentStarts, d.SubagentStops = starts, stops
 		if d.SubagentStarts > 32 {
 			d.SubagentStarts = 32
@@ -199,6 +265,17 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 					return proof, reject("tool_deviated_from_reviewed_protocol", errors.New("native tool deviated from reviewed protocol"))
 				}
 				tools[content.ID] = &nativeTool{name: content.Name, path: input.Path}
+				for _, event := range []string{"PreToolUse", "PostToolUse"} {
+					attestations[qualificationHookMessage(event, p.session, content.ID, content.Name, p.nonce)] = nativeHook{event: event, tool: content.ID}
+				}
+				if content.Name == "Read" && filepath.Clean(path) == filepath.Join(p.challenge, "allowed.txt") {
+					d.Read.Attempts++
+					if len(reads) < 8 {
+						reads = append(reads, tools[content.ID])
+					} else {
+						d.Read.Truncated = true
+					}
+				}
 				active = content.ID
 			}
 		case "user":
@@ -214,6 +291,7 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 					return proof, reject("duplicate_tool_result", errors.New("native duplicate tool result"))
 				}
 				tool.result = true
+				lastResult = content.ToolUseID
 				if content.IsError {
 					tool.errorResult = true
 					marker := "native-fault"
@@ -232,22 +310,51 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 				if m.Session != p.session || m.UUID == "" || m.HookID == "" || m.HookName == "" || hooks[m.HookID].event != "" {
 					return proof, reject("hook_identity_invalid", errors.New("native hook identity invalid"))
 				}
-				hooks[m.HookID] = nativeHook{m.HookEvent, m.HookName, active}
+				hooks[m.HookID] = nativeHook{m.HookEvent, m.HookName, active, lastResult}
+				if m.HookEvent == "PostToolUse" {
+					d.Post.Starts++
+				}
+				if m.HookEvent == "SessionStart" {
+					d.Startup.Starts++
+				}
 			}
 			if m.Subtype != "hook_response" {
 				continue
 			}
 			hook, ok := hooks[m.HookID]
 			if !ok || m.Session != p.session || m.UUID == "" || hook.event != m.HookEvent || hook.name != m.HookName {
+				if m.HookEvent == "PostToolUse" {
+					d.Post.Uncorrelated++
+				}
 				return proof, reject("uncorrelated_hook_response", errors.New("native uncorrelated hook response"))
 			}
 			delete(hooks, m.HookID)
-			if m.HookEvent == "SessionStart" && m.Outcome == "success" {
+			if m.HookEvent == "SessionStart" {
+				d.Startup.Responses++
+				observation := nativeStartupObservation{Outcome: "other", Marker: "malformed", ExitCode: m.ExitCode}
+				switch m.Outcome {
+				case "success", "error", "cancelled":
+					observation.Outcome = m.Outcome
+				}
 				var output struct {
 					Message string `json:"systemMessage"`
 				}
-				if json.Unmarshal([]byte(m.Stdout), &output) == nil && output.Message == "maestro_native_startup_unchanged:"+p.nonce {
+				if json.Unmarshal([]byte(m.Stdout), &output) == nil {
+					observation.Marker = "other"
+					if output.Message == "" {
+						observation.Marker = "missing"
+					} else if strings.HasPrefix(output.Message, "maestro_native_startup_unchanged:") {
+						observation.Marker = "startup"
+					}
+					observation.NonceMatched = output.Message == "maestro_native_startup_unchanged:"+p.nonce
+				}
+				if m.Outcome == "success" && observation.NonceMatched {
 					proof.StartupUnchanged = true
+				}
+				if len(d.Startup.Observations) < 8 {
+					d.Startup.Observations = append(d.Startup.Observations, observation)
+				} else {
+					d.Startup.Capped = true
 				}
 			}
 			if m.HookEvent == "SubagentStart" && m.Outcome == "success" {
@@ -259,32 +366,53 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 			if m.HookEvent == "Stop" && m.Outcome == "success" {
 				stopSeen = true
 			}
-			tool := tools[hook.tool]
-			if tool == nil {
-				continue
+			latest := tools[hook.tool]
+			var output struct {
+				Message  string `json:"systemMessage"`
+				Specific struct {
+					Decision string `json:"permissionDecision"`
+				} `json:"hookSpecificOutput"`
 			}
-			if m.HookEvent == "PreToolUse" && m.Outcome == "success" {
-				var output struct {
-					Message  string `json:"systemMessage"`
-					Specific struct {
-						Decision string `json:"permissionDecision"`
-					} `json:"hookSpecificOutput"`
+			var tool *nativeTool
+			if json.Unmarshal([]byte(m.Stdout), &output) == nil {
+				if attested, ok := attestations[output.Message]; ok && attested.event == m.HookEvent {
+					tool = tools[attested.tool]
 				}
-				if json.Unmarshal([]byte(m.Stdout), &output) == nil && output.Message == "maestro_native_canonical_hook:"+p.nonce {
+			}
+			if m.HookEvent == "PostToolUse" {
+				d.Post.Responses++
+				o := nativePostObservation{Outcome: "other", Binding: "unattested", Tool: nativeControlKind(tool, p), LatestTool: nativeControlKind(latest, p), LastResult: nativeControlKind(tools[hook.lastResult], p), ExitCode: m.ExitCode}
+				switch m.Outcome {
+				case "success", "error", "cancelled":
+					o.Outcome = m.Outcome
+				}
+				if tool != nil {
+					o.Binding = "exact"
+				}
+				if len(d.Post.Observations) < 4 {
+					d.Post.Observations = append(d.Post.Observations, o)
+				} else {
+					d.Post.Capped = true
+				}
+			}
+			if tool != nil && m.Outcome == "success" && m.ExitCode != nil && *m.ExitCode == 0 {
+				if m.HookEvent == "PreToolUse" {
 					tool.canonicalObserved = true
 					if output.Specific.Decision == "deny" {
 						tool.denied = true
 					}
 				}
+				if m.HookEvent == "PostToolUse" && (tool.name == "Read" || tool.name == "Write") {
+					tool.postObserved = true
+				}
 			}
-			if m.HookEvent == "PostToolUse" && m.Outcome == "success" && (tool.name == "Read" || tool.name == "Write") {
-				tool.postObserved = true
-			}
-			if m.HookEvent == "PostToolUse" && tool.name == "Edit" {
+			// Untagged experiment fault hooks retain only their conservative
+			// failure context; they never supply canonical pre/post success.
+			if m.HookEvent == "PostToolUse" && ((tool != nil && tool.name == "Edit") || (tool == nil && latest != nil && latest.name == "Edit")) {
 				return proof, reject("failed_guard_allowed_edit_execution", errors.New("native failed guard allowed edit execution"))
 			}
-			if m.HookEvent == "PreToolUse" && tool.name == "Edit" && (m.Outcome == "error" || m.Outcome == "cancelled") && (m.ExitCode != nil && *m.ExitCode != 0 || m.Outcome == "cancelled") {
-				tool.hookFailure = true
+			if m.HookEvent == "PreToolUse" && latest != nil && latest.name == "Edit" && (m.Outcome == "error" || m.Outcome == "cancelled") && (m.ExitCode != nil && *m.ExitCode != 0 || m.Outcome == "cancelled") {
+				latest.hookFailure = true
 			}
 
 		case "result":
@@ -328,6 +456,7 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 	}
 
 	d.Phase = "canonical_flow"
+	d.CanonicalFlowCheck = "unavailable"
 	h, err := datahome.Resolve(datahome.Options{ProductRoot: p.binding.ProductRoot, UserHome: p.binding.UserHome, LookupEnv: p.binding.LookupEnv})
 	if err != nil {
 		return proof, reject("canonical_home_unavailable", err)
@@ -348,6 +477,7 @@ func verifyNativeProbeDetailed(body []byte, p nativeProbe, full bool, diagnostic
 		return proof, reject("canonical_route_incomplete", errors.New("native canonical route incomplete"))
 	}
 	d.CanonicalFlowObserved = true
+	d.CanonicalFlowCheck = "observed"
 	if full {
 		if !proof.GuardDenied || starts != 2 || stops != 2 || !state.CaseStopObserved || state.LastAgentType != "gamma-guardian" || state.TransitionCount != 4 {
 			return proof, reject("route_events_incomplete", errors.New("native route events incomplete"))
@@ -377,4 +507,24 @@ func observeNativeControls(proof *nativeProof, tools map[string]*nativeTool, p n
 			proof.FaultBlocked = tool.canonicalObserved && !tool.denied && tool.hookFailure && tool.blocked && tool.result
 		}
 	}
+}
+
+func nativeControlKind(tool *nativeTool, p nativeProbe) string {
+	if tool == nil {
+		return "unbound"
+	}
+	path := tool.path
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(p.binding.WorkspacePath, path)
+	}
+	if tool.name == "Read" && filepath.Clean(path) == filepath.Join(p.challenge, "allowed.txt") {
+		return "allowed_read"
+	}
+	if tool.name == "Write" && filepath.Clean(path) == filepath.Join(p.challenge, "allowed-write.txt") {
+		return "allowed_write"
+	}
+	if tool.name == "Edit" {
+		return "edit"
+	}
+	return "other"
 }
