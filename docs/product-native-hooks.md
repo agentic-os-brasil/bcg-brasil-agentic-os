@@ -101,12 +101,21 @@ The finite installed-plugin profile supports one exact user-scoped
 `maestro-product@<origin>` installation from the actual configuration's registry.
 Its complete canonical packet, server digest, physical root and any bound
 owner/workspace selection must match. Unknown IDs, additional physical
-candidates, project/local installation scopes, discovered/synced plugins,
+candidates, project/local installation scopes, active discovered/synced plugins,
 unsafe aliases and unsupported source controls remain explicit refusals.
 Nonempty user/project/local hook groups outside the plugin are also unsupported;
 the producer cannot close arbitrary external scripts from a settings hash.
 Empty maps/event lists remain harmless. This is not general third-party plugin compatibility. The producer never changes
 an owner's profile to make it pass.
+
+A pre-existing stored `syncClaudeAiPlugins:false` in user, local or managed
+settings makes the synced cache inactive. Eligible false wins over true;
+shared-project false alone is ignored. Code supports this behavior from
+2.1.273, below the current enforcement minimum 2.1.295. Native review still
+binds the cache's bounded direct membership and refuses unsafe roots/aliases,
+invalid settings and other active plugin/hook sources. It does not read inactive
+plugin bodies or create a sync override. See the [official setting contract](https://code.claude.com/docs/en/settings-reference#syncclaudeaiplugins)
+and [restrictive precedence](https://code.claude.com/docs/en/settings#exceptions-to-managed-settings-precedence).
 
 If that verified installation would load alongside the new candidate, review
 shows `session_settings_override` disabling only the installed ID for the three

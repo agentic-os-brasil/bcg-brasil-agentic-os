@@ -14,6 +14,11 @@ O relatório automático registra a conexão MCP que ele próprio testou. Login,
 
 **Code no Windows:** as opções automáticas 1 e 3 exigem a instalação nativa `claude.exe` no PATH, pelo fluxo normal autorizado. Instalações que só oferecem `.cmd`, `.bat` ou `.ps1` não recebem o prompt automático. Como alternativa manual, abra **Abrir Code.cmd** sem argumentos e cole o texto `CODE.txt` (opção 1) ou `CODE-CONEXAO.txt` (opção 3) salvo no diagnóstico atual. A abertura comum continua disponível; o kit não instala nem altera o cliente.
 
+O perfil Code deste ensaio é separado. Ao criar um perfil novo, o preparador
+desativa somente nele a memória automática do cliente e os plugins sincronizados
+da conta; a memória do Maestro continua disponível. Essa escolha aparece antes
+de PREPARAR. Repetir a preparação preserva suas configurações e login existentes.
+
 O Code abre com `--plugin-dir` e um `CLAUDE_CONFIG_DIR` específico deste ensaio. O preparador não instala plugins no seu perfil normal. O plugin já usa as pastas aprovadas na preparação, sem diretórios para preencher. Se aparecer uma solicitação de configurar outros caminhos, preserve a mensagem e pare.
 
 Ao escolher Desktop em **Testar Maestro**, confirme a instalação da extensão **Maestro MCP — Ensaio …** indicada no relatório. Ela já usa as pastas aprovadas na preparação; não há caminhos para copiar ou campos de diretório para salvar. Antes de colar, abra **Configurações → Extensões → a extensão deste ensaio** e, somente na linha **Maestro context** (`maestro_context`), selecione **✓ / Sempre permitir**. Preserve as demais permissões. ✓ / Sempre permitir libera só a leitura; gravações de conteúdo exigem revisão exata no formulário nativo ou no navegador local selecionado neste ensaio. Abra uma conversa nova e cole o texto copiado. Se a extensão estiver desativada ou não aparecer, confira **Configurações → Extensões → Configurar → Ativado** nessa extensão. Preserve outras extensões Maestro e pare se o cliente propuser substituir uma de outro ensaio. A etapa termina quando o prompt responder com o workspace esperado, não apenas quando a chave aparecer ativada.

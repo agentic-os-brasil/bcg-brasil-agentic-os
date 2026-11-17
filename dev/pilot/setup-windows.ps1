@@ -58,6 +58,7 @@ if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) { Fail 'Este artefato 
 $digest = Hash-Text ('ordinary-engineering-rehearsal-v1' + $nl + $KitID + $nl + $Target + $nl + $Root + $nl)
 Write-Host 'Ensaio local de engenharia; sem instalação/atualização assinada.'
 Write-Host ("Produto: $Root\product" + $nl + "Estado privado: $Root\owner" + $nl + "Workspace: $Root\workspace" + $nl + "Perfil Code isolado: $Root\client\code" + $nl + "review_digest=$digest")
+Write-Host 'Somente ao criar este perfil Code novo: autoMemoryEnabled:false e syncClaudeAiPlugins:false desativam a memória automática do cliente e o download/carregamento de plugins sincronizados da conta. Perfis existentes e suas escolhas são preservados.'
 Write-Host 'O pacote Desktop usará revisão local no navegador quando não houver formulário nativo; cada alteração exige sua aprovação exata e expira em 150 segundos.'
 if ($Review) { return }
 if ($ConfirmDigest) {
@@ -97,6 +98,7 @@ if (Test-Path -LiteralPath $Root) {
 New-Item -ItemType Directory -Path $Root | Out-Null
 Write-New $marker ($KitID + $nl)
 foreach ($folder in @('product','owner','exports','launchers','client','client/code')) { New-Item -ItemType Directory -Path (Join-Path $Root $folder) | Out-Null }
+Write-New (Join-Path $Root 'client/code/settings.json') ('{"autoMemoryEnabled":false,"syncClaudeAiPlugins":false}' + $nl)
 [IO.File]::Copy($binary, $bin, $false)
 $binaryLine = @(Get-Content -LiteralPath (Join-Path $Kit 'SHA256SUMS') | Where-Object { $_ -cmatch '^[0-9a-f]{64}  \./bin/maestro-mcp-windows-amd64\.exe$' })
 if ($binaryLine.Count -ne 1 -or (Get-FileHash -LiteralPath $bin -Algorithm SHA256).Hash.ToLowerInvariant() -cne $binaryLine[0].Substring(0,64)) { Fail 'O executável copiado mudou; preserve o ensaio.' }
@@ -189,8 +191,10 @@ claude.exe no PATH, obtida pelo fluxo normal autorizado. Com somente um shim
 Abrir Code sem argumentos e copie o texto CODE.txt ou CODE-CONEXAO.txt do
 relatório atual em diagnostics para a conversa. O kit não instala o cliente.
 
-O perfil Code é separado e pode pedir login normal nessa janela. O plugin e a
-extensão já usam as pastas aprovadas; não há diretórios para copiar ou preencher.
+O perfil Code é separado e pode pedir login normal nessa janela. Ao criar um perfil
+novo, este ensaio desativa a memória automática do cliente e os plugins sincronizados
+da conta somente nesse perfil. Repetir a preparação preserva suas escolhas existentes.
+O plugin e a extensão já usam as pastas aprovadas; não há diretórios para copiar ou preencher.
 Se o cliente pedir configurar outros caminhos, preserve a mensagem e pare.
 
 Para Desktop, escolha 4 para conferir somente a conexão ou 2 para retomar o ensaio

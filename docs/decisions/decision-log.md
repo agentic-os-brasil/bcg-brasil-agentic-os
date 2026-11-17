@@ -1528,3 +1528,14 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: Unconfigured and unattended callers remain fail-closed. Decline, cancellation, expiry and browser errors grant no authority. Browser review is a local operator channel, not native MCP form or lifecycle qualification. The ephemeral listener installs no service and emits no reusable approval token. Rebuilding a local pilot is required to adopt its explicit startup selection.
 - Refs: docs/product-local-owner-review.md; adapters/mcp/confirmation.go; adapters/mcp/internal/localreview; adapters/mcp/packaging/desktop_pilot.go
 - Supersedes: none
+
+## NSYN - Admit explicitly inactive synced caches and seed dedicated pilot profiles
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: A dedicated Code profile can contain a cloud-synced plugin cache. Its presence alone does not establish that Code loads it when a supported stored setting explicitly disables sync and loading. Fresh pilot profiles previously left this choice implicit.
+- Decision: Admit bounded synced-cache root membership only when an applicable stored user, local or managed syncClaudeAiPlugins:false disables loading on the supported host. Shared-project false does not grant admission; eligible false wins over true. Preserve all other source admission, exact fingerprints and review/build revalidation. Seed autoMemoryEnabled:false and syncClaudeAiPlugins:false only while creating a new dedicated pilot Code profile, disclose this choice before confirmation and preserve every existing profile.
+- Consequences: The qualifier creates no sync override or profile repair and does not inspect inactive plugin bodies. Active or ambiguous sources still refuse; malformed settings and unsafe roots remain unsupported. The current enforcement minimum 2.1.295 exceeds the setting support minimum 2.1.273. This does not continuously validate configuration after packet construction or qualify ordinary active third-party plugins, native clients or managed remote policy.
+- Refs: specs/063-product-native-plugin.md; docs/product-native-plugin.md; docs/product-pilot.md; adapters/mcp/packaging/native_instructions.go; adapters/mcp/packaging/native_plugins.go; dev/pilot/setup-macos.command; dev/pilot/setup-windows.ps1; https://code.claude.com/docs/en/settings-reference#syncclaudeaiplugins; https://code.claude.com/docs/en/settings#exceptions-to-managed-settings-precedence
+- Supersedes: none
