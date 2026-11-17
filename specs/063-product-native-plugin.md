@@ -57,6 +57,12 @@ UserPromptSubmit emits metadata only and does not enter native agent-flow
 admission. Stop respects recursion and records only a confined typed lifecycle
 observation; it cannot invoke the enforcing unresolved-route Stop path.
 
+After explicit capture setup, this same Stop observation may also queue a
+closed body-free provenance envelope outside canonical memory. Missing
+authority never creates a key. This preserves `observed_only` evidence and
+does not attest host invocation or completed work. Only the separately reviewed
+and enrolled capture job may ingest it; the hook never captures memory itself.
+
 Filesystem creation belongs to explicit setup through the existing datahome,
 workspace, owner and memory initialization owners. Repeat preparation preserves
 existing content and keys. Startup, prompt and stop never initialize or repair

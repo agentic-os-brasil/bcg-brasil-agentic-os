@@ -45,6 +45,16 @@ func (s *Service) Report(job string) (ProductDomainReport, error) {
 		return out, err
 	}
 	switch {
+	case job == MemoryCaptureJobID:
+		r, _, err := s.readCaptureReport("")
+		if err != nil {
+			return out, err
+		}
+		out.Finding = "body_free_signals_captured"
+		out.ObservedAt = r.RecordedAt
+		out.Counts = map[string]int{"captures": len(r.Captures), "observed_only": r.ObservedOnly, "committed_results": r.CommittedResults}
+		out.NativeObservation = "not_observed"
+		return out, nil
 	case DarwinJob(job):
 		if s.darwin == nil {
 			return out, errors.New("Darwin product binding unavailable")

@@ -93,21 +93,22 @@ type ProductReview struct {
 }
 
 type ProductQualification struct {
-	EventID        string    `json:"event_id,omitempty"`
-	ID             string    `json:"id"`
-	WorkspaceID    string    `json:"workspace_id"`
-	JobID          string    `json:"job_id"`
-	Binding        string    `json:"binding"`
-	Implementation string    `json:"implementation"`
-	Configuration  string    `json:"configuration"`
-	Adapter        string    `json:"adapter"`
-	Platform       string    `json:"platform"`
-	Artifact       string    `json:"artifact"`
-	ArtifactSHA256 string    `json:"artifact_sha256"`
-	Receipt        Receipt   `json:"receipt"`
-	ScheduledFor   time.Time `json:"scheduled_for"`
-	RequestedAt    time.Time `json:"requested_at"`
-	VerifiedAt     time.Time `json:"verified_at"`
+	EventID        string             `json:"event_id,omitempty"`
+	ID             string             `json:"id"`
+	WorkspaceID    string             `json:"workspace_id"`
+	JobID          string             `json:"job_id"`
+	Binding        string             `json:"binding"`
+	Implementation string             `json:"implementation"`
+	Configuration  string             `json:"configuration"`
+	Adapter        string             `json:"adapter"`
+	Platform       string             `json:"platform"`
+	Artifact       string             `json:"artifact"`
+	ArtifactSHA256 string             `json:"artifact_sha256"`
+	Receipt        Receipt            `json:"receipt"`
+	ScheduledFor   time.Time          `json:"scheduled_for"`
+	RequestedAt    time.Time          `json:"requested_at"`
+	VerifiedAt     time.Time          `json:"verified_at"`
+	DailyInput     *memory.DailyInput `json:"daily_input,omitempty"`
 }
 
 type ProductJobStatus struct {
@@ -255,7 +256,7 @@ func productDigest(value any) string {
 	return hex.EncodeToString(sum[:])
 }
 func productJob(jobID string) bool {
-	return DarwinJob(jobID) || jobID == MemoryLightDreamJobID || jobID == MemoryCheckpointJobID || jobID == MemoryDeepDreamJobID || jobID == "skills-index-refresh" || diagnosticJob(jobID)
+	return DarwinJob(jobID) || jobID == MemoryCaptureJobID || jobID == MemoryLightDreamJobID || jobID == MemoryCheckpointJobID || jobID == MemoryDeepDreamJobID || jobID == "skills-index-refresh" || diagnosticJob(jobID)
 }
 func (s *Service) configuration(jobID string) string {
 	job, _ := findCatalogJob(s.options.Catalog, jobID)
@@ -549,6 +550,30 @@ type productExecution struct {
 	revision     uint64
 	oneShot      string
 	source       string
+	dailyInput   *memory.DailyInput
+}
+
+func (p *productExecution) selectDailyInput() error {
+	if p.jobID != MemoryLightDreamJobID {
+		return nil
+	}
+	inputs, err := p.service.engine.DailyInputCohort(p.service.workspaceID)
+	if err != nil {
+		return err
+	}
+	if productDigest(inputs) != p.source {
+		return ErrProductConflict
+	}
+	p.dailyInput, err = p.service.engine.PendingDailyInput(p.service.workspaceID, inputs)
+	return err
+}
+
+func (p *productExecution) evidenceAt(at time.Time) time.Time {
+	if p.dailyInput != nil {
+		day, _ := time.Parse("2006-01-02", p.dailyInput.Period)
+		return day
+	}
+	return at
 }
 
 func (p *productExecution) guard(publish func() error) error {
@@ -605,7 +630,7 @@ func (p *productExecution) guardWithControl(ctx context.Context, publish func() 
 				return ErrProductConflict
 			}
 		}
-		if (wikiJob(p.jobID) || p.jobID == UpdateCheckJobID) && p.source != "" {
+		if (wikiJob(p.jobID) || p.jobID == UpdateCheckJobID || p.jobID == MemoryCaptureJobID || p.jobID == MemoryLightDreamJobID) && p.source != "" {
 			current, err := p.service.sourceState(p.jobID)
 			if err != nil || current != p.source {
 				return ErrProductConflict
@@ -635,7 +660,8 @@ func (s *Service) worker(p *productExecution) Worker {
 	weekly := *s.weekly
 	weekly.Now = s.now
 	handlers := map[string]any{
-		MemoryLightDreamJobID:  MemoryLightDreamHandler{Engine: s.engine, ExpectedSourceFingerprint: p.source},
+		MemoryCaptureJobID:     productCaptureHandler{service: s, expected: p.source},
+		MemoryLightDreamJobID:  MemoryLightDreamHandler{Engine: s.engine, ProductSelection: p.source != "", SelectedInput: p.dailyInput},
 		MemoryCheckpointJobID:  MemoryCheckpointHandler{Scheduler: s.scheduler, Store: ContinuityCheckpointStore{Root: s.receipts.Root}, ExpectedSourceFingerprint: p.source},
 		MemoryDeepDreamJobID:   MemoryDeepDreamHandler{Engine: &weekly, ExpectedSourceFingerprint: p.source},
 		"skills-index-refresh": productIndexHandler{service: s, expected: p.source},
@@ -771,11 +797,14 @@ func (s *Service) RunDue(ctx context.Context) (WakeReport, error) {
 				}
 				p.darwinSource = &source
 			}
-			if wikiJob(job.ID) {
+			if wikiJob(job.ID) || job.ID == MemoryCaptureJobID || job.ID == MemoryLightDreamJobID {
 				p.source, err = s.sourceState(job.ID)
 				if err != nil {
 					return report, err
 				}
+			}
+			if err := p.selectDailyInput(); err != nil {
+				return report, err
 			}
 			receipt, err := s.execute(ctx, p, occ, now)
 			report.Receipts = append(report.Receipts, receipt)
@@ -812,8 +841,11 @@ func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatu
 		return ProductJobStatus{}, err
 	}
 	p := &productExecution{service: s, jobID: r.Operation.JobID, revision: revision, oneShot: token, source: r.SourceState}
+	if err := p.selectDailyInput(); err != nil {
+		return ProductJobStatus{}, err
+	}
 	now := s.now().UTC()
-	before, _, beforeErr := s.domainEvidence(p.jobID, now)
+	before, _, beforeErr := s.domainEvidence(p.jobID, p.evidenceAt(now))
 	if beforeErr != nil && !errors.Is(beforeErr, os.ErrNotExist) {
 		return ProductJobStatus{}, beforeErr
 	}
@@ -851,7 +883,7 @@ func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatu
 	if receipt.State != ReceiptSucceeded {
 		return ProductJobStatus{}, ErrQualificationRequired
 	}
-	after, path, err := s.domainEvidence(p.jobID, now)
+	after, path, err := s.domainEvidence(p.jobID, p.evidenceAt(now))
 	if err != nil {
 		return ProductJobStatus{}, err
 	}
@@ -859,6 +891,24 @@ func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatu
 		return ProductJobStatus{}, ErrQualificationRequired
 	}
 	q := ProductQualification{EventID: occ.EventID, WorkspaceID: s.workspaceID, JobID: p.jobID, Binding: s.binding, Implementation: s.build, Configuration: s.configuration(p.jobID), Adapter: s.options.Adapter, Platform: runtime.GOOS + "/" + runtime.GOARCH, Artifact: path, ArtifactSHA256: after, Receipt: receipt, ScheduledFor: occ.ScheduledFor, RequestedAt: now, VerifiedAt: s.now().UTC()}
+	if p.dailyInput != nil {
+		inputs, err := s.engine.DailyInputCohort(s.workspaceID)
+		if err != nil || productDigest(inputs) != p.source {
+			return ProductJobStatus{}, ErrProductConflict
+		}
+		found := false
+		for _, input := range inputs {
+			if input == *p.dailyInput {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return ProductJobStatus{}, ErrQualificationRequired
+		}
+		selected := *p.dailyInput
+		q.DailyInput = &selected
+	}
 	q.ID = productDigest(q)
 	if err := s.verifyQualification(&q); err != nil {
 		return ProductJobStatus{}, err
@@ -882,6 +932,14 @@ func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatu
 func (s *Service) domainEvidence(jobID string, at time.Time) (string, string, error) {
 	var path, ref string
 	switch jobID {
+	case MemoryCaptureJobID:
+		_, p, err := s.readCaptureReport("")
+		if err != nil {
+			return "", "", err
+		}
+		path = p
+		relative, _ := filepath.Rel(s.receipts.Root, path)
+		ref = "maintenance/" + filepath.ToSlash(relative)
 	case MemoryLightDreamJobID:
 		artifact, p, err := s.engine.ActiveArtifact(s.workspaceID, "L1/"+at.UTC().Format("2006-01-02"))
 		if err != nil {
@@ -956,6 +1014,12 @@ func (s *Service) verifyQualification(q *ProductQualification) error {
 	if q == nil {
 		return ErrQualificationRequired
 	}
+	if q.DailyInput != nil {
+		day, err := time.Parse("2006-01-02", q.DailyInput.Period)
+		if q.JobID != MemoryLightDreamJobID || err != nil || day.Format("2006-01-02") != q.DailyInput.Period || !digestPattern.MatchString(q.DailyInput.Fingerprint) {
+			return ErrQualificationRequired
+		}
+	}
 	unsigned := *q
 	unsigned.ID = ""
 	if q.ID != productDigest(unsigned) || q.WorkspaceID != s.workspaceID || q.Binding != s.binding || !productJob(q.JobID) || q.Implementation != s.build || q.Configuration != s.configuration(q.JobID) || q.Adapter != s.options.Adapter || q.Platform != runtime.GOOS+"/"+runtime.GOARCH || q.VerifiedAt.IsZero() || q.RequestedAt.IsZero() || q.ScheduledFor.IsZero() || q.VerifiedAt.Before(q.RequestedAt) {
@@ -975,7 +1039,18 @@ func (s *Service) verifyQualification(q *ProductQualification) error {
 	}
 	var path string
 	prefix := "memory/workspaces/" + s.workspaceID + "/versions/"
-	if q.JobID == MemoryLightDreamJobID {
+	if q.JobID == MemoryCaptureJobID {
+		prefix = "maintenance/workspaces/" + s.workspaceID + "/capture-results/versions/"
+		if !strings.HasPrefix(q.Artifact, prefix) || !strings.HasSuffix(q.Artifact, ".json") {
+			return ErrQualificationRequired
+		}
+		generation := strings.TrimSuffix(strings.TrimPrefix(q.Artifact, prefix), ".json")
+		report, p, err := s.readCaptureReport(generation)
+		if err != nil || report.Implementation != s.build || report.Configuration != s.configuration(q.JobID) || !report.RecordedAt.Equal(q.RequestedAt) {
+			return ErrQualificationRequired
+		}
+		path = p
+	} else if q.JobID == MemoryLightDreamJobID {
 		if !strings.HasPrefix(q.Artifact, prefix) {
 			return ErrQualificationRequired
 		}
@@ -1029,7 +1104,14 @@ func (s *Service) verifyQualification(q *ProductQualification) error {
 	}
 	if q.JobID == MemoryLightDreamJobID {
 		var artifact memory.Artifact
-		if decodeProduct(body, &artifact) != nil || artifact.WorkspaceID != s.workspaceID || artifact.Layer != "L1" || artifact.Period != q.RequestedAt.UTC().Format("2006-01-02") || len(artifact.Sources) == 0 || artifact.Content == "" || artifact.SynthesizerID != memory.DeterministicL1SynthesizerID {
+		if decodeProduct(body, &artifact) != nil || artifact.WorkspaceID != s.workspaceID || artifact.Layer != "L1" || len(artifact.Sources) == 0 || artifact.Content == "" || artifact.SynthesizerID != memory.DeterministicL1SynthesizerID {
+			return ErrQualificationRequired
+		}
+		if q.DailyInput != nil {
+			if artifact.Period != q.DailyInput.Period || artifact.SourceFingerprint != q.DailyInput.Fingerprint {
+				return ErrQualificationRequired
+			}
+		} else if artifact.Period != q.RequestedAt.UTC().Format("2006-01-02") {
 			return ErrQualificationRequired
 		}
 	} else if q.JobID == MemoryCheckpointJobID {
@@ -1110,8 +1192,11 @@ func (s *Service) sourceState(job string) (string, error) {
 		return s.wikiSourceIdentity(job)
 	}
 	switch job {
+	case MemoryCaptureJobID:
+		return s.captureSourceIdentity()
 	case MemoryLightDreamJobID:
-		return s.engine.DailyInputIdentity(s.workspaceID, s.now())
+		inputs, err := s.engine.DailyInputCohort(s.workspaceID)
+		return productDigest(inputs), err
 	case MemoryDeepDreamJobID:
 		return s.weekly.WeeklyInputIdentity(s.workspaceID, s.now())
 	case MemoryCheckpointJobID:

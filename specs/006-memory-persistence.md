@@ -14,7 +14,7 @@ The canonical memory pipeline has three generated operating layers plus a curate
 
 | Layer | Purpose | Input | Default shape |
 |---|---|---|---|
-| L1 | Recent daily continuity | Attested Claude/Codex skill-route metadata; future approved adapters may add selected sanitized signals | Append-only capture-v2 journal plus dense daily digest |
+| L1 | Recent daily continuity | Attested skill-route metadata, eligible body-free lifecycle/completed-record signals and separately reviewed owner captures | Append-only capture-v2 journal plus dense daily digest |
 | L2 | Cross-day continuity | Recent L1 digests | Weekly rollup that collapses repeated threads |
 | L3 | Medium-term continuity | Recent L2 rollups | Rolling thematic synthesis of open, changing or structurally important threads |
 | Lifetime | Stable recall and routing | Repeated, durable evidence promoted from L3 | Compact index with drill-down pointers to owned memory files |
@@ -73,6 +73,24 @@ journal and are deliberately excluded from unattended light dreaming; daily
 logs remain human-readable sources only until a separately approved producer
 and sanitizer exist. L1 remains a bounded continuity product, never a copy of
 either source.
+
+OCAP additionally admits two closed body-free sources: actual Stop adapter
+observations, explicitly labelled `observed_only`, and witnessed canonical
+completed-record metadata, labelled `committed_effect`. The latter derives
+from the confined execution owner and its passing criterion receipts, not a
+model-supplied completion flag or proof of an original client invocation.
+Producer contract/version, workspace, occurrence, source revision/digest,
+original event time and evidence class are sealed with existing capture-v2
+provenance authority. Explicit initialization prepares that authority; runtime
+observation sealing only reads an existing key. It grants no execution power.
+
+Only the separately qualified/enrolled `memory-l1-capture` product job ingests
+those signals. Its immutable occurrence admission and permanent memory denials
+make replay recoverable without duplicate captures or resurrection after
+correction/deletion. A capture records its first actual ingestion time and
+retains the original event time explicitly. Metadata outbox publication is not
+a memory capture; startup/Stop never capture, dream or enroll. Prompt,
+transcript, tool body, objective, summary and document/path text stay excluded.
 
 Manual invocation, a lifecycle hook, a scheduler and presence-based catch-up may all trigger these cycles. The trigger does not own memory semantics. A missed weekly run remains pending until the same idempotent deep cycle succeeds.
 
