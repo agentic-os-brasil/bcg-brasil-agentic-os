@@ -33,7 +33,10 @@ type Options struct {
 	Binding                      product.Options
 	NativeHost                   *NativeHost
 	LifecycleContext             bool
+	CodePilot                    bool
+	codePilot                    *CodePilotBinding
 	DesktopPilot                 bool
+	EngineeringRuntimePilot      bool
 	desktopPilot                 *DesktopPilotBinding
 	Carrier                      *StableCarrier
 	stableIdentity               releasecontract.ServerIdentity
@@ -44,6 +47,9 @@ type Options struct {
 }
 
 func prepare(o Options) (Options, string, error) {
+	if o.Binding.OwnerReviewChannel != "" && !o.DesktopPilot && !o.CodePilot {
+		return o, "", errors.New("packaged local-browser requires an explicit experimental pilot")
+	}
 	if o.LifecycleContext && (o.NativeHost != nil || o.native != nil || o.hookOverride != nil) {
 		return o, "", errors.New("lifecycle context and native enforcement profiles are mutually exclusive")
 	}
@@ -88,7 +94,13 @@ func prepare(o Options) (Options, string, error) {
 			return o, "", err
 		}
 	}
-	return o, o.target.Platform(), err
+	if err != nil {
+		return o, "", err
+	}
+	if err = prepareCodePilot(&o); err != nil {
+		return o, "", err
+	}
+	return o, o.target.Platform(), nil
 }
 func BuildPlugin(options Options) error { return buildPortable(options, "plugin") }
 

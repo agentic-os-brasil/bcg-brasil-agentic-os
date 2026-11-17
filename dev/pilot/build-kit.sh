@@ -3,7 +3,14 @@ set -euo pipefail
 umask 077
 SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 OUT="${1:?Uso: build-kit.sh /caminho/Developer/pasta-do-kit}"
-[[ $# -le 2 && ( $# -lt 2 || "${2:-}" == --lifecycle-context ) ]] || { echo 'Use build-kit.sh destino [--lifecycle-context].' >&2; exit 1; }
+RUNTIME_RELEASE=""; RUNTIME_REGISTRY=""
+if [[ "${2:-}" == --engineering-runtime ]]; then
+  [[ $# -eq 4 ]] || { echo 'Use build-kit.sh destino --engineering-runtime release-assinado registro-publico.' >&2; exit 1; }
+  RUNTIME_RELEASE="$3"; RUNTIME_REGISTRY="$4"
+  [[ "$RUNTIME_RELEASE" == /* && "$RUNTIME_REGISTRY" == /* && ! -L "$RUNTIME_RELEASE" && ! -L "$RUNTIME_REGISTRY" ]] || { echo 'Selecione entradas públicas absolutas, sem links.' >&2; exit 1; }
+else
+  [[ $# -le 2 && ( $# -lt 2 || "${2:-}" == --lifecycle-context ) ]] || { echo 'Use build-kit.sh destino [--lifecycle-context].' >&2; exit 1; }
+fi
 [[ "$OUT" == /* && "$OUT" == */Developer/* && ! -L "$OUT" ]] || { echo 'Use um destino absoluto sob Developer.' >&2; exit 1; }
 [[ "$(uname -s)" == Darwin ]] || { echo 'Este construtor usa o produtor Mac; os alvos cruzados continuam sem execução nativa inferida.' >&2; exit 1; }
 [[ ! -e "$OUT" ]] || { echo 'O destino já existe; use uma pasta nova para evitar misturar artefatos.' >&2; exit 1; }
@@ -22,12 +29,57 @@ if ! mkdir "$OUT"; then
   exit 1
 fi
 mkdir "$OUT/bin"
-(cd "$SOURCE/adapters/mcp" && GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -o "$OUT/bin/maestro-mcp-darwin-arm64" ./cmd/maestro-mcp)
-(cd "$SOURCE/adapters/mcp" && GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o "$OUT/bin/maestro-mcp-darwin-amd64" ./cmd/maestro-mcp)
-(cd "$SOURCE/adapters/mcp" && GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o "$OUT/bin/maestro-mcp-windows-amd64.exe" ./cmd/maestro-mcp)
-chmod 700 "$OUT/bin/maestro-mcp-windows-amd64.exe"
-chmod 700 "$OUT/bin/maestro-mcp-darwin-arm64"
-chmod 700 "$OUT/bin/maestro-mcp-darwin-amd64"
+if [[ -n "$RUNTIME_RELEASE" ]]; then
+  RUNTIME_REGISTRY_SHA="$(shasum -a 256 "$RUNTIME_REGISTRY")"; RUNTIME_REGISTRY_SHA="${RUNTIME_REGISTRY_SHA%% *}"
+  (cd "$SOURCE" && go run ./dev/release verify-signed --directory "$RUNTIME_RELEASE" --authority-registry "$RUNTIME_REGISTRY")
+  python3 - "$RUNTIME_RELEASE" "$RUNTIME_REGISTRY" "$OUT" "$RUNTIME_REGISTRY_SHA" <<'RUNTIME_KIT_PY'
+import datetime
+import hashlib
+import json
+from pathlib import Path
+import re
+import shutil
+import sys
+
+release, registry, output = map(Path, sys.argv[1:4])
+assert hashlib.sha256(registry.read_bytes()).hexdigest() == sys.argv[4], "O registro público mudou durante a verificação."
+manifest = json.loads((release / "release-manifest.json").read_text())
+authority = json.loads(registry.read_text())
+keys = authority["authorities"]
+assert len(keys) == 1, "O piloto completo requer uma autoridade experimental única."
+key = keys[0]
+now = datetime.datetime.now(datetime.timezone.utc)
+parse = lambda value: datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+assert re.fullmatch(r"maestro-engineering-pilot-[0-9]{8}", key["issuer"])
+assert re.fullmatch(r"pilot-[0-9]{8}", key["key_id"])
+assert key["status"] == "active" and parse(key["valid_from"]) <= now < parse(key["valid_until"])
+assert parse(key["valid_until"]) - parse(key["valid_from"]) <= datetime.timedelta(days=14)
+assert manifest["schema_version"] == 2 and manifest["channel"] == "canary"
+assert manifest["issuer"] == {"id": key["issuer"], "key_id": key["key_id"]}
+target = ("darwin", "arm64")
+assert all((a["os"], a["arch"]) == target for a in manifest["artifacts"] if a["kind"] == "runtime_pack"), "O kit Mac não redistribui runtimes de outros alvos."
+servers = [a for a in manifest["artifacts"] if a["kind"] == "mcp_server" and (a["os"], a["arch"]) == target]
+packs = [a for a in manifest["artifacts"] if a["kind"] == "runtime_pack" and a.get("adapter") == "docling" and (a["os"], a["arch"]) == target]
+assert len(servers) == len(packs) == 1, "Este piloto completo aceita somente o alvo Mac Apple Silicon qualificado separadamente."
+server, pack = servers[0], packs[0]
+shutil.copyfile(release / server["name"], output / "bin/maestro-mcp-darwin-arm64")
+(output / "bin/maestro-mcp-darwin-arm64").chmod(0o700)
+shutil.copytree(release, output / "runtime-release", symlinks=False)
+shutil.copyfile(registry, output / "runtime-registry.json")
+assert hashlib.sha256((output / "runtime-registry.json").read_bytes()).hexdigest() == sys.argv[4]
+assert hashlib.sha256((output / "bin/maestro-mcp-darwin-arm64").read_bytes()).hexdigest() == server["sha256"]
+info = {"schema_version": 1, "profile": "engineering-runtime-pilot-v1", "version": manifest["server"]["version"], "target": "darwin-arm64", "registry_sha256": hashlib.sha256(registry.read_bytes()).hexdigest(), "manifest_sha256": hashlib.sha256((release / "release-manifest.json").read_bytes()).hexdigest(), "pack_sha256": pack["sha256"], "issuer": key["issuer"], "issued_at": key["valid_from"], "expires_at": key["valid_until"]}
+(output / "RUNTIME.json").write_text(json.dumps(info, indent=2) + "\n")
+RUNTIME_KIT_PY
+  (cd "$SOURCE" && go run ./dev/release verify-signed --directory "$OUT/runtime-release" --authority-registry "$OUT/runtime-registry.json")
+  mkdir "$OUT/test-documents"
+  cp "$SOURCE/internal/ingest/docling/testdata/sample.docx" "$OUT/test-documents/maestro-pilot.docx"
+else
+  (cd "$SOURCE/adapters/mcp" && GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -o "$OUT/bin/maestro-mcp-darwin-arm64" ./cmd/maestro-mcp)
+  (cd "$SOURCE/adapters/mcp" && GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o "$OUT/bin/maestro-mcp-darwin-amd64" ./cmd/maestro-mcp)
+  (cd "$SOURCE/adapters/mcp" && GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o "$OUT/bin/maestro-mcp-windows-amd64.exe" ./cmd/maestro-mcp)
+  chmod 700 "$OUT/bin/maestro-mcp-windows-amd64.exe" "$OUT/bin/maestro-mcp-darwin-arm64" "$OUT/bin/maestro-mcp-darwin-amd64"
+fi
 cp "$SOURCE/dev/pilot/setup-macos.command" "$OUT/Preparar Maestro.command"
 mkdir "$OUT/templates"
 cp "$SOURCE/dev/pilot/open-code-macos.command" "$OUT/templates/open-code-macos.command"
@@ -39,7 +91,7 @@ chmod 700 "$OUT/templates/"*.command
 python3 -c 'from pathlib import Path; import sys; Path(sys.argv[2]).write_text(Path(sys.argv[1]).read_text(), encoding="utf-8-sig")' "$SOURCE/dev/pilot/setup-windows.ps1" "$OUT/Preparar Maestro.ps1"
 python3 -c 'from pathlib import Path; import sys; Path(sys.argv[2]).write_bytes(Path(sys.argv[1]).read_text().replace("\n", "\r\n").encode("ascii"))' "$SOURCE/dev/pilot/prepare-windows.cmd" "$OUT/Preparar Maestro.cmd"
 printf 'disabled\n' > "$OUT/LIFECYCLE-CONTEXT.txt"
-if [[ "${2:-}" == --lifecycle-context ]]; then
+if [[ "${2:-}" == --lifecycle-context || -n "$RUNTIME_RELEASE" ]]; then
   help="$("$OUT/bin/maestro-mcp-darwin-$( [[ "$(uname -m)" == arm64 ]] && printf arm64 || printf amd64 )" plugin --help 2>&1 || true)"
   [[ "$help" == *-lifecycle-context* ]] || { echo 'O servidor atual não oferece o contexto passivo; preserve este artefato parcial.' >&2; exit 1; }
   printf 'enabled\n' > "$OUT/LIFECYCLE-CONTEXT.txt"
@@ -51,14 +103,31 @@ chmod 700 "$OUT/Preparar Maestro.command"
 SOURCE_COMMIT="$(git -C "$SOURCE" rev-parse HEAD)"
 SOURCE_TREE="$(git -C "$SOURCE" rev-parse HEAD^{tree})"
 {
-  printf 'mode=ordinary-unversioned-developer-rehearsal\nbinary_source_base_commit=%s\n' "$SOURCE_COMMIT"
+  if [[ -n "$RUNTIME_RELEASE" ]]; then
+    printf 'mode=explicit-engineering-runtime-rehearsal\nbuilder_source_commit=%s\nbinary_source=provided_verified_signed_release_exact_digest_in_RUNTIME.json\n' "$SOURCE_COMMIT"
+  else
+    printf 'mode=ordinary-unversioned-developer-rehearsal\nbinary_source_base_commit=%s\n' "$SOURCE_COMMIT"
+  fi
   printf 'source_state=committed_clean_snapshot_sha256_identifies_exact_bytes\n'
   printf 'source_tree=%s\ntrust=unsigned_engineering_candidate\npublisher_authentication=unavailable_checksums_are_integrity_only\n' "$SOURCE_TREE"
-  printf 'server_version=unavailable\npacket_label=0.0.0\nplatforms=darwin-arm64,darwin-amd64,windows-amd64\n'
-  printf 'darwin_arm64_evidence=built_actual_native_execution_requires_retained_receipt\ndarwin_amd64_evidence=cross_build_only_native_execution_unobserved\n'
-  printf 'native_client_loading=not-yet-observed\nwindows_binary_evidence=cross_build_only_this_kit_requires_native_rehearsal\n'
-  printf 'signed_install_update=unavailable\ndocling_unseeded=unavailable\nnative_agents_hooks=unavailable_without_attended_qualification\nwindows_darwin_jobs=unavailable\n'
+  if [[ -n "$RUNTIME_RELEASE" ]]; then
+    RUNTIME_VERSION="$(/usr/bin/plutil -extract version raw -o - "$OUT/RUNTIME.json")"
+    printf 'server_version=%s\npacket_label=%s\nplatforms=darwin-arm64\n' "$RUNTIME_VERSION" "$RUNTIME_VERSION"
+  else
+    printf 'server_version=unavailable\npacket_label=0.0.0\nplatforms=darwin-arm64,darwin-amd64,windows-amd64\n'
+  fi
+  if [[ -n "$RUNTIME_RELEASE" ]]; then
+    printf 'darwin_arm64_evidence=provided_verified_artifact_native_execution_requires_retained_receipt\ndarwin_amd64_evidence=not_included\nwindows_binary_evidence=not_included\n'
+  else
+    printf 'darwin_arm64_evidence=built_actual_native_execution_requires_retained_receipt\ndarwin_amd64_evidence=cross_build_only_native_execution_unobserved\nwindows_binary_evidence=cross_build_only_this_kit_requires_native_rehearsal\n'
+  fi
+  printf 'native_client_loading=not-yet-observed\n'
+  printf 'signed_install_update=unavailable\nnative_agents_hooks=unavailable_without_attended_qualification\nwindows_darwin_jobs=unavailable\n'
+  if [[ -n "$RUNTIME_RELEASE" ]]; then printf 'docling=verified_engineering_release_requires_explicit_local_placement\n'; else printf 'docling_unseeded=unavailable\n'; fi
 } > "$OUT/ARTIFACT.txt"
+if [[ -n "$RUNTIME_RELEASE" ]]; then
+  printf 'runtime_profile=engineering-runtime-pilot-v1\nruntime_targets=darwin-arm64\nruntime_identity=RUNTIME.json\nruntime_trust=short_lived_experimental_issuer_not_organizational_publisher\nwindows_runtime_distribution=unavailable_native_and_redistribution_authority_pending\nintel_runtime=unavailable\nproduction_update=unavailable\n' >> "$OUT/ARTIFACT.txt"
+fi
 (cd "$OUT"; LC_ALL=C find -s . -type f ! -name SHA256SUMS ! -name KIT-ID.txt -exec shasum -a 256 '{}' +) > "$OUT/SHA256SUMS"
 CONTENT_ID="$(shasum -a 256 "$OUT/SHA256SUMS")"
 printf '%s\n' "${CONTENT_ID%% *}" > "$OUT/KIT-ID.txt"

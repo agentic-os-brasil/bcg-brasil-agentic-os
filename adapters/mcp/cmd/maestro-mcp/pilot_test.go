@@ -6,12 +6,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -70,6 +72,47 @@ func TestPilotCodePacketSelectionPreservesCanonicalInventory(t *testing.T) {
 		}
 	}
 	assertBase()
+	t.Run("CodePilot exact reviewed channel", func(t *testing.T) {
+		selected := filepath.Join(root, "exports", "reviewed-code")
+		bound := o
+		bound.OwnerReviewChannel = "local-browser"
+		if err := packaging.BuildPlugin(packaging.Options{Destination: selected, Server: server, Version: "0.0.0", Binding: bound, CodePilot: true}); err != nil {
+			t.Fatal(err)
+		}
+		_, args, err := pilotPacketCommand(selected, o)
+		if err != nil || len(args) != 10 || args[8] != "--owner-review-channel" || args[9] != "local-browser" {
+			t.Fatalf("canonical CodePilot rejected: %v %v", args, err)
+		}
+		wrong := o
+		wrong.WorkspacePath = filepath.Join(root, "foreign-workspace")
+		if _, _, err := pilotPacketCommand(selected, wrong); err == nil {
+			t.Fatal("different workspace admitted")
+		}
+		path := filepath.Join(selected, ".mcp.json")
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, replacement := range []string{"unreviewed-channel", "local-browser --extra"} {
+			changed := bytes.ReplaceAll(body, []byte("local-browser"), []byte(replacement))
+			if err := os.WriteFile(path, changed, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, _, err := pilotPacketCommand(selected, o); err == nil {
+				t.Fatal("changed channel/inventory admitted")
+			}
+		}
+		unknown := bytes.ReplaceAll(body, []byte(`"local-browser"`), []byte(`"local-browser", "--unexpected"`))
+		if err := os.WriteFile(path, unknown, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := pilotPacketCommand(selected, o); err == nil {
+			t.Fatal("unknown argument/inventory admitted")
+		}
+		if err := os.WriteFile(path, body, 0600); err != nil {
+			t.Fatal(err)
+		}
+	})
 	if _, _, err := pilotCodePacket(o, host, strings.Repeat("0", 64)); err == nil {
 		t.Fatal("untrusted executable accepted")
 	}
@@ -368,6 +411,95 @@ func assertPilotReadinessPrompt(t *testing.T, body []byte, workspaceID string, a
 	for _, forbidden := range []string{"maestro_apply", "maestro_query", "execution.", "brain.", "owner.", "memory.", "methods.", "--mcp-config", "--strict-mcp-config"} {
 		if strings.Contains(desktopPrompt, forbidden) {
 			t.Fatalf("read-only Desktop connection prompt expanded the journey: %s", forbidden)
+		}
+	}
+}
+
+func TestPilotRuntimePromptsMatchBundledDocument(t *testing.T) {
+	_, source, _, _ := runtime.Caller(0)
+	fixture := filepath.Join(filepath.Dir(source), "..", "..", "..", "..", "internal", "ingest", "docling", "testdata", "sample.docx")
+	archive, err := zip.OpenReader(fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer archive.Close()
+	var texts []string
+	var rows [][]string
+	for _, entry := range archive.File {
+		if entry.Name != "word/document.xml" {
+			continue
+		}
+		stream, err := entry.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		decoder := xml.NewDecoder(io.LimitReader(stream, 1<<20))
+		var row []string
+		cell := ""
+		inCell := false
+		for {
+			token, err := decoder.Token()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch element := token.(type) {
+			case xml.StartElement:
+				switch element.Name.Local {
+				case "tr":
+					row = nil
+				case "tc":
+					cell, inCell = "", true
+				case "t":
+					var text string
+					if err := decoder.DecodeElement(&text, &element); err != nil {
+						t.Fatal(err)
+					}
+					texts = append(texts, text)
+					if inCell {
+						cell += text
+					}
+				}
+			case xml.EndElement:
+				switch element.Name.Local {
+				case "tc":
+					row, inCell = append(row, cell), false
+				case "tr":
+					rows = append(rows, row)
+				}
+			}
+		}
+		if err := stream.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const marker = "MAESTRO_DOCLING_OFFLINE_20261101"
+	if !strings.Contains(strings.Join(texts, "\n"), marker) || len(rows) < 2 {
+		t.Fatal("bundled DOCX lost the independent marker/table fixture")
+	}
+	actualRows := map[string]bool{}
+	for _, row := range rows[1:] {
+		actualRows[strings.Join(row, "/")] = true
+	}
+	report := pilotReport{Status: "partial", WorkspaceID: strings.Repeat("a", 32), Runtime: &packaging.EngineeringRuntimeBinding{PackSHA256: strings.Repeat("b", 64)}}
+	var output bytes.Buffer
+	if err := finishPilotReport(&report, &output); err != nil {
+		t.Fatal(err)
+	}
+	for _, prompt := range []string{report.CodePrompt, report.DesktopPrompt} {
+		if !strings.Contains(prompt, marker) || !strings.Contains(prompt, "maestro-pilot.docx") {
+			t.Fatal("runtime prompt lost its bundled source/marker")
+		}
+		pairs := regexp.MustCompile(`[a-z]+/[0-9]+`).FindAllString(prompt, -1)
+		if len(pairs) != len(actualRows) {
+			t.Fatal("runtime prompt and actual DOCX have different table expectations", pairs, actualRows)
+		}
+		for _, pair := range pairs {
+			if !actualRows[pair] {
+				t.Fatal("runtime prompt requires a row absent from the bundled DOCX", pair)
+			}
 		}
 	}
 }

@@ -2,9 +2,9 @@ package main
 
 import (
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
-	"os"
 	"path/filepath"
 	"time"
 )
@@ -14,11 +14,11 @@ func seedDoclingAuthority(options *product.Options) {
 	if AuthorityRegistrySHA256 == "" {
 		return
 	}
-	executable, err := os.Executable()
+	executable, err := processidentity.Current()
 	if err != nil {
 		return
 	}
-	directory := filepath.Dir(executable)
+	directory := filepath.Dir(executable.Path)
 	root := filepath.Dir(directory)
 	var registry string
 	switch filepath.Base(directory) {

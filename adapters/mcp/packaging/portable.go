@@ -77,7 +77,10 @@ func portableMetadata(format, platform, version string, stable *stablePacketBind
 			if pilot.OwnerReviewChannel == "local-browser" {
 				config := manifest["server"].(map[string]any)["mcp_config"].(map[string]any)
 				config["args"] = append(config["args"].([]string), "--owner-review-channel", "local-browser")
-				manifest["description"] = "Local engineering rehearsal; protected changes require exact owner review in a temporary local browser page when native forms are unavailable."
+				manifest["description"] = "Local engineering rehearsal; protected changes require exact owner review in a temporary local browser page selected explicitly at preparation."
+			}
+			if pilot.Runtime != nil {
+				manifest["description"] = "Explicit short-lived engineering runtime pilot; verified local converter, fixed workspace and exact owner review. Organizational signing and production updates are separate."
 			}
 
 		}
@@ -94,7 +97,10 @@ func portableMetadata(format, platform, version string, stable *stablePacketBind
 		files["README-PACKET.md"] = []byte("# Local Maestro Desktop rehearsal\n\nConfirm installation of the named rehearsal extension in the client. Its server uses the exact owner and workspace approved during preparation; no directory configuration is required. This engineering MCPB is bound to this machine and workspace: do not redistribute it. Share the generic pilot kit instead. The unique extension name keeps other Maestro installations separate. Inventory is an integrity diagnostic, not publisher authority or proof of native loading.\n")
 	}
 	if pilot != nil && pilot.OwnerReviewChannel == "local-browser" {
-		files["README-PACKET.md"] = append(files["README-PACKET.md"], []byte("\nOwner review channel: local-browser (explicit local operator selection). When the client has no native form, a foreground protected request opens the complete exact review in your browser on this computer. Read it, select the unchecked exact-record checkbox, then Approve or Decline. Closing, expiry (150 seconds), cancellation or opener failure does not approve. Native forms stay first when advertised. Tool permission and chat yes never approve a record. No service is installed; this channel does not qualify native forms, lifecycle hooks or enforcement.\n")...)
+		files["README-PACKET.md"] = append(files["README-PACKET.md"], []byte("\nOwner review channel: local-browser (explicit local operator selection). A foreground protected request opens the complete exact review in your browser on this computer, even when the client advertises native forms. Read it, select the unchecked exact-record checkbox, then Approve or Decline. Closing, expiry (150 seconds), cancellation or opener failure does not approve. Without this explicit selection, native forms stay first when advertised. Tool permission and chat yes never approve a record. No service is installed; this channel does not qualify native forms, lifecycle hooks or enforcement.\n")...)
+	}
+	if pilot != nil && pilot.Runtime != nil {
+		files["README-PACKET.md"] = append(files["README-PACKET.md"], []byte("\nEngineering runtime: explicitly selected short-lived experimental issuer, independently pinned public registry and exact signed converter identity. The prepared private runtime remains outside this extension and startup never installs or repairs it. Check content.status for actual supported formats; upstream package presence is not format support. Expiry requires a newly reviewed engineering kit. This profile grants no organizational publisher authority, production enrollment/update or native Code hook qualification.\n")...)
 	}
 	if lifecycle != nil && stable == nil {
 		if err := lifecycleLocalMetadata(files, platform, lifecycle); err != nil {
@@ -109,6 +115,9 @@ func portableMetadata(format, platform, version string, stable *stablePacketBind
 	return files, server, nil
 }
 func buildPortable(options Options, format string) error {
+	if options.CodePilot && format != "plugin" {
+		return errors.New("Code pilot requires plugin format")
+	}
 	if err := prepareDesktopPilot(&options, format); err != nil {
 		return err
 	}
@@ -160,6 +169,9 @@ func buildPortable(options Options, format string) error {
 	}
 	metadata, server, err := portableMetadata(format, platform, o.Version, stableBinding(o), lifecycleBinding(o), o.desktopPilot)
 	if err != nil {
+		return err
+	}
+	if err := codePilotMetadata(metadata, platform, o.codePilot); err != nil {
 		return err
 	}
 	for name, body := range metadata {
@@ -226,7 +238,7 @@ func buildPortable(options Options, format string) error {
 	if body, target, err := readNativeBinary(filepath.Join(stage, filepath.FromSlash(server))); err != nil || target != o.target || digest(body) != digest(o.serverBody) {
 		return errors.New("selected server changed while packaging")
 	}
-	if err := writeInventory(stage, format, o.Version, platform, server, stableBinding(o), lifecycleBinding(o), o.desktopPilot); err != nil {
+	if err := writeInventory(stage, format, o.Version, platform, server, stableBinding(o), lifecycleBinding(o), o.desktopPilot, o.codePilot); err != nil {
 		return err
 	}
 	if _, err := ValidatePacket(stage); err != nil {
@@ -284,7 +296,7 @@ func buildPortable(options Options, format string) error {
 
 // Do not permit a self-consistent edited inventory to omit canonical managed
 // configuration or recipes. Native bytes/public registry remain separate inputs.
-func requiredPacketFiles(format, platform, version string, stable *stablePacketBinding, lifecycle *lifecyclePacketBinding, pilot *DesktopPilotBinding) (map[string][]byte, string, error) {
+func requiredPacketFiles(format, platform, version string, stable *stablePacketBinding, lifecycle *lifecyclePacketBinding, pilot *DesktopPilotBinding, code *CodePilotBinding) (map[string][]byte, string, error) {
 	namespace := ""
 	if format == "plugin" {
 		namespace = "maestro-product"
@@ -302,6 +314,9 @@ func requiredPacketFiles(format, platform, version string, stable *stablePacketB
 	}
 	metadata, server, err := portableMetadata(format, platform, version, stable, lifecycle, pilot)
 	if err != nil {
+		return nil, "", err
+	}
+	if err := codePilotMetadata(metadata, platform, code); err != nil {
 		return nil, "", err
 	}
 	for name, body := range metadata {

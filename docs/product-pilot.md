@@ -37,6 +37,53 @@ The constructor checks that the actual native server advertises that flag before
 selecting it. Ordinary packages remain the default; the Desktop package receives
 no Code hooks. Passive context is distinct from qualified native enforcement.
 
+## Explicit engineering runtime kit
+
+An independently reviewed modern canary release and its public registry may be
+selected through the existing constructor:
+
+```sh
+./dev/pilot/build-kit.sh /absolute/local/Developer/full-pilot-kit \
+  --engineering-runtime /absolute/verified-modern-release /absolute/public-registry.json
+```
+
+This closed profile accepts one active `maestro-engineering-pilot-YYYYMMDD`
+issuer and key, with a lifetime of at most 14 days. It verifies the full signed
+release before and after copying it. `RUNTIME.json` discloses actual issuance,
+expiry, version, target, public registry, manifest and runtime archive digests.
+The server comes from that exact signed release; `ARTIFACT.txt` distinguishes its
+provenance from the clean builder source. The initial complete carrier targets
+Darwin ARM64. A runtime-bearing Windows carrier and Intel runtime are unavailable
+until their own platform and distribution gates are satisfied.
+
+The Mac preparer first presents the usual isolated-directory review, then the
+complete native `pilot-runtime-review`. The participant must consciously type
+`ATIVAR CONVERSOR` before `pilot-runtime-apply` rechecks the exact review and calls
+the canonical `PlaceVerified`. A generic preparation digest alone never grants
+this second approval. Signed metadata, actual server identity, target, owner,
+workspace ID and existing runtime/placement digests are bound to the review.
+Decline/stale input leaves placement untouched; differing/partial private data
+is preserved. Successful replay checks the existing runtime without replacing
+it. Startup, connection checks and `content.status` never place or repair it.
+
+The new prepared layout uses only `product/server/maestro-mcp` and its fixed
+public registry under `product/managed/trust`. Both Code and the explicitly
+selected `--engineering-runtime-pilot` Desktop export retain the same version,
+registry, server, manifest and archive identities. Full inventory and exact
+physical executing-image validation precede authority seeding, including the
+controlled Desktop ancestor-alias path. Native selection/configuration
+fingerprints and normal source/enrolled/stable production admission are
+unchanged. This experimental key does not establish organizational publisher
+authority, native platform signing, production enrollment or production updates.
+
+The kit copies a synthetic DOCX into the fresh workspace. Its existing guided
+Code and Desktop journeys request actual conversion and paged derived-artifact
+readback, checking the independent marker/table. The read-only doctor reports
+runtime availability separately from conversion and actual client observation.
+`content.status` owns the actual admitted format list; package presence is not
+format support. Expiry refuses with a newly reviewed kit as the recovery route,
+without changing dates, deleting data or silently renewing trust.
+
 ## Participant flow and preservation
 
 The emitted preparer verifies the generic kit, shows its exact local effects and
@@ -105,9 +152,10 @@ profile with a full workspace-ID extension name, a short visible rehearsal label
 and the exact prepared owner/workspace paths in its server argument vector. It
 omits `user_config`: displayed directory defaults did not establish saved MCP
 configuration in an observed Claude Desktop 4.23118.0 rehearsal. The explicit
-preparation review and normal native installation remain required. It is limited
-to ordinary unversioned `0.0.0` rehearsals and rejects signed/enrolled, stable,
-native and lifecycle profiles. The normal product identity and generic packet
+preparation review and normal native installation remain required. The default profile remains limited
+to ordinary unversioned `0.0.0` rehearsals; the explicit runtime profile above is
+the only versioned exception. Both reject enrolled, stable and native carrier
+combinations; Code lifecycle context is separate. The normal product identity and generic packet
 contract remain unchanged. The typed optional inventory binding regenerates the
 exact canonical manifest during validation. `pilot-check` matches it against the
 admitted preparation and includes the exact visible extension in its prompt.
@@ -125,8 +173,10 @@ permissions. Generic, stable and Windows logical roles remain unchanged.
 The public packet validator remains strict about ancestor, leaf and inner links.
 Only the runtime's local engineering MCPB fallback may resolve the managed
 root's parent, append the unchanged basename and strictly validate that physical
-packet. It must be an ordinary DesktopPilot without stable, registry or native
-authority, and its physical server path/digest must match the executing file pin
+packet. It must be either an ordinary unversioned DesktopPilot without registry
+authority or the explicit runtime profile with the same pinned public authority.
+Stable and native carriers still refuse. Its physical server path/digest must
+match the executing file pin
 captured at process startup and rechecked after validation. Later managed reads
 retain the physical root. Owner/workspace paths are never resolved this way;
 no OS alias or installed permission is changed. The pin is bounded file identity,
@@ -200,22 +250,26 @@ workspace, client profiles or participant-local generated packets/prompts.
 The explicit local preparation review discloses selection of `local-browser`
 before PREPARAR or digest confirmation. Both platform preparers build the
 ordinary Desktop pilot with `--owner-review-channel local-browser`; its typed
-inventory and canonical manifest retain that exact startup choice. Native forms
-remain first when advertised. Otherwise, a foreground protected request opens
+inventory and canonical manifest retain that exact startup choice. This explicit channel takes precedence even when native forms are advertised.
+A foreground protected request opens
 its complete review and approval schema in an ephemeral local browser page,
 requiring the initially unchecked checkbox and conscious exact-record approval.
 Decline, cancellation, closing, expiry after at most 150 seconds or opener error
 never approves. No URL or approval token is returned to the model. Generic,
-stable, native and lifecycle profiles remain unchanged. Read-only tool permission
+stable and source profiles remain unchanged. The separately selected experimental
+Code pilot may carry the same channel with `--code-pilot`; its exact local
+binding/channel is retained in immutable inventory, and its native fingerprints
+remain unchanged. Read-only tool permission
 never substitutes for review. See [the channel contract](product-local-owner-review.md).
 Actual Desktop presentation/effect/readback and native hooks remain separately
 observed evidence; this local channel does not qualify MCP native forms.
 
 ## Trust and platform limits
 
-This is an unsigned, unversioned engineering rehearsal. Server release identity,
-production signing, source enrollment and signed update are unavailable; 0.0.0
-is only the portable packet label. Checksums identify integrity, not publisher
+The ordinary profile is an unsigned, unversioned engineering rehearsal; `0.0.0`
+is only its portable packet label. The explicit runtime profile has a pinned
+version and short-lived experimental signature. Production signing, source
+enrollment and signed update remain unavailable in both profiles. Checksums identify integrity, not publisher
 authenticity. Admitted offline conversion and native enforcement keep their
 own qualification requirements. Windows Darwin jobs remain unavailable.
 

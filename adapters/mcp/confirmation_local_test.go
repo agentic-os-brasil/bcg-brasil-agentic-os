@@ -87,7 +87,7 @@ func TestLocalOwnerReviewRoutingAndCanonicalApply(t *testing.T) {
 	for _, mode := range []string{"unconfigured", "fallback", "url_only", "decline", "opener_error", "native_first", "native_decline", "native_error", "stale"} {
 		t.Run(mode, func(t *testing.T) {
 			channel := "local-browser"
-			if mode == "unconfigured" {
+			if mode == "unconfigured" || strings.HasPrefix(mode, "native_") {
 				channel = ""
 			}
 			b := localReviewFixture(t, channel)
@@ -248,7 +248,7 @@ func TestLocalOwnerReviewCapabilityLossContinuationCannotApply(t *testing.T) {
 	for _, mode := range []string{"absent", "url_only"} {
 		for _, action := range []string{"decline", "accept"} {
 			t.Run(mode+"/"+action, func(t *testing.T) {
-				b := localReviewFixture(t, "local-browser")
+				b := localReviewFixture(t, "")
 				before := ownerState(t, b)
 				localCalls := 0
 				b.localOwnerReview = func(context.Context, string, any) (bool, error) { localCalls++; return true, nil }
@@ -265,6 +265,7 @@ func TestLocalOwnerReviewCapabilityLossContinuationCannotApply(t *testing.T) {
 				for id := range first.InputRequests {
 					key = id
 				}
+				b.options.OwnerReviewChannel = "local-browser"
 				capabilities := map[string]any{}
 				if mode == "url_only" {
 					capabilities["elicitation"] = map[string]any{"url": map[string]any{}}
@@ -281,5 +282,98 @@ func TestLocalOwnerReviewCapabilityLossContinuationCannotApply(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestExplicitBrowserSelectionOverridesAdvertisedNativeForm(t *testing.T) {
+	b := localReviewFixture(t, "local-browser")
+	before := ownerState(t, b)
+	localCalls, nativeCalls := 0, 0
+	b.localOwnerReview = func(_ context.Context, message string, schema any) (bool, error) {
+		localCalls++
+		if !strings.Contains(message, "Trilha escolhida") || schema == nil {
+			t.Error("complete review missing")
+		}
+		return false, nil
+	}
+	client := localReviewSession(t, b, &mcp.ClientOptions{ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		nativeCalls++
+		return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"approved": true}}, nil
+	}})
+	out := localTrack(t, client)
+	if !out.IsError || localCalls != 1 || nativeCalls != 0 || ownerState(t, b) != before {
+		t.Fatalf("explicit browser choice ignored: is_error=%v local=%d native=%d changed=%v", out.IsError, localCalls, nativeCalls, ownerState(t, b) != before)
+	}
+}
+
+func TestExplicitBrowserRejectsPriorNativeApprovalWithFormStillAdvertised(t *testing.T) {
+	b := localReviewFixture(t, "")
+	before := ownerState(t, b)
+	localCalls := 0
+	b.localOwnerReview = func(context.Context, string, any) (bool, error) { localCalls++; return true, nil }
+	client := localReviewSession(t, b, &mcp.ClientOptions{MultiRoundTrip: &mcp.MultiRoundTripOptions{Disabled: true}, ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		t.Fatal("manual form handler unexpectedly called")
+		return nil, nil
+	}})
+	args := map[string]any{"operation": "owner.track", "track": "quick"}
+	first, err := client.CallTool(context.Background(), &mcp.CallToolParams{Name: "maestro_apply", Arguments: args})
+	if err != nil || first.IsError || len(first.InputRequests) != 1 {
+		t.Fatalf("native first round: %+v %v", first, err)
+	}
+	var key string
+	for k := range first.InputRequests {
+		key = k
+	}
+	// Simulate the independently selected startup channel on the same exact owner,
+	// workspace and record: the previous native response confers no browser consent.
+	b.options.OwnerReviewChannel = "local-browser"
+	out, err := client.CallTool(context.Background(), &mcp.CallToolParams{Name: "maestro_apply", Arguments: args, InputResponses: mcp.InputResponseMap{key: &mcp.ElicitResult{Action: "accept", Content: map[string]any{"approved": true}}}})
+	if err != nil || out == nil || !out.IsError || localCalls != 0 || ownerState(t, b) != before {
+		t.Fatalf("native approval crossed channel: %+v %v local=%d", out, err, localCalls)
+	}
+}
+
+func TestExplicitBrowserNativeFormFailuresKeepCanonicalFences(t *testing.T) {
+	for _, mode := range []string{"accept", "decline", "opener-error", "expired", "stale"} {
+		t.Run(mode, func(t *testing.T) {
+			b := localReviewFixture(t, "local-browser")
+			before := ownerState(t, b)
+			localCalls, nativeCalls := 0, 0
+			b.localOwnerReview = func(_ context.Context, message string, schema any) (bool, error) {
+				localCalls++
+				if !strings.Contains(message, "Trilha atual") || !strings.Contains(message, "Trilha escolhida") || schema == nil {
+					t.Error("complete record missing")
+				}
+				switch mode {
+				case "opener-error":
+					return false, errors.New("private browser failure")
+				case "expired":
+					return false, context.DeadlineExceeded
+				case "stale":
+					if _, err := b.SelectOwnerTrack("complete", true); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return mode != "decline", nil
+			}
+			client := localReviewSession(t, b, &mcp.ClientOptions{ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+				nativeCalls++
+				return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"approved": true}}, nil
+			}})
+			out := localTrack(t, client)
+			if out.IsError != (mode != "accept") || localCalls != 1 || nativeCalls != 0 {
+				t.Fatalf("wrong channel/result: %+v local=%d native=%d", out, localCalls, nativeCalls)
+			}
+			after := ownerState(t, b)
+			if mode != "accept" && mode != "stale" && before != after {
+				t.Fatal("nonapproval changed owner")
+			}
+			if mode == "accept" && before == after {
+				t.Fatal("approved exact record not applied")
+			}
+			if mode == "stale" && !strings.Contains(after, "complete") {
+				t.Fatal("stale review replaced later state")
+			}
+		})
 	}
 }

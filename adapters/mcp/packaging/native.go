@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -27,6 +28,7 @@ const nativeAllowedWriteContent = "Synthetic native allowed write control.\n"
 const maximumNativeCalls = 3
 const maximumNativeTurns = 8
 const nativeCallSeconds = 120
+const nativeStartupCheckSeconds = 45
 
 // NativeOptions is an operator-local request, never a model tool schema.
 type NativeOptions struct {
@@ -35,39 +37,41 @@ type NativeOptions struct {
 	MaxBudgetUSD                                float64
 }
 type NativePlan struct {
-	Protocol                        string   `json:"protocol"`
-	State                           string   `json:"state"`
-	Reason                          string   `json:"reason,omitempty"`
-	Profile                         string   `json:"profile"`
-	HostExecutable                  string   `json:"host_executable"`
-	HostSHA256                      string   `json:"host_sha256"`
-	HostVersion                     string   `json:"host_version,omitempty"`
-	Authentication                  string   `json:"authentication"`
-	AuthConfigurationLocationSHA256 string   `json:"auth_configuration_location_sha256,omitempty"`
-	NativeConfigurationDirectory    string   `json:"native_configuration_directory,omitempty"`
-	NativeConfigurationSHA256       string   `json:"native_configuration_sha256,omitempty"`
-	SessionSettingsOverride         string   `json:"session_settings_override,omitempty"`
-	ServerSHA256                    string   `json:"server_sha256"`
-	BindingSHA256                   string   `json:"binding_sha256"`
-	ProfileSHA256                   string   `json:"profile_sha256"`
-	Target                          Target   `json:"target"`
-	Destination                     string   `json:"destination"`
-	Version                         string   `json:"version"`
-	ScratchRoot                     string   `json:"scratch_root"`
-	ChallengeDirectory              string   `json:"challenge_directory"`
-	DeniedReadPath                  string   `json:"denied_read_path"`
-	ContextBoundary                 string   `json:"context_boundary"`
-	ManagedPolicyBoundary           string   `json:"managed_policy_boundary"`
-	MetadataWrites                  []string `json:"metadata_writes"`
-	DescendantCleanup               string   `json:"descendant_cleanup"`
-	MaximumCalls                    int      `json:"maximum_native_cli_sessions"`
-	MaximumTurnsPerCall             int      `json:"maximum_parent_turns_per_session"`
-	MaximumSecondsPerCall           int      `json:"maximum_seconds_per_session"`
-	MaxBudgetUSDPerCall             float64  `json:"max_budget_usd_per_call"`
-	AggregateEstimatedLimitUSD      float64  `json:"aggregate_estimated_limit_usd"`
-	BillingBoundary                 string   `json:"billing_boundary"`
-	VendorProvenance                string   `json:"vendor_provenance"`
-	Challenges                      []string `json:"challenges"`
+	CodePilot                       *CodePilotBinding `json:"code_pilot,omitempty"`
+	Protocol                        string            `json:"protocol"`
+	State                           string            `json:"state"`
+	Reason                          string            `json:"reason,omitempty"`
+	Profile                         string            `json:"profile"`
+	HostExecutable                  string            `json:"host_executable"`
+	HostSHA256                      string            `json:"host_sha256"`
+	HostVersion                     string            `json:"host_version,omitempty"`
+	Authentication                  string            `json:"authentication"`
+	AuthConfigurationLocationSHA256 string            `json:"auth_configuration_location_sha256,omitempty"`
+	NativeConfigurationDirectory    string            `json:"native_configuration_directory,omitempty"`
+	NativeConfigurationSHA256       string            `json:"native_configuration_sha256,omitempty"`
+	SessionSettingsOverride         string            `json:"session_settings_override,omitempty"`
+	ServerSHA256                    string            `json:"server_sha256"`
+	BindingSHA256                   string            `json:"binding_sha256"`
+	ProfileSHA256                   string            `json:"profile_sha256"`
+	Target                          Target            `json:"target"`
+	Destination                     string            `json:"destination"`
+	Version                         string            `json:"version"`
+	ScratchRoot                     string            `json:"scratch_root"`
+	ChallengeDirectory              string            `json:"challenge_directory"`
+	DeniedReadPath                  string            `json:"denied_read_path"`
+	ContextBoundary                 string            `json:"context_boundary"`
+	ManagedPolicyBoundary           string            `json:"managed_policy_boundary"`
+	MetadataWrites                  []string          `json:"metadata_writes"`
+	DescendantCleanup               string            `json:"descendant_cleanup"`
+	MaximumCalls                    int               `json:"maximum_native_cli_sessions"`
+	MaximumTurnsPerCall             int               `json:"maximum_parent_turns_per_session"`
+	MaximumSecondsPerCall           int               `json:"maximum_seconds_per_session"`
+	StartupCheckSeconds             int               `json:"startup_check_seconds"`
+	MaxBudgetUSDPerCall             float64           `json:"max_budget_usd_per_call"`
+	AggregateEstimatedLimitUSD      float64           `json:"aggregate_estimated_limit_usd"`
+	BillingBoundary                 string            `json:"billing_boundary"`
+	VendorProvenance                string            `json:"vendor_provenance"`
+	Challenges                      []string          `json:"challenges"`
 }
 type NativeReview struct {
 	Plan         NativePlan `json:"plan"`
@@ -141,13 +145,15 @@ func reviewNativeAt(ctx context.Context, in NativeOptions, run nativeCommand, ch
 		return out, err
 	}
 	profile, profileErr := profileFingerprint(o)
-	p := NativePlan{Protocol: qualificationProtocol, State: "unavailable", Profile: nativeProfile, HostExecutable: in.Executable, ServerSHA256: digest(o.serverBody), BindingSHA256: binding, ProfileSHA256: profile, Target: o.target, Destination: o.Destination, Version: o.Version, ScratchRoot: in.ScratchRoot, Authentication: "unavailable", MaximumCalls: maximumNativeCalls, MaximumTurnsPerCall: maximumNativeTurns, MaximumSecondsPerCall: nativeCallSeconds, MaxBudgetUSDPerCall: in.MaxBudgetUSD, AggregateEstimatedLimitUSD: maximumNativeCalls * in.MaxBudgetUSD, BillingBoundary: "Provider billing and CLI caps are estimates, not hard ceilings. Stop remaining calls when an observed estimate exceeds the reviewed per-call limit.", VendorProvenance: "Explicitly operator-selected local installation; Anthropic vendor provenance is not independently attested.", Challenges: []string{"read_only_startup", "allowed_read", "allowed_write", "guard_denial", "sequential_case_gamma_correlation_and_stops", "missing_helper_blocks_edit", "crashing_helper_blocks_edit", "timed_out_helper_blocks_edit"}}
+	p := NativePlan{Protocol: qualificationProtocol, State: "unavailable", Profile: nativeProfile, HostExecutable: in.Executable, ServerSHA256: digest(o.serverBody), BindingSHA256: binding, ProfileSHA256: profile, Target: o.target, Destination: o.Destination, Version: o.Version, ScratchRoot: in.ScratchRoot, Authentication: "unavailable", MaximumCalls: maximumNativeCalls, MaximumTurnsPerCall: maximumNativeTurns, MaximumSecondsPerCall: nativeCallSeconds, StartupCheckSeconds: nativeStartupCheckSeconds, MaxBudgetUSDPerCall: in.MaxBudgetUSD, AggregateEstimatedLimitUSD: maximumNativeCalls * in.MaxBudgetUSD, BillingBoundary: "Provider billing and CLI caps are estimates, not hard ceilings. Stop remaining calls when an observed estimate exceeds the reviewed per-call limit.", VendorProvenance: "Explicitly operator-selected local installation; Anthropic vendor provenance is not independently attested.", Challenges: []string{"read_only_startup", "allowed_read", "allowed_write", "guard_denial", "sequential_case_gamma_correlation_and_stops", "missing_helper_blocks_edit", "crashing_helper_blocks_edit", "timed_out_helper_blocks_edit"}}
+	p.CodePilot = o.codePilot
 	p.ChallengeDirectory = in.ChallengeDirectory
 	if contains(o.Binding.WorkspacePath, o.Server) {
 		return out, errors.New("negative read control requires the selected public server outside the workspace")
 	}
 	p.DeniedReadPath = o.Server
 	p.ContextBoundary = "All sessions use the exact selected workspace cwd and effective normal project/local hook settings. Choose a synthetic non-client target: Code may load and send its effective context. Agent children can make additional provider requests beyond the parent turn count. Qualification advertises an empty MCP config and disallows MCP tools. Managed policy may affect startup connections; those connectors are not used as qualification evidence or qualified by this result."
+	p.ContextBoundary += " The qualification-only full-state startup check has a " + strconv.Itoa(nativeStartupCheckSeconds) + "-second deadline and finite coverage limits of 32768 entries, 512 MiB per file and 1 GiB total; larger or unstable state refuses without excluding any subtree. Ordinary hook deadlines are unchanged."
 	p.ManagedPolicyBoundary = "Remote or OS-delivered managed policy is UNATTESTED and may affect startup/context. Local autoMemoryEnabled:false establishes only the supported local file profile; it does not prove that managed policy disables memory. Native observations do not establish enterprise device-policy admission or production rollout authority; those remain external acceptance gates."
 	p.MetadataWrites = []string{"new synthetic control files inside the exact challenge directory", "native-agent-flow metadata and lifecycle receipts for three new sessions in the selected canonical owner state", "local candidate packets and metadata-only observations inside the selected private scratch root"}
 	p.DescendantCleanup = nativeProcessBoundary()
@@ -496,6 +502,7 @@ func prepareNativeProbe(o Options, root, challenge string, index int, fault stri
 	}
 	startup := config.Hooks["SessionStart"][0].Hooks[0]
 	startup["args"] = append([]string{"native-startup-check", "--nonce", p.nonce}, args(candidate)[1:]...)
+	startup["timeout"] = nativeStartupCheckSeconds
 	failureCommand := "${CLAUDE_PLUGIN_ROOT}/scripts/" + binaryName(o.target.Platform())
 	failureArgs := []string{"native-fault", "--fault", fault}
 	if fault == "missing" {
@@ -520,6 +527,7 @@ func prepareNativeProbe(o Options, root, challenge string, index int, fault stri
 		}
 	}
 	startup["args"] = append([]string{"native-startup-check", "--nonce", p.nonce}, args(candidate)[1:]...)
+	startup["timeout"] = nativeStartupCheckSeconds
 	hooks["SessionStart"] = []any{map[string]any{"hooks": []any{startup}}}
 	pre := hooks["PreToolUse"].([]any)
 	canonical := pre[0].(map[string]any)["hooks"].([]any)[0].(map[string]any)
@@ -609,7 +617,8 @@ func CheckNativeStartup(binding product.Options, nonce string, in io.Reader, out
 }
 func startupSnapshot(binding product.Options) (string, error) {
 	state := map[string]string{}
-	count, total := 0, 0
+	count, total := 0, int64(0)
+	buffer := make([]byte, 32<<10)
 	h, err := datahome.Resolve(datahome.Options{ProductRoot: binding.ProductRoot, UserHome: binding.UserHome, LookupEnv: binding.LookupEnv})
 	if err != nil {
 		return "", err
@@ -620,7 +629,7 @@ func startupSnapshot(binding product.Options) (string, error) {
 				return walkErr
 			}
 			count++
-			if count > 4096 {
+			if count > 32768 {
 				return errors.New("startup snapshot limit")
 			}
 			info, err := entry.Info()
@@ -643,16 +652,26 @@ func startupSnapshot(binding product.Options) (string, error) {
 			if err != nil {
 				return err
 			}
-			body, readErr := io.ReadAll(io.LimitReader(file, (1<<20)+1))
-			closeErr := file.Close()
-			if readErr != nil || closeErr != nil || len(body) > 1<<20 {
+			// The optional authenticated runtime is covered in full. Bound both
+			// bytes read and memory without excluding any state subtree.
+			limit := int64(512 << 20)
+			if remaining := int64(1<<30) - total; remaining < limit {
+				limit = remaining
+			}
+			before, statErr := file.Stat()
+			if statErr != nil || !os.SameFile(info, before) || !before.Mode().IsRegular() || before.Size() < 0 || before.Size() > limit {
+				file.Close()
 				return errors.New("startup file unavailable")
 			}
-			total += len(body)
-			if total > 8<<20 {
-				return errors.New("startup snapshot bytes")
+			hash := sha256.New()
+			observed, readErr := io.CopyBuffer(hash, io.LimitReader(file, limit+1), buffer)
+			after, afterErr := file.Stat()
+			closeErr := file.Close()
+			if readErr != nil || afterErr != nil || closeErr != nil || observed > limit || observed != before.Size() || !os.SameFile(before, after) || after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime()) || after.Mode() != before.Mode() {
+				return errors.New("startup file unavailable")
 			}
-			state[key] = digest(body)
+			total += observed
+			state[key] = hex.EncodeToString(hash.Sum(nil))
 			return nil
 		})
 		if err != nil {
