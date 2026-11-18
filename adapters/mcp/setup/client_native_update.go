@@ -199,12 +199,13 @@ func copyQualifiedClientTree(source, destination, expected string) error {
 			return err
 		}
 		count, copyErr := io.Copy(out, io.LimitReader(in, (128<<20)+1))
+		modeErr := out.Chmod(info.Mode().Perm())
 		syncErr := out.Sync()
 		closeErr := out.Close()
 		if count != info.Size() || count > 128<<20 {
 			return errors.New("qualified native file changed or exceeds bound")
 		}
-		return errors.Join(copyErr, syncErr, closeErr)
+		return errors.Join(copyErr, modeErr, syncErr, closeErr)
 	})
 	if err != nil {
 		return err
