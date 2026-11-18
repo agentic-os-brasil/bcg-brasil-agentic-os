@@ -7,4 +7,4 @@ import (
 	"os"
 )
 
-func openSyncedFile(path string) (*os.File, error) { return scheduler.OpenRegularFile(path) }
+func openSyncedFile(path string, _ int64) (*os.File, error) { return scheduler.OpenRegularFile(path) }

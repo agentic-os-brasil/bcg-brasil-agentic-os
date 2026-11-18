@@ -94,9 +94,11 @@ this limitation in participant status until the actual client is qualified.
 ## Update the server and preserve the client binding
 
 Use the same console and [signed-source update/recovery workflow](product-synced-source.md).
-SharePoint hosts distribution bytes; download and extract the generation into an
-ordinary local mirror. Direct Windows OneDrive/Files On-Demand paths remain
-unavailable, including hydrated Cloud Files. Signatures, enrolled source
+SharePoint/OneDrive supplies distribution bytes. The current source can materialize
+the finite supported Windows Cloud Files input into ordinary private staging;
+native OneDrive qualification remains pending. It refuses unsafe or incomplete
+input and preserves the configured private brain location and owner data.
+Signatures, enrolled source
 custody and the independently admitted installer supply release authority.
 There is no new hosted MCP endpoint in this local stdio delivery.
 
@@ -171,6 +173,7 @@ loading, Windows private-state admission, organization signing or delivery.
 
 Before inviting participants, qualify the exact native artifacts and clients,
 publish through the approved organization trust/channel, and prove clean
-installation plus update/readback with two participants. The SharePoint
-destination remains deferred. Keep actual client/device/CI/signing/publication
+installation plus update/readback with two participants. Use the selected shared
+distribution destination and choose each participant's local synchronized folder
+at first setup. Keep actual client/device/CI/signing/publication
 and participant results separate from source review and local integration.
