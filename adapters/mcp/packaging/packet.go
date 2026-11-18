@@ -202,7 +202,11 @@ func profileFingerprint(o Options) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	body, err := json.Marshal(map[string]any{"generated": files, "target_configuration": configuration})
+	profile := map[string]any{"generated": files, "target_configuration": configuration}
+	if o.Carrier != nil {
+		profile["stable_carrier"] = stableBinding(o)
+	}
+	body, err := json.Marshal(profile)
 	if err != nil {
 		return "", err
 	}

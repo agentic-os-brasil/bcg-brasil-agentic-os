@@ -24,13 +24,33 @@ its observation time. `current_signed_metadata` describes that metadata check;
 `update_available_metadata_only` does not establish that payload is ready.
 Offline, expired and partial inputs remain explicitly unavailable.
 
-For a requested update, follow the signed-source workflow below through the
-existing Manage Maestro action. Prepare while work continues; offer activation
+For a requested update in Code or Desktop, call `maestro_apply` with only
+`{"operation":"installation.update_handoff"}` when that exact operation is
+available. It uses the fixed validated startup carrier and independently admitted
+participant manager for this installation/workspace; the model supplies no path,
+command, source, plan or approval. The normal host permission governs opening
+the fixed update console. Its exact native installer reviews still own source
+checks, activation, full native profile qualification and each actual stale
+maintenance-job requalification. A `handoff_requested` result means opening was
+requested; activation and reload remain pending. A missing or unqualified carrier
+refuses this route. Preserve the refusal and use the known independently admitted
+manager recovery route when MCP is unavailable; a discovered synced executable
+or model-selected alternate installation is not a recovery path.
+
+Follow the signed-source workflow below in that same existing Manage Maestro
+update action. Prepare while work continues; offer activation
 and the supported reconnect after the current task, preserving its checkpoint.
 Report backend, skills, hooks, agents and Desktop instructions separately until
 the actual new versions are loaded. Keep the existing private brain binding,
 including a Developer location, unchanged. A prepared plan, copied archive or
 new version number alone cannot establish complete Maestro activation.
+
+Desktop's compatible once-installed live-method bootstrap reads current
+canonical instructions, policy and resource identities from this same admitted
+backend on invocation. Ordinary recipe changes do not require another library
+import. Distinguish bootstrap package version, live backend method identities,
+normal host installation and loaded-session evidence. A changed bootstrap
+protocol, carrier or native permission still requires normal host review.
 
 For daily checks, inspect `maintenance.status`. If requested and inactive,
 qualify `update-availability`, then separately enroll its current revision with

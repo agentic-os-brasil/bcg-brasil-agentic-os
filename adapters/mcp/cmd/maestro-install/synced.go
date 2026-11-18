@@ -16,6 +16,7 @@ import (
 )
 
 type lifecycleFlags struct {
+	ManagementIntent                                                                                                                                                                                              string
 	ManagedRoot, UserHome, Workspace, ManifestSHA256, ClientInputsSHA256, PlanID, CarrierID, PackageSHA256, NativeContractSHA256, ClientCodeRoot, ClientDesktopPath, ClientCodeExecutable, ClientScope, HookEvent string
 	LifecycleContext                                                                                                                                                                                              bool
 }

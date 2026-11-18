@@ -103,3 +103,26 @@ admission, canonical specialist identities, confined private lifecycle storage
 and the shared workspace policy. Packet admission precedes every hook effect;
 plain MCP does not gain native hook authority. #495 owns complete carrier and
 attended qualification, with installed-client acceptance still separate.
+
+## Fixed foreground update handoff (SFRD)
+
+The additional closed maestro_apply variant installation.update_handoff accepts
+only its operation field. It requests opening the existing participant manager;
+it grants no source, executable, path, arguments, activation or confirmation
+authority. Discovery and the original closed request validator both advertise
+and enforce this exact field set. Unknown or mixed-variant fields refuse.
+
+Qualified stable-launch supplies the fixed carrier and admitted manager version
+as trusted startup context. Independently admit that installer, revalidate the
+current client/workspace record and reconstruct and verify its exact canonical
+Update Maestro launcher before invoking the normal platform opener. Missing,
+ambiguous, unqualified or changed context refuses without initialization or
+repair. On Windows retain normal script policy. No generic shell/opener request
+or model-provided destination is exposed.
+
+The manager opens directly into its existing update intent. Normal host
+permission governs the handoff; all exact source/native/client/maintenance
+reviews remain with their original owners. handoff_requested means only that
+the opener accepted the request, with activation and reload pending. If MCP is
+unavailable, the independently admitted participant manager remains the recovery
+entry. Actual host opening and completion are distinct from a test opener witness.

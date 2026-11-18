@@ -71,9 +71,6 @@ func prepareStable(o *Options) error {
 	if err := o.Carrier.validate(); err != nil {
 		return err
 	}
-	if o.NativeHost != nil {
-		return errors.New("stable client carrier uses the MCP-only profile")
-	}
 	s, err := installtx.ValidateQualifiedLaunch(o.Binding.ProductRoot, filepath.Join(o.Binding.UserHome, ".maestro-install"), installtx.ReleaseBinding{ManifestSHA256: o.Binding.InstalledManifestSHA256, ClientInputsSHA256: o.Binding.InstalledClientInputsSHA256}, time.Now())
 	if err != nil {
 		return err
@@ -97,6 +94,13 @@ func prepareStable(o *Options) error {
 		}
 	}
 	o.stableIdentity = i
+	// Only the existing process-local qualifier can construct this value.
+	// Imported diagnostics and old-release proof never grant native admission.
+	if o.NativeHost != nil {
+		if err := o.NativeHost.validate(*o); err != nil {
+			return err
+		}
+	}
 	return stableBinding(*o).validate()
 }
 func stableMetadata(files map[string][]byte, format, platform string, s *stablePacketBinding) error {
@@ -164,7 +168,7 @@ func inspectStableStatus(status PacketStatus, c StableCarrier, i releasecontract
 	if err := i.Validate(); err != nil {
 		return err
 	}
-	if status.Stable == nil || *status.Stable != c || (status.NativeMode != "mcp_only" && !(status.Format == "plugin" && status.NativeMode == "mcp_lifecycle")) || status.ServerSHA256 != serverSHA || status.EmbeddedInputsSHA256 != i.EmbeddedInputsSHA256 || status.Version != i.Version || status.RegistrySHA256 != i.AuthorityRegistrySHA256 {
+	if status.Stable == nil || *status.Stable != c || (status.NativeMode != "mcp_only" && !(status.Format == "plugin" && (status.NativeMode == "mcp_lifecycle" || status.NativeMode == "native"))) || status.ServerSHA256 != serverSHA || status.EmbeddedInputsSHA256 != i.EmbeddedInputsSHA256 || status.Version != i.Version || status.RegistrySHA256 != i.AuthorityRegistrySHA256 {
 		return errors.New("current stable packet identity differs")
 	}
 	return nil
