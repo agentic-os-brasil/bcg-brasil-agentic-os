@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -122,4 +124,135 @@ func TestMacSelfServicePreparesExactOwnerClientsAndPreservesProfile(t *testing.T
 	if out, err := run("resolve_code_executable \"$OWNER/loop-a\"", ""); err == nil {
 		t.Fatalf("symlink loop accepted %s", out)
 	}
+}
+
+// The copied fixture is a synthetic identity-protocol process, not a native
+// qualification witness. This exercises the exact cat staging and the original
+// setup-review identity reader; no signed role or real installation is issued.
+func TestMacStagedInitialServerCanAnswerOriginalIdentityReview(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Mac staging file-mode contract")
+	}
+	root := developerFixture(t)
+	repo, err := filepath.Abs("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := os.ReadFile(filepath.Join(repo, "dev/pilot/templates/installed-seed/Maestro.command"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, tail, ok := strings.Cut(string(source), "# plutil raw arrays")
+	if !ok {
+		t.Fatal("staging block missing")
+	}
+	staging, _, ok := strings.Cut(tail, "BOOTSTRAP=")
+	if !ok {
+		t.Fatal("staging boundary missing")
+	}
+	staging = "# plutil raw arrays" + staging
+	public := filepath.Join(root, "kit")
+	stage := filepath.Join(root, "stage")
+	for _, p := range []string{public, stage, filepath.Join(public, "initial-release"), filepath.Join(public, "bootstrap"), filepath.Join(public, "test-documents")} {
+		if err := os.Mkdir(p, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resources := []releasecontract.EmbeddedResource{{URI: "maestro://synthetic-staging-test", Bytes: 1, SHA256: strings.Repeat("a", 64)}}
+	digest, err := releasecontract.EmbeddedDigest(resources)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity := releasecontract.ServerIdentity{SchemaVersion: 2, Product: "maestro", Component: "mcp_server", Protocol: releasecontract.ServerProtocol, Version: "0.1.53", CompatibleBundle: ">=0.1.0 <0.2.0", AuthorityRegistrySHA256: strings.Repeat("b", 64), Resources: resources, EmbeddedInputsSHA256: digest, ExecutionContract: releasecontract.SyncedSourceContract}
+	identityJSON, err := json.Marshal(identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverName := "maestro-mcp_0.1.53_darwin_" + runtime.GOARCH
+	serverBody := []byte("#!/bin/sh\n[ \"$1\" = identity ] || exit 71\nprintf '%s\\n' '" + string(identityJSON) + "'\n")
+	manifest := map[string]any{"server": map[string]any{"version": "0.1.53"}, "artifacts": []any{map[string]any{"kind": "mcp_server", "os": "darwin", "arch": runtime.GOARCH, "name": serverName, "size": len(serverBody), "sha256": sum(serverBody)}}}
+	manifestJSON, _ := json.Marshal(manifest)
+	bodies := map[string][]byte{"initial-release/" + serverName: serverBody, "initial-release/release-manifest.json": manifestJSON, "initial-release/release-manifest.json.sig": []byte("synthetic-not-a-signature"), "initial-release/notes.md": []byte("notes"), "initial-release/archive.tar.gz": []byte("archive"), "test-documents/sample.docx": []byte("document"), "bootstrap/inert": []byte("not executed")}
+	files := []kitFile{}
+	for name, body := range bodies {
+		if err := os.WriteFile(filepath.Join(public, name), body, 0600); err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, kitFile{Path: name, SHA256: sum(body), Size: int64(len(body))})
+	}
+	metadata := map[string]any{"files": files, "server_hashes": []string{sum(serverBody), strings.Repeat("d", 64)}, "identity": map[string]any{"target_os": "darwin", "target_arch": runtime.GOARCH, "admission_sha256": strings.Repeat("c", 64)}}
+	metaJSON, _ := json.Marshal(metadata)
+	meta := filepath.Join(public, "DISTRIBUTION.json")
+	if err := os.WriteFile(meta, metaJSON, 0600); err != nil {
+		t.Fatal(err)
+	}
+	script := `set -euo pipefail
+umask 077
+fail(){ printf '%s' "$*" >&2; exit 1; }
+sha(){ local value; value="$(/usr/bin/shasum -a 256 "$1")"; printf '%s' "${value%% *}"; }
+jget(){ /usr/bin/plutil -extract "$2" raw -o - "$1"; }
+[[ "$(sha "$META")" == "$EXPECTED_META" ]] || fail 'metadata changed'
+[[ "$(jget "$META" identity.admission_sha256)" == "$ROLE" ]] || fail 'role selection changed'
+[[ "$(jget "$META" identity.target_os)" == darwin && "$(jget "$META" identity.target_arch)" == "$ARCH" ]] || fail 'target changed'
+` + staging + `
+if declare -F prepare_initial_server >/dev/null; then prepare_initial_server; fi
+`
+	cmd := exec.Command("/bin/bash", "-c", script)
+	cmd.Env = append(os.Environ(), "ROOT="+public, "STAGE="+stage, "META="+meta, "ARCH="+runtime.GOARCH, "ROLE="+strings.Repeat("c", 64), "EXPECTED_META="+sum(metaJSON))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("shipping inventory staging: %s %v", out, err)
+	}
+	staged := filepath.Join(stage, "initial-release", serverName)
+	actual, err := releasecontract.ReadServerIdentity(staged)
+	if err != nil {
+		t.Fatalf("original setup-review identity failed after actual cat staging: %v", err)
+	}
+	if actual.Version != identity.Version {
+		t.Fatal("wrong server identity")
+	}
+	info, err := os.Stat(staged)
+	if err != nil || info.Mode().Perm() != 0700 {
+		t.Fatalf("exact server permission: %v %v", info, err)
+	}
+	for name := range bodies {
+		if strings.HasSuffix(name, serverName) {
+			continue
+		}
+		info, err := os.Stat(filepath.Join(stage, name))
+		if err != nil || info.Mode().Perm() != 0600 {
+			t.Fatalf("non-server permission changed: %s %v %v", name, info, err)
+		}
+	}
+	// Resume must not turn an aliased or public staged file into an executable.
+	for _, scenario := range []string{"group-readable", "hardlink"} {
+		t.Run(scenario, func(t *testing.T) {
+			if err := os.Chmod(staged, 0600); err != nil {
+				t.Fatal(err)
+			}
+			link := filepath.Join(stage, "linked-server")
+			if scenario == "group-readable" {
+				if err := os.Chmod(staged, 0644); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := os.Link(staged, link); err != nil {
+					t.Fatal(err)
+				}
+				defer os.Remove(link)
+			}
+			retry := exec.Command("/bin/bash", "-c", script)
+			retry.Env = cmd.Env
+			if out, err := retry.CombinedOutput(); err == nil {
+				t.Fatalf("unsafe staged server accepted: %s", out)
+			}
+			info, err := os.Stat(staged)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Mode().Perm()&0100 != 0 {
+				t.Fatal("unsafe staged server was granted execution")
+			}
+		})
+	}
+
 }

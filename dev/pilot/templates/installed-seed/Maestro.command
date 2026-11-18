@@ -51,6 +51,42 @@ while /usr/bin/plutil -extract "files.$i.path" raw -o - "$META" >/dev/null 2>&1;
   ((i+=1))
 done
 [[ "$i" -ge 6 ]] || fail 'Inventário incompleto.'
+
+prepare_initial_server() {
+  local manifest="$STAGE/initial-release/release-manifest.json" index=0 matches=0 name="" expected="" size="" manifest_sha="" manifest_size="" server walk mode
+  # The factory pins this manifest only after original signed-release/role checks.
+  # Revalidate its staged inventory identity before reading a component selection.
+  while /usr/bin/plutil -extract "files.$index.path" raw -o - "$META" >/dev/null 2>&1; do
+    if [[ "$(jget "$META" "files.$index.path")" == initial-release/release-manifest.json ]]; then
+      ((matches+=1)); manifest_sha="$(jget "$META" "files.$index.sha256")"; manifest_size="$(jget "$META" "files.$index.size")"
+    fi
+    ((index+=1))
+  done
+  [[ "$matches" == 1 && -f "$manifest" && ! -L "$manifest" && "$(stat -f '%l' "$manifest")" == 1 && "$(stat -f '%u' "$manifest")" == "$(id -u)" && "$(stat -f '%z' "$manifest")" == "$manifest_size" && "$(sha "$manifest")" == "$manifest_sha" ]] || fail 'Manifesto inicial privado divergente; preserve a preparação.'
+  index=0; matches=0
+  while /usr/bin/plutil -extract "artifacts.$index.kind" raw -o - "$manifest" >/dev/null 2>&1; do
+    if [[ "$(jget "$manifest" "artifacts.$index.kind")" == mcp_server && "$(jget "$manifest" "artifacts.$index.os")" == darwin && "$(jget "$manifest" "artifacts.$index.arch")" == "$ARCH" ]]; then
+      ((matches+=1)); name="$(jget "$manifest" "artifacts.$index.name")"; expected="$(jget "$manifest" "artifacts.$index.sha256")"; size="$(jget "$manifest" "artifacts.$index.size")"
+    fi
+    ((index+=1))
+  done
+  [[ "$matches" == 1 && "$name" =~ ^maestro-mcp_[A-Za-z0-9_.-]+_darwin_(arm64|amd64)$ && "$name" != *..* && "$expected" =~ ^[0-9a-f]{64}$ && "$size" =~ ^[0-9]+$ ]] || fail 'Componente inicial não corresponde ao alvo exato deste Mac.'
+  [[ "$expected" == "$(jget "$META" server_hashes.0)" || "$expected" == "$(jget "$META" server_hashes.1)" ]] || fail 'Componente inicial fora das versões admitidas.'
+  index=0; matches=0
+  while /usr/bin/plutil -extract "files.$index.path" raw -o - "$META" >/dev/null 2>&1; do
+    if [[ "$(jget "$META" "files.$index.path")" == "initial-release/$name" ]]; then
+      [[ "$(jget "$META" "files.$index.sha256")" == "$expected" && "$(jget "$META" "files.$index.size")" == "$size" ]] || fail 'Inventário do componente inicial divergente.'
+      ((matches+=1))
+    fi
+    ((index+=1))
+  done
+  server="$STAGE/initial-release/$name"; walk="$(dirname "$server")"
+  while [[ "$walk" != "$STAGE" ]]; do [[ ! -L "$walk" ]] || fail 'Link na preparação do componente inicial.'; walk="$(dirname "$walk")"; done
+  [[ "$matches" == 1 && -d "$STAGE" && ! -L "$STAGE" && -f "$server" && ! -L "$server" && "$(stat -f '%l' "$server")" == 1 && "$(stat -f '%u' "$server")" == "$(id -u)" && "$(stat -f '%z' "$server")" == "$size" && "$(sha "$server")" == "$expected" ]] || fail 'Componente inicial privado divergente; nenhum outro arquivo será ajustado.'
+  mode="$(stat -f '%Lp' "$server")"; (( (8#$mode & 077) == 0 )) || fail 'Componente inicial permite acesso a outros usuários.'
+  chmod -h 700 "$server" || fail 'Não foi possível preparar o componente inicial autenticado.'
+  [[ -f "$server" && ! -L "$server" && "$(stat -f '%l' "$server")" == 1 && "$(stat -f '%u' "$server")" == "$(id -u)" && "$(stat -f '%Lp' "$server")" == 700 && "$(stat -f '%z' "$server")" == "$size" && "$(sha "$server")" == "$expected" ]] || fail 'Componente inicial mudou durante a preparação; preserve os arquivos.'
+}
 BOOTSTRAP="$STAGE/$(jget "$META" installer)"; chmod 700 "$BOOTSTRAP"
 verify_installer() { [[ -f "$1" && ! -L "$1" && "$(stat -f '%l' "$1")" == 1 && "$(sha "$1")" == "$(jget "$META" identity.installer_sha256)" ]] || fail 'O instalador mudou. Nada será executado.'; }
 verify_installer "$BOOTSTRAP"
@@ -61,6 +97,7 @@ printf '# Maestro MCP — preparação pendente\n\nPiloto experimental (`enginee
 printf '\nRelatório desta tentativa: %s/RELATORIO.md\n' "$RUN"
 "$BOOTSTRAP" seed-status > "$RUN/seed-status-private.json" || fail 'A admissão experimental expirou ou não foi aceita. Peça um kit revisado ao time.'
 [[ "$(jget "$RUN/seed-status-private.json" schema_version)" == 3 && "$(jget "$RUN/seed-status-private.json" experimental_seed.admission_sha256)" == "$ROLE" && "$(jget "$RUN/seed-status-private.json" experimental_seed.profile)" == engineering-installed-seed-v1 ]] || fail 'O instalador retornou outro perfil ou outra admissão.'
+prepare_initial_server
 json() {
   local file="$1" key value; shift
   [[ ! -L "$file" ]] || fail 'Link em arquivo de configuração.'
