@@ -1,9 +1,11 @@
 // Development-only assembly of an already admitted experimental participant kit.
-// It never executes its installer/release inputs and never issues authority.
+// It observes only the authenticated staged installer's read-only seed-status;
+// release/runtime inputs are never executed and this factory issues no authority.
 package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"debug/buildinfo"
 	"encoding/hex"
@@ -13,13 +15,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/pilotdocument"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseprovider"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
@@ -66,7 +71,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Println("Engineering kit assembled; no installer, client, model, signing or activation was run.")
+	fmt.Println("Engineering kit assembled; read-only staged installer identity verified. No installation, client, model, signing or activation was run.")
 }
 
 func buildKit(o factoryOptions, clock func() time.Time) error {
@@ -121,6 +126,9 @@ func buildKit(o factoryOptions, clock func() time.Time) error {
 	if err = validateOutput(o.Output, o.Source, o.InitialRelease); err != nil {
 		return err
 	}
+	if id.TargetOS != runtime.GOOS || id.TargetArch != runtime.GOARCH {
+		return fmt.Errorf("installer identity probe requires matching target host %s/%s; current host is %s/%s", id.TargetOS, id.TargetArch, runtime.GOOS, runtime.GOARCH)
+	}
 	if err = os.Mkdir(o.Output, 0700); err != nil {
 		return fmt.Errorf("new output required; existing material preserved: %w", err)
 	}
@@ -159,6 +167,12 @@ func buildKit(o factoryOptions, clock func() time.Time) error {
 		return err
 	}
 	if err = role.VerifyRelease(currentRelease); err != nil {
+		return err
+	}
+	// The original entry needs its legitimate adjacent public role and registry.
+	// All copied release/source inputs are authenticated before this sole probe;
+	// the fresh bootstrap is retained if identity observation fails.
+	if err = verifyStagedInstallerIdentity(filepath.Join(o.Output, filepath.FromSlash(installerName)), role); err != nil {
 		return err
 	}
 	genDir := filepath.Join(o.Output, "source", "generations", current.Generation.GenerationDirectory(current.SHA256))
@@ -258,10 +272,60 @@ func verifyBuild(path string, id installer.ExperimentalSeedIdentity) error {
 			tag = true
 		}
 	}
-	if !tag || settings["GOOS"] != id.TargetOS || settings["GOARCH"] != id.TargetArch || !strings.Contains(settings["-ldflags"], "main.AuthorityRegistrySHA256="+id.RegistrySHA256) || !strings.Contains(settings["-ldflags"], "main.Version="+id.InstallerVersion) {
-		return errors.New("installer build tag, target, version or compiled public pin differs from admission")
+	// Go intentionally omits -ldflags metadata from -trimpath builds. The
+	// original staged seed-status entry proves compiled pin/version instead.
+	if !tag || settings["GOOS"] != id.TargetOS || settings["GOARCH"] != id.TargetArch {
+		return errors.New("installer build tag or target differs from admission")
 	}
 	return nil
+}
+
+func verifyStagedInstallerIdentity(path string, role *installer.VerifiedExperimentalSeed) error {
+	id := role.Identity()
+	if err := role.VerifyInstaller(path, id.InstallerVersion, id.TargetOS, id.TargetArch); err != nil {
+		return err
+	}
+	if err := verifyBuild(path, id); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, path, "seed-status")
+	command.Dir = filepath.Dir(path)
+	command.WaitDelay = 2 * time.Second
+	var output, diagnostic installerIdentityOutput
+	command.Stdout, command.Stderr = &output, &diagnostic
+	if err := command.Run(); err != nil {
+		return fmt.Errorf("staged installer identity probe failed; copied inputs retained: %w: %s", err, strings.TrimSpace(diagnostic.String()))
+	}
+	var status struct {
+		SchemaVersion           int                                 `json:"schema_version"`
+		Product                 string                              `json:"product"`
+		Component               string                              `json:"component"`
+		Protocol                string                              `json:"protocol"`
+		InstallerVersion        string                              `json:"installer_version"`
+		AuthorityRegistrySHA256 string                              `json:"authority_registry_sha256"`
+		ExperimentalSeed        *installer.ExperimentalSeedIdentity `json:"experimental_seed"`
+	}
+	if err := releasecontract.DecodeStrictJSON(output.Bytes(), &status); err != nil {
+		return fmt.Errorf("staged installer identity probe returned invalid status: %w", err)
+	}
+	if status.SchemaVersion != 3 || status.Product != "maestro" || status.Component != "experimental_installer" || status.Protocol != installer.ExperimentalSeedProtocol || status.InstallerVersion != id.InstallerVersion || status.AuthorityRegistrySHA256 != id.RegistrySHA256 || status.ExperimentalSeed == nil || *status.ExperimentalSeed != id {
+		return errors.New("staged installer identity probe differs from exact admitted compiled pin/version/role")
+	}
+	return role.VerifyInstaller(path, id.InstallerVersion, id.TargetOS, id.TargetArch)
+}
+
+type installerIdentityOutput struct{ buffer bytes.Buffer }
+
+func (o *installerIdentityOutput) Bytes() []byte  { return o.buffer.Bytes() }
+func (o *installerIdentityOutput) String() string { return o.buffer.String() }
+
+func (o *installerIdentityOutput) Write(p []byte) (int, error) {
+	if o.buffer.Len()+len(p) > 16<<10 {
+		return 0, errors.New("installer identity probe output exceeds bound")
+	}
+	return o.buffer.Write(p)
 }
 
 func validateOutput(out string, inputs ...string) error {
