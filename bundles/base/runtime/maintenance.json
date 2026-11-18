@@ -172,6 +172,19 @@
       "success_boundary": "sanitized observation is versioned as a proposal input, never as an active self facet"
     },
     {
+      "id": "update-availability",
+      "category": "update",
+      "trigger": "daily_or_presence",
+      "executor": "local_adapter",
+      "scope": "owner",
+      "availability": "unavailable",
+      "availability_reason": "requires an enrolled signed source, actual metadata qualification and explicit daily observation enrollment",
+      "default_enabled": false,
+      "unattended": "policy_gated",
+      "writes": ["local_diagnostics"],
+      "success_boundary": "one bounded authenticated metadata observation or explicit source-unavailable diagnosis and its terminal receipt are recorded without source custody, payload staging or release activation"
+    },
+    {
       "id": "update-check",
       "category": "update",
       "trigger": "daily_or_presence",

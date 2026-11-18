@@ -288,6 +288,38 @@ the live guard. It cannot mint a new qualification from that clock-only churn.
 Reports retain the stored plan identity as historical when stale; a separate
 bounded current-pending projection requires read-only canonical verification.
 
+### Daily signed-source availability (SFRD)
+
+`update-availability` is a separate default-inactive, metadata-only owner job on
+the existing control, Worker, grant, lease, receipt and diagnostic lifecycle.
+Require an already enrolled managed-installation source, actual authenticated
+qualification and separately reviewed enrollment. Share that owner/installation
+namespace across admitted workspaces and sessions. Model arguments, connections
+and hooks supply no source-enrollment or job-activation authority.
+
+The serve-owned wake observes the current local calendar day on first active use.
+Reconnects and concurrent workspaces coalesce through the existing occurrence
+fence; missed days coalesce to today rather than replaying historical metadata
+checks. Only this read-only-source observation bypasses idle. Other jobs retain
+their existing idle and catch-up behavior. No background service is installed.
+
+Reuse `ReviewSynced` for bounded authenticated source metadata/manifest reads.
+Do not advance source custody, stage payload, call a model, activate code or alter
+brain content. Bounded control, scheduler and diagnostic records remain in the
+existing admitted private owner state, preserving a configured Developer binding.
+Report source observation time and signed metadata status; payload stays
+`not_checked`. Offline, partial, expired, recalled, invalid or unenrolled sources
+never become up-to-date. Completing an unavailable diagnosis is not evidence of
+source availability, payload integrity or loaded-client functionality.
+
+The existing setup-update method provides the conversational update entry using
+the enrolled source and exact reviewed installer/Manage Maestro route. Preserve
+active-work continuity and the private brain. Checking, preparation, activation,
+client reload, native execution and Desktop instruction currency remain separate
+effects and evidence. Whole-executable/CLI/configuration qualification bindings
+remain effective after updates; retained controls cannot relabel stale proofs.
+The attended `update-check` contract above remains unchanged.
+
 ### Closed Darwin local-health product binding (DHRP)
 
 Spec037 owns the finite diagnosis, exclusive first-cache creation and immutable

@@ -22,7 +22,7 @@ import (
 )
 
 func maintenanceQueries() []any {
-	return []any{variant("maintenance.status", map[string]any{}), variant("maintenance.report", map[string]any{"job_id": map[string]any{"type": "string", "enum": []string{maintenance.DarwinDailyJobID, maintenance.DarwinWeeklyJobID, maintenance.DarwinMonthlyJobID, maintenance.UpdateCheckJobID, maintenance.MemoryDeepDreamJobID, maintenance.MemoryCaptureJobID, maintenance.SelfObservationCaptureJobID, "memory-retention-check", "skills-index-refresh", "runtime-health-check", "capability-recheck", "runtime-drift-check", maintenance.WikiIncrementalJobID, maintenance.WikiReconcileJobID, maintenance.WikiIntegrityJobID}}}, "job_id")}
+	return []any{variant("maintenance.status", map[string]any{}), variant("maintenance.report", map[string]any{"job_id": map[string]any{"type": "string", "enum": []string{maintenance.DarwinDailyJobID, maintenance.DarwinWeeklyJobID, maintenance.DarwinMonthlyJobID, maintenance.UpdateCheckJobID, maintenance.UpdateAvailabilityJobID, maintenance.MemoryDeepDreamJobID, maintenance.MemoryCaptureJobID, maintenance.SelfObservationCaptureJobID, "memory-retention-check", "skills-index-refresh", "runtime-health-check", "capability-recheck", "runtime-drift-check", maintenance.WikiIncrementalJobID, maintenance.WikiReconcileJobID, maintenance.WikiIntegrityJobID}}}, "job_id")}
 }
 
 func maintenanceTransitions() []any {
@@ -270,6 +270,9 @@ func maintenancePresentation(review maintenance.ProductReview) any {
 	if review.Operation.JobID == maintenance.UpdateCheckJobID {
 		presentation["signed_source_review"] = review.SourceReview
 		presentation["scope"] = "One attended exact signed-source observation, private candidate staging and bounded diagnosis. No recurring enrollment, release activation, native health or rollout authority. Authenticated higher recalls persist even when expired or payload-incomplete."
+	}
+	if review.Operation.JobID == maintenance.UpdateAvailabilityJobID {
+		presentation["scope"] = "Observe only signed metadata from this installation's already enrolled source, once per calendar day on first active use across admitted workspaces. Record bounded local diagnostics and scheduler receipts in the existing private owner state. Source custody, payload downloads/staging, code activation, client replacement and brain changes are excluded. Qualification requires a genuine authenticated metadata read; enrollment is separate and never installs an operating-system service."
 	}
 	if review.DarwinReview != nil {
 		presentation["darwin_review"] = review.DarwinReview

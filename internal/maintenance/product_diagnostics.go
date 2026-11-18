@@ -18,6 +18,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimeprojection"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/updateservice"
 )
 
 type SourceObservation struct {
@@ -36,18 +37,19 @@ type RuntimeDiagnosis struct {
 	InstallationCoverage string                        `json:"installation_coverage"`
 }
 type DiagnosticReport struct {
-	Update         *UpdateDiagnosis       `json:"update,omitempty"`
-	Wiki           *WikiDiagnostic        `json:"wiki,omitempty"`
-	Implementation string                 `json:"implementation,omitempty"`
-	Configuration  string                 `json:"configuration,omitempty"`
-	SchemaVersion  int                    `json:"schema_version"`
-	WorkspaceID    string                 `json:"workspace_id"`
-	JobID          string                 `json:"job_id"`
-	SourceSHA256   string                 `json:"source_sha256"`
-	ObservedAt     time.Time              `json:"observed_at"`
-	Finding        string                 `json:"finding"`
-	Runtime        *RuntimeDiagnosis      `json:"runtime,omitempty"`
-	Retention      *memory.RetentionState `json:"retention,omitempty"`
+	Availability   *updateservice.SyncedAvailability `json:"availability,omitempty"`
+	Update         *UpdateDiagnosis                  `json:"update,omitempty"`
+	Wiki           *WikiDiagnostic                   `json:"wiki,omitempty"`
+	Implementation string                            `json:"implementation,omitempty"`
+	Configuration  string                            `json:"configuration,omitempty"`
+	SchemaVersion  int                               `json:"schema_version"`
+	WorkspaceID    string                            `json:"workspace_id"`
+	JobID          string                            `json:"job_id"`
+	SourceSHA256   string                            `json:"source_sha256"`
+	ObservedAt     time.Time                         `json:"observed_at"`
+	Finding        string                            `json:"finding"`
+	Runtime        *RuntimeDiagnosis                 `json:"runtime,omitempty"`
+	Retention      *memory.RetentionState            `json:"retention,omitempty"`
 }
 
 func boundedSource(path string) ([]byte, error) {
@@ -217,6 +219,10 @@ func (s *Service) diagnosticSource(job string) (DiagnosticReport, error) {
 // provenance. New reports bind actual inputs to the executing implementation.
 func (r DiagnosticReport) sourceDigest() string {
 	var input any = r.Runtime
+	if r.JobID == UpdateAvailabilityJobID {
+		// Each actual daily observation must retain its fresh observation time.
+		input = []any{r.Availability, r.ObservedAt}
+	}
 	if r.JobID == UpdateCheckJobID {
 		if r.Update != nil {
 			semantic := *r.Update
@@ -248,7 +254,14 @@ func (r DiagnosticReport) validate() error {
 	if r.SourceSHA256 != r.sourceDigest() {
 		return errors.New("diagnostic source digest mismatch")
 	}
-	if r.JobID == UpdateCheckJobID {
+	if r.JobID != UpdateAvailabilityJobID && r.Availability != nil {
+		return errors.New("availability belongs only to its metadata job")
+	}
+	if r.JobID == UpdateAvailabilityJobID {
+		if r.Availability == nil || r.Availability.Validate() != nil || r.Update != nil || r.Runtime != nil || r.Retention != nil || r.Wiki != nil || r.Finding != "update_availability_observed" {
+			return errors.New("invalid source availability observation")
+		}
+	} else if r.JobID == UpdateCheckJobID {
 		if r.Update == nil || r.Runtime != nil || r.Retention != nil || r.Wiki != nil || r.Update.Sequence == 0 || !digestPattern.MatchString(r.Update.GenerationSHA256) || !digestPattern.MatchString(r.Update.ManifestSHA256) || !digestPattern.MatchString(r.Update.ClientInputsSHA256) || r.Update.CandidateRelease == "" || r.Finding != "authenticated_update_check" {
 			return errors.New("update diagnosis lacks actual authenticated source evidence")
 		}
@@ -288,7 +301,7 @@ func (r DiagnosticReport) validate() error {
 	return nil
 }
 func diagnosticJob(id string) bool {
-	return id == UpdateCheckJobID || wikiJob(id) || id == "memory-retention-check" || id == "runtime-health-check" || id == "capability-recheck" || id == "runtime-drift-check"
+	return id == UpdateAvailabilityJobID || id == UpdateCheckJobID || wikiJob(id) || id == "memory-retention-check" || id == "runtime-health-check" || id == "capability-recheck" || id == "runtime-drift-check"
 }
 
 type DiagnosticStore struct{ Root string }
