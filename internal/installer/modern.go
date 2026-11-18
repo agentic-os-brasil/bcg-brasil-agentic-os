@@ -88,6 +88,11 @@ func checkInstalledExecutable(ctx context.Context, run commandRunner, plan Plan,
 }
 
 func validateModernCustody(o Options) error {
+	if o.ExperimentalSeed == nil {
+		if _, err := os.Lstat(filepath.Join(o.ManagedRoot, "trust", experimentalSeedOriginName)); !errors.Is(err, os.ErrNotExist) {
+			return errors.New("production first install cannot adopt experimental custody")
+		}
+	}
 	if err := validateModernCustodyRoots(o); err != nil {
 		return err
 	}

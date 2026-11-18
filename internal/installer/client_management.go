@@ -88,9 +88,15 @@ func PrepareClientManagementHandoff(ctx context.Context, o ClientOptions) (Clien
 				return err
 			}
 		}
+		if err := recheckExperimentalOperation(o.SeededOperationOptions); err != nil {
+			return err
+		}
 		out = ClientManagementHandoff{CarrierID: r.CarrierID, WorkspaceID: r.Binding.WorkspaceID, ManifestSHA256: r.Materialization.ManifestSHA256, Launcher: path, State: "handoff_prepared", Activation: "not_requested_or_approved"}
 		return nil
 	})
+	if err == nil {
+		err = recheckExperimentalOperation(o.SeededOperationOptions)
+	}
 	return out, err
 }
 

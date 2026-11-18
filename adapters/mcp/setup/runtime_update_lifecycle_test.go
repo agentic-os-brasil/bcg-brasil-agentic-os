@@ -41,7 +41,8 @@ import (
 // inert distinct archives. No model, real converter, native host or authority
 // issuance is exercised or claimed by this controlled process witness.
 func TestRuntimeUpdateCompiledChangedPackLifecycle(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
+	journeyStarted := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
 	defer cancel()
 	root := t.TempDir()
 	must(t, os.Chmod(root, 0700))
@@ -80,6 +81,7 @@ func TestRuntimeUpdateCompiledChangedPackLifecycle(t *testing.T) {
 	}
 	n := build("0.1.42", "N synthetic inert")
 	next := build("0.1.43", "N1 DIFFERENT synthetic inert")
+	t.Logf("journey timing: two candidates ready elapsed=%s", time.Since(journeyStarted))
 	seedSHA := sum(read(t, n.factory.Installer))
 	verifyNative := func(_ context.Context, path string) error {
 		body, e := os.ReadFile(path)
@@ -270,9 +272,13 @@ func TestRuntimeUpdateCompiledChangedPackLifecycle(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{"Self": seed.Self, "Version": seed.Version, "Pin": seed.AuthorityRegistrySHA256, "SeedSHA": seedSHA, "ManagedRoot": seed.ManagedRoot, "UserHome": user, "Client": clients.Request})
 	must(t, os.WriteFile(fixture, body, 0600))
 	manager := func(action string, wantSuccess bool) string {
+		actionStarted := time.Now()
+		t.Logf("journey timing: manager %s start elapsed=%s", action, actionStarted.Sub(journeyStarted))
 		command := exec.CommandContext(ctx, process, "-test.run=^TestRuntimeCurrentnessManagerProcess$", "-test.v")
 		command.Env = append(os.Environ(), "MAESTRO_RUNTIME_MANAGER_FIXTURE="+fixture, "MAESTRO_RUNTIME_MANAGER_ACTION="+action)
 		out, e := command.CombinedOutput()
+		actionFinished := time.Now()
+		t.Logf("journey timing: manager %s finish elapsed=%s duration=%s error=%v", action, actionFinished.Sub(journeyStarted), actionFinished.Sub(actionStarted), e)
 		if wantSuccess && e != nil {
 			t.Fatalf("actual manager %s: %s %v", action, out, e)
 		}

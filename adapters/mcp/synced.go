@@ -30,7 +30,7 @@ func (b *Bound) sourceRequired() (bool, error) {
 	return owning.required, err
 }
 func (b *Bound) sourceContext() (sourceOwningContext, error) {
-	return b.sourceContextWithReader(installtx.ReadSourceState)
+	return b.sourceContextWithReader(b.readInstalledSourceState)
 }
 func (b *Bound) sourceContextWithReader(read sourceStateReader) (sourceOwningContext, error) {
 	pinned := b.options.InstalledManifestSHA256 != "" || b.options.InstalledClientInputsSHA256 != ""
@@ -80,7 +80,7 @@ func (b *Bound) validateInstalledSource() error {
 	if !required {
 		return nil
 	}
-	state, err := installtx.ValidateQualifiedLaunch(b.options.ProductRoot, filepath.Join(b.options.UserHome, ".maestro-install"), b.installedExpectation(), time.Now())
+	state, err := b.validatedQualifiedState(b.installedExpectation())
 	if err != nil {
 		return ErrSourceRecoveryRequired
 	}
@@ -123,6 +123,6 @@ func (b *Bound) guardQualifiedPublication(publish func() error) error {
 		if err := b.validate(); err != nil {
 			return err
 		}
-		return publish()
+		return b.withExperimentalSeedFence(publish)
 	})
 }

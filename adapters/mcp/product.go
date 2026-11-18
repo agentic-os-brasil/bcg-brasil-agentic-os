@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
@@ -21,6 +22,8 @@ import (
 )
 
 type Options struct {
+	ExperimentalSeed                     *installer.VerifiedExperimentalSeed
+	ExperimentalSeedRoot                 string
 	ProductRoot, UserHome, WorkspacePath string
 	LookupEnv                            func(string) (string, bool)
 	// These constructor inputs come only from the native binary seed, never tool arguments.
@@ -60,6 +63,9 @@ func Open(o Options) (*Bound, error) {
 	return b, nil
 }
 func (b *Bound) validate() error {
+	if err := b.validateExperimentalSeed(); err != nil {
+		return err
+	}
 	if _, err := processidentity.Current(); err != nil {
 		return err
 	}

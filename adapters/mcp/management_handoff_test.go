@@ -2,11 +2,19 @@ package product
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -36,6 +44,56 @@ func TestManagementHandoffRequiresFixedAdmittedContextAndRejectsModelPaths(t *te
 	call(map[string]any{"operation": "installation.update_handoff"})
 	b.options.ManagementCarrierID = strings.Repeat("a", 32) + "," + strings.Repeat("b", 32)
 	call(map[string]any{"operation": "installation.update_handoff"})
+}
+
+func TestManagementHandoffRetainsAcknowledgedRequestWhenRoleExpires(t *testing.T) {
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
+	registry := []byte(fmt.Sprintf(`{"schema_version":1,"product":"maestro","authorities":[{"issuer":"maestro-engineering-pilot-20261117","key_id":"pilot-20261117","algorithm":"ed25519","public_key":"%s","status":"active","valid_from":"2026-11-17T00:00:00Z","valid_until":"2026-11-30T00:00:00Z"}]}`, base64.StdEncoding.EncodeToString(public)))
+	role := installer.ExperimentalSeedRecord{SchemaVersion: 1, Product: "maestro", Purpose: installer.ExperimentalSeedPurpose, Protocol: installer.ExperimentalSeedProtocol, Profile: installer.ExperimentalSeedProfile, RegistrySHA256: fmt.Sprintf("%x", sha256.Sum256(registry)), InstallerVersion: "0.1.51", InstallerSHA256: strings.Repeat("a", 64), TargetOS: "darwin", TargetArch: "arm64", Source: releasecontract.SourceTuple{SourceID: "team-pilot", Channel: "canary", OS: "darwin", Arch: "arm64"}, Issuer: "maestro-engineering-pilot-20261117", KeyID: "pilot-20261117", NotBefore: "2026-11-17T00:00:00Z", ExpiresAt: "2026-11-18T00:00:00Z"}
+	for _, version := range []string{"0.1.51", "0.1.52"} {
+		role.Releases = append(role.Releases, installer.ExperimentalSeedRelease{Release: version, ManifestSHA256: fmt.Sprintf("%x", sha256.Sum256([]byte(version))), ClientInputsSHA256: strings.Repeat("b", 64), ServerSHA256: strings.Repeat("c", 64), BundleSHA256: strings.Repeat("d", 64), RuntimeSHA256: strings.Repeat("e", 64)})
+	}
+	body, _ := json.Marshal(role)
+	verified, err := installer.VerifyExperimentalSeedAdmission(body, ed25519.Sign(private, body), registry, role.RegistrySHA256, func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared := installer.ClientManagementHandoff{State: "handoff_prepared", Launcher: "/fixed/admitted/Update Maestro.command", Activation: "not_requested_or_approved"}
+	opened := 0
+	value, err := requestManagementOpen(context.Background(), prepared, func(context.Context, string) error {
+		opened++
+		now = time.Date(2026, 11, 18, 0, 0, 1, 0, time.UTC)
+		return nil
+	})
+	if err != nil || opened != 1 {
+		t.Fatal("OS acknowledgement missing", err, opened)
+	}
+	roleErr := verified.Revalidate()
+	if roleErr == nil {
+		t.Fatal("real role expiry was not observed")
+	}
+	out := managementHandoffPostValidation(value, roleErr)
+	var encoded []byte
+	for _, content := range out.Content {
+		if text, ok := content.(*mcp.TextContent); ok {
+			encoded = []byte(text.Text)
+			break
+		}
+	}
+	var metadata map[string]string
+	if err := json.Unmarshal(encoded, &metadata); err != nil {
+		t.Fatal(err)
+	}
+	if metadata["state"] != "handoff_requested" || metadata["continuation"] != "pending_new_valid_review" || metadata["role_state"] != "changed_after_request" || out.IsError {
+		t.Fatal("acknowledged effect was erased or made retryable", string(encoded), out.IsError)
+	}
+	if opened != 1 {
+		t.Fatal("handoff was repeated", opened)
+	}
 }
 
 func TestManagementOpenWitnessReportsOnlyRequestedHandoff(t *testing.T) {

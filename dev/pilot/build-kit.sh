@@ -3,6 +3,9 @@ set -euo pipefail
 umask 077
 SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 OUT="${1:?Uso: build-kit.sh /caminho/Developer/pasta-do-kit}"
+if [[ "${2:-}" == --experimental-installed-seed ]]; then
+  exec /bin/bash "$SOURCE/dev/pilot/build-installed-seed-kit.sh" "$@"
+fi
 RUNTIME_RELEASE=""; RUNTIME_REGISTRY=""; ACQUISITION=false
 if [[ "${2:-}" == --engineering-runtime || "${2:-}" == --engineering-acquisition ]]; then
   [[ "${2:-}" != --engineering-acquisition ]] || ACQUISITION=true

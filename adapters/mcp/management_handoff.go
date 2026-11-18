@@ -22,7 +22,7 @@ func (b *Bound) handleManagementHandoff(ctx context.Context, req *mcp.CallToolRe
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	options := installer.ClientOptions{SeededOperationOptions: installer.SeededOperationOptions{Self: filepath.Join(b.options.ProductRoot, name), ManagedRoot: b.options.ProductRoot, UserHome: b.options.UserHome, DataRoot: filepath.Join(b.options.UserHome, ".maestro-install"), Version: b.options.ManagementInstallerVersion, AuthorityRegistrySHA256: b.options.AuthorityRegistrySHA256}, Request: installer.ClientRequest{CarrierID: b.options.ManagementCarrierID, Workspace: b.options.WorkspacePath}}
+	options := installer.ClientOptions{SeededOperationOptions: installer.SeededOperationOptions{ExperimentalSeed: b.options.ExperimentalSeed, Self: filepath.Join(b.options.ProductRoot, name), ManagedRoot: b.options.ProductRoot, UserHome: b.options.UserHome, DataRoot: filepath.Join(b.options.UserHome, ".maestro-install"), Version: b.options.ManagementInstallerVersion, AuthorityRegistrySHA256: b.options.AuthorityRegistrySHA256}, Request: installer.ClientRequest{CarrierID: b.options.ManagementCarrierID, Workspace: b.options.WorkspacePath}}
 	prepared, err := installer.PrepareClientManagementHandoff(ctx, options)
 	if err != nil {
 		return managementHandoffFailure("independent_manager_admission_unavailable")
@@ -37,6 +37,28 @@ func (b *Bound) handleManagementHandoff(ctx context.Context, req *mcp.CallToolRe
 	value, err := requestManagementOpen(ctx, prepared, open)
 	if err != nil {
 		return managementHandoffFailure("normal_host_handoff_unavailable")
+	}
+	if b.options.ExperimentalSeed != nil {
+		return managementHandoffPostValidation(value, b.validate())
+	}
+	return result(value, nil)
+}
+
+func managementHandoffPostValidation(value any, roleErr error) *mcp.CallToolResult {
+	if roleErr != nil {
+		// The OS already acknowledged the request. Keep that effect truthful and
+		// prevent a generic tool-error retry from opening a second manager.
+		pending := make(map[string]string)
+		if original, ok := value.(map[string]string); ok {
+			for key, field := range original {
+				pending[key] = field
+			}
+		}
+		pending["state"] = "handoff_requested"
+		pending["role_state"] = "changed_after_request"
+		pending["continuation"] = "pending_new_valid_review"
+		pending["next_action"] = "The manager was already requested. Inspect that existing window; do not reopen automatically. Activation remains unapproved and requires a new valid role and the original independent review."
+		return result(pending, nil)
 	}
 	return result(value, nil)
 }

@@ -21,6 +21,9 @@ func runtimeUpdateLaunch(ctx context.Context, o installer.ClientOptions, command
 	if command != "runtime-review" && command != "runtime-apply" {
 		return installer.QualifiedLaunch{}, errors.New("unsupported runtime command")
 	}
+	if err := verifyRuntimeExperimentalOperation(o.SeededOperationOptions, nil); err != nil {
+		return installer.QualifiedLaunch{}, err
+	}
 	// Preserve the whole seeded composition. Future typed admission context and
 	// child argv remain the responsibility of the existing qualified launcher.
 	review, err := installer.ReviewClientsSeeded(ctx, o)
@@ -36,6 +39,9 @@ func runtimeUpdateLaunch(ctx context.Context, o installer.ClientOptions, command
 	}
 	launch.Args = append([]string(nil), launch.Args...)
 	launch.Args[0] = command
+	if err := verifyRuntimeExperimentalOperation(o.SeededOperationOptions, &launch.State); err != nil {
+		return launch, err
+	}
 	return launch, nil
 }
 
@@ -62,6 +68,9 @@ func ReviewRuntimeUpdate(ctx context.Context, o installer.ClientOptions) (produc
 		}
 		sum := sha256.Sum256(body)
 		review.Digest = hex.EncodeToString(sum[:])
+		if err := verifyRuntimeExperimentalOperation(o.SeededOperationOptions, &launch.State); err != nil {
+			return review, err
+		}
 		return review, nil
 	}
 	body, err := clientCommand(ctx, launch.Executable, launch.Args, o.Request.Workspace)
@@ -74,6 +83,9 @@ func ReviewRuntimeUpdate(ctx context.Context, o installer.ClientOptions) (produc
 	}
 	if review.Requirement.ManifestSHA256 != launch.State.Binding.ManifestSHA256 || review.Requirement.ServerVersion != launch.State.Server.Version || review.ServerSHA256 != launch.State.Server.SHA256 {
 		return review, errors.New("current runtime review identity changed")
+	}
+	if err := verifyRuntimeExperimentalOperation(o.SeededOperationOptions, &launch.State); err != nil {
+		return review, err
 	}
 	return review, nil
 }
@@ -90,6 +102,9 @@ func ApplyRuntimeUpdate(ctx context.Context, o installer.ClientOptions, digest s
 		return pending, errors.New("current runtime review changed")
 	}
 	if review.Requirement.PackSHA256 == "" && len(review.Effects) == 0 {
+		if err := verifyRuntimeExperimentalOperation(o.SeededOperationOptions, nil); err != nil {
+			return pending, err
+		}
 		return review.Availability, nil
 	}
 	launch, err := runtimeUpdateLaunch(ctx, o, "runtime-apply")
@@ -111,6 +126,9 @@ func ApplyRuntimeUpdate(ctx context.Context, o installer.ClientOptions, digest s
 	if review.Requirement.PackSHA256 != "" && (result.State != "ready" || result.PackSHA256 != review.Requirement.PackSHA256) {
 		return result, errors.New("source-updated/runtime-pending; current converter not ready; retry manage reconcile")
 	}
+	if err := verifyRuntimeExperimentalOperation(o.SeededOperationOptions, &launch.State); err != nil {
+		return pending, err
+	}
 	return result, nil
 }
 func runRuntimeConsumer(ctx context.Context, path string, args []string, cwd string) ([]byte, error) {
@@ -124,4 +142,26 @@ func runRuntimeConsumer(ctx context.Context, path string, args []string, cwd str
 	command.Stderr = &stderr
 	err := command.Run()
 	return stdout.Bytes(), err
+}
+
+// The opaque role and original installation origin only narrow existing
+// runtime owners. Normal nil admission remains the original identity path.
+func verifyRuntimeExperimentalOperation(o installer.SeededOperationOptions, state *installtx.State) error {
+	if o.ExperimentalSeed == nil {
+		return nil
+	}
+	if err := installer.VerifyExperimentalInstalledBinding(o); err != nil {
+		return err
+	}
+	if state != nil {
+		if err := o.ExperimentalSeed.VerifyReleaseIdentity(state.Binding.ManifestSHA256, state.Binding.ClientInputsSHA256); err != nil {
+			return err
+		}
+		if state.Source != nil {
+			if err := o.ExperimentalSeed.VerifySource(state.Source.Tuple); err != nil {
+				return err
+			}
+		}
+	}
+	return o.ExperimentalSeed.Revalidate()
 }
