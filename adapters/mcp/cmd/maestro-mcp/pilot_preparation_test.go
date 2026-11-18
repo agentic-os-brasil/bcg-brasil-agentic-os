@@ -485,11 +485,12 @@ func TestPilotWindowsCodePromptHandoff(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	start := strings.Index(string(setup), "$code = @'\n")
+	setupText := strings.ReplaceAll(string(setup), "\r\n", "\n")
+	start := strings.Index(setupText, "$code = @'\n")
 	if start < 0 {
 		t.Fatal("Code launcher producer absent")
 	}
-	launcher := strings.SplitN(string(setup)[start+len("$code = @'\n"):], "\n'@", 2)[0]
+	launcher := strings.SplitN(setupText[start+len("$code = @'\n"):], "\n'@", 2)[0]
 	base := t.TempDir()
 	root := filepath.Join(base, "prepared space ' literal")
 	tools := filepath.Join(base, "tools")
