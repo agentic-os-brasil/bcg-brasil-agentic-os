@@ -98,8 +98,8 @@ $script:Answers.Enqueue('YES');$selected=Prepare-CodeConfiguration $profile
 if($selected -cne $profile){throw 'Selected profile changed'}
 $settings=Join-Path $profile 'settings.json'
 $settingsObject=Get-Content -LiteralPath $settings -Raw|ConvertFrom-Json
-if($settingsObject.autoMemoryEnabled -ne $false -or $settingsObject.syncClaudeAiPlugins -ne $false){throw 'New profile settings differ'}
-$preserved='{"custom":"preserve-existing"}'
+if($settingsObject.autoMemoryEnabled -ne $false -or $settingsObject.syncClaudeAiPlugins -ne $false -or $settingsObject.syncClaudeAiSkills -ne $false){throw 'New profile settings differ'}
+$preserved='{"syncClaudeAiSkills":true,"custom":"preserve-existing"}'
 [IO.File]::WriteAllText($settings,$preserved,$Utf8)
 $null=Prepare-CodeConfiguration $profile
 if([IO.File]::ReadAllText($settings) -cne $preserved){throw 'Existing settings were overwritten'}

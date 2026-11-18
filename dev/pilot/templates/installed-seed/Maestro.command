@@ -146,11 +146,11 @@ prepare_code_configuration() {
   profile="$(private_selection_path "$profile")" || fail 'Perfil com link ou caminho ambíguo; preserve-o.'
   require_disjoint "$profile" "$BRAIN" "$WORK" "$BASE" "$OWNER/.maestro-install" "$OWNER/Maestro-Clients"
   if [[ ! -e "$profile" ]]; then
-    printf '\nCriar perfil Code privado em %s, sem copiar login nem alterar seu perfil normal.\nSomente neste perfil novo: memória automática e plugins sincronizados serão desativados; hooks e plugins próprios do Maestro passam pela qualificação normal.\nDigite YES para criar; Enter deixa pendente: ' "$profile" >&2
+    printf '\nCriar perfil Code privado em %s, sem copiar login nem alterar seu perfil normal.\nSomente neste perfil novo: memória automática e sincronização de skills e plugins da conta serão desativadas; hooks e plugins próprios do Maestro passam pela qualificação normal.\nDigite YES para criar; Enter deixa pendente: ' "$profile" >&2
     read -r answer
     [[ "$answer" == YES ]] || fail 'Criação do perfil deixada pendente.'
     private_dir "$profile"
-    (set -o noclobber; printf '%s\n' '{"autoMemoryEnabled":false,"syncClaudeAiPlugins":false}' > "$profile/settings.json") || fail 'Perfil mudou durante a preparação; preserve-o.'
+    (set -o noclobber; printf '%s\n' '{"autoMemoryEnabled":false,"syncClaudeAiPlugins":false,"syncClaudeAiSkills":false}' > "$profile/settings.json") || fail 'Perfil mudou durante a preparação; preserve-o.'
   else
     private_dir "$profile"
   fi

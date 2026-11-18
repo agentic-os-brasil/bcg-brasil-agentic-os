@@ -115,12 +115,12 @@ function Prepare-CodeConfiguration([string]$Profile) {
   Require-Disjoint $Profile @($Brain,$Work,$Base,(Join-Path $Owner '.maestro-install'),(Join-Path $Owner 'Maestro-Clients'))
   if (-not (Test-Path -LiteralPath $Profile)) {
     Write-Host "Criar perfil Code privado em $Profile, sem copiar login nem alterar seu perfil normal."
-    Write-Host 'Somente neste perfil novo: memoria automatica e plugins sincronizados serao desativados. Hooks e plugins do Maestro passam pela qualificacao normal.'
+    Write-Host 'Somente neste perfil novo: memoria automatica e sincronizacao de skills e plugins da conta serao desativadas. Hooks e plugins do Maestro passam pela qualificacao normal.'
     if ((Read-Host 'Digite YES para criar; Enter deixa pendente') -cne 'YES') { Stop-Maestro 'Criacao do perfil deixada pendente.' }
     Private-Directory $Profile
     $file = [IO.File]::Open((Join-Path $Profile 'settings.json'),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
     try {
-      $body = $Utf8.GetBytes('{"autoMemoryEnabled":false,"syncClaudeAiPlugins":false}')
+      $body = $Utf8.GetBytes('{"autoMemoryEnabled":false,"syncClaudeAiPlugins":false,"syncClaudeAiSkills":false}')
       $file.Write($body,0,$body.Length)
       $file.Flush()
     } finally { $file.Dispose() }

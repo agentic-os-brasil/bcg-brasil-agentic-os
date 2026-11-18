@@ -73,10 +73,10 @@ func TestMacSelfServicePreparesExactOwnerClientsAndPreservesProfile(t *testing.T
 	}
 	settings := filepath.Join(profile, "settings.json")
 	got, err := os.ReadFile(settings)
-	if err != nil || string(got) != "{\"autoMemoryEnabled\":false,\"syncClaudeAiPlugins\":false}\n" {
+	if err != nil || string(got) != "{\"autoMemoryEnabled\":false,\"syncClaudeAiPlugins\":false,\"syncClaudeAiSkills\":false}\n" {
 		t.Fatalf("new settings %q %v", got, err)
 	}
-	original := []byte("{\"custom\":\"preserve-existing\"}\n")
+	original := []byte("{\"syncClaudeAiSkills\":true,\"custom\":\"preserve-existing\"}\n")
 	if err := os.WriteFile(settings, original, 0600); err != nil {
 		t.Fatal(err)
 	}
