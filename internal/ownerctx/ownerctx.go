@@ -259,6 +259,9 @@ func Initialize(root string) (Status, error) {
 	if err := ensureOwnerDirectory(directory); err != nil {
 		return Status{}, err
 	}
+	if err := initializeObservationStore(root); err != nil {
+		return Status{}, err
+	}
 	for _, template := range facets {
 		if err := create(filepath.Join(root, filepath.FromSlash(template.Record.Path)), template.Body); err != nil {
 			return Status{}, err

@@ -302,3 +302,50 @@ is rejected rather than truncated. Prompt bodies exist only in the ephemeral
 sealed review packet. A translation adapter is required when languages differ;
 absence fails closed for that normalization stage without changing the user
 request.
+
+### Owner-reviewed declaration intake (OSIN)
+
+A closed explicit instruction, correction or endorsement may enter a fixed
+ownerctx approved-pending envelope after exact trusted owner review. This source
+is `owner.reviewed_declaration` / `owner_declaration`, never observed native
+interaction history. Derive source identity from canonical owner binding and the
+exact normalized declaration payload; request/review/connection IDs cannot mint
+new evidence. Use one fixed owner-declaration cohort, exclude it as corroborating
+support and from independent weekly Yoda evidence, and prohibit corroborated,
+proposed or promoted declaration records. Explicit facet refinement remains the
+existing separate reviewed path.
+
+Only the admitted review adapter derives authenticated-owner, material,
+owner-confirmed and global-declassification assertions after the person attests
+relevance, absence of client/document/conversation material and owner-global
+professional proposal-input use. Those assertions, source hashes, episode and
+scope are never model fields. Approval is not capture. A separately qualified
+maintenance job commits a new canonical observation under existing owner and
+worker publication guards. Pending intake and capture use one owner identity
+across admitted workspaces, with no automatic enrollment or active-SELF effect.
+
+Preserve truthful latest-state receipt replay, terminal denials, exact review/CAS,
+expiry, rejection/redaction and derived reset. Reset denies pending intake before
+redacting captured provisional observations. Redaction preserves append-only
+historical/tombstone semantics. Bound the canonical observation log to 4096
+records and 2 MiB, each record to 16 KiB, and the fixed pending envelope to 1024
+records and 2 MiB. Use the owning descriptor-confined private-file and lock
+implementation; ordinary missing-state reads do not initialize it. Unsafe,
+legacy nonempty lock, malformed, aliased or oversized state refuses intact.
+
+Explicit owner initialization admits valid legacy observation logs whose released
+Unix token lock was removed by the old writer. Reuse the confined observation
+lock owner and validate bounded canonical records without rewriting their bytes.
+The same explicit initializer remains callable for an already initialized owner.
+Missing fresh observation state stays absent; query/startup never creates the
+selection lock. Nonempty legacy tokens, active native locks and unsafe/malformed
+state refuse intact; never remove or reinterpret them as setup permission.
+
+Retain the base reader's lowercase source-digest normalization for observation
+readback/revision and CAS. A legacy uppercase-digest captured record binds its
+original raw-input ID; subsequent base transitions may retain that ID with the
+normalized input. Recognize that mismatch only from the preceding verified
+uppercase captured anchor, identical normalized immutable input and exact prior
+state/revision CAS. Never derive arbitrary legacy IDs or relax strict new-source
+identity. Explicit setup preserves original log bytes, IDs and normalized
+read/CAS revisions, including a valid transitioned history.

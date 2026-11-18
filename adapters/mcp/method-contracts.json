@@ -785,6 +785,28 @@
           "kind": "domain",
           "required": false,
           "fulfillment_operations": ["owner.context", "owner.status"]
+        },
+        {
+          "id": "domain.owner_self_declaration",
+          "kind": "domain",
+          "required": false,
+          "fulfillment_operations": [
+            "owner.observation.status",
+            "owner.observation.intake",
+            "owner.observation.reject"
+          ]
+        },
+        {
+          "id": "host.trusted_review",
+          "kind": "host",
+          "required": false
+        }
+      ],
+      "conditional_effects": [
+        {
+          "effect": "write_owner",
+          "condition": "Only when the owner explicitly requests a normalized professional declaration and approves its complete owner-global proposal-input review. Intake does not capture an observation, alter active SELF, qualify maintenance or establish independent native episodes.",
+          "dependency": "domain.owner_self_declaration"
         }
       ]
     },

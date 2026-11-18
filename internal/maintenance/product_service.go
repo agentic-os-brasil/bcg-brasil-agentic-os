@@ -18,6 +18,7 @@ import (
 	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
@@ -48,6 +49,7 @@ type ServiceOptions struct {
 }
 
 type Service struct {
+	ownerScoped                                   bool
 	darwin                                        DarwinBinding
 	options                                       ServiceOptions
 	home, workspaceID, binding, executable, build string
@@ -79,6 +81,7 @@ type ProductSchedule struct {
 // ProductReview contains metadata only. Its private binding rejects edited or
 // serialized reviews; trusted confirmation is still required for every Apply.
 type ProductReview struct {
+	Scope           string                      `json:"scope,omitempty"`
 	DarwinReview    *DarwinReviewProjection     `json:"darwin_review,omitempty"`
 	Operation       Operation                   `json:"operation"`
 	WorkspaceID     string                      `json:"workspace_id"`
@@ -112,6 +115,8 @@ type ProductQualification struct {
 }
 
 type ProductJobStatus struct {
+	Scope              string                `json:"scope,omitempty"`
+	ScopeID            string                `json:"scope_id,omitempty"`
 	Diagnosis          *DarwinSource         `json:"diagnosis,omitempty"`
 	JobID              string                `json:"job_id"`
 	Revision           uint64                `json:"revision"`
@@ -240,13 +245,21 @@ func (s *Service) validate() error {
 	}
 	executable, build := identity.Path, identity.SHA256
 	binding := productDigest([]string{h.Home, path, w.WorkspaceID})
+	scopeID := w.WorkspaceID
+	if s.ownerScoped {
+		scopeID, err = ownerctx.SelfObservationOwnerScope(filepath.Join(h.Home, "brain"))
+		if err != nil {
+			return err
+		}
+		binding = productDigest([]string{"owner-self-observation-v1", scopeID})
+	}
 	if s.binding != "" && (s.binding != binding || s.build != build || s.executable != executable) {
 		return ErrProductConflict
 	}
 	if s.binding != "" {
 		return nil
 	}
-	s.home, s.workspaceID, s.binding, s.executable, s.build = h.Home, w.WorkspaceID, binding, executable, build
+	s.home, s.workspaceID, s.binding, s.executable, s.build = h.Home, scopeID, binding, executable, build
 	return nil
 }
 
@@ -256,7 +269,7 @@ func productDigest(value any) string {
 	return hex.EncodeToString(sum[:])
 }
 func productJob(jobID string) bool {
-	return DarwinJob(jobID) || jobID == MemoryCaptureJobID || jobID == MemoryLightDreamJobID || jobID == MemoryCheckpointJobID || jobID == MemoryDeepDreamJobID || jobID == "skills-index-refresh" || diagnosticJob(jobID)
+	return jobID == SelfObservationCaptureJobID || DarwinJob(jobID) || jobID == MemoryCaptureJobID || jobID == MemoryLightDreamJobID || jobID == MemoryCheckpointJobID || jobID == MemoryDeepDreamJobID || jobID == "skills-index-refresh" || diagnosticJob(jobID)
 }
 func (s *Service) configuration(jobID string) string {
 	job, _ := findCatalogJob(s.options.Catalog, jobID)
@@ -333,7 +346,14 @@ func (s *Service) Status() (ProductStatus, error) {
 	}
 	report := ProductStatus{WorkspaceID: s.workspaceID}
 	for _, job := range s.options.Catalog.Jobs {
-		c, err := s.loadControl(job.ID)
+		if s.ownerScoped && job.ID != SelfObservationCaptureJobID {
+			continue
+		}
+		service := s
+		if job.ID == SelfObservationCaptureJobID {
+			service = s.selfObservationService()
+		}
+		c, err := service.loadControl(job.ID)
 		if err != nil {
 			return report, err
 		}
@@ -344,12 +364,16 @@ func (s *Service) Status() (ProductStatus, error) {
 		if !productJob(job.ID) || DarwinJob(job.ID) && s.darwin == nil {
 			item.Reason = "production_binding_unavailable"
 		} else if c.Qualification != nil {
-			if err := s.verifyQualification(c.Qualification); err == nil {
+			if err := service.verifyQualification(c.Qualification); err == nil {
 				item.QualificationState = "qualified"
 			} else {
 				item.QualificationState = "stale"
 				item.Reason = "qualification_requires_refresh"
 			}
+		}
+		if job.ID == SelfObservationCaptureJobID {
+			item.Scope = "owner"
+			item.ScopeID = service.workspaceID
 		}
 		if DarwinJob(job.ID) {
 			source := DarwinSource{CacheState: "unavailable"}
@@ -374,6 +398,9 @@ func (s *Service) Status() (ProductStatus, error) {
 }
 
 func (s *Service) Review(op Operation) (ProductReview, error) {
+	if op.JobID == SelfObservationCaptureJobID && !s.ownerScoped {
+		return s.selfObservationService().Review(op)
+	}
 	if err := s.validate(); err != nil {
 		return ProductReview{}, err
 	}
@@ -431,6 +458,9 @@ func (s *Service) Review(op Operation) (ProductReview, error) {
 	}
 	job, _ := findCatalogJob(s.options.Catalog, op.JobID)
 	r := ProductReview{Operation: op, WorkspaceID: s.workspaceID, Schedule: schedule, Writes: append([]string(nil), job.Writes...), Implementation: s.build, Configuration: s.configuration(op.JobID)}
+	if op.JobID == SelfObservationCaptureJobID {
+		r.Scope = "owner"
+	}
 	if c.Qualification != nil {
 		r.QualificationID = c.Qualification.ID
 	}
@@ -471,6 +501,9 @@ func (s *Service) Review(op Operation) (ProductReview, error) {
 // Apply invokes the trusted host's exact review before any write, then repeats
 // read-only review and CAS. Returning an error from confirm leaves no state.
 func (s *Service) Apply(ctx context.Context, r ProductReview, confirm func(context.Context, ProductReview) error) (ProductJobStatus, error) {
+	if r.Operation.JobID == SelfObservationCaptureJobID && !s.ownerScoped {
+		return s.selfObservationService().Apply(ctx, r, confirm)
+	}
 	if confirm == nil {
 		return ProductJobStatus{}, errors.New("trusted maintenance review required")
 	}
@@ -630,7 +663,7 @@ func (p *productExecution) guardWithControl(ctx context.Context, publish func() 
 				return ErrProductConflict
 			}
 		}
-		if (wikiJob(p.jobID) || p.jobID == UpdateCheckJobID || p.jobID == MemoryCaptureJobID || p.jobID == MemoryLightDreamJobID) && p.source != "" {
+		if (p.jobID == SelfObservationCaptureJobID || wikiJob(p.jobID) || p.jobID == UpdateCheckJobID || p.jobID == MemoryCaptureJobID || p.jobID == MemoryLightDreamJobID) && p.source != "" {
 			current, err := p.service.sourceState(p.jobID)
 			if err != nil || current != p.source {
 				return ErrProductConflict
@@ -660,11 +693,12 @@ func (s *Service) worker(p *productExecution) Worker {
 	weekly := *s.weekly
 	weekly.Now = s.now
 	handlers := map[string]any{
-		MemoryCaptureJobID:     productCaptureHandler{service: s, expected: p.source},
-		MemoryLightDreamJobID:  MemoryLightDreamHandler{Engine: s.engine, ProductSelection: p.source != "", SelectedInput: p.dailyInput},
-		MemoryCheckpointJobID:  MemoryCheckpointHandler{Scheduler: s.scheduler, Store: ContinuityCheckpointStore{Root: s.receipts.Root}, ExpectedSourceFingerprint: p.source},
-		MemoryDeepDreamJobID:   MemoryDeepDreamHandler{Engine: &weekly, ExpectedSourceFingerprint: p.source},
-		"skills-index-refresh": productIndexHandler{service: s, expected: p.source},
+		SelfObservationCaptureJobID: productSelfObservationHandler{service: s, expected: p.source},
+		MemoryCaptureJobID:          productCaptureHandler{service: s, expected: p.source},
+		MemoryLightDreamJobID:       MemoryLightDreamHandler{Engine: s.engine, ProductSelection: p.source != "", SelectedInput: p.dailyInput},
+		MemoryCheckpointJobID:       MemoryCheckpointHandler{Scheduler: s.scheduler, Store: ContinuityCheckpointStore{Root: s.receipts.Root}, ExpectedSourceFingerprint: p.source},
+		MemoryDeepDreamJobID:        MemoryDeepDreamHandler{Engine: &weekly, ExpectedSourceFingerprint: p.source},
+		"skills-index-refresh":      productIndexHandler{service: s, expected: p.source},
 	}
 	for _, job := range []string{"memory-retention-check", "runtime-health-check", "capability-recheck", "runtime-drift-check"} {
 		handlers[job] = productDiagnosticHandler{service: s, expected: p.source, job: job}
@@ -729,6 +763,21 @@ func (s *Service) RunDue(ctx context.Context) (WakeReport, error) {
 	report := WakeReport{SchemaVersion: 1, WorkspaceID: s.workspaceID, State: "no_due_work"}
 	now := s.now().UTC()
 	for _, job := range s.options.Catalog.Jobs {
+		if s.ownerScoped && job.ID != SelfObservationCaptureJobID {
+			continue
+		}
+		if job.ID == SelfObservationCaptureJobID && !s.ownerScoped {
+			ownerReport, err := s.selfObservationService().RunDue(ctx)
+			report.Due = append(report.Due, ownerReport.Due...)
+			report.Receipts = append(report.Receipts, ownerReport.Receipts...)
+			if ownerReport.State != "no_due_work" {
+				report.State = ownerReport.State
+			}
+			if err != nil {
+				return report, err
+			}
+			continue
+		}
 		if !productJob(job.ID) {
 			continue
 		}
@@ -797,7 +846,7 @@ func (s *Service) RunDue(ctx context.Context) (WakeReport, error) {
 				}
 				p.darwinSource = &source
 			}
-			if wikiJob(job.ID) || job.ID == MemoryCaptureJobID || job.ID == MemoryLightDreamJobID {
+			if job.ID == SelfObservationCaptureJobID || wikiJob(job.ID) || job.ID == MemoryCaptureJobID || job.ID == MemoryLightDreamJobID {
 				p.source, err = s.sourceState(job.ID)
 				if err != nil {
 					return report, err
@@ -932,6 +981,14 @@ func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatu
 func (s *Service) domainEvidence(jobID string, at time.Time) (string, string, error) {
 	var path, ref string
 	switch jobID {
+	case SelfObservationCaptureJobID:
+		_, p, err := s.readSelfObservationReport("")
+		if err != nil {
+			return "", "", err
+		}
+		path = p
+		relative, _ := filepath.Rel(s.receipts.Root, path)
+		ref = "maintenance/" + filepath.ToSlash(relative)
 	case MemoryCaptureJobID:
 		_, p, err := s.readCaptureReport("")
 		if err != nil {
@@ -1039,7 +1096,18 @@ func (s *Service) verifyQualification(q *ProductQualification) error {
 	}
 	var path string
 	prefix := "memory/workspaces/" + s.workspaceID + "/versions/"
-	if q.JobID == MemoryCaptureJobID {
+	if q.JobID == SelfObservationCaptureJobID {
+		prefix = "maintenance/workspaces/" + s.workspaceID + "/self-observations/versions/"
+		if !s.ownerScoped || !strings.HasPrefix(q.Artifact, prefix) || !strings.HasSuffix(q.Artifact, ".json") {
+			return ErrQualificationRequired
+		}
+		generation := strings.TrimSuffix(strings.TrimPrefix(q.Artifact, prefix), ".json")
+		report, p, err := s.readSelfObservationReport(generation)
+		if err != nil || report.Implementation != s.build || report.Configuration != s.configuration(q.JobID) || !report.RecordedAt.Equal(q.RequestedAt) {
+			return ErrQualificationRequired
+		}
+		path = p
+	} else if q.JobID == MemoryCaptureJobID {
 		prefix = "maintenance/workspaces/" + s.workspaceID + "/capture-results/versions/"
 		if !strings.HasPrefix(q.Artifact, prefix) || !strings.HasSuffix(q.Artifact, ".json") {
 			return ErrQualificationRequired
@@ -1192,6 +1260,8 @@ func (s *Service) sourceState(job string) (string, error) {
 		return s.wikiSourceIdentity(job)
 	}
 	switch job {
+	case SelfObservationCaptureJobID:
+		return s.selfObservationSourceIdentity()
 	case MemoryCaptureJobID:
 		return s.captureSourceIdentity()
 	case MemoryLightDreamJobID:

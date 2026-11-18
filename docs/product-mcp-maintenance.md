@@ -17,10 +17,11 @@ private state.
 
 Call `maestro_query` with `{"operation":"maintenance.status"}`. The response
 lists job IDs, revision, state, schedule, write set and qualification metadata.
-The closed catalog has eighteen jobs; this binding implements sixteen, with attended-only jobs separated from recurring enrollment:
+The closed catalog has eighteen jobs; this binding implements seventeen, with attended-only jobs separated from recurring enrollment:
 
 | Job | Cadence after separate enrollment | Actual result or prerequisite |
 | --- | --- | --- |
+| `self-observation-capture` | Daily after separate owner-wide qualification and enrollment | Exact owner-reviewed declarations become new canonical observation versions, proposal input only |
 | `memory-l1-capture` | Daily after separate qualification and enrollment | Body-free Code Stop observations and witnessed canonical completed-result metadata admitted through the canonical capture/denial owner |
 | `memory-light-dream` | Every three hours | Deterministic L1 for one oldest pending eligible ingestion day; no short historical cutoff |
 | `memory-checkpoint` | Every three hours | Checkpoint of real durable scheduler metadata; bootstrap with a successful light dream |
@@ -44,10 +45,59 @@ captures and ancestry; an empty source or a successful no-op cannot qualify it.
 Skills indexing needs verified installed assets, not an arbitrary product
 directory. A diagnostic can qualify its real execution while its finding is
 missing or unavailable. That qualification does not qualify the reported native
-capability. The remaining two entries, `self-observation-capture` and
-`yoda-self-review-weekly`, retain explicit unavailable reasons until their
-complete execution journeys exist. Supporting workspace capture does not enable
-owner self-observation or Yoda.
+capability. The remaining `yoda-self-review-weekly` entry retains its explicit
+unavailable reason until its complete execution journey exists. Supporting
+workspace capture does not enable owner self-observation or Yoda.
+
+### Capture an explicitly reviewed owner declaration
+
+Use the `interaction-profile` method's conditional self-observation recipe or
+[owner guide](product-mcp-owner.md#review-a-professional-self-declaration). Its
+five-field declaration is reviewed independently before any maintenance action.
+Approval creates only an approved pending intake. It does not capture an
+observation, qualify a job, enroll a cadence or change an active SELF facet.
+
+For a preserved legacy observation log with a missing persistent selection lock,
+close older writers and repeat the existing explicit owner setup as described in
+the [upgrade guide](product-mcp-owner.md#admit-an-existing-observation-store-after-upgrade).
+Queries and capture review refuse until setup admits it; they do not repair it or
+require recreating the owner's data.
+
+Inspect `owner.observation.status` and `maintenance.status`, then qualify
+`self-observation-capture` using its current revision. Qualification needs at
+least one eligible pending declaration and must append and read back a new
+canonical observation version. The metadata-only report identifies those actual
+versions. Enqueue, old captured observations, an unchanged retry or a timestamp
+cannot supply qualification. A partial domain append is retained truthfully;
+replaying it cannot manufacture a successful qualification.
+
+After qualification, enroll separately with an explicit timezone. This job uses
+one OWNER control, qualification and scheduled occurrence shared across the
+owner's admitted workspaces. Status exposes `scope: owner` and its opaque scope
+ID. Enrolling, pausing, resuming or revoking it from either workspace affects that
+same job. Competing Code/Desktop workers cannot double-enroll or double-capture
+one owner occurrence. Other jobs retain their existing workspace scope. Nonblocking publication/lease
+contention may leave both competing wakes refused and work pending. Neither
+refusal is success. One later eligible ordinary wake retries the same scheduled
+occurrence under the unchanged control; it does not resubmit intake or invent
+another occurrence. Inspect actual capture/report receipts rather than assuming
+one contender must immediately win.
+
+Source identity is the canonical owner binding plus the exact normalized
+reviewed declaration. Retries and reconnects keep that identity; all declarations
+share one conservative declaration cohort. They are not native interaction
+history, independent corroborating episodes or automatic sanitization. Only
+owner attestation after full review establishes relevance, no client material
+and professional owner-global proposal-input permission. Nothing here consumes
+raw prompts, work-completion metadata or documents as SELF evidence.
+
+Use reviewed rejection/redaction for pending or captured declarations. Terminal
+canonical denials remain authoritative on retry; reset also denies pending
+intakes. Expiry excludes pending sources. Source/control/installation changes
+and pause/revoke are checked by existing publication fences. Reported versions
+are historical capture evidence, not approval to use denied content. This
+source/SDK contract does not establish native consent, Windows admission or
+colleague acceptance; those remain separately qualified.
 
 ### Capture eligible metadata, then generate L1
 
@@ -128,7 +178,7 @@ admitted installer's [signed-source recovery route](product-synced-source.md).
 The public surface has eight operation variants: `maintenance.status`,
 `maintenance.report`, `maintenance.qualify`, `maintenance.enroll`,
 `maintenance.pause`, `maintenance.resume`, `maintenance.revoke` and
-`maintenance.run`. These operation names are separate from the sixteen supported
+`maintenance.run`. These operation names are separate from the seventeen supported
 job IDs listed above and the full eighteen-entry catalog.
 
 ## Review, qualify and enroll
