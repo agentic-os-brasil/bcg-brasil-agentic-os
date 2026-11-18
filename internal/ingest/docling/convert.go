@@ -81,6 +81,9 @@ func (r *Runtime) Convert(ctx context.Context, source ingest.Request, workspaceI
 	if reason != "" {
 		return fail(ingest.StatusUnavailable, reason)
 	}
+	if reason := qualificationStatus(ctx, r.options, pack); reason != "" {
+		return fail(ingest.StatusUnavailable, reason)
+	}
 	if (extension == ".pdf" || extension == ".pptx") && pack.target.profile != DocumentsProfile {
 		return fail(ingest.StatusUnavailable, "format_profile_unavailable")
 	}
@@ -162,6 +165,13 @@ func (r *Runtime) Convert(ctx context.Context, source ingest.Request, workspaceI
 	}
 	if !r.boundWorkspace(source.WorkspacePath, workspaceID) {
 		return fail(ingest.StatusBlocked, "workspace_changed")
+	}
+	current, reason := r.verify(ctx)
+	if reason != "" || current.sha != pack.sha || current.manifestSHA != pack.manifestSHA {
+		return fail(ingest.StatusUnavailable, "current_release_changed")
+	}
+	if reason := qualificationStatus(ctx, r.options, current); reason != "" {
+		return fail(ingest.StatusUnavailable, reason)
 	}
 	result.Result.Status = ingest.StatusUsable
 	result.Result.Fidelity = route.Fidelity

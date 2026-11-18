@@ -773,6 +773,70 @@ runtime/converter ZIP is not an installed-seed/source-update authority. A bounde
 experimental N-to-N+1 rehearsal needs its exact separate installer-owned admission;
 organization production signing and production verification remain separate.
 
+### Current authenticated converter updates (PCRU)
+
+Complete source-managed updates include a required converter pack when the
+signed current release declares one. Reuse docling.PlaceVerified, complete pack
+verification and the existing exact local review. Extracted payloads already
+have SHA-addressed slots; add only the versioned authenticated metadata/current
+selection needed to preserve differing manifests and prior runtime generations.
+Never overwrite unknown or prior bytes, or delete old generations to make an
+update pass. A repeated identical placement remains idempotent. A malformed,
+unsafe or unknown selector refuses without fallback to an obsolete legacy pack.
+Legacy calls without an authenticated Current requirement retain their original
+verifier. An initial schema4 consumer already has an authenticated Current
+binding before source enrollment: enforce its exact required manifest and pack
+in availability, reuse decisions, placement and use. An older compatible legacy
+pack cannot satisfy a different initial requirement or cause a successful no-op;
+preserve its existing bytes while preparing the actual current generation.
+Before enrollment, reuse the installation lock and authenticated activated-current
+checks for this schema4 binding; this is neither native qualification nor source
+enrollment or lock recovery. Enrolled sources retain the original qualified
+current guard. Missing or malformed current evidence never selects a legacy pack.
+
+Resolve current required pack, target, signed metadata and actual server version
+from the independently authenticated current installation. Tool/model arguments
+and the older installer version do not choose that requirement. Runtime status
+and actual conversion enforce it as well as original signature/expiry, complete
+input/license inventory, compatible client range, confinement and platform
+qualification. An older merely compatible pack cannot be used as current when
+another pack is required. An unchanged pack remains reusable only if all current
+checks, including current-build Windows qualification where needed, succeed.
+
+The manager update/reconcile chain composes the existing placement owner after
+its exact reviewed effects and current-state revalidation. Keep source custody,
+reader/writer floors, original private brain, opt-ins, auth and retained client
+state. Typed experimental context from the distinct installed-seed profile must
+survive branch composition; this is no new converter purpose or authority. A
+failure or decline after backend activation reports source-updated/runtime-pending
+and a fixed recovery action. No whole-update success or rollback is fabricated.
+Rollback may select retained authenticated runtime metadata when the accepted
+current source requires it, with the same current checks and requalification.
+If initial placement failed before a private release snapshot existed, manager
+recovery can materialize only the independently authenticated exact Current
+release through the existing source snapshot owner, after foreground review of
+those effects and final Current revalidation. Runtime review itself stays
+read-only; recovery must not require a participant to discover archive paths.
+
+The local runtime-review/runtime-apply consumer route requires schema4 with its
+retained signed manifest/client-input binding and the actual installed executable.
+A historical schema3 modern consumer lacks that binding and command contract;
+converter setup reports explicitly pending before invoking a child. It neither
+claims qualification built by the older installer belongs to that consumer nor
+silently falls back. Use a compatible source-aware release. Raw, uninstalled and
+EPRT PlaceVerified calls without an authenticated Current requirement retain
+their original fixed metadata layout and authority/profile exclusions.
+
+Source acceptance proves changed-pack N-to-N+1 placement, current identity/use,
+prior-byte preservation, rollback/readback, same-pack idempotence, declined or
+stale review, changed current source, unsafe/foreign/incompatible/expired inputs
+and failed qualification with truthful partial outcomes. Use existing public
+APIs and private synthetic signed fixtures; no extra test engine or relaxed
+native evidence. Source tests, Windows compilation, actual kernel qualification,
+conversion, signing and placement remain separately reported. Complete source
+and manager wiring precede the cohesive reviewed front; same-pack-only tests do
+not close changed-runtime support.
+
 ### Construction acceptance
 
 Provide exact reviewed clients-review/apply/status/reconcile, explicit

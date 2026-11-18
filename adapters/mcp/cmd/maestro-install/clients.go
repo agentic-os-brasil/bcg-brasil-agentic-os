@@ -328,6 +328,9 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 			}
 			o.Request.GenerationID = hex.EncodeToString(generation[:])
 		}
+		if err := reconcileRuntime(ctx, o, confirm, output); err != nil {
+			return err
+		}
 		review, e := installer.ReviewClientsSeeded(ctx, o)
 		if e != nil {
 			return e
@@ -399,6 +402,9 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 			return e
 		}
 		if errors.Is(e, updateservice.ErrCurrent) && status.State == "current_materialization" {
+			if err := reconcileRuntime(ctx, o, confirm, output); err != nil {
+				return err
+			}
 			fmt.Fprintln(output, "The installed source and current packet generation are unchanged. No native qualification or model session was repeated. Loading remains separately unverified.")
 			if r.Code.Executable != "" {
 				registration, err := setup.ReviewCodeRegistration(ctx, r, nil)
@@ -507,6 +513,11 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 		return json.NewEncoder(output).Encode(result)
 	default:
 		return errors.New("unsupported local management action; nothing applied")
+	}
+	if action == "update" || action == "rollback" || action == "reconcile" {
+		if err := reconcileRuntime(ctx, o, confirm, output); err != nil {
+			return err
+		}
 	}
 	if o.Request.NativeEnforcement {
 		var generation [16]byte

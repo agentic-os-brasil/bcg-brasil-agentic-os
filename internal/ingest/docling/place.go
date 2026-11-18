@@ -33,6 +33,16 @@ func PlaceVerified(ctx context.Context, o Options, release releaseverify.Verifie
 	if verified.ManifestSHA256 != release.ManifestSHA256 || !verified.Manifest.Modern() {
 		return errors.New("Docling placement requires the unchanged modern signed release")
 	}
+	required, err := New(o).currentRequirement(ctx)
+	if err != nil {
+		return err
+	}
+	if o.ResolveRequirement != nil {
+		if required.ManifestSHA256 != verified.ManifestSHA256 || required.ServerVersion != verified.Manifest.Server.Version {
+			return errors.New("reviewed converter release is no longer current")
+		}
+		o.CLIVersion = required.ServerVersion
+	}
 	compatibility, err := releasecontract.ParseVersionRange(verified.Manifest.CompatibleExecutable())
 	if err != nil {
 		return err
@@ -51,7 +61,7 @@ func PlaceVerified(ctx context.Context, o Options, release releaseverify.Verifie
 			selected = a
 		}
 	}
-	if selected == nil {
+	if selected == nil || o.ResolveRequirement != nil && selected.SHA256 != required.PackSHA256 {
 		return errors.New("no authenticated converter for this target")
 	}
 	body, _, err := readFile(filepath.Join(verified.Directory, selected.Name), selected.Size)
@@ -69,10 +79,31 @@ func PlaceVerified(ctx context.Context, o Options, release releaseverify.Verifie
 	if err = scheduler.EnsurePrivateDirectory(base); err != nil {
 		return err
 	}
+	// Reject unsafe/unknown selectors before any new payload or metadata effect.
+	if _, err = metadataBase(o); err != nil {
+		return err
+	}
+	metadata := base
+	if o.ResolveRequirement != nil {
+		metadata = filepath.Join(base, "metadata", verified.ManifestSHA256)
+		if err = scheduler.EnsurePrivateDirectory(metadata); err != nil {
+			return err
+		}
+	}
 	installedParent := filepath.Join(base, "installed")
 	if err = scheduler.EnsurePrivateDirectory(installedParent); err != nil {
 		return err
 	}
+	parentHandle, err := scheduler.OpenDirectory(installedParent)
+	if err != nil {
+		return err
+	}
+	defer parentHandle.Close()
+	heldParent, err := scheduler.HoldDirectory(installedParent, parentHandle)
+	if err != nil {
+		return err
+	}
+	defer heldParent.Close()
 	installed := filepath.Join(installedParent, selected.SHA256)
 	if _, err = os.Lstat(installed); errors.Is(err, os.ErrNotExist) {
 		stage, err := os.MkdirTemp(installedParent, ".placing-")
@@ -143,7 +174,7 @@ func PlaceVerified(ctx context.Context, o Options, release releaseverify.Verifie
 				return err
 			}
 		}
-		if err = os.Rename(stage, installed); err != nil {
+		if err = heldParent.Rename(filepath.Base(stage), selected.SHA256, false); err != nil {
 			return err
 		}
 		published = true
@@ -151,7 +182,7 @@ func PlaceVerified(ctx context.Context, o Options, release releaseverify.Verifie
 		return err
 	}
 	for name, content := range map[string][]byte{selected.Name: body} {
-		if err = placeExact(base, name, content); err != nil {
+		if err = placeExact(metadata, name, content); err != nil {
 			return err
 		}
 	}
@@ -160,9 +191,13 @@ func PlaceVerified(ctx context.Context, o Options, release releaseverify.Verifie
 		if err != nil {
 			return err
 		}
-		if err = placeExact(base, name, content); err != nil {
+		if err = placeExact(metadata, name, content); err != nil {
 			return err
 		}
+	}
+	// Verify and qualify the candidate without changing the selected generation.
+	if o.ResolveRequirement != nil {
+		o.metadataGeneration = verified.ManifestSHA256
 	}
 	if err = qualifyPlaced(ctx, o); err != nil {
 		return err
@@ -171,7 +206,12 @@ func PlaceVerified(ctx context.Context, o Options, release releaseverify.Verifie
 	if availability.State != "ready" {
 		return fmt.Errorf("placed converter unavailable: %s", availability.Reason)
 	}
-	return nil
+	// Selection is the only mutable runtime record. Its final publication is
+	// serialized with current installation custody by the owning caller.
+	if o.ResolveRequirement == nil {
+		return nil
+	}
+	return selectMetadata(ctx, o, required)
 }
 
 func placeExact(root, name string, body []byte) error {
