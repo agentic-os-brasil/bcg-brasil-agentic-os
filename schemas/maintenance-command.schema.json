@@ -15,7 +15,8 @@
     "scheduled_for": {"type": "string", "format": "date-time"},
     "requested_at": {"type": "string", "format": "date-time"},
     "deadline": {"type": "string", "format": "date-time"},
-    "proposal_only": {"type": "boolean"}
+    "proposal_only": {"type": "boolean"},
+    "weekly_mode": {"enum": ["native_probe", "weekly_working"]}
   },
   "allOf": [
     {
@@ -24,16 +25,24 @@
       "else": {"not": {"required": ["event_id"]}}
     },
     {
-      "if": {"properties": {"proposal_only": {"const": true}}},
+      "if": {"required": ["weekly_mode"]},
       "then": {
         "properties": {
-          "job_id": {"enum": ["darwin-structural-evolution-proposal", "yoda-self-review-weekly"]}
+          "job_id": {"const": "yoda-self-review-weekly"},
+          "proposal_only": {"const": false},
+          "trigger": {"const": "weekly"}
         }
       },
       "else": {
-        "not": {
-          "properties": {"job_id": {"enum": ["darwin-structural-evolution-proposal", "yoda-self-review-weekly"]}},
-          "required": ["job_id"]
+        "if": {"properties": {"proposal_only": {"const": true}}},
+        "then": {
+          "properties": {"job_id": {"enum": ["darwin-structural-evolution-proposal", "yoda-self-review-weekly"]}}
+        },
+        "else": {
+          "not": {
+            "properties": {"job_id": {"enum": ["darwin-structural-evolution-proposal", "yoda-self-review-weekly"]}},
+            "required": ["job_id"]
+          }
         }
       }
     },
@@ -43,7 +52,7 @@
     },
     {
       "if": {"properties": {"job_id": {"const": "yoda-self-review-weekly"}}, "required": ["job_id"]},
-      "then": {"properties": {"proposal_only": {"const": true}, "trigger": {"const": "weekly"}}}
+      "then": {"properties": {"trigger": {"const": "weekly"}}}
     }
   ]
 }

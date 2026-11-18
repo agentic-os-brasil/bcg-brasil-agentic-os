@@ -18,6 +18,7 @@
     "recorded_at": {"type": "string", "format": "date-time"},
     "deadline": {"type": "string", "format": "date-time"},
     "proposal_only": {"type": "boolean"},
+    "weekly_mode": {"enum": ["native_probe", "weekly_working"]},
     "proposal_count": {"type": "integer", "minimum": 0},
     "proposal_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "proposal_artifact_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
@@ -33,15 +34,25 @@
       "else": {"not": {"required": ["event_id"]}}
     },
     {
-      "if": {"properties": {"proposal_only": {"const": true}}},
+      "if": {"required": ["weekly_mode"]},
       "then": {
-        "properties": {"job_id": {"enum": ["darwin-structural-evolution-proposal", "yoda-self-review-weekly"]}},
-        "not": {"properties": {"state": {"const": "succeeded"}}, "required": ["state"]}
+        "properties": {
+          "job_id": {"const": "yoda-self-review-weekly"},
+          "proposal_only": {"const": false},
+          "trigger": {"const": "weekly"}
+        }
       },
       "else": {
-        "not": {
+        "if": {"properties": {"proposal_only": {"const": true}}},
+        "then": {
           "properties": {"job_id": {"enum": ["darwin-structural-evolution-proposal", "yoda-self-review-weekly"]}},
-          "required": ["job_id"]
+          "not": {"properties": {"state": {"const": "succeeded"}}, "required": ["state"]}
+        },
+        "else": {
+          "not": {
+            "properties": {"job_id": {"enum": ["darwin-structural-evolution-proposal", "yoda-self-review-weekly"]}},
+            "required": ["job_id"]
+          }
         }
       }
     },
@@ -51,7 +62,7 @@
     },
     {
       "if": {"properties": {"job_id": {"const": "yoda-self-review-weekly"}}, "required": ["job_id"]},
-      "then": {"properties": {"proposal_only": {"const": true}, "trigger": {"const": "weekly"}}}
+      "then": {"properties": {"trigger": {"const": "weekly"}}}
     },
     {
       "if": {"properties": {"state": {"const": "proposal_emitted"}}},

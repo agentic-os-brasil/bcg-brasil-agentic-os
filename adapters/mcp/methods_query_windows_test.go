@@ -32,7 +32,7 @@ func TestMethodPlansResolveMaintenanceKeepWikiUnavailable(t *testing.T) {
 		t.Fatalf("method selection granted unattested native authority: %+v", plan)
 	}
 	want := map[string][]string{
-		"domain.maintenance_lifecycle": {"maintenance.enroll", "maintenance.pause", "maintenance.qualify", "maintenance.report", "maintenance.resume", "maintenance.revoke", "maintenance.run", "maintenance.status"},
+		"domain.maintenance_lifecycle": {"maintenance.enroll", "maintenance.pause", "maintenance.qualify", "maintenance.register", "maintenance.report", "maintenance.resume", "maintenance.revoke", "maintenance.run", "maintenance.status"},
 		"domain.workspace_navigation":  {"wiki.read", "wiki.source", "wiki.status"},
 	}
 	for _, dependency := range plan.Dependencies {

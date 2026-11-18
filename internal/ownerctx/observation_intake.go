@@ -547,6 +547,12 @@ func ApplySelfObservationControl(ctx context.Context, root string, review SelfOb
 				if err := ctx.Err(); err != nil {
 					return err
 				}
+				if _, err := invalidateWeeklySelfSourcesLocked(root, weeklySelfSourceChange{Observations: []string{current.ID}}); err != nil {
+					return err
+				}
+				if err := ctx.Err(); err != nil {
+					return err
+				}
 				if err := appendObservationRecord(path, current); err != nil {
 					return err
 				}

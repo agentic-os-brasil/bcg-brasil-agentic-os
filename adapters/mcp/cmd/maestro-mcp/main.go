@@ -120,7 +120,12 @@ func run() error {
 	var proposalID, reviewDigest, track string
 	var confirmed, packet, lifecycleContext, desktopPilot, engineeringRuntimePilot, codePilot bool
 	var runtimeRelease, acquisitionReviewFile string
+	var weeklyRegistrationFile *string
 	var selectedPacket packaging.PacketStatus
+	switch os.Args[1] {
+	case "serve", "maintenance-review", "maintenance-apply", "maintenance-status", "maintenance-run":
+		weeklyRegistrationFile = flags.String("weekly-registration-file", "", "explicit local weekly model declaration; loading neither qualifies nor activates it")
+	}
 	if os.Args[1] == "mcpb" {
 		flags.BoolVar(&desktopPilot, "desktop-pilot", false, "isolate this local engineering rehearsal and bind its exact prepared Desktop paths")
 		flags.BoolVar(&engineeringRuntimePilot, "engineering-runtime-pilot", false, "explicitly carry the prepared short-lived engineering converter identity")
@@ -238,6 +243,11 @@ func run() error {
 	o.GuardProcess = Version != ""
 	if flags.NArg() != 0 {
 		return errors.New("unexpected_arguments")
+	}
+	if weeklyRegistrationFile != nil {
+		if err := configureWeeklyRegistration(&o, *weeklyRegistrationFile); err != nil {
+			return err
+		}
 	}
 	var carrier *packaging.StableCarrier
 	if carrierProfile != "" || carrierID != "" || carrierVersion != "" {
