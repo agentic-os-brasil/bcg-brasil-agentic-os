@@ -77,11 +77,13 @@ func (b *Bound) HandleClaudeLifecycleHook(event string, in io.Reader, out io.Wri
 			}
 			receipt.IdempotencyKey = lifecycle.IdempotencyKey(receipt.IdempotencyKey, input.PromptID)
 			if err = b.guardPublication(func() error {
-				_, e := lifecycle.RecordConfined(filepath.Join(b.home, "state"), b.workspaceID, receipt)
+				var e error
+				receipt, e = lifecycle.RecordConfined(filepath.Join(b.home, "state"), b.workspaceID, receipt)
 				return e
 			}); err != nil {
 				return errors.New("hook_receipt_unavailable")
 			}
+			b.queueLifecycleSignal(receipt)
 		}
 	} else {
 		value, err = b.claudeLifecycleContext(event)

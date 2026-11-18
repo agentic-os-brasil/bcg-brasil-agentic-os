@@ -14,6 +14,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
 )
 
 var workspaceIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
@@ -22,18 +24,19 @@ var ErrDreamInProgress = errors.New("memory dreaming cycle already in progress")
 var ErrNoLiveCaptures = errors.New("daily dream requires at least one live capture")
 
 type Capture struct {
-	ID            string    `json:"id,omitempty"`
-	Revision      uint64    `json:"revision,omitempty"`
-	SchemaVersion int       `json:"schema_version,omitempty"`
-	WorkspaceID   string    `json:"workspace_id"`
-	RecordedAt    time.Time `json:"recorded_at"`
-	Kind          string    `json:"kind"`
-	Text          string    `json:"text"`
-	Sanitized     bool      `json:"sanitized"`
-	ProducerID    string    `json:"producer_id,omitempty"`
-	SanitizerID   string    `json:"sanitizer_id,omitempty"`
-	SourceDigest  string    `json:"source_digest,omitempty"`
-	Attestation   string    `json:"attestation,omitempty"`
+	ID            string            `json:"id,omitempty"`
+	Revision      uint64            `json:"revision,omitempty"`
+	SchemaVersion int               `json:"schema_version,omitempty"`
+	WorkspaceID   string            `json:"workspace_id"`
+	RecordedAt    time.Time         `json:"recorded_at"`
+	Kind          string            `json:"kind"`
+	Text          string            `json:"text"`
+	Sanitized     bool              `json:"sanitized"`
+	ProducerID    string            `json:"producer_id,omitempty"`
+	SanitizerID   string            `json:"sanitizer_id,omitempty"`
+	SourceDigest  string            `json:"source_digest,omitempty"`
+	Attestation   string            `json:"attestation,omitempty"`
+	Observation   *lifecycle.Signal `json:"observation,omitempty"`
 }
 
 type SourceDocument struct {
@@ -743,6 +746,18 @@ func truncateRunes(value string, limit int) (string, bool) {
 }
 
 func (engine *Engine) dailySources(workspaceID, period, captureDirectory string) ([]SourceDocument, error) {
+	var owned []Capture
+	if captureDirectory == "attested-captures" {
+		var err error
+		owned, err = engine.ownedCaptures(workspaceID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return engine.dailySourcesWithOwned(workspaceID, period, captureDirectory, owned)
+}
+
+func (engine *Engine) dailySourcesWithOwned(workspaceID, period, captureDirectory string, owned []Capture) ([]SourceDocument, error) {
 	capturePath := engine.currentPath(workspaceID, "l1", filepath.Join(captureDirectory, period+".jsonl"))
 	paths := []string{capturePath}
 	if captureDirectory == "attested-captures" {
@@ -751,11 +766,7 @@ func (engine *Engine) dailySources(workspaceID, period, captureDirectory string)
 		} else if err != nil {
 			return nil, err
 		}
-		captures, err := engine.ownedCaptures(workspaceID)
-		if err != nil {
-			return nil, err
-		}
-		for _, capture := range captures {
+		for _, capture := range owned {
 			if capture.RecordedAt.UTC().Format("2006-01-02") == period {
 				paths = append(paths, engine.ownedPath(workspaceID, capture.ID))
 			}

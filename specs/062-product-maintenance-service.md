@@ -13,9 +13,35 @@ Worker, scheduler leases/receipts and domain stores remain authoritative.
 Spec036 owns the eighteen job contracts. Existing bindings connect checkpoint,
 light/deep dreaming, retention diagnosis, skills indexing, runtime health,
 capability/drift diagnosis, the three source-owned wiki jobs described in [Spec 008](008-wiki-update-okf.md), and attended signed-source checking.
-Darwin adds three closed jobs below. Capture/observation and Yoda retain
+Darwin adds three closed jobs below. The existing memory-l1-capture binding
+admits eligible body-free Stop observations and witnessed canonical completed
+records through the owning capture/denial store. Self-observation and Yoda retain
 explicit unavailable reasons until their complete owning journeys are constructed.
 Catalog presence, a handler declaration and installation grant no activation.
+
+### Eligible observation capture
+
+The capture job reads only sealed, confined lifecycle observations and the
+canonical execution owner's completed-result projection. Method consultation,
+plans, failed/incomplete work and model assertions never become completed
+execution evidence. Stop observations remain `observed_only`; completed-record
+signals assert only a committed historical result with matching passing
+criterion receipts, never its original host, caller or current artifact bytes.
+
+Source fingerprints bind the complete bounded cohort and producer version.
+Revalidate original receipt/record identity before every visible publication.
+No model argument chooses producers, roots, signers or source envelopes.
+Qualification/enrollment displays both source classes and their strictly
+body-free scope. Genuine new canonical captures plus an immutable metadata-only
+result and actual worker/calendar receipts establish qualification; empty input,
+replay-only and suppressed/deleted occurrences cannot mint it.
+
+The existing memory activation lock and permanent denial barrier own exactly
+once admission. Pending occurrence metadata is intent, not capture evidence.
+Correction/deletion wins over replay, including after interruption. The first
+actual capture time and original event time remain distinct; source journals
+retain their data. Source keys are prepared by explicit setup only. Startup,
+Stop and status never ingest, enroll or synthesize memory.
 
 ## Identity and enrollment
 
@@ -76,11 +102,37 @@ commit followed by receipt failure remains partial evidence, never an invented
 success; replay reads current domain truth and preserves idempotency.
 
 The three-hour memory jobs retain MaxCatchUp=1. Scheduler occurrence identity
-uses ScheduledFor; light dreaming intentionally processes eligible captures for
-the execution day at RequestedAt, matching the existing public handler. Record
-both times; a delayed wake must not claim an earlier day's synthesis. Checkpoint
+uses ScheduledFor. Product light dreaming witnesses the existing bounded cohort
+of at most 4096 canonical captures, applies the permanent denial barrier and
+selects the oldest eligible ingestion day whose actual L1 fingerprint is still
+pending. It processes at most one such day per occurrence, without a rolling
+lookback cutoff. The aggregate source grant contains inputs only: publishing L1
+cannot invalidate its own grant. Pin the selected period and daily fingerprint
+through execution and qualification; do not select a different day when reading
+back the just-published artifact. Concurrent input changes refuse publication;
+another worker's identical publication is an honest no-change. An interruption
+after capture commit before UTC midnight, followed by long client downtime,
+therefore preserves the first ingestion timestamp and eventually reaches L1
+without recapturing or resurrecting deleted data. Direct legacy handler callers
+retain their RequestedAt single-day default. GeneratedAt records actual synthesis
+time rather than pretending that historical work ran earlier. Checkpoint
 needs real durable non-checkpoint scheduler metadata, so bootstrap through a
 trusted capture and qualified light dream before qualifying checkpoint.
+
+New light qualifications include an optional `daily_input` period/fingerprint,
+validated against the exact selected eligible cohort and actual immutable L1
+bytes at issuance and included in the qualification identity. Later validation
+authenticates that historical witness while its immutable artifact bytes still
+exist, without separately requiring its original captures to remain in the live
+cohort. Every actual run selects only live eligible inputs through the current
+permanent denial barrier. The existing privacy purge removes affected generated
+artifact versions: if that removes qualification evidence, report
+`qualification_required` and require new eligible inputs plus a fresh explicit
+owner-reviewed qualification. Never retain deleted text, relax the artifact
+checksum, silently requalify or exempt a purged proof to preserve cadence.
+Tampered periods, fingerprints and identities refuse; no historical qualification
+resurrects removed context. Omission preserves legacy qualification bytes and
+the original RequestedAt period check.
 
 ## Domain ownership
 

@@ -17,11 +17,12 @@ private state.
 
 Call `maestro_query` with `{"operation":"maintenance.status"}`. The response
 lists job IDs, revision, state, schedule, write set and qualification metadata.
-The closed catalog has eighteen jobs; this binding implements fifteen, with attended-only jobs separated from recurring enrollment:
+The closed catalog has eighteen jobs; this binding implements sixteen, with attended-only jobs separated from recurring enrollment:
 
 | Job | Cadence after separate enrollment | Actual result or prerequisite |
 | --- | --- | --- |
-| `memory-light-dream` | Every three hours | Deterministic L1 from eligible reviewed captures |
+| `memory-l1-capture` | Daily after separate qualification and enrollment | Body-free Code Stop observations and witnessed canonical completed-result metadata admitted through the canonical capture/denial owner |
+| `memory-light-dream` | Every three hours | Deterministic L1 for one oldest pending eligible ingestion day; no short historical cutoff |
 | `memory-checkpoint` | Every three hours | Checkpoint of real durable scheduler metadata; bootstrap with a successful light dream |
 | `memory-deep-dream` | Weekly, Sunday | Deterministic L2/L3 from eligible canonical ancestry; lifetime text retains its separate review |
 | `memory-retention-check` | Daily | Durable diagnosis of actual retention/visibility state; no source deletion |
@@ -43,8 +44,53 @@ captures and ancestry; an empty source or a successful no-op cannot qualify it.
 Skills indexing needs verified installed assets, not an arbitrary product
 directory. A diagnostic can qualify its real execution while its finding is
 missing or unavailable. That qualification does not qualify the reported native
-capability. The remaining three entries (two capture/observation jobs and Yoda)
-retain explicit unavailable reasons until their complete execution journeys exist.
+capability. The remaining two entries, `self-observation-capture` and
+`yoda-self-review-weekly`, retain explicit unavailable reasons until their
+complete execution journeys exist. Supporting workspace capture does not enable
+owner self-observation or Yoda.
+
+### Capture eligible metadata, then generate L1
+
+Explicit memory setup prepares the existing capture-provenance key. Code Stop
+can then queue a sealed observation of its actual adapter receipt; it remains
+`observed_only`, never proof of completed work or native Agent invocation. The
+capture job separately reads the confined execution owner's completed records
+and matching passing criterion receipts. These provide historical
+`committed_effect` metadata, without proving the original host/caller or current
+artifact bytes. Read/plan operations, failed or incomplete work and model
+approval/sanitizer claims do not establish that evidence.
+
+Use the reviewed qualify/enroll sequence below first with
+`job_id: "memory-l1-capture"`, reading that job's current revision at each step.
+Qualification performs one real capture pass; enrollment separately permits its
+daily cadence. Its review names both source classes and the metadata-only scope.
+Signals contain closed labels, opaque source hashes, revisions and timestamps;
+they never copy prompts, transcripts, tool bodies, objectives, summaries,
+document paths or document contents. Exact replay does not duplicate captures;
+changed sources refuse, and corrections/deletions remain authoritative.
+
+Lifecycle startup context and status/query operations never capture, create
+signing authority or enroll jobs. Stop only records/queues diagnostic metadata:
+it never captures, dreams or
+enrolls. Capture provenance grants no tool permission or native execution proof.
+Inspect `maintenance.report` for `memory-l1-capture` to see its actual bounded
+capture/class counts; this report contains no captured text.
+
+After eligible captures exist, qualify and enroll `memory-light-dream`
+separately. Each occurrence selects at most one oldest pending eligible ingestion
+day from the bounded canonical memory cohort. Its selected period/fingerprint
+stays fixed through execution and qualification, so a capture committed before
+midnight can still reach L1 after a long client shutdown. `GeneratedAt` records
+actual synthesis time; this does not backdate an execution or remove the
+scheduler's separate no-backfill boundary.
+
+Current permanent correction/deletion denials apply to every run and public
+readback. The existing privacy purge can physically remove generated versions
+used as qualification evidence. When that happens, the job requires fresh
+explicit qualification with current eligible inputs before it can run again.
+New inputs alone do not silently requalify it. Inspect status, obtain a new
+review, and approve only the intended requalification; never restore deleted
+text or copy old evidence to keep a cadence active.
 
 ### Darwin diagnosis, first cache and proposals
 
@@ -82,7 +128,7 @@ admitted installer's [signed-source recovery route](product-synced-source.md).
 The public surface has eight operation variants: `maintenance.status`,
 `maintenance.report`, `maintenance.qualify`, `maintenance.enroll`,
 `maintenance.pause`, `maintenance.resume`, `maintenance.revoke` and
-`maintenance.run`. These operation names are separate from the fifteen supported
+`maintenance.run`. These operation names are separate from the sixteen supported
 job IDs listed above and the full eighteen-entry catalog.
 
 ## Review, qualify and enroll
@@ -169,7 +215,7 @@ qualification, enrollment, dependency installation or model/provider call.
 The response contains bounded due/receipt metadata. A wake-up or a process exit
 alone is not proof of a committed domain result.
 
-For deep dream, diagnostic/index, Wiki, update-check and the three Darwin jobs,
+For capture, deep dream, diagnostic/index, Wiki, update-check and the three Darwin jobs,
 call `maestro_query` with
 `{"operation":"maintenance.report","job_id":"skills-index-refresh"}`,
 substituting the supported job ID. Reports expose bounded findings, coverage,
