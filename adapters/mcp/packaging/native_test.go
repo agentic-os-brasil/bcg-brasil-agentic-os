@@ -3,6 +3,8 @@ package packaging
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +12,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -17,9 +20,59 @@ import (
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
+
+func TestNativeFaultHookCarriesOnlyAdmittedExperimentalChildIdentity(t *testing.T) {
+	// This deterministic source-only authority is never written or installed.
+	key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{7}, ed25519.SeedSize))
+	now := time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
+	registry := []byte(fmt.Sprintf(`{"schema_version":1,"product":"maestro","authorities":[{"issuer":"maestro-engineering-pilot-20261117","key_id":"pilot-20261117","algorithm":"ed25519","public_key":"%s","status":"active","valid_from":"2026-11-17T00:00:00Z","valid_until":"2026-11-30T00:00:00Z"}]}`, base64.StdEncoding.EncodeToString(key.Public().(ed25519.PublicKey))))
+	record := installer.ExperimentalSeedRecord{
+		SchemaVersion: 1, Product: "maestro", Purpose: installer.ExperimentalSeedPurpose,
+		Protocol: installer.ExperimentalSeedProtocol, Profile: installer.ExperimentalSeedProfile,
+		RegistrySHA256: digest(registry), InstallerVersion: "0.1.51", InstallerSHA256: strings.Repeat("a", 64),
+		TargetOS: "darwin", TargetArch: "arm64", Source: releasecontract.SourceTuple{SourceID: "source-test", Channel: "canary", OS: "darwin", Arch: "arm64"},
+		Issuer: "maestro-engineering-pilot-20261117", KeyID: "pilot-20261117", NotBefore: "2026-11-17T00:00:00Z", ExpiresAt: "2026-11-29T00:00:00Z",
+	}
+	for _, version := range []string{"0.1.51", "0.1.52"} {
+		record.Releases = append(record.Releases, installer.ExperimentalSeedRelease{Release: version, ManifestSHA256: digest([]byte(version)), ClientInputsSHA256: strings.Repeat("b", 64), ServerSHA256: strings.Repeat("c", 64), BundleSHA256: strings.Repeat("d", 64), RuntimeSHA256: strings.Repeat("e", 64)})
+	}
+	body, err := json.Marshal(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	role, err := installer.VerifyExperimentalSeedAdmission(body, ed25519.Sign(key, body), registry, record.RegistrySHA256, func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, experimental := range []bool{false, true} {
+		for _, fault := range []string{"crash", "timeout", "missing"} {
+			t.Run(fmt.Sprintf("experimental=%t/%s", experimental, fault), func(t *testing.T) {
+				o := Options{target: Target{OS: "darwin", Arch: "arm64"}}
+				if experimental {
+					o.Binding.ExperimentalSeed, o.Binding.ExperimentalSeedRoot = role, "/reviewed/installed-root"
+				}
+				row := nativeFaultHook(o, fault)
+				hook := row["hooks"].([]any)[0].(map[string]any)
+				wantCommand := "${CLAUDE_PLUGIN_ROOT}/scripts/maestro-mcp"
+				wantArgs := []string{"native-fault", "--fault", fault}
+				if experimental {
+					wantArgs = append(wantArgs, "--experimental-seed-sha256", digest(body), "--experimental-installed-root", "/reviewed/installed-root")
+				}
+				if fault == "missing" {
+					wantCommand, wantArgs = "${CLAUDE_PLUGIN_ROOT}/scripts/absent-native-guard", []string{}
+				}
+				if row["matcher"] != "Edit" || hook["type"] != "command" || hook["command"] != wantCommand || !reflect.DeepEqual(hook["args"], wantArgs) || hook["timeout"] != 1 || hook["onFailure"] != "block" {
+					t.Fatalf("qualification fault must preserve its exact helper, fixed admission and blocking contract: got %+v; want command=%s args=%v", row, wantCommand, wantArgs)
+				}
+			})
+		}
+	}
+}
 
 func nativeFixture(t *testing.T) NativeOptions {
 	t.Helper()
