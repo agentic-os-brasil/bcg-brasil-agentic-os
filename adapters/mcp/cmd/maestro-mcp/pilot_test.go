@@ -22,6 +22,7 @@ import (
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -884,5 +885,134 @@ func assertDesktopPilotNativeMaterialization(t *testing.T, binary, packet, archi
 	}
 	if _, err := packaging.ValidatePacket(packet); err != nil {
 		t.Fatal("negative fixtures changed the original packet", err)
+	}
+}
+
+func TestPilotGuidedJourneyReport(t *testing.T) {
+	const workspaceID = "444df343c3054843e367c8b6b13f4d5d"
+	r := pilotReport{SchemaVersion: 1, Status: "partial", WorkspaceID: workspaceID, DesktopExtension: "Maestro MCP — Ensaio 444df343"}
+	var out bytes.Buffer
+	if err := finishPilotReport(&r, &out); err != nil {
+		t.Fatal(err)
+	}
+	var report map[string]json.RawMessage
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	var readback string
+	if err := json.Unmarshal(report["code_readback_prompt"], &readback); err != nil || readback == "" {
+		t.Fatal("public report must provide a separate read-only restart/readback continuation")
+	}
+	for label, prompt := range map[string]string{"Code": r.CodePrompt, "Desktop": r.DesktopPrompt, "readback": readback} {
+		for _, required := range []string{workspaceID, "memory.search", "memory.read", "capture_id", "MEMORY_ACCEPT", "MEMORY_DECLINE", "next_offset", "4096"} {
+			if !strings.Contains(prompt, required) {
+				t.Fatalf("%s journey omits %s", label, required)
+			}
+		}
+	}
+	for _, required := range []string{"definições e relações", "modelo completo", "não comprova invocação nativa", "memory.capture", "confirmation_declined", "confirmation_unavailable", "FALHA DO CONTROLE", "não apague", "reutilize"} {
+		if !strings.Contains(r.CodePrompt, required) {
+			t.Fatalf("Code guided journey omits its model/memory control: %s", required)
+		}
+	}
+	for _, required := range []string{"somente leitura", "estado e revisão", "reinício informado", "brain.read", "execution.next"} {
+		if !strings.Contains(readback, required) {
+			t.Fatalf("readback continuation omits %s", required)
+		}
+	}
+	for _, mutation := range []string{"maestro_apply", "execution.resume", "execution.checkpoint", "memory.capture", "brain.create", "memory.consolidate", "maintenance.enroll"} {
+		if strings.Contains(readback, mutation) {
+			t.Fatalf("read-only continuation exposes mutation %s", mutation)
+		}
+	}
+	assertPilotReadinessPrompt(t, out.Bytes(), workspaceID, true)
+	t.Run("blocked report releases no continuation", func(t *testing.T) {
+		blocked := pilotReport{SchemaVersion: 1, Status: "blocked", WorkspaceID: workspaceID}
+		var body bytes.Buffer
+		if err := finishPilotReport(&blocked, &body); err == nil {
+			t.Fatal("blocked report must return its blocked status")
+		}
+		var document map[string]json.RawMessage
+		if err := json.Unmarshal(body.Bytes(), &document); err != nil {
+			t.Fatal(err)
+		}
+		var continuation string
+		if err := json.Unmarshal(document["code_readback_prompt"], &continuation); err != nil || continuation != "" {
+			t.Fatal("blocked report must retain an empty readback field")
+		}
+	})
+}
+
+func TestPilotGuidedSelectionUsesActualNextProjection(t *testing.T) {
+	const workspaceID = "444df343c3054843e367c8b6b13f4d5d"
+	marker := "MAESTRO_PILOT_" + workspaceID
+	store := execution.Store{Root: t.TempDir()}
+	input := execution.CreateInput{WorkspaceID: workspaceID, Objective: "Synthetic participant work.", InitialNextStep: "Unrelated synthetic step.", Criteria: []execution.Criterion{{ID: "artifact", Type: execution.CriterionArtifactSnapshot, TargetRef: "bcgos://workspace/pilot"}}, AllowedRefs: []string{"bcgos://workspace/pilot"}}
+	if _, err := store.Create(input); err != nil {
+		t.Fatal(err)
+	}
+	input.InitialNextStep = marker
+	selected, err := store.Create(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, err := store.Start(workspaceID, selected.Contract.ItemID, selected.State.StateRevision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Checkpoint(workspaceID, selected.Contract.ItemID, execution.CheckpointInput{ExpectedRevision: started.State.StateRevision, AttemptID: started.State.ActiveAttemptID, Summary: marker, NextStep: marker}); err != nil {
+		t.Fatal(err)
+	}
+	listed, err := store.List(workspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 2 {
+		t.Fatalf("expected two metadata candidates, got %d", len(listed))
+	}
+	var matches []execution.NextProjection
+	for _, item := range listed {
+		body, err := json.Marshal(item)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var metadata map[string]json.RawMessage
+		if err := json.Unmarshal(body, &metadata); err != nil {
+			t.Fatal(err)
+		}
+		for _, field := range []string{"summary", "next_step"} {
+			if _, ok := metadata[field]; ok {
+				t.Fatalf("execution.list unexpectedly exposes %s", field)
+			}
+		}
+		projection, err := store.Next(workspaceID, item.ItemID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if projection.Summary == marker && projection.NextStep == marker {
+			matches = append(matches, projection)
+		}
+	}
+	if len(matches) != 1 || matches[0].ItemID != selected.Contract.ItemID {
+		t.Fatal("only actual Next projections must identify the marked work")
+	}
+	code, desktop, readback := pilotPrompts(workspaceID)
+	for name, prompt := range map[string]string{"Code": code, "Desktop": desktop, "readback": readback} {
+		listAt := strings.Index(prompt, "execution.list")
+		nextAt := strings.Index(prompt, "para cada item_id listado")
+		selectAt := strings.Index(prompt, "Somente após ler todas as projeções")
+		if listAt < 0 || nextAt <= listAt || selectAt <= nextAt {
+			t.Fatalf("%s must read every listed candidate through execution.next before selecting by summary/next_step", name)
+		}
+		if !strings.Contains(prompt, "execution.list retorna somente metadados") || !strings.Contains(prompt, "128") {
+			t.Fatalf("%s must respect the metadata-only bounded list", name)
+		}
+	}
+	after, err := store.Next(workspaceID, matches[0].ItemID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.State != matches[0].State || after.StateRevision != matches[0].StateRevision {
+		t.Fatal("selection and readback changed work state")
 	}
 }

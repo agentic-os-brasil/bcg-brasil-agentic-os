@@ -43,7 +43,7 @@ if ! /usr/bin/plutil -extract schema_version raw -o - "$RUN/report.json" 2>/dev/
   printf 'Relatório: %s/RELATORIO.md\n' "$RUN"
   exit 1
 fi
-for pair in 'markdown|RELATORIO.md' 'code_prompt|CODE.txt' 'desktop_prompt|DESKTOP.txt' 'code_ready_prompt|CODE-CONEXAO.txt' 'desktop_ready_prompt|DESKTOP-CONEXAO.txt'; do
+for pair in 'markdown|RELATORIO.md' 'code_prompt|CODE.txt' 'code_readback_prompt|CODE-RELEITURA.txt' 'desktop_prompt|DESKTOP.txt' 'code_ready_prompt|CODE-CONEXAO.txt' 'desktop_ready_prompt|DESKTOP-CONEXAO.txt'; do
   /usr/bin/plutil -extract "${pair%%|*}" raw -o "$RUN/${pair#*|}" "$RUN/report.json" || fail "Relatório incompleto; preserve $RUN."
 done
 printf '\nRelatório: %s/RELATORIO.md\n' "$RUN"
@@ -87,7 +87,7 @@ qualify_code() {
   printf 'Qualificação concluída. O launcher verificará o pacote e abrirá o Code com os sete hooks. Os diagnósticos native-*.json são privados; não os compartilhe com o relatório.\n'
   exec "$ROOT/launchers/Abrir Code.command"
 }
-printf '\n1 — Ensaio completo no Code\n2 — Retomar no Desktop\n3 — Conferir conexão Code (somente leitura)\n4 — Conferir conexão Desktop (somente leitura)\n5 — Qualificar os sete hooks do Code (testes com modelo; confirmação separada)\nEnter — Sair\nEscolha: '
+printf '\n1 — Ensaio completo no Code\n2 — Retomar no Desktop\n3 — Conferir conexão Code (somente leitura)\n4 — Conferir conexão Desktop (somente leitura)\n5 — Qualificar os sete hooks do Code (testes com modelo; confirmação separada)\n6 — Conferir persistência no Code (somente leitura)\nEnter — Sair\nEscolha: '
 read -r choice
 case "$choice" in
   1) [[ -s "$RUN/CODE.txt" ]] || fail 'O relatório ainda não liberou o ensaio no cliente.'
@@ -109,6 +109,11 @@ case "$choice" in
      printf 'Conferência copiada. Confirme a instalação da extensão deste ensaio. Antes de colar, abra Configurações > Extensões > a extensão deste ensaio e, somente na linha Maestro context (maestro_context), selecione ✓ / Sempre permitir. Preserve as demais permissões. ✓ / Sempre permitir libera só a leitura; gravações de conteúdo exigem revisão exata no formulário nativo ou no navegador local selecionado neste ensaio. Depois cole uma vez em uma conversa nova do Desktop.\n'
      exec "$ROOT/launchers/Abrir Desktop.command";;
   5) qualify_code;;
+  6) [[ -s "$RUN/CODE-RELEITURA.txt" ]] || fail 'O relatório ainda não liberou a releitura no cliente.'
+     command -v claude >/dev/null || fail 'Disponibilize o comando claude pelo fluxo normal do Code e abra Testar Maestro novamente.'
+     prompt="$(cat "$RUN/CODE-RELEITURA.txt" && printf .)" || fail 'Não foi possível ler o prompt deste relatório.'
+     printf 'Abrindo uma sessão nova do Code para conferir página, memória e trabalho sem alterações. Para testar um reinício frio, feche antes somente as sessões e conexões deste ensaio pelo fluxo normal, preserve outros trabalhos e volte a esta opção. Uma conversa nova não comprova reinício do servidor; registre o reinício informado separadamente.\n'
+     exec "$ROOT/launchers/Abrir Code.command" "${prompt%.}";;
   '') ;;
-  *) fail 'Escolha 1, 2, 3, 4, 5 ou Enter.';;
+  *) fail 'Escolha 1, 2, 3, 4, 5, 6 ou Enter.';;
 esac
