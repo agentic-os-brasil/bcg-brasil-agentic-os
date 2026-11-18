@@ -33,7 +33,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "maestro: lifecycle context unavailable; inspect the selected binding and explicit preparation")
 			os.Exit(1)
 		}
-		if len(os.Args) > 1 && os.Args[1] == "hook" {
+		if len(os.Args) > 1 && (os.Args[1] == "hook" || os.Args[1] == "installed-native-hook") {
 			event := ""
 			for i, arg := range os.Args {
 				if value, ok := strings.CutPrefix(arg, "--event="); ok {

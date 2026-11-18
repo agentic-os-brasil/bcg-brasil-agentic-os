@@ -608,3 +608,25 @@ Stable carrier identity is included in the reviewed qualification fingerprint
 before the producer runs. Current packet publication cannot reuse an imported
 native proof or silently fall back to the non-enforcing lifecycle/resources-only
 profiles. Existing native custody and qualification requirements remain effective.
+
+The experimental installed native hook uses a distinct closed
+`installed-native-hook` server command. The stable installer preserves the
+current installed executable and its original manifest, client-input and
+engineering-admission pins, adding only the event, carrier and native binding
+selectors. The child independently reloads the signed installation origin and
+reuses the same current-record native admission as the installer: current
+materialization, full native enforcement, no passive lifecycle mode and the
+four-field owner/workspace/home/workspace-ID digest. It compares the supplied
+pins with that admitted result and requires the actual installed server path,
+image digest, target and current server version. The installed bootstrapper
+version still comes from the signed origin when the server updates independently.
+
+Complete current-record admission releases the installation lock before the
+existing product constructor and hook handler acquire their domain locks.
+Those original source and process checks remain active; this does not claim an
+atomic native event across an update. Generic `hook --binding-sha256` remains
+packet-only, and the default build exposes no installed native-hook admission.
+Controlled compiled protocol tests distinguish their test-only constructor from
+signed-source admission and genuine host qualification. Passing the original
+direct-packet qualifier alone does not prove delivery through the installed
+stable plugin; qualify that final ordinary client route separately.

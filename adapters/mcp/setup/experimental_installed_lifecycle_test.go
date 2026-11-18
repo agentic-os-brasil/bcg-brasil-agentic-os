@@ -322,8 +322,36 @@ func TestExperimentalInstalledSeedFiniteSourceLifecycle(t *testing.T) {
 	nativeCLI := exec.CommandContext(ctx, seed.Self, nativeArgs...)
 	var nativeStdout, nativeStderr bytes.Buffer
 	nativeCLI.Stdout, nativeCLI.Stderr = &nativeStdout, &nativeStderr
-	if err := nativeCLI.Run(); err == nil || nativeStdout.Len() != 0 || !strings.Contains(nativeStderr.String(), "genuinely published full native carrier required") {
-		t.Fatalf("native CLI refusal polluted hook stdout or bypassed native record requirement: stdout=%s stderr=%s err=%v", nativeStdout.String(), nativeStderr.String(), err)
+	nativeErr := nativeCLI.Run()
+	var nativeExit *exec.ExitError
+	if !errors.As(nativeErr, &nativeExit) || nativeExit.ExitCode() != product.HookExitCode("PreToolUse") || nativeStdout.Len() != 0 || strings.TrimSpace(nativeStderr.String()) != "maestro: hook unavailable; inspect admitted state before retrying" {
+		t.Fatalf("native CLI refusal lost event-aware masking or bypassed native record requirement: stdout=%s stderr=%s err=%v", nativeStdout.String(), nativeStderr.String(), nativeErr)
+	}
+	// Bypass the wrapper and call the actual signed/current server command.
+	// A correctly installed signed source and matching release pins still grant
+	// no native admission to this explicitly passive-only fixture.
+	serverNativeArgs := installer.ExperimentalChildArgs([]string{"installed-native-hook", "--event", "PreToolUse", "--binding-sha256", selection, "--carrier-id", clients.Request.CarrierID, "--product-root", managed, "--user-home", user, "--workspace", ws, "--installed-manifest", currentN.Binding.ManifestSHA256, "--installed-client-inputs", currentN.Binding.ClientInputsSHA256}, role, managed)
+	for _, change := range []string{"passive", "owner", "workspace", "carrier"} {
+		t.Run("installed_native_child_refusal_"+change, func(t *testing.T) {
+			args := append([]string(nil), serverNativeArgs...)
+			for i := 1; i+1 < len(args); i += 2 {
+				if change == "owner" && args[i] == "--user-home" || change == "workspace" && args[i] == "--workspace" {
+					args[i+1] = filepath.Join(root, "foreign")
+				}
+				if change == "carrier" && args[i] == "--carrier-id" {
+					args[i+1] = strings.Repeat("f", 32)
+				}
+			}
+			child := exec.CommandContext(ctx, installed.CLIPath, args...)
+			child.Stdin = bytes.NewReader(mustJSON(t, map[string]any{"session_id": "synthetic-denied-native", "prompt_id": "synthetic-turn", "cwd": ws, "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_use_id": "synthetic-probe", "tool_input": map[string]any{"command": "printf synthetic"}, "prompt": "PRIVATE_PAYLOAD_MUST_NOT_BE_LOGGED"}))
+			var output, diagnostic bytes.Buffer
+			child.Stdout, child.Stderr = &output, &diagnostic
+			err := child.Run()
+			var exit *exec.ExitError
+			if !errors.As(err, &exit) || exit.ExitCode() != product.HookExitCode("PreToolUse") || output.Len() != 0 || strings.TrimSpace(diagnostic.String()) != "maestro: hook unavailable; inspect admitted state before retrying" {
+				t.Fatalf("actual installed native child bypassed admission or leaked diagnostics: exit=%v stdout=%s stderr=%s", err, output.String(), diagnostic.String())
+			}
+		})
 	}
 	for _, change := range []string{"absent_carrier", "changed_workspace", "expired_role", "modified_packet"} {
 		t.Run("native_refusal_"+change, func(t *testing.T) {

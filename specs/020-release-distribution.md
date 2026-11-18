@@ -741,6 +741,18 @@ payload readback preserve disabled state and refuse foreign entries. Host policy
 may reject command sources; no alternate updater or profile edit bypasses it.
 The existing relative local source remains the legacy selected profile.
 
+The original read-only registration review binds the exact generated provider
+catalog, launcher script, current packet and narrow supported host command digest.
+Operator confirmation may supply only `--accept-command <sha256>` for that exact
+command, catalog, COPY mode and plugin identity. Missing host support remains
+pending; no dry-run install, broad approval or Claude-session guard bypass is
+allowed. Current native COPY observations that omit folder fields require exact
+selected-profile cache custody, actual manifest identity, independently derived
+host content-version hash and canonical payload/topology equality, with only the
+bounded typed root host lease role admitted. Preserve the raw host version and
+separate manifest/content evidence. Neither consent nor registration proves
+session loading, native enforcement or functional acceptance.
+
 A complete native selection uses the existing genuine review/qualify producer,
 with stable carrier and destination generation bound before the probe. Run the
 qualifier outside installer publication serialization, then publish only its

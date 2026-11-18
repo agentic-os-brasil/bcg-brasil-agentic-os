@@ -16,7 +16,7 @@ status: stable
 x-maestro-profile-version: "1"
 x-maestro-stable-id: managed/model-backed-maintenance-activation
 x-maestro-scope: managed
-x-maestro-source-fingerprint: 7ec32eff72aed0903001679f02a956ada59b92670a11f32593f6823add0ddd92
+x-maestro-source-fingerprint: 6e929878445eb0a231bb94dedaa9d80623fee0fd243fd7d5ec3a3ee4112649e2
 x-maestro-freshness: fresh
 x-maestro-status: active
 x-maestro-generator-version: maestro-managed-wiki/0.2
@@ -39,6 +39,10 @@ This managed concept is generated from the reviewed repository source `specs/041
 Status: contract only. No model-backed maintenance job is activated by this
 specification. The shipped catalog remains fail-closed and `unavailable` until
 every precondition below has executable, reviewed evidence.
+
+The [weekly source-core construction](repo://docs/weekly-yoda-core.md) describes the
+unbound frozen-input/working-projection seams and their remaining integration
+gates. That construction does not change this unavailable activation status.
 
 ## Intent
 

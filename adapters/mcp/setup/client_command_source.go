@@ -16,40 +16,67 @@ import (
 
 func commandSourceFiles(o installer.ClientOptions, platform string) (string, map[string][]byte, string, error) {
 	root := o.Request.CodeRoot + ".provider-" + o.Request.CarrierID
+	name, command, err := commandSourceLauncher(root, platform)
+	if err != nil {
+		return "", nil, "", err
+	}
 	args := []string{o.Self, "client-plugin-path", "--product-root", o.ManagedRoot, "--user-home", o.UserHome, "--workspace", o.Request.Workspace, "--carrier-id", o.Request.CarrierID}
 	var quoted []string
-	name := "Maestro plugin path.command"
 	for _, arg := range args {
 		quoted = append(quoted, "'"+strings.ReplaceAll(arg, "'", "'\"'\"'")+"'")
 	}
 	script := []byte("#!/bin/sh\nexec " + strings.Join(quoted, " ") + "\n")
-	command := "'" + strings.ReplaceAll(filepath.Join(root, name), "'", "'\"'\"'") + "'"
 	if platform == "windows" {
-		name = "Maestro plugin path.ps1"
 		quoted = nil
 		for _, arg := range args {
 			quoted = append(quoted, "'"+strings.ReplaceAll(arg, "'", "''")+"'")
 		}
 		script = []byte("$ErrorActionPreference = 'Stop'\n& " + strings.Join(quoted, " ") + "\nexit $LASTEXITCODE\n")
+		// powershell.exe is Windows PowerShell, whose -File reader otherwise
+		// interprets non-ASCII UTF-8 as the current ANSI code page. Preserve
+		// existing ASCII provider bytes; Unicode arguments need an explicit BOM.
+		for _, ch := range string(script) {
+			if ch > 127 {
+				script = append([]byte{0xef, 0xbb, 0xbf}, script...)
+				break
+			}
+		}
+	}
+	manifest, err := commandSourceManifest(o.Request.CarrierID, command)
+	if err != nil {
+		return "", nil, "", err
+	}
+	return root, map[string][]byte{".claude-plugin/marketplace.json": manifest, name: script}, name, nil
+}
+
+func commandSourceLauncher(root, platform string) (name, command string, err error) {
+	name = "Maestro plugin path.command"
+	command = "'" + strings.ReplaceAll(filepath.Join(root, name), "'", "'\"'\"'") + "'"
+	if platform == "windows" {
+		name = "Maestro plugin path.ps1"
 		path := filepath.Join(root, name)
 		if strings.ContainsAny(path, "\"%!?\r\n") {
-			return "", nil, "", errors.New("Code command source cannot represent this Windows launcher path")
+			return "", "", errors.New("Code command source cannot represent this Windows launcher path")
 		}
 		command = "powershell.exe -NoProfile -NonInteractive -File \"" + path + "\""
 	}
 	if len(command) == 0 || len(command) > 500 || strings.Contains(command, "    ") {
-		return "", nil, "", errors.New("Code command source exceeds native command bound")
+		return "", "", errors.New("Code command source exceeds native command bound")
 	}
 	for _, ch := range command {
 		if ch < 32 || ch > 126 {
-			return "", nil, "", errors.New("Code command source requires a printable ASCII launcher path")
+			return "", "", errors.New("Code command source requires a printable ASCII launcher path")
 		}
 	}
-	manifest, err := json.MarshalIndent(map[string]any{"name": "maestro-local-" + o.Request.CarrierID, "owner": map[string]string{"name": "Maestro"}, "plugins": []any{map[string]any{"name": "maestro-product", "source": map[string]any{"source": "command", "command": command, "timeout": 30, "mode": "copy"}}}}, "", "  ")
+	return name, command, nil
+}
+
+func commandSourceManifest(carrier, command string) ([]byte, error) {
+	manifest, err := json.MarshalIndent(map[string]any{"name": "maestro-local-" + carrier, "owner": map[string]string{"name": "Maestro"}, "plugins": []any{map[string]any{"name": "maestro-product", "source": map[string]any{"source": "command", "command": command, "timeout": 30, "mode": "copy"}}}}, "", "  ")
 	if err != nil {
-		return "", nil, "", err
+		return nil, err
 	}
-	return root, map[string][]byte{".claude-plugin/marketplace.json": append(manifest, '\n'), name: script}, name, nil
+	return append(manifest, '\n'), nil
 }
 
 func ensureCommandMarketplace(o installer.ClientOptions) (string, error) {

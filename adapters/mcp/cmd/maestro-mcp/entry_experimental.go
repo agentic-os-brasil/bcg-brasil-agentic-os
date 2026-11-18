@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -48,6 +49,9 @@ func experimentalCommandFlags(flags *flag.FlagSet, o *product.Options) func() er
 }
 
 func experimentalEarlyCommand(ctx context.Context, command string, args []string, output io.Writer) (bool, error) {
+	if command == "installed-native-hook" {
+		return true, runInstalledNativeHook(ctx, args, os.Stdin, output)
+	}
 	if command == "installed-pilot-prepare-document" {
 		return true, runInstalledPilotPrepareDocument(ctx, args, output)
 	}

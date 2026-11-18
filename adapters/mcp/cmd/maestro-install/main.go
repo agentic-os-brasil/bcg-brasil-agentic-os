@@ -23,6 +23,10 @@ var AuthorityRegistrySHA256 string
 
 func main() {
 	if err := run(); err != nil {
+		if code, handled := experimentalNativeHookFailure(os.Args[1:]); handled {
+			fmt.Fprintln(os.Stderr, "maestro: hook unavailable; inspect admitted state before retrying")
+			os.Exit(code)
+		}
 		if len(os.Args) > 1 && os.Args[1] == "stable-hook" {
 			fmt.Fprintln(os.Stderr, "maestro: passive lifecycle unavailable; inspect the selected installation and client materialization")
 			os.Exit(1)

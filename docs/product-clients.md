@@ -136,6 +136,33 @@ and qualified plugin ID are specific to this carrier. The adapter reads actual
 marketplace/plugin state, uses supported add/install/update commands, then reads
 both inventories again.
 
+For a versioned command source, that original review also shows the exact fixed
+provider command, generated launcher script, catalog revision and narrow host
+command digest. Review remains read-only. After the operator confirms, the
+installer supplies only the host's supported `--accept-command <sha256>` option
+for that exact install/update; it never grants broad command approval. The
+provider, current packet, selected executable and private record are checked
+again before effects. A host missing that option stays pending. Host policy and
+Claude-session safeguards remain in force; a refusal preserves its closed error
+category and does not cause a retry through another execution environment.
+
+Current command-source COPY readback may omit folder-only fields. Registration
+then requires the exact selected-profile cache path, authenticated COPY provider,
+actual cached plugin manifest, independently computed host content-version suffix
+and every canonical plugin byte and directory. The raw host version is retained
+alongside the verified manifest version and content digest. Only the root
+`.in_use` directory with the host's bounded PID-marker schema is treated as host
+metadata; other additions, links, malformed markers and changed payloads refuse
+current registration. This does not default an absent field to false or infer
+freshness from a version prefix. Legacy explicit folder observations retain their
+existing contract.
+
+Windows providers preserve quoted arguments and use an explicit UTF-8 signature
+when their script contains non-ASCII arguments, as required by
+[Windows PowerShell's script decoding](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_character_encoding).
+Existing ASCII provider bytes are preserved. An occupied provider with different
+bytes is preserved for explicit review, never silently rewritten.
+
 If you initially leave Code unselected, return through the same launcher and
 choose Code registration. Select the first executable through its exact review;
 the same carrier, workspace and explicit scope are preserved. This does not

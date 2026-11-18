@@ -12,8 +12,27 @@ import (
 	"path/filepath"
 	"strings"
 
+	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 )
+
+// Admission failures, including failures before flag parsing or child launch,
+// must retain the same event-aware blocking semantics as the actual server.
+func experimentalNativeHookFailure(args []string) (int, bool) {
+	if len(args) == 0 || args[0] != "stable-native-hook" {
+		return 0, false
+	}
+	event := ""
+	for i, arg := range args[1:] {
+		if value, ok := strings.CutPrefix(arg, "--event="); ok {
+			event = value
+		}
+		if arg == "--event" && i+2 < len(args) {
+			event = args[i+2]
+		}
+	}
+	return product.HookExitCode(event), true
+}
 
 func experimentalNativeHookCommand(ctx context.Context, command, self string, args []string, role *installer.VerifiedExperimentalSeed) (bool, error) {
 	if command != "stable-native-hook" {

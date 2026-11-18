@@ -142,6 +142,8 @@ type CodeObservation struct {
 	SourcePath             string `json:"source_path,omitempty"`
 	InstallPath            string `json:"install_path,omitempty"`
 	InstalledVersion       string `json:"installed_version,omitempty"`
+	CopyManifestVersion    string `json:"copy_manifest_version,omitempty"`
+	CopyContentSHA256      string `json:"copy_content_sha256,omitempty"`
 	FolderVersion          string `json:"folder_version,omitempty"`
 	ReadFromFolder         bool   `json:"read_from_folder"`
 	Enabled                bool   `json:"enabled"`
