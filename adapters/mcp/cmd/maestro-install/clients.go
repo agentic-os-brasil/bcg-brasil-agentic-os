@@ -44,9 +44,10 @@ func runClientsWithNativeVerifier(ctx context.Context, command, self string, f l
 		o.Request.CodeRoot = f.ClientCodeRoot
 		o.Request.DesktopPath = f.ClientDesktopPath
 		o.Request.CodeExecutable = f.ClientCodeExecutable
+		o.Request.CodeConfigurationDirectory = f.ClientCodeConfigurationDirectory
 		o.Request.CodeScope = f.ClientScope
 		o.Request.LifecycleContext = f.LifecycleContext
-	} else if f.ClientCodeRoot != "" || f.ClientDesktopPath != "" || f.ClientCodeExecutable != "" || f.ClientScope != "" {
+	} else if f.ClientCodeRoot != "" || f.ClientDesktopPath != "" || f.ClientCodeExecutable != "" || f.ClientScope != "" || f.ClientCodeConfigurationDirectory != "" {
 		return true, errors.New("operator launcher recovery choices are valid only for manage")
 	}
 	encode := func(value any, err error) (bool, error) {

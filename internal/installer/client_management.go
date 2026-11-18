@@ -18,7 +18,14 @@ import (
 // ClientManagementLauncher is the sole canonical participant console recipe.
 // update selects one closed foreground intent, retaining every installer review.
 func ClientManagementLauncher(o ClientOptions, update bool) (string, []byte) {
+	return clientManagementLauncherForOS(o, update, runtime.GOOS)
+}
+
+func clientManagementLauncherForOS(o ClientOptions, update bool, targetOS string) (string, []byte) {
 	args := []string{o.Self, "manage", "--product-root", o.ManagedRoot, "--user-home", o.UserHome, "--workspace", o.Request.Workspace, "--carrier-id", o.Request.CarrierID, "--client-code-root", o.Request.CodeRoot, "--client-desktop-path", o.Request.DesktopPath, "--client-code-executable", o.Request.CodeExecutable, "--client-scope", o.Request.CodeScope}
+	if o.Request.CodeConfigurationDirectory != "" {
+		args = append(args, "--client-code-config", o.Request.CodeConfigurationDirectory)
+	}
 	if o.Request.LifecycleContext {
 		args = append(args, "--client-lifecycle-context")
 	}
@@ -28,16 +35,25 @@ func ClientManagementLauncher(o ClientOptions, update bool) (string, []byte) {
 		args = append(args, "--management-intent", "update")
 	}
 	var quoted []string
-	if runtime.GOOS == "windows" {
+	if targetOS == "windows" {
 		for _, arg := range args {
 			quoted = append(quoted, "'"+strings.ReplaceAll(arg, "'", "''")+"'")
 		}
-		return name + ".ps1", []byte("& " + strings.Join(quoted, " ") + "\nif ($LASTEXITCODE) { exit $LASTEXITCODE }\n")
+		body := "& " + strings.Join(quoted, " ") + "\nif ($LASTEXITCODE) { exit $LASTEXITCODE }\n"
+		if profile := o.Request.CodeConfigurationDirectory; profile != "" {
+			value := "'" + strings.ReplaceAll(profile, "'", "''") + "'"
+			body = "$maestroPreviousConfig = $env:CLAUDE_CONFIG_DIR\ntry {\n$env:CLAUDE_CONFIG_DIR = " + value + "\n$global:LASTEXITCODE = $null\n& " + strings.Join(quoted, " ") + "\n$maestroExit = $global:LASTEXITCODE\nif ($null -eq $maestroExit) { throw \"Maestro executable did not return a child exit status\" }\n} finally { $env:CLAUDE_CONFIG_DIR = $maestroPreviousConfig }\nif ($maestroExit) { exit $maestroExit }\n"
+		}
+		return name + ".ps1", []byte(body)
 	}
 	for _, arg := range args {
 		quoted = append(quoted, "'"+strings.ReplaceAll(arg, "'", "'\"'\"'")+"'")
 	}
-	return name + ".command", []byte("#!/bin/sh\nexec " + strings.Join(quoted, " ") + "\n")
+	prefix := ""
+	if profile := o.Request.CodeConfigurationDirectory; profile != "" {
+		prefix = "/usr/bin/env '" + strings.ReplaceAll("CLAUDE_CONFIG_DIR="+profile, "'", "'\"'\"'") + "' "
+	}
+	return name + ".command", []byte("#!/bin/sh\nexec " + prefix + strings.Join(quoted, " ") + "\n")
 }
 
 type ClientManagementHandoff struct {

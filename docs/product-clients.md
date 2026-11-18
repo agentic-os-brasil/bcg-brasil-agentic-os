@@ -23,6 +23,17 @@ an explicit Code scope; Code registration is optional and separately reviewed.
 You do not need a Git checkout, hand-written request JSON or a manually
 generated identifier.
 
+An optional reviewed `code_configuration_directory` selects an existing private
+Code profile inside the exact owner, separate from product, brain, workspace
+and packets. The same selection is retained in the current record, registration
+review and generated management/update recipes. It cannot change on an existing
+carrier. Native qualification and registration use it through child-process
+environment only; an empty legacy selection keeps the prior contract.
+Profile provisioning and official login are explicit participant actions,
+never credential copying or edits to the ordinary profile. A dedicated profile
+does not suppress effective project instructions or enterprise managed policy;
+the existing qualifier still decides compatibility.
+
 Declining leaves that operation pending. A source observation, activation,
 client regeneration and native registration are separate effects, so the console
 shows the exact review at each required transition. It never grants blanket

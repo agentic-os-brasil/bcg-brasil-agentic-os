@@ -100,6 +100,7 @@ func run() error {
 	flags.StringVar(&launch.ClientCodeRoot, "client-code-root", "", "fixed generated operator launcher Code destination")
 	flags.StringVar(&launch.ClientDesktopPath, "client-desktop-path", "", "fixed generated operator launcher Desktop destination")
 	flags.StringVar(&launch.ClientCodeExecutable, "client-code-executable", "", "fixed generated operator launcher Code executable")
+	flags.StringVar(&launch.ClientCodeConfigurationDirectory, "client-code-config", "", "reviewed participant-local Code configuration directory")
 	flags.StringVar(&launch.ClientScope, "client-scope", "", "fixed generated operator launcher Code scope")
 	if os.Args[1] == "stable-hook" {
 		flags.StringVar(&launch.HookEvent, "event", "", "exact passive lifecycle event")

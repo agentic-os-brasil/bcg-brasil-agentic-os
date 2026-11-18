@@ -46,15 +46,16 @@ func StableClientCapabilities(component, version, pin string) ClientCapabilities
 }
 
 type ClientRequest struct {
-	VersionedSlots    bool   `json:"versioned_slots,omitempty"`
-	NativeEnforcement bool   `json:"native_enforcement,omitempty"`
-	GenerationID      string `json:"generation_id,omitempty"`
-	CarrierID         string `json:"carrier_id"`
-	Workspace         string `json:"workspace"`
-	CodeRoot          string `json:"code_root"`
-	DesktopPath       string `json:"desktop_path"`
-	CodeExecutable    string `json:"code_executable,omitempty"`
-	CodeScope         string `json:"code_scope"`
+	VersionedSlots             bool   `json:"versioned_slots,omitempty"`
+	NativeEnforcement          bool   `json:"native_enforcement,omitempty"`
+	GenerationID               string `json:"generation_id,omitempty"`
+	CarrierID                  string `json:"carrier_id"`
+	Workspace                  string `json:"workspace"`
+	CodeRoot                   string `json:"code_root"`
+	DesktopPath                string `json:"desktop_path"`
+	CodeExecutable             string `json:"code_executable,omitempty"`
+	CodeConfigurationDirectory string `json:"code_configuration_directory,omitempty"`
+	CodeScope                  string `json:"code_scope"`
 	// ManualDesktopUpdate creates the documented replacement bundle instead of
 	// reusing the byte-identical external-launcher candidate.
 	ManualDesktopUpdate bool `json:"manual_desktop_update,omitempty"`
@@ -131,22 +132,23 @@ type ClientMaterialization struct {
 	BootstrapEmbeddedInputsSHA256 string                 `json:"bootstrap_embedded_inputs_sha256"`
 }
 type CodeObservation struct {
-	Executable       string `json:"executable,omitempty"`
-	ExecutableSHA256 string `json:"executable_sha256,omitempty"`
-	Version          string `json:"version,omitempty"`
-	Marketplace      string `json:"marketplace"`
-	PluginID         string `json:"plugin_id"`
-	Scope            string `json:"scope"`
-	SourcePath       string `json:"source_path,omitempty"`
-	InstallPath      string `json:"install_path,omitempty"`
-	InstalledVersion string `json:"installed_version,omitempty"`
-	FolderVersion    string `json:"folder_version,omitempty"`
-	ReadFromFolder   bool   `json:"read_from_folder"`
-	Enabled          bool   `json:"enabled"`
-	Errors           int    `json:"errors"`
-	Notes            int    `json:"notes"`
-	State            string `json:"state"`
-	EvidenceClass    string `json:"evidence_class"`
+	ConfigurationDirectory string `json:"configuration_directory,omitempty"`
+	Executable             string `json:"executable,omitempty"`
+	ExecutableSHA256       string `json:"executable_sha256,omitempty"`
+	Version                string `json:"version,omitempty"`
+	Marketplace            string `json:"marketplace"`
+	PluginID               string `json:"plugin_id"`
+	Scope                  string `json:"scope"`
+	SourcePath             string `json:"source_path,omitempty"`
+	InstallPath            string `json:"install_path,omitempty"`
+	InstalledVersion       string `json:"installed_version,omitempty"`
+	FolderVersion          string `json:"folder_version,omitempty"`
+	ReadFromFolder         bool   `json:"read_from_folder"`
+	Enabled                bool   `json:"enabled"`
+	Errors                 int    `json:"errors"`
+	Notes                  int    `json:"notes"`
+	State                  string `json:"state"`
+	EvidenceClass          string `json:"evidence_class"`
 }
 type DesktopObservation struct {
 	Handoff              string `json:"handoff"`
@@ -272,6 +274,19 @@ func clientBinding(o ClientOptions) (ClientBinding, error) {
 	if clientOverlap(o.Request.CodeRoot, o.Request.DesktopPath) {
 		return ClientBinding{}, errors.New("client destinations overlap")
 	}
+	if profile := o.Request.CodeConfigurationDirectory; profile != "" {
+		if !filepath.IsAbs(profile) || filepath.Clean(profile) != profile || strings.ContainsAny(profile, "\x00\r\n") || !containsClientOwner(o.UserHome, profile) {
+			return ClientBinding{}, errors.New("clean private Code configuration inside selected owner required")
+		}
+		if err := scheduler.ValidatePrivateDirectory(profile); err != nil {
+			return ClientBinding{}, err
+		}
+		for _, root := range []string{o.ManagedRoot, o.DataRoot, h.Home, o.Request.Workspace, o.Request.CodeRoot, o.Request.DesktopPath} {
+			if clientOverlap(root, profile) {
+				return ClientBinding{}, errors.New("Code configuration overlaps admitted binding or client packet")
+			}
+		}
+	}
 	if o.Request.CodeScope != "user" && o.Request.CodeScope != "local" && o.Request.CodeScope != "project" {
 		return ClientBinding{}, errors.New("explicit user/local/project scope required")
 	}
@@ -382,7 +397,7 @@ func ReviewClientsSeeded(ctx context.Context, o ClientOptions) (ClientReview, er
 	old, body, err := readClientRecord(o.SeededOperationOptions, o.Request.CarrierID)
 	if err == nil {
 		selection := ClientRequestFromRecord(old)
-		if old.Binding != binding || selection.CodeRoot != o.Request.CodeRoot || selection.DesktopPath != o.Request.DesktopPath || selection.VersionedSlots && !o.Request.VersionedSlots || old.Code.Scope != o.Request.CodeScope || old.Code.Executable != o.Request.CodeExecutable && !(old.Code.Executable == "" && old.Code.State == "registration_pending" && old.Code.EvidenceClass == "not_observed") {
+		if old.Binding != binding || selection.CodeConfigurationDirectory != o.Request.CodeConfigurationDirectory || selection.CodeRoot != o.Request.CodeRoot || selection.DesktopPath != o.Request.DesktopPath || selection.VersionedSlots && !o.Request.VersionedSlots || old.Code.Scope != o.Request.CodeScope || old.Code.Executable != o.Request.CodeExecutable && !(old.Code.Executable == "" && old.Code.State == "registration_pending" && old.Code.EvidenceClass == "not_observed") {
 			return ClientReview{}, errors.New("existing client selection differs; preserved unchanged")
 		}
 		if old.Materialization.NativeEnforcement && !o.Request.NativeEnforcement {
@@ -460,7 +475,7 @@ func MaterializeClientsSeeded(ctx context.Context, o ClientOptions, digest strin
 			return e
 		}
 		result = ClientRecord{SchemaVersion: 1, Profile: StableClientProfile, Protocol: StableClientProtocol, CarrierVersion: StableCarrierVersion, CarrierID: o.Request.CarrierID, Binding: review.Binding, Materialization: material,
-			Code:    CodeObservation{Executable: o.Request.CodeExecutable, Marketplace: "maestro-local-" + o.Request.CarrierID, PluginID: "maestro-product@maestro-local-" + o.Request.CarrierID, Scope: o.Request.CodeScope, State: "registration_pending", EvidenceClass: "not_observed"},
+			Code:    CodeObservation{Executable: o.Request.CodeExecutable, ConfigurationDirectory: o.Request.CodeConfigurationDirectory, Marketplace: "maestro-local-" + o.Request.CarrierID, PluginID: "maestro-product@maestro-local-" + o.Request.CarrierID, Scope: o.Request.CodeScope, State: "registration_pending", EvidenceClass: "not_observed"},
 			Desktop: DesktopObservation{Handoff: "bundle_ready", InstallConfirmation: "awaiting_user_install", Connection: "pending", FunctionalCheck: "pending", EvidenceClass: "not_observed"}}
 		if previous != nil && previous.Materialization.CodeTreeSHA256 == material.CodeTreeSHA256 && previous.Code.Executable == o.Request.CodeExecutable {
 			result.Code = previous.Code
@@ -504,6 +519,9 @@ func ReadClientsSeeded(ctx context.Context, o ClientOptions) (ClientStatus, erro
 		o.Request.Workspace = record.Binding.Workspace
 	}
 	selection := ClientRequestFromRecord(record)
+	if o.Request.CodeConfigurationDirectory == "" {
+		o.Request.CodeConfigurationDirectory = record.Code.ConfigurationDirectory
+	}
 	if o.Request.CodeRoot == "" {
 		o.Request.CodeRoot = selection.CodeRoot
 	}
@@ -631,7 +649,7 @@ func observeClientsSeeded(ctx context.Context, o ClientOptions, expectedRecord s
 			code = &observation
 		}
 		if code != nil {
-			if code.Marketplace != r.Code.Marketplace || code.PluginID != r.Code.PluginID || code.Scope != r.Code.Scope || code.Executable != r.Code.Executable || code.State != "registered" || code.EvidenceClass != "supported_cli_readback" && code.EvidenceClass != "engineering_process_witness" {
+			if code.Marketplace != r.Code.Marketplace || code.PluginID != r.Code.PluginID || code.Scope != r.Code.Scope || code.Executable != r.Code.Executable || code.ConfigurationDirectory != r.Code.ConfigurationDirectory || code.State != "registered" || code.EvidenceClass != "supported_cli_readback" && code.EvidenceClass != "engineering_process_witness" {
 				return errors.New("unsupported Code observation")
 			}
 			r.Code = *code
@@ -859,4 +877,10 @@ func validateClientFiles(m ClientMaterialization) error {
 		return errors.New("client packet identity changed")
 	}
 	return nil
+}
+
+// A configuration selection never expands the admitted installation owner.
+func containsClientOwner(owner, path string) bool {
+	rel, err := filepath.Rel(owner, path)
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }

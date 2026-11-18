@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -71,16 +72,37 @@ type marketplaceRow struct {
 }
 
 func clientCommand(ctx context.Context, path string, args []string, cwd string) ([]byte, error) {
-	bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(bounded, path, args...)
-	cmd.Dir = cwd
-	cmd.WaitDelay = 2 * time.Second
-	var stdout boundedClientOutput
-	cmd.Stdout = &stdout
-	cmd.Stderr = &boundedClientOutput{}
-	err := cmd.Run()
-	return stdout.Bytes(), err
+	return clientCommandWithProfile("")(ctx, path, args, cwd)
+}
+
+// Selection is per child process; never mutate the calling application profile.
+func clientCodeEnvironment(profile string) []string {
+	env := os.Environ()
+	if profile == "" {
+		return env
+	}
+	out := make([]string, 0, len(env)+1)
+	for _, entry := range env {
+		if !strings.HasPrefix(entry, "CLAUDE_CONFIG_DIR=") {
+			out = append(out, entry)
+		}
+	}
+	return append(out, "CLAUDE_CONFIG_DIR="+profile)
+}
+func clientCommandWithProfile(profile string) ClientCommand {
+	return func(ctx context.Context, path string, args []string, cwd string) ([]byte, error) {
+		bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(bounded, path, args...)
+		cmd.Dir = cwd
+		cmd.Env = clientCodeEnvironment(profile)
+		cmd.WaitDelay = 2 * time.Second
+		var stdout boundedClientOutput
+		cmd.Stdout = &stdout
+		cmd.Stderr = &boundedClientOutput{}
+		err := cmd.Run()
+		return stdout.Bytes(), err
+	}
 }
 
 type boundedClientOutput struct{ bytes.Buffer }
@@ -127,7 +149,7 @@ func observeCode(ctx context.Context, r installer.ClientRecord, run ClientComman
 	if run != nil {
 		o.EvidenceClass = "engineering_process_witness"
 	} else {
-		run = clientCommand
+		run = clientCommandWithProfile(r.Code.ConfigurationDirectory)
 	}
 	if !filepath.IsAbs(o.Executable) || filepath.Clean(o.Executable) != o.Executable {
 		return o, false, false, errors.New("explicit absolute Code executable required")
@@ -326,7 +348,7 @@ func ApplyCodeRegistration(ctx context.Context, r installer.ClientRecord, run Cl
 	}
 	execute := run
 	if execute == nil {
-		execute = clientCommand
+		execute = clientCommandWithProfile(r.Code.ConfigurationDirectory)
 	}
 	effects := 0
 	drift := func(observation installer.CodeObservation, cause error) (installer.CodeObservation, error) {

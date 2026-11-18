@@ -21,9 +21,9 @@ func TestClientGenerationsRetainSelectionsAndSeparateReleases(t *testing.T) {
 	if first.CodeRoot == second.CodeRoot || first.DesktopPath == second.DesktopPath || first.Selection == nil || *first.Selection != (ClientPacketSelection{CodeRoot: r.CodeRoot, DesktopPath: r.DesktopPath}) {
 		t.Fatal("release slots or selected roots conflated")
 	}
-	record := ClientRecord{CarrierID: r.CarrierID, Materialization: first, Code: CodeObservation{Scope: "user"}}
+	record := ClientRecord{CarrierID: r.CarrierID, Materialization: first, Code: CodeObservation{Scope: "user", ConfigurationDirectory: filepath.Join(t.TempDir(), "selected-profile")}}
 	got := ClientRequestFromRecord(record)
-	if !got.VersionedSlots || got.GenerationID != r.GenerationID || got.CodeRoot != r.CodeRoot || got.DesktopPath != r.DesktopPath || ClientMarketplaceRoot(record) == first.CodeRoot {
+	if got.CodeConfigurationDirectory != record.Code.ConfigurationDirectory || !got.VersionedSlots || got.GenerationID != r.GenerationID || got.CodeRoot != r.CodeRoot || got.DesktopPath != r.DesktopPath || ClientMarketplaceRoot(record) == first.CodeRoot {
 		t.Fatal("restart lost stable source selection")
 	}
 	for _, bad := range []string{"", "../escape", strings.Repeat("x", 64)} {

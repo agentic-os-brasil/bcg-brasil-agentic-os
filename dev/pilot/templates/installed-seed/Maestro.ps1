@@ -66,6 +66,111 @@ function Verify-Installer([string]$Path) {
   $null = Private-File $Path
   if ((Hash $Path) -cne $Meta.identity.installer_sha256) { Stop-Maestro 'O instalador mudou. Nada sera executado.' }
 }
+function Resolve-CodeExecutable([string]$Selected) {
+  if (-not [IO.Path]::IsPathRooted($Selected) -or $Selected.Contains("`n") -or $Selected.Contains("`r")) { Stop-Maestro 'Selecione o executavel absoluto do Claude Code.' }
+  $Selected = [IO.Path]::GetFullPath($Selected)
+  if ([IO.Path]::GetExtension($Selected) -ine '.exe' -or -not (Test-Path -LiteralPath $Selected -PathType Leaf)) { Stop-Maestro 'Selecione o arquivo .exe regular do Claude Code pelo fluxo normal.' }
+  $walk = $Selected
+  while ($walk) {
+    if (((Get-Item -LiteralPath $walk -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Stop-Maestro 'O executavel selecionado atravessa um link. Selecione o .exe local regular.' }
+    $walk = [IO.Path]::GetDirectoryName($walk)
+  }
+  $null = Private-File $Selected
+  return $Selected
+}
+function Private-SelectionPath([string]$Selected) {
+  if (-not [IO.Path]::IsPathRooted($Selected) -or $Selected.Contains("`n") -or $Selected.Contains("`r")) { Stop-Maestro 'Selecao privada com caminho ambiguo. Preserve o vinculo.' }
+  $normalized = [IO.Path]::GetFullPath($Selected)
+  $separator = [IO.Path]::DirectorySeparatorChar
+  if (-not $normalized.Equals($Selected,[StringComparison]::OrdinalIgnoreCase) -or -not $normalized.StartsWith($Dev.TrimEnd($separator) + $separator,[StringComparison]::OrdinalIgnoreCase) -or $normalized.EndsWith([string]$separator)) { Stop-Maestro 'Selecao privada deve ser um caminho local sem ambiguidade em Developer.' }
+  $walk = $normalized
+  while ($walk -ine $Dev) {
+    if (Test-Path -LiteralPath $walk) {
+      if (((Get-Item -LiteralPath $walk -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Stop-Maestro 'Selecao privada atravessa um link. Preserve o local e confira o vinculo.' }
+    }
+    $walk = [IO.Path]::GetDirectoryName($walk)
+  }
+  return $normalized
+}
+function Require-Disjoint([string]$Candidate,[string[]]$Reserved) {
+  $Candidate = Private-SelectionPath $Candidate
+  $separator = [IO.Path]::DirectorySeparatorChar
+  foreach ($path in $Reserved) {
+    $path = Private-SelectionPath $path
+    if ($Candidate.Equals($path,[StringComparison]::OrdinalIgnoreCase) -or $Candidate.StartsWith($path + $separator,[StringComparison]::OrdinalIgnoreCase) -or $path.StartsWith($Candidate + $separator,[StringComparison]::OrdinalIgnoreCase)) { Stop-Maestro 'Escolha pastas separadas para perfil, clientes, brain, workspace e instalacao.' }
+  }
+}
+function Prepare-ClientParent {
+  $parent = Join-Path $Owner 'Maestro-Clients'
+  Require-Disjoint $parent @($Brain,$Work,$Base,(Join-Path $Owner '.maestro-install'))
+  Private-Directory $parent
+  $selected = Join-Path $parent $Role; Private-Directory $selected
+  return $selected
+}
+function Prepare-CodeConfiguration([string]$Profile) {
+  if (-not [IO.Path]::IsPathRooted($Profile) -or $Profile.Contains("`n") -or $Profile.Contains("`r")) { Stop-Maestro 'O perfil Code deve ficar dentro do owner selecionado.' }
+  $Profile = [IO.Path]::GetFullPath($Profile)
+  $separator = [IO.Path]::DirectorySeparatorChar
+  if (-not $Profile.StartsWith($Owner.TrimEnd($separator) + $separator, [StringComparison]::OrdinalIgnoreCase) -or -not (Test-Path -LiteralPath ([IO.Path]::GetDirectoryName($Profile)) -PathType Container)) { Stop-Maestro 'Escolha um perfil privado dentro do owner, com a pasta pai existente.' }
+  Require-Disjoint $Profile @($Brain,$Work,$Base,(Join-Path $Owner '.maestro-install'),(Join-Path $Owner 'Maestro-Clients'))
+  if (-not (Test-Path -LiteralPath $Profile)) {
+    Write-Host "Criar perfil Code privado em $Profile, sem copiar login nem alterar seu perfil normal."
+    Write-Host 'Somente neste perfil novo: memoria automatica e plugins sincronizados serao desativados. Hooks e plugins do Maestro passam pela qualificacao normal.'
+    if ((Read-Host 'Digite YES para criar; Enter deixa pendente') -cne 'YES') { Stop-Maestro 'Criacao do perfil deixada pendente.' }
+    Private-Directory $Profile
+    $file = [IO.File]::Open((Join-Path $Profile 'settings.json'),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+    try {
+      $body = $Utf8.GetBytes('{"autoMemoryEnabled":false,"syncClaudeAiPlugins":false}')
+      $file.Write($body,0,$body.Length)
+      $file.Flush()
+    } finally { $file.Dispose() }
+  } else { Private-Directory $Profile }
+  return $Profile
+}
+function Invoke-SelectedCode([string[]]$Arguments) {
+  $hadProfile = Test-Path Env:CLAUDE_CONFIG_DIR
+  $previousProfile = $env:CLAUDE_CONFIG_DIR
+  $script:CodeExit = $null
+  try {
+    $env:CLAUDE_CONFIG_DIR = $Config.code_configuration_directory
+    & $Config.code_executable @Arguments
+    $script:CodeExit = $LASTEXITCODE
+  } finally {
+    if ($hadProfile) { $env:CLAUDE_CONFIG_DIR = $previousProfile }
+    else { Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue }
+  }
+}
+function Ensure-CodeLogin([switch]$Force) {
+  $statusPath = Join-Path $Run 'code-auth-private.json'
+  $logPath = Join-Path $Run 'code-auth-private.log'
+  $loggedIn = $false
+  if (-not $Force) { try {
+    $lines = Invoke-SelectedCode -Arguments @('auth','status') 2> $logPath
+    [IO.File]::WriteAllText($statusPath,[string]::Join("`n",@($lines)),$Utf8)
+    if ($script:CodeExit -eq 0) { $loggedIn = (Get-Content -LiteralPath $statusPath -Raw | ConvertFrom-Json).loggedIn -eq $true }
+  } catch { $loggedIn = $false } }
+  if ($loggedIn) { return }
+  if ((Read-Host 'O perfil Code do piloto precisa de login oficial. Nenhuma credencial sera copiada. Digite YES para abrir o login; Enter deixa pendente') -cne 'YES') { Stop-Maestro 'Login do perfil de teste pendente. Reabra este programa quando quiser continuar.' }
+  Invoke-SelectedCode -Arguments @('auth','login') | Out-Host
+  if ($script:CodeExit -ne 0) { Stop-Maestro 'Login nao concluido; use o fluxo oficial deste perfil e retome.' }
+  $lines = Invoke-SelectedCode -Arguments @('auth','status') 2> $logPath
+  [IO.File]::WriteAllText($statusPath,[string]::Join("`n",@($lines)),$Utf8)
+  if ($script:CodeExit -ne 0 -or (Get-Content -LiteralPath $statusPath -Raw | ConvertFrom-Json).loggedIn -ne $true) { Stop-Maestro 'Login ainda pendente.' }
+}
+function Invoke-Management([string[]]$Extra = @()) {
+  Verify-Installer $Installer
+  Ensure-CodeLogin
+  $hadProfile = Test-Path Env:CLAUDE_CONFIG_DIR
+  $previousProfile = $env:CLAUDE_CONFIG_DIR
+  try {
+    $env:CLAUDE_CONFIG_DIR = $Config.code_configuration_directory
+    & $Installer manage @Manage @Extra
+    $script:ManagementExit = $LASTEXITCODE
+  } finally {
+    if ($hadProfile) { $env:CLAUDE_CONFIG_DIR = $previousProfile }
+    else { Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue }
+  }
+}
 try {
   $Root = $PSScriptRoot
   $metadata = Join-Path $Root 'DISTRIBUTION.json'
@@ -77,6 +182,7 @@ try {
   if ($hostArch -cne $Meta.identity.target_arch) { Stop-Maestro 'Este kit e para outra arquitetura de Windows.' }
   $Role = $Meta.identity.admission_sha256
   $Dev = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE 'Developer'))
+  if (-not (Test-Path -LiteralPath $Dev)) { [IO.Directory]::CreateDirectory($Dev) | Out-Null }
   if (-not (Test-Path -LiteralPath $Dev -PathType Container) -or ((Get-Item -LiteralPath $Dev).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Stop-Maestro 'Crie uma pasta local Developer no seu perfil antes de continuar.' }
   $pilot = Join-Path $Dev 'Maestro-Pilot'; Private-Directory $pilot
   $Base = Join-Path $pilot $Role; Private-Directory $Base
@@ -114,8 +220,8 @@ try {
   if (-not (Test-Path -LiteralPath $configPath)) {
     if ($CheckOnly) { Stop-Maestro 'Ainda nao preparado. Abra Maestro.cmd uma vez para revisar e escolher seu workspace.' }
     Write-Host "`nMaestro MCP - piloto experimental. O brain existente sera preservado."
-    $Owner = Read-Host 'Owner existente em Developer (se nunca usou Maestro, selecione a propria pasta Developer)'
-    if (-not $Owner) { Stop-Maestro 'Selecione explicitamente o diretorio do owner.' }
+    $Owner = Read-Host "Owner existente em Developer [$Dev; Enter se nunca usou Maestro]"
+    if (-not $Owner) { $Owner = $Dev }
     $Owner = [IO.Path]::GetFullPath($Owner)
     if (-not (Test-Path -LiteralPath $Owner -PathType Container) -or ($Owner -ne $Dev -and -not $Owner.StartsWith($Dev + '\',[StringComparison]::OrdinalIgnoreCase))) { Stop-Maestro 'Selecione o owner existente em Developer. Nao crie outro para contornar uma instalacao.' }
     $Work = Read-Host "Workspace em Developer [$(Join-Path $Dev 'Maestro-Workspace')]"
@@ -125,7 +231,7 @@ try {
     $proposed = ''; if ($null -ne $defaultCode) { $proposed = $defaultCode.Source }
     $Code = Read-Host "Executavel absoluto do Claude Code [$proposed]"
     if (-not $Code) { $Code = $proposed }
-    if (-not [IO.Path]::IsPathRooted($Code) -or -not (Test-Path -LiteralPath $Code -PathType Leaf)) { Stop-Maestro 'Instale o Claude Code pelo fluxo normal e selecione o executavel absoluto.' }
+    $Code = Resolve-CodeExecutable $Code
     $Brain = $env:MAESTRO_HOME
     $locator = Join-Path $Owner '.maestro-home.json'
     if (-not $Brain -and (Test-Path -LiteralPath $locator)) { $Brain = (Get-Content -LiteralPath $locator -Raw | ConvertFrom-Json).home }
@@ -136,11 +242,20 @@ try {
     }
     $Brain = [IO.Path]::GetFullPath($Brain)
     if (-not $Brain.StartsWith($Dev + '\',[StringComparison]::OrdinalIgnoreCase)) { Stop-Maestro 'O brain selecionado fica fora de Developer. Preserve-o e peca orientacao; este piloto nao migra dados.' }
-    Write-Json $configPath @{admission_sha256=$Role;user_home=$Owner;workspace=$Work;code_executable=$Code;carrier_id=[Guid]::NewGuid().ToString('N');brain_home=$Brain;source_root=(Join-Path $Root 'source')}
+    $Clients = Prepare-ClientParent
+    $CodeConfig = Read-Host "Perfil Code privado [$(Join-Path $Owner 'Maestro-Code-Profile')]"
+    if (-not $CodeConfig) { $CodeConfig = Join-Path $Owner 'Maestro-Code-Profile' }
+    $CodeConfig = Prepare-CodeConfiguration $CodeConfig
+    Write-Json $configPath @{admission_sha256=$Role;user_home=$Owner;workspace=$Work;code_executable=$Code;carrier_id=[Guid]::NewGuid().ToString('N');brain_home=$Brain;source_root=(Join-Path $Root 'source');client_parent=$Clients;code_configuration_directory=$CodeConfig}
   }
   $null = Private-File $configPath
   $Config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
   if ($Config.admission_sha256 -cne $Role) { Stop-Maestro 'Configuracao local divergente.' }
+  if ($null -eq $Config.PSObject.Properties['client_parent'] -or $null -eq $Config.PSObject.Properties['code_configuration_directory'] -or -not $Config.client_parent -or -not $Config.code_configuration_directory) { Stop-Maestro 'Esta preparacao e anterior ao perfil isolado. Preserve participant.json e o brain; envie o relatorio para revisar a continuacao do mesmo owner.' }
+  foreach ($selected in @($Config.client_parent,$Config.code_configuration_directory)) {
+    if (-not $selected.StartsWith($Config.user_home.TrimEnd('\') + '\',[StringComparison]::OrdinalIgnoreCase) -or -not (Test-Path -LiteralPath $selected -PathType Container)) { Stop-Maestro 'Selecao privada ausente ou fora do owner. Preserve a configuracao, sem recriar perfil ou clientes.' }
+    Private-Directory $selected
+  }
   if ($env:MAESTRO_HOME -and $env:MAESTRO_HOME -cne $Config.brain_home) { Stop-Maestro 'MAESTRO_HOME mudou. Preserve o brain e confira a configuracao.' }
   $env:MAESTRO_HOME = $Config.brain_home
   $Product = Join-Path $Base 'product'
@@ -156,7 +271,7 @@ try {
     Write-Json (Join-Path $Run 'setup-result-private.json') $result
   }
   $Installer = $installed; Verify-Installer $Installer
-  $Manage = $Common + @('--client-code-root',(Join-Path $Base 'clients\code'),'--client-desktop-path',(Join-Path $Base 'clients\maestro-product.mcpb'),'--client-code-executable',$Config.code_executable,'--client-scope','user')
+  $Manage = $Common + @('--client-code-root',(Join-Path $Config.client_parent 'code'),'--client-desktop-path',(Join-Path $Config.client_parent 'maestro-product.mcpb'),'--client-code-executable',$Config.code_executable,'--client-code-config',$Config.code_configuration_directory,'--client-scope','user')
   function Current-Clients {
     Verify-Installer $Installer
     $lines = & $Installer clients-status @Common
@@ -177,8 +292,8 @@ try {
       Write-Json (Join-Path $Run 'update-result-private.json') $result
     }
     Write-Host 'O gerenciador prepara/qualifica os clientes completos. Se faltar login/prova nativa/permissao, permanece pendente. Nao use resources-only para contornar.'
-    & $Installer manage @Manage
-    if ($LASTEXITCODE -ne 0) { Write-Host 'Registro/qualificacao pendente. O relatorio preserva esse estado.' }
+    Invoke-Management
+    if ($script:ManagementExit -ne 0) { Write-Host 'Registro/qualificacao pendente. O relatorio preserva esse estado.' }
   }
   $ClientStatus = Current-Clients
   $Server = Join-Path $Product 'bin\maestro-mcp.exe'; $null = Private-File $Server
@@ -224,9 +339,13 @@ try {
     if ($LASTEXITCODE -ne 0) { Stop-Maestro 'Plugin atual nao admitido.' }
     $selected = $ClientStatus.record.code.executable
     if (-not [IO.Path]::IsPathRooted($selected) -or (Hash $selected) -cne $ClientStatus.record.code.executable_sha256) { Stop-Maestro 'O Code selecionado mudou. Revise o registro pelo gerenciador.' }
+    if ($null -eq $ClientStatus.record.code.PSObject.Properties['configuration_directory'] -or $ClientStatus.record.code.configuration_directory -cne $Config.code_configuration_directory -or $selected -cne $Config.code_executable) { Stop-Maestro 'O perfil Code registrado divergiu. Preserve o registro e confira pelo gerenciador.' }
     if ($PromptFile -ceq 'CODE.txt') { Prepare-ConversionDocument $ClientStatus $PromptFile }
     Push-Location -LiteralPath $Config.workspace
-    try { & $selected (Get-Content -LiteralPath (Join-Path $Run $PromptFile) -Raw) } finally { Pop-Location }
+    try {
+      Invoke-SelectedCode -Arguments @((Get-Content -LiteralPath (Join-Path $Run $PromptFile) -Raw)) | Out-Host
+      if ($script:CodeExit -ne 0) { Stop-Maestro "O Code encerrou com codigo $script:CodeExit. Preserve o relatorio e retome pelo fluxo normal." }
+    } finally { Pop-Location }
   }
   function Test-CurrentDesktopInstall($ClientStatus) {
     $material = $ClientStatus.record.materialization
@@ -252,14 +371,14 @@ try {
     Write-Host 'Prompt copiado. Abra sua conversa no Desktop, use somente o Maestro deste ensaio, cole uma vez e execute. Registre o resultado na opcao 7.'
   }
   do {
-    Write-Host "`n1 - Ensaio completo Code`n2 - Retomar Desktop (um prompt)`n3 - Conexao Code`n4 - Conexao Desktop`n5 - Gerenciar/qualificar hooks e skills`n6 - Persistencia Code`n7 - Resultados e relatorio`n8 - Atualizar da pasta compartilhada`nEnter - Sair"
+    Write-Host "`n1 - Ensaio completo Code`n2 - Retomar Desktop (um prompt)`n3 - Conexao Code`n4 - Conexao Desktop`n5 - Gerenciar/qualificar hooks e skills`n6 - Persistencia Code`n7 - Resultados e relatorio`n8 - Atualizar da pasta compartilhada`n9 - Renovar login do perfil Code do piloto`nEnter - Sair"
     $choice = Read-Host 'Escolha'
     switch -CaseSensitive ($choice) {
       '1' { Open-Code 'CODE.txt' }
       '2' { Open-Desktop 'DESKTOP.txt' }
       '3' { Open-Code 'CODE-CONEXAO.txt' }
       '4' { Open-Desktop 'DESKTOP-CONEXAO.txt' }
-      '5' { Verify-Installer $Installer; & $Installer manage @Manage; Write-Host 'Reabra Maestro.cmd para conferir a nova geracao.'; $choice = '' }
+      '5' { Invoke-Management; if ($script:ManagementExit -ne 0) { Write-Host 'Gerenciamento pendente. Preserve o relatorio.' }; Write-Host 'Reabra Maestro.cmd para conferir a nova geracao.'; $choice = '' }
       '6' { Open-Code 'CODE-RELEITURA.txt' }
       '7' {
         [IO.File]::AppendAllText($Report, "`n## Observacoes do participante`n`nAutodeclaracoes; nao substituem qualificacao nativa.`n", $Utf8)
@@ -270,7 +389,8 @@ try {
         }
         Start-Process -FilePath notepad.exe -ArgumentList @('"' + $Report + '"')
       }
-      '8' { Verify-Installer $Installer; & $Installer manage @Manage --management-intent update; Write-Host 'Reabra Maestro.cmd para conferir a nova geracao.'; $choice = '' }
+      '8' { Invoke-Management -Extra @('--management-intent','update'); if ($script:ManagementExit -ne 0) { Write-Host 'Atualizacao pendente. Preserve o relatorio.' }; Write-Host 'Reabra Maestro.cmd para conferir a nova geracao.'; $choice = '' }
+      '9' { Ensure-CodeLogin -Force }
     }
   } while ($choice -ne '')
 } catch {

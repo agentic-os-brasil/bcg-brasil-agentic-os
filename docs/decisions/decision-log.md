@@ -1718,3 +1718,15 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: Same-pack compatibility and changed-pack updates require distinct evidence. Unknown, corrupt or unsafe selectors never cause silent fallback to an older runtime. Prior metadata and payloads are retained, with no destructive replacement or automatic cleanup. Existing signatures, full input/license inventory, confinement, client range, native Windows qualification and user review remain effective. No new issuer, signing key, installer profile, trust override, MCP installation authority, updater service or real placement is authorized. Legacy uninstalled/runtime-pilot behavior and its exclusions stay unchanged. Source-only tests use synthetic ephemeral-key releases; actual native conversion and placement remain separate gates.
 - Refs: SFRD; specs/020-release-distribution.md; specs/063-product-native-plugin.md; internal/ingest/docling; adapters/mcp/docling.go; adapters/mcp/setup; adapters/mcp/cmd/maestro-install
 - Supersedes: none
+
+
+## CCPF - Preserve one reviewed Code configuration across client handoffs
+
+- Date: 2026-11-18
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The installed pilot discovers ordinary CLI symlinks but its native verifier requires a canonical regular executable. Its manager inherits an unselected Code profile, while complete qualification requires supported effective instructions and settings. Generated standalone management handoffs must retain the same participant choice.
+- Decision: Reuse the existing reviewed client request, current record and management recipe to carry an optional exact private Code configuration directory inside the installation owner, separate from canonical private state and packets. Preserve that selection across qualification, registration, launch and update using child-process environment and safely quoted original handoffs. Refuse profile changes on an existing carrier. The Mac frontend resolves ordinary executable symlinks before the unchanged no-follow verifier, creates private client parents inside the exact owner and provisions a profile only on explicit creation confirmation.
+- Consequences: Existing empty-profile records retain their contract. Existing profile content, owner/brain/source/carrier bindings and enterprise managed policy remain unchanged. Official profile login is separate from qualification; no credentials are copied, native proof bypassed or runtime effects implied by provisioning. Earlier launcher participant files without explicit selections remain preserved pending review rather than silently adopting another profile.
+- Refs: SFRD; EISA; specs/063-product-native-plugin.md; docs/product-clients.md; internal/installer/client_management.go; dev/pilot/templates/installed-seed/Maestro.command
+- Supersedes: none
