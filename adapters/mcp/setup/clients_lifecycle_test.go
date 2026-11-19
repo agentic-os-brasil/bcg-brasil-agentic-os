@@ -157,6 +157,7 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 	_, err = datahome.InitializeFresh(datahome.Options{ProductRoot: priorProduct, UserHome: user, LookupEnv: c.LookupEnv})
 	must(t, err)
 	request := setup.Request{ReleaseDirectory: n.directory, ManagedRoot: filepath.Join(root, "managed"), UserHome: user, Workspace: ws, CodePacket: filepath.Join(root, "legacy-code"), DesktopPacket: filepath.Join(root, "legacy-desktop.mcpb")}
+	c.Run = clientLifecycleDiagnosticRun(t, ws)
 	review, err := setup.ReviewInstallation(request, c)
 	must(t, err)
 	installed, err := setup.Apply(ctx, request, c, review.Digest, true)
@@ -997,4 +998,52 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 	}
 	proof, _ := json.MarshalIndent(map[string]any{"native_admission": "verified ephemeral experimental role over exact tagged seed and server; strict shipping nil-role negative passed", "runtime_pack": "inert engineering fixture; no conversion or native client qualification", "actual_clients": "unattested", "old_server_sha256": oldSHA, "n_artifacts": n.verified.Manifest.Artifacts, "next_artifacts": next.verified.Manifest.Artifacts, "actual_installer_sha256": seedSHA, "unused_future_factory_seed_sha256": sum(read(t, next.factory.Installer)), "original_doctor_sha256": sum(read(t, filepath.Join(source, "bundles/base/skills/maestro-doctor/SKILL.md"))), "future_doctor_sha256": sum(futureDoctor), "old_installer_lacks_future_marker": true, "next_release": "0.1.43", "stable_desktop_sha256": desktopSHA, "carrier_id": id, "source_sequence_after_rollback": finalState.Source.Sequence, "first_run": "actual console source review and generated ID", "code": "supported controlled process readback; disabled preserved", "sdk": "actual stable launcher process to real shipping server stdio continuation/memory/knowledge and exact changed future-method resource", "owner_workspace_preserved": true}, "", "  ")
 	must(t, os.WriteFile(filepath.Join(root, "client-lifecycle-proof.json"), append(proof, '\n'), 0600))
+}
+
+// Observe the actual synthetic setup children through the existing composition
+// seam. Preserve each original runner's output, error, working directory,
+// inherited environment/context, output bound and WaitDelay.
+func clientLifecycleDiagnosticRun(t *testing.T, workspace string) func(context.Context, string, ...string) ([]byte, error) {
+	t.Helper()
+	return func(ctx context.Context, path string, args ...string) ([]byte, error) {
+		command := exec.CommandContext(ctx, path, args...)
+		command.WaitDelay = time.Second
+		stdout := &clientLifecycleDiagnosticOutput{overflow: "installer process output exceeds 1 MiB"}
+		command.Stdout, command.Stderr = stdout, stdout
+		runtimeChild := len(args) > 0 && (args[0] == "runtime-review" || args[0] == "runtime-apply")
+		var stderr *clientLifecycleDiagnosticOutput
+		if runtimeChild {
+			command.Dir = workspace
+			command.WaitDelay = 2 * time.Second
+			stdout.overflow = "client output exceeds bound"
+			stderr = &clientLifecycleDiagnosticOutput{overflow: "client output exceeds bound"}
+			command.Stderr = stderr
+		}
+		err := command.Run()
+		if err != nil {
+			exitCode := -1
+			var exited *exec.ExitError
+			if errors.As(err, &exited) {
+				exitCode = exited.ExitCode()
+			}
+			if runtimeChild {
+				t.Logf("actual synthetic setup child failed: executable=%q argv=%q exit_code=%d error=%v stdout=%q stderr=%q", path, args, exitCode, err, stdout.Bytes(), stderr.Bytes())
+			} else {
+				t.Logf("actual synthetic setup child failed: executable=%q argv=%q exit_code=%d error=%v combined_output=%q", path, args, exitCode, err, stdout.Bytes())
+			}
+		}
+		return stdout.Bytes(), err
+	}
+}
+
+type clientLifecycleDiagnosticOutput struct {
+	bytes.Buffer
+	overflow string
+}
+
+func (b *clientLifecycleDiagnosticOutput) Write(body []byte) (int, error) {
+	if b.Len()+len(body) > 1<<20 {
+		return 0, errors.New(b.overflow)
+	}
+	return b.Buffer.Write(body)
 }
