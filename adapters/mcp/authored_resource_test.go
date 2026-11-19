@@ -16,10 +16,10 @@ func TestAuthoredBrainResourceHasIndependentCanonicalIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Independently inspected canonical files: 247 method files plus six shared
+	// Independently inspected canonical files: 248 method files plus six shared
 	// policy/catalogue/license/provenance/declaration resources and 16 fixed agent assets.
-	if len(resources.Resources) != 269 {
-		t.Fatalf("immutable current resource closure: got %d want 269", len(resources.Resources))
+	if len(resources.Resources) != 270 {
+		t.Fatalf("immutable current resource closure: got %d want 270", len(resources.Resources))
 	}
 	const uri = "maestro://methods/maestro-operator/resources/authored-brain.md"
 	canonical, err := os.ReadFile("../../bundles/base/skills/maestro-operator/resources/authored-brain.md")
@@ -38,6 +38,9 @@ func TestAuthoredBrainResourceHasIndependentCanonicalIdentity(t *testing.T) {
 				t.Fatal("authored recipe metadata differs from canonical bytes", resource)
 			}
 		}
+	}
+	if !seen["maestro://methods/maestro-operator/resources/foreground-agents.md"] {
+		t.Fatal("canonical foreground recipe is missing from the resource closure")
 	}
 	if found != 1 {
 		t.Fatalf("canonical authored recipe appears %d times", found)
