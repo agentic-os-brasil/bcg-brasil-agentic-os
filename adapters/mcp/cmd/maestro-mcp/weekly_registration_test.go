@@ -138,3 +138,14 @@ func TestWeeklyCLIRegistrationFlagIsStartupOnly(t *testing.T) {
 		})
 	}
 }
+
+func TestForegroundProductionCompositionDoesNotInvokeAModel(t *testing.T) {
+	var o product.Options
+	seedMaintenanceExecutors(&o)
+	if o.ForegroundInspect == nil || o.ForegroundExecute == nil {
+		t.Fatal("serve composition omitted fixed foreground runtime")
+	}
+	if o.WeeklyCandidate != nil {
+		t.Fatal("foreground composition manufactured a weekly registration")
+	}
+}

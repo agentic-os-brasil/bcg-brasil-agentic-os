@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
@@ -22,6 +23,8 @@ import (
 )
 
 type Options struct {
+	ForegroundInspect                    func(context.Context, installer.ClientOptions) (ForegroundRuntime, error)
+	ForegroundExecute                    func(context.Context, ForegroundRuntime, ForegroundPacket, func(context.Context) error) (ForegroundExecution, error)
 	ExperimentalSeed                     *installer.VerifiedExperimentalSeed
 	ExperimentalSeedRoot                 string
 	ProductRoot, UserHome, WorkspacePath string
@@ -41,6 +44,7 @@ type Options struct {
 	ManagementCarrierID, ManagementInstallerVersion string
 }
 type Bound struct {
+	foregroundActive  atomic.Int32
 	options           Options
 	home, workspaceID string
 	store             execution.Store
@@ -139,6 +143,7 @@ func mutationSchema() map[string]any {
 		}
 		variants = append(variants, variant("execution."+op, f, r...))
 	}
+	variants = append(variants, foregroundMutations()...)
 	variants = append(variants, accountNarrativeMutations()...)
 	variants = append(variants, historyMutations()...)
 	variants = append(variants, agentIdentityMutations()...)
@@ -229,8 +234,8 @@ func (b *Bound) Server() *mcp.Server {
 	queryPresentation, queryContracts := toolPresentation(query)
 	apply := productApplySchema()
 	applyPresentation, applyContracts := toolPresentation(apply)
-	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read immutable methods and requirements, accepted session-readable owner context, owner metadata/questions, execution continuation, eligible memory, authored pages, converted content, named workspace knowledge, maintenance status or private wiki through bounded pages. Full private owner review and reader-restricted text remain protected." + queryContracts, InputSchema: queryPresentation, Annotations: readonly}, b.handle("query", query))
-	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Author reviewed workspace pages, convert documents, apply reviewed knowledge/owner/memory changes, qualify and enroll exact maintenance jobs, or run active due work. Maintenance lifecycle changes require trusted exact review; execution uses revision/attempt and artifact checks." + applyContracts, InputSchema: applyPresentation}, b.handle("apply", apply))
+	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read foreground agent availability, immutable methods and requirements, accepted session-readable owner context, owner metadata/questions, execution continuation, eligible memory, authored pages, converted content, named workspace knowledge, maintenance status or private wiki through bounded pages. Full private owner review and reader-restricted text remain protected." + queryContracts, InputSchema: queryPresentation, Annotations: readonly}, b.handle("query", query))
+	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Execute one exactly reviewed independent foreground draft/review, author reviewed workspace pages, convert documents, apply reviewed knowledge/owner/memory changes, qualify and enroll exact maintenance jobs, or run active due work. Maintenance lifecycle changes require trusted exact review; execution uses revision/attempt and artifact checks." + applyContracts, InputSchema: applyPresentation}, b.handle("apply", apply))
 	b.registerMethods(s)
 	return s
 }
@@ -241,13 +246,14 @@ func productQuerySchema() map[string]any {
 		variant("execution.next", map[string]any{"item_id": strSchema(96)}, "item_id"),
 		variant("execution.contract", map[string]any{"item_id": strSchema(96)}, "item_id"),
 	}
-	for _, group := range [][]any{accountNarrativeQueries(), dailyQueries(), historyQueries(), sharepointEnrollmentQueries(), caseSetupQueries(), ownerQueries(), agentIdentityQueries(), memoryQueries(), methodsQueries(), contentQueries(), brainQueries(), maintenanceQueries(), wikiQueries()} {
+	for _, group := range [][]any{foregroundQueries(), accountNarrativeQueries(), dailyQueries(), historyQueries(), sharepointEnrollmentQueries(), caseSetupQueries(), ownerQueries(), agentIdentityQueries(), memoryQueries(), methodsQueries(), contentQueries(), brainQueries(), maintenanceQueries(), wikiQueries()} {
 		variants = append(variants, group...)
 	}
 	return map[string]any{"type": "object", "oneOf": variants}
 }
 
 type input struct {
+	foregroundArguments
 	KnowledgeDestination string   `json:"knowledge_destination,omitempty"`
 	CaseAgentIDs         []string `json:"case_agent_ids"`
 	historyArguments
@@ -395,6 +401,9 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		}
 		if strings.HasPrefix(in.Operation, "sharepoint.enrollment.") {
 			return b.handleSharepointEnrollment(ctx, req, in), nil
+		}
+		if strings.HasPrefix(in.Operation, "agents.") {
+			return b.handleForeground(ctx, req, in), nil
 		}
 		if strings.HasPrefix(in.Operation, "history.") {
 			return b.handleHistory(ctx, req), nil

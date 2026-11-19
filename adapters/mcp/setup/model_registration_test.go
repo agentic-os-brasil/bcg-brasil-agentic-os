@@ -69,3 +69,15 @@ func TestModelRegistrationReviewUsesActualSelectedJobScope(t *testing.T) {
 		})
 	}
 }
+
+func TestForegroundProfilePreparationAndLoginRequireSeparateConfirmation(t *testing.T) {
+	if _, err := ApplyForegroundProfile(context.Background(), installer.ClientOptions{}, ModelProfileReview{}, "", false); err == nil {
+		t.Fatal("foreground preparation lacked exact confirmation")
+	}
+	if _, err := LoginForegroundProfile(context.Background(), installer.ClientOptions{}, ModelProfileLoginReview{}, "", false); err == nil {
+		t.Fatal("foreground login lacked separate confirmation")
+	}
+	if string(modelProfileMarker("synthetic")) == string(purposeProfileMarker("synthetic", "bounded-foreground-agents")) {
+		t.Fatal("foreground profile borrowed maintenance purpose")
+	}
+}
