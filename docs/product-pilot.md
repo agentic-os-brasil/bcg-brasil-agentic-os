@@ -346,3 +346,9 @@ Read-only doctor/startup never acquires, places, retries or repairs. Interrupted
 preparations/cache remain private and preserved; choosing a fresh rehearsal is
 the current guided recovery, without claiming automatic resume. Organization
 signing, native Windows acceptance and actual client presentation remain distinct.
+
+## Full Windows experimental kit construction
+
+For the native unsigned-export, root-only-signing and public-metadata assembly
+sequence, use [the complete Windows engineering kit recipe](development/windows-complete-experimental-kit.md).
+Native construction and actual colleague Code/Desktop/OneDrive acceptance remain separate.

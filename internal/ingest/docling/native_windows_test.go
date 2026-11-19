@@ -45,6 +45,7 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("maestro_native_runtime_pack_sha256=%s", assemble.ArchiveSHA256)
 	public, private, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
