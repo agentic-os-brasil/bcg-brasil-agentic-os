@@ -9,6 +9,7 @@ import (
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/setup"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
@@ -57,6 +58,8 @@ func configureWeeklyRegistration(o *product.Options, path string) error {
 // A cold installed wake composes fixed code only. Stored reviewed registrations,
 // actual native qualification and current grants remain the sole job authority.
 func seedMaintenanceExecutors(o *product.Options) {
+	o.ForegroundInspect = setup.ObserveForegroundRuntime
+	o.ForegroundExecute = packaging.ExecuteForegroundNative
 	o.WeeklyNativeExecutor = packaging.ExecuteWeeklyNative
 	o.MemoryNativeExecutor = packaging.ExecuteMemoryNative
 }

@@ -1801,3 +1801,15 @@ Refs: #596, original OSWK decision, independent Walter source review R2.
 - Consequences: L2/L3 remain useful while lifetime is pending. Original source denial/purge also retires private sidecars. Producer-specific caching/reprocessing remains truthful; lifetime additionally requires distinct eligible L1 source cohorts, so weekly provider/format flips do not manufacture continuity. Deterministic and model weekly enrollment/resume require an explicit pause of the other engine. First-use observation/login, exact registration, genuine native probe, enrollment, real due effect, terminal completion and closed-client wake are separate gates. No global model switch, credentials copy, model-supplied approval, generic command runner, fabricated calendar/native evidence or production activation is introduced.
 - Refs: https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/595; specs/006-memory-persistence.md; specs/041-model-backed-maintenance-activation.md; specs/062-product-maintenance-service.md; docs/model-second-brain.md; internal/maintenance/product_memory_model.go; internal/memory/model_weekly_commit.go
 - Supersedes: none
+
+
+## FARD - Execute foreground role drafts through separately reviewed native calls
+
+- Date: 2026-11-19
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Desktop distributes canonical agent methods but lacks Code host Agent/Task execution. The existing weekly model runner owns useful bounded native transport while its maintenance qualifications and grants authorize only their original jobs.
+- Decision: Add attended MCP foreground execution for active dispatchable canonical spokes using independent tool-less native Code CLI turns. Each call measures the explicitly prepared private foreground profile and current selected signed executable/configuration, binds the closed task/context and actual owner/workspace/case/source, and requires exact trusted owner confirmation before input transmission. Reuse native lifetime, cancellation, image observation and strict output-envelope mechanics without borrowing any weekly grant, SELF policy, enrollment or unattended authority. Maestro receives derived draft/review text and remains responsible for canonical reviewed filesystem effects.
+- Consequences: The participant manager prepares and authenticates a separate foreground profile through the official flow. A status query invokes no model; each foreground call selects its provider/model explicitly and grants only that bounded call. Roles retain activation policy and scope restrictions; account/case remain session scopes and dormant roles remain unavailable. Workers receive only selected input, expose no tools or direct filesystem effects and retain no transcripts. Code host-native Agent/Task remains available. Actual client execution and model usage require separate installed-byte acceptance.
+- Refs: https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/598; specs/023-sequential-agent-dispatch.md; specs/063-product-native-plugin.md; adapters/mcp/foreground.go; adapters/mcp/packaging/foreground.go
+- Supersedes: none

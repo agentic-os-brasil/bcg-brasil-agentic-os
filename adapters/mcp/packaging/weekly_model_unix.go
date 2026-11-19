@@ -18,6 +18,9 @@ func weeklyModelSupervisorReadiness() error { return errWeeklyModelSupervisorUna
 // Reuse the existing owned process-group cancellation primitive only. Native
 // proof/admission/custody routines are not involved in model transport.
 func runWeeklyModelProcess(ctx context.Context, spec weeklyModelProcess) ([]byte, error) {
+	if spec.foreground != nil {
+		return nil, errWeeklyModelSupervisorUnavailable
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

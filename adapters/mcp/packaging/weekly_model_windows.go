@@ -152,6 +152,13 @@ func runWeeklyModelProcess(ctx context.Context, spec weeklyModelProcess) ([]byte
 			}
 		}
 	}
+	if runErr == nil && spec.foreground != nil {
+		child, e := spec.foreground.identity.ObserveWindowsChild(ctx, process.Process, process.Thread, job, process.ProcessId, process.ThreadId)
+		runErr = e
+		if runErr == nil {
+			spec.foreground.childSHA256 = child.Digest()
+		}
+	}
 	if runErr == nil {
 		if err := ctx.Err(); err != nil {
 			runErr = err
@@ -166,9 +173,18 @@ func runWeeklyModelProcess(ctx context.Context, spec weeklyModelProcess) ([]byte
 		runErr = spec.native.check(ctx)
 	}
 	if runErr == nil {
+		runErr = spec.checkForeground(ctx)
+	}
+	if runErr == nil {
 		inputDone = make(chan error, 1)
 		go func() {
-			write := func() error { _, e := inputWrite.Write(spec.Input); return errors.Join(e, inputWrite.Close()) }
+			write := func() error {
+				if e := spec.checkForeground(ctx); e != nil {
+					return e
+				}
+				_, e := inputWrite.Write(spec.Input)
+				return errors.Join(e, inputWrite.Close())
+			}
 			var e error
 			if spec.native != nil {
 				e = spec.native.session.WriteInput(ctx, actual, write)
@@ -215,6 +231,12 @@ func runWeeklyModelProcess(ctx context.Context, spec weeklyModelProcess) ([]byte
 				continue
 			}
 		default:
+		}
+		if inputJoined {
+			if e := spec.checkForeground(ctx); e != nil {
+				runErr = e
+				break
+			}
 		}
 		if inputJoined && spec.native != nil {
 			if e := spec.native.check(ctx); e != nil {

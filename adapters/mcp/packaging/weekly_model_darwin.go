@@ -240,14 +240,30 @@ func runWeeklyModelProcess(ctx context.Context, spec weeklyModelProcess) ([]byte
 			}
 		}
 	}
+	if runErr == nil && spec.foreground != nil {
+		child, e := spec.foreground.identity.ObserveChild(ctx, cmd.Process, os.Getpid(), time.Now().Add(-time.Second))
+		runErr = e
+		if runErr == nil {
+			spec.foreground.childSHA256 = child.Digest()
+		}
+	}
 	if runErr == nil && spec.native != nil {
 		runErr = spec.native.check(ctx)
+	}
+	if runErr == nil {
+		runErr = spec.checkForeground(ctx)
 	}
 	if runErr == nil {
 		// Registration failure never sends the quoted private input to the child.
 		inputDone = make(chan error, 1)
 		go func() {
-			write := func() error { _, err := inputWrite.Write(spec.Input); return errors.Join(err, inputWrite.Close()) }
+			write := func() error {
+				if e := spec.checkForeground(ctx); e != nil {
+					return e
+				}
+				_, err := inputWrite.Write(spec.Input)
+				return errors.Join(err, inputWrite.Close())
+			}
 			var err error
 			if spec.native != nil {
 				err = spec.native.session.WriteInput(ctx, actual, write)
@@ -269,6 +285,12 @@ func runWeeklyModelProcess(ctx context.Context, spec weeklyModelProcess) ([]byte
 			inputDone = nil
 			runErr = err
 		default:
+		}
+		if inputJoined {
+			if e := spec.checkForeground(ctx); e != nil {
+				runErr = e
+				break
+			}
 		}
 		if inputJoined && spec.native != nil {
 			if err := spec.native.check(ctx); err != nil {
