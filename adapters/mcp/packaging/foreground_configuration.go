@@ -17,6 +17,22 @@ import (
 const ForegroundManagedPolicyBoundary = "Remote or OS-delivered managed policy is UNATTESTED and may affect startup, connections, context or effects. The native probe observes only the supported local closure; it does not attest enterprise device policy or production admission."
 const ForegroundContextBoundary = "The dedicated native profile and working directory use their reviewed effective local instruction alternatives, ancestry, imported rules and settings. That startup context may be loaded and sent to the native provider in BOTH the synthetic qualification session and the selected role session. The qualification input contains only a fresh synthetic challenge; task/context/SELF are withheld until the local native qualification gate succeeds."
 
+// ObserveForegroundConfiguration uses the same selected child reader for
+// initial observation and live verification, without changing weekly defaults.
+func ObserveForegroundConfiguration(ctx context.Context, r product.ForegroundRuntime) (maintenance.WeeklyConfiguration, error) {
+	managed, err := nativeManagedDirectory()
+	if err != nil {
+		return nil, err
+	}
+	return observeForegroundConfigurationAt(ctx, r, managed)
+}
+func observeForegroundConfigurationAt(ctx context.Context, r product.ForegroundRuntime, managed string) (maintenance.WeeklyConfiguration, error) {
+	sources, _, err := foregroundInstructionSources(r)
+	if err != nil {
+		return nil, err
+	}
+	return observeWeeklyConfigurationFromSources(ctx, r.ProfileDirectory, r.WorkingDirectory, managed, sources)
+}
 func VerifyForegroundConfiguration(ctx context.Context, r product.ForegroundRuntime) error {
 	managed, err := nativeManagedDirectory()
 	if err != nil {
@@ -25,7 +41,7 @@ func VerifyForegroundConfiguration(ctx context.Context, r product.ForegroundRunt
 	return verifyForegroundConfigurationAt(ctx, r, managed)
 }
 func verifyForegroundConfigurationAt(ctx context.Context, r product.ForegroundRuntime, managed string) error {
-	fresh, err := observeWeeklyConfigurationAt(ctx, r.ProfileDirectory, r.WorkingDirectory, managed)
+	fresh, err := observeForegroundConfigurationAt(ctx, r, managed)
 	if err != nil {
 		return err
 	}
@@ -51,18 +67,10 @@ func observeForegroundLocalClosureAt(ctx context.Context, r product.ForegroundRu
 	if err := verifyForegroundConfigurationAt(ctx, r, managed); err != nil {
 		return "", err
 	}
-	env := map[string]string{}
-	for _, entry := range r.Environment {
-		key, value, _ := strings.Cut(entry, "=")
-		env[key] = value
+	s, home, err := foregroundInstructionSources(r)
+	if err != nil {
+		return "", err
 	}
-	home := env["HOME"]
-	if !filepath.IsAbs(home) || filepath.Clean(home) != home || env["CLAUDE_CONFIG_DIR"] != r.ProfileDirectory {
-		return "", errors.New("foreground_explicit_profile_required")
-	}
-	s := newInstructionSources()
-	s.home = home
-	s.lookupEnv = func(key string) (string, bool) { v, ok := env[key]; return v, ok }
 	if err := s.environment(); err != nil {
 		return "", err
 	}
@@ -128,4 +136,24 @@ func VerifyForegroundRuntimeSources(ctx context.Context, r product.ForegroundRun
 		return errors.New("foreground_local_closure_changed")
 	}
 	return nil
+}
+
+func foregroundInstructionSources(r product.ForegroundRuntime) (*instructionSources, string, error) {
+	if maintenance.ValidateWeeklyModelEnvironment(r.Environment) != nil {
+		return nil, "", errors.New("foreground_local_closure_unavailable")
+	}
+	env := map[string]string{}
+	for _, entry := range r.Environment {
+		key, value, _ := strings.Cut(entry, "=")
+		env[key] = value
+	}
+	home := env["HOME"]
+	if !filepath.IsAbs(home) || filepath.Clean(home) != home || env["CLAUDE_CONFIG_DIR"] != r.ProfileDirectory {
+		return nil, "", errors.New("foreground_explicit_profile_required")
+	}
+	s := newInstructionSources()
+	s.home = home
+	s.lookupEnv = func(key string) (string, bool) { v, ok := env[key]; return v, ok }
+
+	return s, home, nil
 }

@@ -109,6 +109,9 @@ func ObserveWeeklyConfiguration(ctx context.Context, profile, directory string) 
 	return observeWeeklyConfigurationAt(ctx, profile, directory, managed)
 }
 func observeWeeklyConfigurationAt(ctx context.Context, profile, directory, managed string) (maintenance.WeeklyConfiguration, error) {
+	return observeWeeklyConfigurationFromSources(ctx, profile, directory, managed, newInstructionSources())
+}
+func observeWeeklyConfigurationFromSources(ctx context.Context, profile, directory, managed string, sources *instructionSources) (maintenance.WeeklyConfiguration, error) {
 	if ctx == nil || !filepath.IsAbs(profile) || filepath.Clean(profile) != profile || !filepath.IsAbs(directory) || filepath.Clean(directory) != directory {
 		return nil, errWeeklyConfiguration
 	}
@@ -124,7 +127,6 @@ func observeWeeklyConfigurationAt(ctx context.Context, profile, directory, manag
 	add(filepath.Join(profile, "settings.local.json"), "settings")
 	add(filepath.Join(directory, ".claude", "settings.json"), "settings")
 	add(filepath.Join(directory, ".claude", "settings.local.json"), "settings")
-	sources := newInstructionSources()
 	projectRoot, err := sources.projectLocalRoot(directory)
 	if err != nil {
 		return nil, err

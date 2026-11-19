@@ -24,11 +24,11 @@ func ObserveForegroundRuntime(ctx context.Context, o installer.ClientOptions) (p
 	if err != nil {
 		return out, err
 	}
-	configuration, err := packaging.ObserveWeeklyConfiguration(ctx, profile.ProfileDirectory, profile.WorkingDirectory)
+	out = product.ForegroundRuntime{Executable: profile.Executable, ExecutableSHA256: profile.ExecutableSHA256, ProfileDirectory: profile.ProfileDirectory, WorkingDirectory: profile.WorkingDirectory, ClientRecordSHA256: profile.ClientRecordSHA256, Environment: base, ManagedPolicyBoundary: packaging.ForegroundManagedPolicyBoundary, ContextBoundary: packaging.ForegroundContextBoundary}
+	out.Configuration, err = packaging.ObserveForegroundConfiguration(ctx, out)
 	if err != nil {
-		return out, err
+		return product.ForegroundRuntime{}, err
 	}
-	out = product.ForegroundRuntime{Executable: profile.Executable, ExecutableSHA256: profile.ExecutableSHA256, ProfileDirectory: profile.ProfileDirectory, WorkingDirectory: profile.WorkingDirectory, ClientRecordSHA256: profile.ClientRecordSHA256, Configuration: configuration, Environment: base, ManagedPolicyBoundary: packaging.ForegroundManagedPolicyBoundary, ContextBoundary: packaging.ForegroundContextBoundary}
 	out.LocalClosureSHA256, err = packaging.ObserveForegroundLocalClosure(ctx, out)
 	if err != nil {
 		return product.ForegroundRuntime{}, err

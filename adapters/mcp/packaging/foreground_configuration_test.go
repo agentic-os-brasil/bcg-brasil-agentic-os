@@ -34,7 +34,7 @@ func foregroundConfigurationFixture(t *testing.T) (product.ForegroundRuntime, st
 	if err != nil {
 		t.Fatal(err)
 	}
-	return product.ForegroundRuntime{ProfileDirectory: profile, WorkingDirectory: work, Configuration: c}, managed
+	return product.ForegroundRuntime{ProfileDirectory: profile, WorkingDirectory: work, Configuration: c, Environment: []string{"HOME=" + root, "CLAUDE_CONFIG_DIR=" + profile, "PATH=/usr/bin:/bin"}}, managed
 }
 func TestForegroundConfigurationReobservesManagedDropins(t *testing.T) {
 	for _, initial := range []string{"absent", "empty"} {
@@ -120,5 +120,36 @@ func TestForegroundDropinDriftStopsBeforePrivateInputClaim(t *testing.T) {
 	}
 	if q.inputClaimed {
 		t.Fatal("changed sources consumed or released private input")
+	}
+}
+
+func TestForegroundConfigurationIgnoresCoordinatorGitEnvironment(t *testing.T) {
+	r, managed := foregroundConfigurationFixture(t)
+	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
+		return
+	}
+	r.Environment = []string{"HOME=" + filepath.Dir(r.ProfileDirectory), "CLAUDE_CONFIG_DIR=" + r.ProfileDirectory, "PATH=/usr/bin:/bin"}
+	baseline, err := observeForegroundLocalClosureAt(context.Background(), r, managed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"GIT_DIR", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS"} {
+		t.Run(key, func(t *testing.T) {
+			t.Setenv(key, "coordinator-only-value")
+			initial, err := observeForegroundConfigurationAt(context.Background(), r, managed)
+			if err != nil || product.ForegroundDigest(initial) != product.ForegroundDigest(r.Configuration) {
+				t.Fatal("initial foreground observation used coordinator environment", err)
+			}
+			if err := verifyForegroundConfigurationAt(context.Background(), r, managed); err != nil {
+				t.Fatal("coordinator environment contaminated closed child observation", err)
+			}
+			current, err := observeForegroundLocalClosureAt(context.Background(), r, managed)
+			if err != nil || current != baseline {
+				t.Fatal("coordinator environment changed closed child closure", err)
+			}
+			if _, err := observeWeeklyConfigurationAt(context.Background(), r.ProfileDirectory, r.WorkingDirectory, managed); err == nil {
+				t.Fatal("legacy observer stopped honoring its coordinator environment")
+			}
+		})
 	}
 }
