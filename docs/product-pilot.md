@@ -352,3 +352,8 @@ signing, native Windows acceptance and actual client presentation remain distinc
 For the native unsigned-export, root-only-signing and public-metadata assembly
 sequence, use [the complete Windows engineering kit recipe](development/windows-complete-experimental-kit.md).
 Native construction and actual colleague Code/Desktop/OneDrive acceptance remain separate.
+
+The complete experimental Windows kit selects the authenticated
+`model-free-documents-v1` runtime: the original eleven formats plus native encoded
+PDF text and modern PPTX, with explicit finite refusals and no OCR/model download.
+Actual native/client acceptance is recorded against that exact pack and final ZIP.

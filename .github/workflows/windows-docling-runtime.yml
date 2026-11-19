@@ -79,12 +79,12 @@ jobs:
         run: |
           python -m unittest acceptance.test_windows_profile_driver.WindowsDoclingRuntimeProfile
           if ($LASTEXITCODE -ne 0) { throw 'Docling pre-account admission contracts failed.' }
-      - name: Stage exact public source, verified modules, SDK and pinned runtime inputs
+      - name: Stage exact public source, verified modules, SDK and complete model-free document inputs
         if: inputs.mode != 'assemble'
         shell: pwsh
         run: |
           ./acceptance/windows-engine-build.ps1 -DoclingRuntime
-      - name: Run actual converter and kernel controls through the existing ordinary-account driver
+      - name: Run actual thirteen-format converter and finite PDF/PPTX controls through the ordinary-account driver
         if: inputs.mode != 'assemble'
         shell: pwsh
         run: |

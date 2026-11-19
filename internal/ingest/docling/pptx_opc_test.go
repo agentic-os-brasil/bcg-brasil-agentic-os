@@ -18,7 +18,24 @@ func TestNativeDocumentPreflightBeforeAuthentication(t *testing.T) {
 		}
 	}
 	base := read(t, "testdata/documents/native.pptx")
-	for _, test := range []struct {
+	for _, test := range nativePPTXRefusalCases() {
+		t.Run(test.name, func(t *testing.T) {
+			body := editXLSX(t, base, test.edit)
+			name := "unsafe.pptx"
+			put(t, filepath.Join(space, name), body)
+			got, err := r.Convert(context.Background(), ingest.Request{SourcePath: name, WorkspacePath: space, Policy: ingest.DefaultPolicy()}, id)
+			if err != nil || got.Result.Status != ingest.StatusBlocked || len(got.Result.Warnings) != 1 || got.Result.Warnings[0] != "source_format_invalid" || len(got.Document) != 0 || len(got.Markdown) != 0 {
+				t.Fatalf("unsafe OPC reached authentication: %+v %v", got.Result, err)
+			}
+		})
+	}
+}
+
+func nativePPTXRefusalCases() []struct {
+	name string
+	edit func(map[string]string)
+} {
+	return []struct {
 		name string
 		edit func(map[string]string)
 	}{
@@ -46,15 +63,5 @@ func TestNativeDocumentPreflightBeforeAuthentication(t *testing.T) {
 		{"root decoy", func(p map[string]string) {
 			p["_rels/.rels"] = strings.ReplaceAll(p["_rels/.rels"], "ppt/presentation.xml", "ppt/slides/slide1.xml")
 		}},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			body := editXLSX(t, base, test.edit)
-			name := "unsafe.pptx"
-			put(t, filepath.Join(space, name), body)
-			got, err := r.Convert(context.Background(), ingest.Request{SourcePath: name, WorkspacePath: space, Policy: ingest.DefaultPolicy()}, id)
-			if err != nil || got.Result.Status != ingest.StatusBlocked || len(got.Result.Warnings) != 1 || got.Result.Warnings[0] != "source_format_invalid" || len(got.Document) != 0 || len(got.Markdown) != 0 {
-				t.Fatalf("unsafe OPC reached authentication: %+v %v", got.Result, err)
-			}
-		})
 	}
 }

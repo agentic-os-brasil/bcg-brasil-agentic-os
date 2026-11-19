@@ -9,18 +9,24 @@ explicit runs on the **same exact clean commit and tree**.
 Dispatch `Windows authenticated Docling runtime` with `mode=export`, ascending
 `version` / `next_version`, one stable `installer_version`, and the existing
 approved **public** registry encoded as base64 (`registry_base64`, at most 4096
-characters). Keep every assembly input empty.
+characters). Keep every assembly input empty. The Windows document closure has 56 locked
+packages (85,851,562 bytes) plus its 47,113,364-byte interpreter: 57 inputs /
+132,964,926 bytes. The original legacy profile and default assembler stay unchanged.
 
 The original ordinary-account driver must first pass all four native parent
-tests and eleven real conversion formats, including the tamper/missing-runtime
+tests and thirteen real conversion formats (the original eleven plus encoded-text PDF and modern PPTX), including the tamper/missing-runtime
 controls. Its receipt now records the hash of the runtime actually converted.
-The export rebuild authenticates the same 53 public inputs and refuses if the
+The distinct qualification identity is `windows_docling_documents_v1`; it binds
+`model-free-documents-v1`, its exact authenticated lock, six finite PDF refusals
+and nine existing unsafe PPTX refusals. OCR, scanned/visual PDF reconstruction
+and model downloads remain outside this profile. The export rebuild authenticates the same 57 public inputs and refuses if the
 result differs from that observed hash. It then uses `BuildModernCandidate`
 twice and requires byte-identical stable bootstrappers.
 
 Download the retained `maestro-windows-unsigned-RUN-COMMIT` artifact into a new
 physical Developer directory. Preserve `export.json`, its independently
-reviewed SHA-256, both candidates, bootstrap, public registry and proof. These
+reviewed SHA-256, both candidates, bootstrap, public registry and proof. The schema-v2 receipt records runtime profile and lock alongside the exact
+pack hash. Historical schema-v1 legacy exports are refused by this full kit path. These
 are unsigned construction artifacts; do not send them as a participant kit.
 
 ## 2. Root-only signing and public return metadata

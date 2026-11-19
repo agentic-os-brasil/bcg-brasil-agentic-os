@@ -48,72 +48,86 @@ func TestAuthenticatedNativeDocuments(t *testing.T) {
 	for _, name := range []string{"native.pdf", "native.pptx"} {
 		t.Run(name, func(t *testing.T) {
 			got := convert(t, name)
-			if got.Result.Status != ingest.StatusUsable || !got.Provenance.NetworkDenied || got.Provenance.LockSHA256 != descriptor.LockSHA256 {
-				t.Fatalf("actual conversion: %+v", got)
-			}
-			var document struct {
-				Schema string                     `json:"schema_name"`
-				Pages  map[string]json.RawMessage `json:"pages"`
-				Texts  []struct {
-					Text string `json:"text"`
-					Prov []struct {
-						Page int            `json:"page_no"`
-						BBox map[string]any `json:"bbox"`
-					} `json:"prov"`
-				} `json:"texts"`
-				Tables   []json.RawMessage `json:"tables"`
-				Pictures []struct {
-					Image json.RawMessage `json:"image"`
-				} `json:"pictures"`
-			}
-			if json.Unmarshal(got.Document, &document) != nil || document.Schema != "DoclingDocument" || len(document.Pages) != 2 {
-				t.Fatal("actual structured two-page document missing")
-			}
-			pages := map[int]bool{}
-			for _, item := range document.Texts {
-				if strings.TrimSpace(item.Text) != "" {
-					for _, p := range item.Prov {
-						if len(p.BBox) != 0 {
-							pages[p.Page] = true
-						}
-					}
-				}
-			}
-			if !pages[1] || !pages[2] {
-				t.Fatal("page/bounding-box provenance missing", pages)
-			}
-			for _, picture := range document.Pictures {
-				if len(picture.Image) > 0 && string(picture.Image) != "null" {
-					t.Fatal("image rendering happened")
-				}
-			}
-			if name == "native.pdf" {
-				if got.Result.Parser != "docling.pdf_native_text" || got.Result.Fidelity != ingest.FidelityTextual || len(got.Result.Warnings) != 1 || got.Result.Warnings[0] != "pdf_native_text_only" || !bytes.Contains(got.Markdown, []byte("PAGE ONE 731")) || !bytes.Contains(got.Markdown, []byte("PAGE TWO 947")) || len(document.Tables) != 0 {
-					t.Fatal("native PDF content/fidelity oracle", got.Result)
-				}
-			} else {
-				if got.Result.Parser != "docling.pptx" || got.Result.Fidelity != ingest.FidelityStructured || !bytes.Contains(got.Markdown, []byte("FIRST 421")) || !bytes.Contains(got.Markdown, []byte("SECOND 683")) || len(document.Tables) != 1 || !bytes.Contains(document.Tables[0], []byte(`"text": "41"`)) {
-					t.Fatal("native PPTX text/table oracle", got.Result)
-				}
-			}
+			assertNativeDocument(t, got, name, descriptor.LockSHA256)
 			t.Logf("actual %s parser=%s fidelity=%s document=%d markdown=%d", name, got.Result.Parser, got.Result.Fidelity, len(got.Document), len(got.Markdown))
 		})
 	}
-	for name, want := range map[string]string{"interactive.pdf": "pdf_native_text_unavailable", "nontext.pdf": "pdf_native_text_unavailable", "scanned.pdf": "pdf_native_text_unavailable", "mixed-image.pdf": "pdf_native_text_unavailable", "mixed.pdf": "pdf_native_text_unavailable", "protected.pdf": "pdf_protected_unavailable"} {
+	for name, want := range nativePDFRefusals() {
 		t.Run(name, func(t *testing.T) {
 			got := convert(t, name)
-			if name == "interactive.pdf" && got.Result.Status == ingest.StatusUsable {
-				pagePresent := bytes.Contains(got.Markdown, []byte("MAESTRO ACROFORM PAGE TEXT 613"))
-				fieldMissing := !bytes.Contains(got.Markdown, []byte("MAESTRO FIELD VALUE 859")) && !bytes.Contains(got.Document, []byte("MAESTRO FIELD VALUE 859"))
-				t.Fatalf("interactive PDF silently admitted: page_marker_present=%v distinct_field_value_omitted=%v result=%+v", pagePresent, fieldMissing, got.Result)
-			}
-			if got.Result.Status != ingest.StatusUnavailable || len(got.Result.Warnings) != 1 || got.Result.Warnings[0] != want || len(got.Document) != 0 || len(got.Markdown) != 0 {
-				t.Fatalf("finite PDF refusal: %+v", got)
-			}
+			assertNativePDFRefusal(t, got, name, want)
 		})
 	}
 	status := r.Status(context.Background())
 	if status.State != "ready" || status.Profile != docling.DocumentsProfile {
 		t.Fatal("actual verified profile status", status)
+	}
+}
+
+func assertNativeDocument(t *testing.T, got docling.Conversion, name, lockSHA256 string) {
+	t.Helper()
+	if got.Result.Status != ingest.StatusUsable || !got.Provenance.NetworkDenied || got.Provenance.LockSHA256 != lockSHA256 {
+		t.Fatalf("actual conversion: %+v", got)
+	}
+	var document struct {
+		Schema string                     `json:"schema_name"`
+		Pages  map[string]json.RawMessage `json:"pages"`
+		Texts  []struct {
+			Text string `json:"text"`
+			Prov []struct {
+				Page int            `json:"page_no"`
+				BBox map[string]any `json:"bbox"`
+			} `json:"prov"`
+		} `json:"texts"`
+		Tables   []json.RawMessage `json:"tables"`
+		Pictures []struct {
+			Image json.RawMessage `json:"image"`
+		} `json:"pictures"`
+	}
+	if json.Unmarshal(got.Document, &document) != nil || document.Schema != "DoclingDocument" || len(document.Pages) != 2 {
+		t.Fatal("actual structured two-page document missing")
+	}
+	pages := map[int]bool{}
+	for _, item := range document.Texts {
+		if strings.TrimSpace(item.Text) != "" {
+			for _, p := range item.Prov {
+				if len(p.BBox) != 0 {
+					pages[p.Page] = true
+				}
+			}
+		}
+	}
+	if !pages[1] || !pages[2] {
+		t.Fatal("page/bounding-box provenance missing", pages)
+	}
+	for _, picture := range document.Pictures {
+		if len(picture.Image) > 0 && string(picture.Image) != "null" {
+			t.Fatal("image rendering happened")
+		}
+	}
+	if name == "native.pdf" {
+		if got.Result.Parser != "docling.pdf_native_text" || got.Result.Fidelity != ingest.FidelityTextual || len(got.Result.Warnings) != 1 || got.Result.Warnings[0] != "pdf_native_text_only" || !bytes.Contains(got.Markdown, []byte("PAGE ONE 731")) || !bytes.Contains(got.Markdown, []byte("PAGE TWO 947")) || len(document.Tables) != 0 {
+			t.Fatal("native PDF content/fidelity oracle", got.Result)
+		}
+	} else {
+		if got.Result.Parser != "docling.pptx" || got.Result.Fidelity != ingest.FidelityStructured || !bytes.Contains(got.Markdown, []byte("FIRST 421")) || !bytes.Contains(got.Markdown, []byte("SECOND 683")) || len(document.Tables) != 1 || !bytes.Contains(document.Tables[0], []byte(`"text": "41"`)) {
+			t.Fatal("native PPTX text/table oracle", got.Result)
+		}
+	}
+}
+
+func nativePDFRefusals() map[string]string {
+	return map[string]string{"interactive.pdf": "pdf_native_text_unavailable", "nontext.pdf": "pdf_native_text_unavailable", "scanned.pdf": "pdf_native_text_unavailable", "mixed-image.pdf": "pdf_native_text_unavailable", "mixed.pdf": "pdf_native_text_unavailable", "protected.pdf": "pdf_protected_unavailable"}
+}
+
+func assertNativePDFRefusal(t *testing.T, got docling.Conversion, name, want string) {
+	t.Helper()
+	if name == "interactive.pdf" && got.Result.Status == ingest.StatusUsable {
+		pagePresent := bytes.Contains(got.Markdown, []byte("MAESTRO ACROFORM PAGE TEXT 613"))
+		fieldMissing := !bytes.Contains(got.Markdown, []byte("MAESTRO FIELD VALUE 859")) && !bytes.Contains(got.Document, []byte("MAESTRO FIELD VALUE 859"))
+		t.Fatalf("interactive PDF silently admitted: page_marker_present=%v distinct_field_value_omitted=%v result=%+v", pagePresent, fieldMissing, got.Result)
+	}
+	if got.Result.Status != ingest.StatusUnavailable || len(got.Result.Warnings) != 1 || got.Result.Warnings[0] != want || len(got.Document) != 0 || len(got.Markdown) != 0 {
+		t.Fatalf("finite PDF refusal: %+v", got)
 	}
 }

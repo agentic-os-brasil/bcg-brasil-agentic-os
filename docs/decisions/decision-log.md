@@ -1812,3 +1812,17 @@ Refs: #596, original OSWK decision, independent Walter source review R2.
 - Consequences: No private signing material, replacement issuer, authority renewal, company signing identity or participant profile enters CI. Existing and interrupted staging is preserved. Native assembly does not substitute for actual corporate-device, client, hook, agent or OneDrive acceptance.
 - Refs: #599; specs/020-release-distribution.md; specs/022-guided-pilot-release.md; docs/development/windows-complete-experimental-kit.md; dev/pilot/windows-kit; .github/workflows/windows-docling-runtime.yml
 - Supersedes: none
+
+### WPKB refinement — complete native document scope
+
+The complete experimental kit uses the already accepted NTXT/Spec061
+`model-free-documents-v1` closure, extending the original eleven formats with
+encoded-text PDF and modern PPTX. Windows authenticates 56 package inputs plus
+its interpreter (57 files / 132,964,926 bytes). A distinct
+`windows_docling_documents_v1` proof binds the actual profile/lock/pack, thirteen
+positive format cases, six finite PDF refusals and nine unsafe PPTX cases. The
+schema-v2 export records that profile/lock and refuses historical legacy exports.
+The legacy archive, metadata and default assembler retain their original meaning.
+OCR, visual reconstruction, model downloads and all signing/installation authority
+remain unchanged. The earlier eleven-format construction snapshot is historical
+coverage, not proof of this complete-kit scope. Refs: #599; Spec061 NTXT.

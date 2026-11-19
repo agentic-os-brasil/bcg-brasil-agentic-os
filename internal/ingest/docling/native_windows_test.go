@@ -41,11 +41,20 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 		t.Fatal(err)
 	}
 	directory.Close()
-	assemble, err := docling.AssembleTarget(inputs, filepath.Join(root, "unsigned-pack"), "windows", "amd64")
+	profile := os.Getenv("MAESTRO_WINDOWS_DOCLING_TEST_PROFILE")
+	if profile == "" {
+		profile = docling.LegacyProfile
+	}
+	descriptor, err := docling.DescribeProfile("windows", "amd64", profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assemble, err := docling.AssembleProfile(inputs, filepath.Join(root, "unsigned-pack"), "windows", "amd64", profile)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("maestro_native_runtime_pack_sha256=%s", assemble.ArchiveSHA256)
+	t.Logf("maestro_native_runtime_profile=%s lock_sha256=%s", profile, descriptor.LockSHA256)
 	public, private, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +104,7 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 	}
 	var availability docling.Availability
 	invoke("place", ingest.Request{}, &availability)
-	if availability.State != "ready" {
+	if availability.State != "ready" || availability.Profile != profile {
 		t.Fatalf("explicit actual converter proof did not qualify: %+v", availability)
 	}
 	proofPath := filepath.Join(data, "ingestion", "docling", "windows-qualification.dpapi")
@@ -115,7 +124,7 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 			put(t, filepath.Join(space, name), original)
 			var conversion docling.Conversion
 			invoke("convert", ingest.Request{SourcePath: name, WorkspacePath: space, Policy: ingest.DefaultPolicy()}, &conversion)
-			if conversion.Result.Status != ingest.StatusUsable || !conversion.Provenance.NetworkDenied || conversion.Provenance.LockSHA256 != docling.WindowsLockSHA256 || conversion.Provenance.PackSHA256 != assemble.ArchiveSHA256 {
+			if conversion.Result.Status != ingest.StatusUsable || !conversion.Provenance.NetworkDenied || conversion.Provenance.LockSHA256 != descriptor.LockSHA256 || conversion.Provenance.PackSHA256 != assemble.ArchiveSHA256 {
 				t.Fatalf("real Windows conversion/provenance: %+v", conversion)
 			}
 			if !bytes.Equal(original, read(t, filepath.Join(space, name))) {
@@ -123,6 +132,45 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 			}
 		})
 	}
+
+	if profile == docling.DocumentsProfile {
+		convertDocument := func(t *testing.T, name string, body []byte) docling.Conversion {
+			t.Helper()
+			put(t, filepath.Join(space, name), body)
+			var got docling.Conversion
+			invoke("convert", ingest.Request{SourcePath: name, WorkspacePath: space, Policy: ingest.DefaultPolicy()}, &got)
+			if !bytes.Equal(body, read(t, filepath.Join(space, name))) || got.Result.Status != ingest.StatusBlocked && got.Result.SourceSHA256 != sum(body) {
+				t.Fatal("native document source identity changed")
+			}
+			if got.Result.Status == ingest.StatusUsable && (got.Provenance.PackSHA256 != assemble.ArchiveSHA256 || !got.Provenance.NetworkDenied || got.Provenance.LockSHA256 != descriptor.LockSHA256) {
+				t.Fatalf("native document pack provenance differs: %+v", got)
+			}
+			return got
+		}
+		for _, name := range []string{"native.pdf", "native.pptx"} {
+			t.Run(name, func(t *testing.T) {
+				got := convertDocument(t, name, read(t, filepath.Join(sourceRoot, "internal/ingest/docling/testdata/documents", name)))
+				assertNativeDocument(t, got, name, descriptor.LockSHA256)
+			})
+		}
+		for name, want := range nativePDFRefusals() {
+			t.Run(name, func(t *testing.T) {
+				got := convertDocument(t, name, read(t, filepath.Join(sourceRoot, "internal/ingest/docling/testdata/documents", name)))
+				assertNativePDFRefusal(t, got, name, want)
+			})
+		}
+		base := read(t, filepath.Join(sourceRoot, "internal/ingest/docling/testdata/documents/native.pptx"))
+		for _, test := range nativePPTXRefusalCases() {
+			t.Run("pptx_"+strings.ReplaceAll(test.name, " ", "_"), func(t *testing.T) {
+				body := editXLSX(t, base, test.edit)
+				got := convertDocument(t, "unsafe.pptx", body)
+				if got.Result.Status != ingest.StatusBlocked || len(got.Result.Warnings) != 1 || got.Result.Warnings[0] != "source_format_invalid" || len(got.Document) != 0 || len(got.Markdown) != 0 {
+					t.Fatalf("unsafe PPTX reached actual converter: %+v", got)
+				}
+			})
+		}
+	}
+
 	t.Run("validated_export", func(t *testing.T) {
 		var conversion docling.Conversion
 		invoke("export_fixture", ingest.Request{SourcePath: "sample.docx", WorkspacePath: space, Policy: ingest.DefaultPolicy()}, &conversion)
@@ -180,7 +228,7 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 	}
 	put(t, proofPath, proof)
 	invoke("place", ingest.Request{}, &availability)
-	if availability.State != "ready" {
+	if availability.State != "ready" || availability.Profile != profile {
 		t.Fatal("unchanged signed pack cannot requalify after actual repeated smoke")
 	}
 	t.Logf("engineering only: real native Windows converter + zero-capability kernel controls observed; pack_sha256=%s files=%d expanded=%d", assemble.ArchiveSHA256, assemble.Files, assemble.ExpandedBytes)

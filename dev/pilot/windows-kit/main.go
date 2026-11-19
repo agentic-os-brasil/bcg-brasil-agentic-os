@@ -47,14 +47,16 @@ type member struct {
 	SHA256 string `json:"sha256"`
 }
 type receipt struct {
-	SchemaVersion  int      `json:"schema_version"`
-	SourceRevision string   `json:"source_revision"`
-	SourceTree     string   `json:"source_tree"`
-	ProducerRunID  string   `json:"producer_run_id"`
-	Target         string   `json:"target"`
-	RuntimeSHA256  string   `json:"runtime_sha256"`
-	RegistrySHA256 string   `json:"registry_sha256"`
-	Files          []member `json:"files"`
+	SchemaVersion     int      `json:"schema_version"`
+	SourceRevision    string   `json:"source_revision"`
+	SourceTree        string   `json:"source_tree"`
+	ProducerRunID     string   `json:"producer_run_id"`
+	Target            string   `json:"target"`
+	RuntimeSHA256     string   `json:"runtime_sha256"`
+	RuntimeProfile    string   `json:"runtime_profile"`
+	RuntimeLockSHA256 string   `json:"runtime_lock_sha256"`
+	RegistrySHA256    string   `json:"registry_sha256"`
+	Files             []member `json:"files"`
 }
 type publicFile struct {
 	Path string `json:"path"`
@@ -270,7 +272,7 @@ func exportNative(o options) error {
 	if err = fresh(o.output); err != nil {
 		return err
 	}
-	assembly, err := docling.AssembleProfile(o.raw, filepath.Join(o.output, "construction-runtime"), "windows", "amd64", docling.LegacyProfile)
+	assembly, err := docling.AssembleProfile(o.raw, filepath.Join(o.output, "construction-runtime"), "windows", "amd64", docling.DocumentsProfile)
 	if err != nil {
 		return err
 	}
@@ -281,7 +283,11 @@ func exportNative(o options) error {
 	if err != nil {
 		return err
 	}
-	r := receipt{SchemaVersion: 1, SourceRevision: o.revision, SourceTree: o.tree, ProducerRunID: o.run, Target: "windows/amd64", RuntimeSHA256: proof, RegistrySHA256: digest(reg)}
+	descriptor, e := docling.DescribeProfile("windows", "amd64", docling.DocumentsProfile)
+	if e != nil {
+		return e
+	}
+	r := receipt{SchemaVersion: 2, RuntimeProfile: docling.DocumentsProfile, RuntimeLockSHA256: descriptor.LockSHA256, SourceRevision: o.revision, SourceTree: o.tree, ProducerRunID: o.run, Target: "windows/amd64", RuntimeSHA256: proof, RegistrySHA256: digest(reg)}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	for i, v := range []string{o.n, o.n1} {
@@ -355,29 +361,37 @@ func exportNative(o options) error {
 }
 func verifyProof(body, log []byte, revision string) (string, error) {
 	var p struct {
-		SchemaVersion int      `json:"schema_version"`
-		Profile       string   `json:"qualification_profile"`
-		Revision      string   `json:"source_revision"`
-		Inventory     string   `json:"inventory_sha256"`
-		Binary        string   `json:"test_binary_sha256"`
-		SID           string   `json:"effective_sid_sha256"`
-		Standard      bool     `json:"actual_standard_user"`
-		Elevated      bool     `json:"elevated"`
-		Admin         bool     `json:"admin_member"`
-		Tests         []string `json:"passed_tests"`
-		Formats       int      `json:"real_formats"`
-		Log           string   `json:"log_sha256"`
-		Shared        bool     `json:"shared_implementation_attested"`
-		MCP           string   `json:"mcp_server_execution"`
-		Client        string   `json:"native_client"`
-		Authority     string   `json:"publisher_authority"`
-		Pack          string   `json:"runtime_pack_sha256"`
+		SchemaVersion  int      `json:"schema_version"`
+		Profile        string   `json:"qualification_profile"`
+		Revision       string   `json:"source_revision"`
+		Inventory      string   `json:"inventory_sha256"`
+		Binary         string   `json:"test_binary_sha256"`
+		SID            string   `json:"effective_sid_sha256"`
+		Standard       bool     `json:"actual_standard_user"`
+		Elevated       bool     `json:"elevated"`
+		Admin          bool     `json:"admin_member"`
+		Tests          []string `json:"passed_tests"`
+		Formats        int      `json:"real_formats"`
+		RuntimeProfile string   `json:"runtime_profile"`
+		RuntimeLock    string   `json:"runtime_lock_sha256"`
+		PDFRefusals    int      `json:"pdf_refusals"`
+		PPTXRefusals   int      `json:"pptx_refusals"`
+		Log            string   `json:"log_sha256"`
+		Shared         bool     `json:"shared_implementation_attested"`
+		MCP            string   `json:"mcp_server_execution"`
+		Client         string   `json:"native_client"`
+		Authority      string   `json:"publisher_authority"`
+		Pack           string   `json:"runtime_pack_sha256"`
 	}
 	if e := releasecontract.DecodeStrictJSON(bytes.TrimPrefix(body, []byte{239, 187, 191}), &p); e != nil {
 		return "", e
 	}
+	descriptor, err := docling.DescribeProfile("windows", "amd64", docling.DocumentsProfile)
+	if err != nil {
+		return "", err
+	}
 	want := []string{"TestWindowsNativeConfinement", "TestWindowsNativeConfinementDeadline", "TestWindowsSharedImplementationIdentityAcrossEntryModules", "TestWindowsRealAuthenticatedDocling"}
-	if p.SchemaVersion != 1 || p.Profile != "windows_docling_runtime_v1" || p.Revision != revision || !shaPattern.MatchString(p.Inventory) || !shaPattern.MatchString(p.Binary) || !shaPattern.MatchString(p.SID) || !p.Standard || p.Elevated || p.Admin || !reflect.DeepEqual(p.Tests, want) || p.Formats != 11 || p.Log != digest(log) || !p.Shared || p.MCP != "not_attested" || p.Client != "not_run" || p.Authority != "not_granted" || !shaPattern.MatchString(p.Pack) {
+	if p.SchemaVersion != 1 || p.Profile != "windows_docling_documents_v1" || p.Revision != revision || !shaPattern.MatchString(p.Inventory) || !shaPattern.MatchString(p.Binary) || !shaPattern.MatchString(p.SID) || !p.Standard || p.Elevated || p.Admin || !reflect.DeepEqual(p.Tests, want) || p.Formats != 13 || p.RuntimeProfile != docling.DocumentsProfile || p.RuntimeLock != descriptor.LockSHA256 || p.PDFRefusals != 6 || p.PPTXRefusals != 9 || p.Log != digest(log) || !p.Shared || p.MCP != "not_attested" || p.Client != "not_run" || p.Authority != "not_granted" || !shaPattern.MatchString(p.Pack) {
 		return "", errors.New("exact successful ordinary-user full-profile proof required")
 	}
 	if bytes.Contains(log, []byte("--- FAIL:")) || bytes.Contains(log, []byte("--- SKIP:")) {
@@ -388,7 +402,7 @@ func verifyProof(body, log []byte, revision string) (string, error) {
 			return "", errors.New("required native parent did not pass")
 		}
 	}
-	for _, name := range []string{"sample.docx", "literal.txt", "structured.md", "quoted.csv", "generic.json", "generic.xml", "page.html", "page.htm", "spine.epub", "legacy.xls", "sheets.xlsx", "validated_export", "installed_tamper", "missing_native_runtime"} {
+	for _, name := range []string{"sample.docx", "literal.txt", "structured.md", "quoted.csv", "generic.json", "generic.xml", "page.html", "page.htm", "spine.epub", "legacy.xls", "sheets.xlsx", "native.pdf", "native.pptx", "interactive.pdf", "nontext.pdf", "scanned.pdf", "mixed-image.pdf", "mixed.pdf", "protected.pdf", "pptx_alternate_presentation", "pptx_duplicate_slide_selection", "pptx_external_relationship", "pptx_macro_presentation", "pptx_metafile", "pptx_macro_payload", "pptx_DTD", "pptx_slide_type_confusion", "pptx_root_decoy", "validated_export", "installed_tamper", "missing_native_runtime"} {
 		if !regexp.MustCompile("(?m)^    --- PASS: TestWindowsRealAuthenticatedDocling/" + regexp.QuoteMeta(name) + " ").Match(log) {
 			return "", errors.New("required native format/control did not pass")
 		}
@@ -396,6 +410,10 @@ func verifyProof(body, log []byte, revision string) (string, error) {
 	matches := regexp.MustCompile("(?m)^    native_windows_test.go:[0-9]+: maestro_native_runtime_pack_sha256=([a-f0-9]{64})\r?$").FindAllSubmatch(log, -1)
 	if len(matches) != 1 || string(matches[0][1]) != p.Pack {
 		return "", errors.New("actual native pack observation differs")
+	}
+	profileObservation := "(?m)^    native_windows_test.go:[0-9]+: maestro_native_runtime_profile=" + regexp.QuoteMeta(docling.DocumentsProfile) + " lock_sha256=" + regexp.QuoteMeta(descriptor.LockSHA256) + "\r?$"
+	if len(regexp.MustCompile(profileObservation).FindAll(log, -1)) != 1 {
+		return "", errors.New("actual extended runtime profile observation missing")
 	}
 	return p.Pack, nil
 }
@@ -418,7 +436,11 @@ func loadExport(o options) (receipt, error) {
 	if e = releasecontract.DecodeStrictJSON(b, &r); e != nil {
 		return r, e
 	}
-	if r.SchemaVersion != 1 || r.Target != "windows/amd64" || r.SourceRevision != o.revision || r.SourceTree != o.tree || r.ProducerRunID != o.run || !revisionPattern.MatchString(o.revision) || !revisionPattern.MatchString(o.tree) || !runPattern.MatchString(o.run) || !shaPattern.MatchString(r.RegistrySHA256) || !shaPattern.MatchString(r.RuntimeSHA256) {
+	descriptor, err := docling.DescribeProfile("windows", "amd64", docling.DocumentsProfile)
+	if err != nil {
+		return r, err
+	}
+	if r.SchemaVersion != 2 || r.RuntimeProfile != docling.DocumentsProfile || r.RuntimeLockSHA256 != descriptor.LockSHA256 || r.Target != "windows/amd64" || r.SourceRevision != o.revision || r.SourceTree != o.tree || r.ProducerRunID != o.run || !revisionPattern.MatchString(o.revision) || !revisionPattern.MatchString(o.tree) || !runPattern.MatchString(o.run) || !shaPattern.MatchString(r.RegistrySHA256) || !shaPattern.MatchString(r.RuntimeSHA256) {
 		return r, errors.New("export source, run, target or registry differs")
 	}
 	allowed := map[string]bool{"bootstrap.exe": true, "registry.json": true, "proof.json": true, "proof.log": true}
@@ -798,7 +820,7 @@ func assembleNative(o options) error {
 	if e = write(filepath.Join(o.output, "LEIA-ME-WINDOWS.md"), []byte(text)); e != nil {
 		return e
 	}
-	result := map[string]string{"zip": filepath.Base(archive), "sha256": digest(z), "export_sha256": o.expected, "source_revision": r.SourceRevision, "source_tree": r.SourceTree, "producer_run_id": r.ProducerRunID, "admission_sha256": id.AdmissionSHA256, "runtime_pack_sha256": r.RuntimeSHA256, "evidence": "engineering_assembled_native_factory", "native_client": "not_run"}
+	result := map[string]string{"zip": filepath.Base(archive), "sha256": digest(z), "export_sha256": o.expected, "source_revision": r.SourceRevision, "source_tree": r.SourceTree, "producer_run_id": r.ProducerRunID, "admission_sha256": id.AdmissionSHA256, "runtime_pack_sha256": r.RuntimeSHA256, "runtime_profile": r.RuntimeProfile, "runtime_lock_sha256": r.RuntimeLockSHA256, "evidence": "engineering_assembled_native_factory", "native_client": "not_run"}
 	identity, e := jsonBody(result)
 	if e != nil {
 		return e
