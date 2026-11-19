@@ -6,17 +6,18 @@ import (
 	"testing"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlasops"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 func TestAccountNarrativeConstructorIsFixedAndNoncreating(t *testing.T) {
-	home := t.TempDir()
+	home := atlasops.AtlasDataRootForTest(t)
 	if _, err := atlasops.OpenAccountExisting(home, "synthetic", nil); err == nil {
 		t.Fatal("missing brain accepted")
 	}
 	if _, err := os.Lstat(filepath.Join(home, "brain")); !os.IsNotExist(err) {
 		t.Fatal("query created brain", err)
 	}
-	if err := os.Mkdir(filepath.Join(home, "brain"), 0700); err != nil {
+	if err := scheduler.EnsurePrivateDirectory(filepath.Join(home, "brain")); err != nil {
 		t.Fatal(err)
 	}
 	guardCalls := 0
@@ -45,7 +46,7 @@ func TestAccountNarrativeConstructorIsFixedAndNoncreating(t *testing.T) {
 	if err := os.Rename(filepath.Join(home, "brain"), filepath.Join(home, "old-brain")); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Mkdir(filepath.Join(home, "brain"), 0700); err != nil {
+	if err := scheduler.EnsurePrivateDirectory(filepath.Join(home, "brain")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := engine.ReviewPage(atlasops.CollectRequest{Pages: []string{page}, Purpose: "Refuse replaced root", Reader: atlasops.ReaderOwnerSession}); err == nil {
