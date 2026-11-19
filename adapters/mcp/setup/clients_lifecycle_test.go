@@ -982,8 +982,20 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 	if !reflect.DeepEqual(ownerBefore, snapshot(t, installed.Home)) || !reflect.DeepEqual(workspaceBefore, snapshot(t, ws)) {
 		t.Fatal("client reconciliation changed owner/workspace")
 	}
-	if _, e = installer.PrepareStableLifecycleHook(ctx, passiveOptions, "Stop"); e != nil {
-		t.Fatalf("passive source hook unavailable before authenticated recall: %v", e)
+	// The fixed-slot passive carrier still owns N1; rollback cannot replace it.
+	if _, e = installer.PrepareStableLifecycleHook(ctx, passiveOptions, "Stop"); e == nil {
+		t.Fatal("stale passive carrier bypassed explicit regeneration after rollback")
+	}
+	recallPassive := passiveOptions
+	recallPassive.Request.CarrierID = "d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0"
+	recallPassive.Request.CodeRoot = filepath.Join(root, "recall-passive-code")
+	recallPassive.Request.DesktopPath = filepath.Join(root, "recall-passive-desktop.mcpb")
+	recallReview, e := installer.ReviewClientsSeeded(ctx, recallPassive)
+	must(t, e)
+	_, e = setup.ApplyClients(ctx, recallPassive, recallReview.Digest, true)
+	must(t, e)
+	if _, e = installer.PrepareStableLifecycleHook(ctx, recallPassive, "Stop"); e != nil {
+		t.Fatalf("current passive source hook unavailable before authenticated recall: %v", e)
 	}
 	publish(4, n, []releasecontract.ReleaseRecall{{Release: n.verified.Manifest.Release, ManifestSHA256: n.verified.ManifestSHA256}})
 	_, recallErr := check()
@@ -993,7 +1005,7 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 	if _, e = installer.PrepareStableLaunch(ctx, options); e == nil {
 		t.Fatal("current client record bypassed authenticated recall")
 	}
-	if _, e = installer.PrepareStableLifecycleHook(ctx, passiveOptions, "Stop"); e == nil {
+	if _, e = installer.PrepareStableLifecycleHook(ctx, recallPassive, "Stop"); e == nil {
 		t.Fatal("passive client bypassed authenticated recall")
 	}
 	proof, _ := json.MarshalIndent(map[string]any{"native_admission": "verified ephemeral experimental role over exact tagged seed and server; strict shipping nil-role negative passed", "runtime_pack": "inert engineering fixture; no conversion or native client qualification", "actual_clients": "unattested", "old_server_sha256": oldSHA, "n_artifacts": n.verified.Manifest.Artifacts, "next_artifacts": next.verified.Manifest.Artifacts, "actual_installer_sha256": seedSHA, "unused_future_factory_seed_sha256": sum(read(t, next.factory.Installer)), "original_doctor_sha256": sum(read(t, filepath.Join(source, "bundles/base/skills/maestro-doctor/SKILL.md"))), "future_doctor_sha256": sum(futureDoctor), "old_installer_lacks_future_marker": true, "next_release": "0.1.43", "stable_desktop_sha256": desktopSHA, "carrier_id": id, "source_sequence_after_rollback": finalState.Source.Sequence, "first_run": "actual console source review and generated ID", "code": "supported controlled process readback; disabled preserved", "sdk": "actual stable launcher process to real shipping server stdio continuation/memory/knowledge and exact changed future-method resource", "owner_workspace_preserved": true}, "", "  ")
@@ -1005,7 +1017,8 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 // inherited environment/context, output bound and WaitDelay.
 func clientLifecycleDiagnosticRun(t *testing.T, workspace string) func(context.Context, string, ...string) ([]byte, error) {
 	t.Helper()
-	return func(ctx context.Context, path string, args ...string) ([]byte, error) {
+	var run func(context.Context, string, ...string) ([]byte, error)
+	run = func(ctx context.Context, path string, args ...string) ([]byte, error) {
 		command := exec.CommandContext(ctx, path, args...)
 		command.WaitDelay = time.Second
 		stdout := &clientLifecycleDiagnosticOutput{overflow: "installer process output exceeds 1 MiB"}
@@ -1032,8 +1045,28 @@ func clientLifecycleDiagnosticRun(t *testing.T, workspace string) func(context.C
 				t.Logf("actual synthetic setup child failed: executable=%q argv=%q exit_code=%d error=%v combined_output=%q", path, args, exitCode, err, stdout.Bytes())
 			}
 		}
+		if runtimeChild && args[0] == "runtime-review" && err == nil {
+			t.Logf("actual synthetic setup runtime-review succeeded: executable=%q argv=%q stdout=%q stderr=%q", path, args, stdout.Bytes(), stderr.Bytes())
+		}
+		if runtimeChild && args[0] == "runtime-apply" && err != nil {
+			// Observe the failed placement without retrying or approving it. The
+			// same runner preserves the original context, cwd and output bounds.
+			reviewArgs := []string{"runtime-review"}
+			for i := 1; i < len(args); i++ {
+				switch args[i] {
+				case "--review-digest":
+					i++ // Only the original digest value accompanies this flag.
+				case "--confirm":
+				default:
+					reviewArgs = append(reviewArgs, args[i])
+				}
+			}
+			reviewOutput, reviewErr := run(ctx, path, reviewArgs...)
+			t.Logf("read-only runtime-review after actual synthetic runtime-apply failure: stdout=%q error=%v", reviewOutput, reviewErr)
+		}
 		return stdout.Bytes(), err
 	}
+	return run
 }
 
 type clientLifecycleDiagnosticOutput struct {
