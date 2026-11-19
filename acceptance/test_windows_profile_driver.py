@@ -615,7 +615,7 @@ $values|ConvertTo-Json -Depth 4 -Compress
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         ledger = json.loads(result.stdout)
         self.assertEqual(len(ledger["$adapterParents"]), 61)
-        self.assertEqual(len(ledger["$adapterAssertions"]), 178)
+        self.assertEqual(len(ledger["$adapterAssertions"]), 179)
         self.assertIn("TestMaintenancePublicJourney/owned-background", ledger["$adapterAssertions"])
         for case in ("refusal-diagnostic", "request-capability-withdrawal", "request-url-only",
                      "request-empty-elicitation", "request-explicit-form", "request-form-added"):
@@ -627,7 +627,7 @@ $values|ConvertTo-Json -Depth 4 -Compress
             for format in ("plugin", "mcpb"):
                 self.assertIn(f"TestCompiledStdioWorkflowAndPackets/portable_{format}_{version}", ledger["$adapterAssertions"])
         self.assertEqual(len(ledger["$adapterCommandParents"]), 1)
-        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]), 179)
+        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]), 180)
         self.assertEqual(ledger["$adapterSetupParents"], ["TestModernFactoryFirstInstallAndRestart", "TestDirectInnerInstallRequiresProductionAuthority", "TestModernSyncedSourceLifecycle", "TestSyncedPublicationInterleavingAndReadOnlyReviews"])
         self.assertEqual(len(ledger["$adapterSetupAssertions"]), 22)
         self.assertEqual(len(set(ledger["$adapterSetupAssertions"])), 22)
@@ -636,13 +636,13 @@ $values|ConvertTo-Json -Depth 4 -Compress
         setup_source = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "adapters/mcp/setup").glob("*_test.go"))
         for parent in ledger["$adapterSetupParents"]:
             self.assertIn(f"func {parent}(", setup_source)
-        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]) + len(ledger["$adapterSetupAssertions"]), 201)
+        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]) + len(ledger["$adapterSetupAssertions"]), 202)
         self.assertEqual(ledger["$adapterPackagingParents"], ["TestNativeWindowsOwnedProcessTree"])
         self.assertEqual(ledger["$adapterPackagingAssertions"], ["TestNativeWindowsOwnedProcessTree"] + [
             "TestNativeWindowsOwnedProcessTree/" + child for child in
             ("private-scratch", "cancel", "parent-exit", "output-limit", "nonzero-exit", "pre-cancel")])
         self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]) +
-                         len(ledger["$adapterSetupAssertions"]) + len(ledger["$adapterPackagingAssertions"]), 208)
+                         len(ledger["$adapterSetupAssertions"]) + len(ledger["$adapterPackagingAssertions"]), 209)
 
         for name in ("TestMethodPlansResolveMaintenanceKeepWikiUnavailable", "TestMethodPlansResolveRegisteredMaintenanceAndWiki", "TestAgentResourceCallbacksRevalidateBinding"):
             self.assertIn(name, ledger["$adapterParents"])
@@ -659,6 +659,7 @@ $values|ConvertTo-Json -Depth 4 -Compress
             'TestCompiledClaudeHook/startup_read_only_and_current_context',
             'TestCompiledClaudeHook/malformed_event_and_size_fail_closed',
             'TestCompiledClaudeHook/paths_glob_regex_and_cross_case',
+            'TestCompiledClaudeHook/repository_review_pair',
             'TestCompiledClaudeHook/namespace_and_predispatch',
             'TestCompiledClaudeHook/observations_retries_and_body_privacy',
             'TestCompiledClaudeHook/optional_prompt_identity_never_resets',
