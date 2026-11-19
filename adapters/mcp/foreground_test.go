@@ -39,7 +39,7 @@ func foregroundControlledFixture(t *testing.T) (*Bound, *bool, *int) {
 		if err := check(ctx); err != nil {
 			return ForegroundExecution{}, err
 		}
-		return ForegroundExecution{Result: ForegroundResult{1, ForegroundDigest(p), p.Role, "Controlled independent draft fixture; not native evidence"}, SessionID: "controlled-session", RuntimeVersion: r.RuntimeVersion, Model: p.Model}, nil
+		return ForegroundExecution{Qualification: ForegroundProbeObservation{State: "observed_supported_local_closure", SessionID: "controlled-probe-session"}, Result: ForegroundResult{1, ForegroundDigest(p), p.Role, "Controlled independent draft fixture; not native evidence"}, SessionID: "controlled-session", RuntimeVersion: r.RuntimeVersion, Model: p.Model}, nil
 	}
 	return b, &current, &calls
 }
@@ -143,5 +143,19 @@ func TestForegroundDeclineRevocationAndInvalidOutput(t *testing.T) {
 				t.Fatal("refused review invoked child")
 			}
 		})
+	}
+}
+
+func TestForegroundFailureRetainsOnlyObservedProbeUsage(t *testing.T) {
+	b, _, _ := foregroundControlledFixture(t)
+	b.localOwnerReview = func(context.Context, string, any) (bool, error) { return true, nil }
+	cost := 0.01
+	b.options.ForegroundExecute = func(context.Context, ForegroundRuntime, ForegroundPacket, func(context.Context) error) (ForegroundExecution, error) {
+		return ForegroundExecution{Qualification: ForegroundProbeObservation{State: "observed_supported_local_closure", SessionID: "controlled-probe", CostUSD: &cost}, Result: ForegroundResult{Text: "PRIVATE_UNPUBLISHABLE_ROLE_OUTPUT"}}, context.DeadlineExceeded
+	}
+	out := foregroundCall(t, b, localReviewSession(t, b, nil), nil)
+	body, _ := json.Marshal(out)
+	if !out.IsError || !strings.Contains(string(body), "observed_qualification") || strings.Contains(string(body), "PRIVATE_UNPUBLISHABLE_ROLE_OUTPUT") {
+		t.Fatal("failed role lost usage or exposed unpublished text", string(body))
 	}
 }

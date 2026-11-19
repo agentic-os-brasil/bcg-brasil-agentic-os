@@ -102,6 +102,13 @@ func weeklyObservationEnvironment(env []string) bool {
 // WeeklyConfiguration contract, this does not attest every vendor source;
 // native qualification remains a separate mandatory operation.
 func ObserveWeeklyConfiguration(ctx context.Context, profile, directory string) (maintenance.WeeklyConfiguration, error) {
+	managed, err := nativeManagedDirectory()
+	if err != nil {
+		return nil, err
+	}
+	return observeWeeklyConfigurationAt(ctx, profile, directory, managed)
+}
+func observeWeeklyConfigurationAt(ctx context.Context, profile, directory, managed string) (maintenance.WeeklyConfiguration, error) {
 	if ctx == nil || !filepath.IsAbs(profile) || filepath.Clean(profile) != profile || !filepath.IsAbs(directory) || filepath.Clean(directory) != directory {
 		return nil, errWeeklyConfiguration
 	}
@@ -124,10 +131,6 @@ func ObserveWeeklyConfiguration(ctx context.Context, profile, directory string) 
 	}
 	if projectRoot != "" && projectRoot != directory {
 		add(filepath.Join(projectRoot, ".claude", "settings.local.json"), "settings")
-	}
-	managed, err := nativeManagedDirectory()
-	if err != nil {
-		return nil, err
 	}
 	add(filepath.Join(managed, "managed-settings.json"), "managed_policy")
 	// The original native configuration inspector refuses populated drop-in

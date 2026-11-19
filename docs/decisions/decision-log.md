@@ -1813,3 +1813,27 @@ Refs: #596, original OSWK decision, independent Walter source review R2.
 - Consequences: The participant manager prepares and authenticates a separate foreground profile through the official flow. A status query invokes no model; each foreground call selects its provider/model explicitly and grants only that bounded call. Roles retain activation policy and scope restrictions; account/case remain session scopes and dormant roles remain unavailable. Workers receive only selected input, expose no tools or direct filesystem effects and retain no transcripts. Code host-native Agent/Task remains available. Actual client execution and model usage require separate installed-byte acceptance.
 - Refs: https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/598; specs/023-sequential-agent-dispatch.md; specs/063-product-native-plugin.md; adapters/mcp/foreground.go; adapters/mcp/packaging/foreground.go
 - Supersedes: none
+
+### FARD refinement — observed local native qualification before private input
+
+An attended foreground call authorizes at most two native sessions under one
+sixty-second operation deadline and the original aggregate 2048 output-token,
+32768 stdout-byte and 4096 stderr-byte bounds. The first uses only a fresh
+compiled synthetic challenge. The actual role retains one turn and one attempt.
+
+Bind the original finite local instruction/settings/plugin closure, selected
+HOME/environment, current source/scope/image/profile/model and canonical role
+prompt into the exact review. Include an explicit digest-bound UNATTESTED fact
+for remote or OS-delivered policy, startup connections/context/effects and the
+two-session provider usage. The local probe establishes only observed supported
+local behavior; it neither proves remote policy absence nor creates enterprise
+or production admission.
+
+Only successful genuine native probe observation creates an unexported
+attempt-local qualification capability. The actual private stdin gate requires
+that capability, matching tuple and exact input, a current independently
+observed native child, and fresh canonical configuration/closure re-enumeration.
+Consume it once; imported JSON or a weekly grant cannot construct it. Changed
+or newly populated managed drop-ins refuse before private input, live drift
+cancels, and final return revalidates. Return distinct actual probe/role session
+identities and usage. No task/context/SELF enters the synthetic probe payload.

@@ -157,6 +157,16 @@ func runWeeklyModelProcess(ctx context.Context, spec weeklyModelProcess) ([]byte
 		runErr = e
 		if runErr == nil {
 			spec.foreground.childSHA256 = child.Digest()
+			spec.foreground.reobserveChild = func(c context.Context) error {
+				current, e := spec.foreground.identity.ObserveWindowsChild(c, process.Process, process.Thread, job, process.ProcessId, process.ThreadId)
+				if e != nil {
+					return e
+				}
+				if !current.Same(child) {
+					return errors.New("foreground_native_child_changed")
+				}
+				return nil
+			}
 		}
 	}
 	if runErr == nil {
@@ -179,8 +189,10 @@ func runWeeklyModelProcess(ctx context.Context, spec weeklyModelProcess) ([]byte
 		inputDone = make(chan error, 1)
 		go func() {
 			write := func() error {
-				if e := spec.checkForeground(ctx); e != nil {
-					return e
+				if spec.foreground != nil {
+					if e := spec.foreground.beforeInput(ctx, spec.Input); e != nil {
+						return e
+					}
 				}
 				_, e := inputWrite.Write(spec.Input)
 				return errors.Join(e, inputWrite.Close())
