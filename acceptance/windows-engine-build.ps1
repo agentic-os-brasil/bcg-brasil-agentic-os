@@ -189,19 +189,48 @@ try {
   $setupInventory = @(& $setupBinary '-test.list' '^(Test|Example)')
   # Complete compiled inventory is distinct from the four selected native setup parents.
   $expectedSetupInventory = @(
-    'TestModernFactoryFirstInstallAndRestart',
-    'TestDirectInnerInstallRequiresProductionAuthority',
-    'TestModernSyncedSourceLifecycle',
-    'TestSyncedPublicationInterleavingAndReadOnlyReviews',
+    'TestCodeCommandConsentKeepsOnlyClosedHostFailureCategory',
+    'TestCodeCommandConsentPreservesOfficialChildSessionGuards',
+    'TestCodeCommandConsentPublicVendorGoldenFrames',
+    'TestCodeCommandConsentRechecksAfterNativeIdentityRead',
+    'TestCodeCommandConsentRefusesChangedReviewedInputsBeforeEffects',
+    'TestCodeCommandConsentRejectsForeignScriptEvenWithRehashedRecord',
+    'TestCodeCommandConsentUnavailableHostPreservesPendingState',
+    'TestCodeCommandSourceRegistrationUsesOnlyReviewedNarrowConsent',
+    'TestCodeCopyContentProtocolPreservesUTF16OrderAndExactBytes',
+    'TestCodeCurrentCommandCopyReadbackWithoutFolderFields',
+    'TestCodeReadbackRequiresExplicitEnabledState',
+    'TestCodeRegistrationDoesNotTrustExitAcknowledgement',
     'TestCodeRegistrationPreservesDisabledAndRefusesForeignSource',
     'TestCodeRegistrationWithUnrelatedCachedPlugin',
-    'TestCodeRegistrationDoesNotTrustExitAcknowledgement',
-    'TestCodeReadbackRequiresExplicitEnabledState',
+    'TestCodeWindowsSourcePreservesUnicodeArgumentsForWindowsPowerShell',
+    'TestCompatibleDesktopCarrierReusesBytesWithoutChangingPriorSlot',
     'TestCurrentClientShippingNativeRefusal',
-    'TestModernClientRegistrationLifecycle'
+    'TestCurrentMaintenancePreservesQualifiedRoleAndReleaseArguments',
+    'TestDirectInnerInstallRequiresProductionAuthority',
+    'TestExplicitNativeRetryUsesFreshReviewedSlotsAndPreservesFailedCandidate',
+    'TestFullNativeClientMaterializationHasNoResourceOnlyFallback',
+    'TestInitialRuntimeOlderUnboundConsumerRemainsExplicitlyPending',
+    'TestMaintenanceRefreshSelectsOnlyPreviouslyQualifiedStaleJobs',
+    'TestModelProfilePreparationAndLoginRequireSeparateConfirmation',
+    'TestModelRegistrationRefusesOwnerPolicyForWorkspaceBeforeSourceAccess',
+    'TestModelRegistrationRequiresExplicitConfirmationBeforeSourceAccess',
+    'TestModelRegistrationReviewUsesActualSelectedJobScope',
+    'TestModernClientRegistrationLifecycle',
+    'TestModernFactoryFirstInstallAndRestart',
+    'TestModernSyncedSourceLifecycle',
+    'TestSelectedCodeProfileIsPerChildAndLeavesCallerUntouched',
+    'TestSyncedPublicationInterleavingAndReadOnlyReviews',
+    'TestVersionedCodeReadbackAcceptsOnlyMatchingNativeCopy',
+    'TestVersionedCodeSourceUsesFixedShortLauncherOnMacAndWindows',
+    'TestVersionedProviderPreservesChangedFilesAndForeignEntries',
+    'TestWindowsWakeFreshAbsentPauseIsDurableAndReviewIsOSFree',
+    'TestWindowsWakeLateNativeAckCannotReopenPausedEpoch',
+    'TestWindowsWakeRefusesInvalidAckWithoutOpeningControl',
+    'TestWindowsWakeSuccessfulOptInPauseRevokeAndContextFailures'
   )
-  if ($LASTEXITCODE -ne 0 -or $setupInventory.Count -ne 10 -or
-      @((Compare-Object $expectedSetupInventory ($setupInventory | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) { throw 'Setup full inventory must contain the ten existing first-install, source and client parents.' }
+  if ($LASTEXITCODE -ne 0 -or $setupInventory.Count -ne $expectedSetupInventory.Count -or
+      @((Compare-Object $expectedSetupInventory ($setupInventory | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) { throw 'Setup full inventory must match the reviewed first-install, source, client, model and maintenance test set.' }
   $packagingBinary = Join-Path $binaryRoot 'packaging.test.exe'
   & $sdkGo test -c ./packaging -o $packagingBinary
   if ($LASTEXITCODE -ne 0) { throw 'Native owned-process packaging test compilation failed.' }
