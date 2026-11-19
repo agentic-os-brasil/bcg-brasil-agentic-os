@@ -3,9 +3,11 @@ package packaging
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -26,9 +28,14 @@ func weeklyConfigurationFiles(t *testing.T, body string) maintenance.WeeklyConfi
 }
 
 func TestWeeklyConfigurationVerification(t *testing.T) {
+	identitySupported := runtime.GOOS == "darwin" || runtime.GOOS == "windows"
 	for _, body := range []string{`{}`, `{"model":"accepted-model","theme":"dark","permissions":{"defaultMode":"dontAsk"}}`} {
-		if err := VerifyWeeklyConfiguration(context.Background(), weeklyConfigurationFiles(t, body)); err != nil {
+		err := VerifyWeeklyConfiguration(context.Background(), weeklyConfigurationFiles(t, body))
+		if identitySupported && err != nil {
 			t.Fatal(err)
+		}
+		if !identitySupported && !errors.Is(err, errWeeklyConfiguration) {
+			t.Fatalf("unsupported identity backend did not refuse configuration: %v", err)
 		}
 	}
 	for _, body := range []string{`null`, `[]`, `{} {}`, `{"theme":"a","theme":"b"}`, `{"x":{"k":1,"k":2}}`, `{"hooks":{}}`, `{"env":{}}`, `{"enabledPlugins":{}}`, `{"mcpServers":{}}`, `{"agent":"worker"}`, `{"apiKeyHelper":"cmd"}`, `{"statusLine":{"type":"command","command":"cmd"}}`, strings.Repeat(" ", 65537)} {
@@ -71,6 +78,7 @@ func TestWeeklyConfigurationVerification(t *testing.T) {
 }
 
 func TestWeeklyConfigurationRefusesAliasesAndTotalSize(t *testing.T) {
+	identitySupported := runtime.GOOS == "darwin" || runtime.GOOS == "windows"
 	c := weeklyConfigurationFiles(t, `{}`)
 	for i := range c {
 		if !c[i].Absent {
@@ -103,8 +111,12 @@ func TestWeeklyConfigurationRefusesAliasesAndTotalSize(t *testing.T) {
 		c = append(c, maintenance.WeeklyConfigurationEntry{Path: path, Role: "settings", SHA256: fmt.Sprintf("%x", sha256.Sum256(body))})
 		if i == 2 {
 			sort.Slice(c, func(i, j int) bool { return c[i].Path < c[j].Path })
-			if err := VerifyWeeklyConfiguration(context.Background(), c); err != nil {
+			err := VerifyWeeklyConfiguration(context.Background(), c)
+			if identitySupported && err != nil {
 				t.Fatalf("exact total bound refused: %v", err)
+			}
+			if !identitySupported && !errors.Is(err, errWeeklyConfiguration) {
+				t.Fatalf("unsupported identity backend did not refuse exact total: %v", err)
 			}
 		}
 	}

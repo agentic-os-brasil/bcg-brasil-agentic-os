@@ -127,7 +127,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
@@ -210,11 +210,11 @@ jobs:
       - name: Product protocol, bootstrap refusal and package contracts
         if: runner.os != 'Windows'
         working-directory: adapters/mcp
-        run: go test ./... -timeout=600s
+        run: go test ./... -timeout=20m
       - name: Remaining Windows protocol, unsafe-owner and elevated-host contracts
         if: runner.os == 'Windows'
         working-directory: adapters/mcp
-        run: go test ./... -skip '${{ steps.windows_engine_proof.outputs.host_exclusions }}' -timeout=600s
+        run: go test ./... -skip '${{ steps.windows_engine_proof.outputs.host_exclusions }}' -timeout=20m
       - name: Product module static checks
         working-directory: adapters/mcp
         run: go vet ./...

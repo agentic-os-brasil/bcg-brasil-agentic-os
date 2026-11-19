@@ -104,7 +104,7 @@ func TestMaintenanceFreshStatusReadOnly(t *testing.T) {
 			before := cadenceTree(t, f)
 			cs := f.connect(t, nil)
 			status := cadenceCall(t, cs, "status", nil, false)
-			if len(status["jobs"].([]any)) != 19 {
+			if len(status["jobs"].([]any)) != 20 {
 				t.Fatal(status)
 			}
 			for _, raw := range status["jobs"].([]any) {
