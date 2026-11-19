@@ -134,7 +134,7 @@ func TestWeeklySelfPublicationBoundaryFailuresAreTruthful(t *testing.T) {
 					if err := write(); err != nil {
 						return err
 					}
-					return os.Chmod(weeklySelfPath(root), 0644)
+					return os.Link(weeklySelfPath(root), weeklySelfPath(root)+".readback-alias")
 				default:
 					if err := write(); err != nil {
 						return err
@@ -155,7 +155,7 @@ func TestWeeklySelfPublicationBoundaryFailuresAreTruthful(t *testing.T) {
 					t.Fatalf("durable partial result was hidden: %+v", receipt)
 				}
 				if kind == "failed_readback" {
-					if err := os.Chmod(weeklySelfPath(root), 0600); err != nil {
+					if err := os.Remove(weeklySelfPath(root) + ".readback-alias"); err != nil {
 						t.Fatal(err)
 					}
 				}

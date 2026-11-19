@@ -133,7 +133,7 @@ func currentClientMaterializer(o installer.ClientOptions, nativeSHA string, prev
 				if e != nil {
 					return material, e
 				}
-				if e = inspectCurrentDesktopContract(ctx, o.Request.DesktopPath, o, identity, s.Server.SHA256, nativeContract); e != nil {
+				if e = inspectFirstDesktopContract(ctx, o, s, b, previousDesktop, identity, nativeContract); e != nil {
 					return material, e
 				}
 				if e = requireInspectedClientArchive(o.Request.DesktopPath, before); e != nil {
@@ -666,6 +666,30 @@ func inspectCurrentDesktopContract(ctx context.Context, path string, o installer
 		return errors.New("Desktop native contract differs from reviewed current binding; preserved")
 	}
 	return nil
+}
+func inspectFirstDesktopContract(ctx context.Context, o installer.ClientOptions, s installtx.State, binding installer.ClientBinding, previousDesktop *installer.ClientRecord, identity releasecontract.ServerIdentity, nativeContract string) error {
+	// A fresh generation can already contain the exact retained prior bootstrap
+	// if publication stopped before its new private record was committed. Only
+	// the authenticated same-carrier record may identify those historical bytes;
+	// unrelated first-publication destinations still require Current inspection.
+	prior := previousDesktop
+	if o.VersionedManagement && prior != nil && prior.SchemaVersion == 1 && prior.Profile == installer.StableClientProfile && prior.Protocol == installer.StableClientProtocol && prior.CarrierVersion == installer.StableCarrierVersion && prior.CarrierID == o.Request.CarrierID && prior.Binding == binding && prior.Materialization.Selection != nil && !o.Request.ManualDesktopUpdate && prior.Materialization.DesktopNativeContractSHA256 == nativeContract {
+		m := prior.Materialization
+		actual, err := installer.ClientArchiveDigest(o.Request.DesktopPath)
+		if err != nil {
+			return err
+		}
+		if actual == m.DesktopSHA256 {
+			if err := packaging.InspectReusedStableExtension(o.Request.DesktopPath, stableCarrier(prior.CarrierID), m.DesktopSHA256, m.BootstrapServerSHA256, m.BootstrapEmbeddedInputsSHA256, m.DesktopNativeContractSHA256); err != nil {
+				return err
+			}
+			if err := inspectDesktopCandidateBinding(o.Request.DesktopPath, o, s.TargetOS, nativeContract); err != nil {
+				return err
+			}
+			return requireInspectedClientArchive(o.Request.DesktopPath, actual)
+		}
+	}
+	return inspectCurrentDesktopContract(ctx, o.Request.DesktopPath, o, identity, s.Server.SHA256, nativeContract)
 }
 func swapOwnedDesktop(ctx context.Context, stage string, o installer.ClientOptions, old *installer.ClientRecord, identity releasecontract.ServerIdentity, nativeContract string) error {
 	destination := o.Request.DesktopPath

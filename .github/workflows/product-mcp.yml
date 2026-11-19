@@ -404,7 +404,7 @@ jobs:
         shell: bash
         run: |
           evidence="$RUNNER_TEMP/maestro-client-registration.jsonl"
-          if ! go test ./setup -run '^TestModernClientRegistrationLifecycle$' -count=1 -json -timeout=900s > "$evidence"; then
+          if ! go test -tags=maestro_experimental_installed_seed ./setup -run '^TestModernClientRegistrationLifecycle$' -count=1 -json -timeout=900s > "$evidence"; then
             cat "$evidence"
             exit 1
           fi

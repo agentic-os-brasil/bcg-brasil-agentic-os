@@ -18,12 +18,12 @@ import (
 
 const currentMethodMarker = "CLIENT_CURRENT_SERVER_METHOD_N1_LITERAL"
 
-// Snapshot only exact ordinary Go build inputs (including embed inputs) and the
+// Snapshot only exact selected experimental Go build inputs (including embed inputs) and the
 // closed factory allowlist. No repository/cache/history/private-state copy and
 // no source/baseline mutation is used to distinguish future server resources.
 func clientFutureSource(t *testing.T, ctx context.Context, source, root string) string {
 	t.Helper()
-	command := exec.CommandContext(ctx, "go", "list", "-mod=readonly", "-deps", "-json", "./cmd/maestro-mcp", "./cmd/maestro-install")
+	command := exec.CommandContext(ctx, "go", "list", "-mod=readonly", "-tags=maestro_experimental_installed_seed", "-deps", "-json", "./cmd/maestro-mcp", "./cmd/maestro-install")
 	command.Dir = filepath.Join(source, "adapters/mcp")
 	output, err := command.CombinedOutput()
 	if err != nil {

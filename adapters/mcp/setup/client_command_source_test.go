@@ -1,16 +1,151 @@
 package setup
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 )
+
+func TestInterruptedVersionedDesktopReuseRequiresAuthenticatedPriorBinding(t *testing.T) {
+	tests := []struct {
+		name   string
+		change func(*installer.ClientOptions, *installer.ClientBinding, **installer.ClientRecord, *string)
+		ok     bool
+	}{
+		{name: "ExactAdmittedPriorReuse", ok: true},
+		{name: "NoPrior", change: func(_ *installer.ClientOptions, _ *installer.ClientBinding, r **installer.ClientRecord, _ *string) {
+			*r = nil
+		}},
+		{name: "FixedSlotPrior", change: func(_ *installer.ClientOptions, _ *installer.ClientBinding, r **installer.ClientRecord, _ *string) {
+			(*r).Materialization.Selection = nil
+		}},
+		{name: "OrdinaryFirstPublication", change: func(o *installer.ClientOptions, _ *installer.ClientBinding, _ **installer.ClientRecord, _ *string) {
+			o.VersionedManagement = false
+		}},
+		{name: "ManualReplacement", change: func(o *installer.ClientOptions, _ *installer.ClientBinding, _ **installer.ClientRecord, _ *string) {
+			o.Request.ManualDesktopUpdate = true
+		}},
+		{name: "WrongSchema", change: func(_ *installer.ClientOptions, _ *installer.ClientBinding, r **installer.ClientRecord, _ *string) {
+			(*r).SchemaVersion = 2
+		}},
+		{name: "WrongProfile", change: func(_ *installer.ClientOptions, _ *installer.ClientBinding, r **installer.ClientRecord, _ *string) {
+			(*r).Profile = "foreign"
+		}},
+		{name: "WrongProtocol", change: func(_ *installer.ClientOptions, _ *installer.ClientBinding, r **installer.ClientRecord, _ *string) {
+			(*r).Protocol = "foreign"
+		}},
+		{name: "WrongCarrierVersion", change: func(_ *installer.ClientOptions, _ *installer.ClientBinding, r **installer.ClientRecord, _ *string) {
+			(*r).CarrierVersion = "9.0.0"
+		}},
+		{name: "WrongCarrierID", change: func(_ *installer.ClientOptions, _ *installer.ClientBinding, r **installer.ClientRecord, _ *string) {
+			(*r).CarrierID = strings.Repeat("f", 32)
+		}},
+		{name: "WrongFullBinding", change: func(_ *installer.ClientOptions, _ *installer.ClientBinding, r **installer.ClientRecord, _ *string) {
+			(*r).Binding.Home += "-other"
+		}},
+		{name: "WrongRecordedWorkspace", change: func(_ *installer.ClientOptions, _ *installer.ClientBinding, r **installer.ClientRecord, _ *string) {
+			(*r).Binding.Workspace += "-other"
+		}},
+		{name: "WrongActualWorkspace", change: func(o *installer.ClientOptions, _ *installer.ClientBinding, _ **installer.ClientRecord, _ *string) {
+			o.Request.Workspace += "-other"
+		}},
+		{name: "WrongCurrentNativeContract", change: func(_ *installer.ClientOptions, _ *installer.ClientBinding, _ **installer.ClientRecord, native *string) {
+			*native = strings.Repeat("f", 64)
+		}},
+		{name: "MissingBootstrapIdentity", change: func(_ *installer.ClientOptions, _ *installer.ClientBinding, r **installer.ClientRecord, _ *string) {
+			(*r).Materialization.BootstrapServerSHA256 = ""
+		}},
+		{name: "WrongPackageHash", change: func(_ *installer.ClientOptions, _ *installer.ClientBinding, r **installer.ClientRecord, _ *string) {
+			(*r).Materialization.DesktopSHA256 = strings.Repeat("f", 64)
+		}},
+		{name: "ChangedDestination"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			o := installer.ClientOptions{SeededOperationOptions: installer.SeededOperationOptions{ManagedRoot: filepath.Join(root, "managed"), UserHome: filepath.Join(root, "owner"), AuthorityRegistrySHA256: strings.Repeat("a", 64)}, Request: installer.ClientRequest{CarrierID: strings.Repeat("b", 32), Workspace: filepath.Join(root, "workspace"), DesktopPath: filepath.Join(root, "new.mcpb")}, VersionedManagement: true}
+			binding := installer.ClientBinding{ManagedRoot: o.ManagedRoot, UserHome: o.UserHome, Home: filepath.Join(root, "brain"), Workspace: o.Request.Workspace, WorkspaceID: strings.Repeat("c", 32), RegistrySHA256: o.AuthorityRegistrySHA256}
+			launcher := "maestro-install"
+			if runtime.GOOS == "windows" {
+				launcher += ".exe"
+			}
+			manifest, err := json.Marshal(map[string]any{"server": map[string]any{"mcp_config": map[string]any{"command": filepath.Join(o.ManagedRoot, launcher), "args": []string{"stable-launch", "--product-root", o.ManagedRoot, "--user-home", o.UserHome, "--workspace", o.Request.Workspace, "--carrier-id", o.Request.CarrierID}}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var archive bytes.Buffer
+			zw := zip.NewWriter(&archive)
+			entry, err := zw.Create("manifest.json")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = entry.Write(manifest); err != nil {
+				t.Fatal(err)
+			}
+			if err = zw.Close(); err != nil {
+				t.Fatal(err)
+			}
+			priorPath := filepath.Join(root, "prior.mcpb")
+			for _, path := range []string{priorPath, o.Request.DesktopPath} {
+				if err = os.WriteFile(path, archive.Bytes(), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			packageSHA, err := installer.ClientArchiveDigest(priorPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			native := fmt.Sprintf("%x", sha256.Sum256(manifest))
+			// This unit seam receives a previously authenticated private record.
+			// Its historical inert resources are not current canonical assets.
+			prior := &installer.ClientRecord{SchemaVersion: 1, Profile: installer.StableClientProfile, Protocol: installer.StableClientProtocol, CarrierVersion: installer.StableCarrierVersion, CarrierID: o.Request.CarrierID, Binding: binding, Materialization: installer.ClientMaterialization{DesktopPath: priorPath, DesktopSHA256: packageSHA, BootstrapServerSHA256: strings.Repeat("d", 64), BootstrapEmbeddedInputsSHA256: strings.Repeat("e", 64), DesktopNativeContractSHA256: native, Selection: &installer.ClientPacketSelection{CodeRoot: filepath.Join(root, "selected-code"), DesktopPath: filepath.Join(root, "selected.mcpb")}}}
+			if tt.change != nil {
+				tt.change(&o, &binding, &prior, &native)
+			}
+			if tt.name == "ChangedDestination" {
+				if err = os.WriteFile(o.Request.DesktopPath, []byte("foreign destination must survive\n"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before, err := os.ReadFile(o.Request.DesktopPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			beforeInfo, err := os.Stat(o.Request.DesktopPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			priorInfo, err := os.Stat(priorPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			state := installtx.State{TargetOS: runtime.GOOS}
+			err = inspectFirstDesktopContract(context.Background(), o, state, binding, prior, releasecontract.ServerIdentity{}, native)
+			if (err == nil) != tt.ok {
+				t.Fatalf("authenticated prior reuse=%v: %v", tt.ok, err)
+			}
+			after, readErr := os.ReadFile(o.Request.DesktopPath)
+			old, oldErr := os.ReadFile(priorPath)
+			info, statErr := os.Stat(o.Request.DesktopPath)
+			priorAfterInfo, priorStatErr := os.Stat(priorPath)
+			if readErr != nil || oldErr != nil || statErr != nil || priorStatErr != nil || !bytes.Equal(before, after) || !bytes.Equal(old, archive.Bytes()) || !os.SameFile(beforeInfo, info) || info.Mode() != beforeInfo.Mode() || !os.SameFile(priorInfo, priorAfterInfo) || priorAfterInfo.Mode() != priorInfo.Mode() {
+				t.Fatal("observation changed prior or destination bytes/identity/mode", readErr, oldErr, statErr, priorStatErr)
+			}
+		})
+	}
+}
 
 func TestVersionedCodeSourceUsesFixedShortLauncherOnMacAndWindows(t *testing.T) {
 	for _, platform := range []string{"darwin", "windows"} {
