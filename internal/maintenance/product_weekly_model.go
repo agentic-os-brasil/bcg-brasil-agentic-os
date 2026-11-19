@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"reflect"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 )
@@ -12,6 +13,7 @@ import (
 // WeeklyModelRegistration is an explicit local declaration, not a native
 // qualification, activation, credential source or model-selected executable.
 type WeeklyModelRegistration struct {
+	Memory           *MemoryModelPolicy         `json:"memory_policy,omitempty"`
 	Configuration    WeeklyConfiguration        `json:"configuration,omitempty"`
 	SchemaVersion    int                        `json:"schema_version"`
 	WorkingDirectory string                     `json:"working_directory,omitempty"`
@@ -44,17 +46,27 @@ func (r WeeklyModelRegistration) Validate() error {
 	if err := r.Descriptor.Validate(); err != nil {
 		return err
 	}
-	if err := ownerctx.ValidateWeeklySelfPolicy(r.Policy); err != nil {
-		return err
-	}
-	if r.Policy.Limits.MaxInputBytes > r.Descriptor.Limits.MaxInputBytes {
-		return errors.New("weekly source policy exceeds registered input bound")
+	if r.Descriptor.JobID == MemoryModelJobID {
+		if r.Memory == nil || r.Memory.Validate() != nil || !reflect.DeepEqual(r.Policy, ownerctx.WeeklySelfOptions{}) {
+			return errors.New("workspace memory registration cannot borrow owner SELF policy")
+		}
+	} else {
+		if r.Memory != nil {
+			return errors.New("owner registration cannot select workspace memory policy")
+		}
+		if err := ownerctx.ValidateWeeklySelfPolicy(r.Policy); err != nil {
+			return err
+		}
+		if r.Policy.Limits.MaxInputBytes > r.Descriptor.Limits.MaxInputBytes {
+			return errors.New("weekly source policy exceeds registered input bound")
+		}
 	}
 	return nil
 }
 func (r WeeklyModelRegistration) Digest() string { return productDigest(r) }
 
 type weeklyModelControl struct {
+	MemorySelection          *memoryModelSelection   `json:"memory_selection,omitempty"`
 	Registration             WeeklyModelRegistration `json:"registration"`
 	RegistrationReviewSHA256 string                  `json:"registration_review_sha256"`
 }
@@ -71,7 +83,7 @@ func (s *Service) weeklyModelService() *Service {
 }
 func (s *Service) reviewWeeklyRegistration(op Operation) (ProductReview, error) {
 	var empty ProductReview
-	if op.JobID != YodaSelfReviewWeeklyJobID || op.Kind != "register" || op.Timezone != "" || s.options.WeeklyCandidate == nil {
+	if !modelJob(op.JobID) || op.Kind != "register" || op.Timezone != "" || s.options.WeeklyCandidate == nil || s.options.WeeklyCandidate.Descriptor.JobID != op.JobID {
 		return empty, errors.New("explicit weekly native registration declaration is unavailable")
 	}
 	if err := s.validate(); err != nil {
@@ -90,7 +102,11 @@ func (s *Service) reviewWeeklyRegistration(op Operation) (ProductReview, error) 
 		return empty, ErrProductConflict
 	}
 	job, _ := findCatalogJob(s.options.Catalog, op.JobID)
-	r := ProductReview{Scope: "owner", Operation: op, WorkspaceID: s.workspaceID, Writes: append([]string(nil), job.Writes...), Implementation: s.build, Configuration: s.configuration(op.JobID), SourceState: candidate.Digest(), WeeklyRegistration: &candidate}
+	scope := "workspace"
+	if op.JobID == YodaSelfReviewWeeklyJobID {
+		scope = "owner"
+	}
+	r := ProductReview{Scope: scope, Operation: op, WorkspaceID: s.workspaceID, Writes: append([]string(nil), job.Writes...), Implementation: s.build, Configuration: s.configuration(op.JobID), SourceState: candidate.Digest(), WeeklyRegistration: &candidate}
 	r.seal = productDigest([]any{s.binding, r})
 	return r, nil
 }
@@ -140,7 +156,7 @@ func (s *Service) applyWeeklyRegistration(ctx context.Context, r ProductReview, 
 	if err != nil {
 		return ProductJobStatus{}, err
 	}
-	return ProductJobStatus{Scope: "owner", ScopeID: s.workspaceID, JobID: c.JobID, Revision: c.Revision, State: c.State, QualificationState: "unqualified", Reason: "registration_accepted_native_qualification_required"}, nil
+	return ProductJobStatus{Scope: r.Scope, ScopeID: s.workspaceID, JobID: c.JobID, Revision: c.Revision, State: c.State, QualificationState: "unqualified", Reason: "registration_accepted_native_qualification_required"}, nil
 }
 func cloneWeeklyRegistration(candidate *WeeklyModelRegistration) (*WeeklyModelRegistration, error) {
 	if candidate == nil {

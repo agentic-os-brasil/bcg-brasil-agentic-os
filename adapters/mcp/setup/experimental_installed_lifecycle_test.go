@@ -31,6 +31,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/updateservice"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // This is a source-only engineering rehearsal using actual tagged seed/server
@@ -178,6 +179,7 @@ func TestExperimentalInstalledSeedFiniteSourceLifecycle(t *testing.T) {
 		t.Fatalf("full native profile accepted missing genuine proof: %v", err)
 	}
 	clients := installer.ClientOptions{SeededOperationOptions: seed, Request: installer.ClientRequest{VersionedSlots: true, LifecycleContext: true, CarrierID: strings.Repeat("1", 32), Workspace: ws, CodeRoot: filepath.Join(packetRoot, "resource-code"), DesktopPath: filepath.Join(packetRoot, "resources.mcpb"), CodeScope: "user"}}
+	clients.Request.OwnerReviewChannel = "local-browser"
 	placeRuntime := func(expected built) {
 		review, e := setup.ReviewRuntimeUpdate(ctx, clients)
 		if e != nil {
@@ -201,12 +203,25 @@ func TestExperimentalInstalledSeedFiniteSourceLifecycle(t *testing.T) {
 	materialize := func() installer.ClientRecord {
 		review, e := installer.ReviewClientsSeeded(ctx, clients)
 		must(t, e)
+		if review.Request.OwnerReviewChannel != "local-browser" || !strings.Contains(strings.Join(review.Effects, " "), "both_Code_and_Desktop_without_approving_any_individual_write") {
+			t.Fatal("original review lost the common-client exact-review disclosure")
+		}
 		r, e := setup.ApplyClients(ctx, clients, review.Digest, true)
 		must(t, e)
 		status, e := installer.ReadClientsSeeded(ctx, clients)
 		must(t, e)
-		if r.SchemaVersion != 1 || status.State != "current_materialization" || r.Materialization.NativeEnforcement {
+		if r.SchemaVersion != 1 || status.State != "current_materialization" || r.Materialization.NativeEnforcement || r.Materialization.OwnerReviewChannel != "local-browser" || installer.ClientRequestFromRecord(r).OwnerReviewChannel != "local-browser" {
 			t.Fatal("explicit resources fixture changed record schema or native class")
+		}
+		launch, e := installer.PrepareStableLaunch(ctx, clients)
+		must(t, e)
+		if !strings.HasSuffix(strings.Join(launch.Args, " "), "--owner-review-channel local-browser") {
+			t.Fatal("original stable launch lost the current-record review channel")
+		}
+		changed := clients
+		changed.Request.OwnerReviewChannel = ""
+		if _, e := installer.ReviewClientsSeeded(ctx, changed); e == nil {
+			t.Fatal("an existing carrier changed its reviewed channel")
 		}
 		must(t, setup.VerifyRecordedDesktopContract(r.Materialization.DesktopPath, clients, runtime.GOOS, r.Materialization.DesktopNativeContractSHA256))
 		plugin, e := installer.CurrentClientPluginPath(ctx, clients)
@@ -229,6 +244,54 @@ func TestExperimentalInstalledSeedFiniteSourceLifecycle(t *testing.T) {
 	currentN, err := installtx.ReadSourceState(o.DataRoot, managed)
 	must(t, err)
 	selectedBinding := product.Options{ExperimentalSeed: role, ExperimentalSeedRoot: managed, ProductRoot: managed, UserHome: user, WorkspacePath: ws, AuthorityRegistryPath: filepath.Join(managed, "trust", "release-authority-registry.json"), AuthorityRegistrySHA256: record.RegistrySHA256, CLIVersion: currentN.Server.Version, InstalledManifestSHA256: currentN.Binding.ManifestSHA256, InstalledClientInputsSHA256: currentN.Binding.ClientInputsSHA256}
+	if !t.Run("installed_owner_review_receiver", func(t *testing.T) {
+		selected := selectedBinding
+		selected.OwnerReviewChannel = "local-browser"
+		selected.ManagementCarrierID, selected.ManagementInstallerVersion = clients.Request.CarrierID, seed.Version
+		bound, e := product.Open(selected)
+		must(t, e)
+		for _, change := range []string{"missing-channel", "missing-carrier", "foreign-carrier", "foreign-installer-version"} {
+			altered := selected
+			switch change {
+			case "missing-channel":
+				altered.OwnerReviewChannel = ""
+			case "missing-carrier":
+				altered.ManagementCarrierID, altered.ManagementInstallerVersion = "", ""
+			case "foreign-carrier":
+				altered.ManagementCarrierID = strings.Repeat("f", 32)
+			case "foreign-installer-version":
+				altered.ManagementInstallerVersion = "0.0.0"
+			}
+			if _, e := product.Open(altered); e == nil {
+				t.Fatalf("receiving constructor admitted %s", change)
+			}
+		}
+		a, z := mcp.NewInMemoryTransports()
+		server, e := bound.Server().Connect(ctx, a, nil)
+		must(t, e)
+		defer server.Close()
+		client, e := mcp.NewClient(&mcp.Implementation{Name: "installed-review-source-fixture", Version: "1"}, nil).Connect(ctx, z, nil)
+		must(t, e)
+		defer client.Close()
+		call(t, ctx, client, "maestro_context", map[string]any{}, false)
+		path := filepath.Join(seed.DataRoot, "clients", clients.Request.CarrierID+".json")
+		original := read(t, path)
+		defer func() { must(t, os.WriteFile(path, original, 0600)) }()
+		for _, change := range []string{"channel", "whole-record"} {
+			altered := initialClients
+			if change == "channel" {
+				altered.Materialization.OwnerReviewChannel = ""
+			} else {
+				altered.Code.State = "synthetic-changed-observation"
+			}
+			must(t, os.WriteFile(path, mustJSON(t, altered), 0600))
+			call(t, ctx, client, "maestro_context", map[string]any{}, true)
+			must(t, os.WriteFile(path, original, 0600))
+		}
+		call(t, ctx, client, "maestro_context", map[string]any{}, false)
+	}) {
+		return
+	}
 	if !t.Run("private_packet_native_startup", func(t *testing.T) {
 		candidate := filepath.Join(root, "private-startup-candidate")
 		must(t, packaging.BuildPlugin(packaging.Options{Destination: candidate, Server: installed.CLIPath, Version: currentN.Server.Version, Binding: selectedBinding}))

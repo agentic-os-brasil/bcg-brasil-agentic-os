@@ -17,6 +17,7 @@ func TestCanonicalAgentResourceDiscovery(t *testing.T) {
 	ctx := context.Background()
 	var got []string
 	methodResources := 0
+	methodURIs := map[string]bool{}
 	params := &mcp.ListResourcesParams{}
 	seenCursors := map[string]bool{}
 	for {
@@ -30,6 +31,10 @@ func TestCanonicalAgentResourceDiscovery(t *testing.T) {
 			}
 			if strings.HasPrefix(resource.URI, "maestro://methods/") {
 				methodResources++
+				if methodURIs[resource.URI] {
+					t.Fatalf("duplicated method resource URI: %s", resource.URI)
+				}
+				methodURIs[resource.URI] = true
 			}
 		}
 		if resources.NextCursor == "" {
@@ -48,7 +53,16 @@ func TestCanonicalAgentResourceDiscovery(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("canonical agent resources: got %d %v; want %d %v", len(got), got, len(want), want)
 	}
-	if methodResources != 250 {
+	if methodResources != 253 {
 		t.Fatalf("method assets lost: %d resources", methodResources)
+	}
+	for _, uri := range []string{
+		"maestro://methods/account-case-setup/resources/account-narrative-mcp.md",
+		"maestro://methods/interaction-profile/resources/self-observation.md",
+		"maestro://methods/maestro-operator/resources/daily-zip.md",
+	} {
+		if !methodURIs[uri] {
+			t.Fatalf("canonical skill resource is missing: %s", uri)
+		}
 	}
 }

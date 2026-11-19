@@ -27,6 +27,15 @@ func l3Predecessor(artifact Artifact) (*SourceRef, error) {
 // Only the next staged L3 and its SHA-bound, committed ancestry count. Text,
 // orphaned versions and commits from an earlier visibility generation do not.
 func (engine *Engine) l3GenerationCount(workspaceID string, next Artifact) (int, error) {
+	return engine.countL3Generations(workspaceID, next, false)
+}
+
+// Later exact review starts at an already committed L3, rather than counting a
+// synthetic extra generation to make the original staged-only walker fit.
+func (engine *Engine) committedL3GenerationCount(workspaceID string, next Artifact) (int, error) {
+	return engine.countL3Generations(workspaceID, next, true)
+}
+func (engine *Engine) countL3Generations(workspaceID string, next Artifact, committed bool) (int, error) {
 	if next.WorkspaceID != workspaceID || next.Layer != "L3" {
 		return 0, errors.New("L3 evidence is outside selected workspace/layer")
 	}
@@ -53,6 +62,8 @@ func (engine *Engine) l3GenerationCount(workspaceID string, next Artifact) (int,
 	}
 	generations := 1
 	previousDigest := ""
+	nextBody := sha256.Sum256(artifactSource(next).Content)
+	nextDigest := hex.EncodeToString(nextBody[:])
 	seen := map[string]bool{}
 	for checked := 0; checked < maximumL3EvidenceCommits; checked++ {
 		if seen[name] {
@@ -69,6 +80,12 @@ func (engine *Engine) l3GenerationCount(workspaceID string, next Artifact) (int,
 		document := artifactSource(current)
 		digest := sha256.Sum256(document.Content)
 		encoded := hex.EncodeToString(digest[:])
+		if committed && checked == 0 {
+			if encoded != nextDigest {
+				return 0, errors.New("selected L3 is not current committed evidence")
+			}
+			previousDigest = encoded
+		}
 		if encoded != previousDigest {
 			if document.ID != wanted.ID || encoded != wanted.SHA256 {
 				return 0, errors.New("L3 predecessor does not match committed source digest")

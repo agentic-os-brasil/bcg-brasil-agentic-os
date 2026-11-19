@@ -951,3 +951,34 @@ refusals. Native-positive process composition is explicitly engineering-only;
 shipping unsigned native refusal remains real. Four final independent front
 lenses precede the cohesive PR. Actual clients, signing, hosted CI, SharePoint
 publication and participant acceptance remain separate gates.
+
+
+### Explicit experimental installed-carrier owner review (ICRV)
+
+A fresh experimentally admitted versioned client carrier may deliberately select
+owner_review_channel local-browser in the original first-client manager, before
+the original complete client review and confirmation. Empty/omitted selection
+retains native-first behavior and byte-compatible legacy JSON. Unknown channels,
+non-experimental or non-versioned nonempty profiles, and mode changes on an
+existing carrier refuse. The request and materialization bind this optional
+selection into their existing review/current-record identity. The full review
+discloses the owner, brain, workspace, carrier and common effect on both Code
+and Desktop; selecting the channel approves no individual operation.
+
+The original current materializer must return the reviewed mode unchanged.
+Cold request reconstruction and supported source updates retain it. Ordinary
+stable-launch derives the existing serve --owner-review-channel option only
+from the authenticated current record; it does not pass the option to native
+or passive hooks, qualification arguments or generic packet generators.
+
+The installed receiver independently reads and verifies that current carrier,
+compares the effective startup mode even when empty, and pins the whole semantic
+ClientRecord through the existing ClientRecordDigest. Before and after trusted
+review and before protected publication, the same original nonlocking readers
+recheck current source, role, owner, admitted brain/workspace, materialized files
+and record identity. Drift requires a new current connection; no installation
+lock spans browser review or domain handlers. An installed browser flag without
+an authenticated carrier refuses. Legacy native-first installed diagnostics
+without management carrier metadata remain supported, while incomplete declared
+carrier metadata refuses. The read-only installed checker derives its mode from
+the same already-authenticated record and never opens an approval screen.

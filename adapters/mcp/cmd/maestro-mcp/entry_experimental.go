@@ -49,6 +49,9 @@ func experimentalCommandFlags(flags *flag.FlagSet, o *product.Options) func() er
 }
 
 func experimentalEarlyCommand(ctx context.Context, command string, args []string, output io.Writer) (bool, error) {
+	if command == "installed-maintenance-wake" {
+		return true, runInstalledMaintenanceWake(ctx, args, output)
+	}
 	if command == "installed-native-hook" {
 		return true, runInstalledNativeHook(ctx, args, os.Stdin, output)
 	}

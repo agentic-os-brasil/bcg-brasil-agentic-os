@@ -1,6 +1,6 @@
 # Spec 062 - Product maintenance service
 
-Status: The landed maintenance and wiki owners retain their existing lifecycle. Signed-source checks and the three closed Darwin health/cache/proposal jobs use that same lifecycle and catalog. The MCP serve process owns a cancellable background adapter over that service. Windows private wiki uses retained-namespace admission; Darwin private publication on Windows and operating-system wake registration remain unavailable. Source construction, focused local proof, hosted qualification and installed-client acceptance remain separate. See the [operator workflow](../docs/product-mcp-maintenance.md).
+Status: The landed maintenance and wiki owners retain their existing lifecycle. Signed-source checks and the three closed Darwin health/cache/proposal jobs use that same lifecycle and catalog. The MCP serve process owns a cancellable background adapter over that service. Windows private wiki uses retained-namespace admission; Darwin private publication on Windows remains unavailable. The optional installed closed-client wake has an explicit reviewed native lifecycle under OSWK; source construction and actual Mac/Windows qualification remain separate. Source construction, focused local proof, hosted qualification and installed-client acceptance remain separate. See the [operator workflow](../docs/product-mcp-maintenance.md).
 
 ## Outcome
 
@@ -162,10 +162,12 @@ review receives the existing local stdin review/apply fallback. Model output
 contains bounded metadata and domain references, not private captures or full
 profiles. The installed method routes these intents to the same service.
 
-Ordinary run dispatches only active due jobs and never installs OS tasks,
-downloads dependencies or calls a provider/model. Operating-system wake
-installation remains a separately attended operation. Foreground proof does not establish
-background wake behavior or client qualification.
+Ordinary run dispatches only active due jobs and never installs OS tasks or
+downloads dependencies. The two closed model jobs may invoke only their exact
+separately registered, genuinely qualified and enrolled executor under Spec041;
+there is no general provider selection or global model activation. Operating-
+system wake installation remains a separately attended operation. Foreground
+proof does not establish background wake behavior or client qualification.
 
 ### Owned MCP process
 
@@ -210,6 +212,44 @@ weekly handlers and exact lifetime-candidate review are unchanged. When every
 MCP process is closed, this adapter performs no work; a later owned process
 provides bounded catch-up. OS service/task installation remains separate and
 cannot be inferred from a live MCP connection or source-level test.
+
+## Optional installed closed-client wake (OSWK)
+
+The original installed manager provides a separately reviewed, per-user native
+pulse for an exact existing installation, source, owner, brain, workspace and
+carrier. Its unique label/task name cannot replace another installation or the
+legacy shared label. The stable admitted installer resolves and authenticates
+the actual current server at every wake, including after a source update; the
+fixed installer version and current server version remain separate.
+
+The fifteen-minute pulse invokes a bounded one-shot composition of the existing
+source-availability and RunDue owners. It supplies no qualification, enrollment,
+model registration, past occurrence or source activation. All existing job
+grants, no-backfill boundaries, leases, idle/cancellation checks and guarded
+domain/receipt publication remain effective. With no eligible active job, the
+honest result is no_due_work rather than an execution receipt.
+
+Opt-in, status, pause and revoke use the exact current binding and explicit
+manager review. Native lifecycle/status operations share one fifteen-second
+deadline under the original publication serialization; no domain worker or
+browser wait occurs there. A loaded Mac service must match the complete actual
+arguments as well as its canonical private definition. Unknown or foreign
+identity refuses without adoption or replacement. Pause/revoke closes the owned
+definition before bootout, and the one-shot rechecks this veto inside the
+original publication guard. A timeout retains the disabled eligibility barrier
+and reports partial or unknown acknowledgement, never automatic re-enablement.
+
+Windows uses a create-only, least-privilege Task Scheduler definition for the
+current logged-in interactive user, without a password, elevation or WSL. It
+checks the complete fixed principal, action and cadence before operating on an
+existing task. A registered task, cross-compiled binary or parsed script does
+not establish native Windows execution.
+
+Pausing or removing this pulse stops the closed-client wake only. Existing
+per-job enrollments and a connected MCP process's original worker retain their
+own controls. OS registration/readback, an actual native wake, a no-due scan,
+a real domain commit and later client consumption are separate evidence.
+See the [operator guide](../docs/product-maintenance-wake.md).
 
 ## Acceptance
 
@@ -368,3 +408,14 @@ may have been validated before an owner-lock wait. Likewise check context inside
 the final source-lock report publication; never reacquire the installed/control
 guard from the observation lock. Cancellation before first canonical publication
 leaves input pending and cannot produce successful report/qualification evidence.
+
+
+Windows eligibility also requires the installer's private native-definition
+control, independent of Task Scheduler's enabled flag. The reviewed revision
+advances before every opt-in, pause or revoke, including when no task is present.
+A timed-out or delayed COM enable cannot reopen that control. Opt-in opens it
+only after exact successful readback and a current live transaction; pause/revoke
+retains the disabled record before touching the task. Missing or unsafe control
+refuses a worker; an explicitly reviewed first action may bootstrap a disabled
+record. This is OS wake eligibility only, with job grants and actual execution
+proof kept separate. Do not delete or manually repair the control to retry.

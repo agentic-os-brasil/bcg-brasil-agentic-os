@@ -41,8 +41,33 @@ func TestClientGenerationsLeaveLegacyJSONAndLocationsUnchanged(t *testing.T) {
 	}
 	for _, value := range []any{r, m} {
 		body, err := json.Marshal(value)
-		if err != nil || strings.Contains(string(body), "versioned_slots") || strings.Contains(string(body), "selection") {
+		if err != nil || strings.Contains(string(body), "versioned_slots") || strings.Contains(string(body), "selection") || strings.Contains(string(body), "owner_review_channel") {
 			t.Fatal("absent extension changed legacy JSON", err)
 		}
+	}
+}
+
+func TestClientOwnerReviewChannelRejectsUnknownAndUnsupportedProfiles(t *testing.T) {
+	for _, mode := range []string{"", "local-browser", "native-first", "model-approved"} {
+		for _, experimental := range []bool{false, true} {
+			for _, versioned := range []bool{false, true} {
+				err := validateClientOwnerReviewChannel(mode, experimental, versioned)
+				want := mode == "" || mode == "local-browser" && experimental && versioned
+				if (err == nil) != want {
+					t.Fatalf("mode=%q experimental=%t versioned=%t: %v", mode, experimental, versioned, err)
+				}
+			}
+		}
+	}
+}
+
+func TestClientGenerationsRetainOwnerReviewChannel(t *testing.T) {
+	var record ClientRecord
+	if err := json.Unmarshal([]byte(`{"materialization":{"owner_review_channel":"local-browser"}}`), &record); err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(ClientRequestFromRecord(record))
+	if err != nil || !strings.Contains(string(body), `"owner_review_channel":"local-browser"`) {
+		t.Fatalf("cold reconstruction lost the reviewed owner channel: %s %v", body, err)
 	}
 }

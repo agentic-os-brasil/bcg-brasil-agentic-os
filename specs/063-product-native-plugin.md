@@ -630,3 +630,33 @@ Controlled compiled protocol tests distinguish their test-only constructor from
 signed-source admission and genuine host qualification. Passing the original
 direct-packet qualifier alone does not prove delivery through the installed
 stable plugin; qualify that final ordinary client route separately.
+
+
+## Experimental installed-carrier foreground review (ICRV)
+
+The installed-client flow has a separate explicitly reviewed selection in its
+original private carrier record. A fresh experimentally admitted versioned
+carrier may choose local-browser before full client review; omitted/empty stays
+native-first. This common setting applies to Code and Desktop and grants no
+individual write approval. Existing carriers cannot change modes implicitly.
+Standalone Code/Desktop pilot restrictions and inventories are unchanged; an
+installed carrier does not become an unbound browser pilot.
+
+The stable producer derives only ordinary serve startup arguments from the
+current authenticated materialization. The receiving bound product independently
+requires exact effective-channel equality with that current selected carrier,
+including an omitted channel against a browser-selected record. It pins the
+whole original semantic record identity and repeats the original role, source,
+owner, brain/workspace and record checks before and after trusted confirmation
+and before guarded effects. Raw installed browser selection without a carrier,
+partial metadata, stale or changed state refuses. Empty native-first diagnostics
+without carrier metadata retain their existing route. No installation lock is
+held while waiting for a review. Native hook and genuine qualifier arguments,
+admission and event semantics remain unchanged.
+
+Protected operations reuse the existing foreground one-shot loopback review,
+complete current/proposed content, initially unchecked approval control,
+independent decline/cancel/expiry and canonical revision guards. Browser-selected
+requests cannot reuse native InputResponses; no model argument, tool permission,
+previous approval or startup choice supplies individual consent. Source and
+compiled tests do not qualify the actual final Code/Desktop browser journey.

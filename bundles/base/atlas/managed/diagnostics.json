@@ -4,6 +4,7 @@
     "docs/releasing.md:repo://docs/release-gates-checklist.md",
     "docs/wiki.md:repo://bundles/base/atlas/managed/index.md",
     "docs/wiki.md:repo://dev/wiki/managed-allowlist.json",
+    "specs/041-model-backed-maintenance-activation.md:repo://docs/model-second-brain.md",
     "specs/041-model-backed-maintenance-activation.md:repo://docs/weekly-yoda-core.md"
   ],
   "orphans": [],

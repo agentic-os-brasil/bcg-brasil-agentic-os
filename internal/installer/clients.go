@@ -46,6 +46,7 @@ func StableClientCapabilities(component, version, pin string) ClientCapabilities
 }
 
 type ClientRequest struct {
+	OwnerReviewChannel         string `json:"owner_review_channel,omitempty"`
 	VersionedSlots             bool   `json:"versioned_slots,omitempty"`
 	NativeEnforcement          bool   `json:"native_enforcement,omitempty"`
 	GenerationID               string `json:"generation_id,omitempty"`
@@ -107,6 +108,7 @@ func (b ClientBackup) ValidateBinding(codeRoot, desktopPath string) error {
 }
 
 type ClientMaterialization struct {
+	OwnerReviewChannel            string                 `json:"owner_review_channel,omitempty"`
 	Selection                     *ClientPacketSelection `json:"selection,omitempty"`
 	CodeProviderRoot              string                 `json:"code_provider_root,omitempty"`
 	CodeProviderSHA256            string                 `json:"code_provider_sha256,omitempty"`
@@ -241,7 +243,20 @@ func readClientRecord(o SeededOperationOptions, id string) (ClientRecord, []byte
 	if r.Materialization.NativeEnforcement && (r.Materialization.Selection == nil || r.Materialization.LifecycleContext) {
 		return r, nil, errors.New("invalid complete native carrier profile")
 	}
+	if err := validateClientOwnerReviewChannel(r.Materialization.OwnerReviewChannel, o.ExperimentalSeed != nil, r.Materialization.Selection != nil); err != nil {
+		return r, nil, err
+	}
 	return r, body, nil
+}
+
+func validateClientOwnerReviewChannel(channel string, experimental, versioned bool) error {
+	if channel == "" {
+		return nil
+	}
+	if channel != "local-browser" || !experimental || !versioned {
+		return errors.New("owner review channel requires an explicitly reviewed experimental versioned carrier")
+	}
+	return nil
 }
 func clientBinding(o ClientOptions) (ClientBinding, error) {
 	h, err := datahome.Resolve(datahome.Options{ProductRoot: o.ManagedRoot, UserHome: o.UserHome, LookupEnv: o.LookupEnv})
@@ -334,6 +349,9 @@ func ReviewClientsSeeded(ctx context.Context, o ClientOptions) (ClientReview, er
 	if _, err := admitOperationSeed(ctx, o.SeededOperationOptions); err != nil {
 		return ClientReview{}, err
 	}
+	if err := validateClientOwnerReviewChannel(o.Request.OwnerReviewChannel, o.ExperimentalSeed != nil, o.Request.VersionedSlots); err != nil {
+		return ClientReview{}, err
+	}
 	if _, err := clientRecordPath(o.SeededOperationOptions, o.Request.CarrierID); err != nil {
 		return ClientReview{}, err
 	}
@@ -393,12 +411,18 @@ func ReviewClientsSeeded(ctx context.Context, o ClientOptions) (ClientReview, er
 	if o.Request.LifecycleContext {
 		review.Effects = append(review.Effects, "configure_three_non_enforcing_Code_lifecycle_hooks_for_exact_reviewed_selection")
 	}
+	if o.Request.OwnerReviewChannel == "local-browser" {
+		review.Effects = append(review.Effects, "select_local_browser_exact_review_for_protected_foreground_MCP_changes_in_both_Code_and_Desktop_without_approving_any_individual_write")
+	}
 	if o.Request.Reconcile {
 		review.Effects = append(review.Effects, "reclaim_only_dead_installation_lock_and_reconcile_actual_owned_packets")
 	}
 	old, body, err := readClientRecord(o.SeededOperationOptions, o.Request.CarrierID)
 	if err == nil {
 		selection := ClientRequestFromRecord(old)
+		if selection.OwnerReviewChannel != o.Request.OwnerReviewChannel {
+			return ClientReview{}, errors.New("existing carrier owner review channel differs; preserved unchanged")
+		}
 		if old.Binding != binding || selection.CodeConfigurationDirectory != o.Request.CodeConfigurationDirectory || selection.CodeRoot != o.Request.CodeRoot || selection.DesktopPath != o.Request.DesktopPath || selection.VersionedSlots && !o.Request.VersionedSlots || old.Code.Scope != o.Request.CodeScope || old.Code.Executable != o.Request.CodeExecutable && !(old.Code.Executable == "" && old.Code.State == "registration_pending" && old.Code.EvidenceClass == "not_observed") {
 			return ClientReview{}, errors.New("existing client selection differs; preserved unchanged")
 		}
@@ -464,7 +488,7 @@ func MaterializeClientsSeeded(ctx context.Context, o ClientOptions, digest strin
 			return fmt.Errorf("activation-applied/client-materialization-pending: %w", e)
 		}
 		paths, pathErr := ClientGenerationPaths(o.Request, s.Binding.ManifestSHA256)
-		if !sameClientCurrent(material, s) || pathErr != nil || material.CodeRoot != paths.CodeRoot || material.DesktopPath != paths.DesktopPath || !sameClientSelection(material.Selection, paths.Selection) || material.LifecycleContext != o.Request.LifecycleContext || material.NativeEnforcement != o.Request.NativeEnforcement || material.GenerationID != o.Request.GenerationID {
+		if !sameClientCurrent(material, s) || pathErr != nil || material.CodeRoot != paths.CodeRoot || material.DesktopPath != paths.DesktopPath || !sameClientSelection(material.Selection, paths.Selection) || material.LifecycleContext != o.Request.LifecycleContext || material.NativeEnforcement != o.Request.NativeEnforcement || material.GenerationID != o.Request.GenerationID || material.OwnerReviewChannel != o.Request.OwnerReviewChannel {
 			return errors.New("materializer returned another current binding")
 		}
 		if material.Selection != nil && (material.CodeProviderRoot != ClientMarketplaceRoot(ClientRecord{CarrierID: o.Request.CarrierID, Materialization: material}) || validateClientMethodBinding(material) != nil) {
@@ -587,6 +611,9 @@ func prepareStableLaunch(ctx context.Context, o ClientOptions, event string) (Qu
 		launch, e = PrepareQualifiedLaunch(ctx, QualifiedLaunchOptions{SeededOperationOptions: o.SeededOperationOptions, ExpectedBinding: installtx.ReleaseBinding{ManifestSHA256: r.Materialization.ManifestSHA256, ClientInputsSHA256: r.Materialization.ClientInputsSHA256}, Workspace: r.Binding.Workspace})
 		if e == nil && event == "" && r.Materialization.Selection != nil {
 			launch.Args = append(launch.Args, "--management-carrier-id", r.CarrierID, "--management-installer-version", o.Version)
+			if r.Materialization.OwnerReviewChannel != "" {
+				launch.Args = append(launch.Args, "--owner-review-channel", r.Materialization.OwnerReviewChannel)
+			}
 		}
 		if e == nil && event != "" {
 			if len(launch.Args) == 0 || launch.Args[0] != "serve" {

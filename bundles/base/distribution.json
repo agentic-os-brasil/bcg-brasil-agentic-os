@@ -52,6 +52,16 @@
       "role": "data"
     },
     {
+      "source": "bundles/base/agents/repository-spec-reviewer/AGENT.md",
+      "path": "agents/repository-spec-reviewer/AGENT.md",
+      "role": "data"
+    },
+    {
+      "source": "bundles/base/agents/repository-standards-reviewer/AGENT.md",
+      "path": "agents/repository-standards-reviewer/AGENT.md",
+      "role": "data"
+    },
+    {
       "source": "bundles/base/agents/templates/case_agent/AGENT.md",
       "path": "agents/templates/case_agent/AGENT.md",
       "role": "data"

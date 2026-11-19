@@ -142,7 +142,9 @@ func TestBuildDesktopMethodFrontendClosedDeterministicOutput(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if report.Name != "maestro-desktop-methods" || report.Name == claudeagents.PluginNamespace || report.Mode != "instructions_only" || report.NativeQualification != "unavailable" || report.FileCount != 273 {
+		// 247 canonical method files, six shared assets, one projection, 16 agent
+		// references, two frontend skills, and the manifest and README close this payload.
+		if report.Name != "maestro-desktop-methods" || report.Name == claudeagents.PluginNamespace || report.Mode != "instructions_only" || report.NativeQualification != "unavailable" || report.FileCount != 274 {
 			t.Fatalf("wrong identity/scope: %+v", report)
 		}
 		payload := filepath.Join(root, report.Name)

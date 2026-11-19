@@ -53,6 +53,23 @@ func promoted(result DreamResult) bool {
 	return false
 }
 
+func TestWeeklyProviderReprocessingDoesNotCreateLifetimeContinuity(t *testing.T) {
+	e := generationEngine(t, 2)
+	day := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
+	addGeneration(t, e, day, "one actual eligible source cohort")
+	e.SynthesizerID = "another-explicit-weekly-provider-v1"
+	out, err := e.DreamWeekly(context.Background(), "case-a", day)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Skipped {
+		t.Fatal("explicit provider reprocessing contract was removed")
+	}
+	if promoted(out) {
+		t.Fatal("a provider/format change manufactured lifetime continuity without new eligible source evidence")
+	}
+}
+
 func TestL3GenerationEvidenceIgnoresLiteralSourceText(t *testing.T) {
 	e := generationEngine(t, 2)
 	day := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)

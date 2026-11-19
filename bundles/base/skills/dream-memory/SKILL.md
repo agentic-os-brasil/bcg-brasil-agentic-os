@@ -43,6 +43,10 @@ Keep the admitted workspace and the user's selected text as the scope.
    review of its exact text. Missing or declined lifetime review retains ordinary
    L2/L3 and reports `lifetime_status: confirmation_unavailable` or
    `confirmation_declined`. Report those layers separately from lifetime status.
+   A still-current pending model lifetime candidate for the same period is
+   reviewed from its exact stored text through this same operation, without a
+   new model call or new L2/L3 history. Changed sources never authorize the old
+   candidate; correction/deletion revoke and purge derived private bodies.
 4. For recurring upkeep, follow the reviewed
    [maintenance workflow](../maestro-runtime-checkup/SKILL.md). The relevant jobs
    are `memory-light-dream`, `memory-deep-dream`, `memory-checkpoint`,
@@ -51,6 +55,15 @@ Keep the admitted workspace and the user's selected text as the scope.
    Bootstrap checkpoint qualification with a real reviewed capture and qualified
    light dream. A retention diagnostic never deletes captures. Deep-dream job
    enrollment authorizes its L2/L3 schedule, never future lifetime text.
+   The separately selected model job is `memory-weekly`; owner-local Yoda is
+   `yoda-self-review-weekly`, with independent scope, policy and qualification.
+   Use the installed manager's first-use model setup to observe the actual Code
+   executable/purpose profile and review the tuple. Complete official login in
+   that profile when needed; never copy credentials or author declaration JSON.
+   Model qualification is evidence-only, enrollment is separate, and a closed-
+   client OS wake has its own explicit setup. Pause `memory-deep-dream` before
+   enrolling/resuming `memory-weekly`, or the reverse; neither silently replaces
+   or falls back to the other. Authentication/model failure stays unavailable.
 5. Read back bounded `memory.context` and the resulting metadata. For deep dream
    or retention, `maintenance.report` with the exact `job_id` exposes the domain
    result. Status is not proof that a new synthesis or background wake occurred.

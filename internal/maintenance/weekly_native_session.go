@@ -38,6 +38,7 @@ type WeeklyNativeEvidence struct {
 	CommandID            string    `json:"command_id"`
 	OccurrenceSHA256     string    `json:"occurrence_sha256"`
 	OwnerScope           string    `json:"owner_scope"`
+	JobID                string    `json:"job_id,omitempty"`
 	ImplementationSHA256 string    `json:"implementation_sha256"`
 	RegistrationSHA256   string    `json:"registration_sha256"`
 	InputSHA256          string    `json:"input_sha256"`
@@ -58,6 +59,7 @@ type WeeklyAttemptSession struct {
 	grant          executionGrant
 	registration   WeeklyModelRegistration
 	input          ownerctx.WeeklySelfInput
+	memory         *memoryAttemptInput
 	created        time.Time
 	implementation string
 	ownerRoot      string
@@ -74,7 +76,7 @@ func (*WeeklyAttemptSession) MarshalJSON() ([]byte, error) {
 }
 func newWeeklyAttemptSession(ctx context.Context, command Command, grant ExecutionGrant, registration WeeklyModelRegistration, input ownerctx.WeeklySelfInput, implementation, ownerRoot string) (*WeeklyAttemptSession, error) {
 	bounded, ok := grant.(executionGrant)
-	if !ok || !attemptIDPattern.MatchString(bounded.attemptID) || !digestPattern.MatchString(implementation) || registration.Descriptor.RuntimeIdentity == nil {
+	if !ok || command.JobID != YodaSelfReviewWeeklyJobID || registration.Descriptor.JobID != YodaSelfReviewWeeklyJobID || !attemptIDPattern.MatchString(bounded.attemptID) || !digestPattern.MatchString(implementation) || registration.Descriptor.RuntimeIdentity == nil {
 		return nil, ErrQualificationRequired
 	}
 	if err := registration.Validate(); err != nil {
@@ -116,7 +118,8 @@ func (s *WeeklyAttemptSession) check(ctx context.Context) error {
 	if err := s.ctx.Err(); err != nil {
 		return err
 	}
-	return ValidateWeeklyModelExecution(s.grant, s.command, s.registration.Descriptor, s.input.InputSHA256, s.input.PolicySHA256)
+	input, policy := s.inputDigests()
+	return ValidateWeeklyModelExecution(s.grant, s.command, s.registration.Descriptor, input, policy)
 }
 func (s *WeeklyAttemptSession) CheckCurrent(ctx context.Context) error { return s.check(ctx) }
 func (s *WeeklyAttemptSession) ObserveStarted(ctx context.Context, actual WeeklyNativeProcess) error {
@@ -187,15 +190,24 @@ func (s *WeeklyAttemptSession) WriteInput(ctx context.Context, actual WeeklyNati
 	if s.grant.publication == nil {
 		return ErrQualificationRequired
 	}
-	err := s.grant.publication(func() error {
+	write := func() error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		if err := s.ctx.Err(); err != nil {
 			return err
 		}
-		return ownerctx.WithCurrentWeeklySelfInput(ctx, s.ownerRoot, s.input, time.Now().UTC(), writeAndClose)
-	})
+		return writeAndClose()
+	}
+	var err error
+	if s.memory != nil {
+		// Memory takes its original activation lock before control/installation.
+		err = s.memory.engine.WithCurrentModelWeeklyInput(ctx, s.memory.input, s.memory.at, func() error { return s.grant.publication(write) })
+	} else {
+		err = s.grant.publication(func() error {
+			return ownerctx.WithCurrentWeeklySelfInput(ctx, s.ownerRoot, s.input, time.Now().UTC(), write)
+		})
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err != nil {
@@ -247,6 +259,9 @@ func (s *WeeklyAttemptSession) ObserveReaped(ctx context.Context, actual WeeklyN
 	return nil
 }
 func (s *WeeklyAttemptSession) ObserveResponse(ctx context.Context, candidate ownerctx.WeeklySelfCandidate) error {
+	if s == nil || s.memory != nil {
+		return ErrQualificationRequired
+	}
 	if err := s.check(ctx); err != nil {
 		return err
 	}
@@ -267,6 +282,9 @@ func (s *WeeklyAttemptSession) ObserveResponse(ctx context.Context, candidate ow
 	return nil
 }
 func (s *WeeklyAttemptSession) consume(ctx context.Context, candidate ownerctx.WeeklySelfCandidate) (WeeklyNativeEvidence, error) {
+	if s == nil || s.memory != nil {
+		return WeeklyNativeEvidence{}, ErrQualificationRequired
+	}
 	var empty WeeklyNativeEvidence
 	if err := s.check(ctx); err != nil {
 		return empty, err

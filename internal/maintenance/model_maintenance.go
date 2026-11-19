@@ -49,7 +49,8 @@ func (d WeeklyModelDescriptor) Validate() error {
 			return err
 		}
 	}
-	if d.SchemaVersion != 1 || d.JobID != YodaSelfReviewWeeklyJobID || d.Runtime != "claude_code_cli" || d.CredentialMode != "runtime_owned_session" || d.ValidatorVersion != "weekly-self-v1" {
+	validator := map[string]string{YodaSelfReviewWeeklyJobID: "weekly-self-v1", MemoryModelJobID: "weekly-memory-v1"}[d.JobID]
+	if d.SchemaVersion != 1 || validator == "" || d.Runtime != "claude_code_cli" || d.CredentialMode != "runtime_owned_session" || d.ValidatorVersion != validator {
 		return errors.New("weekly model descriptor is unsupported")
 	}
 	for _, v := range []string{d.RuntimeVersion, d.Provider, d.Model} {
@@ -112,7 +113,7 @@ func ValidateWeeklyModelExecution(grant ExecutionGrant, command Command, descrip
 	if err := descriptor.Validate(); err != nil {
 		return err
 	}
-	if command.JobID != YodaSelfReviewWeeklyJobID || command.Trigger != TriggerWeekly || (!digestPattern.MatchString(inputSHA256) || !digestPattern.MatchString(policySHA256)) {
+	if !modelJob(command.JobID) || command.JobID != descriptor.JobID || command.Trigger != TriggerWeekly || (!digestPattern.MatchString(inputSHA256) || !digestPattern.MatchString(policySHA256)) {
 		return errors.New("weekly model command/input binding is invalid")
 	}
 	if err := ValidateExecutionGrant(grant, command); err != nil {
@@ -132,7 +133,11 @@ func ValidateWeeklyModelExecution(grant ExecutionGrant, command Command, descrip
 			return errors.New("weekly evidence-only probe binding is invalid")
 		}
 	case WeeklyWorking:
-		if b.TerminalOperation != "working_projection_only" || b.ProbeIntentSHA256 != "" || !digestPattern.MatchString(b.QualificationSHA256) || !digestPattern.MatchString(b.ActivationSHA256) {
+		terminal := "working_projection_only"
+		if command.JobID == MemoryModelJobID {
+			terminal = "memory_atomic_commit_only"
+		}
+		if b.TerminalOperation != terminal || b.ProbeIntentSHA256 != "" || !digestPattern.MatchString(b.QualificationSHA256) || !digestPattern.MatchString(b.ActivationSHA256) {
 			return errors.New("weekly working activation/qualification binding is unavailable")
 		}
 	default:
@@ -158,7 +163,7 @@ func WeeklyModelExecutionMode(grant ExecutionGrant, command Command) (WeeklyMode
 		return "", err
 	}
 	bounded, ok := grant.(executionGrant)
-	if !ok || bounded.weekly == nil || command.JobID != YodaSelfReviewWeeklyJobID {
+	if !ok || bounded.weekly == nil || !modelJob(command.JobID) {
 		return "", errors.New("weekly private grant is unavailable")
 	}
 	mode := bounded.weekly.Mode

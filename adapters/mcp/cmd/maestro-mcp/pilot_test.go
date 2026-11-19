@@ -328,12 +328,13 @@ func assertPilotCheckPackets(t *testing.T) {
 		if err := packaging.BuildExtension(options); err != nil {
 			t.Fatal(err)
 		}
-		var legacy bytes.Buffer
-		if err := runPilotCheck(ctx, args, &legacy); err != nil {
-			t.Fatalf("legacy generic rehearsal refused: %v", err)
+		// The checker must run as the packet's actual compiled server image.
+		legacy, err := exec.CommandContext(ctx, binary, append([]string{"pilot-check"}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("legacy generic rehearsal refused: %v\n%s", err, legacy)
 		}
 		var generic pilotReport
-		if err := json.Unmarshal(legacy.Bytes(), &generic); err != nil || generic.DesktopExtension != "" || generic.DesktopPrompt == "" {
+		if err := json.Unmarshal(legacy, &generic); err != nil || generic.DesktopExtension != "" || generic.DesktopPrompt == "" {
 			t.Fatal("generic archive was silently converted to an isolated profile")
 		}
 		if err := os.Remove(options.Destination); err != nil {

@@ -32,8 +32,8 @@ func TestIdentityAdvertisesSignedSourceExecutionContract(t *testing.T) {
 	if wire.SchemaVersion != 2 || wire.ExecutionContract != "maestro-synced-source-v1" {
 		t.Fatalf("actual identity cannot qualify signed-source execution: schema=%d contract=%q", wire.SchemaVersion, wire.ExecutionContract)
 	}
-	if len(identity.Resources) != 266 { // 250 method resources plus 16 canonical agent resources.
-		t.Fatalf("immutable resource closure changed: got %d, want 266", len(identity.Resources))
+	if len(identity.Resources) != 269 { // 253 method resources plus 16 canonical agent resources.
+		t.Fatalf("immutable resource closure changed: got %d, want 269", len(identity.Resources))
 	}
 	canonical, err := os.ReadFile("../../bundles/base/skills/start-day/resources/owner-atlas-mcp.md")
 	if err != nil {

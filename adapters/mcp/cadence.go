@@ -22,7 +22,7 @@ import (
 )
 
 func maintenanceQueries() []any {
-	return []any{variant("maintenance.status", map[string]any{}), variant("maintenance.report", map[string]any{"job_id": map[string]any{"type": "string", "enum": []string{maintenance.DarwinDailyJobID, maintenance.DarwinWeeklyJobID, maintenance.DarwinMonthlyJobID, maintenance.UpdateCheckJobID, maintenance.UpdateAvailabilityJobID, maintenance.MemoryDeepDreamJobID, maintenance.MemoryCaptureJobID, maintenance.SelfObservationCaptureJobID, maintenance.YodaSelfReviewWeeklyJobID, "memory-retention-check", "skills-index-refresh", "runtime-health-check", "capability-recheck", "runtime-drift-check", maintenance.WikiIncrementalJobID, maintenance.WikiReconcileJobID, maintenance.WikiIntegrityJobID}}}, "job_id")}
+	return []any{variant("maintenance.status", map[string]any{}), variant("maintenance.report", map[string]any{"job_id": map[string]any{"type": "string", "enum": []string{maintenance.DarwinDailyJobID, maintenance.DarwinWeeklyJobID, maintenance.DarwinMonthlyJobID, maintenance.UpdateCheckJobID, maintenance.UpdateAvailabilityJobID, maintenance.MemoryModelJobID, maintenance.MemoryDeepDreamJobID, maintenance.MemoryCaptureJobID, maintenance.SelfObservationCaptureJobID, maintenance.YodaSelfReviewWeeklyJobID, "memory-retention-check", "skills-index-refresh", "runtime-health-check", "capability-recheck", "runtime-drift-check", maintenance.WikiIncrementalJobID, maintenance.WikiReconcileJobID, maintenance.WikiIntegrityJobID}}}, "job_id")}
 }
 
 func maintenanceTransitions() []any {
@@ -48,7 +48,7 @@ func maintenanceTransitions() []any {
 		variants = append(variants, variant("maintenance."+kind, fields, required...))
 	}
 	variants = append(variants, variant("maintenance.register", map[string]any{
-		"job_id":            map[string]any{"type": "string", "const": maintenance.YodaSelfReviewWeeklyJobID},
+		"job_id":            map[string]any{"type": "string", "enum": []string{maintenance.YodaSelfReviewWeeklyJobID, maintenance.MemoryModelJobID}},
 		"expected_revision": map[string]any{"type": "integer", "minimum": 0, "maximum": 9007199254740991},
 	}, "job_id", "expected_revision"))
 	return variants
@@ -63,6 +63,10 @@ func (b *Bound) maintenanceService() (*maintenance.Service, error) {
 }
 
 func (b *Bound) maintenanceServiceWithEligibility(eligibility func() error) (*maintenance.Service, error) {
+	return b.maintenanceServiceWithGuards(eligibility, b.guardPublication)
+}
+
+func (b *Bound) maintenanceServiceWithGuards(eligibility func() error, installedGuard func(func() error) error) (*maintenance.Service, error) {
 	if err := b.validate(); err != nil {
 		return nil, err
 	}
@@ -75,10 +79,10 @@ func (b *Bound) maintenanceServiceWithEligibility(eligibility func() error) (*ma
 	return maintenance.NewService(maintenance.ServiceOptions{
 		SourceAdmission:  b.experimentalSourceAdmission(),
 		EligibilityGuard: eligibility,
-		WeeklyCandidate:  b.options.WeeklyCandidate, WeeklyNativeExecutor: b.options.WeeklyNativeExecutor,
+		WeeklyCandidate:  b.options.WeeklyCandidate, WeeklyNativeExecutor: b.options.WeeklyNativeExecutor, MemoryNativeExecutor: b.options.MemoryNativeExecutor,
 		ProductRoot: b.options.ProductRoot, UserHome: b.options.UserHome,
 		WorkspacePath: b.options.WorkspacePath, LookupEnv: b.options.LookupEnv,
-		DarwinFactory: darwin.NewProductBinding, Catalog: catalog, Adapter: "local", Now: b.maintenanceClock, CLIVersion: b.options.CLIVersion, InstalledGuard: b.guardPublication, AuthorityRegistryPath: b.options.AuthorityRegistryPath, AuthorityRegistrySHA256: b.options.AuthorityRegistrySHA256,
+		DarwinFactory: darwin.NewProductBinding, Catalog: catalog, Adapter: "local", Now: b.maintenanceClock, CLIVersion: b.options.CLIVersion, InstalledGuard: installedGuard, AuthorityRegistryPath: b.options.AuthorityRegistryPath, AuthorityRegistrySHA256: b.options.AuthorityRegistrySHA256,
 	})
 }
 
@@ -271,7 +275,14 @@ func maintenancePresentation(review maintenance.ProductReview) any {
 		delete(presentation, "workspace_id")
 		presentation["scope_kind"] = "owner"
 		presentation["owner_scope_id"] = review.WorkspaceID
-		presentation["scope"] = "This exact owner and weekly Yoda job across admitted workspaces. Registration alone leaves the job inactive and unqualified. Qualification observes one bounded tool-free native attempt; enrollment separately authorizes this schedule. Publish only the validated silent working projection; canonical SELF and ordinary session context remain unchanged."
+		presentation["scope"] = "This exact owner and weekly Yoda job across admitted workspaces. Registration alone leaves the job inactive and unqualified. Qualification observes one bounded tool-free native attempt; enrollment separately authorizes this schedule. Publish only the validated silent working projection. Canonical SELF remains unchanged; optional ordinary advisory context additionally requires current accepted session policy, execution and terminal evidence."
+		if review.WeeklyRegistration != nil {
+			presentation["weekly_registration"] = review.WeeklyRegistration
+		}
+	}
+	if review.Operation.JobID == maintenance.MemoryModelJobID {
+		presentation["scope_kind"] = "workspace"
+		presentation["scope"] = "This exact workspace and memory-weekly job only. Registration leaves it inactive and unqualified. Qualification is one bounded tool-free native evidence-only attempt with no memory publication; enrollment separately permits canonical L2/L3 and a private pending lifetime candidate through the original atomic engine. Lifetime still requires independent deterministic continuity and exact foreground review. Sources/correction/deletion, immutable occurrence, pause/revocation and provider/model bounds remain enforced. Explicitly pause the other scheduled weekly engine before enrolling or resuming this one; no fallback or automatic engine swap."
 		if review.WeeklyRegistration != nil {
 			presentation["weekly_registration"] = review.WeeklyRegistration
 		}

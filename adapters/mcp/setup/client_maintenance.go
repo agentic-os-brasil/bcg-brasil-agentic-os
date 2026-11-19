@@ -61,13 +61,17 @@ func currentMaintenanceCommand(ctx context.Context, o installer.ClientOptions, c
 		name += ".exe"
 	}
 	server := filepath.Join(o.ManagedRoot, "bin", name)
+	launch, err := installer.PrepareQualifiedLaunch(ctx, installer.QualifiedLaunchOptions{SeededOperationOptions: o.SeededOperationOptions, ExpectedBinding: s.Binding, Workspace: o.Request.Workspace})
+	if err != nil || launch.Executable != server {
+		return nil, errors.New("independently admitted maintenance launch required")
+	}
 	before, err := installer.ClientFileDigest(server)
 	if err != nil || before != s.Server.SHA256 {
 		return nil, errors.New("current maintenance owner changed")
 	}
-	args := []string{command, "--product-root", o.ManagedRoot, "--user-home", o.UserHome, "--workspace", o.Request.Workspace, "--installed-manifest", s.Binding.ManifestSHA256, "--installed-client-inputs", s.Binding.ClientInputsSHA256}
-	if digest != "" {
-		args = append(args, "--review-digest", digest, "--confirm")
+	args, err := maintenanceLaunchArguments(launch.Args, command, digest)
+	if err != nil {
+		return nil, err
 	}
 	bounded, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
@@ -95,6 +99,43 @@ func currentMaintenanceCommand(ctx context.Context, o installer.ClientOptions, c
 		return nil, err
 	}
 	return output.Bytes(), nil
+}
+
+// Keep the original qualified launch's complete release/experimental tail.
+func maintenanceLaunchArguments(qualified []string, command, digest string) ([]string, error) {
+	if len(qualified) == 0 || qualified[0] != "serve" || command != "maintenance-status" && command != "maintenance-review" && command != "maintenance-apply" {
+		return nil, errors.New("closed maintenance command requires a qualified launch")
+	}
+	args := append([]string{command}, qualified[1:]...)
+	if digest != "" {
+		args = append(args, "--review-digest", digest, "--confirm")
+	}
+	return args, nil
+}
+
+// ReviewClientMaintenanceTransition uses the same original domain review for
+// enrollment/pause/resume/revoke. A wake never supplies any of these grants.
+func ReviewClientMaintenanceTransition(ctx context.Context, o installer.ClientOptions, request product.MaintenanceMutation) (product.LocalMaintenanceReview, error) {
+	body, err := currentMaintenanceCommand(ctx, o, "maintenance-review", request, "")
+	if err != nil {
+		return product.LocalMaintenanceReview{}, err
+	}
+	var review product.LocalMaintenanceReview
+	err = releasecontract.DecodeStrictJSON(body, &review)
+	return review, err
+}
+
+func ApplyClientMaintenanceTransition(ctx context.Context, o installer.ClientOptions, request product.MaintenanceMutation, digest string, confirmed bool) (ClientMaintenanceJob, error) {
+	if !confirmed {
+		return ClientMaintenanceJob{}, errors.New("explicit per-job review confirmation required")
+	}
+	body, err := currentMaintenanceCommand(ctx, o, "maintenance-apply", request, digest)
+	if err != nil {
+		return ClientMaintenanceJob{}, err
+	}
+	var job ClientMaintenanceJob
+	err = releasecontract.DecodeStrictJSON(body, &job)
+	return job, err
 }
 
 func InspectClientMaintenance(ctx context.Context, o installer.ClientOptions) (ClientMaintenanceStatus, error) {

@@ -224,6 +224,19 @@
       "success_boundary": "a bounded deep review durably records an allowlisted validated operational repair or a metadata-only structural recommendation; it never applies structural change"
     },
     {
+      "id": "memory-weekly",
+      "category": "memory",
+      "trigger": "weekly_or_presence",
+      "executor": "model_adapter",
+      "scope": "workspace",
+      "availability": "unavailable",
+      "availability_reason": "Requires exact workspace model registration, genuine native qualification and separate reviewed enrollment; lifetime remains independently reviewed.",
+      "default_enabled": false,
+      "unattended": "policy_gated",
+      "writes": ["memory_rollups"],
+      "success_boundary": "a job-bound model candidate is validated and atomically committed through the original memory engine with independent lifetime eligibility and review"
+    },
+    {
       "id": "yoda-self-review-weekly",
       "category": "self",
       "trigger": "weekly_or_presence",

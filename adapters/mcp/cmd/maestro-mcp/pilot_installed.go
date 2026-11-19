@@ -199,6 +199,7 @@ func runInstalledPilotCheck(ctx context.Context, args []string, output io.Writer
 		r.add("code_cli", "passed", "selected_absolute_executable_verified_login_not_tested", "")
 	}
 	o := product.Options{ExperimentalSeed: role, ExperimentalSeedRoot: selection.ProductRoot, ProductRoot: selection.ProductRoot, UserHome: selection.UserHome, WorkspacePath: selection.Workspace, AuthorityRegistryPath: filepath.Join(selection.ProductRoot, "trust", "release-authority-registry.json"), AuthorityRegistrySHA256: AuthorityRegistrySHA256, CLIVersion: Version, InstalledManifestSHA256: state.Binding.ManifestSHA256, InstalledClientInputsSHA256: state.Binding.ClientInputsSHA256, ManagementCarrierID: selection.CarrierID, ManagementInstallerVersion: selection.InstallerVersion}
+	o.OwnerReviewChannel = record.Materialization.OwnerReviewChannel
 	expectedRuntime, err := installedExpectedRuntime(role, state)
 	if err != nil {
 		return fail("document_runtime", "closed_current_runtime_identity_unavailable")

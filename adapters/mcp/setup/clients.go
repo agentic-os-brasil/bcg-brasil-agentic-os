@@ -123,6 +123,7 @@ func currentClientMaterializer(o installer.ClientOptions, nativeSHA string, prev
 		}
 		material := installer.ClientMaterialization{LifecycleContext: o.Request.LifecycleContext, Release: s.Release, ManifestSHA256: s.Binding.ManifestSHA256, ClientInputsSHA256: s.Binding.ClientInputsSHA256, ServerSHA256: s.Server.SHA256, EmbeddedInputsSHA256: s.Server.EmbeddedInputsSHA256, BundleSHA256: s.Binding.BundleSHA256, CodeRoot: o.Request.CodeRoot, DesktopPath: o.Request.DesktopPath, DesktopNativeContractSHA256: nativeContract, BootstrapServerSHA256: s.Server.SHA256, BootstrapEmbeddedInputsSHA256: s.Server.EmbeddedInputsSHA256}
 		material.NativeEnforcement = o.Request.NativeEnforcement
+		material.OwnerReviewChannel = o.Request.OwnerReviewChannel
 		material.GenerationID = o.Request.GenerationID
 		// First publication may encounter an already-swapped destination. Admit
 		// its exact reviewed native contract before any Code or Desktop swap.

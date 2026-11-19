@@ -664,7 +664,7 @@ func assertSourceClosure(t *testing.T, source string, identity releasecontract.S
 			return nil
 		}))
 	}
-	agents := []string{"catalog.json", "activation-policy.json", "pa-expert-registry.json", "case-agent/AGENT.md", "client-account-agent/AGENT.md", "darwin/AGENT.md", "gamma-guardian/AGENT.md", "maestro/AGENT.md", "pa-expert/AGENT.md", "yoda/AGENT.md", "templates/case_agent/AGENT.md", "templates/client_account_agent/AGENT.md", "templates/pa_expert/AGENT.md", "templates/quality_guardian/AGENT.md"}
+	agents := []string{"catalog.json", "activation-policy.json", "pa-expert-registry.json", "case-agent/AGENT.md", "client-account-agent/AGENT.md", "darwin/AGENT.md", "gamma-guardian/AGENT.md", "maestro/AGENT.md", "pa-expert/AGENT.md", "repository-spec-reviewer/AGENT.md", "repository-standards-reviewer/AGENT.md", "yoda/AGENT.md", "templates/case_agent/AGENT.md", "templates/client_account_agent/AGENT.md", "templates/pa_expert/AGENT.md", "templates/quality_guardian/AGENT.md"}
 	for _, name := range agents {
 		uri := "maestro://agents/" + name
 		body := read(t, filepath.Join(source, "bundles/base/agents", filepath.FromSlash(name)))

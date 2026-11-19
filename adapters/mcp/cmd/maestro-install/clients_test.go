@@ -4,8 +4,33 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"strings"
 	"testing"
 )
+
+func TestFirstClientOwnerReviewChannelIsAnExplicitCommonChoice(t *testing.T) {
+	for _, choice := range []string{"", "native-first", "local-browser", "model-approved"} {
+		got, err := promptClientOwnerReviewChannel(func(message string) (string, error) {
+			if !strings.Contains(message, "BOTH Code and Desktop") || !strings.Contains(message, "approves no write") {
+				t.Fatal("first setup hid the common client scope or individual approval requirement")
+			}
+			return choice, nil
+		})
+		if choice == "model-approved" {
+			if err == nil {
+				t.Fatal("unknown channel accepted")
+			}
+			continue
+		}
+		want := ""
+		if choice == "local-browser" {
+			want = choice
+		}
+		if err != nil || got != want {
+			t.Fatalf("choice %q: channel=%q error=%v", choice, got, err)
+		}
+	}
+}
 
 func TestClientCapabilitiesReadOnlyWithoutInstallation(t *testing.T) {
 	oldArgs, oldVersion, oldPin, oldOutput := os.Args, Version, AuthorityRegistrySHA256, os.Stdout

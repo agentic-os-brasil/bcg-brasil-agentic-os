@@ -42,9 +42,24 @@ import (
 // issuance is exercised or claimed by this controlled process witness.
 func TestRuntimeUpdateCompiledChangedPackLifecycle(t *testing.T) {
 	journeyStarted := time.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
+	// Measured Mac runs exceed12m across builds, reconciliation and rollback.
+	// This fixture budget changes no per-operation production deadline.
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 	root := t.TempDir()
+	retained := os.Getenv("MAESTRO_RUNTIME_UPDATE_TEST_ROOT")
+	if retained != "" {
+		if !filepath.IsAbs(retained) || filepath.Clean(retained) != retained {
+			t.Fatal("retained fixture requires a canonical absolute new directory")
+		}
+		parent, pathErr := filepath.EvalSymlinks(filepath.Dir(retained))
+		must(t, pathErr)
+		if parent != filepath.Dir(retained) {
+			t.Fatal("retained fixture parent must be physical, without aliases")
+		}
+		must(t, os.Mkdir(retained, 0700))
+		root = retained // Fresh synthetic bindings retain their original absolute paths.
+	}
 	must(t, os.Chmod(root, 0700))
 	t.Cleanup(func() {
 		filepath.WalkDir(root, func(p string, d os.DirEntry, e error) error {
@@ -53,6 +68,9 @@ func TestRuntimeUpdateCompiledChangedPackLifecycle(t *testing.T) {
 			}
 			return e
 		})
+		if retained != "" && !t.Failed() {
+			must(t, os.RemoveAll(root))
+		}
 	})
 	source, e := filepath.Abs("../../..")
 	must(t, e)
@@ -280,6 +298,54 @@ func TestRuntimeUpdateCompiledChangedPackLifecycle(t *testing.T) {
 		actionFinished := time.Now()
 		t.Logf("journey timing: manager %s finish elapsed=%s duration=%s error=%v", action, actionFinished.Sub(journeyStarted), actionFinished.Sub(actionStarted), e)
 		if wantSuccess && e != nil {
+			if retained != "" {
+				diagnostic := map[string]any{"evidence": "synthetic_failure_diagnostic_not_qualification", "action": action, "error": e.Error(), "context_error": ctx.Err() != nil, "root": root}
+				captured := out
+				if len(captured) > 64<<10 {
+					captured = captured[:64<<10]
+					diagnostic["manager_output_truncated"] = true
+				}
+				must(t, os.WriteFile(filepath.Join(root, "failed-manager-output.log"), captured, 0600))
+				current, readErr := installtx.ReadSourceState(seed.DataRoot, seed.ManagedRoot)
+				if readErr != nil {
+					diagnostic["current_state_error"] = readErr.Error()
+				} else {
+					name := "maestro-mcp"
+					if current.TargetOS == "windows" {
+						name += ".exe"
+					}
+					server := filepath.Join(seed.ManagedRoot, "bin", name)
+					diagnostic["current_manifest"] = current.Binding.ManifestSHA256
+					diagnostic["expected_server_sha256"] = current.Server.SHA256
+					actual, hashErr := installer.ClientFileDigest(server)
+					diagnostic["actual_server_sha256"] = actual
+					if hashErr != nil {
+						diagnostic["server_hash_error"] = hashErr.Error()
+					}
+					paths, pathErr := installer.ClientGenerationPaths(clients.Request, current.Binding.ManifestSHA256)
+					if pathErr != nil {
+						diagnostic["generation_error"] = pathErr.Error()
+					} else {
+						stage := paths.DesktopPath + ".candidate-" + clients.Request.CarrierID + "-" + current.Binding.ManifestSHA256 + ".mcpb"
+						diagnostic["mcpb_argv_reconstructed_from_original_generator_not_process_trace"] = []string{server, "mcpb", "--destination", stage, "--server", server, "--version", current.Release, "--product-root", seed.ManagedRoot, "--user-home", user, "--workspace", ws, "--installed-manifest", current.Binding.ManifestSHA256, "--installed-client-inputs", current.Binding.ClientInputsSHA256, "--carrier-profile", installer.StableClientProfile, "--carrier-id", clients.Request.CarrierID, "--carrier-version", installer.StableCarrierVersion}
+						if info, statErr := os.Lstat(stage); statErr == nil {
+							diagnostic["mcpb_stage_bytes"], diagnostic["mcpb_stage_mode"] = info.Size(), info.Mode().String()
+						} else {
+							diagnostic["mcpb_stage_error"] = statErr.Error()
+						}
+					}
+					// The original read-only identity probe retains its own 15s limit.
+					identity, identityErr := releasecontract.ReadServerIdentity(server)
+					diagnostic["identity_probe"] = map[string]any{"version": identity.Version, "embedded_inputs_sha256": identity.EmbeddedInputsSHA256, "resources": len(identity.Resources)}
+					if identityErr != nil {
+						diagnostic["identity_probe_error"] = identityErr.Error()
+					}
+				}
+				body, marshalErr := json.MarshalIndent(diagnostic, "", "  ")
+				must(t, marshalErr)
+				must(t, os.WriteFile(filepath.Join(root, "failed-manager-diagnostic.json"), body, 0600))
+				t.Logf("retained exact synthetic failure at %s; child stderr was discarded by original clientCommand and is not fabricated", root)
+			}
 			t.Fatalf("actual manager %s: %s %v", action, out, e)
 		}
 		if !wantSuccess && e == nil {

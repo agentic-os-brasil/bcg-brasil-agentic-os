@@ -86,6 +86,9 @@ func run() error {
 	if handled, err := experimentalNativeHookCommand(context.Background(), os.Args[1], executable, os.Args[2:], entryRole); handled {
 		return err
 	}
+	if handled, err := experimentalMaintenanceWakeCommand(context.Background(), os.Args[1], executable, os.Args[2:], entryRole); handled {
+		return err
+	}
 	flags := flag.NewFlagSet("maestro-install", flag.ContinueOnError)
 	planJSON := flags.String("confirmed-plan", "", "exact canonical activation plan from the reviewed handoff")
 	digest := flags.String("review-digest", "", "exact setup review digest")

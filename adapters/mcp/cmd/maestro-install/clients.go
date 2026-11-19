@@ -140,6 +140,20 @@ func runClientsWithNativeVerifier(ctx context.Context, command, self string, f l
 	return encode(r, e)
 }
 
+func promptClientOwnerReviewChannel(prompt func(string) (string, error)) (string, error) {
+	channel, err := prompt("For protected foreground MCP changes in BOTH Code and Desktop, choose native-first (Enter) or local-browser for complete one-shot review in this computer's browser. Each change still requires its own approval; this carrier choice approves no write [native-first]: ")
+	if err != nil {
+		return "", err
+	}
+	if channel == "" || channel == "native-first" {
+		return "", nil
+	}
+	if channel != "local-browser" {
+		return "", errors.New("unsupported owner review channel; client materialization remains pending")
+	}
+	return channel, nil
+}
+
 func manageClients(ctx context.Context, o installer.ClientOptions, input io.Reader, output io.Writer) error {
 	return manageClientsWithIntent(ctx, o, input, output, "")
 }
@@ -329,6 +343,12 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 			}
 			o.Request.GenerationID = hex.EncodeToString(generation[:])
 		}
+		if o.ExperimentalSeed != nil {
+			o.Request.OwnerReviewChannel, e = promptClientOwnerReviewChannel(prompt)
+			if e != nil {
+				return e
+			}
+		}
 		if err := reconcileRuntime(ctx, o, confirm, output); err != nil {
 			return err
 		}
@@ -371,7 +391,7 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 	action := intent
 	var e error
 	if action == "" {
-		action, e = prompt("Choose status, update, regenerate, reconcile, register-code, revalidate-maintenance, desktop-confirm, manual-desktop-update, or rollback: ")
+		action, e = prompt("Choose status, update, regenerate, reconcile, register-code, maintenance, revalidate-maintenance, desktop-confirm, manual-desktop-update, or rollback: ")
 		if e != nil {
 			return e
 		}
@@ -499,6 +519,8 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 			return e
 		}
 		return json.NewEncoder(output).Encode(result)
+	case "maintenance":
+		return manageClientMaintenance(ctx, o, prompt, confirm, output)
 	case "desktop-confirm":
 		if readErr != nil || status.State != "current_materialization" {
 			return errors.New("regenerate current clients before confirming Desktop")

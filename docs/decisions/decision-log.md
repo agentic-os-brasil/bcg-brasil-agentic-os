@@ -1730,3 +1730,74 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: Existing empty-profile records retain their contract. Existing profile content, owner/brain/source/carrier bindings and enterprise managed policy remain unchanged. Official profile login is separate from qualification; no credentials are copied, native proof bypassed or runtime effects implied by provisioning. Earlier launcher participant files without explicit selections remain preserved pending review rather than silently adopting another profile.
 - Refs: SFRD; EISA; specs/063-product-native-plugin.md; docs/product-clients.md; internal/installer/client_management.go; dev/pilot/templates/installed-seed/Maestro.command
 - Supersedes: none
+
+
+## ICRV - Bind installed-carrier foreground review to the authenticated current record
+
+- Date: 2026-11-18
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: An installed Desktop client can lack native forms although protected onboarding operations already require exact owner review. The current stable carrier cannot durably select the existing local browser, and an unverified serve flag would not establish the selected carrier's review contract.
+- Decision: Extend EORC narrowly to a fresh, explicitly reviewed experimental installed carrier. Its optional owner_review_channel is empty/native-first or local-browser, fixed for that carrier and common to Code and Desktop. Bind the choice into the original client review, materialization and current record, preserve it through cold management and source updates, and derive only the existing ordinary serve flag from that authenticated record. The receiver independently verifies the effective mode, including empty/mismatch, against the same current carrier before and after trusted review and before publication. Changed record, owner, workspace or source refuses; no installation lock spans browser review or domain handlers. Existing standalone pilot gates, hook vectors and genuine native qualification remain unchanged.
+- Consequences: First setup deliberately discloses the shared client effect before the original full confirmation. Mode selection approves no individual write. Every protected request retains the existing complete one-shot loopback review, unchecked checkbox, decline/cancel/expiry handling and canonical revision/source checks. Unsupported profiles and unknown or changed modes refuse; a raw installed browser flag without an authenticated carrier supplies no authority. No silent fallback, model-selected channel, native InputResponses reuse or command-line owner autoapproval is introduced. Actual client acceptance remains separate from source and compiled tests.
+- Refs: https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/594; specs/020-release-distribution.md; specs/063-product-native-plugin.md; docs/product-local-owner-review.md; internal/installer/clients.go; adapters/mcp/confirmation.go
+- Supersedes: EORC
+
+
+## OSWK - Wake the original admitted maintenance worker through owned user-level tasks
+
+- Date: 2026-11-18
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Closing the MCP clients stops their serve-owned maintenance worker. Existing native lifecycle adapters need an explicit installed selection and the maintenance manager must retain the actual experimental role and current-server arguments.
+- Decision: Add an explicitly reviewed experimental installed-carrier opt-in for one uniquely bound user-level discovery pulse. Reuse the original macOS LaunchAgent lifecycle; use a narrow current-user interactive-token Windows Task Scheduler adapter with create-only registration and exact owned-definition readback. Bind stable installation, role, admitted source locator/tuple, owner, Developer brain, workspace and carrier. Invoke only the original independently admitted stable installer and actual current server through a bounded one-shot entry, then the same RunDue, grants, leases, native idle/cancellation and domain publication owners. Review/status never grant jobs; qualify/enroll each job separately.
+- Consequences: Native operations have one total fifteen-second deadline and preserve foreign/unknown jobs. Exact loaded Mac arguments are required before mutating an occupied label. Pause/revoke close wake eligibility before stopping native work, under original publication serialization; no installation lock spans domain execution or browser review. Cold/source updates retain the stable wake definition while reauthenticating current record/image and job qualification; stale state refuses. Windows uses logged-in least-privilege context without passwords or administrative enrollment; battery policy and real native qualification remain explicit. A pulse, loaded task, no_due_work result, actual domain commit and model execution are separate evidence. No daemon, new job grant store, cloud state write, hidden catch-up, clock change or native-proof importer is introduced.
+- Refs: https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/596; specs/062-product-maintenance-service.md; docs/product-maintenance-wake.md; internal/macosadapter; internal/windowsadapter; adapters/mcp/setup/client_wake.go; adapters/mcp/maintenance_worker.go
+- Supersedes: none
+
+
+### OSWK refinement — Windows late native acknowledgement (R3)
+
+The Windows COM acknowledgement can time out while its service-side register or
+enable operation is still completing. Task.Enabled alone therefore cannot own
+pause/revoke eligibility. Keep the original OSWK installation/source/owner/brain/
+workspace/carrier identity and stable task name, but retain a narrowly scoped
+native-definition control in the installer's existing private state area.
+
+Bind that private no-follow/ACL-protected atomic record to the full static wake
+binding digest and a monotonically increasing revision. It is an OS eligibility
+veto, never a job grant, qualification, service or new identity. Worker startup
+and original guarded publication require its valid enabled state alongside the
+exact OS definition. Missing, malformed or foreign state refuses execution.
+
+A freshly reviewed first management action may bootstrap missing control as
+revision zero; pause/revoke may create a disabled tombstone even if the task is
+absent. Existing unsafe/corrupt state is preserved and refused. Windows review
+binds exact action/spec/current record/static binding and durable revision,
+without requiring a pre-veto OS inspection during apply. Under the original
+installation guard, every action advances revision and persists disabled before
+any OS access. Opt-in opens only after exact successful enabled readback, a live
+context and last atomic publication; error/timeout leaves disabled. Pause/revoke
+retains the disabled record before inspecting/stopping/removing the task. A late
+COM operation can affect the task only, never this private control.
+
+A prior opt-in review cannot replay across a pause, including when both OS
+observations report absent. Keep the existing fifteen-second total deadline,
+create-only current-user Task Scheduler behavior and all original maintenance
+grants/leases/idle/source guards. Mac Disabled-plist behavior and legacy bytes
+remain unchanged. Native Windows qualification still requires real Windows;
+the race regression is focused engineering source proof, not that qualification.
+
+Refs: #596, original OSWK decision, independent Walter source review R2.
+
+
+## MWDR - Compose separately qualified model memory and ordinary working context
+
+- Date: 2026-11-18
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The model-maintenance contract had a native Yoda transport but lacked self-service observed registration, a workspace memory executor, a normal bounded working-view consumer and reachable later review of a withheld lifetime candidate. Merely relabelling Yoda or counting provider-specific reprocessing as continuity would violate scope and eligibility.
+- Decision: Reuse the original observed Code runtime, private native session, maintenance grants/supervisor and registration/qualification/enrollment owners for two finite job-specific contracts. Add workspace memory input/output validation and publish through the original memory atomic engine. Retain exact pending lifetime and execution metadata in a bounded same-version sidecar whose bytes are anchored by the canonical L3 filename, leaving original manifest/Artifact schemas unchanged. Later foreground review revalidates source/visibility and exact candidate, republishes byte-identical L2/L3 with approved lifetime and introduces no new L3 content history. The ordinary owner reader intersects current qualified working text with independently accepted session policy; canonical SELF remains unchanged. Preserve existing namespace labels and refuse inconsistency; no person identity is inferred.
+- Consequences: L2/L3 remain useful while lifetime is pending. Original source denial/purge also retires private sidecars. Producer-specific caching/reprocessing remains truthful; lifetime additionally requires distinct eligible L1 source cohorts, so weekly provider/format flips do not manufacture continuity. Deterministic and model weekly enrollment/resume require an explicit pause of the other engine. First-use observation/login, exact registration, genuine native probe, enrollment, real due effect, terminal completion and closed-client wake are separate gates. No global model switch, credentials copy, model-supplied approval, generic command runner, fabricated calendar/native evidence or production activation is introduced.
+- Refs: https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/595; specs/006-memory-persistence.md; specs/041-model-backed-maintenance-activation.md; specs/062-product-maintenance-service.md; docs/model-second-brain.md; internal/maintenance/product_memory_model.go; internal/memory/model_weekly_commit.go
+- Supersedes: none

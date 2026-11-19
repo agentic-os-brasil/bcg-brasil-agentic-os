@@ -40,7 +40,15 @@ func (b *Bound) claudeLifecycleContext(event string) (sessionhook.ClaudeOutput, 
 	if err = b.validate(); err != nil {
 		return sessionhook.ClaudeOutput{}, err
 	}
-	return sessionhook.BuildClaudeEvent(packet, event)
+	value, err := sessionhook.BuildClaudeEvent(packet, event)
+	if err != nil || event != "SessionStart" {
+		return value, err
+	}
+	value = b.withWeeklySessionHook(value, event)
+	if err = b.validate(); err != nil {
+		return sessionhook.ClaudeOutput{}, err
+	}
+	return value, nil
 }
 
 // HandleClaudeLifecycleHook delivers passive context and observation only.

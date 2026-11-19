@@ -50,7 +50,7 @@ func (grant executionGrant) weeklyModelBinding() weeklyModelBinding {
 }
 
 func (grant executionGrant) validate(command Command) error {
-	if command.WeeklyMode != "" && (grant.weekly == nil || grant.weekly.Mode != command.WeeklyMode || command.JobID != YodaSelfReviewWeeklyJobID || command.ProposalOnly) {
+	if command.WeeklyMode != "" && (grant.weekly == nil || grant.weekly.Mode != command.WeeklyMode || !modelJob(command.JobID) || command.ProposalOnly) {
 		return ErrQualificationRequired
 	}
 	if grant.weekly != nil && command.WeeklyMode != "" && grant.weekly.Mode != command.WeeklyMode {
