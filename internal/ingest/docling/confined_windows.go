@@ -25,15 +25,15 @@ import (
 var userenv = windows.NewLazySystemDLL("userenv.dll")
 var createAppContainerProfile = userenv.NewProc("CreateAppContainerProfile")
 var deleteAppContainerProfile = userenv.NewProc("DeleteAppContainerProfile")
+var accessCheck = windows.NewLazySystemDLL("advapi32.dll").NewProc("AccessCheck")
 
 const securityCapabilitiesAttribute = 0x00020009
 const childProcessPolicyAttribute = 0x0002000e
 
-// Windows SDK WinBase.h/WinNT.h definitions not exposed by x/sys v0.47.0.
-// ALL_APPLICATION_PACKAGES opt-out creates LPAC; the token query attests it.
+// Windows SDK WinBase.h definitions not exposed by x/sys v0.47.0.
+// ALL_APPLICATION_PACKAGES opt-out creates LPAC; access semantics attest it.
 const allApplicationPackagesPolicyAttribute = 0x0002000f
 const allApplicationPackagesOptOut uint32 = 0x01
-const tokenIsLessPrivilegedAppContainer = 46
 
 type securityCapabilities struct {
 	SID             *windows.SID
@@ -404,7 +404,7 @@ func restoreExecutionTree(handles []windows.Handle) error {
 
 func validateConfinedToken(process windows.Handle, expected *windows.SID) error {
 	var token windows.Token
-	if err := windows.OpenProcessToken(process, windows.TOKEN_QUERY, &token); err != nil {
+	if err := windows.OpenProcessToken(process, windows.TOKEN_QUERY|windows.TOKEN_DUPLICATE, &token); err != nil {
 		return err
 	}
 	defer token.Close()
@@ -414,9 +414,6 @@ func validateConfinedToken(process windows.Handle, expected *windows.SID) error 
 	}
 	if isContainer != 1 {
 		return errors.New("converter_token_not_appcontainer")
-	}
-	if err := validateLessPrivilegedAppContainer(token); err != nil {
-		return err
 	}
 	// TOKEN_APPCONTAINER_INFORMATION includes the variable-length SID after its pointer.
 	container := make([]byte, 256)
@@ -437,17 +434,40 @@ func validateConfinedToken(process windows.Handle, expected *windows.SID) error 
 	if returned < 4 || *(*uint32)(unsafe.Pointer(&capabilities[0])) != 0 {
 		return errors.New("converter_token_has_capabilities")
 	}
-	return nil
+	return validateLessPrivilegedAppContainer(token, expected)
 }
 
-// Reject unsupported queries and malformed/non-LPAC tokens before child resume.
-func validateLessPrivilegedAppContainer(token windows.Token) error {
-	var lessPrivileged, returned uint32
-	size := uint32(unsafe.Sizeof(lessPrivileged))
-	if err := windows.GetTokenInformation(token, tokenIsLessPrivilegedAppContainer, (*byte)(unsafe.Pointer(&lessPrivileged)), size, &returned); err != nil {
-		return fmt.Errorf("query converter LPAC token: %w", err)
+// Attest the actual suspended child's LPAC access semantics, without assigning
+// its token to a thread or changing any resource ACL. World permits both bits
+// for the user half; only an ordinary AppContainer may obtain bit 1 via AAP.
+func validateLessPrivilegedAppContainer(token windows.Token, expected *windows.SID) error {
+	var impersonation windows.Token
+	if err := windows.DuplicateTokenEx(token, windows.TOKEN_QUERY, nil, windows.SecurityIdentification, windows.TokenImpersonation, &impersonation); err != nil {
+		return fmt.Errorf("duplicate converter token for LPAC attestation: %w", err)
 	}
-	if returned != size || lessPrivileged == 0 {
+	defer impersonation.Close()
+	descriptor, err := windows.SecurityDescriptorFromString("O:SYG:SYD:(A;;0x3;;;WD)(A;;0x1;;;AC)(A;;0x2;;;" + expected.String() + ")")
+	if err != nil {
+		return err
+	}
+	// GENERIC_MAPPING and PRIVILEGE_SET follow the documented Win32 layouts.
+	// DesiredAccess has no generic bits. Buffer insufficiency fails closed.
+	mapping := struct{ Read, Write, Execute, All uint32 }{1, 2, 3, 3}
+	privileges := struct {
+		Count, Control uint32
+		Privilege      [1]windows.LUIDAndAttributes
+	}{}
+	privilegeLength := uint32(unsafe.Sizeof(privileges))
+	var grantedAccess, accessStatus uint32
+	if err := accessCheck.Find(); err != nil {
+		return fmt.Errorf("load converter LPAC access check: %w", err)
+	}
+	ok, _, callErr := accessCheck.Call(uintptr(unsafe.Pointer(descriptor)), uintptr(impersonation), uintptr(windows.MAXIMUM_ALLOWED), uintptr(unsafe.Pointer(&mapping)), uintptr(unsafe.Pointer(&privileges)), uintptr(unsafe.Pointer(&privilegeLength)), uintptr(unsafe.Pointer(&grantedAccess)), uintptr(unsafe.Pointer(&accessStatus)))
+	runtime.KeepAlive(descriptor)
+	if ok == 0 {
+		return fmt.Errorf("check converter LPAC access: %w", callErr)
+	}
+	if privilegeLength > uint32(unsafe.Sizeof(privileges)) || accessStatus == 0 || grantedAccess != 2 {
 		return errors.New("converter_token_not_less_privileged_appcontainer")
 	}
 	return nil

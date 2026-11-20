@@ -262,9 +262,6 @@ func TestWindowsConfinementChild(t *testing.T) {
 	if err := windows.GetTokenInformation(windows.GetCurrentProcessToken(), 29, (*byte)(unsafe.Pointer(&appContainer)), 4, &returned); err != nil || appContainer != 1 {
 		t.Fatalf("kernel token is not AppContainer: flag=%d err=%v", appContainer, err)
 	}
-	if err := validateLessPrivilegedAppContainer(windows.GetCurrentProcessToken()); err != nil {
-		t.Fatalf("actual child is not LPAC: %v", err)
-	}
 	for _, name := range []string{sentinel, os.Args[0]} {
 		file, err := os.OpenFile(name, os.O_WRONLY|os.O_APPEND, 0)
 		if file != nil {
