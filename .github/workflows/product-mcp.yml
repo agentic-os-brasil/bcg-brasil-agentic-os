@@ -397,6 +397,26 @@ jobs:
           mkdir "$MAESTRO_CLIENT_REGISTRATION_BASELINE"
           git archive --format=tar f398d32478c19259932c8ecdaebdc4bcf1380cb9 -o "$RUNNER_TEMP/maestro-client-registration-baseline.tar"
           tar -xf "$RUNNER_TEMP/maestro-client-registration-baseline.tar" -C "$MAESTRO_CLIENT_REGISTRATION_BASELINE"
+      # Original inert signed-pack fixture: retain the actual placement error
+      # under this job's physical temporary root before the installed journey.
+      - name: Existing authenticated runtime placement under hosted storage
+        working-directory: .
+        shell: bash
+        run: |
+          evidence="$RUNNER_TEMP/maestro-runtime-placement.jsonl"
+          if ! go test ./internal/ingest/docling -run '^TestAuthenticatedChangedPackPlacementPreservesPrior$' -count=1 -json > "$evidence"; then
+            cat "$evidence"
+            exit 1
+          fi
+          cat "$evidence"
+          python3 - "$evidence" <<'PYCODE'
+          import json, pathlib, sys
+          events = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+          family = "TestAuthenticatedChangedPackPlacementPreservesPrior"
+          assert any(e.get("Action") == "pass" and e.get("Test") == family for e in events), "original runtime placement test missing or skipped"
+          skipped = [e.get("Test") for e in events if e.get("Action") == "skip" and (e.get("Test") == family or e.get("Test", "").startswith(family + "/"))]
+          assert not skipped, "original runtime placement test skipped proof: " + repr(skipped)
+          PYCODE
       # Real current-server generation, installed launch and SDK/stdio; supported
       # client-process witnesses are engineering evidence, not native loading.
       - name: Exact materialization registration recovery and update lifecycle
