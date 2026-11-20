@@ -1,6 +1,6 @@
 # Spec 062 - Product maintenance service
 
-Status: The landed maintenance and wiki owners retain their existing lifecycle. Signed-source checks and the three closed Darwin health/cache/proposal jobs use that same lifecycle and catalog. The MCP serve process owns a cancellable background adapter over that service. Windows private wiki uses retained-namespace admission; Darwin private publication on Windows and operating-system wake registration remain unavailable. Source construction, focused local proof, hosted qualification and installed-client acceptance remain separate. See the [operator workflow](../docs/product-mcp-maintenance.md).
+Status: The landed maintenance and wiki owners retain their existing lifecycle. Signed-source checks and the three closed Darwin health/cache/proposal jobs use that same lifecycle and catalog. The MCP serve process owns a cancellable background adapter over that service. Windows private wiki uses retained-namespace admission; Darwin private publication on Windows remains unavailable. The optional installed closed-client wake has an explicit reviewed native lifecycle under OSWK; source construction and actual Mac/Windows qualification remain separate. Source construction, focused local proof, hosted qualification and installed-client acceptance remain separate. See the [operator workflow](../docs/product-mcp-maintenance.md).
 
 ## Outcome
 
@@ -13,9 +13,35 @@ Worker, scheduler leases/receipts and domain stores remain authoritative.
 Spec036 owns the eighteen job contracts. Existing bindings connect checkpoint,
 light/deep dreaming, retention diagnosis, skills indexing, runtime health,
 capability/drift diagnosis, the three source-owned wiki jobs described in [Spec 008](008-wiki-update-okf.md), and attended signed-source checking.
-Darwin adds three closed jobs below. Capture/observation and Yoda retain
+Darwin adds three closed jobs below. The existing memory-l1-capture binding
+admits eligible body-free Stop observations and witnessed canonical completed
+records through the owning capture/denial store. Self-observation and Yoda retain
 explicit unavailable reasons until their complete owning journeys are constructed.
 Catalog presence, a handler declaration and installation grant no activation.
+
+### Eligible observation capture
+
+The capture job reads only sealed, confined lifecycle observations and the
+canonical execution owner's completed-result projection. Method consultation,
+plans, failed/incomplete work and model assertions never become completed
+execution evidence. Stop observations remain `observed_only`; completed-record
+signals assert only a committed historical result with matching passing
+criterion receipts, never its original host, caller or current artifact bytes.
+
+Source fingerprints bind the complete bounded cohort and producer version.
+Revalidate original receipt/record identity before every visible publication.
+No model argument chooses producers, roots, signers or source envelopes.
+Qualification/enrollment displays both source classes and their strictly
+body-free scope. Genuine new canonical captures plus an immutable metadata-only
+result and actual worker/calendar receipts establish qualification; empty input,
+replay-only and suppressed/deleted occurrences cannot mint it.
+
+The existing memory activation lock and permanent denial barrier own exactly
+once admission. Pending occurrence metadata is intent, not capture evidence.
+Correction/deletion wins over replay, including after interruption. The first
+actual capture time and original event time remain distinct; source journals
+retain their data. Source keys are prepared by explicit setup only. Startup,
+Stop and status never ingest, enroll or synthesize memory.
 
 ## Identity and enrollment
 
@@ -76,11 +102,37 @@ commit followed by receipt failure remains partial evidence, never an invented
 success; replay reads current domain truth and preserves idempotency.
 
 The three-hour memory jobs retain MaxCatchUp=1. Scheduler occurrence identity
-uses ScheduledFor; light dreaming intentionally processes eligible captures for
-the execution day at RequestedAt, matching the existing public handler. Record
-both times; a delayed wake must not claim an earlier day's synthesis. Checkpoint
+uses ScheduledFor. Product light dreaming witnesses the existing bounded cohort
+of at most 4096 canonical captures, applies the permanent denial barrier and
+selects the oldest eligible ingestion day whose actual L1 fingerprint is still
+pending. It processes at most one such day per occurrence, without a rolling
+lookback cutoff. The aggregate source grant contains inputs only: publishing L1
+cannot invalidate its own grant. Pin the selected period and daily fingerprint
+through execution and qualification; do not select a different day when reading
+back the just-published artifact. Concurrent input changes refuse publication;
+another worker's identical publication is an honest no-change. An interruption
+after capture commit before UTC midnight, followed by long client downtime,
+therefore preserves the first ingestion timestamp and eventually reaches L1
+without recapturing or resurrecting deleted data. Direct legacy handler callers
+retain their RequestedAt single-day default. GeneratedAt records actual synthesis
+time rather than pretending that historical work ran earlier. Checkpoint
 needs real durable non-checkpoint scheduler metadata, so bootstrap through a
 trusted capture and qualified light dream before qualifying checkpoint.
+
+New light qualifications include an optional `daily_input` period/fingerprint,
+validated against the exact selected eligible cohort and actual immutable L1
+bytes at issuance and included in the qualification identity. Later validation
+authenticates that historical witness while its immutable artifact bytes still
+exist, without separately requiring its original captures to remain in the live
+cohort. Every actual run selects only live eligible inputs through the current
+permanent denial barrier. The existing privacy purge removes affected generated
+artifact versions: if that removes qualification evidence, report
+`qualification_required` and require new eligible inputs plus a fresh explicit
+owner-reviewed qualification. Never retain deleted text, relax the artifact
+checksum, silently requalify or exempt a purged proof to preserve cadence.
+Tampered periods, fingerprints and identities refuse; no historical qualification
+resurrects removed context. Omission preserves legacy qualification bytes and
+the original RequestedAt period check.
 
 ## Domain ownership
 
@@ -110,10 +162,12 @@ review receives the existing local stdin review/apply fallback. Model output
 contains bounded metadata and domain references, not private captures or full
 profiles. The installed method routes these intents to the same service.
 
-Ordinary run dispatches only active due jobs and never installs OS tasks,
-downloads dependencies or calls a provider/model. Operating-system wake
-installation remains a separately attended operation. Foreground proof does not establish
-background wake behavior or client qualification.
+Ordinary run dispatches only active due jobs and never installs OS tasks or
+downloads dependencies. The two closed model jobs may invoke only their exact
+separately registered, genuinely qualified and enrolled executor under Spec041;
+there is no general provider selection or global model activation. Operating-
+system wake installation remains a separately attended operation. Foreground
+proof does not establish background wake behavior or client qualification.
 
 ### Owned MCP process
 
@@ -158,6 +212,44 @@ weekly handlers and exact lifetime-candidate review are unchanged. When every
 MCP process is closed, this adapter performs no work; a later owned process
 provides bounded catch-up. OS service/task installation remains separate and
 cannot be inferred from a live MCP connection or source-level test.
+
+## Optional installed closed-client wake (OSWK)
+
+The original installed manager provides a separately reviewed, per-user native
+pulse for an exact existing installation, source, owner, brain, workspace and
+carrier. Its unique label/task name cannot replace another installation or the
+legacy shared label. The stable admitted installer resolves and authenticates
+the actual current server at every wake, including after a source update; the
+fixed installer version and current server version remain separate.
+
+The fifteen-minute pulse invokes a bounded one-shot composition of the existing
+source-availability and RunDue owners. It supplies no qualification, enrollment,
+model registration, past occurrence or source activation. All existing job
+grants, no-backfill boundaries, leases, idle/cancellation checks and guarded
+domain/receipt publication remain effective. With no eligible active job, the
+honest result is no_due_work rather than an execution receipt.
+
+Opt-in, status, pause and revoke use the exact current binding and explicit
+manager review. Native lifecycle/status operations share one fifteen-second
+deadline under the original publication serialization; no domain worker or
+browser wait occurs there. A loaded Mac service must match the complete actual
+arguments as well as its canonical private definition. Unknown or foreign
+identity refuses without adoption or replacement. Pause/revoke closes the owned
+definition before bootout, and the one-shot rechecks this veto inside the
+original publication guard. A timeout retains the disabled eligibility barrier
+and reports partial or unknown acknowledgement, never automatic re-enablement.
+
+Windows uses a create-only, least-privilege Task Scheduler definition for the
+current logged-in interactive user, without a password, elevation or WSL. It
+checks the complete fixed principal, action and cadence before operating on an
+existing task. A registered task, cross-compiled binary or parsed script does
+not establish native Windows execution.
+
+Pausing or removing this pulse stops the closed-client wake only. Existing
+per-job enrollments and a connected MCP process's original worker retain their
+own controls. OS registration/readback, an actual native wake, a no-due scan,
+a real domain commit and later client consumption are separate evidence.
+See the [operator guide](../docs/product-maintenance-wake.md).
 
 ## Acceptance
 
@@ -236,6 +328,38 @@ the live guard. It cannot mint a new qualification from that clock-only churn.
 Reports retain the stored plan identity as historical when stale; a separate
 bounded current-pending projection requires read-only canonical verification.
 
+### Daily signed-source availability (SFRD)
+
+`update-availability` is a separate default-inactive, metadata-only owner job on
+the existing control, Worker, grant, lease, receipt and diagnostic lifecycle.
+Require an already enrolled managed-installation source, actual authenticated
+qualification and separately reviewed enrollment. Share that owner/installation
+namespace across admitted workspaces and sessions. Model arguments, connections
+and hooks supply no source-enrollment or job-activation authority.
+
+The serve-owned wake observes the current local calendar day on first active use.
+Reconnects and concurrent workspaces coalesce through the existing occurrence
+fence; missed days coalesce to today rather than replaying historical metadata
+checks. Only this read-only-source observation bypasses idle. Other jobs retain
+their existing idle and catch-up behavior. No background service is installed.
+
+Reuse `ReviewSynced` for bounded authenticated source metadata/manifest reads.
+Do not advance source custody, stage payload, call a model, activate code or alter
+brain content. Bounded control, scheduler and diagnostic records remain in the
+existing admitted private owner state, preserving a configured Developer binding.
+Report source observation time and signed metadata status; payload stays
+`not_checked`. Offline, partial, expired, recalled, invalid or unenrolled sources
+never become up-to-date. Completing an unavailable diagnosis is not evidence of
+source availability, payload integrity or loaded-client functionality.
+
+The existing setup-update method provides the conversational update entry using
+the enrolled source and exact reviewed installer/Manage Maestro route. Preserve
+active-work continuity and the private brain. Checking, preparation, activation,
+client reload, native execution and Desktop instruction currency remain separate
+effects and evidence. Whole-executable/CLI/configuration qualification bindings
+remain effective after updates; retained controls cannot relabel stale proofs.
+The attended `update-check` contract above remains unchanged.
+
 ### Closed Darwin local-health product binding (DHRP)
 
 Spec037 owns the finite diagnosis, exclusive first-cache creation and immutable
@@ -252,3 +376,46 @@ unavailable; no current native kernel or profile is replaced by old stubs.
 
 Issue #498 remains partial until its automatic preservation and native/hosted
 acceptance gates are met. Source preparation is not installed-client acceptance.
+
+### Owner declaration capture binding (OSIN)
+
+Bind `self-observation-capture` to the fixed ownerctx approved-pending declaration
+source, not the already captured canonical log. Reuse the existing reviewed
+qualification/control, worker grant, scheduler lease, attempt and publication
+owners. This job alone uses a deterministic canonical-owner namespace shared
+across admitted workspaces: one qualification/control and one scheduled owner
+occurrence. Other jobs keep existing namespace behavior; no implicit migration
+of old receipts or authority is allowed.
+
+Intake review is distinct from job qualification and later enrollment. Successful
+qualification must commit and read back at least one new canonical observation
+version linked to its exact reviewed intake. Store bounded body-free immutable
+version evidence and a guarded pointer; verify the underlying canonical record,
+not an enqueue receipt or timestamp. Already captured/no-op/replayed input cannot
+qualify. Source fingerprint includes reviewed input and terminal denials, excludes
+its own captured outputs, and is held stable through final metadata publication.
+
+Acquire existing control/grant before the observation lock. Keep pause/revoke,
+source changes, deletion/expiry and concurrent owner workers fenced. Partial
+canonical commit remains real retained evidence if later publication fails; do
+not roll it back or mint qualification by replaying it. A report proves only its
+historical proposal-input capture, never current content permission, active SELF,
+independent native episodes, Windows availability or client qualification.
+
+Pass the actual handler context into canonical capture and check cancellation
+under the observation lock immediately before append. The enclosing worker grant
+may have been validated before an owner-lock wait. Likewise check context inside
+the final source-lock report publication; never reacquire the installed/control
+guard from the observation lock. Cancellation before first canonical publication
+leaves input pending and cannot produce successful report/qualification evidence.
+
+
+Windows eligibility also requires the installer's private native-definition
+control, independent of Task Scheduler's enabled flag. The reviewed revision
+advances before every opt-in, pause or revoke, including when no task is present.
+A timed-out or delayed COM enable cannot reopen that control. Opt-in opens it
+only after exact successful readback and a current live transaction; pause/revoke
+retains the disabled record before touching the task. Missing or unsafe control
+refuses a worker; an explicitly reviewed first action may bootstrap a disabled
+record. This is OS wake eligibility only, with job grants and actual execution
+proof kept separate. Do not delete or manually repair the control to retry.

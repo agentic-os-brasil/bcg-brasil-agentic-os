@@ -186,6 +186,20 @@
           }
         },
         {
+          "if": {"properties": {"id": {"const": "update-availability"}}},
+          "then": {
+            "properties": {
+              "category": {"const": "update"},
+              "trigger": {"const": "daily_or_presence"},
+              "executor": {"const": "local_adapter"},
+              "scope": {"const": "owner"},
+              "default_enabled": {"const": false},
+              "unattended": {"const": "policy_gated"},
+              "writes": {"const": ["local_diagnostics"]}
+            }
+          }
+        },
+        {
           "if": {"properties": {"id": {"const": "update-check"}}},
           "then": {
             "properties": {

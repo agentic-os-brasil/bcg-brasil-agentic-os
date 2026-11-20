@@ -23,6 +23,10 @@ var AuthorityRegistrySHA256 string
 
 func main() {
 	if err := run(); err != nil {
+		if code, handled := experimentalNativeHookFailure(os.Args[1:]); handled {
+			fmt.Fprintln(os.Stderr, "maestro: hook unavailable; inspect admitted state before retrying")
+			os.Exit(code)
+		}
 		if len(os.Args) > 1 && os.Args[1] == "stable-hook" {
 			fmt.Fprintln(os.Stderr, "maestro: passive lifecycle unavailable; inspect the selected installation and client materialization")
 			os.Exit(1)
@@ -45,6 +49,10 @@ func run() error {
 		return err
 	}
 	root := filepath.Dir(executable)
+	entryRole, err := installerEntryAdmission(executable)
+	if err != nil {
+		return err
+	}
 	registryPath := filepath.Join(root, "trust", "release-authority-registry.json")
 	if os.Args[1] == "lifecycle-capabilities" {
 		if len(os.Args) != 2 || Version == "" || AuthorityRegistrySHA256 == "" {
@@ -59,6 +67,13 @@ func run() error {
 		return json.NewEncoder(os.Stdout).Encode(installer.StableClientCapabilities("installer", Version, AuthorityRegistrySHA256))
 	}
 	if os.Args[1] == "seed-status" {
+		if entryRole != nil {
+			status, err := installer.ExperimentalSeedStatus(entryRole)
+			if err != nil {
+				return err
+			}
+			return json.NewEncoder(os.Stdout).Encode(status)
+		}
 		if len(os.Args) != 2 || Version == "" || AuthorityRegistrySHA256 == "" {
 			return errors.New("installer seed unavailable")
 		}
@@ -68,11 +83,18 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	if handled, err := experimentalNativeHookCommand(context.Background(), os.Args[1], executable, os.Args[2:], entryRole); handled {
+		return err
+	}
+	if handled, err := experimentalMaintenanceWakeCommand(context.Background(), os.Args[1], executable, os.Args[2:], entryRole); handled {
+		return err
+	}
 	flags := flag.NewFlagSet("maestro-install", flag.ContinueOnError)
 	planJSON := flags.String("confirmed-plan", "", "exact canonical activation plan from the reviewed handoff")
 	digest := flags.String("review-digest", "", "exact setup review digest")
 	confirm := flags.Bool("confirm", false, "explicit local confirmation")
 	var launch lifecycleFlags
+	launch.ExperimentalSeed = entryRole
 	flags.StringVar(&launch.ManagedRoot, "product-root", "", "fixed installed managed directory")
 	flags.StringVar(&launch.UserHome, "user-home", "", "fixed installation owner directory")
 	flags.StringVar(&launch.Workspace, "workspace", "", "fixed admitted workspace directory")
@@ -85,11 +107,13 @@ func run() error {
 	flags.StringVar(&launch.ClientCodeRoot, "client-code-root", "", "fixed generated operator launcher Code destination")
 	flags.StringVar(&launch.ClientDesktopPath, "client-desktop-path", "", "fixed generated operator launcher Desktop destination")
 	flags.StringVar(&launch.ClientCodeExecutable, "client-code-executable", "", "fixed generated operator launcher Code executable")
+	flags.StringVar(&launch.ClientCodeConfigurationDirectory, "client-code-config", "", "reviewed participant-local Code configuration directory")
 	flags.StringVar(&launch.ClientScope, "client-scope", "", "fixed generated operator launcher Code scope")
 	if os.Args[1] == "stable-hook" {
 		flags.StringVar(&launch.HookEvent, "event", "", "exact passive lifecycle event")
 	}
 	if os.Args[1] == "manage" {
+		flags.StringVar(&launch.ManagementIntent, "management-intent", "", "closed foreground participant intent: update")
 		flags.BoolVar(&launch.LifecycleContext, "client-lifecycle-context", false, "explicit passive Code lifecycle selection")
 	}
 	if err = flags.Parse(os.Args[2:]); err != nil {
@@ -112,7 +136,7 @@ func run() error {
 		if err := releasecontract.DecodeStrictJSON([]byte(*planJSON), &plan); err != nil {
 			return err
 		}
-		state, err := installer.ActivateSeeded(context.Background(), installer.SeededActivationOptions{Self: executable, Version: Version, AuthorityRegistrySHA256: AuthorityRegistrySHA256, Plan: plan, ReviewDigest: *digest, Confirmed: *confirm})
+		state, err := installer.ActivateSeeded(context.Background(), installer.SeededActivationOptions{ExperimentalSeed: entryRole, Self: executable, Version: Version, AuthorityRegistrySHA256: AuthorityRegistrySHA256, Plan: plan, ReviewDigest: *digest, Confirmed: *confirm})
 		if err != nil {
 			return err
 		}
@@ -130,7 +154,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	config := setup.Config{Installer: executable, AuthorityRegistry: registryPath}
+	config := setup.Config{ExperimentalSeed: entryRole, Installer: executable, AuthorityRegistry: registryPath}
 	if os.Args[1] == "review" {
 		review, err := setup.ReviewInstallation(request, config)
 		if err != nil {

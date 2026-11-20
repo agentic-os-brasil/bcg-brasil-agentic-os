@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+// AtlasDataRootForTest shares the canonical private fixture with external tests.
+func AtlasDataRootForTest(t *testing.T) string { return atlasTestDataRoot(t) }
+
 func testEngine(t *testing.T) *Engine {
 	t.Helper()
 	dataRoot := atlasTestDataRoot(t)

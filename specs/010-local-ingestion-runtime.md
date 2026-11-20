@@ -48,13 +48,12 @@ An extraction failure changes no memory, wiki or shared knowledge state.
 The product bundle remains a thin Go CLI. Docling belongs to a separately
 versioned, per-platform ingestion runtime pack managed by `bcgos`:
 
-- a pinned Python runtime and Docling dependency set;
-- a compatible CPU-first PyTorch distribution and approved local models;
+- a pinned Python runtime and Docling dependency set; the current SimplePipeline closure is model-free;
+- CPU-first PyTorch and approved local models only for a separately approved future model-backed profile;
 - a verified manifest, checksums, provenance and compatibility range;
 - preflight checks for operating-system support, free disk, writable local
   application storage and required corporate-network access;
-- model prefetch at installation or first explicit ingestion, with a visible
-  progress and retry path;
+- model prefetch only in that separately approved future profile, with a visible progress/retry path; the current profile fetches no models;
 - local artifact cache outside workspaces and outside synchronized roots.
 
 `bcgos` asks for confirmation before downloading or activating the pack. The
@@ -93,11 +92,28 @@ and capability reporting; Docling owns document conversion.
 
 ## Delivery boundary
 
-The initial implementation assembles the exact acquired interpreter and 45 locked
-wheels, authenticates the complete installed closure and converts DOCX offline on
-Apple Silicon macOS. It downloads no dependencies or models, uses no ambient
-Python and preserves an unavailable result for other platforms and formats.
+The source supports target-specific construction for Darwin arm64 and Windows
+amd64. Darwin preserves its exact 51-wheel closure and bridge. Windows has a
+separate 52-wheel/CPython closure, held owner/DACL/no-reparse inventory verification
+and native ordinary-user zero-capability AppContainer execution. Child creation
+is prohibited; a suspended child joins a timeout-controlled kill-on-close Job
+before execution. Only staged authenticated bytes and private scratch receive
+the per-conversion SID; original documents and installed-pack ACLs stay intact.
 
+Windows readiness requires actual explicit authenticated placement qualification:
+real synthetic SimplePipeline conversion and native network/filesystem/child
+negative controls precede a private current-user/machine DPAPI proof bound to
+signed pack bytes, production implementation/dependency identity and hashed local
+kernel/owner/install identity. Status only verifies that proof and current bytes;
+missing/stale proof reports requalification_required without side effects.
+Profile create/remove and smoke execution belong only to explicit setup/apply or
+conversion, never queries. No admin/service/firewall/global ACL change is required.
+
+Source tests, a cross-build or an assembled pack do not qualify native Windows.
+The closed ordinary-account driver and manual-only native workflow must actually
+pass real conversion and denial controls before native readiness claims. Corporate
+signing, publisher authority, installed client loading and device acceptance are
+separate gates.
 Read the [authenticated runtime guide](../docs/product-offline-runtime.md) when
 assembling a pack, diagnosing authority/availability or qualifying conversion.
 The owning code is `internal/ingest/docling`; `cmd/maestro-docling-pack` constructs
@@ -111,3 +127,14 @@ release authority must be observed before claiming the broader platform promise.
 - [Docling installation](https://docling-project.github.io/docling/getting_started/installation/)
 - [Docling offline models and artifact paths](https://docling-project.github.io/docling/usage/advanced_options/)
 - [Docling supported formats and local execution](https://github.com/docling-project/docling)
+
+## NTXT model-free document extension
+
+Spec061 and decision NTXT admit encoded-text PDF and modern PPTX through the
+separate authenticated `model-free-documents-v1` closure. NativePdfPipeline uses
+PyPdfium explicitly, with rendering/model/OCR/remote paths disabled; the result
+is textual fidelity with page/bounding-box provenance. This does not authorize
+full visual PDF parsing, model downloads, OCR or implicit MarkItDown fallback.
+The legacy eleven-format profile and its archive bytes remain supported exactly.
+Per-format status follows the verified installed profile, not the global policy
+allowlist. Read Spec061 for the closed refusal and acceptance boundaries.

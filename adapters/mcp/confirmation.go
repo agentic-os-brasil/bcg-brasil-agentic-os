@@ -8,7 +8,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/internal/localreview"
+
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceagent"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/zipruntime"
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -30,23 +33,34 @@ func (b *Bound) confirm(ctx context.Context, req *mcp.CallToolRequest, question 
 		logConfirmationUnavailable(req, stage)
 		return errConfirmationUnavailable
 	}
-	capabilities := req.ClientCapabilities()
-	if capabilities == nil || capabilities.Elicitation == nil {
-		return unavailable("form_undeclared")
+	if req == nil || req.Params == nil || req.Params.Name == "" || ctx.Err() != nil {
+		return unavailable("foreground_required")
 	}
-	caps := capabilities.Elicitation
-	if caps.Form == nil && caps.URL != nil {
+	capabilities := req.ClientCapabilities()
+	form, _ := confirmationModes(capabilities)
+	localBrowser := b.options.OwnerReviewChannel == "local-browser"
+	if (localBrowser || !form) && len(req.Params.InputResponses) != 0 {
+		return unavailable("native_continuation_unavailable")
+	}
+	if !form && !localBrowser {
+		if capabilities == nil || capabilities.Elicitation == nil {
+			return unavailable("form_undeclared")
+		}
 		return unavailable("url_only")
 	}
 	maximum := 1 << 20
 	// A full 256KiB page plus its proposed replacement can expand sixfold in JSON.
 	switch review.(type) {
+	case zipruntime.DailyReview:
+		maximum = zipruntime.DailyReviewMax
 	case workspaceagent.SetupReview:
 		// One complete 256KiB page expands at most sixfold; bounded registration,
 		// current/proposed setup and optional checkpoint fit in the remaining 512KiB.
 		maximum = 2 << 20
 	case KnowledgeReview, BrainReview:
 		maximum = 4 << 20
+	case historyReviewEnvelope:
+		maximum = maximumHistoryReviewBytes
 	case ownerAtlasReview:
 		// Preparation reviews four existing 256KiB scaffold pages: at most
 		// 6MiB after sixfold JSON escaping. Create/update bind at most three
@@ -74,6 +88,26 @@ func (b *Bound) confirm(ctx context.Context, req *mcp.CallToolRequest, question 
 		RequestedSchema: &jsonschema.Schema{Type: "object", Properties: map[string]*jsonschema.Schema{
 			"approved": {Type: "boolean", Title: "Aprovo este registro exato", Description: "Li o conteúdo completo e autorizo esta alteração."},
 		}, Required: []string{"approved"}},
+	}
+	if localBrowser {
+		if req.Session == nil {
+			return unavailable("missing_session")
+		}
+		review := b.localOwnerReview
+		if review == nil {
+			review = localreview.Confirm
+		}
+		accepted, err := review(ctx, params.Message, params.RequestedSchema)
+		if err != nil {
+			return unavailable("local_browser_unavailable")
+		}
+		if !accepted {
+			return errConfirmationDeclined
+		}
+		if ctx.Err() != nil {
+			return unavailable("local_browser_unavailable")
+		}
+		return b.validate()
 	}
 	var out *mcp.ElicitResult
 	if req.ProtocolVersion() >= "2026-07-28" {
@@ -104,6 +138,10 @@ func (b *Bound) confirm(ctx context.Context, req *mcp.CallToolRequest, question 
 }
 
 func logConfirmationUnavailable(req *mcp.CallToolRequest, stage string) {
+	if req == nil || req.Params == nil {
+		fmt.Fprintf(os.Stderr, "maestro_confirmation_unavailable stage=%s protocol=missing request_capabilities=false initial_form=false initial_url=false form=false url=false\n", stage)
+		return
+	}
 	initialForm, initialURL := false, false
 	if req.Session != nil {
 		if p := req.Session.InitializeParams(); p != nil {

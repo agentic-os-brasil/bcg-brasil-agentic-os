@@ -1,6 +1,6 @@
 # Build only exact committed source and a publicly readable copied SDK.
 # The existing credentialed driver owns all ordinary-account execution.
-param([string]$KitArchive, [string]$KitIdentity)
+param([string]$KitArchive, [string]$KitIdentity, [switch]$DoclingRuntime)
 $ErrorActionPreference = 'Stop'
 if (-not $env:GITHUB_ENV -or -not $env:RUNNER_TEMP) { throw 'Use this builder inside the reviewed hosted qualification job.' }
 $ErrorActionPreference = 'Stop'
@@ -76,6 +76,59 @@ git archive --format=tar --output=$archive HEAD
 if ($LASTEXITCODE -ne 0) { throw 'Exact source archive failed.' }
 tar -xf $archive -C $sourceRoot
 if ($LASTEXITCODE -ne 0) { throw 'Exact source staging failed.' }
+if ($DoclingRuntime) {
+  if ($artifactMode) { throw 'Docling runtime qualification does not consume a generic pilot artifact.' }
+  $env:GOCACHE = Join-Path $env:RUNNER_TEMP 'docling-host-build-cache'
+  $env:GOMODCACHE = Join-Path $publicRoot 'modules'
+  $env:GOTOOLCHAIN = 'local'
+  $env:GOFLAGS = '-mod=readonly -buildvcs=false'
+  foreach ($module in @($sourceRoot, (Join-Path $sourceRoot 'adapters/mcp'))) {
+    Push-Location -LiteralPath $module
+    try {
+      & $sdkGo mod download
+      if ($LASTEXITCODE -ne 0) { throw 'Docling exact module acquisition failed.' }
+      & $sdkGo mod verify
+      if ($LASTEXITCODE -ne 0) { throw 'Docling module checksum verification failed.' }
+    } finally { Pop-Location }
+  }
+  $rawRoot=Join-Path $publicRoot 'raw'
+  New-Item -ItemType Directory -Path $rawRoot | Out-Null
+  $env:MAESTRO_DOCLING_ACQUIRE_SOURCE=$sourceRoot
+  $env:MAESTRO_DOCLING_ACQUIRE_RAW=$rawRoot
+  @'
+import hashlib,json,os,pathlib,urllib.request
+source=pathlib.Path(os.environ['MAESTRO_DOCLING_ACQUIRE_SOURCE'])
+root=pathlib.Path(os.environ['MAESTRO_DOCLING_ACQUIRE_RAW'])
+inputs=json.loads((source/'internal/ingest/docling/runtime/windows-amd64/inputs.json').read_text())
+assert len(inputs)==52 and sum(x['size'] for x in inputs)==80853273
+inputs.append(dict(filename='cpython-3.12.16+20261026-x86_64-pc-windows-msvc-install_only.tar.gz',size=47113364,sha256='590dfcbe3a34c07301e6332e13e2188b98655cd072b08afa45a7998dc4c22bc5',url='https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.12.16%2B20261026-x86_64-pc-windows-msvc-install_only.tar.gz'))
+for item in inputs:
+    name=item['filename'];assert pathlib.PurePosixPath(name).name==name and ':' not in name and '\\' not in name
+    expected=item['sha256'];count=0;digest=hashlib.sha256()
+    assert item['url'].startswith(('https://files.pythonhosted.org/packages/','https://github.com/astral-sh/python-build-standalone/releases/download/20261026/'))
+    with urllib.request.urlopen(item['url'],timeout=60) as response,(root/name).open('xb') as output:
+        while chunk:=response.read(1<<20):
+            count+=len(chunk);assert count<=item['size'];digest.update(chunk);output.write(chunk)
+    assert count==item['size'] and digest.hexdigest()==expected,'pinned input mismatch'
+print('verified_exact_public_runtime_inputs=53 bytes=127966637')
+'@ | python -
+  if ($LASTEXITCODE -ne 0) { throw 'Docling exact public runtime acquisition failed.' }
+  $testBinary=Join-Path $binaryRoot 'docling.test.exe'
+  Push-Location -LiteralPath $sourceRoot
+  try { & $sdkGo test -c './internal/ingest/docling' -o $testBinary; if ($LASTEXITCODE -ne 0) { throw 'Exact Docling native test compilation failed.' } } finally { Pop-Location }
+  $inventory=Join-Path $publicRoot 'docling-input-inventory.jsonl'
+  $records=@(Get-ChildItem -LiteralPath $publicRoot -Recurse -File -Force | Sort-Object FullName | ForEach-Object {
+    [ordered]@{path=$_.FullName.Substring($publicRoot.Length+1).Replace('\','/');size=$_.Length;sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()} | ConvertTo-Json -Compress
+  })
+  $records | Set-Content -LiteralPath $inventory -Encoding UTF8
+  . (Join-Path $sourceRoot 'acceptance/windows-docling-profile.ps1')
+  $manifest=[ordered]@{schema_version=1;qualification_profile='windows_docling_runtime_v1';source_revision=$revision;public_root=$publicRoot;source_root=$sourceRoot;sdk_go=$sdkGo;module_cache=$env:GOMODCACHE;raw_inputs=$rawRoot;test_binary=$testBinary;inventory_sha256=(Get-FileHash -LiteralPath $inventory -Algorithm SHA256).Hash.ToLowerInvariant();required_tests=$script:DoclingRuntimeTests}
+  $manifestPath=Join-Path $publicRoot 'docling-runtime-manifest.json'
+  $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+  Read-DoclingRuntimeManifest $manifestPath | Out-Null
+  "MAESTRO_WINDOWS_DOCLING_MANIFEST=$manifestPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+  return
+}
 $env:GOCACHE = Join-Path $env:RUNNER_TEMP 'native-engine-build-cache'
 $env:GOTOOLCHAIN = 'local'
 $env:GOFLAGS = '-buildvcs=false'
@@ -136,19 +189,48 @@ try {
   $setupInventory = @(& $setupBinary '-test.list' '^(Test|Example)')
   # Complete compiled inventory is distinct from the four selected native setup parents.
   $expectedSetupInventory = @(
-    'TestModernFactoryFirstInstallAndRestart',
-    'TestDirectInnerInstallRequiresProductionAuthority',
-    'TestModernSyncedSourceLifecycle',
-    'TestSyncedPublicationInterleavingAndReadOnlyReviews',
+    'TestCodeCommandConsentKeepsOnlyClosedHostFailureCategory',
+    'TestCodeCommandConsentPreservesOfficialChildSessionGuards',
+    'TestCodeCommandConsentPublicVendorGoldenFrames',
+    'TestCodeCommandConsentRechecksAfterNativeIdentityRead',
+    'TestCodeCommandConsentRefusesChangedReviewedInputsBeforeEffects',
+    'TestCodeCommandConsentRejectsForeignScriptEvenWithRehashedRecord',
+    'TestCodeCommandConsentUnavailableHostPreservesPendingState',
+    'TestCodeCommandSourceRegistrationUsesOnlyReviewedNarrowConsent',
+    'TestCodeCopyContentProtocolPreservesUTF16OrderAndExactBytes',
+    'TestCodeCurrentCommandCopyReadbackWithoutFolderFields',
+    'TestCodeReadbackRequiresExplicitEnabledState',
+    'TestCodeRegistrationDoesNotTrustExitAcknowledgement',
     'TestCodeRegistrationPreservesDisabledAndRefusesForeignSource',
     'TestCodeRegistrationWithUnrelatedCachedPlugin',
-    'TestCodeRegistrationDoesNotTrustExitAcknowledgement',
-    'TestCodeReadbackRequiresExplicitEnabledState',
+    'TestCodeWindowsSourcePreservesUnicodeArgumentsForWindowsPowerShell',
+    'TestCompatibleDesktopCarrierReusesBytesWithoutChangingPriorSlot',
     'TestCurrentClientShippingNativeRefusal',
-    'TestModernClientRegistrationLifecycle'
+    'TestCurrentMaintenancePreservesQualifiedRoleAndReleaseArguments',
+    'TestDirectInnerInstallRequiresProductionAuthority',
+    'TestExplicitNativeRetryUsesFreshReviewedSlotsAndPreservesFailedCandidate',
+    'TestFullNativeClientMaterializationHasNoResourceOnlyFallback',
+    'TestInitialRuntimeOlderUnboundConsumerRemainsExplicitlyPending',
+    'TestInterruptedVersionedDesktopReuseRequiresAuthenticatedPriorBinding',
+    'TestMaintenanceRefreshSelectsOnlyPreviouslyQualifiedStaleJobs',
+    'TestModelProfilePreparationAndLoginRequireSeparateConfirmation',
+    'TestModelRegistrationRefusesOwnerPolicyForWorkspaceBeforeSourceAccess',
+    'TestModelRegistrationRequiresExplicitConfirmationBeforeSourceAccess',
+    'TestModelRegistrationReviewUsesActualSelectedJobScope',
+    'TestModernFactoryFirstInstallAndRestart',
+    'TestModernSyncedSourceLifecycle',
+    'TestSelectedCodeProfileIsPerChildAndLeavesCallerUntouched',
+    'TestSyncedPublicationInterleavingAndReadOnlyReviews',
+    'TestVersionedCodeReadbackAcceptsOnlyMatchingNativeCopy',
+    'TestVersionedCodeSourceUsesFixedShortLauncherOnMacAndWindows',
+    'TestVersionedProviderPreservesChangedFilesAndForeignEntries',
+    'TestWindowsWakeFreshAbsentPauseIsDurableAndReviewIsOSFree',
+    'TestWindowsWakeLateNativeAckCannotReopenPausedEpoch',
+    'TestWindowsWakeRefusesInvalidAckWithoutOpeningControl',
+    'TestWindowsWakeSuccessfulOptInPauseRevokeAndContextFailures'
   )
-  if ($LASTEXITCODE -ne 0 -or $setupInventory.Count -ne 10 -or
-      @((Compare-Object $expectedSetupInventory ($setupInventory | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) { throw 'Setup full inventory must contain the ten existing first-install, source and client parents.' }
+  if ($LASTEXITCODE -ne 0 -or $setupInventory.Count -ne $expectedSetupInventory.Count -or
+      @((Compare-Object $expectedSetupInventory ($setupInventory | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) { throw 'Setup full inventory must match the reviewed first-install, source, client, model and maintenance test set.' }
   $packagingBinary = Join-Path $binaryRoot 'packaging.test.exe'
   & $sdkGo test -c ./packaging -o $packagingBinary
   if ($LASTEXITCODE -ne 0) { throw 'Native owned-process packaging test compilation failed.' }

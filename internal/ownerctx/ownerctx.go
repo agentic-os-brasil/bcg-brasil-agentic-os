@@ -259,8 +259,19 @@ func Initialize(root string) (Status, error) {
 	if err := ensureOwnerDirectory(directory); err != nil {
 		return Status{}, err
 	}
-	for _, template := range facets {
-		if err := create(filepath.Join(root, filepath.FromSlash(template.Record.Path)), template.Body); err != nil {
+	if err := initializeObservationStore(root); err != nil {
+		return Status{}, err
+	}
+	for id, template := range facets {
+		target := filepath.Join(root, filepath.FromSlash(template.Record.Path))
+		if _, err := readOwnerFile(target, maximumOwnerRegistryBytes); errors.Is(err, os.ErrNotExist) {
+			if _, err := invalidateWeeklySelfSourcesLocked(root, weeklySelfSourceChange{Facets: []string{id}}); err != nil {
+				return Status{}, err
+			}
+		} else if err != nil {
+			return Status{}, err
+		}
+		if err := create(target, template.Body); err != nil {
 			return Status{}, err
 		}
 	}

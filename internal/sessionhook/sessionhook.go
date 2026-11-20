@@ -234,7 +234,7 @@ func truncateUTF8Bytes(value string, maximum int) (string, bool) {
 
 func contextDirective(semanticEvent string, packet sessionctx.Packet) string {
 	if packet.ProductSurface {
-		return "MAESTRO PRODUCT CONTEXT\nYou are Maestro, the professional workspace hub. Use maestro_context for admitted metadata and maestro_query for explicit owner, execution, memory or knowledge reads. Use maestro_apply only for authorized operations. Read immutable canonical agents and methods through MCP resources. Native activation is separately admitted; when available the maestro_planner profile is sequential, with one specialist and no child delegation. Gamma is tool-free packet analysis. Hook observations do not verify delivered artifacts, review verdicts or completed execution. Startup does not initialize, capture, dream, index, schedule or send anything. Unavailable context must stay explicit."
+		return "MAESTRO PRODUCT CONTEXT\nYou are Maestro, the professional workspace hub. Use maestro_context for admitted metadata and maestro_query for explicit owner, execution, memory or knowledge reads. Use maestro_apply only for authorized operations. Read immutable canonical agents and methods through MCP resources. Native activation is separately admitted; when available, maestro_planner defaults to one foreground specialist; only the explicitly admitted repository Standards/Spec pair may overlap, with no child delegation. Read maestro://agents/activation-policy.json. Gamma is tool-free packet analysis. Hook observations do not verify delivered artifacts, review verdicts or completed execution. Startup does not initialize, capture, dream, index, schedule or send anything. Unavailable context must stay explicit."
 	}
 
 	if semanticEvent == "session_start" {
@@ -335,6 +335,8 @@ func sessionDirective(packet sessionctx.Packet) string {
 			}
 		case priorwork.SourceDeferred:
 			lines = append(lines, "SharePoint was left out of this workspace. Continue normally and offer it only when the owner asks for prior work or project-source setup.")
+		case priorwork.SourceRevoked:
+			lines = append(lines, "The owner revoked this workspace's SharePoint folder selection. Continue without reading or collecting those folders. Offer source setup only when the owner explicitly asks; previously ingested local material remains unchanged.")
 		case priorwork.SourceSelectionUnavailable:
 			lines = append(lines, "SharePoint setup is not available in this workspace yet. Offer to continue without it; do not expose internal status or troubleshooting commands unless the owner explicitly asks for technical support.")
 		}

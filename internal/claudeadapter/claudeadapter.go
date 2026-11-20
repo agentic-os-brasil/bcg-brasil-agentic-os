@@ -95,7 +95,7 @@ type SubagentStartOutput struct {
 func ManagedSubagentStartContext(agentType string) SubagentStartOutput {
 	var output SubagentStartOutput
 	output.HookSpecificOutput.HookEventName = "SubagentStart"
-	output.HookSpecificOutput.AdditionalContext = "You are running as the managed Maestro specialist " + agentType + ". Stay inside the exact delegated packet, never delegate, and return only to Maestro. This is the bounded sequential maestro_planner profile. Native host qualification remains separate; a stop observation does not verify delivery, a verdict or execution completion."
+	output.HookSpecificOutput.AdditionalContext = "You are running as the managed Maestro specialist " + agentType + ". Stay inside the exact delegated packet, never delegate, and return only to Maestro. This is the maestro_planner profile: ordinary specialists are sequential; only the closed foreground repository Standards/Spec pair may overlap. Native host qualification remains separate; a stop observation does not verify delivery, a verdict or execution completion."
 	return output
 }
 

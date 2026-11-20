@@ -57,6 +57,12 @@ UserPromptSubmit emits metadata only and does not enter native agent-flow
 admission. Stop respects recursion and records only a confined typed lifecycle
 observation; it cannot invoke the enforcing unresolved-route Stop path.
 
+After explicit capture setup, this same Stop observation may also queue a
+closed body-free provenance envelope outside canonical memory. Missing
+authority never creates a key. This preserves `observed_only` evidence and
+does not attest host invocation or completed work. Only the separately reviewed
+and enrolled capture job may ingest it; the hook never captures memory itself.
+
 Filesystem creation belongs to explicit setup through the existing datahome,
 workspace, owner and memory initialization owners. Repeat preparation preserves
 existing content and keys. Startup, prompt and stop never initialize or repair
@@ -137,8 +143,9 @@ diagnosable without silently becoming isolated extensions.
 
 ## Canonical identities and projection
 
-Maestro remains the main-session hub. Project the six canonical specialists:
-case-agent, client-account-agent, darwin, gamma-guardian, pa-expert and yoda.
+Maestro remains the main-session hub. Project the canonical ordinary specialists:
+case-agent, client-account-agent, darwin, gamma-guardian, pa-expert and yoda,
+plus the closed repository review pair described under RPAR below.
 Reuse embedded definitions/catalog/templates and one pure projection shared
 with the existing workspace renderer. Frontmatter must be first; preserve
 ownership recognition and conflict-safe replacement of older managed files.
@@ -154,6 +161,10 @@ executable Agent references only; preserve canonical IDs, paths, policy and
 provenance. Normalize only the exact admitted namespace. Unknown own-namespace
 IDs and spoofed prefixes cannot become managed specialists. Tools do not gain
 authority from a prompt, a metadata file or successful name resolution.
+
+DMFP adds a separate `maestro-desktop-methods` instruction/resource carrier
+(Spec 065). Its projected references do not extend these native identities,
+normalizers, plugin admission checks or qualification fingerprints.
 
 ## Bound hook adapter
 
@@ -293,7 +304,7 @@ and [command fields](https://code.claude.com/docs/en/hooks#command-hook-fields).
 The admission path must withhold native activation when the host/profile is
 unknown, unsupported, stale or unqualified. It must emit a functional MCP-only
 packet with an explicit native capability reason and no active native hooks.
-The six canonical specialist projections remain inert instructions as required
+The eight canonical specialist projections remain inert instructions as required
 by the portable agent contract. Their presence never establishes native admission.
 Do not invent a plugin-manifest compatibility field or a native client identity.
 Windows native admission is currently refused; compiled/source tests do not
@@ -338,7 +349,30 @@ When the verified installed Maestro would otherwise load too, the exact review
 and receipt bind a session-only settings override disabling that installed ID.
 This prevents duplicate hook execution without editing user/project settings.
 The inline candidate stays distinct. No other plugin is silently disabled or
-ignored, and a changed registry, source or override invalidates review. A
+ignored, and a changed registry, source or override invalidates review.
+
+A nonempty cloud-synced cache is inactive only when a pre-existing stored
+`syncClaudeAiPlugins:false` is applicable in user, local or managed settings.
+Shared-project false does not disable loading; an eligible false wins over true.
+Validate the setting as a boolean. This setting stops both downloading and
+loading already-synced plugins, supported since Code 2.1.273; the enforcement
+minimum 2.1.295 already includes that support. Preserve that relationship if the
+minimum changes. Bind the cache's bounded direct membership and reject unsafe
+roots, direct aliases, unsupported entry types and overflow, without reading
+inactive bodies. Absent/true/shared-only false retains the active-cache refusal.
+Other plugin and hook sources retain their existing admission. Qualification
+creates no sync override and never edits a profile to make it eligible.
+Stored settings and cache membership participate in the existing review and
+pre-final-build configuration fingerprint checks. Shipping hooks validate their
+packet/binding; they do not continuously recompute the host configuration hash.
+
+Both ordinary pilot preparers disclose, before confirmation, the creation of
+`autoMemoryEnabled:false` and `syncClaudeAiPlugins:false` in only their new
+dedicated `client/code/settings.json`. Create it exclusively as UTF-8 without a
+BOM. Existing rehearsals preserve settings and all other profile data, including
+an absent settings file. The profile remains outside managed inventory and the
+generic distributable ZIP. This deliberate pilot setup is separate from native
+qualification and does not establish active third-party-plugin parity. A
 configured passive carrier and full observed enforcement retain separate
 capability states; adapter-command context alone cannot promote qualification.
 
@@ -420,3 +454,209 @@ continuity/resume exercise. Guides distinguish quick 3/4 from complete 1→2 and
 not ask participants to re-enter prepared owner/workspace paths. Normal login,
 installation, permissions and actual native-client observation remain required;
 a generated prompt or SDK check does not attest that the client executed it.
+
+### Qualified Code delivery in the ordinary pilot
+
+Ordinary preparation and opening never run paid qualification. Menu option 5
+invokes the existing native review/qualification commands with the exact local
+binding, selected Code executable and dedicated profile. It displays the complete
+returned plan, requests the existing estimated per-session limit and requires a
+separate explicit confirmation. The canonical command retains all admission,
+budget/count/time and proof predicates. Refusal or an existing result does not
+trigger deletion, profile repair, hidden retry or native capability promotion.
+
+The sole optional export `exports/code-native-qualified` is validated through its
+closed packet inventory, host target, trusted pilot executable SHA and exact
+native binding. Only its `native` mode is selected; a valid `mcp_only` result keeps
+the baseline MCP packet, and other modes or invalid material refuse. The outer
+prepared inventory continues to protect baseline product/exports/launchers while
+excluding only this separately validated optional subtree. Unknown additions
+elsewhere remain changes to managed material.
+
+The Code launcher passes a private per-session `--settings` file containing only
+`pluginConfigs["maestro-product@inline"].options.user_home` and `.workspace`.
+These values select the already validated binding for retained MCP and seven-hook
+userConfig vectors. It changes no sealed packet, stored settings, authentication,
+permissions or hooks. Session selection is a delivery condition distinct from
+qualification; neither proves continuous runtime configuration revalidation.
+Desktop retains its separate bound MCP extension and no Code-hook parity claim.
+
+## Closed foreground repository review pair (RPAR)
+
+The same `maestro_planner` profile additionally projects
+`repository-spec-reviewer` and `repository-standards-reviewer`. These are fixed
+repository axes with Read, Glob and Grep confined by the existing workspace
+policy, including existing symlink resolution and structured selected-case .active/.pending
+path checks. Searches inherit descendant case checks; a repository-wide search
+covering foreign case trees refuses rather than broadening authority. They have no shell, write, MCP,
+child delegation, resumed-agent or team authority. The canonical catalog declares
+this exact pair separately from the unchanged ordinary sequential role graph.
+A catalog without the optional declaration retains its prior sequential model.
+
+Before dispatch Maestro freezes the actual three-dot diff, resolved base/head,
+commit list, standards with smell baseline, and spec (or explicit absence). The
+independent bounded packets carry actual diff text and repository-relative source
+references; each worker may read needed files independently. Live source drift
+must be reported, not treated as frozen evidence. No generic repository RPC or
+shell grant is introduced. Submit both explicit canonical Agent calls in one
+foreground parallel batch. A missing spec produces an explicit absent-spec
+response from its worker, preserving the closed pair.
+
+Bound schema-2 state adds only an optional `repository_review_pair` containing
+exactly two axis slots. Each slot stores hashed dispatch/native identities and
+its stop flag; it stores no packet, diff, source path, result or private content.
+The strict decoder validates slot shape, replay membership, uniqueness, active
+ordinary-route exclusion and both-starts-before-first-stop. Existing schema-2
+bytes with no pair remain valid; old strict binaries reject pair-bearing bytes,
+so an in-flight pair must not be downgraded to an old binary. Schema-1 passive
+observations still grant no bound authority.
+
+The first admission fences ordinary hub work, turn reset and closure. Only the
+complementary axis can join, pending or already active; no third branch, repeated
+axis or child dispatch is admitted. Each observed native start correlates to its
+reserved canonical axis exactly once. Both starts must precede either stop. Each
+stop revokes that worker's tools; the first matching foreground Agent return may
+arrive while its peer remains active. Unknown IDs, altered tool IDs, stale prompt
+IDs and late prior-turn events refuse. Exact pending admission/start/stop retries
+are idempotent; an already started axis cannot be re-dispatched. Completion does
+not synthesize Case, Account, Gamma or Yoda route observations, and the same pair
+cannot reenter that turn.
+
+A failed/missing dispatch, start or stop leaves the pair unresolved. Keep its
+metadata across process resumption, report the diagnostic and preserve partial
+axis evidence without claiming a complete review. An exact pending call can retry;
+there is no silent timeout, reset, repair or new identity that clears authority.
+A host session may be ended explicitly, but its abandoned state is not evidence
+of successful completion. Both native stop observations release the pair fence;
+ordinary routes then retain all their existing sequencing requirements.
+
+Focused source/compiled-CLI hook tests establish only these local contracts.
+The existing native-planner-v2 qualification experiment remains the finite
+Case-to-Gamma control and does not attest the review pair. Actual independently
+reading model workers, foreground overlap, host permission enforcement and useful
+Standards/Spec reports require separate attended runtime evidence against the
+frozen source and packet. Adding these public role assets grants no installation,
+model-spend, distribution or signing authority.
+
+
+### Exact-call qualification post evidence
+
+Candidate-only canonical PreToolUse and PostToolUse wrappers use validated native
+session/tool-use/tool-name identities to emit a versioned, domain-separated
+SHA256 over a canonical JSON array with event and probe nonce. The documented
+systemMessage transports this correlation marker after canonical success; no
+raw identity or tool content enters it. Verify the actual matching native
+hook_started/response envelopes, event, success outcome, typed zero exit and
+exact call marker. Latest assistant position, another same-kind tool, marker
+text alone, old nonce-only markers and returned content cannot replace this
+successful canonical post observation. Ordinary installed hooks remain unchanged.
+
+The existing private 4096-byte failure record adds capped PostToolUse counts
+(32) and at most four normalized metadata observations of outcome, exact versus
+unattested binding, derived tool/latest/last-result kind and typed exit code.
+Retain the existing eight-startup/eight-read bounds and private-body exclusion;
+compact JSON preserves the aggregate size cap. These are diagnostic observations,
+not importable qualification, signing, installation or owner authority. Source
+fixtures demonstrate correlation behavior only. Retained failed runtime trials
+remain failed; later instrumented native trials require their own reviewed plan.
+
+
+## Explicit readable owner review in experimental Code pilots
+
+An explicitly prepared `--code-pilot --owner-review-channel local-browser`
+packet binds that foreground channel, exact admitted owner/workspace and selection
+digest in its closed inventory and canonical MCP launch arguments. Serve rejects
+channel/binding substitution; ordinary hooks retain their existing no-review
+arguments and native fingerprints. Empty startup selection remains native-first.
+Browser-selected requests reject native InputResponses, including when native
+forms are advertised. Full current/proposed review and domain stale-state checks
+are unchanged. Generic, stable, enrolled and source packets cannot acquire this
+profile implicitly. The existing prepared short-lived engineering runtime identity
+owns versioned experiments; this profile creates no publisher authority.
+
+Qualification plans separately disclose/bind this Code selection. Actual native
+qualification remains independent; neither packet metadata nor browser readability
+qualifies hooks, native form rendering, Desktop UI or runtime conversions.
+
+## Live Desktop method bootstrap and complete source-managed clients (SFRD)
+
+The optional maestro-live-method-bootstrap-v1 Desktop library retains existing
+entry identities and frontmatter while resolving instructions from the actual
+admitted backend. It adds no native agent, hook, approval or filesystem authority.
+An MCPB and this separately installed library remain distinct components.
+
+Each invocation positively identifies the workspace connector, then reads the
+current methods index and agent-skill policy, discovers the complete paged catalog,
+selects an exact current method and obtains its plan. Read every instruction and
+referenced canonical resource through existing methods.read/resource APIs, with
+consistent URI, hash, total length and contiguous page offsets. Discard and reread
+if identities change. Use a genuine host hashing facility when available; never
+claim an independent calculation otherwise. Plans describe effects but grant none.
+Cached auxiliary snapshots cannot override current instructions. New methods are
+reachable through operator even without a newly installed slash alias.
+
+Ordinary method/catalog updates require no library reimport while the bootstrap
+protocol stays compatible. A changed bootstrap contract or native permission
+still needs normal host review. Bootstrap package version, current backend method
+identities and actual loaded/functional client evidence remain separate. Missing
+runtime dependencies or native capabilities stay unavailable after reading an
+updated method. This profile does not turn Desktop into an enforcing Code host.
+
+The versioned complete Code route in Spec020 retains this specification's genuine
+exact-host qualifier and all canonical specialists and seven-event enforcement.
+Stable carrier identity is included in the reviewed qualification fingerprint
+before the producer runs. Current packet publication cannot reuse an imported
+native proof or silently fall back to the non-enforcing lifecycle/resources-only
+profiles. Existing native custody and qualification requirements remain effective.
+
+The experimental installed native hook uses a distinct closed
+`installed-native-hook` server command. The stable installer preserves the
+current installed executable and its original manifest, client-input and
+engineering-admission pins, adding only the event, carrier and native binding
+selectors. The child independently reloads the signed installation origin and
+reuses the same current-record native admission as the installer: current
+materialization, full native enforcement, no passive lifecycle mode and the
+four-field owner/workspace/home/workspace-ID digest. It compares the supplied
+pins with that admitted result and requires the actual installed server path,
+image digest, target and current server version. The installed bootstrapper
+version still comes from the signed origin when the server updates independently.
+
+Complete current-record admission releases the installation lock before the
+existing product constructor and hook handler acquire their domain locks.
+Those original source and process checks remain active; this does not claim an
+atomic native event across an update. Generic `hook --binding-sha256` remains
+packet-only, and the default build exposes no installed native-hook admission.
+Controlled compiled protocol tests distinguish their test-only constructor from
+signed-source admission and genuine host qualification. Passing the original
+direct-packet qualifier alone does not prove delivery through the installed
+stable plugin; qualify that final ordinary client route separately.
+
+
+## Experimental installed-carrier foreground review (ICRV)
+
+The installed-client flow has a separate explicitly reviewed selection in its
+original private carrier record. A fresh experimentally admitted versioned
+carrier may choose local-browser before full client review; omitted/empty stays
+native-first. This common setting applies to Code and Desktop and grants no
+individual write approval. Existing carriers cannot change modes implicitly.
+Standalone Code/Desktop pilot restrictions and inventories are unchanged; an
+installed carrier does not become an unbound browser pilot.
+
+The stable producer derives only ordinary serve startup arguments from the
+current authenticated materialization. The receiving bound product independently
+requires exact effective-channel equality with that current selected carrier,
+including an omitted channel against a browser-selected record. It pins the
+whole original semantic record identity and repeats the original role, source,
+owner, brain/workspace and record checks before and after trusted confirmation
+and before guarded effects. Raw installed browser selection without a carrier,
+partial metadata, stale or changed state refuses. Empty native-first diagnostics
+without carrier metadata retain their existing route. No installation lock is
+held while waiting for a review. Native hook and genuine qualifier arguments,
+admission and event semantics remain unchanged.
+
+Protected operations reuse the existing foreground one-shot loopback review,
+complete current/proposed content, initially unchecked approval control,
+independent decline/cancel/expiry and canonical revision guards. Browser-selected
+requests cannot reuse native InputResponses; no model argument, tool permission,
+previous approval or startup choice supplies individual consent. Source and
+compiled tests do not qualify the actual final Code/Desktop browser journey.

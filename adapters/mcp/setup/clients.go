@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
@@ -34,7 +33,17 @@ func ApplyClients(ctx context.Context, o installer.ClientOptions, digest string,
 // CurrentClientMaterializer is trusted process composition at the installer
 // seam. It returns verified files, never installation or native-host authority.
 func CurrentClientMaterializer(o installer.ClientOptions) installer.ClientMaterializer {
+	return currentClientMaterializer(o, "", nil)
+}
+
+func currentClientMaterializer(o installer.ClientOptions, nativeSHA string, previousDesktop *installer.ClientRecord) installer.ClientMaterializer {
+	if o.Request.VersionedSlots {
+		return versionedClientMaterializer(o, nativeSHA)
+	}
 	return func(ctx context.Context, s installtx.State, b installer.ClientBinding, old *installer.ClientRecord) (installer.ClientMaterialization, error) {
+		if o.Request.NativeEnforcement && nativeSHA == "" {
+			return installer.ClientMaterialization{}, errors.New("full native packet requires the existing genuine qualifier before publication")
+		}
 		serverName := "maestro-mcp"
 		if s.TargetOS == "windows" {
 			serverName += ".exe"
@@ -53,6 +62,9 @@ func CurrentClientMaterializer(o installer.ClientOptions) installer.ClientMateri
 		// A complete interrupted candidate is reusable only after exact inspection;
 		// partial or foreign candidates remain preserved for operator diagnosis.
 		if _, e := os.Lstat(stage); errors.Is(e, os.ErrNotExist) {
+			if o.Request.NativeEnforcement {
+				return installer.ClientMaterialization{}, errors.New("qualified native candidate missing; no MCP-only fallback")
+			}
 			if err = os.Mkdir(stage, 0700); err != nil {
 				return installer.ClientMaterialization{}, err
 			}
@@ -68,6 +80,12 @@ func CurrentClientMaterializer(o installer.ClientOptions) installer.ClientMateri
 			}
 		} else if e != nil {
 			return installer.ClientMaterialization{}, e
+		}
+		if o.Request.NativeEnforcement {
+			actual, e := installer.ClientTreeDigest(filepath.Join(stage, "plugins", "maestro-product"))
+			if e != nil || actual != nativeSHA {
+				return installer.ClientMaterialization{}, errors.New("genuinely qualified native candidate changed")
+			}
 		}
 		// The digest becomes admissible only after canonical inspection and an
 		// unchanged observation. Never promote a fresh post-publication hash.
@@ -104,6 +122,9 @@ func CurrentClientMaterializer(o installer.ClientOptions) installer.ClientMateri
 			return installer.ClientMaterialization{}, err
 		}
 		material := installer.ClientMaterialization{LifecycleContext: o.Request.LifecycleContext, Release: s.Release, ManifestSHA256: s.Binding.ManifestSHA256, ClientInputsSHA256: s.Binding.ClientInputsSHA256, ServerSHA256: s.Server.SHA256, EmbeddedInputsSHA256: s.Server.EmbeddedInputsSHA256, BundleSHA256: s.Binding.BundleSHA256, CodeRoot: o.Request.CodeRoot, DesktopPath: o.Request.DesktopPath, DesktopNativeContractSHA256: nativeContract, BootstrapServerSHA256: s.Server.SHA256, BootstrapEmbeddedInputsSHA256: s.Server.EmbeddedInputsSHA256}
+		material.NativeEnforcement = o.Request.NativeEnforcement
+		material.OwnerReviewChannel = o.Request.OwnerReviewChannel
+		material.GenerationID = o.Request.GenerationID
 		// First publication may encounter an already-swapped destination. Admit
 		// its exact reviewed native contract before any Code or Desktop swap.
 		if old == nil {
@@ -112,7 +133,7 @@ func CurrentClientMaterializer(o installer.ClientOptions) installer.ClientMateri
 				if e != nil {
 					return material, e
 				}
-				if e = inspectCurrentDesktopContract(ctx, o.Request.DesktopPath, o, identity, s.Server.SHA256, nativeContract); e != nil {
+				if e = inspectFirstDesktopContract(ctx, o, s, b, previousDesktop, identity, nativeContract); e != nil {
 					return material, e
 				}
 				if e = requireInspectedClientArchive(o.Request.DesktopPath, before); e != nil {
@@ -142,15 +163,24 @@ func CurrentClientMaterializer(o installer.ClientOptions) installer.ClientMateri
 		if _, err = inspectDesktopBackup(o, old); err != nil {
 			return material, err
 		}
-		reuse := old != nil && !o.Request.ManualDesktopUpdate && old.Materialization.DesktopNativeContractSHA256 == nativeContract && !adoptCurrent
+		desktopPrevious := old
+		if previousDesktop != nil {
+			desktopPrevious = previousDesktop
+		}
+		reuse := desktopPrevious != nil && !o.Request.ManualDesktopUpdate && desktopPrevious.Materialization.DesktopNativeContractSHA256 == nativeContract && !adoptCurrent
 		if reuse {
-			m := old.Materialization
+			m := desktopPrevious.Materialization
 			if err = packaging.InspectReusedStableExtension(m.DesktopPath, expected, m.DesktopSHA256, m.BootstrapServerSHA256, m.BootstrapEmbeddedInputsSHA256, m.DesktopNativeContractSHA256); err != nil {
 				return material, err
 			}
 			expectedDesktop = m.DesktopSHA256
 			material.BootstrapServerSHA256 = m.BootstrapServerSHA256
 			material.BootstrapEmbeddedInputsSHA256 = m.BootstrapEmbeddedInputsSHA256
+			if m.DesktopPath != o.Request.DesktopPath {
+				if err = retainCurrentDesktopCarrier(m.DesktopPath, o.Request.DesktopPath, m.DesktopSHA256); err != nil {
+					return material, err
+				}
+			}
 		}
 		// Preflight both visible slots before publishing either. There is no
 		// admitted strong custody for replacing a shared client tree on this
@@ -222,7 +252,7 @@ func currentGeneratorArgs(command, destination, server string, o installer.Clien
 	if command == "plugin" && o.Request.LifecycleContext {
 		args = append(args, "--lifecycle-context")
 	}
-	return args
+	return installer.ExperimentalChildArgs(args, o.ExperimentalSeed, o.ManagedRoot)
 }
 func writeMarketplaceAndLauncher(root string, o installer.ClientOptions) error {
 	if err := os.Mkdir(filepath.Join(root, ".claude-plugin"), 0700); err != nil {
@@ -237,29 +267,28 @@ func writeMarketplaceAndLauncher(root string, o installer.ClientOptions) error {
 	if err := scheduler.WriteNewPrivateFile(path, body); err != nil {
 		return err
 	}
+	if o.VersionedManagement {
+		name, body := installer.ClientManagementLauncher(o, true)
+		if err := scheduler.WriteNewPrivateFile(filepath.Join(root, name), body); err != nil {
+			return err
+		}
+		if runtime.GOOS != "windows" {
+			if err := os.Chmod(filepath.Join(root, name), 0700); err != nil {
+				return err
+			}
+		} else {
+			if err := scheduler.WriteNewPrivateFile(filepath.Join(root, "Update Maestro.cmd"), installer.ClientWindowsManagementEntry()); err != nil {
+				return err
+			}
+		}
+	}
 	if runtime.GOOS == "windows" {
 		return nil
 	}
 	return os.Chmod(path, 0700)
 }
 func managementLauncher(o installer.ClientOptions) (string, []byte) {
-	args := []string{o.Self, "manage", "--product-root", o.ManagedRoot, "--user-home", o.UserHome, "--workspace", o.Request.Workspace, "--carrier-id", o.Request.CarrierID}
-	args = append(args, "--client-code-root", o.Request.CodeRoot, "--client-desktop-path", o.Request.DesktopPath, "--client-code-executable", o.Request.CodeExecutable, "--client-scope", o.Request.CodeScope)
-	if o.Request.LifecycleContext {
-		args = append(args, "--client-lifecycle-context")
-	}
-	if runtime.GOOS == "windows" {
-		var q []string
-		for _, s := range args {
-			q = append(q, "'"+strings.ReplaceAll(s, "'", "''")+"'")
-		}
-		return "Manage Maestro.ps1", []byte("& " + strings.Join(q, " ") + "\nif ($LASTEXITCODE) { exit $LASTEXITCODE }\n")
-	}
-	var q []string
-	for _, s := range args {
-		q = append(q, "'"+strings.ReplaceAll(s, "'", "'\"'\"'")+"'")
-	}
-	return "Manage Maestro.command", []byte("#!/bin/sh\nexec " + strings.Join(q, " ") + "\n")
+	return installer.ClientManagementLauncher(o, false)
 }
 func inspectMarketplace(ctx context.Context, root string, o installer.ClientOptions, identity releasecontract.ServerIdentity, serverSHA string) error {
 	if _, e := installer.ClientTreeDigest(root); e != nil {
@@ -290,6 +319,10 @@ func inspectMarketplace(ctx context.Context, root string, o installer.ClientOpti
 	for _, entry := range entries {
 		switch entry.Name() {
 		case ".claude-plugin", "plugins", "Manage Maestro.command", "Manage Maestro.ps1":
+		case "Update Maestro.command", "Update Maestro.ps1", "Update Maestro.cmd":
+			if !o.VersionedManagement {
+				return errors.New("unexpected update launcher in legacy packet; preserved")
+			}
 		default:
 			return errors.New("unexpected local marketplace content; preserved")
 		}
@@ -633,6 +666,30 @@ func inspectCurrentDesktopContract(ctx context.Context, path string, o installer
 		return errors.New("Desktop native contract differs from reviewed current binding; preserved")
 	}
 	return nil
+}
+func inspectFirstDesktopContract(ctx context.Context, o installer.ClientOptions, s installtx.State, binding installer.ClientBinding, previousDesktop *installer.ClientRecord, identity releasecontract.ServerIdentity, nativeContract string) error {
+	// A fresh generation can already contain the exact retained prior bootstrap
+	// if publication stopped before its new private record was committed. Only
+	// the authenticated same-carrier record may identify those historical bytes;
+	// unrelated first-publication destinations still require Current inspection.
+	prior := previousDesktop
+	if o.VersionedManagement && prior != nil && prior.SchemaVersion == 1 && prior.Profile == installer.StableClientProfile && prior.Protocol == installer.StableClientProtocol && prior.CarrierVersion == installer.StableCarrierVersion && prior.CarrierID == o.Request.CarrierID && prior.Binding == binding && prior.Materialization.Selection != nil && !o.Request.ManualDesktopUpdate && prior.Materialization.DesktopNativeContractSHA256 == nativeContract {
+		m := prior.Materialization
+		actual, err := installer.ClientArchiveDigest(o.Request.DesktopPath)
+		if err != nil {
+			return err
+		}
+		if actual == m.DesktopSHA256 {
+			if err := packaging.InspectReusedStableExtension(o.Request.DesktopPath, stableCarrier(prior.CarrierID), m.DesktopSHA256, m.BootstrapServerSHA256, m.BootstrapEmbeddedInputsSHA256, m.DesktopNativeContractSHA256); err != nil {
+				return err
+			}
+			if err := inspectDesktopCandidateBinding(o.Request.DesktopPath, o, s.TargetOS, nativeContract); err != nil {
+				return err
+			}
+			return requireInspectedClientArchive(o.Request.DesktopPath, actual)
+		}
+	}
+	return inspectCurrentDesktopContract(ctx, o.Request.DesktopPath, o, identity, s.Server.SHA256, nativeContract)
 }
 func swapOwnedDesktop(ctx context.Context, stage string, o installer.ClientOptions, old *installer.ClientRecord, identity releasecontract.ServerIdentity, nativeContract string) error {
 	destination := o.Request.DesktopPath

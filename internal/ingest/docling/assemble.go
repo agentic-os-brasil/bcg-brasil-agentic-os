@@ -85,22 +85,37 @@ type Assembly struct {
 // them. Destination must be new; the result is unsigned until the existing
 // release authority signs its archive and release manifest.
 func Assemble(inputDirectory, destination string) (Assembly, error) {
+	return AssembleTarget(inputDirectory, destination, "darwin", "arm64")
+}
+
+// AssembleTarget constructs only an authenticated, target-specific unsigned pack.
+// It never executes the interpreter, and does not establish native qualification.
+func AssembleTarget(inputDirectory, destination, goos, goarch string) (Assembly, error) {
+	return AssembleProfile(inputDirectory, destination, goos, goarch, LegacyProfile)
+}
+
+// AssembleProfile constructs one closed authenticated profile without executing inputs.
+func AssembleProfile(inputDirectory, destination, goos, goarch, profile string) (Assembly, error) {
 	var result Assembly
+	target, err := inputsForProfile(goos, goarch, profile)
+	if err != nil {
+		return result, err
+	}
 	if err := scheduler.ValidateDirectory(inputDirectory); err != nil {
 		return result, err
 	}
 	inputs := []Input{}
-	if err := decode(lockedInputs, &inputs); err != nil {
+	if err := decode(target.inputs, &inputs); err != nil {
 		return result, err
 	}
-	if len(inputs) != 51 || digest(rawLock) != LockSHA256 {
+	if len(inputs) != target.count || digest(target.lock) != target.lockSHA {
 		return result, errors.New("embedded_lock_invalid")
 	}
-	python, _, err := readFile(filepath.Join(inputDirectory, PythonArchive), maximumArchiveBytes)
+	python, _, err := readFile(filepath.Join(inputDirectory, target.pythonArchive), maximumArchiveBytes)
 	if err != nil {
 		return result, err
 	}
-	if digest(python) != PythonArchiveSHA256 {
+	if digest(python) != target.pythonSHA {
 		return result, errors.New("python_archive_digest")
 	}
 	// Authenticate all raw wheels before extracting any of them.
@@ -119,6 +134,12 @@ func Assemble(inputDirectory, destination string) (Assembly, error) {
 		return result, err
 	}
 	for i, body := range wheels {
+		if inputs[i].Name == "pylatexenc" {
+			if err := addPylatexenc(entries, inputs[i], body); err != nil {
+				return result, err
+			}
+			continue
+		}
 		archive, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
 		if err != nil {
 			return result, err
@@ -135,10 +156,15 @@ func Assemble(inputDirectory, destination string) (Assembly, error) {
 			if strings.Contains(file.Name, ".data/") {
 				// Retain the exact authenticated xlrd CLI as inert inventory. It
 				// is outside PATH and never used by the closed BIFF route.
-				if inputs[i].Name != "xlrd" || inputs[i].Version != "2.0.2" || file.Name != "xlrd-2.0.2.data/scripts/runxlrd.py" {
+				switch {
+				case inputs[i].Name == "xlrd" && inputs[i].Version == "2.0.2" && file.Name == "xlrd-2.0.2.data/scripts/runxlrd.py":
+					name = "wheel-scripts/xlrd/runxlrd.py"
+				case target.profile == DocumentsProfile && inputs[i].Name == "xlsxwriter" && inputs[i].Version == "3.2.9" && file.Name == "xlsxwriter-3.2.9.data/scripts/vba_extract.py":
+					name = "wheel-scripts/xlsxwriter/vba_extract.py"
+				default:
 					return result, fmt.Errorf("wheel relocation unsupported: %s", inputs[i].Name)
 				}
-				name, relocatedScript = "wheel-scripts/xlrd/runxlrd.py", true
+				relocatedScript = true
 			}
 			if _, exists := entries[name]; exists {
 				return result, errors.New("wheel_collision")
@@ -168,11 +194,14 @@ func Assemble(inputDirectory, destination string) (Assembly, error) {
 			}
 		}
 	}
-	entries["bridge.py"] = entry{bridge, 0444}
-	entries["pylock.toml"] = entry{rawLock, 0444}
-	entries["inputs.json"] = entry{lockedInputs, 0444}
-	entries["parser-licenses.json"] = entry{parserLicenses, 0444}
-	manifest := packManifest{SchemaVersion: 1, Adapter: "docling", Version: DoclingVersion, OS: "darwin", Arch: "arm64", CompatibleCLI: ">=0.1.0 <0.2.0", Python: PythonVersion, PythonArchiveSHA256: PythonArchiveSHA256, LockSHA256: LockSHA256, Models: []string{}, Inputs: inputs, Files: []inventoryFile{}}
+	if err := addNativeClosure(target, entries); err != nil {
+		return result, err
+	}
+	entries["bridge.py"] = entry{target.bridge, 0444}
+	entries["pylock.toml"] = entry{target.lock, 0444}
+	entries["inputs.json"] = entry{target.inputs, 0444}
+	entries["parser-licenses.json"] = entry{target.notices, 0444}
+	manifest := packManifest{SchemaVersion: 1, Adapter: "docling", Version: DoclingVersion, OS: target.os, Arch: target.arch, CompatibleCLI: ">=0.1.0 <0.2.0", Python: PythonVersion, PythonArchiveSHA256: target.pythonSHA, LockSHA256: target.lockSHA, Models: []string{}, Inputs: inputs, Files: []inventoryFile{}}
 	names := entryNames(entries)
 	for _, name := range names {
 		e := entries[name]
@@ -215,7 +244,7 @@ func Assemble(inputDirectory, destination string) (Assembly, error) {
 		return result, err
 	}
 	result.ArchiveSHA256 = digest(compressed.Bytes())
-	result.ArchivePath = filepath.Join(destination, "docling-runtime-"+DoclingVersion+"-darwin-arm64.tar.gz")
+	result.ArchivePath = filepath.Join(destination, "docling-runtime-"+DoclingVersion+"-"+target.os+"-"+target.arch+".tar.gz")
 	if err := writeExclusive(result.ArchivePath, compressed.Bytes(), 0444); err != nil {
 		return result, err
 	}

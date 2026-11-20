@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
@@ -21,13 +22,23 @@ import (
 )
 
 type Options struct {
+	ExperimentalSeed                     *installer.VerifiedExperimentalSeed
+	ExperimentalSeedRoot                 string
 	ProductRoot, UserHome, WorkspacePath string
 	LookupEnv                            func(string) (string, bool)
 	// These constructor inputs come only from the native binary seed, never tool arguments.
 	AuthorityRegistryPath, AuthorityRegistrySHA256, CLIVersion string
 	// Fixed carrier inputs come from canonical packaging, never MCP arguments.
 	InstalledManifestSHA256, InstalledClientInputsSHA256 string
-	GuardProcess                                         bool
+	// Explicit operator startup selection; never admitted from tool arguments.
+	OwnerReviewChannel string
+	GuardProcess       bool
+	// Explicit native startup inputs; declarations never qualify or activate a job.
+	WeeklyCandidate      *maintenance.WeeklyModelRegistration
+	WeeklyNativeExecutor maintenance.WeeklyNativeExecutor
+	MemoryNativeExecutor maintenance.MemoryNativeExecutor
+	// Fixed by the validated stable launcher, never by an MCP argument.
+	ManagementCarrierID, ManagementInstallerVersion string
 }
 type Bound struct {
 	options           Options
@@ -36,11 +47,17 @@ type Bound struct {
 	// Deterministic test seams; neither is exposed as runtime configuration or tool authority.
 	afterBrainPrepareEffect    func() error
 	observeWorkspaceTransition func(stage, page string)
+	localOwnerReview           func(context.Context, string, any) (bool, error)
 	maintenanceClock           func() time.Time
 	maintenanceActivity        func(context.Context) (maintenance.IdleState, error)
+	managementOpen             func(context.Context, string) error
+	ownerReviewClientSHA256    string
 }
 
 func Open(o Options) (*Bound, error) {
+	if o.OwnerReviewChannel != "" && o.OwnerReviewChannel != "local-browser" {
+		return nil, errors.New("owner_review_channel_unavailable")
+	}
 	b := &Bound{options: o}
 	if err := b.validate(); err != nil {
 		return nil, err
@@ -48,6 +65,9 @@ func Open(o Options) (*Bound, error) {
 	return b, nil
 }
 func (b *Bound) validate() error {
+	if err := b.validateExperimentalSeed(); err != nil {
+		return err
+	}
 	if _, err := processidentity.Current(); err != nil {
 		return err
 	}
@@ -69,6 +89,9 @@ func (b *Bound) validate() error {
 	}
 	if b.home != "" && (b.home != h.Home || b.workspaceID != w.WorkspaceID) {
 		return errors.New("binding_changed")
+	}
+	if err := b.validateInstalledOwnerReview(h.Home, w.WorkspaceID); err != nil {
+		return err
 	}
 	s, err := execution.OpenConfinedStore(root)
 	if err != nil {
@@ -116,7 +139,10 @@ func mutationSchema() map[string]any {
 		}
 		variants = append(variants, variant("execution."+op, f, r...))
 	}
+	variants = append(variants, accountNarrativeMutations()...)
+	variants = append(variants, historyMutations()...)
 	variants = append(variants, agentIdentityMutations()...)
+	variants = append(variants, sharepointEnrollmentMutations()...)
 	return map[string]any{"type": "object", "oneOf": variants}
 }
 
@@ -203,7 +229,7 @@ func (b *Bound) Server() *mcp.Server {
 	queryPresentation, queryContracts := toolPresentation(query)
 	apply := productApplySchema()
 	applyPresentation, applyContracts := toolPresentation(apply)
-	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read immutable methods and requirements, owner metadata/questions, execution continuation, eligible memory, authored pages, converted content, named workspace knowledge, maintenance status or private wiki through bounded pages. Private owner/legacy text requires trusted review." + queryContracts, InputSchema: queryPresentation, Annotations: readonly}, b.handle("query", query))
+	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read immutable methods and requirements, accepted session-readable owner context, owner metadata/questions, execution continuation, eligible memory, authored pages, converted content, named workspace knowledge, maintenance status or private wiki through bounded pages. Full private owner review and reader-restricted text remain protected." + queryContracts, InputSchema: queryPresentation, Annotations: readonly}, b.handle("query", query))
 	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Author reviewed workspace pages, convert documents, apply reviewed knowledge/owner/memory changes, qualify and enroll exact maintenance jobs, or run active due work. Maintenance lifecycle changes require trusted exact review; execution uses revision/attempt and artifact checks." + applyContracts, InputSchema: applyPresentation}, b.handle("apply", apply))
 	b.registerMethods(s)
 	return s
@@ -215,13 +241,27 @@ func productQuerySchema() map[string]any {
 		variant("execution.next", map[string]any{"item_id": strSchema(96)}, "item_id"),
 		variant("execution.contract", map[string]any{"item_id": strSchema(96)}, "item_id"),
 	}
-	for _, group := range [][]any{caseSetupQueries(), ownerQueries(), agentIdentityQueries(), memoryQueries(), methodsQueries(), contentQueries(), brainQueries(), maintenanceQueries(), wikiQueries()} {
+	for _, group := range [][]any{accountNarrativeQueries(), dailyQueries(), historyQueries(), sharepointEnrollmentQueries(), caseSetupQueries(), ownerQueries(), agentIdentityQueries(), memoryQueries(), methodsQueries(), contentQueries(), brainQueries(), maintenanceQueries(), wikiQueries()} {
 		variants = append(variants, group...)
 	}
 	return map[string]any{"type": "object", "oneOf": variants}
 }
 
 type input struct {
+	KnowledgeDestination string   `json:"knowledge_destination,omitempty"`
+	CaseAgentIDs         []string `json:"case_agent_ids"`
+	historyArguments
+	selfObservationArguments
+	FolderURLs    []string `json:"folder_urls"`
+	DailyScope    string   `json:"daily_scope"`
+	CheckpointID  string   `json:"checkpoint_id"`
+	SessionID     string   `json:"session_id"`
+	CapturedAt    string   `json:"captured_at"`
+	LocalDate     string   `json:"local_date"`
+	Decisions     []string `json:"decisions"`
+	NextActions   []string `json:"next_actions"`
+	CheckpointIDs []string `json:"checkpoint_ids"`
+
 	Mode                       string   `json:"mode"`
 	ProjectName                string   `json:"project_name"`
 	AccountID                  string   `json:"account_id"`
@@ -338,14 +378,32 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		if d.Decode(new(any)) != io.EOF {
 			return result(nil, errors.New("trailing_input")), nil
 		}
-		if len(req.Params.Arguments) > 128<<10 && in.Operation != "knowledge.create" && in.Operation != "brain.create" && in.Operation != "brain.update" && in.Operation != "owner.atlas.create" && in.Operation != "owner.atlas.update" {
+		if strings.HasPrefix(in.Operation, "history.") && len(req.Params.Arguments) > 256<<10 {
+			return historyResult(nil, errors.New("history input size")), nil
+		}
+		if len(req.Params.Arguments) > 128<<10 && in.Operation != "history.record" && in.Operation != "account.narrative.save" && in.Operation != "knowledge.create" && in.Operation != "brain.create" && in.Operation != "brain.update" && in.Operation != "owner.atlas.create" && in.Operation != "owner.atlas.update" {
 			return result(nil, errors.New("input_size")), nil
 		}
-		if len(req.Params.Arguments) > 16<<10 && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" && in.Operation != "knowledge.create" && in.Operation != "knowledge.append" && in.Operation != "brain.append" && in.Operation != "brain.create" && in.Operation != "brain.update" && in.Operation != "owner.atlas.create" && in.Operation != "owner.atlas.update" && in.Operation != "owner.atlas.append" && in.Operation != "owner.atlas.collect" {
+		if len(req.Params.Arguments) > 16<<10 && in.Operation != "account.narrative.save" && in.Operation != "daily.enqueue" && in.Operation != "sharepoint.enrollment.select" && in.Operation != "history.record" && in.Operation != "history.selection" && in.Operation != "history.read" && in.Operation != "owner.propose" && in.Operation != "memory.capture" && in.Operation != "memory.correct" && in.Operation != "knowledge.create" && in.Operation != "knowledge.append" && in.Operation != "brain.append" && in.Operation != "brain.create" && in.Operation != "brain.update" && in.Operation != "owner.atlas.create" && in.Operation != "owner.atlas.update" && in.Operation != "owner.atlas.append" && in.Operation != "owner.atlas.collect" {
 			return result(nil, errors.New("input_size")), nil
 		}
 		if kind == "context" {
-			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "agent_identity": b.managedIdentityContext(), "next_max_bytes": 2048, "memory": map[string]any{"context_operation": "memory.context", "max_page_bytes": 4096, "synthesis": "local_deterministic", "lifetime": "two_l3_generations_and_exact_owner_review"}, "methods": map[string]any{"list_operation": "methods.list", "read_operation": "methods.read", "plan_operation": "methods.plan", "max_page_bytes": 4096, "mode": "methods_not_authority"}}, nil), nil
+			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "agent_identity": b.managedIdentityContext(), "next_max_bytes": 2048, "owner": map[string]any{"context_operation": "owner.context", "reader": "session", "max_page_bytes": 4096, "requires": "current_confirmed_onboarding", "authority": "owner_profile_data_only"}, "memory": map[string]any{"context_operation": "memory.context", "max_page_bytes": 4096, "synthesis": "local_deterministic", "lifetime": "two_l3_generations_and_exact_owner_review"}, "methods": map[string]any{"list_operation": "methods.list", "read_operation": "methods.read", "plan_operation": "methods.plan", "max_page_bytes": 4096, "mode": "methods_not_authority"}}, nil), nil
+		}
+		if in.Operation == "installation.update_handoff" {
+			return b.handleManagementHandoff(ctx, req), nil
+		}
+		if strings.HasPrefix(in.Operation, "sharepoint.enrollment.") {
+			return b.handleSharepointEnrollment(ctx, req, in), nil
+		}
+		if strings.HasPrefix(in.Operation, "history.") {
+			return b.handleHistory(ctx, req), nil
+		}
+		if strings.HasPrefix(in.Operation, "daily.") {
+			return b.handleDaily(ctx, req), nil
+		}
+		if strings.HasPrefix(in.Operation, "account.narrative.") {
+			return b.handleAccountNarrative(ctx, req, in), nil
 		}
 		if strings.HasPrefix(in.Operation, "case.setup.") {
 			return b.handleCaseSetup(ctx, req, in), nil

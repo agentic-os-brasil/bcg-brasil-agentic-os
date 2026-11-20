@@ -22,6 +22,7 @@ import (
 type verifiedPack struct {
 	entries          map[string]entry
 	sha, manifestSHA string
+	target           targetInputs
 }
 
 func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
@@ -38,13 +39,27 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 	if err != nil || !registry.HasActiveKey() {
 		return empty, "authority_unavailable"
 	}
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+	target, targetErr := inputsForTarget(runtime.GOOS, runtime.GOARCH)
+	if targetErr != nil {
 		return empty, "platform_unavailable"
 	}
 	if !filepath.IsAbs(o.DataRoot) || filepath.Clean(o.DataRoot) != o.DataRoot {
 		return empty, "pack_unavailable"
 	}
-	base := filepath.Join(o.DataRoot, "ingestion", "docling")
+	required, err := r.currentRequirement(ctx)
+	if err != nil {
+		return empty, "current_release_unavailable"
+	}
+	if o.ResolveRequirement != nil {
+		if required.PackSHA256 == "" {
+			return empty, "current_pack_not_declared"
+		}
+		o.CLIVersion = required.ServerVersion
+	}
+	base, err := metadataBase(o)
+	if err != nil {
+		return empty, "pack_selection_unavailable"
+	}
 	manifestBody, _, err := readFile(filepath.Join(base, releaseverify.ManifestName), 1<<20)
 	if err != nil {
 		return empty, "pack_unavailable"
@@ -56,6 +71,9 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 	manifest, key, err := releaseverify.VerifyManifest(manifestBody, signature, registry)
 	if err != nil {
 		return empty, "pack_untrusted"
+	}
+	if o.ResolveRequirement != nil && digest(manifestBody) != required.ManifestSHA256 {
+		return empty, "current_pack_pending"
 	}
 	compatibility, err := releasecontract.ParseVersionRange(manifest.CompatibleExecutable())
 	if err != nil {
@@ -74,6 +92,9 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 			}
 			selected = a
 		}
+	}
+	if selected != nil && o.ResolveRequirement != nil && selected.SHA256 != required.PackSHA256 {
+		return empty, "current_pack_pending"
 	}
 	if selected == nil || selected.Size > maximumArchiveBytes {
 		return empty, "pack_unavailable"
@@ -101,10 +122,14 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 	if decode(metadata.body, &pack) != nil {
 		return empty, "pack_untrusted"
 	}
+	target, err = inputsForLock(runtime.GOOS, runtime.GOARCH, pack.LockSHA256)
+	if err != nil {
+		return empty, "pack_untrusted"
+	}
 	canonical, _ := json.Marshal(pack)
 	var expected []Input
-	_ = decode(lockedInputs, &expected)
-	if !bytes.Equal(canonical, metadata.body) || pack.SchemaVersion != 1 || pack.Adapter != "docling" || pack.Version != DoclingVersion || pack.OS != runtime.GOOS || pack.Arch != runtime.GOARCH || pack.Python != PythonVersion || pack.PythonArchiveSHA256 != PythonArchiveSHA256 || pack.LockSHA256 != LockSHA256 || pack.Models == nil || len(pack.Models) != 0 || !reflect.DeepEqual(pack.Inputs, expected) {
+	_ = decode(target.inputs, &expected)
+	if !bytes.Equal(canonical, metadata.body) || pack.SchemaVersion != 1 || pack.Adapter != "docling" || pack.Version != DoclingVersion || pack.OS != runtime.GOOS || pack.Arch != runtime.GOARCH || pack.Python != PythonVersion || pack.PythonArchiveSHA256 != target.pythonSHA || pack.LockSHA256 != target.lockSHA || pack.Models == nil || len(pack.Models) != 0 || !reflect.DeepEqual(pack.Inputs, expected) {
 		return empty, "pack_untrusted"
 	}
 	compatibility, err = releasecontract.ParseVersionRange(pack.CompatibleCLI)
@@ -126,14 +151,23 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 		}
 		seen[file.Path] = true
 	}
-	if !bytes.Equal(entries["bridge.py"].body, bridge) || !bytes.Equal(entries["pylock.toml"].body, rawLock) || !bytes.Equal(entries["inputs.json"].body, lockedInputs) || !bytes.Equal(entries["parser-licenses.json"].body, parserLicenses) {
+	if !bytes.Equal(entries["bridge.py"].body, target.bridge) || !bytes.Equal(entries["pylock.toml"].body, target.lock) || !bytes.Equal(entries["inputs.json"].body, target.inputs) || !bytes.Equal(entries["parser-licenses.json"].body, target.notices) {
 		return empty, "pack_untrusted"
 	}
-	installed := filepath.Join(base, "installed", selected.SHA256)
+	if !nativeClosureValid(target, entries) {
+		return empty, "pack_untrusted"
+	}
+	installed := filepath.Join(o.DataRoot, "ingestion", "docling", "installed", selected.SHA256)
 	if err := verifyInstalled(ctx, installed, entries); err != nil {
 		return empty, "installed_pack_changed"
 	}
-	return verifiedPack{entries: entries, sha: selected.SHA256, manifestSHA: digest(manifestBody)}, ""
+	if o.ResolveRequirement != nil {
+		after, err := r.currentRequirement(ctx)
+		if err != nil || after != required {
+			return empty, "current_release_changed"
+		}
+	}
+	return verifiedPack{entries: entries, sha: selected.SHA256, manifestSHA: digest(manifestBody), target: target}, ""
 }
 func archiveEntries(body []byte) (map[string]entry, error) {
 	compressed := bytes.NewReader(body)

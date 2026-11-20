@@ -3,6 +3,8 @@ package packaging
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +12,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -17,9 +20,59 @@ import (
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
+
+func TestNativeFaultHookCarriesOnlyAdmittedExperimentalChildIdentity(t *testing.T) {
+	// This deterministic source-only authority is never written or installed.
+	key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{7}, ed25519.SeedSize))
+	now := time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
+	registry := []byte(fmt.Sprintf(`{"schema_version":1,"product":"maestro","authorities":[{"issuer":"maestro-engineering-pilot-20261117","key_id":"pilot-20261117","algorithm":"ed25519","public_key":"%s","status":"active","valid_from":"2026-11-17T00:00:00Z","valid_until":"2026-11-30T00:00:00Z"}]}`, base64.StdEncoding.EncodeToString(key.Public().(ed25519.PublicKey))))
+	record := installer.ExperimentalSeedRecord{
+		SchemaVersion: 1, Product: "maestro", Purpose: installer.ExperimentalSeedPurpose,
+		Protocol: installer.ExperimentalSeedProtocol, Profile: installer.ExperimentalSeedProfile,
+		RegistrySHA256: digest(registry), InstallerVersion: "0.1.51", InstallerSHA256: strings.Repeat("a", 64),
+		TargetOS: "darwin", TargetArch: "arm64", Source: releasecontract.SourceTuple{SourceID: "source-test", Channel: "canary", OS: "darwin", Arch: "arm64"},
+		Issuer: "maestro-engineering-pilot-20261117", KeyID: "pilot-20261117", NotBefore: "2026-11-17T00:00:00Z", ExpiresAt: "2026-11-29T00:00:00Z",
+	}
+	for _, version := range []string{"0.1.51", "0.1.52"} {
+		record.Releases = append(record.Releases, installer.ExperimentalSeedRelease{Release: version, ManifestSHA256: digest([]byte(version)), ClientInputsSHA256: strings.Repeat("b", 64), ServerSHA256: strings.Repeat("c", 64), BundleSHA256: strings.Repeat("d", 64), RuntimeSHA256: strings.Repeat("e", 64)})
+	}
+	body, err := json.Marshal(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	role, err := installer.VerifyExperimentalSeedAdmission(body, ed25519.Sign(key, body), registry, record.RegistrySHA256, func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, experimental := range []bool{false, true} {
+		for _, fault := range []string{"crash", "timeout", "missing"} {
+			t.Run(fmt.Sprintf("experimental=%t/%s", experimental, fault), func(t *testing.T) {
+				o := Options{target: Target{OS: "darwin", Arch: "arm64"}}
+				if experimental {
+					o.Binding.ExperimentalSeed, o.Binding.ExperimentalSeedRoot = role, "/reviewed/installed-root"
+				}
+				row := nativeFaultHook(o, fault)
+				hook := row["hooks"].([]any)[0].(map[string]any)
+				wantCommand := "${CLAUDE_PLUGIN_ROOT}/scripts/maestro-mcp"
+				wantArgs := []string{"native-fault", "--fault", fault}
+				if experimental {
+					wantArgs = append(wantArgs, "--experimental-seed-sha256", digest(body), "--experimental-installed-root", "/reviewed/installed-root")
+				}
+				if fault == "missing" {
+					wantCommand, wantArgs = "${CLAUDE_PLUGIN_ROOT}/scripts/absent-native-guard", []string{}
+				}
+				if row["matcher"] != "Edit" || hook["type"] != "command" || hook["command"] != wantCommand || !reflect.DeepEqual(hook["args"], wantArgs) || hook["timeout"] != 1 || hook["onFailure"] != "block" {
+					t.Fatalf("qualification fault must preserve its exact helper, fixed admission and blocking contract: got %+v; want command=%s args=%v", row, wantCommand, wantArgs)
+				}
+			})
+		}
+	}
+}
 
 func nativeFixture(t *testing.T) NativeOptions {
 	t.Helper()
@@ -89,8 +142,14 @@ func TestNativeReviewRequiresExactConfirmationWithoutWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if review.Plan.State != "reviewable" || review.Plan.MaximumCalls != 3 || review.Plan.MaximumTurnsPerCall != 8 || review.Plan.MaximumSecondsPerCall != 120 || review.Plan.AggregateEstimatedLimitUSD != 3*in.MaxBudgetUSD || review.ReviewDigest == "" {
+	if review.Plan.State != "reviewable" || review.Plan.MaximumCalls != 3 || review.Plan.MaximumTurnsPerCall != 8 || review.Plan.MaximumSecondsPerCall != 120 || review.Plan.StartupCheckSeconds != 45 || review.Plan.AggregateEstimatedLimitUSD != 3*in.MaxBudgetUSD || review.ReviewDigest == "" {
 		t.Fatalf("invalid exact plan: %+v", review)
+	}
+	changedPlan := review.Plan
+	changedPlan.StartupCheckSeconds--
+	changedBody, _ := json.Marshal(changedPlan)
+	if digest(changedBody) == review.ReviewDigest {
+		t.Fatal("startup deadline missing from exact reviewed digest")
 	}
 	if !strings.Contains(review.Plan.BillingBoundary, "not hard") || !strings.Contains(review.Plan.ContextBoundary, "additional provider requests") || review.Plan.ChallengeDirectory != in.ChallengeDirectory {
 		t.Fatal("plan concealed billing/context/write boundaries")
@@ -180,7 +239,8 @@ func probeFromArguments(t *testing.T, in NativeOptions, args []string, cwd strin
 	var config struct {
 		Hooks map[string][]struct {
 			Hooks []struct {
-				Args []string `json:"args"`
+				Args    []string `json:"args"`
+				Timeout int      `json:"timeout"`
 			} `json:"hooks"`
 		} `json:"hooks"`
 	}
@@ -192,6 +252,9 @@ func probeFromArguments(t *testing.T, in NativeOptions, args []string, cwd strin
 	inventoryBody, err := os.ReadFile(filepath.Join(plugin, InventoryName))
 	if err != nil || json.Unmarshal(inventoryBody, &packet) != nil {
 		t.Fatal("candidate inventory missing")
+	}
+	if config.Hooks["SessionStart"][0].Hooks[0].Timeout != 45 {
+		t.Fatal("qualification startup deadline differs from plan")
 	}
 	matched := false
 	for _, file := range packet.Files {
@@ -250,13 +313,15 @@ func syntheticNativeStream(t *testing.T, p nativeProbe) []byte {
 		var err error
 		if event == "SessionStart" {
 			err = CheckNativeStartup(p.binding, p.nonce, bytes.NewReader(base(event, extra)), &out)
-		} else if event == "PreToolUse" {
-			var scoped bytes.Buffer
-			if err := QualificationScopeGuard(p.binding, p.challenge, p.outside, bytes.NewReader(base(event, extra)), &scoped); err != nil {
-				t.Fatal(err)
-			}
-			if string(bytes.TrimSpace(scoped.Bytes())) != "{}" {
-				t.Fatalf("scope instrumentation masked a reviewed control: %s", scoped.Bytes())
+		} else if event == "PreToolUse" || event == "PostToolUse" {
+			if event == "PreToolUse" {
+				var scoped bytes.Buffer
+				if err := QualificationScopeGuard(p.binding, p.challenge, p.outside, bytes.NewReader(base(event, extra)), &scoped); err != nil {
+					t.Fatal(err)
+				}
+				if string(bytes.TrimSpace(scoped.Bytes())) != "{}" {
+					t.Fatalf("scope instrumentation masked a reviewed control: %s", scoped.Bytes())
+				}
 			}
 			err = QualificationHook(p.binding, p.nonce, bytes.NewReader(base(event, extra)), &out)
 		} else {
@@ -380,7 +445,7 @@ func testNativeControlledSessions(t *testing.T, managed bool) {
 	if json.Unmarshal(body, &packet) != nil || packet.Mode != "native_engineering_fixture" {
 		t.Fatal("fixture evidence label absent")
 	}
-	for _, id := range []string{"case-agent", "client-account-agent", "darwin", "gamma-guardian", "pa-expert", "yoda"} {
+	for _, id := range []string{"case-agent", "client-account-agent", "darwin", "gamma-guardian", "pa-expert", "repository-spec-reviewer", "repository-standards-reviewer", "yoda"} {
 		if _, err := os.Stat(filepath.Join(in.Packet.Destination, "agents", id+".md")); err != nil {
 			t.Fatal(err)
 		}
@@ -428,7 +493,11 @@ func testNativeControlledSessions(t *testing.T, managed bool) {
 			if kind == "partial" {
 				wantCalls = 2
 			}
-			if err != nil || result.State != "unavailable" || result.EvidenceClass != "not_observed" || calls != wantCalls || result.EstimatedSpendComplete || result.EstimatedSpendSessions != wantCalls-1 {
+			wantSessions, wantComplete := wantCalls, true
+			if kind == "transport" || kind == "typed_exit" {
+				wantSessions, wantComplete = wantCalls-1, false
+			}
+			if err != nil || result.State != "unavailable" || result.EvidenceClass != "not_observed" || calls != wantCalls || result.EstimatedSpendComplete != wantComplete || result.EstimatedSpendSessions != wantSessions {
 				t.Fatalf("failed %s session changed fallback/cost availability or retried: %+v %v", kind, result, err)
 			}
 			path := filepath.Join(result.ScratchDirectory, fmt.Sprint(calls-1), "failure.json")
@@ -461,8 +530,8 @@ func testNativeControlledSessions(t *testing.T, managed bool) {
 			if kind == "result" && (diagnostic["result_kind"] != "other" || diagnostic["result_seen"] != true || diagnostic["result_accepted"] != false) {
 				t.Fatal("rejected result lost safe closed diagnostic kind")
 			}
-			if kind == "partial" && (diagnostic["phase"] != "controls" || diagnostic["read_observed"] != false || diagnostic["write_observed"] != true || result.EstimatedSpendUSD != 0.01) {
-				t.Fatal("partial controls or verified-only aggregate became misleading")
+			if kind == "partial" && (diagnostic["phase"] != "controls" || diagnostic["read_observed"] != false || diagnostic["write_observed"] != true || result.EstimatedSpendUSD != 0.02) {
+				t.Fatal("partial controls or known aggregate became misleading")
 			}
 			packet, err := os.ReadFile(filepath.Join(failed.Packet.Destination, "maestro-packet.json"))
 			var manifest nativePacketManifest
@@ -496,7 +565,7 @@ func TestNativeProofRejectsAssistantClaimsAndMissingPositiveEvidence(t *testing.
 	}
 	var diagnostic nativeFailureDiagnostic
 	detailed, err := verifyNativeProbeDetailed(body, p, true, &diagnostic)
-	if err != nil || detailed != proof || !diagnostic.ResultAccepted || !diagnostic.CostAvailable || diagnostic.EstimatedCostUSD == nil || !diagnostic.CanonicalFlowObserved {
+	if err != nil || detailed != proof || !diagnostic.ResultAccepted || !diagnostic.CostAvailable || diagnostic.EstimatedCostUSD == nil || !diagnostic.CanonicalFlowObserved || diagnostic.CanonicalFlowCheck != "observed" {
 		t.Fatal("diagnostic path changed accepted proof or lost observations")
 	}
 	zeroCost := bytes.ReplaceAll(body, []byte(`"total_cost_usd":0.01`), []byte(`"total_cost_usd":0`))
@@ -575,4 +644,198 @@ func TestNativeCommandRunnerBoundsOrdinaryOwnedProcessGroup(t *testing.T) {
 	}
 	// A detached host process is deliberately outside this test and the stated
 	// guarantee. The producer reports timeout cleanup unavailable, never PASS.
+}
+
+func TestNativeStartupSnapshotCoversLargeRuntimeState(t *testing.T) {
+	in := nativeFixture(t)
+	home, err := datahome.Resolve(datahome.Options{ProductRoot: in.Packet.Binding.ProductRoot, UserHome: in.Packet.Binding.UserHome, LookupEnv: in.Packet.Binding.LookupEnv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(home.Home, "state", "large-runtime")
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	archive := filepath.Join(dir, "00-runtime-archive")
+	f, err := os.OpenFile(archive, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block := bytes.Repeat([]byte("synthetic-runtime"), 65536)
+	for range 10 {
+		if _, err := f.Write(block); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for i := range 4100 {
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("input-%05d", i)), []byte("signed-input-fixture"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before, err := startupSnapshot(in.Packet.Binding)
+	if err != nil {
+		t.Fatalf("legitimate runtime-sized state refused: %v", err)
+	}
+	input, _ := json.Marshal(map[string]any{"hook_event_name": "SessionStart", "session_id": "aabbccdd-0011-2233-4455-66778899aabb", "cwd": in.Packet.Binding.WorkspacePath})
+	var output bytes.Buffer
+	if err := CheckNativeStartup(in.Packet.Binding, strings.Repeat("a", 32), bytes.NewReader(input), &output); err != nil {
+		t.Fatal("legitimate startup hook refused", err)
+	}
+	if !strings.Contains(output.String(), "maestro_native_startup_unchanged:") {
+		t.Fatal("startup marker absent")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "input-04099"), []byte("changed-final-input"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	after, err := startupSnapshot(in.Packet.Binding)
+	if err != nil || after == before {
+		t.Fatal("late runtime input excluded from coverage", err)
+	}
+	if err := os.Symlink(archive, filepath.Join(dir, "linked-input")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := startupSnapshot(in.Packet.Binding); err == nil {
+		t.Fatal("runtime alias admitted")
+	}
+}
+
+func TestNativeStartupSnapshotRefusesOversizeRuntimeFile(t *testing.T) {
+	in := nativeFixture(t)
+	home, err := datahome.Resolve(datahome.Options{ProductRoot: in.Packet.Binding.ProductRoot, UserHome: in.Packet.Binding.UserHome, LookupEnv: in.Packet.Binding.LookupEnv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(filepath.Join(home.Home, "state", "oversize-runtime"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.Truncate((512 << 20) + 1); err != nil {
+		t.Fatal(err)
+	}
+	if err = f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := startupSnapshot(in.Packet.Binding); err == nil {
+		t.Fatal("file beyond finite runtime bound admitted")
+	}
+}
+
+// Explicit opt-in uses only the fresh fictional participant state; it changes
+// no selected data and records no hook context or private file contents.
+func TestNativeStartupActualRuntimeState(t *testing.T) {
+	path := os.Getenv("MAESTRO_NATIVE_STARTUP_RUNTIME_ROUTE")
+	if path == "" {
+		t.Skip("explicit fresh synthetic runtime binding required")
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var route struct {
+		Command        string `json:"command"`
+		RegistryPath   string `json:"registry_path"`
+		RegistrySHA256 string `json:"registry_sha256"`
+		Version        string `json:"version"`
+	}
+	if err := json.Unmarshal(body, &route); err != nil {
+		t.Fatal(err)
+	}
+	productRoot := filepath.Dir(filepath.Dir(route.Command))
+	root := filepath.Dir(productRoot)
+	binding := product.Options{ProductRoot: productRoot, UserHome: filepath.Join(root, "owner"), WorkspacePath: filepath.Join(root, "workspace"), CLIVersion: route.Version, AuthorityRegistryPath: route.RegistryPath, AuthorityRegistrySHA256: route.RegistrySHA256, LookupEnv: func(string) (string, bool) { return "", false }}
+	var entries int
+	var size int64
+	for _, base := range []string{filepath.Join(binding.UserHome, ".maestro", "state"), filepath.Join(binding.WorkspacePath, ".bcgos")} {
+		if err := filepath.WalkDir(base, func(_ string, d os.DirEntry, e error) error {
+			if e != nil {
+				return e
+			}
+			entries++
+			if !d.IsDir() {
+				i, e := d.Info()
+				if e != nil {
+					return e
+				}
+				size += i.Size()
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	input, _ := json.Marshal(map[string]any{"hook_event_name": "SessionStart", "session_id": "53863738-8677-4cc5-9298-70748edc110b", "cwd": binding.WorkspacePath})
+	var output bytes.Buffer
+	started := time.Now()
+	err = CheckNativeStartup(binding, "5386373886774cc5929870748edc110b", bytes.NewReader(input), &output)
+	elapsed := time.Since(started)
+	marker := bytes.Contains(output.Bytes(), []byte("maestro_native_startup_unchanged:"))
+	result := map[string]any{"actual_synthetic_entries": entries, "actual_synthetic_bytes": size, "check_native_startup_seconds": elapsed.Seconds(), "ordinary_hook_deadline_seconds": 5, "within_deadline": elapsed < 5*time.Second, "qualification_startup_seconds": 45, "within_qualification_deadline": elapsed < 45*time.Second, "marker_found": marker, "state_unchanged_verified": err == nil && marker, "model": false, "execution": "direct canonical CheckNativeStartup API over real selected state; no CLI startup overhead"}
+	if err != nil {
+		result["error"] = err.Error()
+	}
+	if destination := os.Getenv("MAESTRO_NATIVE_STARTUP_RUNTIME_PROOF"); destination != "" {
+		b, _ := json.MarshalIndent(result, "", "  ")
+		if e := os.WriteFile(destination, append(b, '\n'), 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if err != nil || !marker {
+		t.Fatal("actual selected runtime startup failed", err)
+	}
+	t.Logf("actual full-state startup: entries=%d bytes=%d elapsed=%s under5s=%t", entries, size, elapsed, elapsed < 5*time.Second)
+}
+
+func TestNativeOrdinaryHookDeadlinesRemainFiveSeconds(t *testing.T) {
+	files, err := nativeProfilePayload(runtime.GOOS, strings.Repeat("a", 64))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config struct {
+		Hooks map[string][]struct {
+			Hooks []struct {
+				Timeout int `json:"timeout"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(files["hooks/hooks.json"], &config); err != nil {
+		t.Fatal(err)
+	}
+	if len(config.Hooks) != 7 {
+		t.Fatal("ordinary hook set changed")
+	}
+	for event, rows := range config.Hooks {
+		for _, row := range rows {
+			for _, hook := range row.Hooks {
+				if hook.Timeout != 5 {
+					t.Fatal("ordinary deadline changed", event)
+				}
+			}
+		}
+	}
+}
+
+func TestNativeStartupSnapshotRefusesAggregateBeyondRuntimeBound(t *testing.T) {
+	in := nativeFixture(t)
+	home, err := datahome.Resolve(datahome.Options{ProductRoot: in.Packet.Binding.ProductRoot, UserHome: in.Packet.Binding.UserHome, LookupEnv: in.Packet.Binding.LookupEnv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, size := range []int64{512 << 20, 512 << 20, 1} {
+		f, err := os.Create(filepath.Join(home.Home, "state", fmt.Sprintf("aggregate-%d", i)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = f.Truncate(size); err != nil {
+			t.Fatal(err)
+		}
+		if err = f.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := startupSnapshot(in.Packet.Binding); err == nil {
+		t.Fatal("aggregate beyond finite runtime bound admitted")
+	}
 }

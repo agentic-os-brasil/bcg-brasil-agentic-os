@@ -59,7 +59,7 @@ func TestContentUnseededStatus(t *testing.T) {
 		t.Fatalf("valid unseeded conversion created an artifact: %v", got)
 	}
 	reason := "authority_unavailable"
-	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
+	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" && runtime.GOOS != "windows" {
 		reason = "platform_unavailable"
 	}
 	if !reflect.DeepEqual(conversion["warnings"], []any{reason}) {
@@ -119,6 +119,8 @@ func assertPolicyCoverage(t *testing.T, got map[string]any, state, reason string
 		".html": {"docling_local", "docling.html", "structured", ""},
 		".json": {"maestro_literal_v1", "maestro.literal_utf8.v1", "textual", "native_generic_literal_unsupported"},
 		".md":   {"docling_local", "docling.markdown", "structured", ""},
+		".pdf":  {"docling_local", "docling.pdf_native_text", "textual", ""},
+		".pptx": {"docling_local", "docling.pptx", "structured", ""},
 		".txt":  {"maestro_literal_v1", "maestro.literal_utf8.v1", "textual", "native_generic_literal_unsupported"},
 		".xls":  {"maestro_biff_v1", "xlrd.biff", "textual", "native_xls_requires_unmanaged_office"},
 		".xlsx": {"docling_local", "docling.xlsx", "structured", ""},
@@ -133,7 +135,11 @@ func assertPolicyCoverage(t *testing.T, got map[string]any, state, reason string
 		format := entry.(map[string]any)
 		ext := format["extension"].(string)
 		expected, exists := want[ext]
-		if !exists || ext <= previous || format["state"] != state || reason != "" && format["reason"] != reason {
+		expectedState, expectedReason := state, reason
+		if state == "ready" && (ext == ".pdf" || ext == ".pptx") && got["profile"] != "model-free-documents-v1" {
+			expectedState, expectedReason = "unavailable", "format_profile_unavailable"
+		}
+		if !exists || ext <= previous || format["state"] != expectedState || expectedReason != "" && format["reason"] != expectedReason {
 			t.Fatalf("format availability: %v", format)
 		}
 		previous = ext

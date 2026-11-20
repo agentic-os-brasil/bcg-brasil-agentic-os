@@ -28,6 +28,16 @@ func TestProductSessionMemoryBudgetAndPromptPrivacy(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := start.HookSpecificOutput.AdditionalContext
+	for _, required := range []string{
+		"only the explicitly admitted repository Standards/Spec pair may overlap",
+		"defaults to one foreground specialist",
+		"no child delegation",
+		"maestro://agents/activation-policy.json",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("product SessionStart omits native activation boundary %q", required)
+		}
+	}
 	index := strings.Index(text, "MAESTRO LOCAL MEMORY")
 	if index < 0 || len(text)-index > MaximumMemoryContextBytes || len(text) > MaximumAdditionalContextBytes || !utf8.ValidString(text) || !strings.Contains(text, "memory context truncated") {
 		t.Fatalf("product memory budget/UTF8 contract failed: bytes=%d memory_index=%d", len(text), index)
@@ -164,6 +174,11 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 	deferred.SharePointSource = sessionctx.SharePointSource{State: priorwork.SourceDeferred, SourceAuthority: "sharepoint", LocalProjection: "metadata_and_source_pointers_only", CollectionRuntime: "claude", CollectionState: "unavailable", CodexCollectionState: "unavailable/corporate_policy"}
 	if got := sessionDirective(deferred); strings.Contains(got, "Quer conectar uma pasta do SharePoint") || !strings.Contains(got, "SharePoint was left out of this workspace") {
 		t.Fatalf("deferred directive = %q", got)
+	}
+	revoked := deferred
+	revoked.SharePointSource.State = priorwork.SourceRevoked
+	if got := sessionDirective(revoked); !strings.Contains(got, "owner revoked") || !strings.Contains(got, "without reading or collecting") || strings.Contains(got, "SharePoint is connected") || strings.Contains(got, "Quer conectar uma pasta do SharePoint") {
+		t.Fatalf("revoked directive = %q", got)
 	}
 	unavailable := active
 	unavailable.MaestroCLIPath = "/Users/pilot/Library/Application Support/Maestro/bin/bcgos"

@@ -1,10 +1,13 @@
 # Authenticated offline document runtime
 
-**Current source capability:** assemble and execute the pinned, authenticated model-free format
-pack on Apple Silicon macOS. Runtime construction, genuine converter execution,
-CI, installed clients and distribution each require separate evidence. Windows,
-Intel macOS and Linux conversion remain unavailable in this profile; a successful
-cross-build does not change that state.
+**Current source capability:** the pinned authenticated model-free converter has
+Apple Silicon macOS execution and a Windows amd64 producer, native confinement
+implementation and explicit placement qualification path. Windows native kernel
+and real converter qualification remain **unattested** until the ordinary-account
+job actually passes. Cross-compilation, downloading and assembly establish none
+of those native results. Intel macOS and Linux conversion remain unavailable.
+Runtime construction, converter execution, hosted CI, installed clients and
+organization-signed distribution require separate evidence.
 
 Read this guide when assembling a runtime, diagnosing its availability, or
 qualifying conversion. Source policy and fallback rules remain in
@@ -78,3 +81,129 @@ silent network or MarkItDown fallback.
 The full source cannot be called delivered merely because this guide, a catalog
 entry or a pack manifest exists. Hosted native conversion and final signed
 installation/client acceptance remain explicit gates under issue #485 and epic #460.
+
+
+## Windows amd64 construction and explicit qualification
+
+Select the Windows closure explicitly; the historical command default and the
+Darwin interpreter, 51-wheel lock and bridge bytes are preserved:
+
+```sh
+go run ./cmd/maestro-docling-pack --target windows/amd64 --inputs "$MAESTRO_AUTH_INPUTS" --destination "$MAESTRO_AUTH_OUTPUT"
+```
+
+The Windows closure uses CPython 3.12.16+20261026 from the official
+[python-build-standalone release](https://github.com/astral-sh/python-build-standalone/releases/tag/20261026),
+52 pinned wheels from PyPI, and the same Docling 2.145.0 SimplePipeline contract.
+Ten native wheels select `win_amd64`; the remaining existing package versions
+are retained. Windows-only `colorama==0.4.6` satisfies the `tqdm` and `typer`
+platform markers. Upstream package notices remain inventoried within each
+wheel's `dist-info` license files; no dependency installer runs during assembly.
+The Windows producer also makes one app-local `python/msvcp140.dll` alias from
+the exact authenticated NumPy-supplied DLL bytes, SHA-256
+`a4c2229bdc2a2a630acdc095b4d86008e5c3e3bc7773174354f3da4f5beb9cde`.
+Rtree imports that unmangled basename. The bridge verifies those bytes and the
+actual loaded module's snapshot location before any wheel imports, and excludes
+PATH/current-directory DLL search. A missing installed DLL refuses before an
+ambient VC++ redistributable could satisfy it. This changes no acquired bytes
+or original wheel notices.
+
+**Redistribution authority remains unresolved.** NumPy/Pandas notices do not
+grant Microsoft runtime rights. A properly licensed distributor must qualify
+[the applicable Microsoft redistribution terms](https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files)
+before any team or public runtime publication, including an experimental pilot.
+Local reversible source construction accepts no license and grants no such
+permission. The runtime inventories this exact provenance and outstanding gate
+in `native-runtime.json`.
+
+Exact raw acquisition is 127,966,637 bytes: the interpreter is 47,113,364 bytes
+with SHA-256 `590dfcbe3a34c07301e6332e13e2188b98655cd072b08afa45a7998dc4c22bc5`,
+and the wheels total 80,853,273 bytes. The target lock SHA-256 is
+`728aab0b59dd5011070dfc4e9159e3ed6180b1668539f84275f1b88e81f5be58`.
+
+`BuildModernCandidate` can carry this exact target pack through the existing
+modern signed setup route. The unversioned desktop pilot retains its explicit
+refusal of signing/registry/version inputs. Assembly, ephemeral engineering keys
+and local qualification never replace organization-controlled release authority,
+Windows Authenticode, corporate device acceptance or native client loading.
+
+Only explicit authenticated `PlaceVerified` runs Windows qualification. It
+creates a fresh private execution snapshot, never a hardlink to the installed
+runtime or source documents. A unique ordinary-user AppContainer profile has
+zero capabilities; only that profile SID receives snapshot read/execute and
+execution-local scratch access. Scratch uses low integrity. No global ACL,
+firewall rule, service, admin elevation, network capability or
+`ALL APPLICATION PACKAGES` grant is installed. The profile is removed after
+execution, with removal failure reported. This is a disclosed per-user Windows
+profile effect of explicit setup/conversion, and is never run by a query.
+
+The process is created suspended with a stdio-only handle allowlist, checked for
+the expected actual AppContainer SID and zero capabilities, attached to a
+kill-on-close single-process Job with a 1 GiB process-memory limit, then resumed.
+Child process creation is forbidden. The bridge observes TCP/UDP IPv4/IPv6
+network denial, outside synthetic-file read/write denial, snapshot write denial,
+allowed scratch writes and native child-creation refusal before using real
+Docling. System files deliberately available to ordinary AppContainers remain an
+OS dependency; this is no claim to an independent virtual filesystem or disk
+quota. The 90-second execution deadline and existing source/output/expansion
+budgets remain enforced. A platform/corporate policy that cannot meet the native
+controls refuses rather than running Python without confinement.
+
+After a real synthetic DOCX marker and 2x2 table convert successfully, placement
+re-verifies installed signed bytes and atomically seals a private DPAPI proof
+with UI forbidden. It binds pack and signed-manifest digests, actual embedded
+production runtime/helper sources, Go toolchain and resolved schema-validator/OS/Unicode dependency
+versions/sums, and hashes of owner/machine/volume/install-root/kernel-build
+identity. It attests the shared converter implementation; it does not attest that
+the MCP server executable ran. Test binaries or vendor builds that cannot provide
+the required dependency identity cannot issue that proof.
+
+`Status` stays read-only: it verifies current bytes and the bound DPAPI proof.
+Absent/stale/invalid proof returns `unqualified` with
+`requalification_required`, without running a converter, creating a profile,
+repairing state or writing a receipt. Repeating explicit placement can requalify
+an unchanged authenticated pack only after actual successful conversion again.
+Every explicit conversion independently repeats its kernel denial controls.
+
+## Native Windows gate
+
+The manual-only `windows-docling-runtime.yml` uses the existing exact-source
+engine builder's `-DoclingRuntime` branch and the same
+`windows-core-pilot.ps1 -DoclingManifest` credentialed ordinary-account launcher.
+It stages exact public source, a copied SDK, checksum-verified read-only module
+cache, all 53 raw public inputs and the exact test image under a closed inventory.
+It grants the disposable ordinary account read/execute access to those inputs;
+private caches, profile effects and synthetic documents stay in its owned proof
+subtree. Dependencies are unavailable from the network during the ordinary-user
+phase. No generic command/test selector is accepted.
+
+The closed gate requires actual pass outcomes without skips for:
+
+- `TestWindowsNativeConfinement`: actual AppContainer token, TCP/UDP IPv4/IPv6,
+  outside/private reads and writes, immutable snapshot, writable scratch and
+  native child denial, including repeated phases.
+- `TestWindowsNativeConfinementDeadline`: actual in-flight native Job termination.
+- `TestWindowsSharedImplementationIdentityAcrossEntryModules`: independent
+  root-module and MCP-module production executables compute the same identity.
+- `TestWindowsRealAuthenticatedDocling`: real native modern factory, ephemeral
+  engineering signed release, explicit placement/smoke, eleven format journeys,
+  real export classification/conversion, tamper refusal, query preservation and
+  conscious repeat qualification.
+
+Only bounded synthetic proof/log files are retained. The workflow has no push or
+pull-request trigger: publishing source and dispatching it require separately
+approved scope. Until its actual ordinary-user result is inspected, native
+Windows converter, client loading, clean-device and production-release gates
+remain unattested.
+
+## Explicit short-lived engineering pilot
+
+The full-runtime participant carrier uses the same verifier and `PlaceVerified`,
+selected by a separate conscious local runtime review after isolated preparation.
+The closed engineering profile binds the actual server/version, one public
+registry, signed modern canary manifest, target/archive and private destination.
+Its fresh experimental issuer has at most fourteen days of validity; expiration
+refuses and requests a newly reviewed kit. No startup/query installs, renews,
+repairs or changes production enrollment. The initial bundled runtime targets
+Darwin ARM64; Windows redistribution/native gates and Intel runtime availability
+remain separate. See [the complete carrier flow](product-pilot.md#explicit-engineering-runtime-kit).

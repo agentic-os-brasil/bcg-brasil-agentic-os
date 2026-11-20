@@ -22,7 +22,7 @@ import (
 )
 
 func maintenanceQueries() []any {
-	return []any{variant("maintenance.status", map[string]any{}), variant("maintenance.report", map[string]any{"job_id": map[string]any{"type": "string", "enum": []string{maintenance.DarwinDailyJobID, maintenance.DarwinWeeklyJobID, maintenance.DarwinMonthlyJobID, maintenance.UpdateCheckJobID, maintenance.MemoryDeepDreamJobID, "memory-retention-check", "skills-index-refresh", "runtime-health-check", "capability-recheck", "runtime-drift-check", maintenance.WikiIncrementalJobID, maintenance.WikiReconcileJobID, maintenance.WikiIntegrityJobID}}}, "job_id")}
+	return []any{variant("maintenance.status", map[string]any{}), variant("maintenance.report", map[string]any{"job_id": map[string]any{"type": "string", "enum": []string{maintenance.DarwinDailyJobID, maintenance.DarwinWeeklyJobID, maintenance.DarwinMonthlyJobID, maintenance.UpdateCheckJobID, maintenance.UpdateAvailabilityJobID, maintenance.MemoryModelJobID, maintenance.MemoryDeepDreamJobID, maintenance.MemoryCaptureJobID, maintenance.SelfObservationCaptureJobID, maintenance.YodaSelfReviewWeeklyJobID, "memory-retention-check", "skills-index-refresh", "runtime-health-check", "capability-recheck", "runtime-drift-check", maintenance.WikiIncrementalJobID, maintenance.WikiReconcileJobID, maintenance.WikiIntegrityJobID}}}, "job_id")}
 }
 
 func maintenanceTransitions() []any {
@@ -47,6 +47,10 @@ func maintenanceTransitions() []any {
 		}
 		variants = append(variants, variant("maintenance."+kind, fields, required...))
 	}
+	variants = append(variants, variant("maintenance.register", map[string]any{
+		"job_id":            map[string]any{"type": "string", "enum": []string{maintenance.YodaSelfReviewWeeklyJobID, maintenance.MemoryModelJobID}},
+		"expected_revision": map[string]any{"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+	}, "job_id", "expected_revision"))
 	return variants
 }
 
@@ -59,6 +63,10 @@ func (b *Bound) maintenanceService() (*maintenance.Service, error) {
 }
 
 func (b *Bound) maintenanceServiceWithEligibility(eligibility func() error) (*maintenance.Service, error) {
+	return b.maintenanceServiceWithGuards(eligibility, b.guardPublication)
+}
+
+func (b *Bound) maintenanceServiceWithGuards(eligibility func() error, installedGuard func(func() error) error) (*maintenance.Service, error) {
 	if err := b.validate(); err != nil {
 		return nil, err
 	}
@@ -69,10 +77,12 @@ func (b *Bound) maintenanceServiceWithEligibility(eligibility func() error) (*ma
 	// Foreground and serve-owned work share local authority. ClientInfo cannot
 	// qualify a native Code/Desktop adapter or an operating-system wake.
 	return maintenance.NewService(maintenance.ServiceOptions{
+		SourceAdmission:  b.experimentalSourceAdmission(),
 		EligibilityGuard: eligibility,
-		ProductRoot:      b.options.ProductRoot, UserHome: b.options.UserHome,
+		WeeklyCandidate:  b.options.WeeklyCandidate, WeeklyNativeExecutor: b.options.WeeklyNativeExecutor, MemoryNativeExecutor: b.options.MemoryNativeExecutor,
+		ProductRoot: b.options.ProductRoot, UserHome: b.options.UserHome,
 		WorkspacePath: b.options.WorkspacePath, LookupEnv: b.options.LookupEnv,
-		DarwinFactory: darwin.NewProductBinding, Catalog: catalog, Adapter: "local", Now: b.maintenanceClock, CLIVersion: b.options.CLIVersion, InstalledGuard: b.guardPublication, AuthorityRegistryPath: b.options.AuthorityRegistryPath, AuthorityRegistrySHA256: b.options.AuthorityRegistrySHA256,
+		DarwinFactory: darwin.NewProductBinding, Catalog: catalog, Adapter: "local", Now: b.maintenanceClock, CLIVersion: b.options.CLIVersion, InstalledGuard: installedGuard, AuthorityRegistryPath: b.options.AuthorityRegistryPath, AuthorityRegistrySHA256: b.options.AuthorityRegistrySHA256,
 	})
 }
 
@@ -197,6 +207,8 @@ type maintenanceQualificationMetadata struct {
 }
 
 type maintenanceJobMetadataView struct {
+	Scope              string                            `json:"scope,omitempty"`
+	ScopeID            string                            `json:"scope_id,omitempty"`
 	Diagnosis          *maintenance.DarwinSource         `json:"diagnosis,omitempty"`
 	JobID              string                            `json:"job_id"`
 	Revision           uint64                            `json:"revision"`
@@ -210,7 +222,7 @@ type maintenanceJobMetadataView struct {
 }
 
 func maintenanceJobMetadata(job maintenance.ProductJobStatus) maintenanceJobMetadataView {
-	out := maintenanceJobMetadataView{Diagnosis: job.Diagnosis, JobID: job.JobID, Revision: job.Revision, State: job.State, Schedule: job.Schedule, Boundary: job.Boundary, Writes: job.Writes, QualificationState: job.QualificationState, Reason: job.Reason}
+	out := maintenanceJobMetadataView{Scope: job.Scope, ScopeID: job.ScopeID, Diagnosis: job.Diagnosis, JobID: job.JobID, Revision: job.Revision, State: job.State, Schedule: job.Schedule, Boundary: job.Boundary, Writes: job.Writes, QualificationState: job.QualificationState, Reason: job.Reason}
 	if q := job.Qualification; q != nil {
 		out.Qualification = &maintenanceQualificationMetadata{ID: q.ID, Adapter: q.Adapter, Platform: q.Platform, Implementation: q.Implementation, Configuration: q.Configuration, ArtifactRef: q.Artifact, ArtifactSHA256: q.ArtifactSHA256, ScheduledFor: q.ScheduledFor, RequestedAt: q.RequestedAt, VerifiedAt: q.VerifiedAt}
 	}
@@ -256,9 +268,37 @@ func maintenancePresentation(review maintenance.ProductReview) any {
 		"configuration": review.Configuration, "source_state": review.SourceState,
 		"scope": "This exact job and workspace only. Qualification executes once; enrollment authorizes only this schedule and write set. Operating-system wake installation remains separate.",
 	}
+	if review.Operation.JobID == maintenance.SelfObservationCaptureJobID {
+		presentation["scope"] = "This exact owner and self-observation job across admitted workspaces, with one shared owner control and occurrence. Consume only exact owner-reviewed professional declarations as versioned proposal input; never capture conversations, infer native interaction episodes, corroborate or change active SELF. Declaration intake is separate from this job's qualification and enrollment. Qualification must commit and read back a new canonical observation; replay or no-op cannot qualify. Rejection, redaction, pause and revocation remain authoritative."
+	}
+	if review.Operation.JobID == maintenance.YodaSelfReviewWeeklyJobID {
+		delete(presentation, "workspace_id")
+		presentation["scope_kind"] = "owner"
+		presentation["owner_scope_id"] = review.WorkspaceID
+		presentation["scope"] = "This exact owner and weekly Yoda job across admitted workspaces. Registration alone leaves the job inactive and unqualified. Qualification observes one bounded tool-free native attempt; enrollment separately authorizes this schedule. Publish only the validated silent working projection. Canonical SELF remains unchanged; optional ordinary advisory context additionally requires current accepted session policy, execution and terminal evidence."
+		if review.WeeklyRegistration != nil {
+			presentation["weekly_registration"] = review.WeeklyRegistration
+		}
+	}
+	if review.Operation.JobID == maintenance.MemoryModelJobID {
+		presentation["scope_kind"] = "workspace"
+		presentation["scope"] = "This exact workspace and memory-weekly job only. Registration leaves it inactive and unqualified. Qualification is one bounded tool-free native evidence-only attempt with no memory publication; enrollment separately permits canonical L2/L3 and a private pending lifetime candidate through the original atomic engine. Lifetime still requires independent deterministic continuity and exact foreground review. Sources/correction/deletion, immutable occurrence, pause/revocation and provider/model bounds remain enforced. Explicitly pause the other scheduled weekly engine before enrolling or resuming this one; no fallback or automatic engine swap."
+		if review.WeeklyRegistration != nil {
+			presentation["weekly_registration"] = review.WeeklyRegistration
+		}
+	}
+	if review.Operation.JobID == maintenance.MemoryCaptureJobID {
+		presentation["scope"] = "Admit only body-free, workspace-bound adapter observations and witnessed canonical completed-record metadata through this exact capture job. Adapter observations are observed_only; committed records do not attest an original host or native invocation. No prompts, transcripts, tool bodies, objectives, summaries or document paths enter memory. Qualification runs once; enrollment separately authorizes this cadence. Source state, producer version and permanent correction/deletion denials are revalidated before each publication."
+	}
+	if review.Operation.JobID == maintenance.MemoryLightDreamJobID {
+		presentation["scope"] = "Generate deterministic L1 from the oldest pending eligible ingestion day in this workspace's bounded canonical memory cohort, at most one day per occurrence. Historical input days remain pending across client downtime; source fingerprints and current correction/deletion denials are revalidated before publication. The artifact records actual synthesis time. Qualification executes once and binds that selected period and fingerprint; enrollment separately authorizes this cadence. No capture, raw history ingestion, lifetime promotion or native invocation proof is granted."
+	}
 	if review.Operation.JobID == maintenance.UpdateCheckJobID {
 		presentation["signed_source_review"] = review.SourceReview
 		presentation["scope"] = "One attended exact signed-source observation, private candidate staging and bounded diagnosis. No recurring enrollment, release activation, native health or rollout authority. Authenticated higher recalls persist even when expired or payload-incomplete."
+	}
+	if review.Operation.JobID == maintenance.UpdateAvailabilityJobID {
+		presentation["scope"] = "Observe only signed metadata from this installation's already enrolled source, once per calendar day on first active use across admitted workspaces. Record bounded local diagnostics and scheduler receipts in the existing private owner state. Source custody, payload downloads/staging, code activation, client replacement and brain changes are excluded. Qualification requires a genuine authenticated metadata read; enrollment is separate and never installs an operating-system service."
 	}
 	if review.DarwinReview != nil {
 		presentation["darwin_review"] = review.DarwinReview

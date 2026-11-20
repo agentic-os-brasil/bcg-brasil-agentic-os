@@ -79,9 +79,16 @@ func (engine *Engine) activate(workspaceID string, artifacts []Artifact) error {
 	defer memoryRemoveAll(staging)
 	transactionID := filepath.Base(staging)
 
+	modelSHA, err := engine.stageModelWeeklyRecord(staging, workspaceID, artifacts)
+	if err != nil {
+		return err
+	}
 	artifactPaths := make(map[string]string, len(artifacts))
 	for index, artifact := range artifacts {
 		name := fmt.Sprintf("%02d-%s-%s.json", index, strings.ToLower(artifact.Layer), safeName(artifact.Period))
+		if artifact.Layer == "L3" && modelSHA != "" {
+			name = strings.TrimSuffix(name, ".json") + "-model-" + modelSHA + ".json"
+		}
 		path := filepath.Join(staging, name)
 		if err := writeJSONFile(path, artifact); err != nil {
 			return err

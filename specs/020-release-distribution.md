@@ -370,17 +370,23 @@ expiry or add recalls. It cannot redefine that version's artifact identity.
 
 ### 2. Explicit local source enrollment and private snapshots
 
-Trusted operator review selects one source ID/channel/target and an ordinary local
-folder locator for the real installation. The path supplies transport, not trust.
-For the current Windows pilot, direct OneDrive/Files On-Demand source paths are
-unavailable: confinement rejects every reparse point, including hydrated Cloud
-Files. Download and extract a signed generation from SharePoint into an ordinary
-local mirror, then apply the same confinement checks. Hydration is insufficient;
-direct synchronization needs separate native qualification and is not claimed.
+Trusted operator review selects one source ID/channel/target and an exact local
+distribution-folder locator for the real installation. The path supplies transport,
+not trust. Under SFRD, Windows distribution input may traverse held ordinary objects
+or the finite documented Cloud Files tags. Resolve only the authenticated finite
+file set; bound each leaf before requesting hydration of its measured range through
+the operating system. Cloud directories may remain partially populated, while every
+required file must be fully ready before and after reading. Junctions, symlinks,
+unknown reparse types, aliases and partial/offline/error files remain unavailable.
+Copy accepted bytes into disjoint ordinary private staging and retain the existing
+complete signature verification. This source-input extension does not relax any
+private owner/workspace/installation reader or authorize execution from the share.
+Hydration bounds bytes, not provider/kernel wall time. Actual native Windows/OneDrive
+qualification remains separate; the earlier experimental pilot artifacts are unchanged.
 Later metadata cannot silently rebind that tuple or its independently pinned
 registry. No SharePoint destination, endpoint or account is guessed.
 
-Read bounded ordinary no-follow/unaliasable source files and copy the exact
+Read bounded no-follow/unaliasable source files under the platform rule above and copy the exact
 manifest-authorized release set into private install-state staging. Verify the
 complete snapshot through the canonical directory verifier; execute no synced
 file. Review reads metadata/manifests within finite in-memory bounds and grants
@@ -557,6 +563,26 @@ implausibly future publication (bounded five-minute skew). Do not claim protecti
 against owner-controlled clock tampering beyond that contract. Test-clock seams
 remain trusted in-process composition only.
 
+### Routine availability and deliberate update (SFRD)
+
+Offer `update-availability` as an opt-in owner/managed-installation job on the
+existing maintenance worker. After genuine qualification and reviewed enrollment,
+observe the enrolled source once per local calendar day on first active use;
+coalesce missed days and concurrent/reconnected workspaces. This metadata-only
+observation alone may bypass idle. Reuse bounded authenticated `ReviewSynced`
+reads, with no source discovery/enrollment, custody advancement, payload staging,
+activation or model call. Preserve the configured private brain location.
+
+Keep bounded local scheduler/diagnostic records distinct from source-content
+writes and installation custody. Availability reports retain observation time,
+leave payload `not_checked` and never describe offline/partial/expired/recalled
+input as current. The conversational update entry uses the existing exact reviewed
+installer and a deliberate supported reconnect boundary. An old running session,
+copied instruction library or retained qualification is not evidence that the new
+complete product is loaded and functional. Preserve stale-proof refusal and
+report the actual revalidation/client phases. Spec062 owns this job lifecycle;
+the separate attended `update-check` below retains all its existing effects.
+
 ### 8. Real attended update-check and focused complete proof
 
 The existing `update-check` job remains unattended-never and cannot enroll as
@@ -695,6 +721,216 @@ bypass a rejecting client policy. In that policy the stable source-managed
 carrier is unavailable. An ordinary unmanaged MCPB is a separate profile,
 not a source-managed fallback. Never claim MCPB automatic updating.
 
+### Complete versioned clients from one synced source (SFRD)
+
+New reviewed selections may use private versioned client slots. Carrier, signed
+manifest and a bounded reviewed preparation-generation ID determine finite sibling
+names; the private current record selects the exact verified generation. Publish
+that record last. Preserve previous, failed, occupied and foreign candidates;
+never replace an unknown shared tree to make an update succeed. Legacy records
+without this explicit selection retain their original serialization and behavior.
+The admitted workspace and physical Developer brain binding survive every phase.
+
+For this profile, Code uses its supported command plugin source in COPY mode.
+A fixed participant-local provider invokes only the independently admitted
+installed client's current-plugin-path reader. Before and after readback validate
+Current, source custody and exact private-record identity; this reader cannot
+repair, stage, approve or activate anything. It does not reacquire the native
+registration owner's lock. Supported scoped install/update and canonical copied
+payload readback preserve disabled state and refuse foreign entries. Host policy
+may reject command sources; no alternate updater or profile edit bypasses it.
+The existing relative local source remains the legacy selected profile.
+
+The original read-only registration review binds the exact generated provider
+catalog, launcher script, current packet and narrow supported host command digest.
+Operator confirmation may supply only `--accept-command <sha256>` for that exact
+command, catalog, COPY mode and plugin identity. Missing host support remains
+pending; no dry-run install, broad approval or Claude-session guard bypass is
+allowed. Current native COPY observations that omit folder fields require exact
+selected-profile cache custody, actual manifest identity, independently derived
+host content-version hash and canonical payload/topology equality, with only the
+bounded typed root host lease role admitted. Preserve the raw host version and
+separate manifest/content evidence. Neither consent nor registration proves
+session loading, native enforcement or functional acceptance.
+
+A complete native selection uses the existing genuine review/qualify producer,
+with stable carrier and destination generation bound before the probe. Run the
+qualifier outside installer publication serialization, then publish only its
+same-call native_observed result and unchanged canonically inspected candidate
+under the existing guards. Imported proof, engineering witnesses or missing
+native capabilities cannot qualify it. Do not silently downgrade a complete
+selection to resources-only. A failed attempt remains preserved; an explicit
+new review selects a fresh bounded generation. Existing D3 custody stays pending
+where its independent requirements are unmet.
+
+The actual current server also generates and verifies the complete Desktop live
+method bootstrap described in Spec063. Compatible external-launch MCPB bytes may
+remain exact while current backend resources change. Distinguish connector
+installation, bootstrap installation, current backend, current live methods,
+loaded session and functional acceptance. Native contract or bootstrap protocol
+changes still require the host's normal review; external launch needs actual
+Desktop qualification and cannot be inferred from packaging or an opener.
+
+The fixed manage/update intent composes existing source, native, packet,
+registration and per-job review owners. Whole-executable and CLI-version changes
+make maintenance proof stale. Offer only previously qualified stale jobs to their
+original real qualifiers, preserving opt-ins, enrollment/timezone and paused or
+revoked state; absent real inputs remain pending. No old proof is relabeled.
+Reload/reconnect at a deliberate safe point; do not terminate an active client or
+move the brain to create an activation claim. The closed MCP handoff in Spec057
+opens this manager without granting any of those subsequent approvals.
+
+Construction tests do not admit an experimental installation. The existing
+runtime/converter ZIP is not an installed-seed/source-update authority. A bounded
+experimental N-to-N+1 rehearsal needs its exact separate installer-owned admission;
+organization production signing and production verification remain separate.
+
+### Closed experimental installed-seed rehearsal (EISA)
+
+A separate compile-time experimental installer entry may consume only a closed
+verified installed-seed admission. Its paired shared-MCP build uses the same
+closed engineering class and fixed installed role; the default production MCP
+entry accepts no engineering input or override. Bind each exact child artifact
+and refuse mixed production/experimental children. Keep the production command,
+strict native verifier and default wire bytes unchanged; it must refuse the same unsigned
+installer and must not acquire an experimental trust override. The existing
+runtime/converter pilot remains a distinct profile and keeps its enrolled-source
+refusals. Signature validity in a general registry does not confer this new role.
+
+The experimental admission has a literal purpose/protocol, a pinned public
+engineering registry, exact installer digest/version/target, exactly bounded
+release N/N+1 manifest/client/server/bundle/runtime identities, fixed source tuple
+and finite expiry no later than the existing accepted authority window. No
+arbitrary commands, alternate executable or source selection, key renewal or
+new issuer is admitted. The record and exact local review are independently
+verified; generic publisher records contain no participant-private path. Preserve
+the existing physical Developer brain/workspace binding and all user data.
+
+Use an opaque verified type at the owning boundary and retain the explicit
+engineering evidence class through plan, installed custody/status, child process
+composition, first activation, source enrollment/check/stage/apply/recovery/
+rollback, stable launch, current plugin provider and update-manager handoff.
+Do not inject an engineering callback into a path that then reports native-strict.
+Production readers refuse the distinct engineering status/profile. Existing
+production installations cannot be adopted or relabeled. Reuse the original
+transactions, source custody, reviews, client slots and independently verified
+current records; this profile introduces no replacement updater or service.
+The actual native client qualifier, its exact host evidence and D3 custody remain
+unchanged; a role record cannot qualify a missing host or native Agent execution.
+
+In this experimental build, final full-native hooks use the existing installed
+stable binding and a closed native-hook route through the independently admitted
+installer. One canonical recipe owns generation, fingerprinting and inspection
+of all seven events; ordinary builds retain their exact recipe and command
+surface. Private qualification probes still execute the actual MCP directly,
+with the verified experimental arguments, before any native client record is
+published. Subsequent final hooks require the current native materialization,
+its exact files/carrier/workspace and the existing qualified launch. The schema1
+native bit alone is no proof: only the existing genuine qualifier, exact candidate
+inspection and guarded publication can establish that materialization. Keep the
+three-event passive owner separate; introduce no packet schema, proof importer
+or D3 bridge.
+
+The participant entry reuses the existing prepare/test/report flow and manager.
+Prefill authenticated source metadata and admitted local selections; retain
+necessary human choices and exact reviews. Distribution is read from the selected
+synced source using the existing admitted ingress, while private state remains in
+Developer. Do not reuse the runtime-only KIT-ID/raw-init path for an existing
+brain or weaken that old profile's cloud-input refusal. Reuse the selected
+absolute Code executable after the once-only choice.
+
+The installed-profile checker derives current paths, binding and packet/native
+contract currency from the verified current client record. A compatible reused
+MCPB may contain historical inert server provenance; it must not fail merely
+because that bundled server hash differs from the current backend. Preserve the
+original profile's exact archive checks and all installed contract checks. Reuse
+the existing test menu and automatic prompts, collect its existing host-observation
+answers into the report and label them participant attestations. Distinguish
+preparation, registration, actual loading, native qualification and functional
+results; automated file/SDK checks cannot stand in for host observations.
+Desktop instructions identify the exact admitted stable connector, including a
+compatible retained MCPB; a generic or legacy product name is insufficient.
+The complete test action prepares the existing public synthetic DOCX in the
+selected workspace without replacing any existing file and includes conversion
+and paginated artifact readback against the independently verified Current
+manifest and pack. An unavailable runtime remains explicitly pending. The
+read-only checker does not prepare workspace files. Shared conversion-test
+expectations are diagnostics, never admission to the separate old runtime-pilot
+profile or evidence that a real conversion has succeeded.
+
+Source acceptance uses ephemeral test keys and private synthetic fixtures, covers
+closed-parser/purpose/target/hash/source/expiry/revocation negatives, production
+unsigned refusal, actual child role propagation and bounded N-to-N+1/rollback
+readback through the existing owners. These tests issue no real role. Actual
+signed-purpose issuance/use, exact reviewed artifact placement, native clients
+and activation remain separate gates. Build artifacts and present exact hashes
+and effects before requesting any outstanding real action; never infer that
+source approval authorizes signing or placement.
+
+### Current authenticated converter updates (PCRU)
+
+Complete source-managed updates include a required converter pack when the
+signed current release declares one. Reuse docling.PlaceVerified, complete pack
+verification and the existing exact local review. Extracted payloads already
+have SHA-addressed slots; add only the versioned authenticated metadata/current
+selection needed to preserve differing manifests and prior runtime generations.
+Never overwrite unknown or prior bytes, or delete old generations to make an
+update pass. A repeated identical placement remains idempotent. A malformed,
+unsafe or unknown selector refuses without fallback to an obsolete legacy pack.
+Legacy calls without an authenticated Current requirement retain their original
+verifier. An initial schema4 consumer already has an authenticated Current
+binding before source enrollment: enforce its exact required manifest and pack
+in availability, reuse decisions, placement and use. An older compatible legacy
+pack cannot satisfy a different initial requirement or cause a successful no-op;
+preserve its existing bytes while preparing the actual current generation.
+Before enrollment, reuse the installation lock and authenticated activated-current
+checks for this schema4 binding; this is neither native qualification nor source
+enrollment or lock recovery. Enrolled sources retain the original qualified
+current guard. Missing or malformed current evidence never selects a legacy pack.
+
+Resolve current required pack, target, signed metadata and actual server version
+from the independently authenticated current installation. Tool/model arguments
+and the older installer version do not choose that requirement. Runtime status
+and actual conversion enforce it as well as original signature/expiry, complete
+input/license inventory, compatible client range, confinement and platform
+qualification. An older merely compatible pack cannot be used as current when
+another pack is required. An unchanged pack remains reusable only if all current
+checks, including current-build Windows qualification where needed, succeed.
+
+The manager update/reconcile chain composes the existing placement owner after
+its exact reviewed effects and current-state revalidation. Keep source custody,
+reader/writer floors, original private brain, opt-ins, auth and retained client
+state. Typed experimental context from the distinct installed-seed profile must
+survive branch composition; this is no new converter purpose or authority. A
+failure or decline after backend activation reports source-updated/runtime-pending
+and a fixed recovery action. No whole-update success or rollback is fabricated.
+Rollback may select retained authenticated runtime metadata when the accepted
+current source requires it, with the same current checks and requalification.
+If initial placement failed before a private release snapshot existed, manager
+recovery can materialize only the independently authenticated exact Current
+release through the existing source snapshot owner, after foreground review of
+those effects and final Current revalidation. Runtime review itself stays
+read-only; recovery must not require a participant to discover archive paths.
+
+The local runtime-review/runtime-apply consumer route requires schema4 with its
+retained signed manifest/client-input binding and the actual installed executable.
+A historical schema3 modern consumer lacks that binding and command contract;
+converter setup reports explicitly pending before invoking a child. It neither
+claims qualification built by the older installer belongs to that consumer nor
+silently falls back. Use a compatible source-aware release. Raw, uninstalled and
+EPRT PlaceVerified calls without an authenticated Current requirement retain
+their original fixed metadata layout and authority/profile exclusions.
+
+Source acceptance proves changed-pack N-to-N+1 placement, current identity/use,
+prior-byte preservation, rollback/readback, same-pack idempotence, declined or
+stale review, changed current source, unsafe/foreign/incompatible/expired inputs
+and failed qualification with truthful partial outcomes. Use existing public
+APIs and private synthetic signed fixtures; no extra test engine or relaxed
+native evidence. Source tests, Windows compilation, actual kernel qualification,
+conversion, signing and placement remain separately reported. Complete source
+and manager wiring precede the cohesive reviewed front; same-pack-only tests do
+not close changed-runtime support.
+
 ### Construction acceptance
 
 Provide exact reviewed clients-review/apply/status/reconcile, explicit
@@ -715,3 +951,34 @@ refusals. Native-positive process composition is explicitly engineering-only;
 shipping unsigned native refusal remains real. Four final independent front
 lenses precede the cohesive PR. Actual clients, signing, hosted CI, SharePoint
 publication and participant acceptance remain separate gates.
+
+
+### Explicit experimental installed-carrier owner review (ICRV)
+
+A fresh experimentally admitted versioned client carrier may deliberately select
+owner_review_channel local-browser in the original first-client manager, before
+the original complete client review and confirmation. Empty/omitted selection
+retains native-first behavior and byte-compatible legacy JSON. Unknown channels,
+non-experimental or non-versioned nonempty profiles, and mode changes on an
+existing carrier refuse. The request and materialization bind this optional
+selection into their existing review/current-record identity. The full review
+discloses the owner, brain, workspace, carrier and common effect on both Code
+and Desktop; selecting the channel approves no individual operation.
+
+The original current materializer must return the reviewed mode unchanged.
+Cold request reconstruction and supported source updates retain it. Ordinary
+stable-launch derives the existing serve --owner-review-channel option only
+from the authenticated current record; it does not pass the option to native
+or passive hooks, qualification arguments or generic packet generators.
+
+The installed receiver independently reads and verifies that current carrier,
+compares the effective startup mode even when empty, and pins the whole semantic
+ClientRecord through the existing ClientRecordDigest. Before and after trusted
+review and before protected publication, the same original nonlocking readers
+recheck current source, role, owner, admitted brain/workspace, materialized files
+and record identity. Drift requires a new current connection; no installation
+lock spans browser review or domain handlers. An installed browser flag without
+an authenticated carrier refuses. Legacy native-first installed diagnostics
+without management carrier metadata remain supported, while incomplete declared
+carrier metadata refuses. The read-only installed checker derives its mode from
+the same already-authenticated record and never opens an approval screen.

@@ -46,12 +46,17 @@ func StableClientCapabilities(component, version, pin string) ClientCapabilities
 }
 
 type ClientRequest struct {
-	CarrierID      string `json:"carrier_id"`
-	Workspace      string `json:"workspace"`
-	CodeRoot       string `json:"code_root"`
-	DesktopPath    string `json:"desktop_path"`
-	CodeExecutable string `json:"code_executable,omitempty"`
-	CodeScope      string `json:"code_scope"`
+	OwnerReviewChannel         string `json:"owner_review_channel,omitempty"`
+	VersionedSlots             bool   `json:"versioned_slots,omitempty"`
+	NativeEnforcement          bool   `json:"native_enforcement,omitempty"`
+	GenerationID               string `json:"generation_id,omitempty"`
+	CarrierID                  string `json:"carrier_id"`
+	Workspace                  string `json:"workspace"`
+	CodeRoot                   string `json:"code_root"`
+	DesktopPath                string `json:"desktop_path"`
+	CodeExecutable             string `json:"code_executable,omitempty"`
+	CodeConfigurationDirectory string `json:"code_configuration_directory,omitempty"`
+	CodeScope                  string `json:"code_scope"`
 	// ManualDesktopUpdate creates the documented replacement bundle instead of
 	// reusing the byte-identical external-launcher candidate.
 	ManualDesktopUpdate bool `json:"manual_desktop_update,omitempty"`
@@ -60,8 +65,10 @@ type ClientRequest struct {
 }
 type ClientOptions struct {
 	SeededOperationOptions
-	Request   ClientRequest
-	LookupEnv func(string) (string, bool)
+	// Trusted materializer composition only; no request/tool field.
+	VersionedManagement bool `json:"-"`
+	Request             ClientRequest
+	LookupEnv           func(string) (string, bool)
 }
 type ClientBinding struct {
 	ManagedRoot    string `json:"managed_root"`
@@ -101,41 +108,51 @@ func (b ClientBackup) ValidateBinding(codeRoot, desktopPath string) error {
 }
 
 type ClientMaterialization struct {
-	LifecycleContext              bool           `json:"lifecycle_context,omitempty"`
-	Release                       string         `json:"release"`
-	ManifestSHA256                string         `json:"manifest_sha256"`
-	ClientInputsSHA256            string         `json:"client_inputs_sha256"`
-	ServerSHA256                  string         `json:"server_sha256"`
-	EmbeddedInputsSHA256          string         `json:"embedded_inputs_sha256"`
-	BundleSHA256                  string         `json:"bundle_sha256"`
-	CodeRoot                      string         `json:"code_root"`
-	CodeTreeSHA256                string         `json:"code_tree_sha256"`
-	CodeBackupTreeSHA256          string         `json:"code_backup_tree_sha256,omitempty"`
-	Backups                       []ClientBackup `json:"backups,omitempty"`
-	DesktopPath                   string         `json:"desktop_path"`
-	DesktopSHA256                 string         `json:"desktop_sha256"`
-	DesktopBackupSHA256           string         `json:"desktop_backup_sha256,omitempty"`
-	DesktopNativeContractSHA256   string         `json:"desktop_native_contract_sha256"`
-	BootstrapServerSHA256         string         `json:"bootstrap_server_sha256"`
-	BootstrapEmbeddedInputsSHA256 string         `json:"bootstrap_embedded_inputs_sha256"`
+	OwnerReviewChannel            string                 `json:"owner_review_channel,omitempty"`
+	Selection                     *ClientPacketSelection `json:"selection,omitempty"`
+	CodeProviderRoot              string                 `json:"code_provider_root,omitempty"`
+	CodeProviderSHA256            string                 `json:"code_provider_sha256,omitempty"`
+	DesktopMethods                *ClientMethodFrontend  `json:"desktop_methods,omitempty"`
+	NativeEnforcement             bool                   `json:"native_enforcement,omitempty"`
+	GenerationID                  string                 `json:"generation_id,omitempty"`
+	LifecycleContext              bool                   `json:"lifecycle_context,omitempty"`
+	Release                       string                 `json:"release"`
+	ManifestSHA256                string                 `json:"manifest_sha256"`
+	ClientInputsSHA256            string                 `json:"client_inputs_sha256"`
+	ServerSHA256                  string                 `json:"server_sha256"`
+	EmbeddedInputsSHA256          string                 `json:"embedded_inputs_sha256"`
+	BundleSHA256                  string                 `json:"bundle_sha256"`
+	CodeRoot                      string                 `json:"code_root"`
+	CodeTreeSHA256                string                 `json:"code_tree_sha256"`
+	CodeBackupTreeSHA256          string                 `json:"code_backup_tree_sha256,omitempty"`
+	Backups                       []ClientBackup         `json:"backups,omitempty"`
+	DesktopPath                   string                 `json:"desktop_path"`
+	DesktopSHA256                 string                 `json:"desktop_sha256"`
+	DesktopBackupSHA256           string                 `json:"desktop_backup_sha256,omitempty"`
+	DesktopNativeContractSHA256   string                 `json:"desktop_native_contract_sha256"`
+	BootstrapServerSHA256         string                 `json:"bootstrap_server_sha256"`
+	BootstrapEmbeddedInputsSHA256 string                 `json:"bootstrap_embedded_inputs_sha256"`
 }
 type CodeObservation struct {
-	Executable       string `json:"executable,omitempty"`
-	ExecutableSHA256 string `json:"executable_sha256,omitempty"`
-	Version          string `json:"version,omitempty"`
-	Marketplace      string `json:"marketplace"`
-	PluginID         string `json:"plugin_id"`
-	Scope            string `json:"scope"`
-	SourcePath       string `json:"source_path,omitempty"`
-	InstallPath      string `json:"install_path,omitempty"`
-	InstalledVersion string `json:"installed_version,omitempty"`
-	FolderVersion    string `json:"folder_version,omitempty"`
-	ReadFromFolder   bool   `json:"read_from_folder"`
-	Enabled          bool   `json:"enabled"`
-	Errors           int    `json:"errors"`
-	Notes            int    `json:"notes"`
-	State            string `json:"state"`
-	EvidenceClass    string `json:"evidence_class"`
+	ConfigurationDirectory string `json:"configuration_directory,omitempty"`
+	Executable             string `json:"executable,omitempty"`
+	ExecutableSHA256       string `json:"executable_sha256,omitempty"`
+	Version                string `json:"version,omitempty"`
+	Marketplace            string `json:"marketplace"`
+	PluginID               string `json:"plugin_id"`
+	Scope                  string `json:"scope"`
+	SourcePath             string `json:"source_path,omitempty"`
+	InstallPath            string `json:"install_path,omitempty"`
+	InstalledVersion       string `json:"installed_version,omitempty"`
+	CopyManifestVersion    string `json:"copy_manifest_version,omitempty"`
+	CopyContentSHA256      string `json:"copy_content_sha256,omitempty"`
+	FolderVersion          string `json:"folder_version,omitempty"`
+	ReadFromFolder         bool   `json:"read_from_folder"`
+	Enabled                bool   `json:"enabled"`
+	Errors                 int    `json:"errors"`
+	Notes                  int    `json:"notes"`
+	State                  string `json:"state"`
+	EvidenceClass          string `json:"evidence_class"`
 }
 type DesktopObservation struct {
 	Handoff              string `json:"handoff"`
@@ -168,12 +185,13 @@ type ClientReview struct {
 	Digest               string                `json:"review_digest"`
 }
 type ClientStatus struct {
-	State            string        `json:"state"`
-	Reason           string        `json:"reason,omitempty"`
-	Record           *ClientRecord `json:"record,omitempty"`
-	CodeRegistration string        `json:"code_registration"`
-	SessionLoading   string        `json:"session_loading"`
-	HostObservations string        `json:"host_observations"`
+	Phases           *ClientUpdatePhases `json:"phases,omitempty"`
+	State            string              `json:"state"`
+	Reason           string              `json:"reason,omitempty"`
+	Record           *ClientRecord       `json:"record,omitempty"`
+	CodeRegistration string              `json:"code_registration"`
+	SessionLoading   string              `json:"session_loading"`
+	HostObservations string              `json:"host_observations"`
 }
 type ClientMaterializer func(context.Context, installtx.State, ClientBinding, *ClientRecord) (ClientMaterialization, error)
 
@@ -205,7 +223,40 @@ func readClientRecord(o SeededOperationOptions, id string) (ClientRecord, []byte
 	if r.SchemaVersion != 1 || r.Profile != StableClientProfile || r.Protocol != StableClientProtocol || r.CarrierVersion != StableCarrierVersion || r.CarrierID != id || r.Binding.ManagedRoot != o.ManagedRoot || r.Binding.UserHome != o.UserHome || r.Binding.RegistrySHA256 != o.AuthorityRegistrySHA256 {
 		return r, nil, errors.New("client record binding/profile mismatch")
 	}
+	if r.Materialization.Selection != nil {
+		expected, err := ClientGenerationPaths(ClientRequestFromRecord(r), r.Materialization.ManifestSHA256)
+		if err != nil || expected.CodeRoot != r.Materialization.CodeRoot || expected.DesktopPath != r.Materialization.DesktopPath {
+			return r, nil, errors.New("client record generation differs from reviewed selection")
+		}
+		if r.Materialization.CodeProviderRoot != ClientMarketplaceRoot(r) {
+			return r, nil, errors.New("client record provider differs from selected carrier")
+		}
+	} else if r.Materialization.CodeProviderRoot != "" || r.Materialization.CodeProviderSHA256 != "" {
+		return r, nil, errors.New("legacy client record contains versioned provider")
+	}
+	if r.Materialization.Selection == nil && r.Materialization.GenerationID != "" {
+		return r, nil, errors.New("legacy record contains a versioned packet generation")
+	}
+	if err := validateClientMethodBinding(r.Materialization); err != nil {
+		return r, nil, err
+	}
+	if r.Materialization.NativeEnforcement && (r.Materialization.Selection == nil || r.Materialization.LifecycleContext) {
+		return r, nil, errors.New("invalid complete native carrier profile")
+	}
+	if err := validateClientOwnerReviewChannel(r.Materialization.OwnerReviewChannel, o.ExperimentalSeed != nil, r.Materialization.Selection != nil); err != nil {
+		return r, nil, err
+	}
 	return r, body, nil
+}
+
+func validateClientOwnerReviewChannel(channel string, experimental, versioned bool) error {
+	if channel == "" {
+		return nil
+	}
+	if channel != "local-browser" || !experimental || !versioned {
+		return errors.New("owner review channel requires an explicitly reviewed experimental versioned carrier")
+	}
+	return nil
 }
 func clientBinding(o ClientOptions) (ClientBinding, error) {
 	h, err := datahome.Resolve(datahome.Options{ProductRoot: o.ManagedRoot, UserHome: o.UserHome, LookupEnv: o.LookupEnv})
@@ -239,6 +290,19 @@ func clientBinding(o ClientOptions) (ClientBinding, error) {
 	}
 	if clientOverlap(o.Request.CodeRoot, o.Request.DesktopPath) {
 		return ClientBinding{}, errors.New("client destinations overlap")
+	}
+	if profile := o.Request.CodeConfigurationDirectory; profile != "" {
+		if !filepath.IsAbs(profile) || filepath.Clean(profile) != profile || strings.ContainsAny(profile, "\x00\r\n") || !containsClientOwner(o.UserHome, profile) {
+			return ClientBinding{}, errors.New("clean private Code configuration inside selected owner required")
+		}
+		if err := scheduler.ValidatePrivateDirectory(profile); err != nil {
+			return ClientBinding{}, err
+		}
+		for _, root := range []string{o.ManagedRoot, o.DataRoot, h.Home, o.Request.Workspace, o.Request.CodeRoot, o.Request.DesktopPath} {
+			if clientOverlap(root, profile) {
+				return ClientBinding{}, errors.New("Code configuration overlaps admitted binding or client packet")
+			}
+		}
 	}
 	if o.Request.CodeScope != "user" && o.Request.CodeScope != "local" && o.Request.CodeScope != "project" {
 		return ClientBinding{}, errors.New("explicit user/local/project scope required")
@@ -285,6 +349,9 @@ func ReviewClientsSeeded(ctx context.Context, o ClientOptions) (ClientReview, er
 	if _, err := admitOperationSeed(ctx, o.SeededOperationOptions); err != nil {
 		return ClientReview{}, err
 	}
+	if err := validateClientOwnerReviewChannel(o.Request.OwnerReviewChannel, o.ExperimentalSeed != nil, o.Request.VersionedSlots); err != nil {
+		return ClientReview{}, err
+	}
 	if _, err := clientRecordPath(o.SeededOperationOptions, o.Request.CarrierID); err != nil {
 		return ClientReview{}, err
 	}
@@ -318,16 +385,49 @@ func ReviewClientsSeeded(ctx context.Context, o ClientOptions) (ClientReview, er
 		return ClientReview{}, err
 	}
 	review := ClientReview{SchemaVersion: 1, Request: o.Request, Binding: binding, Current: currentClients(s), Effects: []string{"generate_and_verify_current_server_packets", "publish_only_absent_or_identical_client_slots_or_return_manual_custody_step", "publish_private_current_client_record", "materialize_bound_operator_launcher"}}
+	if o.Request.VersionedSlots {
+		paths, err := ClientGenerationPaths(o.Request, s.Binding.ManifestSHA256)
+		if err != nil {
+			return ClientReview{}, err
+		}
+		generation := o
+		generation.Request.CodeRoot = paths.CodeRoot
+		generation.Request.DesktopPath = paths.DesktopPath
+		if _, err := clientBinding(generation); err != nil {
+			return ClientReview{}, err
+		}
+		review.Effects[1] = "publish_fresh_manifest_bound_generation_slots_preserving_previous_packets"
+		review.Effects = append(review.Effects, "publish_fixed_current_record_Code_command_source", "prepare_current_Desktop_method_library_with_separate_native_install_status")
+	}
+	if o.Request.NativeEnforcement {
+		if !carrierIDPattern.MatchString(o.Request.GenerationID) {
+			return ClientReview{}, errors.New("reviewed fresh native packet generation ID required")
+		}
+		if !o.Request.VersionedSlots || o.Request.LifecycleContext || o.Request.CodeExecutable == "" {
+			return ClientReview{}, errors.New("full native client update requires versioned slots, the selected Code host and no passive lifecycle profile")
+		}
+		review.Effects = append(review.Effects, "genuinely_requalify_current_native_profile_before_current_record_publication", "keep_reconnect_loading_and_maintenance_requalification_pending_until_observed")
+	}
 	if o.Request.LifecycleContext {
 		review.Effects = append(review.Effects, "configure_three_non_enforcing_Code_lifecycle_hooks_for_exact_reviewed_selection")
+	}
+	if o.Request.OwnerReviewChannel == "local-browser" {
+		review.Effects = append(review.Effects, "select_local_browser_exact_review_for_protected_foreground_MCP_changes_in_both_Code_and_Desktop_without_approving_any_individual_write")
 	}
 	if o.Request.Reconcile {
 		review.Effects = append(review.Effects, "reclaim_only_dead_installation_lock_and_reconcile_actual_owned_packets")
 	}
 	old, body, err := readClientRecord(o.SeededOperationOptions, o.Request.CarrierID)
 	if err == nil {
-		if old.Binding != binding || old.Materialization.CodeRoot != o.Request.CodeRoot || old.Materialization.DesktopPath != o.Request.DesktopPath || old.Code.Scope != o.Request.CodeScope || old.Code.Executable != o.Request.CodeExecutable && !(old.Code.Executable == "" && old.Code.State == "registration_pending" && old.Code.EvidenceClass == "not_observed") {
+		selection := ClientRequestFromRecord(old)
+		if selection.OwnerReviewChannel != o.Request.OwnerReviewChannel {
+			return ClientReview{}, errors.New("existing carrier owner review channel differs; preserved unchanged")
+		}
+		if old.Binding != binding || selection.CodeConfigurationDirectory != o.Request.CodeConfigurationDirectory || selection.CodeRoot != o.Request.CodeRoot || selection.DesktopPath != o.Request.DesktopPath || selection.VersionedSlots && !o.Request.VersionedSlots || old.Code.Scope != o.Request.CodeScope || old.Code.Executable != o.Request.CodeExecutable && !(old.Code.Executable == "" && old.Code.State == "registration_pending" && old.Code.EvidenceClass == "not_observed") {
 			return ClientReview{}, errors.New("existing client selection differs; preserved unchanged")
+		}
+		if old.Materialization.NativeEnforcement && !o.Request.NativeEnforcement {
+			return ClientReview{}, errors.New("native capability downgrade refused; retain previous packet and qualify the complete profile")
 		}
 		if old.Code.Executable != o.Request.CodeExecutable {
 			if !filepath.IsAbs(o.Request.CodeExecutable) || filepath.Clean(o.Request.CodeExecutable) != o.Request.CodeExecutable || strings.ContainsAny(o.Request.CodeExecutable, "\x00\r\n") {
@@ -383,12 +483,16 @@ func MaterializeClientsSeeded(ctx context.Context, o ClientOptions, digest strin
 		} else if !errors.Is(e, os.ErrNotExist) {
 			return e
 		}
-		material, e := build(ctx, s, review.Binding, previous)
+		material, e := buildClientsWithSeedFence(ctx, o, s, review.Binding, previous, build)
 		if e != nil {
 			return fmt.Errorf("activation-applied/client-materialization-pending: %w", e)
 		}
-		if !sameClientCurrent(material, s) || material.CodeRoot != o.Request.CodeRoot || material.DesktopPath != o.Request.DesktopPath || material.LifecycleContext != o.Request.LifecycleContext {
+		paths, pathErr := ClientGenerationPaths(o.Request, s.Binding.ManifestSHA256)
+		if !sameClientCurrent(material, s) || pathErr != nil || material.CodeRoot != paths.CodeRoot || material.DesktopPath != paths.DesktopPath || !sameClientSelection(material.Selection, paths.Selection) || material.LifecycleContext != o.Request.LifecycleContext || material.NativeEnforcement != o.Request.NativeEnforcement || material.GenerationID != o.Request.GenerationID || material.OwnerReviewChannel != o.Request.OwnerReviewChannel {
 			return errors.New("materializer returned another current binding")
+		}
+		if material.Selection != nil && (material.CodeProviderRoot != ClientMarketplaceRoot(ClientRecord{CarrierID: o.Request.CarrierID, Materialization: material}) || validateClientMethodBinding(material) != nil) {
+			return errors.New("versioned client provider/frontend differs from reviewed binding")
 		}
 		if e = validateClientFiles(material); e != nil {
 			return e
@@ -397,7 +501,7 @@ func MaterializeClientsSeeded(ctx context.Context, o ClientOptions, digest strin
 			return e
 		}
 		result = ClientRecord{SchemaVersion: 1, Profile: StableClientProfile, Protocol: StableClientProtocol, CarrierVersion: StableCarrierVersion, CarrierID: o.Request.CarrierID, Binding: review.Binding, Materialization: material,
-			Code:    CodeObservation{Executable: o.Request.CodeExecutable, Marketplace: "maestro-local-" + o.Request.CarrierID, PluginID: "maestro-product@maestro-local-" + o.Request.CarrierID, Scope: o.Request.CodeScope, State: "registration_pending", EvidenceClass: "not_observed"},
+			Code:    CodeObservation{Executable: o.Request.CodeExecutable, ConfigurationDirectory: o.Request.CodeConfigurationDirectory, Marketplace: "maestro-local-" + o.Request.CarrierID, PluginID: "maestro-product@maestro-local-" + o.Request.CarrierID, Scope: o.Request.CodeScope, State: "registration_pending", EvidenceClass: "not_observed"},
 			Desktop: DesktopObservation{Handoff: "bundle_ready", InstallConfirmation: "awaiting_user_install", Connection: "pending", FunctionalCheck: "pending", EvidenceClass: "not_observed"}}
 		if previous != nil && previous.Materialization.CodeTreeSHA256 == material.CodeTreeSHA256 && previous.Code.Executable == o.Request.CodeExecutable {
 			result.Code = previous.Code
@@ -424,6 +528,7 @@ func ReadClientsSeeded(ctx context.Context, o ClientOptions) (ClientStatus, erro
 		return status, err
 	}
 	status.Record = &record
+	status.Phases = ClientPhases(record)
 	s, err := installtx.ValidateQualifiedLaunch(o.ManagedRoot, o.DataRoot, installtx.ReleaseBinding{}, time.Now())
 	if err != nil {
 		status.Reason = "source_or_current_unavailable"
@@ -431,16 +536,23 @@ func ReadClientsSeeded(ctx context.Context, o ClientOptions) (ClientStatus, erro
 	}
 	if !sameClientCurrent(record.Materialization, s) {
 		status.Reason = "current_release_changed"
+		if err := recheckExperimentalOperation(o.SeededOperationOptions); err != nil {
+			return status, err
+		}
 		return status, nil
 	}
 	if o.Request.Workspace == "" {
 		o.Request.Workspace = record.Binding.Workspace
 	}
+	selection := ClientRequestFromRecord(record)
+	if o.Request.CodeConfigurationDirectory == "" {
+		o.Request.CodeConfigurationDirectory = record.Code.ConfigurationDirectory
+	}
 	if o.Request.CodeRoot == "" {
-		o.Request.CodeRoot = record.Materialization.CodeRoot
+		o.Request.CodeRoot = selection.CodeRoot
 	}
 	if o.Request.DesktopPath == "" {
-		o.Request.DesktopPath = record.Materialization.DesktopPath
+		o.Request.DesktopPath = selection.DesktopPath
 	}
 	if o.Request.CodeScope == "" {
 		o.Request.CodeScope = record.Code.Scope
@@ -455,11 +567,17 @@ func ReadClientsSeeded(ctx context.Context, o ClientOptions) (ClientStatus, erro
 		return status, err
 	}
 	status.State = "current_materialization"
+	if status.Phases != nil {
+		status.Phases.PacketInventory = "current_generation_files_verified"
+	}
 	status.CodeRegistration = record.Code.State
 	if record.Code.State == "registered" {
 		status.CodeRegistration = "historical_registered_readback"
 	}
 	status.SessionLoading = "native_loading_unattested"
+	if err := recheckExperimentalOperation(o.SeededOperationOptions); err != nil {
+		return status, err
+	}
 	return status, nil
 }
 func PrepareStableLaunch(ctx context.Context, o ClientOptions) (QualifiedLaunch, error) {
@@ -482,10 +600,7 @@ func prepareStableLaunch(ctx context.Context, o ClientOptions, event string) (Qu
 			return errors.New("passive lifecycle was not explicitly materialized for this carrier")
 		}
 		bound := o
-		bound.Request.LifecycleContext = r.Materialization.LifecycleContext
-		bound.Request.CodeRoot = r.Materialization.CodeRoot
-		bound.Request.DesktopPath = r.Materialization.DesktopPath
-		bound.Request.CodeScope = r.Code.Scope
+		bound.Request = ClientRequestFromRecord(r)
 		status, e := ReadClientsSeeded(ctx, bound)
 		if e != nil {
 			return e
@@ -494,6 +609,12 @@ func prepareStableLaunch(ctx context.Context, o ClientOptions, event string) (Qu
 			return errors.New("stable binding stale; explicit client regeneration required")
 		}
 		launch, e = PrepareQualifiedLaunch(ctx, QualifiedLaunchOptions{SeededOperationOptions: o.SeededOperationOptions, ExpectedBinding: installtx.ReleaseBinding{ManifestSHA256: r.Materialization.ManifestSHA256, ClientInputsSHA256: r.Materialization.ClientInputsSHA256}, Workspace: r.Binding.Workspace})
+		if e == nil && event == "" && r.Materialization.Selection != nil {
+			launch.Args = append(launch.Args, "--management-carrier-id", r.CarrierID, "--management-installer-version", o.Version)
+			if r.Materialization.OwnerReviewChannel != "" {
+				launch.Args = append(launch.Args, "--owner-review-channel", r.Materialization.OwnerReviewChannel)
+			}
+		}
 		if e == nil && event != "" {
 			if len(launch.Args) == 0 || launch.Args[0] != "serve" {
 				return errors.New("canonical current launch unavailable")
@@ -524,6 +645,7 @@ func observeClientsSeeded(ctx context.Context, o ClientOptions, expectedRecord s
 		return ClientRecord{}, err
 	}
 	var r ClientRecord
+	registrationCompleted := false
 	err := installtx.GuardQualifiedCurrent(o.ManagedRoot, o.DataRoot, installtx.ReleaseBinding{}, time.Now(), func() error {
 		var body []byte
 		var e error
@@ -545,14 +667,18 @@ func observeClientsSeeded(ctx context.Context, o ClientOptions, expectedRecord s
 			return e
 		}
 		if register != nil {
+			if err := recheckExperimentalOperation(o.SeededOperationOptions); err != nil {
+				return err
+			}
 			observation, err := register(r)
 			if err != nil {
 				return err
 			}
+			registrationCompleted = true
 			code = &observation
 		}
 		if code != nil {
-			if code.Marketplace != r.Code.Marketplace || code.PluginID != r.Code.PluginID || code.Scope != r.Code.Scope || code.Executable != r.Code.Executable || code.State != "registered" || code.EvidenceClass != "supported_cli_readback" && code.EvidenceClass != "engineering_process_witness" {
+			if code.Marketplace != r.Code.Marketplace || code.PluginID != r.Code.PluginID || code.Scope != r.Code.Scope || code.Executable != r.Code.Executable || code.ConfigurationDirectory != r.Code.ConfigurationDirectory || code.State != "registered" || code.EvidenceClass != "supported_cli_readback" && code.EvidenceClass != "engineering_process_witness" {
 				return errors.New("unsupported Code observation")
 			}
 			r.Code = *code
@@ -568,6 +694,9 @@ func observeClientsSeeded(ctx context.Context, o ClientOptions, expectedRecord s
 		}
 		return writeClientRecord(o.SeededOperationOptions, r)
 	})
+	if err != nil && registrationCompleted && o.ExperimentalSeed != nil {
+		return r, fmt.Errorf("Code registration callback completed; current record remains pending and the prior record is preserved; inspect native state before retrying: %w", err)
+	}
 	return r, err
 }
 func ClientRecordDigest(r ClientRecord) string {
@@ -584,6 +713,9 @@ func writeClientRecord(o SeededOperationOptions, r ClientRecord) error {
 	if err != nil || len(body) > 64<<10 {
 		return errors.New("bounded client record required")
 	}
+	if err := recheckExperimentalOperation(o); err != nil {
+		return err
+	}
 	directory := filepath.Dir(p)
 	if err = os.MkdirAll(directory, 0700); err != nil {
 		return err
@@ -596,6 +728,9 @@ func writeClientRecord(o SeededOperationOptions, r ClientRecord) error {
 			return e
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := recheckExperimentalOperation(o); err != nil {
 		return err
 	}
 	return scheduler.WritePrivateFileAtomic(p, body)
@@ -637,6 +772,14 @@ func clientFileDigest(path string, privateArchive bool) (string, error) {
 }
 
 func ClientTreeDigest(root string) (string, error) {
+	return clientTreeDigest(root, false)
+}
+
+// ClientPayloadDigest observes exact native COPY contents independently of
+// permission normalization by the host. It grants no execution qualification.
+func ClientPayloadDigest(root string) (string, error) { return clientTreeDigest(root, true) }
+
+func clientTreeDigest(root string, payloadOnly bool) (string, error) {
 	if e := scheduler.ValidateDirectory(root); e != nil {
 		return "", e
 	}
@@ -661,7 +804,11 @@ func ClientTreeDigest(root string) (string, error) {
 			if err != nil {
 				return err
 			}
-			vector = append(vector, fmt.Sprintf("directory:%s:%04o", filepath.ToSlash(relative), info.Mode().Perm()))
+			if payloadOnly {
+				vector = append(vector, "directory:"+filepath.ToSlash(relative))
+			} else {
+				vector = append(vector, fmt.Sprintf("directory:%s:%04o", filepath.ToSlash(relative), info.Mode().Perm()))
+			}
 			return nil
 		}
 		if !d.Type().IsRegular() {
@@ -683,7 +830,11 @@ func ClientTreeDigest(root string) (string, error) {
 		if e != nil {
 			return e
 		}
-		vector = append(vector, fmt.Sprintf("%s:%04o:%s", filepath.ToSlash(rel), info.Mode().Perm(), sha))
+		if payloadOnly {
+			vector = append(vector, fmt.Sprintf("%s:%s", filepath.ToSlash(rel), sha))
+		} else {
+			vector = append(vector, fmt.Sprintf("%s:%04o:%s", filepath.ToSlash(rel), info.Mode().Perm(), sha))
+		}
 		return nil
 	})
 	if err != nil {
@@ -694,6 +845,22 @@ func ClientTreeDigest(root string) (string, error) {
 	return clientDigest(body), nil
 }
 func validateClientFiles(m ClientMaterialization) error {
+	if m.Selection != nil {
+		if !clientSHA.MatchString(m.CodeProviderSHA256) {
+			return errors.New("versioned Code provider digest missing")
+		}
+		actual, err := ClientTreeDigest(m.CodeProviderRoot)
+		if err != nil || actual != m.CodeProviderSHA256 {
+			return errors.New("versioned Code provider changed")
+		}
+		if err := validateClientMethodBinding(m); err != nil {
+			return err
+		}
+		actual, err = ClientFileDigest(m.DesktopMethods.Archive)
+		if err != nil || actual != m.DesktopMethods.SHA256 {
+			return errors.New("current Desktop methods archive changed")
+		}
+	}
 	for _, v := range []string{m.CodeTreeSHA256, m.DesktopSHA256, m.DesktopNativeContractSHA256, m.BootstrapServerSHA256, m.BootstrapEmbeddedInputsSHA256} {
 		if !clientSHA.MatchString(v) {
 			return errors.New("client materialization digest missing")
@@ -739,4 +906,10 @@ func validateClientFiles(m ClientMaterialization) error {
 		return errors.New("client packet identity changed")
 	}
 	return nil
+}
+
+// A configuration selection never expands the admitted installation owner.
+func containsClientOwner(owner, path string) bool {
+	rel, err := filepath.Rel(owner, path)
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }

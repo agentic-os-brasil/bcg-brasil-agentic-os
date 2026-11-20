@@ -6,14 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
@@ -82,38 +81,28 @@ func (r *Runtime) Convert(ctx context.Context, source ingest.Request, workspaceI
 	if reason != "" {
 		return fail(ingest.StatusUnavailable, reason)
 	}
-	executions := filepath.Join(r.options.DataRoot, "ingestion", "docling", "executions")
-	if err := scheduler.EnsurePrivateDirectory(executions); err != nil {
-		return fail(ingest.StatusUnavailable, "execution_storage_unavailable")
+	if reason := qualificationStatus(ctx, r.options, pack); reason != "" {
+		return fail(ingest.StatusUnavailable, reason)
 	}
-	work, err := os.MkdirTemp(executions, "conversion-")
+	if (extension == ".pdf" || extension == ".pptx") && pack.target.profile != DocumentsProfile {
+		return fail(ingest.StatusUnavailable, "format_profile_unavailable")
+	}
+	work, snapshot, err := prepareExecution(r.options.DataRoot, pack)
 	if err != nil {
+		if errors.Is(err, errExecutionSnapshot) {
+			return fail(ingest.StatusUnavailable, "execution_snapshot_unavailable")
+		}
 		return fail(ingest.StatusUnavailable, "execution_storage_unavailable")
 	}
 	defer os.RemoveAll(work)
-	snapshot := filepath.Join(work, "pack")
-	if err := materialize(pack.entries, snapshot); err != nil {
-		return fail(ingest.StatusUnavailable, "execution_snapshot_unavailable")
-	}
-	for _, dir := range []string{"home", "cache", "models", "tmp", "config", "data"} {
-		if err := os.Mkdir(filepath.Join(work, dir), 0700); err != nil {
-			return fail(ingest.StatusUnavailable, "execution_storage_unavailable")
-		}
-	}
 	deadline, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	run := func(phase string) (bridgeResponse, error) {
 		var response bridgeResponse
 		request, _ := json.Marshal(bridgeRequest{body, source.Policy.MaxInputBytes, source.Policy.MaxOutputBytes, source.Policy.MaxOutputBytes, extension, route, phase})
-		command := exec.CommandContext(deadline, "/usr/bin/sandbox-exec", "-p", "(version 1)(allow default)(deny network*)", filepath.Join(snapshot, "python/bin/python3.12"), "-I", "-S", "-B", filepath.Join(snapshot, "bridge.py"))
-		command.Dir = work
-		command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + filepath.Join(work, "home"), "TMPDIR=" + filepath.Join(work, "tmp"), "XDG_CACHE_HOME=" + filepath.Join(work, "cache"), "XDG_CONFIG_HOME=" + filepath.Join(work, "config"), "XDG_DATA_HOME=" + filepath.Join(work, "data"), "HF_HOME=" + filepath.Join(work, "models"), "HF_HUB_OFFLINE=1", "TRANSFORMERS_OFFLINE=1", "DOCLING_ARTIFACTS_PATH=" + filepath.Join(work, "models"), "OMP_NUM_THREADS=1", "OPENBLAS_NUM_THREADS=1", "VECLIB_MAXIMUM_THREADS=1", "LANG=en_US.UTF-8"}
-		command.Stdin = bytes.NewReader(request)
 		stdout := boundedOutput{maximum: 2*source.Policy.MaxOutputBytes + 4096, cancel: cancel}
 		stderr := boundedOutput{maximum: 64 << 10, cancel: cancel}
-		command.Stdout, command.Stderr = &stdout, &stderr
-		command.WaitDelay = time.Second
-		if err := command.Run(); err != nil {
+		if err := runConfinedBridge(deadline, work, snapshot, request, &stdout, &stderr); err != nil {
 			return response, err
 		}
 		if err := decode(stdout.Bytes(), &response); err != nil {
@@ -145,6 +134,9 @@ func (r *Runtime) Convert(ctx context.Context, source ingest.Request, workspaceI
 		}
 		return fail(ingest.StatusUnavailable, "offline_conversion_failed")
 	}
+	if extension == ".pdf" && (response.Refusal == "pdf_native_text_unavailable" || response.Refusal == "pdf_protected_unavailable") && len(response.Markdown) == 0 && len(response.Document) == 0 {
+		return fail(ingest.StatusUnavailable, response.Refusal)
+	}
 	if response.Refusal == "output_limit" && len(response.Markdown) == 0 && len(response.Document) == 0 {
 		return fail(ingest.StatusDegraded, "output_limit")
 	}
@@ -174,6 +166,13 @@ func (r *Runtime) Convert(ctx context.Context, source ingest.Request, workspaceI
 	if !r.boundWorkspace(source.WorkspacePath, workspaceID) {
 		return fail(ingest.StatusBlocked, "workspace_changed")
 	}
+	current, reason := r.verify(ctx)
+	if reason != "" || current.sha != pack.sha || current.manifestSHA != pack.manifestSHA {
+		return fail(ingest.StatusUnavailable, "current_release_changed")
+	}
+	if reason := qualificationStatus(ctx, r.options, current); reason != "" {
+		return fail(ingest.StatusUnavailable, reason)
+	}
 	result.Result.Status = ingest.StatusUsable
 	result.Result.Fidelity = route.Fidelity
 	if route.FallbackReason != "" {
@@ -181,6 +180,11 @@ func (r *Runtime) Convert(ctx context.Context, source ingest.Request, workspaceI
 	}
 	for _, warning := range response.Warnings {
 		switch warning {
+		case "pdf_native_text_only":
+			if extension != ".pdf" {
+				return fail(ingest.StatusDegraded, "converter_output_invalid")
+			}
+			result.Result.Warnings = append(result.Result.Warnings, warning)
 		case "xls_cached_values_only", "xlsx_cached_values_only":
 			result.Result.Warnings = append(result.Result.Warnings, warning)
 		default:
@@ -190,7 +194,7 @@ func (r *Runtime) Convert(ctx context.Context, source ingest.Request, workspaceI
 	result.Result.OutputBytes = int64(len(response.Markdown) + len(response.Document))
 	result.Markdown = response.Markdown
 	result.Document = response.Document
-	result.Provenance = Provenance{PackSHA256: pack.sha, ManifestSHA256: pack.manifestSHA, MarkdownSHA256: digest(response.Markdown), DocumentSHA256: digest(response.Document), LockSHA256: LockSHA256, Python: PythonVersion, Docling: DoclingVersion, NetworkDenied: true}
+	result.Provenance = Provenance{PackSHA256: pack.sha, ManifestSHA256: pack.manifestSHA, MarkdownSHA256: digest(response.Markdown), DocumentSHA256: digest(response.Document), LockSHA256: pack.target.lockSHA, Python: PythonVersion, Docling: DoclingVersion, NetworkDenied: true}
 	return result, nil
 }
 
@@ -261,4 +265,9 @@ func (b *boundedOutput) Write(p []byte) (int, error) {
 		return 0, errors.New("process_output_limit")
 	}
 	return b.Buffer.Write(p)
+}
+
+func targetLockSHA() string {
+	target, _ := inputsForTarget(runtime.GOOS, runtime.GOARCH)
+	return target.lockSHA
 }

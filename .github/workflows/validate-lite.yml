@@ -35,6 +35,9 @@ jobs:
             go version
             go env GOOS GOARCH
           } | tee -a "${GITHUB_STEP_SUMMARY}"
+      - name: Download MCP dependencies before offline factory tests
+        working-directory: adapters/mcp
+        run: go mod download
       - name: Run full development harness (includes parsed action-pin policy)
         id: development_harness
         env:

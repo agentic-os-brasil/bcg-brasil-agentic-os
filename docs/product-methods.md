@@ -10,7 +10,15 @@ Use the installed product's ordinary `maestro_query` tool:
 
 For example, select `execution-continuity`, inspect its plan and read `maestro://methods/execution-continuity/SKILL.md`. Its product route uses the actual `execution.*` operations to create, start, checkpoint, pause and resume work. The ledger binds existing workspace artifacts; selecting the method does not create or execute those artifacts. A new client reads the current revision and checkpoint, then resumes with a new attempt ID.
 
-The `brain-index` plan describes its ordinary authored-brain recompilation: the admitted owner compiler reads that owner corpus, executes a local command and publishes derived owner indexes, backlinks, diagnostics and its log. Both `domain.authored_brain_compiler` and `host.command_run` remain required and unavailable until separately admitted. Read-only memory/private-wiki queries do not fulfill either dependency. The skill's explicit `--check` variant inspects without publication; the default plan does not claim that every invocation writes, run the compiler, grant shell access, select a workspace corpus or authorize a legacy fallback.
+The `brain-index` plan uses the existing `brain.compile` owner over an explicit
+cohort of 1–24 admitted workspace pages and named absences. Native review binds
+the cohort, source revisions, workspace and expected generation. Publication
+writes derived navigation into the existing private journal; canonical pages
+stay unchanged. `brain.navigation_status`, `brain.search`, `brain.navigate`,
+`brain.diagnostics` and `brain.read` provide the current-generation read route.
+This is foreground workspace compilation, with `host.trusted_review` separately
+required. It neither reads the owner corpus nor grants shell execution, a root
+walk, private-memory compilation or standing maintenance authority.
 
 Other recipes can depend on host commands, delegated agents, connectors, provider configuration or owning domain operations. A packaged recipe and its discovered schema do not establish that those capabilities are admitted in the current client. Keep the requested effect pending and follow its named prerequisite. Missing capability never authorizes direct writes into private state or silently selects a legacy filesystem route.
 
@@ -19,3 +27,67 @@ The canonical declaration is [`method-contracts.json`](../adapters/mcp/method-co
 `required_operations` names only operations registered by this source. A named domain dependency can instead declare bounded `fulfillment_operations` for an owning route that has not landed yet. Plans compare those names with the actual registered schemas under the admitted binding and report the exact missing operations. Once all are registered, only that domain dependency becomes available; input review and host, connector, runtime or provider admission remain separate. Content conversion and workspace knowledge operations are registered by the document-knowledge adapter. Their domain requirements can therefore be available while runtime, host review, owner-knowledge or provider requirements remain unavailable until independently admitted. Maintenance lifecycle and wiki navigation still report their exact missing operations. Planning executes none of those capabilities.
 
 Construction contract: [specification 065](../specs/065-product-method-discovery.md). Implementation tracking: [issue 463](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/463). SDK and compiled packet checks establish local protocol behaviour; native-client method invocation remains separate evidence.
+
+## Existing owners and remaining prerequisites
+
+Case-bound methods query `case.setup.status` for the current admitted binding;
+selection files and remembered paths are not inputs. `case-canon-ingest` and
+`case-decision-log-entry` use actual reviewed authored-brain creation/append or
+replacement, with complete readback at the returned revision. Named sources use
+`knowledge.collect`/`brain.read`; an actual converted source uses
+`content.read` and `knowledge.create`/`knowledge.append` to retain its owning
+source and conversion provenance. Ordinary authored synthesis never fabricates
+an artifact ID. Interrupted writes retry the exact original request/revision;
+a conflict preserves newer work and requires fresh review.
+
+`account-case-setup` exposes its existing first-case registration/brief/optional
+checkpoint bridge through `case.setup.*`. Its broader account narrative,
+relationship history and multi-case recall/promotion still lack the separate
+`domain.account_case_scaffold` owner. Keep that required dependency unavailable;
+a saved first brief does not fulfill the broader account promise.
+
+`case-sharepoint-map` can persist its reviewed map through `brain.create` or
+`brain.update`, but remote reading and `domain.sharepoint_enrollment` remain
+independent prerequisites. The recipe neither implements enrollment nor infers
+it from connector tool names. `caseos-connect` resolves its local binding through
+`case.setup.status`; authorized native configuration, OAuth and scope-verified
+remote reads remain external prerequisites.
+
+caseOS preparation returns a nonpersisted proposal by default. Explicit Save
+uses the existing reviewed brain owner, valid scoped frontmatter, actual source
+references/revisions and complete readback. Both the conversational and saved
+proposal retain `remote_write: not_attempted`; local persistence does not queue
+or authorize a later connector publication. `pocock-teach` likewise saves only
+on request, using the actual admitted host/artifact teaching workspace for its
+HTML lessons and supporting course files. A brain Markdown note cannot satisfy
+that different artifact promise. A host without that capability leaves Save
+unavailable.
+
+Yoda's dispatch prerequisite is the existing Code `host.subagents` capability,
+using the Agent tool with `subagent_type: "yoda"` and the sealed packet, plus
+separate senior-review model authority. Desktop's ordinary MCP tools supply no
+dispatcher. Plans still leave host/provider/runtime capabilities unattested and
+execution `not_executed`; static registration, packaged instructions and these
+recipes are not fresh host or model-execution evidence.
+
+## Background and writing through accepted owner context
+
+`owner-background` enriches the existing `personal-context` facet. It requires
+current confirmed onboarding and a complete generation-bound `owner.context`
+read, preserves the existing body and privacy limits, and asks three optional
+background questions. An explicitly authorized candidate uses `owner.propose`
+and trusted `owner.apply`; the owner then separately reviews and reconfirms the
+whole profile through `owner.onboarding_review`/`owner.confirm_onboarding`.
+Completion requires `owner.status: complete` plus full accepted-context readback.
+An unknown/ambiguous body or a merged candidate exceeding 12KiB remains pending;
+there is no new background facet, direct owner-file write or task-checkbox effect.
+This sensitive context is readable by the admitted session and its canonical
+Yoda reader policy; a local file is not a promise of local-only model processing.
+
+`writing-tighten` can read the same confirmed context without saving anything.
+It uses external `voice` only when that facet is actually present in the selected
+track, and `communication-style` for internal text. Missing/unconfirmed context
+uses an explicitly uncalibrated editorial pass; it does not substitute another
+private file. Drafts stay in the conversation until a separate admitted Save.
+These registered owner routes fulfill static domain dependencies only. Trusted
+review, actual method invocation and native host qualification remain separate.

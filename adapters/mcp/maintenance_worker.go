@@ -46,7 +46,11 @@ func (b *Bound) maintain(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		err := b.backgroundMaintenance(ctx)
+		service, availabilityErr := b.maintenanceService()
+		if availabilityErr == nil {
+			_, availabilityErr = service.RunUpdateAvailability(ctx)
+		}
+		err := errors.Join(availabilityErr, b.backgroundMaintenance(ctx))
 		if ctx.Err() != nil {
 			return
 		}
@@ -88,6 +92,46 @@ func (b *Bound) observeMaintenanceActivity(ctx context.Context) (maintenance.Idl
 }
 
 func (b *Bound) backgroundMaintenance(ctx context.Context) error {
+	_, err := b.runBackgroundMaintenance(ctx, nil)
+	return err
+}
+
+// RunMaintenanceWake performs one original due scan; a pulse is not a commit.
+// Its veto comes from trusted installed/native composition, never MCP input.
+func (b *Bound) RunMaintenanceWake(ctx context.Context, wakeAllowed func() error) (maintenance.WakeReport, error) {
+	if wakeAllowed == nil {
+		return maintenance.WakeReport{}, errors.New("owned native wake eligibility required")
+	}
+	if err := wakeAllowed(); err != nil {
+		return maintenance.WakeReport{}, err
+	}
+	// The existing read-only availability owner runs without idle, just as in
+	// Serve; it still requires its own enrollment and this wake's live veto.
+	service, err := b.maintenanceServiceWithGuards(wakeAllowed, func(publish func() error) error {
+		return b.guardPublication(func() error {
+			if err := wakeAllowed(); err != nil {
+				return err
+			}
+			return publish()
+		})
+	})
+	if err != nil {
+		return maintenance.WakeReport{}, err
+	}
+	availability, err := service.RunUpdateAvailability(ctx)
+	if err != nil {
+		return availability, err
+	}
+	report, err := b.runBackgroundMaintenance(ctx, wakeAllowed)
+	report.Due = append(availability.Due, report.Due...)
+	report.Receipts = append(availability.Receipts, report.Receipts...)
+	if report.State == "no_due_work" && availability.State != "no_due_work" {
+		report.State = availability.State
+	}
+	return report, err
+}
+
+func (b *Bound) runBackgroundMaintenance(ctx context.Context, wakeAllowed func() error) (maintenance.WakeReport, error) {
 	ctx, cancel := context.WithCancelCause(ctx)
 	start := make(chan struct{})
 	done := make(chan struct{})
@@ -95,6 +139,12 @@ func (b *Bound) backgroundMaintenance(ctx context.Context) error {
 	check := func() error {
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+		if wakeAllowed != nil {
+			if err := wakeAllowed(); err != nil {
+				cancel(err)
+				return err
+			}
 		}
 		state, err := b.observeMaintenanceActivity(ctx)
 		if ctx.Err() != nil {
@@ -135,15 +185,26 @@ func (b *Bound) backgroundMaintenance(ctx context.Context) error {
 		cancel(nil)
 		<-done
 	}()
-	service, err := b.maintenanceServiceWithEligibility(check)
+	guard := b.guardPublication
+	if wakeAllowed != nil {
+		guard = func(publish func() error) error {
+			return b.guardPublication(func() error {
+				if err := wakeAllowed(); err != nil {
+					return err
+				}
+				return publish()
+			})
+		}
+	}
+	service, err := b.maintenanceServiceWithGuards(check, guard)
 	if err != nil {
-		return err
+		return maintenance.WakeReport{}, err
 	}
-	_, err = service.RunDue(ctx)
+	report, err := service.RunDue(ctx)
 	if cause := context.Cause(ctx); errors.Is(cause, errBackgroundUserActive) {
-		return nil
+		return report, nil
 	} else if errors.Is(cause, errBackgroundIdleUnknown) {
-		return errBackgroundIdleUnknown
+		return report, errBackgroundIdleUnknown
 	}
-	return err
+	return report, err
 }

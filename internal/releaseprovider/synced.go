@@ -191,7 +191,7 @@ func matchSyncedManifest(v releaseverify.VerifiedGeneration, m releasecontract.M
 }
 
 func readSyncedFile(path string, maximum int64) ([]byte, error) {
-	f, err := openSyncedFile(path)
+	f, err := openSyncedFile(path, maximum)
 	if err != nil {
 		return nil, err
 	}
@@ -200,8 +200,8 @@ func readSyncedFile(path string, maximum int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !before.Mode().IsRegular() || before.Size() < 0 || before.Size() > maximum || !syncedSingleLink(f, before) {
-		return nil, fmt.Errorf("synced input must be bounded hydrated unaliased ordinary file: %s", filepath.Base(path))
+	if before.Size() < 0 || before.Size() > maximum || !syncedSingleLink(f, before) {
+		return nil, fmt.Errorf("synced input must be bounded hydrated unaliased source file: %s", filepath.Base(path))
 	}
 	body, err := io.ReadAll(io.LimitReader(f, maximum+1))
 	if err != nil {

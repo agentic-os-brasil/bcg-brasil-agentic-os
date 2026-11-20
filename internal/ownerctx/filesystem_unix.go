@@ -64,7 +64,18 @@ func ensureOwnerDirectory(path string) error {
 }
 
 func ownerOpenAt(dir *os.File, name string, flags int) (*os.File, error) {
-	fd, err := unix.Openat(int(dir.Fd()), name, flags|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0600)
+	privateFlags := flags | unix.O_NOFOLLOW | unix.O_NONBLOCK | unix.O_CLOEXEC
+	var fd int
+	var err error
+	// Split create/open to avoid macOS's racing openat fallback (golang/go#81246).
+	if flags&os.O_CREATE != 0 && flags&os.O_EXCL == 0 {
+		fd, err = unix.Openat(int(dir.Fd()), name, privateFlags|os.O_EXCL, 0600)
+		if errors.Is(err, unix.EEXIST) {
+			fd, err = unix.Openat(int(dir.Fd()), name, privateFlags&^os.O_CREATE, 0600)
+		}
+	} else {
+		fd, err = unix.Openat(int(dir.Fd()), name, privateFlags, 0600)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -152,12 +163,20 @@ func publishOwnerFile(path string, body []byte, exclusive bool) error {
 }
 
 func acquireOwnerTransition(path string) (func() error, error) {
-	dir, err := openOwnerDirectory(filepath.Dir(path), true)
+	return acquireOwnerTransitionFile(path, true)
+}
+
+func acquireOwnerTransitionFile(path string, create bool) (func() error, error) {
+	dir, err := openOwnerDirectory(filepath.Dir(path), create)
 	if err != nil {
 		return nil, err
 	}
 	defer dir.Close()
-	file, err := ownerOpenAt(dir, filepath.Base(path), os.O_RDWR|os.O_CREATE)
+	flags := os.O_RDWR
+	if create {
+		flags |= os.O_CREATE
+	}
+	file, err := ownerOpenAt(dir, filepath.Base(path), flags)
 	if err != nil {
 		return nil, err
 	}
@@ -181,4 +200,32 @@ func acquireOwnerTransition(path string) (func() error, error) {
 
 func acquireExistingOwnerTransition(path string) (func() error, error) {
 	return acquirePromptHistoryLock(path)
+}
+
+func appendOwnerFile(path string, body []byte, maximum int64) error {
+	dir, err := openOwnerDirectory(filepath.Dir(path), false)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	file, err := ownerOpenAt(dir, filepath.Base(path), os.O_CREATE|os.O_APPEND|os.O_WRONLY)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if info.Size()+int64(len(body)) > maximum {
+		return errors.New("owner append exceeds bounded size")
+	}
+	n, err := file.Write(body)
+	if err != nil {
+		return err
+	}
+	if n != len(body) {
+		return io.ErrShortWrite
+	}
+	return errors.Join(file.Sync(), dir.Sync())
 }

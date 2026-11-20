@@ -13,10 +13,16 @@ type Options struct {
 	AuthorityRegistryPath   string
 	AuthorityRegistrySHA256 string
 	CLIVersion              string
+	// Trusted constructor callbacks, never decoded from model/tool arguments.
+	ResolveRequirement func(context.Context) (Requirement, error) `json:"-"`
+	GuardSelection     func(func() error) error                   `json:"-"`
+	metadataGeneration string
+	legacyMetadata     bool
 }
 type Runtime struct{ options Options }
 type Availability struct {
 	State      string `json:"state"`
+	Profile    string `json:"profile,omitempty"`
 	Reason     string `json:"reason,omitempty"`
 	PackSHA256 string `json:"pack_sha256,omitempty"`
 }
@@ -43,5 +49,8 @@ func (r *Runtime) Status(ctx context.Context) Availability {
 	if reason != "" {
 		return Availability{State: "unavailable", Reason: reason}
 	}
-	return Availability{State: "ready", PackSHA256: pack.sha}
+	if reason := qualificationStatus(ctx, r.options, pack); reason != "" {
+		return Availability{State: "unqualified", Reason: reason, PackSHA256: pack.sha}
+	}
+	return Availability{State: "ready", PackSHA256: pack.sha, Profile: pack.target.profile}
 }

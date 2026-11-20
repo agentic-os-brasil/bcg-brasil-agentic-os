@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
@@ -39,6 +40,7 @@ type packetInventory struct {
 	Stable        *stablePacketBinding    `json:"stable,omitempty"`
 	Lifecycle     *lifecyclePacketBinding `json:"lifecycle,omitempty"`
 	DesktopPilot  *DesktopPilotBinding    `json:"desktop_pilot,omitempty"`
+	CodePilot     *CodePilotBinding       `json:"code_pilot,omitempty"`
 }
 
 // PacketStatus is integrity evidence only, never publisher or owner authority.
@@ -51,10 +53,12 @@ type PacketStatus struct {
 	RegistrySHA256       string               `json:"registry_sha256,omitempty"`
 	InventorySHA256      string               `json:"inventory_sha256"`
 	NativeMode           string               `json:"native_mode"`
+	NativeBindingSHA256  string               `json:"native_binding_sha256,omitempty"`
 	Stable               *StableCarrier       `json:"stable,omitempty"`
 	EmbeddedInputsSHA256 string               `json:"embedded_inputs_sha256,omitempty"`
 	NativeContractSHA256 string               `json:"native_contract_sha256,omitempty"`
 	DesktopPilot         *DesktopPilotBinding `json:"desktop_pilot,omitempty"`
+	CodePilot            *CodePilotBinding    `json:"code_pilot,omitempty"`
 }
 
 type packetSource struct {
@@ -187,7 +191,7 @@ func scanPacket(root string) ([]packetFile, error) {
 	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
 	return result, err
 }
-func writeInventory(root, format, version, platform, server string, stable *stablePacketBinding, lifecycle *lifecyclePacketBinding, pilot *DesktopPilotBinding) error {
+func writeInventory(root, format, version, platform, server string, stable *stablePacketBinding, lifecycle *lifecyclePacketBinding, pilot *DesktopPilotBinding, code *CodePilotBinding) error {
 	files, err := scanPacket(root)
 	if err != nil {
 		return err
@@ -201,7 +205,7 @@ func writeInventory(root, format, version, platform, server string, stable *stab
 			}
 		}
 	}
-	body, err := json.MarshalIndent(packetInventory{SchemaVersion: packetSchema(stable), Format: format, Version: version, Platform: platform, Server: server, Files: files, Stable: stable, Lifecycle: lifecycle, DesktopPilot: pilot}, "", "  ")
+	body, err := json.MarshalIndent(packetInventory{SchemaVersion: packetSchema(stable), Format: format, Version: version, Platform: platform, Server: server, Files: files, Stable: stable, Lifecycle: lifecycle, DesktopPilot: pilot, CodePilot: code}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -256,7 +260,10 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 		}
 	}
 	if inventory.DesktopPilot != nil {
-		if inventory.Format != "mcpb" || inventory.Version != "0.0.0" || inventory.Stable != nil || inventory.Lifecycle != nil {
+		if inventory.CodePilot != nil {
+			return status, errors.New("Code and Desktop pilots are separate")
+		}
+		if inventory.Format != "mcpb" || inventory.Stable != nil || inventory.Lifecycle != nil || (inventory.DesktopPilot.Runtime == nil && inventory.Version != "0.0.0") || (inventory.DesktopPilot.Runtime != nil && inventory.DesktopPilot.Runtime.ClientVersion != inventory.Version) {
 			return status, errors.New("invalid Desktop pilot profile")
 		}
 		if err := inventory.DesktopPilot.validate(); err != nil {
@@ -286,7 +293,7 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 	if file, found := expected[inventory.Server]; !found || file.Mode != uint32(serverMode) {
 		return status, errors.New("packet server unavailable")
 	}
-	required, server, err := requiredPacketFiles(inventory.Format, inventory.Platform, inventory.Version, inventory.Stable, inventory.Lifecycle, inventory.DesktopPilot)
+	required, server, err := requiredPacketFiles(inventory.Format, inventory.Platform, inventory.Version, inventory.Stable, inventory.Lifecycle, inventory.DesktopPilot, inventory.CodePilot)
 	if err != nil {
 		return status, err
 	}
@@ -314,7 +321,7 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 			return status, fmt.Errorf("canonical packet asset unavailable: %s", name)
 		}
 	}
-	if registry, found := expected["managed/trust/release-authority-registry.json"]; found && (registry.Mode != 0644 || registry.Bytes > 1<<20) {
+	if registry, found := expected["managed/trust/release-authority-registry.json"]; found && (registry.Mode != uint32(assetMode) || registry.Bytes > 1<<20) {
 		return status, errors.New("public registry role changed")
 	}
 	for name := range expected {
@@ -343,17 +350,33 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 		return PacketStatus{}, err
 	}
 	status.NativeMode = diagnostic.Mode
+	status.NativeBindingSHA256 = diagnostic.BindingSHA256
 	if inventory.DesktopPilot != nil {
 		if diagnostic.Mode != "mcp_only" {
 			return PacketStatus{}, errors.New("Desktop pilot cannot carry native authority")
 		}
-		if _, exists := expected["managed/trust/release-authority-registry.json"]; exists {
+		if _, exists := expected["managed/trust/release-authority-registry.json"]; exists && inventory.DesktopPilot.Runtime == nil {
 			return PacketStatus{}, errors.New("Desktop pilot cannot carry release authority")
+		}
+		if pilot := inventory.DesktopPilot.Runtime; pilot != nil {
+			registry, found := expected["managed/trust/release-authority-registry.json"]
+			if !found || registry.SHA256 != pilot.RegistrySHA256 || pilot.ServerSHA256 != status.ServerSHA256 || pilot.Target != target {
+				return PacketStatus{}, errors.New("engineering Desktop inventory identities differ")
+			}
+			body, err := source.read("managed/trust/release-authority-registry.json", 1<<20)
+			if err != nil {
+				return PacketStatus{}, err
+			}
+			expires, err := engineeringRuntimeAuthority(body, pilot.RegistrySHA256, pilot.Issuer, pilot.KeyID, time.Now())
+			if err != nil || expires.UTC().Format(time.RFC3339) != pilot.ExpiresAt {
+				return PacketStatus{}, errors.New("engineering Desktop authority expired or changed; request a newly reviewed kit")
+			}
 		}
 		status.DesktopPilot = inventory.DesktopPilot
 	}
 	if inventory.Stable != nil {
-		if (diagnostic.Mode != "mcp_only" && diagnostic.Mode != "mcp_lifecycle") || inventory.Stable.BootstrapServerSHA256 != status.ServerSHA256 {
+		validMode := diagnostic.Mode == "mcp_only" || diagnostic.Mode == "mcp_lifecycle" || inventory.Format == "plugin" && (diagnostic.Mode == "native" || diagnostic.Mode == "qualification_candidate" || diagnostic.Mode == "native_engineering_fixture")
+		if !validMode || inventory.Stable.BootstrapServerSHA256 != status.ServerSHA256 {
 			return PacketStatus{}, errors.New("stable bootstrap identity changed")
 		}
 		embedded, err := packetEmbeddedDigest(diagnostic.Resources)
@@ -369,6 +392,12 @@ func validatePacket(source packetSource) (PacketStatus, error) {
 	}
 	if registry, found := expected["managed/trust/release-authority-registry.json"]; found {
 		status.RegistrySHA256 = registry.SHA256
+	}
+	if inventory.CodePilot != nil {
+		if err := validateCodePilotInventory(inventory.CodePilot, status, inventory.Lifecycle, source.read); err != nil {
+			return PacketStatus{}, err
+		}
+		status.CodePilot = inventory.CodePilot
 	}
 	return status, nil
 }

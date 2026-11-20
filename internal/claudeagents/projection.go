@@ -37,6 +37,8 @@ var managed = []definition{
 	{ID: "darwin", Description: "Maestro system-health and bounded-housekeeping specialist; never handles client work.", Tools: "[]", PermissionMode: "plan"},
 	{ID: "gamma-guardian", Description: "Tool-free analysis of one Maestro-supplied bounded quality packet; inspection and longitudinal custody are unavailable.", Tools: "[]", PermissionMode: "plan"},
 	{ID: "pa-expert", Description: "Read-only functional or industrial PA Expert consulted only through Maestro.", Tools: "[]", PermissionMode: "plan"},
+	{ID: "repository-spec-reviewer", Description: "Independent Spec axis in Maestro closed foreground repository review pair.", Tools: "Read, Glob, Grep", PermissionMode: "plan"},
+	{ID: "repository-standards-reviewer", Description: "Independent Standards axis in Maestro closed foreground repository review pair.", Tools: "Read, Glob, Grep", PermissionMode: "plan"},
 	{ID: "yoda", Description: "Calm owner-self proxy and senior refiner for high-leverage outputs selected by Maestro.", Tools: "[]", PermissionMode: "plan"},
 }
 
@@ -99,15 +101,31 @@ func Project(namespace string) ([]Projection, error) {
 	return result, nil
 }
 
-var executableAgentReference = regexp.MustCompile("(Agent\\(\\s*subagent_type\\s*=\\s*[\"']|Agent\\s+tool,\\s*`subagent_type:\\s*[\"'])([^\"'\\r\\n]+)([\"'])")
+var executableAgentReference = regexp.MustCompile("(Agent\\(\\s*subagent_type\\s*=\\s*[\"']|Agent\\s+tool,\\s*`subagent_type:\\s*[\"']|`subagent_type:\\s*[\"'])([^\"'\\r\\n]+)([\"'])")
 
 // ProjectAgentInvocations rewrites explicit Agent calls and the bundled methods'
-// "Agent tool, `subagent_type: ...`" instruction. Canonical JSON, paths and
+// explicit `subagent_type: ...` instruction properties. Canonical JSON, paths and
 // skill references remain byte-identical.
 func ProjectAgentInvocations(body []byte, namespace string) ([]byte, error) {
 	if namespace != "" && namespace != PluginNamespace {
 		return nil, errors.New("unsupported native agent namespace")
 	}
+	return projectAgentReferences(body, func(id string) (string, error) { return NativeAgentID(id, namespace) })
+}
+
+// DesktopMethodNamespace identifies inert account-synced instructions, never a
+// managed native plugin or an admitted specialist execution namespace.
+const DesktopMethodNamespace = "maestro-desktop-methods"
+
+// ProjectDesktopMethodInvocations projects explicit instruction references only.
+// NativeAgentID, CanonicalAgentID and Project retain their Code-only admission.
+func ProjectDesktopMethodInvocations(body []byte) ([]byte, error) {
+	return projectAgentReferences(body, func(id string) (string, error) {
+		return DesktopMethodNamespace + ":" + id, nil
+	})
+}
+
+func projectAgentReferences(body []byte, qualify func(string) (string, error)) ([]byte, error) {
 	var projectionErr error
 	projected := executableAgentReference.ReplaceAllFunc(body, func(call []byte) []byte {
 		parts := executableAgentReference.FindSubmatch(call)
@@ -118,7 +136,7 @@ func ProjectAgentInvocations(body []byte, namespace string) ([]byte, error) {
 			}
 			return call
 		}
-		name, err := NativeAgentID(id, namespace)
+		name, err := qualify(id)
 		if err != nil {
 			projectionErr = err
 			return call
@@ -258,7 +276,7 @@ func render(item definition) ([]byte, error) {
 		return nil, err
 	}
 	header := nativeHeader(item) + managedMarker + "\n"
-	profile := "## Active native projection\n\nThis projection uses the bounded sequential maestro_planner profile: Maestro is the main-session hub, one specialist at a time, no child delegation. native_advisory is unavailable. The canonical contract below describes additional capabilities and historical adapters; their mention grants no authority in this profile. Use only the tools explicitly listed in frontmatter and the bounded packet supplied by Maestro. Native stop events do not verify a delivered artifact, review verdict or completed execution contract.\n\n"
+	profile := "## Active native projection\n\nThis projection uses the maestro_planner profile: Maestro is the main-session hub; ordinary specialists run sequentially, with one closed foreground repository Standards/Spec pair exception and no child delegation. native_advisory is unavailable. The canonical contract below describes additional capabilities and historical adapters; their mention grants no authority in this profile. Use only the tools explicitly listed in frontmatter and the bounded packet supplied by Maestro. Native stop events do not verify a delivered artifact, review verdict or completed execution contract.\n\n"
 	if item.ID == "gamma-guardian" {
 		profile += "Gamma is tool-free bounded packet analysis only. Workspace/source-head inspection grants and longitudinal custody are unavailable (Spec043 remains partially unimplemented). Return UNAVAILABLE/BLOCKED for evidence requiring inspection; never invent source verification, signed DoneContract satisfaction or durable custody.\n\n"
 		template, err := baseagents.Template("quality_guardian")
@@ -282,8 +300,13 @@ func owned(body []byte, item definition) bool {
 	if bytes.Equal(body, current) {
 		return true
 	}
+	// Accept only the exact preceding managed projection during an upgrade.
+	prior := bytes.Replace(current, []byte("maestro_planner profile: Maestro is the main-session hub; ordinary specialists run sequentially, with one closed foreground repository Standards/Spec pair exception and no child delegation."), []byte("bounded sequential maestro_planner profile: Maestro is the main-session hub, one specialist at a time, no child delegation."), 1)
+	if !RepositoryReviewer(item.ID) && bytes.Equal(body, prior) {
+		return true
+	}
 	// Only the five original specialists had the marker-before-frontmatter layout.
-	if item.ID == "gamma-guardian" {
+	if item.ID == "gamma-guardian" || RepositoryReviewer(item.ID) {
 		return false
 	}
 	contract, err := baseagents.Definition(item.ID)
@@ -412,13 +435,14 @@ func validateManaged(root *os.Root, action string) error {
 var managedAgentTypes = map[string]bool{
 	"case-agent": true, "client-account-agent": true, "yoda": true,
 	"darwin": true, "pa-expert": true, "gamma-guardian": true,
+	"repository-spec-reviewer": true, "repository-standards-reviewer": true,
 }
 
 func Managed(agentType string) bool { _, ok := CanonicalAgentID(agentType); return ok }
 
 // GuardTool enforces the beta native-agent boundary independently of prompt
-// instructions. No-tool specialists can never call a tool. Case Agent receives
-// only local file tools and every explicit path is resolved inside the exact
+// instructions. No-tool specialists cannot call tools; repository reviewers
+// receive only read tools. Every explicit path resolves inside the exact
 // installed workspace, including existing symlink targets.
 func GuardTool(agentType, toolName string, raw json.RawMessage, cwd, workspace string) (string, bool) {
 	canonical, ok := CanonicalAgentID(agentType)
@@ -426,15 +450,43 @@ func GuardTool(agentType, toolName string, raw json.RawMessage, cwd, workspace s
 		return "", false
 	}
 	agentType = canonical
-	if agentType != "case-agent" {
+	if agentType != "case-agent" && !RepositoryReviewer(agentType) {
 		return "this Maestro specialist is tool-free; return only the bounded typed result to Maestro", true
 	}
 	allowed := map[string]bool{"Read": true, "Write": true, "Edit": true, "Glob": true, "Grep": true}
+	if RepositoryReviewer(agentType) {
+		allowed = map[string]bool{"Read": true, "Glob": true, "Grep": true}
+	}
 	if !allowed[toolName] {
-		return "Case Agent may use only workspace-local file tools and cannot execute shell commands or delegate", true
+		return "this specialist may use only its listed workspace-local file tools and cannot execute shell commands or delegate", true
 	}
 	if err := workspacepolicy.Tool(workspace, cwd, toolName, raw); err != nil {
-		return "Case Agent path or pattern is outside the admitted workspace policy", true
+		return "specialist path or pattern is outside the admitted workspace policy", true
 	}
 	return "", true
+}
+
+// RepositoryReviewer recognizes only the two fixed native repository axes.
+func RepositoryReviewer(id string) bool {
+	return id == "repository-spec-reviewer" || id == "repository-standards-reviewer"
+}
+
+// ForegroundReviewDispatch refuses context reuse and background/team execution.
+func ForegroundReviewDispatch(raw json.RawMessage) bool {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil {
+		return false
+	}
+	for key, value := range fields {
+		switch key {
+		case "description", "prompt", "subagent_type", "model", "max_turns":
+		case "run_in_background":
+			if string(value) != "false" {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
 }

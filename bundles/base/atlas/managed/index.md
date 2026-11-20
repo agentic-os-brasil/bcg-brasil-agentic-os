@@ -4,7 +4,7 @@ okf_version: "0.2"
 
 Deterministic managed knowledge bundle compiled from an explicit product-source allowlist.
 
-Source watermark: `7ec32eff72aed0903001679f02a956ada59b92670a11f32593f6823add0ddd92`
+Source watermark: `f413ccfbcde07f07c5e25e4ff6031ff7966f927f3962f559f5190d6e265c2bcf`
 
 ## Concepts
 

@@ -11,3 +11,9 @@ go.sum text eol=lf
 *.json text eol=lf
 *.jsonl text eol=lf
 *.toml text eol=lf
+
+# Preserve byte-addressed PDF xref fixtures on every checkout.
+internal/ingest/docling/testdata/documents/*.pdf binary
+
+# Embedded method licenses participate in portable byte-addressed payloads.
+bundles/tech-core/skills/*/LICENSE text eol=lf

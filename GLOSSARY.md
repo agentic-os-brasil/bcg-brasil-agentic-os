@@ -27,6 +27,10 @@ _Avoid_: memória completa
 Resultado verificável que sustenta um critério de pronto e pode ser revalidado.
 _Avoid_: declaração de conclusão
 
+**Sinal elegível**:
+Observação mínima com origem verificável, escopo conhecido e uso permitido para continuidade. Uma observação de sessão e um resultado comprometido conservam significados distintos.
+_Avoid_: conversa completa, prova de execução nativa
+
 **Vínculo**:
 Seleção autorizada que delimita o estado e o workspace em que uma operação pode agir.
 _Avoid_: caminho fornecido livremente pelo modelo
@@ -61,3 +65,7 @@ _Avoid_: fotografia histórica da origem
 **Linhagem**:
 Evidência histórica que vincula transações e origens sem conceder nova autoridade de escrita.
 _Avoid_: permissão atual
+
+**Declaração do dono**:
+Preferência profissional normalizada que o próprio dono revisa e autoriza como entrada de proposta. Repetir a declaração não demonstra episódios independentes nem altera o perfil ativo.
+_Avoid_: histórico observado, aprovação automática

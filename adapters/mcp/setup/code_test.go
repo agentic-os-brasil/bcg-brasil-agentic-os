@@ -31,7 +31,7 @@ func testCodeInventory(t *testing.T, mixed bool) {
 	must(t, os.WriteFile(executable, originalBody, 0700))
 	id := "0123456789abcdef0123456789abcdef"
 	root := filepath.Join(t.TempDir(), "marketplace")
-	record := installer.ClientRecord{Binding: installer.ClientBinding{Workspace: t.TempDir()}, Materialization: installer.ClientMaterialization{CodeRoot: root, Release: "0.1.43"}, Code: installer.CodeObservation{Executable: executable, Marketplace: "maestro-local-" + id, PluginID: "maestro-product@maestro-local-" + id, Scope: "user"}}
+	record := installer.ClientRecord{Binding: installer.ClientBinding{Workspace: t.TempDir()}, Materialization: installer.ClientMaterialization{CodeRoot: root, Release: "0.1.43"}, Code: installer.CodeObservation{ConfigurationDirectory: filepath.Join(root, "selected-profile"), Executable: executable, Marketplace: "maestro-local-" + id, PluginID: "maestro-product@maestro-local-" + id, Scope: "user"}}
 	foreign, enabled, current := false, false, false
 	version, fault, versionCalls := "2.1.295", "", 0
 	var mutations [][]string
@@ -95,7 +95,7 @@ func testCodeInventory(t *testing.T, mixed bool) {
 	observation, err := setup.ApplyCodeRegistration(context.Background(), record, run, review.Digest, true)
 	must(t, err)
 	want := [][]string{{"plugin", "marketplace", "update", "maestro-local-" + id, "--json"}, {"plugin", "update", "maestro-product@maestro-local-" + id, "--scope", "user", "--json"}, {"plugin", "disable", "maestro-product@maestro-local-" + id, "--scope", "user", "--json"}}
-	if !reflect.DeepEqual(mutations, want) || observation.Enabled || observation.State != "registered" || observation.InstalledVersion != "0.1.42" || observation.FolderVersion != "0.1.43" || observation.EvidenceClass != "engineering_process_witness" {
+	if observation.ConfigurationDirectory != record.Code.ConfigurationDirectory || !reflect.DeepEqual(mutations, want) || observation.Enabled || observation.State != "registered" || observation.InstalledVersion != "0.1.42" || observation.FolderVersion != "0.1.43" || observation.EvidenceClass != "engineering_process_witness" {
 		t.Fatalf("supported argv/readback did not preserve semantics: %+v %+v", mutations, observation)
 	}
 	foreign = true

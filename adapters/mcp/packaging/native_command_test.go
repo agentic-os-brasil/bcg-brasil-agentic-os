@@ -316,8 +316,14 @@ func TestNativePacketExecutesSelectedHookArgumentVectors(t *testing.T) {
 	callCandidate("UserPromptSubmit", 0, nil)
 	publicRead := map[string]any{"tool_name": "Read", "tool_use_id": "public-negative", "tool_input": map[string]any{"file_path": probe.outside}}
 	out = callCandidate("PreToolUse", 0, publicRead)
-	if !bytes.Contains(out, []byte("maestro_native_canonical_hook:"+probe.nonce)) || !bytes.Contains(out, []byte(`"permissionDecision":"deny"`)) {
+	if !bytes.Contains(out, []byte(qualificationHookMessage("PreToolUse", probe.session, "public-negative", "Read", probe.nonce))) || !bytes.Contains(out, []byte(`"permissionDecision":"deny"`)) {
 		t.Fatal("compiled canonical wrapper lost its own denial")
+	}
+	allowedRead := map[string]any{"tool_name": "Read", "tool_use_id": "positive-read", "tool_input": map[string]any{"file_path": filepath.Join(probe.challenge, "allowed.txt")}}
+	callCandidate("PreToolUse", 0, allowedRead)
+	out = callCandidate("PostToolUse", 0, allowedRead)
+	if !bytes.Contains(out, []byte(qualificationHookMessage("PostToolUse", probe.session, "positive-read", "Read", probe.nonce))) || bytes.Contains(out, []byte("positive-read")) {
+		t.Fatal("compiled canonical post wrapper lost exact private identity binding")
 	}
 	out = callCandidate("PreToolUse", 1, publicRead)
 	if string(bytes.TrimSpace(out)) != "{}" {

@@ -19,32 +19,67 @@ type SourceCoverage struct {
 	State  string `json:"state"`
 }
 type ProductDomainReport struct {
-	Darwin               *DarwinReport                `json:"darwin,omitempty"`
-	CurrentPending       *UpdatePendingReadback       `json:"current_pending,omitempty"`
-	Update               *UpdateDiagnosis             `json:"update,omitempty"`
-	Wiki                 *WikiDiagnostic              `json:"wiki,omitempty"`
-	Period               string                       `json:"period,omitempty"`
-	LifetimeStatus       string                       `json:"lifetime_status,omitempty"`
-	JobID                string                       `json:"job_id"`
-	WorkspaceID          string                       `json:"workspace_id"`
-	Finding              string                       `json:"finding"`
-	ObservedAt           time.Time                    `json:"observed_at,omitempty"`
-	NativeObservation    string                       `json:"native_observation,omitempty"`
-	InstallationCoverage string                       `json:"installation_coverage,omitempty"`
-	Counts               map[string]int               `json:"counts,omitempty"`
-	Sources              []SourceCoverage             `json:"sources,omitempty"`
-	Capabilities         []CapabilityFinding          `json:"capabilities,omitempty"`
-	Skills               []skillsindex.RuntimePointer `json:"skills,omitempty"`
+	Scope                string                            `json:"scope,omitempty"`
+	Weekly               *WeeklyReportMetadata             `json:"weekly,omitempty"`
+	Availability         *updateservice.SyncedAvailability `json:"availability,omitempty"`
+	Darwin               *DarwinReport                     `json:"darwin,omitempty"`
+	CurrentPending       *UpdatePendingReadback            `json:"current_pending,omitempty"`
+	Update               *UpdateDiagnosis                  `json:"update,omitempty"`
+	Wiki                 *WikiDiagnostic                   `json:"wiki,omitempty"`
+	Period               string                            `json:"period,omitempty"`
+	LifetimeStatus       string                            `json:"lifetime_status,omitempty"`
+	JobID                string                            `json:"job_id"`
+	WorkspaceID          string                            `json:"workspace_id"`
+	Finding              string                            `json:"finding"`
+	ObservedAt           time.Time                         `json:"observed_at,omitempty"`
+	NativeObservation    string                            `json:"native_observation,omitempty"`
+	InstallationCoverage string                            `json:"installation_coverage,omitempty"`
+	Counts               map[string]int                    `json:"counts,omitempty"`
+	Sources              []SourceCoverage                  `json:"sources,omitempty"`
+	Capabilities         []CapabilityFinding               `json:"capabilities,omitempty"`
+	Skills               []skillsindex.RuntimePointer      `json:"skills,omitempty"`
 }
 
 // Report is a closed, read-only projection of independently verified domain
 // output. It never opens an argument-selected path or returns captured text.
 func (s *Service) Report(job string) (ProductDomainReport, error) {
+	if job == MemoryModelJobID {
+		return s.memoryModelReport()
+	}
+	if job == YodaSelfReviewWeeklyJobID {
+		return s.weeklyModelService().weeklyReport()
+	}
+	if job == UpdateAvailabilityJobID && !s.updateScoped {
+		return s.updateAvailabilityService().Report(job)
+	}
+	if job == SelfObservationCaptureJobID && !s.ownerScoped {
+		return s.selfObservationService().Report(job)
+	}
 	out := ProductDomainReport{JobID: job, WorkspaceID: s.workspaceID}
 	if err := s.validate(); err != nil {
 		return out, err
 	}
 	switch {
+	case job == SelfObservationCaptureJobID:
+		report, _, err := s.readSelfObservationReport("")
+		if err != nil {
+			return out, err
+		}
+		out.Finding = "reviewed_owner_declarations_captured_as_proposal_input"
+		out.ObservedAt = report.RecordedAt
+		out.Counts = map[string]int{"observations": len(report.Observations)}
+		out.NativeObservation = "not_observed"
+		return out, nil
+	case job == MemoryCaptureJobID:
+		r, _, err := s.readCaptureReport("")
+		if err != nil {
+			return out, err
+		}
+		out.Finding = "body_free_signals_captured"
+		out.ObservedAt = r.RecordedAt
+		out.Counts = map[string]int{"captures": len(r.Captures), "observed_only": r.ObservedOnly, "committed_results": r.CommittedResults}
+		out.NativeObservation = "not_observed"
+		return out, nil
 	case DarwinJob(job):
 		if s.darwin == nil {
 			return out, errors.New("Darwin product binding unavailable")
@@ -67,7 +102,9 @@ func (s *Service) Report(job string) (ProductDomainReport, error) {
 		}
 		out.Finding = report.Finding
 		out.ObservedAt = report.ObservedAt
-		if report.Update != nil {
+		if report.Availability != nil {
+			out.Availability = report.Availability
+		} else if report.Update != nil {
 			out.Update = report.Update
 			out.CurrentPending = &UpdatePendingReadback{State: "unavailable"}
 			if report.Update.Outcome == "candidate_staged_activation_unconfirmed" {

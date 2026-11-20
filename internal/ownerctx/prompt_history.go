@@ -121,40 +121,11 @@ func DefaultPromptHistoryConfig() PromptHistoryConfig {
 }
 
 func ConfigurePromptHistory(root string, config PromptHistoryConfig) error {
-	if err := validatePromptHistoryConfig(config); err != nil {
+	review, err := ReviewPromptHistory(root, PromptHistoryChange{Operation: "configure", Config: &config})
+	if err != nil {
 		return err
 	}
-	return withPromptHistoryLock(root, func(entriesPath, configPath string) error {
-		existingConfig, err := loadPromptHistoryConfig(configPath)
-		if err != nil {
-			return err
-		}
-		if existingConfig.OwnerID != "" {
-			if config.OwnerID != "" && config.OwnerID != existingConfig.OwnerID {
-				return errors.New("prompt history owner binding cannot be changed")
-			}
-			config.OwnerID = existingConfig.OwnerID
-		}
-		entries, err := readPromptHistoryEntries(entriesPath)
-		if err != nil {
-			return err
-		}
-		if config.OwnerID == "" && len(entries) > 0 {
-			config.OwnerID = entries[0].OwnerID
-		}
-		if config.OwnerID != "" {
-			for _, entry := range entries {
-				if entry.OwnerID != config.OwnerID {
-					return errors.New("prompt history owner binding is inconsistent")
-				}
-			}
-		}
-		entries = retainPromptHistory(entries, config, time.Now().UTC())
-		if err := writePromptHistoryEntries(entriesPath, entries); err != nil {
-			return err
-		}
-		return writePrivateJSON(configPath, config)
-	})
+	return ApplyReviewedPromptHistory(root, review, true)
 }
 
 func LoadPromptHistoryConfig(root string) (PromptHistoryConfig, error) {
@@ -306,6 +277,11 @@ func readPromptHistorySnapshot(root string) ([]PromptHistoryEntry, PromptHistory
 	if err != nil {
 		return nil, PromptHistoryConfig{}, fmt.Errorf("prompt history snapshot lock: %w", err)
 	}
+	if _, pendingErr := readOwnerFile(filepath.Join(directory, promptHistoryPending), maximumHistoryJournalBytes); pendingErr == nil {
+		return nil, PromptHistoryConfig{}, errors.Join(ErrPromptHistoryRecovery, unlock())
+	} else if !errors.Is(pendingErr, os.ErrNotExist) {
+		return nil, PromptHistoryConfig{}, errors.Join(pendingErr, unlock())
+	}
 	configuration, configErr := loadPromptHistoryConfig(config)
 	records, readErr := readPromptHistoryEntries(entries)
 	if err := errors.Join(configErr, readErr, unlock()); err != nil {
@@ -328,6 +304,7 @@ func RecordUserPrompt(root string, input PromptHistoryInput) (PromptHistoryRecei
 		if err != nil {
 			return err
 		}
+		before := promptHistoryPair{Config: config, Entries: append([]PromptHistoryEntry(nil), entries...)}
 		if config.OwnerID == "" && len(entries) > 0 {
 			config.OwnerID = entries[0].OwnerID
 		}
@@ -336,9 +313,6 @@ func RecordUserPrompt(root string, input PromptHistoryInput) (PromptHistoryRecei
 		}
 		if config.OwnerID == "" {
 			config.OwnerID = input.OwnerID
-			if err := writePrivateJSON(configPath, config); err != nil {
-				return err
-			}
 		}
 		now := time.Now().UTC()
 		if input.RecordedAt.IsZero() {
@@ -386,6 +360,14 @@ func RecordUserPrompt(root string, input PromptHistoryInput) (PromptHistoryRecei
 		}
 		if !found {
 			return errors.New("prompt was excluded by configured history retention")
+		}
+		if err := invalidateWeeklyHistoryChange(root, before, promptHistoryPair{config, entries}); err != nil {
+			return err
+		}
+		if digestJSON(before.Config) != digestJSON(config) {
+			if err := writePrivateJSON(configPath, config); err != nil {
+				return err
+			}
 		}
 		if err := writePromptHistoryEntries(entriesPath, entries); err != nil {
 			return err
@@ -458,6 +440,9 @@ func DeletePromptHistory(root, id string, confirmed bool) error {
 		if !found {
 			return os.ErrNotExist
 		}
+		if _, err := invalidateWeeklySelfSourcesLocked(root, weeklySelfSourceChange{Prompts: []string{id}}); err != nil {
+			return err
+		}
 		return writePromptHistoryEntries(entriesPath, filtered)
 	})
 }
@@ -467,6 +452,9 @@ func ResetPromptHistory(root string, confirmed bool) error {
 		return ErrConfirmationRequired
 	}
 	return withPromptHistoryLock(root, func(entriesPath, _ string) error {
+		if _, err := invalidateWeeklySelfSourcesLocked(root, weeklySelfSourceChange{All: true}); err != nil {
+			return err
+		}
 		return writePromptHistoryEntries(entriesPath, nil)
 	})
 }
@@ -607,6 +595,9 @@ func readPromptHistoryEntries(path string) ([]PromptHistoryEntry, error) {
 	if err != nil {
 		return nil, err
 	}
+	return parsePromptHistoryEntries(body)
+}
+func parsePromptHistoryEntries(body []byte) ([]PromptHistoryEntry, error) {
 	scanner := bufio.NewScanner(bytes.NewReader(body))
 	scanner.Buffer(make([]byte, 4096), maximumPromptSerializedEntryBytes)
 	entries := []PromptHistoryEntry{}
@@ -633,34 +624,41 @@ func readPromptHistoryEntries(path string) ([]PromptHistoryEntry, error) {
 }
 
 func writePromptHistoryEntries(path string, entries []PromptHistoryEntry) error {
+	body, err := encodePromptHistoryEntries(entries)
+	if err != nil {
+		return err
+	}
+	if err = atomicPrivateWrite(path, body); err != nil {
+		return fmt.Errorf("prompt history entries publication: %w", err)
+	}
+	return nil
+}
+func encodePromptHistoryEntries(entries []PromptHistoryEntry) ([]byte, error) {
 	var body strings.Builder
 	for _, entry := range entries {
 		if err := validatePromptHistoryEntry(entry); err != nil {
-			return err
+			return nil, err
 		}
 		metadata := entry
 		metadata.Prompt = ""
 		envelope, err := json.Marshal(metadata)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if len(envelope)+1 > maximumPromptMetadataBytes {
-			return errors.New("prompt history metadata exceeds its serialized envelope")
+			return nil, errors.New("prompt history metadata exceeds its serialized envelope")
 		}
 		encoded, err := json.Marshal(entry)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if len(encoded)+1 > maximumPromptSerializedEntryBytes || body.Len()+len(encoded)+1 > maximumPromptSerializedStoreBytes {
-			return errors.New("prompt history exceeds its serialized envelope")
+			return nil, errors.New("prompt history exceeds its serialized envelope")
 		}
 		body.Write(encoded)
 		body.WriteByte('\n')
 	}
-	if err := atomicPrivateWrite(path, []byte(body.String())); err != nil {
-		return fmt.Errorf("prompt history entries publication: %w", err)
-	}
-	return nil
+	return []byte(body.String()), nil
 }
 
 func validatePromptHistoryEntry(entry PromptHistoryEntry) error {

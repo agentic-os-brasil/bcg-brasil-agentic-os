@@ -37,6 +37,7 @@ type Request struct {
 // Config is process composition, never decoded from user/model JSON. The
 // production command always uses strict native trust and its compiled seed.
 type Config struct {
+	ExperimentalSeed             *installer.VerifiedExperimentalSeed
 	Installer, AuthorityRegistry string
 	Clock                        func() time.Time
 	VerifyNative                 func(context.Context, string) error
@@ -76,7 +77,7 @@ type Result struct {
 }
 
 func installOptions(r Request, c Config) installer.Options {
-	return installer.Options{UserHome: r.UserHome, ReleaseDir: r.ReleaseDirectory, Bootstrapper: c.Installer, AuthorityRegistry: c.AuthorityRegistry, ManagedRoot: r.ManagedRoot, DataRoot: filepath.Join(r.UserHome, ".maestro-install"), TargetOS: runtime.GOOS, TargetArch: runtime.GOARCH, Clock: c.Clock, VerifyNative: c.VerifyNative, Run: c.Run, NativeTrustMode: installer.NativeTrustStrict}
+	return configureExperimentalInstall(installer.Options{UserHome: r.UserHome, ReleaseDir: r.ReleaseDirectory, Bootstrapper: c.Installer, AuthorityRegistry: c.AuthorityRegistry, ManagedRoot: r.ManagedRoot, DataRoot: filepath.Join(r.UserHome, ".maestro-install"), TargetOS: runtime.GOOS, TargetArch: runtime.GOARCH, Clock: c.Clock, VerifyNative: c.VerifyNative, Run: c.Run, NativeTrustMode: installer.NativeTrustStrict}, c)
 }
 
 func ReviewInstallation(r Request, c Config) (Review, error) {
@@ -206,6 +207,7 @@ func Apply(ctx context.Context, r Request, c Config, digest string, confirmed bo
 	result.WorkspaceID = w.WorkspaceID
 	registry := filepath.Join(review.Installation.ManagedRoot, "trust", "release-authority-registry.json")
 	binding := product.Options{ProductRoot: review.Installation.ManagedRoot, UserHome: r.UserHome, WorkspacePath: r.Workspace, LookupEnv: c.LookupEnv, CLIVersion: review.Installation.ServerVersion, AuthorityRegistryPath: registry, AuthorityRegistrySHA256: review.Installation.RegistrySHA256}
+	binding = configureExperimentalBinding(binding, c, review.Installation.ManagedRoot)
 	bound, err := product.Open(binding)
 	if err != nil {
 		return pending(err)
@@ -236,7 +238,7 @@ func Apply(ctx context.Context, r Request, c Config, digest string, confirmed bo
 	}
 	for _, artifact := range verified.Manifest.Artifacts {
 		if artifact.Kind == "runtime_pack" && artifact.OS == runtime.GOOS && artifact.Arch == runtime.GOARCH {
-			if err = docling.PlaceVerified(ctx, docling.Options{DataRoot: filepath.Join(home.Home, "state"), AuthorityRegistryPath: registry, AuthorityRegistrySHA256: review.Installation.RegistrySHA256, CLIVersion: review.Installation.ServerVersion}, verified); err != nil {
+			if err = placeInitialRuntime(ctx, binding, c, state, verified); err != nil {
 				return pending(err)
 			}
 		}

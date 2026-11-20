@@ -20,6 +20,7 @@ var canonicalAgentPaths = []string{
 	"activation-policy.json", "case-agent/AGENT.md", "catalog.json",
 	"client-account-agent/AGENT.md", "darwin/AGENT.md", "gamma-guardian/AGENT.md",
 	"maestro/AGENT.md", "pa-expert-registry.json", "pa-expert/AGENT.md",
+	"repository-spec-reviewer/AGENT.md", "repository-standards-reviewer/AGENT.md",
 	"templates/case_agent/AGENT.md", "templates/client_account_agent/AGENT.md",
 	"templates/pa_expert/AGENT.md", "templates/quality_guardian/AGENT.md", "yoda/AGENT.md",
 }

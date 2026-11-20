@@ -3,6 +3,8 @@ package maintenance
 import (
 	"context"
 	"errors"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
+	"path/filepath"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
@@ -77,6 +79,11 @@ func (p *productExecution) publishTerminal(publish func() error) error {
 }
 
 func (p *productExecution) publishTerminalWithin(ctx, acquisitionCtx context.Context, publish func() error) error {
+	if p.weeklyPlan != nil && p.weeklyPlan.committed != nil {
+		return p.guardWithin(ctx, acquisitionCtx, func() error {
+			return ownerctx.WithCurrentWeeklySelfWorking(ctx, filepath.Join(p.service.home, "brain"), *p.weeklyPlan.committed, p.service.now().UTC(), publish)
+		})
+	}
 	if !wikiJob(p.jobID) {
 		return p.guardWithin(ctx, acquisitionCtx, publish)
 	}

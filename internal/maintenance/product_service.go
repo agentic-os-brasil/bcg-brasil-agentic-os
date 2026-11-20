@@ -18,6 +18,7 @@ import (
 	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
@@ -31,6 +32,10 @@ var ErrQualificationRequired = errors.New("current actual maintenance qualificat
 // ServiceOptions is a native constructor boundary, never a tool schema.
 // Catalog must come from bundles/base/runtime.Maintenance (which imports this package).
 type ServiceOptions struct {
+	SourceAdmission                                updateservice.SyncedAdmission            `json:"-"`
+	WeeklyNativeExecutor                           WeeklyNativeExecutor                     `json:"-"`
+	MemoryNativeExecutor                           MemoryNativeExecutor                     `json:"-"`
+	WeeklyCandidate                                *WeeklyModelRegistration                 `json:"-"`
 	DarwinFactory                                  func(DarwinScope) (DarwinBinding, error) `json:"-"`
 	ProductRoot, UserHome, WorkspacePath           string
 	LookupEnv                                      func(string) (string, bool)
@@ -48,6 +53,9 @@ type ServiceOptions struct {
 }
 
 type Service struct {
+	updateScoped                                  bool
+	ownerScoped                                   bool
+	weeklyScoped                                  bool
 	darwin                                        DarwinBinding
 	options                                       ServiceOptions
 	home, workspaceID, binding, executable, build string
@@ -79,38 +87,43 @@ type ProductSchedule struct {
 // ProductReview contains metadata only. Its private binding rejects edited or
 // serialized reviews; trusted confirmation is still required for every Apply.
 type ProductReview struct {
-	DarwinReview    *DarwinReviewProjection     `json:"darwin_review,omitempty"`
-	Operation       Operation                   `json:"operation"`
-	WorkspaceID     string                      `json:"workspace_id"`
-	Schedule        ProductSchedule             `json:"schedule"`
-	Writes          []string                    `json:"writes"`
-	QualificationID string                      `json:"qualification_id,omitempty"`
-	Implementation  string                      `json:"implementation"`
-	Configuration   string                      `json:"configuration"`
-	SourceState     string                      `json:"source_state,omitempty"`
-	SourceReview    *updateservice.SyncedReview `json:"source_review,omitempty"`
-	seal            string
+	WeeklyRegistration *WeeklyModelRegistration    `json:"weekly_registration,omitempty"`
+	Scope              string                      `json:"scope,omitempty"`
+	DarwinReview       *DarwinReviewProjection     `json:"darwin_review,omitempty"`
+	Operation          Operation                   `json:"operation"`
+	WorkspaceID        string                      `json:"workspace_id"`
+	Schedule           ProductSchedule             `json:"schedule"`
+	Writes             []string                    `json:"writes"`
+	QualificationID    string                      `json:"qualification_id,omitempty"`
+	Implementation     string                      `json:"implementation"`
+	Configuration      string                      `json:"configuration"`
+	SourceState        string                      `json:"source_state,omitempty"`
+	SourceReview       *updateservice.SyncedReview `json:"source_review,omitempty"`
+	seal               string
 }
 
 type ProductQualification struct {
-	EventID        string    `json:"event_id,omitempty"`
-	ID             string    `json:"id"`
-	WorkspaceID    string    `json:"workspace_id"`
-	JobID          string    `json:"job_id"`
-	Binding        string    `json:"binding"`
-	Implementation string    `json:"implementation"`
-	Configuration  string    `json:"configuration"`
-	Adapter        string    `json:"adapter"`
-	Platform       string    `json:"platform"`
-	Artifact       string    `json:"artifact"`
-	ArtifactSHA256 string    `json:"artifact_sha256"`
-	Receipt        Receipt   `json:"receipt"`
-	ScheduledFor   time.Time `json:"scheduled_for"`
-	RequestedAt    time.Time `json:"requested_at"`
-	VerifiedAt     time.Time `json:"verified_at"`
+	EventID        string             `json:"event_id,omitempty"`
+	ID             string             `json:"id"`
+	WorkspaceID    string             `json:"workspace_id"`
+	JobID          string             `json:"job_id"`
+	Binding        string             `json:"binding"`
+	Implementation string             `json:"implementation"`
+	Configuration  string             `json:"configuration"`
+	Adapter        string             `json:"adapter"`
+	Platform       string             `json:"platform"`
+	Artifact       string             `json:"artifact"`
+	ArtifactSHA256 string             `json:"artifact_sha256"`
+	Receipt        Receipt            `json:"receipt"`
+	ScheduledFor   time.Time          `json:"scheduled_for"`
+	RequestedAt    time.Time          `json:"requested_at"`
+	VerifiedAt     time.Time          `json:"verified_at"`
+	DailyInput     *memory.DailyInput `json:"daily_input,omitempty"`
 }
 
 type ProductJobStatus struct {
+	Scope              string                `json:"scope,omitempty"`
+	ScopeID            string                `json:"scope_id,omitempty"`
 	Diagnosis          *DarwinSource         `json:"diagnosis,omitempty"`
 	JobID              string                `json:"job_id"`
 	Revision           uint64                `json:"revision"`
@@ -129,6 +142,7 @@ type ProductStatus struct {
 }
 
 type productControl struct {
+	Weekly        *weeklyModelControl   `json:"weekly_model,omitempty"`
 	Writes        []string              `json:"writes,omitempty"`
 	SchemaVersion int                   `json:"schema_version"`
 	WorkspaceID   string                `json:"workspace_id"`
@@ -177,6 +191,10 @@ func NewService(options ServiceOptions) (*Service, error) {
 		return nil, err
 	}
 	options.Catalog = ownedCatalog
+	options.WeeklyCandidate, err = cloneWeeklyRegistration(options.WeeklyCandidate)
+	if err != nil {
+		return nil, err
+	}
 	now := options.Now
 	if now == nil {
 		now = time.Now
@@ -239,13 +257,27 @@ func (s *Service) validate() error {
 	}
 	executable, build := identity.Path, identity.SHA256
 	binding := productDigest([]string{h.Home, path, w.WorkspaceID})
+	scopeID := w.WorkspaceID
+	if s.ownerScoped || s.weeklyScoped {
+		scopeID, err = ownerctx.SelfObservationOwnerScope(filepath.Join(h.Home, "brain"))
+		if err != nil {
+			return err
+		}
+		binding = productDigest([]string{"owner-self-observation-v1", scopeID})
+		if s.weeklyScoped {
+			binding = productDigest([]string{"owner-weekly-model-v1", scopeID})
+		}
+	}
+	if s.updateScoped {
+		scopeID, binding = updateAvailabilityScope(h.Home, s.options.ProductRoot)
+	}
 	if s.binding != "" && (s.binding != binding || s.build != build || s.executable != executable) {
 		return ErrProductConflict
 	}
 	if s.binding != "" {
 		return nil
 	}
-	s.home, s.workspaceID, s.binding, s.executable, s.build = h.Home, w.WorkspaceID, binding, executable, build
+	s.home, s.workspaceID, s.binding, s.executable, s.build = h.Home, scopeID, binding, executable, build
 	return nil
 }
 
@@ -255,7 +287,7 @@ func productDigest(value any) string {
 	return hex.EncodeToString(sum[:])
 }
 func productJob(jobID string) bool {
-	return DarwinJob(jobID) || jobID == MemoryLightDreamJobID || jobID == MemoryCheckpointJobID || jobID == MemoryDeepDreamJobID || jobID == "skills-index-refresh" || diagnosticJob(jobID)
+	return modelJob(jobID) || jobID == SelfObservationCaptureJobID || DarwinJob(jobID) || jobID == MemoryCaptureJobID || jobID == MemoryLightDreamJobID || jobID == MemoryCheckpointJobID || jobID == MemoryDeepDreamJobID || jobID == "skills-index-refresh" || diagnosticJob(jobID)
 }
 func (s *Service) configuration(jobID string) string {
 	job, _ := findCatalogJob(s.options.Catalog, jobID)
@@ -280,6 +312,15 @@ func (s *Service) loadControl(jobID string) (productControl, error) {
 	}
 	if c.SchemaVersion != 1 || c.WorkspaceID != s.workspaceID || c.Binding != s.binding || c.JobID != jobID || c.Revision == 0 {
 		return c, ErrProductConflict
+	}
+	if c.Weekly != nil && (!modelJob(jobID) || c.Weekly.Registration.Descriptor.JobID != jobID || c.Weekly.Registration.Validate() != nil || !digestPattern.MatchString(c.Weekly.RegistrationReviewSHA256)) {
+		return c, ErrProductConflict
+	}
+	if c.Weekly != nil && c.Weekly.MemorySelection != nil {
+		m := c.Weekly.MemorySelection
+		if jobID != MemoryModelJobID || m.ScheduledFor.IsZero() || !digestPattern.MatchString(m.InputSHA256) || m.RegistrationSHA256 != c.Weekly.Registration.Digest() {
+			return c, ErrProductConflict
+		}
 	}
 	if c.Qualification != nil && (c.Qualification.JobID != c.JobID || c.Qualification.WorkspaceID != c.WorkspaceID || c.Qualification.Binding != c.Binding) {
 		return c, ErrProductConflict
@@ -323,6 +364,11 @@ func (s *Service) saveControl(c productControl) error {
 	return scheduler.WritePrivateFileAtomic(s.controlPath(c.JobID), body)
 }
 func (s *Service) withControl(jobID string, fn func() error) error {
+	if weeklyMemoryJob(jobID) {
+		return scheduler.WithPrivateLock(filepath.Join(s.receipts.Root, "workspaces", s.workspaceID, "weekly-memory.guard"), func() error {
+			return scheduler.WithPrivateLock(filepath.Join(filepath.Dir(s.controlPath(jobID)), "control.guard"), fn)
+		})
+	}
 	return scheduler.WithPrivateLock(filepath.Join(filepath.Dir(s.controlPath(jobID)), "control.guard"), fn)
 }
 
@@ -332,7 +378,20 @@ func (s *Service) Status() (ProductStatus, error) {
 	}
 	report := ProductStatus{WorkspaceID: s.workspaceID}
 	for _, job := range s.options.Catalog.Jobs {
-		c, err := s.loadControl(job.ID)
+		if s.updateScoped && job.ID != UpdateAvailabilityJobID || s.weeklyScoped && job.ID != YodaSelfReviewWeeklyJobID || s.ownerScoped && job.ID != SelfObservationCaptureJobID {
+			continue
+		}
+		service := s
+		if job.ID == YodaSelfReviewWeeklyJobID {
+			service = s.weeklyModelService()
+		}
+		if job.ID == SelfObservationCaptureJobID {
+			service = s.selfObservationService()
+		}
+		if job.ID == UpdateAvailabilityJobID {
+			service = s.updateAvailabilityService()
+		}
+		c, err := service.loadControl(job.ID)
 		if err != nil {
 			return report, err
 		}
@@ -340,15 +399,19 @@ func (s *Service) Status() (ProductStatus, error) {
 		if len(c.Writes) > 0 {
 			item.Writes = append([]string(nil), c.Writes...)
 		}
-		if !productJob(job.ID) || DarwinJob(job.ID) && s.darwin == nil {
+		if !productJob(job.ID) || DarwinJob(job.ID) && s.darwin == nil || job.ID == YodaSelfReviewWeeklyJobID && (service.options.WeeklyNativeExecutor == nil || c.Weekly == nil) || job.ID == MemoryModelJobID && (service.options.MemoryNativeExecutor == nil || c.Weekly == nil) {
 			item.Reason = "production_binding_unavailable"
 		} else if c.Qualification != nil {
-			if err := s.verifyQualification(c.Qualification); err == nil {
+			if err := service.verifyQualification(c.Qualification); err == nil {
 				item.QualificationState = "qualified"
 			} else {
 				item.QualificationState = "stale"
 				item.Reason = "qualification_requires_refresh"
 			}
+		}
+		if job.ID == SelfObservationCaptureJobID || job.ID == UpdateAvailabilityJobID || job.ID == YodaSelfReviewWeeklyJobID {
+			item.Scope = "owner"
+			item.ScopeID = service.workspaceID
 		}
 		if DarwinJob(job.ID) {
 			source := DarwinSource{CacheState: "unavailable"}
@@ -373,6 +436,21 @@ func (s *Service) Status() (ProductStatus, error) {
 }
 
 func (s *Service) Review(op Operation) (ProductReview, error) {
+	if op.JobID == UpdateAvailabilityJobID && !s.updateScoped {
+		return s.updateAvailabilityService().Review(op)
+	}
+	if modelJob(op.JobID) && op.Kind == "register" {
+		if op.JobID == YodaSelfReviewWeeklyJobID {
+			return s.weeklyModelService().reviewWeeklyRegistration(op)
+		}
+		return s.reviewWeeklyRegistration(op)
+	}
+	if op.JobID == YodaSelfReviewWeeklyJobID && !s.weeklyScoped {
+		return s.weeklyModelService().Review(op)
+	}
+	if op.JobID == SelfObservationCaptureJobID && !s.ownerScoped {
+		return s.selfObservationService().Review(op)
+	}
 	if err := s.validate(); err != nil {
 		return ProductReview{}, err
 	}
@@ -424,12 +502,25 @@ func (s *Service) Review(op Operation) (ProductReview, error) {
 		return ProductReview{}, ErrProductConflict
 	}
 	if op.Kind == "enroll" || op.Kind == "resume" {
+		if err := s.checkWeeklyMemoryExclusive(op.JobID); err != nil {
+			return ProductReview{}, err
+		}
 		if err := s.verifyQualification(c.Qualification); err != nil {
 			return ProductReview{}, err
 		}
 	}
 	job, _ := findCatalogJob(s.options.Catalog, op.JobID)
 	r := ProductReview{Operation: op, WorkspaceID: s.workspaceID, Schedule: schedule, Writes: append([]string(nil), job.Writes...), Implementation: s.build, Configuration: s.configuration(op.JobID)}
+	if op.JobID == SelfObservationCaptureJobID || op.JobID == YodaSelfReviewWeeklyJobID {
+		r.Scope = "owner"
+	}
+	if modelJob(op.JobID) && c.Weekly != nil {
+		r.WeeklyRegistration, err = cloneWeeklyRegistration(&c.Weekly.Registration)
+		if err != nil {
+			return ProductReview{}, err
+		}
+	}
+
 	if c.Qualification != nil {
 		r.QualificationID = c.Qualification.ID
 	}
@@ -470,6 +561,21 @@ func (s *Service) Review(op Operation) (ProductReview, error) {
 // Apply invokes the trusted host's exact review before any write, then repeats
 // read-only review and CAS. Returning an error from confirm leaves no state.
 func (s *Service) Apply(ctx context.Context, r ProductReview, confirm func(context.Context, ProductReview) error) (ProductJobStatus, error) {
+	if r.Operation.JobID == UpdateAvailabilityJobID && !s.updateScoped {
+		return s.updateAvailabilityService().Apply(ctx, r, confirm)
+	}
+	if modelJob(r.Operation.JobID) && r.Operation.Kind == "register" {
+		if r.Operation.JobID == YodaSelfReviewWeeklyJobID {
+			return s.weeklyModelService().applyWeeklyRegistration(ctx, r, confirm)
+		}
+		return s.applyWeeklyRegistration(ctx, r, confirm)
+	}
+	if r.Operation.JobID == YodaSelfReviewWeeklyJobID && !s.weeklyScoped {
+		return s.weeklyModelService().Apply(ctx, r, confirm)
+	}
+	if r.Operation.JobID == SelfObservationCaptureJobID && !s.ownerScoped {
+		return s.selfObservationService().Apply(ctx, r, confirm)
+	}
 	if confirm == nil {
 		return ProductJobStatus{}, errors.New("trusted maintenance review required")
 	}
@@ -503,6 +609,11 @@ func (s *Service) Apply(ctx context.Context, r ProductReview, confirm func(conte
 		}
 		if c.Revision != r.Operation.ExpectedRevision {
 			return ErrProductConflict
+		}
+		if r.Operation.Kind == "enroll" || r.Operation.Kind == "resume" {
+			if err := s.checkWeeklyMemoryExclusive(r.Operation.JobID); err != nil {
+				return err
+			}
 		}
 		c.Revision++
 		c.OneShot = ""
@@ -542,6 +653,8 @@ func (s *Service) jobStatus(id string) (ProductJobStatus, error) {
 // Existing memory activation lock → control guard → occurrence lease guard →
 // visible publication. Control transitions never acquire memory or lease locks.
 type productExecution struct {
+	memoryPlan   *memoryExecutionPlan
+	weeklyPlan   *weeklyExecutionPlan
 	ctx          context.Context
 	darwinSource *DarwinSource
 	service      *Service
@@ -549,6 +662,30 @@ type productExecution struct {
 	revision     uint64
 	oneShot      string
 	source       string
+	dailyInput   *memory.DailyInput
+}
+
+func (p *productExecution) selectDailyInput() error {
+	if p.jobID != MemoryLightDreamJobID {
+		return nil
+	}
+	inputs, err := p.service.engine.DailyInputCohort(p.service.workspaceID)
+	if err != nil {
+		return err
+	}
+	if productDigest(inputs) != p.source {
+		return ErrProductConflict
+	}
+	p.dailyInput, err = p.service.engine.PendingDailyInput(p.service.workspaceID, inputs)
+	return err
+}
+
+func (p *productExecution) evidenceAt(at time.Time) time.Time {
+	if p.dailyInput != nil {
+		day, _ := time.Parse("2006-01-02", p.dailyInput.Period)
+		return day
+	}
+	return at
 }
 
 func (p *productExecution) guard(publish func() error) error {
@@ -599,13 +736,42 @@ func (p *productExecution) guardWithControl(ctx context.Context, publish func() 
 		if c.Revision != p.revision || p.oneShot != "" && c.OneShot != p.oneShot || p.oneShot == "" && c.State != "active" {
 			return ErrProductConflict
 		}
+		if weeklyMemoryJob(p.jobID) && !(p.jobID == MemoryModelJobID && p.oneShot != "") {
+			if err := p.service.checkWeeklyMemoryExclusive(p.jobID); err != nil {
+				return err
+			}
+		}
+		if p.weeklyPlan != nil {
+			if p.weeklyPlan.committed != nil {
+				if err := p.validateWeeklyCommitted(); err != nil {
+					return err
+				}
+			} else {
+				if err := ownerctx.ValidateWeeklySelfInputCurrent(ctx, filepath.Join(p.service.home, "brain"), p.weeklyPlan.input, p.service.now().UTC()); err != nil {
+					return err
+				}
+			}
+			if c.Weekly == nil || c.Weekly.Registration.Digest() != p.weeklyPlan.registration.Digest() {
+				return ErrProductConflict
+			}
+			if p.weeklyPlan.mode == WeeklyWorking {
+				if c.Qualification == nil || c.Qualification.ID != p.weeklyPlan.qualification || p.service.verifyQualification(c.Qualification) != nil {
+					return ErrQualificationRequired
+				}
+			}
+		}
+		if p.memoryPlan != nil {
+			if err := p.validateMemoryPlan(ctx, c); err != nil {
+				return err
+			}
+		}
 		if p.darwinSource != nil {
 			current, err := p.service.darwinSource(p.jobID)
 			if err != nil || productDigest(current) != productDigest(*p.darwinSource) {
 				return ErrProductConflict
 			}
 		}
-		if (wikiJob(p.jobID) || p.jobID == UpdateCheckJobID) && p.source != "" {
+		if (p.jobID == UpdateAvailabilityJobID || p.jobID == SelfObservationCaptureJobID || wikiJob(p.jobID) || p.jobID == UpdateCheckJobID || p.jobID == MemoryCaptureJobID || p.jobID == MemoryLightDreamJobID) && p.source != "" {
 			current, err := p.service.sourceState(p.jobID)
 			if err != nil || current != p.source {
 				return ErrProductConflict
@@ -635,10 +801,12 @@ func (s *Service) worker(p *productExecution) Worker {
 	weekly := *s.weekly
 	weekly.Now = s.now
 	handlers := map[string]any{
-		MemoryLightDreamJobID:  MemoryLightDreamHandler{Engine: s.engine, ExpectedSourceFingerprint: p.source},
-		MemoryCheckpointJobID:  MemoryCheckpointHandler{Scheduler: s.scheduler, Store: ContinuityCheckpointStore{Root: s.receipts.Root}, ExpectedSourceFingerprint: p.source},
-		MemoryDeepDreamJobID:   MemoryDeepDreamHandler{Engine: &weekly, ExpectedSourceFingerprint: p.source},
-		"skills-index-refresh": productIndexHandler{service: s, expected: p.source},
+		SelfObservationCaptureJobID: productSelfObservationHandler{service: s, expected: p.source},
+		MemoryCaptureJobID:          productCaptureHandler{service: s, expected: p.source},
+		MemoryLightDreamJobID:       MemoryLightDreamHandler{Engine: s.engine, ProductSelection: p.source != "", SelectedInput: p.dailyInput},
+		MemoryCheckpointJobID:       MemoryCheckpointHandler{Scheduler: s.scheduler, Store: ContinuityCheckpointStore{Root: s.receipts.Root}, ExpectedSourceFingerprint: p.source},
+		MemoryDeepDreamJobID:        MemoryDeepDreamHandler{Engine: &weekly, ExpectedSourceFingerprint: p.source},
+		"skills-index-refresh":      productIndexHandler{service: s, expected: p.source},
 	}
 	for _, job := range []string{"memory-retention-check", "runtime-health-check", "capability-recheck", "runtime-drift-check"} {
 		handlers[job] = productDiagnosticHandler{service: s, expected: p.source, job: job}
@@ -646,7 +814,14 @@ func (s *Service) worker(p *productExecution) Worker {
 	for _, job := range []string{WikiIncrementalJobID, WikiReconcileJobID, WikiIntegrityJobID} {
 		handlers[job] = productWikiHandler{service: s, expected: p.source, job: job}
 	}
+	if p.weeklyPlan != nil {
+		handlers[YodaSelfReviewWeeklyJobID] = productWeeklyModelHandler{service: s, plan: p.weeklyPlan}
+	}
+	if p.memoryPlan != nil {
+		handlers[MemoryModelJobID] = productMemoryModelHandler{service: s, plan: p.memoryPlan}
+	}
 	handlers[UpdateCheckJobID] = productUpdateHandler{service: s, expected: p.source, execution: p}
+	handlers[UpdateAvailabilityJobID] = productAvailabilityHandler{service: s, expected: p.source, qualification: p.oneShot != ""}
 	if DarwinJob(p.jobID) && s.darwin != nil && p.darwinSource != nil {
 		handlers[p.jobID] = s.darwin.Handler(p.jobID, p.darwinSource, p.oneShot != "")
 	}
@@ -655,13 +830,32 @@ func (s *Service) worker(p *productExecution) Worker {
 
 func (s *Service) execute(ctx context.Context, p *productExecution, occ scheduler.Occurrence, now time.Time) (Receipt, error) {
 	p.ctx = ctx
+	if p.jobID == MemoryModelJobID {
+		if err := p.selectMemory(ctx, occ, now); err != nil {
+			return Receipt{}, err
+		}
+	}
+	if p.jobID == YodaSelfReviewWeeklyJobID {
+		if err := p.selectWeekly(ctx, occ, now); err != nil {
+			return Receipt{}, err
+		}
+	}
 	if err := p.guard(func() error { return nil }); err != nil {
 		return Receipt{}, err
+	}
+	if p.weeklyPlan != nil && p.weeklyPlan.committed != nil {
+		return s.reconcileWeeklyCommitted(ctx, p, occ, now)
+	}
+	if p.memoryPlan != nil && p.memoryPlan.committed != nil {
+		return s.reconcileMemoryCommitted(ctx, p, occ, now)
 	}
 	authority := ExecutionAuthority{catalog: s.options.Catalog, occurrences: map[string]OccurrenceAuthorization{}, activated: map[string]bool{p.jobID: true}, attended: p.oneShot != "", preauthorized: p.oneShot == "", ready: true, productBound: true}
 	trigger := TriggerPresence
 	if p.jobID == DarwinMonthlyJobID {
 		trigger = TriggerMonthly
+	}
+	if modelJob(p.jobID) {
+		trigger = TriggerWeekly
 	}
 	if occ.EventID != "" {
 		trigger = TriggerEvent
@@ -702,7 +896,52 @@ func (s *Service) RunDue(ctx context.Context) (WakeReport, error) {
 	}
 	report := WakeReport{SchemaVersion: 1, WorkspaceID: s.workspaceID, State: "no_due_work"}
 	now := s.now().UTC()
+
 	for _, job := range s.options.Catalog.Jobs {
+		if s.updateScoped && job.ID != UpdateAvailabilityJobID || s.weeklyScoped && job.ID != YodaSelfReviewWeeklyJobID || s.ownerScoped && job.ID != SelfObservationCaptureJobID {
+			continue
+		}
+		if job.ID == UpdateAvailabilityJobID && !s.updateScoped {
+			// The serve-owned adapter runs this read-only-source job separately
+			// while active; its ordinary background jobs retain native idle gating.
+			if s.options.EligibilityGuard != nil {
+				continue
+			}
+			ownerReport, err := s.updateAvailabilityService().RunDue(ctx)
+			report.Due = append(report.Due, ownerReport.Due...)
+			report.Receipts = append(report.Receipts, ownerReport.Receipts...)
+			if ownerReport.State != "no_due_work" {
+				report.State = ownerReport.State
+			}
+			if err != nil {
+				return report, err
+			}
+			continue
+		}
+		if job.ID == YodaSelfReviewWeeklyJobID && !s.weeklyScoped {
+			ownerReport, err := s.weeklyModelService().RunDue(ctx)
+			report.Due = append(report.Due, ownerReport.Due...)
+			report.Receipts = append(report.Receipts, ownerReport.Receipts...)
+			if ownerReport.State != "no_due_work" {
+				report.State = ownerReport.State
+			}
+			if err != nil {
+				return report, err
+			}
+			continue
+		}
+		if job.ID == SelfObservationCaptureJobID && !s.ownerScoped {
+			ownerReport, err := s.selfObservationService().RunDue(ctx)
+			report.Due = append(report.Due, ownerReport.Due...)
+			report.Receipts = append(report.Receipts, ownerReport.Receipts...)
+			if ownerReport.State != "no_due_work" {
+				report.State = ownerReport.State
+			}
+			if err != nil {
+				return report, err
+			}
+			continue
+		}
 		if !productJob(job.ID) {
 			continue
 		}
@@ -757,7 +996,17 @@ func (s *Service) RunDue(ctx context.Context) (WakeReport, error) {
 		if err != nil {
 			return report, err
 		}
-		due, err := scheduler.PlanDue([]scheduler.Job{{ID: job.ID, Cadence: c.Schedule.Cadence, Weekday: c.Schedule.Weekday, LocalHour: c.Schedule.LocalHour, LocalMinute: c.Schedule.LocalMinute, IntervalHours: c.Schedule.IntervalHours, MaxCatchUp: c.Schedule.MaxCatchUp}}, c.Boundary, filtered, now.In(location))
+		boundary := c.Boundary
+		if job.ID == UpdateAvailabilityJobID {
+			// Availability describes the source now; missed calendar days do not
+			// require historical observations on subsequent reconnects.
+			local := now.In(location)
+			today := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, location).Add(-time.Nanosecond)
+			if today.After(boundary) {
+				boundary = today
+			}
+		}
+		due, err := scheduler.PlanDue([]scheduler.Job{{ID: job.ID, Cadence: c.Schedule.Cadence, Weekday: c.Schedule.Weekday, LocalHour: c.Schedule.LocalHour, LocalMinute: c.Schedule.LocalMinute, IntervalHours: c.Schedule.IntervalHours, MaxCatchUp: c.Schedule.MaxCatchUp}}, boundary, filtered, now.In(location))
 		if err != nil {
 			return report, err
 		}
@@ -771,11 +1020,14 @@ func (s *Service) RunDue(ctx context.Context) (WakeReport, error) {
 				}
 				p.darwinSource = &source
 			}
-			if wikiJob(job.ID) {
+			if job.ID == UpdateAvailabilityJobID || job.ID == SelfObservationCaptureJobID || wikiJob(job.ID) || job.ID == MemoryCaptureJobID || job.ID == MemoryLightDreamJobID {
 				p.source, err = s.sourceState(job.ID)
 				if err != nil {
 					return report, err
 				}
+			}
+			if err := p.selectDailyInput(); err != nil {
+				return report, err
 			}
 			receipt, err := s.execute(ctx, p, occ, now)
 			report.Receipts = append(report.Receipts, receipt)
@@ -812,8 +1064,11 @@ func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatu
 		return ProductJobStatus{}, err
 	}
 	p := &productExecution{service: s, jobID: r.Operation.JobID, revision: revision, oneShot: token, source: r.SourceState}
+	if err := p.selectDailyInput(); err != nil {
+		return ProductJobStatus{}, err
+	}
 	now := s.now().UTC()
-	before, _, beforeErr := s.domainEvidence(p.jobID, now)
+	before, _, beforeErr := s.domainEvidence(p.jobID, p.evidenceAt(now))
 	if beforeErr != nil && !errors.Is(beforeErr, os.ErrNotExist) {
 		return ProductJobStatus{}, beforeErr
 	}
@@ -851,7 +1106,7 @@ func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatu
 	if receipt.State != ReceiptSucceeded {
 		return ProductJobStatus{}, ErrQualificationRequired
 	}
-	after, path, err := s.domainEvidence(p.jobID, now)
+	after, path, err := s.domainEvidence(p.jobID, p.evidenceAt(now))
 	if err != nil {
 		return ProductJobStatus{}, err
 	}
@@ -859,6 +1114,24 @@ func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatu
 		return ProductJobStatus{}, ErrQualificationRequired
 	}
 	q := ProductQualification{EventID: occ.EventID, WorkspaceID: s.workspaceID, JobID: p.jobID, Binding: s.binding, Implementation: s.build, Configuration: s.configuration(p.jobID), Adapter: s.options.Adapter, Platform: runtime.GOOS + "/" + runtime.GOARCH, Artifact: path, ArtifactSHA256: after, Receipt: receipt, ScheduledFor: occ.ScheduledFor, RequestedAt: now, VerifiedAt: s.now().UTC()}
+	if p.dailyInput != nil {
+		inputs, err := s.engine.DailyInputCohort(s.workspaceID)
+		if err != nil || productDigest(inputs) != p.source {
+			return ProductJobStatus{}, ErrProductConflict
+		}
+		found := false
+		for _, input := range inputs {
+			if input == *p.dailyInput {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return ProductJobStatus{}, ErrQualificationRequired
+		}
+		selected := *p.dailyInput
+		q.DailyInput = &selected
+	}
 	q.ID = productDigest(q)
 	if err := s.verifyQualification(&q); err != nil {
 		return ProductJobStatus{}, err
@@ -882,6 +1155,24 @@ func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatu
 func (s *Service) domainEvidence(jobID string, at time.Time) (string, string, error) {
 	var path, ref string
 	switch jobID {
+	case YodaSelfReviewWeeklyJobID, MemoryModelJobID:
+		return s.weeklyDomainEvidence()
+	case SelfObservationCaptureJobID:
+		_, p, err := s.readSelfObservationReport("")
+		if err != nil {
+			return "", "", err
+		}
+		path = p
+		relative, _ := filepath.Rel(s.receipts.Root, path)
+		ref = "maintenance/" + filepath.ToSlash(relative)
+	case MemoryCaptureJobID:
+		_, p, err := s.readCaptureReport("")
+		if err != nil {
+			return "", "", err
+		}
+		path = p
+		relative, _ := filepath.Rel(s.receipts.Root, path)
+		ref = "maintenance/" + filepath.ToSlash(relative)
 	case MemoryLightDreamJobID:
 		artifact, p, err := s.engine.ActiveArtifact(s.workspaceID, "L1/"+at.UTC().Format("2006-01-02"))
 		if err != nil {
@@ -956,6 +1247,12 @@ func (s *Service) verifyQualification(q *ProductQualification) error {
 	if q == nil {
 		return ErrQualificationRequired
 	}
+	if q.DailyInput != nil {
+		day, err := time.Parse("2006-01-02", q.DailyInput.Period)
+		if q.JobID != MemoryLightDreamJobID || err != nil || day.Format("2006-01-02") != q.DailyInput.Period || !digestPattern.MatchString(q.DailyInput.Fingerprint) {
+			return ErrQualificationRequired
+		}
+	}
 	unsigned := *q
 	unsigned.ID = ""
 	if q.ID != productDigest(unsigned) || q.WorkspaceID != s.workspaceID || q.Binding != s.binding || !productJob(q.JobID) || q.Implementation != s.build || q.Configuration != s.configuration(q.JobID) || q.Adapter != s.options.Adapter || q.Platform != runtime.GOOS+"/"+runtime.GOARCH || q.VerifiedAt.IsZero() || q.RequestedAt.IsZero() || q.ScheduledFor.IsZero() || q.VerifiedAt.Before(q.RequestedAt) {
@@ -975,7 +1272,35 @@ func (s *Service) verifyQualification(q *ProductQualification) error {
 	}
 	var path string
 	prefix := "memory/workspaces/" + s.workspaceID + "/versions/"
-	if q.JobID == MemoryLightDreamJobID {
+	if modelJob(q.JobID) {
+		var err error
+		path, err = s.verifyWeeklyQualification(q)
+		if err != nil {
+			return err
+		}
+	} else if q.JobID == SelfObservationCaptureJobID {
+		prefix = "maintenance/workspaces/" + s.workspaceID + "/self-observations/versions/"
+		if !s.ownerScoped || !strings.HasPrefix(q.Artifact, prefix) || !strings.HasSuffix(q.Artifact, ".json") {
+			return ErrQualificationRequired
+		}
+		generation := strings.TrimSuffix(strings.TrimPrefix(q.Artifact, prefix), ".json")
+		report, p, err := s.readSelfObservationReport(generation)
+		if err != nil || report.Implementation != s.build || report.Configuration != s.configuration(q.JobID) || !report.RecordedAt.Equal(q.RequestedAt) {
+			return ErrQualificationRequired
+		}
+		path = p
+	} else if q.JobID == MemoryCaptureJobID {
+		prefix = "maintenance/workspaces/" + s.workspaceID + "/capture-results/versions/"
+		if !strings.HasPrefix(q.Artifact, prefix) || !strings.HasSuffix(q.Artifact, ".json") {
+			return ErrQualificationRequired
+		}
+		generation := strings.TrimSuffix(strings.TrimPrefix(q.Artifact, prefix), ".json")
+		report, p, err := s.readCaptureReport(generation)
+		if err != nil || report.Implementation != s.build || report.Configuration != s.configuration(q.JobID) || !report.RecordedAt.Equal(q.RequestedAt) {
+			return ErrQualificationRequired
+		}
+		path = p
+	} else if q.JobID == MemoryLightDreamJobID {
 		if !strings.HasPrefix(q.Artifact, prefix) {
 			return ErrQualificationRequired
 		}
@@ -1011,6 +1336,9 @@ func (s *Service) verifyQualification(q *ProductQualification) error {
 		if err != nil || !report.ObservedAt.Equal(q.RequestedAt) || report.Implementation != s.build || report.Configuration != s.configuration(q.JobID) {
 			return ErrQualificationRequired
 		}
+		if q.JobID == UpdateAvailabilityJobID && (report.Availability == nil || !report.Availability.MetadataReady()) {
+			return ErrQualificationRequired
+		}
 		path = p
 	} else {
 		prefix = "maintenance/workspaces/" + s.workspaceID + "/memory-checkpoints/versions/"
@@ -1029,7 +1357,14 @@ func (s *Service) verifyQualification(q *ProductQualification) error {
 	}
 	if q.JobID == MemoryLightDreamJobID {
 		var artifact memory.Artifact
-		if decodeProduct(body, &artifact) != nil || artifact.WorkspaceID != s.workspaceID || artifact.Layer != "L1" || artifact.Period != q.RequestedAt.UTC().Format("2006-01-02") || len(artifact.Sources) == 0 || artifact.Content == "" || artifact.SynthesizerID != memory.DeterministicL1SynthesizerID {
+		if decodeProduct(body, &artifact) != nil || artifact.WorkspaceID != s.workspaceID || artifact.Layer != "L1" || len(artifact.Sources) == 0 || artifact.Content == "" || artifact.SynthesizerID != memory.DeterministicL1SynthesizerID {
+			return ErrQualificationRequired
+		}
+		if q.DailyInput != nil {
+			if artifact.Period != q.DailyInput.Period || artifact.SourceFingerprint != q.DailyInput.Fingerprint {
+				return ErrQualificationRequired
+			}
+		} else if artifact.Period != q.RequestedAt.UTC().Format("2006-01-02") {
 			return ErrQualificationRequired
 		}
 	} else if q.JobID == MemoryCheckpointJobID {
@@ -1083,7 +1418,7 @@ func NewProductWeeklyMemoryEngine(home string) (*memory.Engine, error) {
 	return engine, nil
 }
 func scheduleFor(job string) ProductSchedule {
-	if job == DarwinWeeklyJobID {
+	if modelJob(job) || job == DarwinWeeklyJobID {
 		return ProductSchedule{Cadence: scheduler.Weekly, Weekday: time.Sunday, MaxCatchUp: 1}
 	}
 	if job == WikiIncrementalJobID {
@@ -1098,6 +1433,9 @@ func scheduleFor(job string) ProductSchedule {
 	return ProductSchedule{Cadence: scheduler.Daily, MaxCatchUp: 1}
 }
 func (s *Service) sourceState(job string) (string, error) {
+	if job == UpdateAvailabilityJobID {
+		return s.updateAvailabilitySource()
+	}
 	if DarwinJob(job) {
 		source, err := s.darwinSource(job)
 		return productDigest(source), err
@@ -1110,8 +1448,22 @@ func (s *Service) sourceState(job string) (string, error) {
 		return s.wikiSourceIdentity(job)
 	}
 	switch job {
+	case YodaSelfReviewWeeklyJobID, MemoryModelJobID:
+		c, e := s.loadControl(job)
+		if e != nil {
+			return "", e
+		}
+		if c.Weekly == nil {
+			return "", ErrQualificationRequired
+		}
+		return c.Weekly.Registration.Digest(), nil
+	case SelfObservationCaptureJobID:
+		return s.selfObservationSourceIdentity()
+	case MemoryCaptureJobID:
+		return s.captureSourceIdentity()
 	case MemoryLightDreamJobID:
-		return s.engine.DailyInputIdentity(s.workspaceID, s.now())
+		inputs, err := s.engine.DailyInputCohort(s.workspaceID)
+		return productDigest(inputs), err
 	case MemoryDeepDreamJobID:
 		return s.weekly.WeeklyInputIdentity(s.workspaceID, s.now())
 	case MemoryCheckpointJobID:

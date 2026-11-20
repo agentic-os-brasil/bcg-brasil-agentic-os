@@ -320,6 +320,17 @@ func TestSessionPacketCarriesOnlyBoundedSharePointSourceGuidance(t *testing.T) {
 	if strings.Contains(string(body), "sharepoint.com") || strings.Contains(string(body), "Authorized-Folder") {
 		t.Fatalf("session packet exposed SharePoint source details: %s", body)
 	}
+	packet.SharePointSource.State = priorwork.SourceRevoked
+	packet.SharePointSource.FolderCount = 0
+	packet.SharePointSource.AuthorizationState = "revoked_by_owner"
+	if err := packet.Validate(); err != nil {
+		t.Fatal("revoked pointer-only state rejected", err)
+	}
+	packet.SharePointSource.FolderCount = 1
+	if err := packet.Validate(); err == nil {
+		t.Fatal("revoked selection retained a collection scope")
+	}
+	packet.SharePointSource.FolderCount = 0
 
 	packet.SharePointSource.CollectionRuntime = "codex"
 	if err := packet.Validate(); err == nil {

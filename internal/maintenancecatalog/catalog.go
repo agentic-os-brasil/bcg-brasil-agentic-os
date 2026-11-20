@@ -161,8 +161,8 @@ func (catalog Catalog) Validate() error {
 		"memory-l1-capture", MemoryCheckpointJobID, MemoryLightDreamJobID, MemoryDeepDreamJobID, "memory-retention-check",
 		"wiki-incremental-sync", "wiki-reconcile", "wiki-integrity-check", "skills-index-refresh",
 		"runtime-health-check", "capability-recheck", "runtime-drift-check", "self-observation-capture",
-		"update-check", "darwin-structural-evolution-proposal",
-		"darwin-housekeeping-daily", "darwin-deep-weekly", "yoda-self-review-weekly",
+		"update-availability", "update-check", "darwin-structural-evolution-proposal",
+		"darwin-housekeeping-daily", "darwin-deep-weekly", "yoda-self-review-weekly", "memory-weekly",
 	} {
 		if !seen[required] {
 			return fmt.Errorf("maintenance catalog is missing required universal job %q", required)
@@ -187,6 +187,10 @@ func validateRequiredJobInvariant(job Job) error {
 		if job.Category != "update" || job.Executor != "local_adapter" || job.Scope != "owner" || job.Unattended != "never" || len(job.Writes) != 3 || job.Writes[0] != "source_custody" || job.Writes[1] != "candidate_plan" || job.Writes[2] != "local_diagnostics" {
 			return errors.New("update-check requires an attended exact source-custody, candidate-plan and diagnosis contract")
 		}
+	case "update-availability":
+		if job.Category != "update" || job.Trigger != "daily_or_presence" || job.Executor != "local_adapter" || job.Scope != "owner" || job.DefaultEnabled || job.Unattended != "policy_gated" || strings.Join(job.Writes, ",") != "local_diagnostics" {
+			return errors.New("update-availability requires an opt-in owner-scoped metadata-only contract")
+		}
 	case MemoryCheckpointJobID:
 		if job.Category != "memory" || job.Trigger != "daily_or_presence" || job.Executor != "deterministic" || job.Scope != "workspace" || !job.DefaultEnabled || job.Unattended != "deterministic_only" || len(job.Writes) != 1 || job.Writes[0] != "memory_checkpoint" {
 			return errors.New("memory checkpoint has an unsafe maintenance contract")
@@ -202,6 +206,10 @@ func validateRequiredJobInvariant(job Job) error {
 	case "yoda-self-review-weekly":
 		if job.Category != "self" || job.Trigger != "weekly_or_presence" || job.Executor != "model_adapter" || job.Scope != "owner" || job.DefaultEnabled || job.Unattended != "policy_gated" {
 			return errors.New("Yoda weekly self-review has an unsafe maintenance contract")
+		}
+	case "memory-weekly":
+		if job.Category != "memory" || job.Trigger != "weekly_or_presence" || job.Executor != "model_adapter" || job.Scope != "workspace" || job.Availability != Unavailable || job.DefaultEnabled || job.Unattended != "policy_gated" || strings.Join(job.Writes, ",") != "memory_rollups" {
+			return errors.New("workspace model memory requires exact qualified atomic rollup contract")
 		}
 	case "darwin-structural-evolution-proposal":
 		if job.Category != "runtime" || job.Trigger != "monthly_or_presence" || job.Executor != "local_adapter" || job.Scope != "managed" || job.DefaultEnabled || job.Unattended != "never" {

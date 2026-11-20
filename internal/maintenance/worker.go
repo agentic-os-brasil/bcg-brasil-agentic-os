@@ -258,6 +258,14 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 		trigger = request.Trigger
 	}
 	command := Command{SchemaVersion: CommandSchemaVersion, CommandID: "wake-" + digestPrefix(occurrence.JobID+occurrence.EventID+occurrence.ScheduledFor.UTC().Format(time.RFC3339Nano)+now.UTC().Format(time.RFC3339Nano)), JobID: occurrence.JobID, WorkspaceID: request.WorkspaceID, Trigger: trigger, EventID: occurrence.EventID, ScheduledFor: occurrence.ScheduledFor, RequestedAt: now, Deadline: now.Add(worker.Deadline), ProposalOnly: IsProposalOnlyJob(occurrence.JobID)}
+	if worker.product != nil && worker.product.weeklyPlan != nil {
+		command.WeeklyMode = worker.product.weeklyPlan.mode
+		command.ProposalOnly = false
+	}
+	if worker.product != nil && worker.product.memoryPlan != nil {
+		command.WeeklyMode = worker.product.memoryPlan.mode
+		command.ProposalOnly = false
+	}
 	if err := command.Validate(now); err != nil {
 		return worker.unavailableReceipt(request.WorkspaceID, occurrence, now, ReasonOccurrenceRejected)
 	}
@@ -298,10 +306,10 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 	}
 	lease, err := worker.Scheduler.TryAcquireLease(request.WorkspaceID, occurrence.JobID, command.OccurrenceKey(), request.OwnerID, now, leaseTTL)
 	if err != nil {
-		base := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attemptID, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: occurrence.JobID, WorkspaceID: request.WorkspaceID, Trigger: trigger, EventID: command.EventID, State: ReceiptBusy, RecordedAt: now, Deadline: command.Deadline, ProposalOnly: command.ProposalOnly, ReasonCode: ReasonLeaseBusy}
+		base := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attemptID, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: occurrence.JobID, WorkspaceID: request.WorkspaceID, Trigger: trigger, EventID: command.EventID, State: ReceiptBusy, RecordedAt: now, Deadline: command.Deadline, ProposalOnly: command.ProposalOnly, WeeklyMode: command.WeeklyMode, ReasonCode: ReasonLeaseBusy}
 		return base, err
 	}
-	base := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attemptID, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: occurrence.JobID, WorkspaceID: request.WorkspaceID, Trigger: trigger, EventID: command.EventID, State: ReceiptFailed, RecordedAt: now, Deadline: command.Deadline, ProposalOnly: command.ProposalOnly, ReasonCode: ReasonHandlerFailure}
+	base := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attemptID, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: occurrence.JobID, WorkspaceID: request.WorkspaceID, Trigger: trigger, EventID: command.EventID, State: ReceiptFailed, RecordedAt: now, Deadline: command.Deadline, ProposalOnly: command.ProposalOnly, WeeklyMode: command.WeeklyMode, ReasonCode: ReasonHandlerFailure}
 	// Arm the quarantine fence before invoking any handler. This removes the
 	// expiry-to-quarantine race entirely: a crashed or stalled worker leaves an
 	// explicit operator-recoverable fence instead of an ordinary reclaimable
@@ -328,6 +336,15 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 	}
 	if worker.product != nil {
 		bounded := grant.(executionGrant)
+		bounded.attemptID = attemptID
+		if worker.product.weeklyPlan != nil {
+			binding := worker.product.weeklyPlan.binding(command.WorkspaceID)
+			bounded.weekly = &binding
+		}
+		if worker.product.memoryPlan != nil {
+			binding := worker.product.memoryPlan.binding(command.WorkspaceID)
+			bounded.weekly = &binding
+		}
 		bounded.publication = func(publish func() error) error {
 			publicationCtx, stopPublication := context.WithTimeout(workerCtx, leaseQuarantineGrace)
 			defer stopPublication()
@@ -509,6 +526,14 @@ func (worker Worker) publishOccurrence(ctx context.Context, workspaceID string, 
 	}
 	publish := func() error {
 		return worker.Scheduler.WithCurrentLeaseContext(publicationCtx, lease, leaseNow, func() error {
+			closed := false
+			if worker.product != nil && (worker.product.weeklyPlan != nil && worker.product.weeklyPlan.committed != nil || worker.product.memoryPlan != nil && worker.product.memoryPlan.committed != nil) {
+				var e error
+				closed, e = worker.product.service.weeklySchedulerAlreadyClosed(occurrence, receipt)
+				if e != nil {
+					return e
+				}
+			}
 			if err := worker.Receipts.AppendReceipt(receipt); err != nil {
 				return err
 			}
@@ -516,7 +541,7 @@ func (worker Worker) publishOccurrence(ctx context.Context, workspaceID string, 
 			if receipt.State == ReceiptSucceeded || receipt.State == ReceiptReviewedNoChange || receipt.State == ReceiptProposalEmitted {
 				state = scheduler.Succeeded
 			}
-			if occurrence.EventID != "" {
+			if occurrence.EventID != "" || closed {
 				return nil
 			}
 			return worker.Scheduler.AppendReceipt(workspaceID, scheduler.Receipt{JobID: occurrence.JobID, ScheduledFor: occurrence.ScheduledFor, AttemptedAt: now.UTC(), State: state, Error: schedulerError(receipt)})

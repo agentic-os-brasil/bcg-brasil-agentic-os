@@ -15,7 +15,7 @@ status: stable
 x-maestro-profile-version: "1"
 x-maestro-stable-id: managed/wiki-entrypoint
 x-maestro-scope: managed
-x-maestro-source-fingerprint: 7ec32eff72aed0903001679f02a956ada59b92670a11f32593f6823add0ddd92
+x-maestro-source-fingerprint: f413ccfbcde07f07c5e25e4ff6031ff7966f927f3962f559f5190d6e265c2bcf
 x-maestro-freshness: fresh
 x-maestro-status: active
 x-maestro-generator-version: maestro-managed-wiki/0.2

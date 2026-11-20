@@ -15,6 +15,7 @@ import (
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
@@ -180,7 +181,11 @@ func bindingFingerprint(o product.Options) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	body, err := json.Marshal([]any{o.ProductRoot, o.UserHome, o.WorkspacePath, h.Home, w.WorkspaceID, o.AuthorityRegistryPath, o.AuthorityRegistrySHA256})
+	identity := []any{o.ProductRoot, o.UserHome, o.WorkspacePath, h.Home, w.WorkspaceID, o.AuthorityRegistryPath, o.AuthorityRegistrySHA256}
+	if o.ExperimentalSeed != nil {
+		identity = append(identity, o.ExperimentalSeed.Identity(), o.ExperimentalSeedRoot)
+	}
+	body, err := json.Marshal(identity)
 	if err != nil {
 		return "", err
 	}
@@ -188,10 +193,10 @@ func bindingFingerprint(o product.Options) (string, error) {
 }
 
 func args(o Options) []string {
-	return []string{"serve", "--packet", "--product-root", o.Destination, "--user-home", o.Binding.UserHome, "--workspace", o.Binding.WorkspacePath}
+	return installer.ExperimentalChildArgs([]string{"serve", "--packet", "--product-root", o.Destination, "--user-home", o.Binding.UserHome, "--workspace", o.Binding.WorkspacePath}, o.Binding.ExperimentalSeed, o.Binding.ExperimentalSeedRoot)
 }
 func nativeProfileFiles(o Options) (map[string][]byte, error) {
-	return nativeProfilePayload(o.target.Platform(), "")
+	return canonicalNativeProfile(o.target.Platform(), "", stableBinding(o))
 }
 func profileFingerprint(o Options) (string, error) {
 	files, err := nativeProfileFiles(o)
@@ -202,7 +207,11 @@ func profileFingerprint(o Options) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	body, err := json.Marshal(map[string]any{"generated": files, "target_configuration": configuration})
+	profile := map[string]any{"generated": files, "target_configuration": configuration}
+	if o.Carrier != nil {
+		profile["stable_carrier"] = stableBinding(o)
+	}
+	body, err := json.Marshal(profile)
 	if err != nil {
 		return "", err
 	}

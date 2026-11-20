@@ -459,11 +459,12 @@ func modernCandidate(root string, args []string) {
 	platform := flags.String("os", "", "actual runner OS")
 	arch := flags.String("arch", "", "actual runner architecture")
 	pack := flags.String("docling-pack", "", "optional separately qualified offline pack")
+	experimental := flags.Bool("experimental-installed-seed", false, "build separate experimental pilot entries; requires canary channel and grants no signed role")
 	_ = flags.Parse(args)
 	if flags.NArg() != 0 || *registry == "" || *output == "" {
 		fatal(fmt.Errorf("modern factory requires exact registry/output and no positional arguments"))
 	}
-	result, err := releasepack.BuildModernCandidate(context.Background(), releasepack.ModernOptions{Root: root, Output: absoluteFromRoot(root, *output), Version: *version, InstallerVersion: *installer, Channel: *channel, AuthorityRegistry: absoluteFromRoot(root, *registry), Target: releasepack.Target{OS: *platform, Arch: *arch}, DoclingPack: optionalAbsoluteFromRoot(root, *pack)})
+	result, err := releasepack.BuildModernCandidate(context.Background(), releasepack.ModernOptions{Root: root, Output: absoluteFromRoot(root, *output), Version: *version, InstallerVersion: *installer, Channel: *channel, AuthorityRegistry: absoluteFromRoot(root, *registry), Target: releasepack.Target{OS: *platform, Arch: *arch}, DoclingPack: optionalAbsoluteFromRoot(root, *pack), ExperimentalInstalledSeed: *experimental})
 	if err != nil {
 		fatal(err)
 	}

@@ -5,7 +5,16 @@
       "method_ids": [
         "account-case-setup"
       ],
-      "required_operations": [],
+      "required_operations": [
+        "case.setup.status",
+        "case.setup.prepare",
+        "brain.create",
+        "brain.read",
+        "case.setup.finish",
+        "account.narrative.status",
+        "account.narrative.read",
+        "account.narrative.save"
+      ],
       "effects": [
         "write_workspace"
       ],
@@ -17,6 +26,40 @@
           "id": "domain.account_case_scaffold",
           "kind": "domain",
           "required": true
+        },
+        {
+          "id": "domain.case_setup",
+          "kind": "domain",
+          "required": true,
+          "fulfillment_operations": [
+            "case.setup.status",
+            "case.setup.prepare",
+            "brain.create",
+            "brain.read",
+            "case.setup.finish"
+          ]
+        },
+        {
+          "id": "domain.account_narrative",
+          "kind": "domain",
+          "required": false,
+          "fulfillment_operations": [
+            "account.narrative.status",
+            "account.narrative.read",
+            "account.narrative.save"
+          ]
+        },
+        {
+          "id": "host.trusted_review",
+          "kind": "host",
+          "required": true
+        }
+      ],
+      "conditional_effects": [
+        {
+          "effect": "write_owner",
+          "condition": "Only after the owner explicitly requests saving the complete shared account narrative and its exact registered case references.",
+          "dependency": "domain.account_narrative"
         }
       ]
     },
@@ -157,10 +200,20 @@
     },
     {
       "method_ids": [
-        "case-canon-ingest",
-        "case-decision-log-entry"
+        "case-canon-ingest"
       ],
-      "required_operations": [],
+      "required_operations": [
+        "case.setup.status",
+        "brain.status",
+        "brain.read",
+        "brain.create",
+        "brain.append",
+        "brain.update",
+        "knowledge.collect",
+        "content.read",
+        "knowledge.create",
+        "knowledge.append"
+      ],
       "effects": [
         "write_workspace"
       ],
@@ -171,7 +224,58 @@
         {
           "id": "domain.case_canon",
           "kind": "domain",
+          "required": true,
+          "fulfillment_operations": [
+            "case.setup.status",
+            "brain.status",
+            "brain.read",
+            "brain.create",
+            "brain.append",
+            "brain.update",
+            "knowledge.collect",
+            "content.read",
+            "knowledge.create",
+            "knowledge.append"
+          ]
+        },
+        {
+          "id": "host.trusted_review",
+          "kind": "host",
           "required": true
+        }
+      ]
+    },
+    {
+      "method_ids": [
+        "case-decision-log-entry"
+      ],
+      "required_operations": [
+        "case.setup.status",
+        "brain.status",
+        "brain.read",
+        "brain.create",
+        "brain.append",
+        "brain.update"
+      ],
+      "effects": [
+        "write_workspace"
+      ],
+      "output_kinds": [
+        "case_artifact"
+      ],
+      "dependencies": [
+        {
+          "id": "domain.case_canon",
+          "kind": "domain",
+          "required": true,
+          "fulfillment_operations": [
+            "case.setup.status",
+            "brain.status",
+            "brain.read",
+            "brain.create",
+            "brain.append",
+            "brain.update"
+          ]
         },
         {
           "id": "host.trusted_review",
@@ -229,7 +333,13 @@
       "method_ids": [
         "case-sharepoint-map"
       ],
-      "required_operations": [],
+      "required_operations": [
+        "case.setup.status",
+        "brain.status",
+        "brain.read",
+        "brain.create",
+        "brain.update"
+      ],
       "effects": [
         "write_workspace"
       ],
@@ -243,8 +353,32 @@
           "required": true
         },
         {
-          "id": "domain.account_case_scaffold",
+          "id": "domain.case_binding",
           "kind": "domain",
+          "required": true,
+          "fulfillment_operations": [
+            "case.setup.status"
+          ]
+        },
+        {
+          "id": "domain.case_artifacts",
+          "kind": "domain",
+          "required": true,
+          "fulfillment_operations": [
+            "brain.status",
+            "brain.read",
+            "brain.create",
+            "brain.update"
+          ]
+        },
+        {
+          "id": "domain.sharepoint_enrollment",
+          "kind": "domain",
+          "required": true
+        },
+        {
+          "id": "host.trusted_review",
+          "kind": "host",
           "required": true
         }
       ]
@@ -253,7 +387,9 @@
       "method_ids": [
         "caseos-connect"
       ],
-      "required_operations": [],
+      "required_operations": [
+        "case.setup.status"
+      ],
       "effects": [
         "read"
       ],
@@ -269,7 +405,10 @@
         {
           "id": "domain.case_binding",
           "kind": "domain",
-          "required": true
+          "required": true,
+          "fulfillment_operations": [
+            "case.setup.status"
+          ]
         }
       ]
     },
@@ -278,9 +417,16 @@
         "caseos-prepare-enrichment",
         "caseos-prepare-ingest"
       ],
-      "required_operations": [],
+      "required_operations": [
+        "case.setup.status",
+        "knowledge.collect",
+        "brain.status",
+        "brain.read",
+        "brain.create",
+        "brain.update"
+      ],
       "effects": [
-        "write_workspace"
+        "none"
       ],
       "output_kinds": [
         "reviewable_text",
@@ -290,12 +436,32 @@
         {
           "id": "domain.case_artifacts",
           "kind": "domain",
-          "required": true
+          "required": false,
+          "fulfillment_operations": [
+            "case.setup.status",
+            "knowledge.collect",
+            "brain.status",
+            "brain.read",
+            "brain.create",
+            "brain.update"
+          ]
         },
         {
           "id": "connector.caseos_read",
           "kind": "connector",
           "required": false
+        },
+        {
+          "id": "host.trusted_review",
+          "kind": "host",
+          "required": false
+        }
+      ],
+      "conditional_effects": [
+        {
+          "effect": "write_workspace",
+          "condition": "Only when the owner explicitly requests Save of the complete local proposal at an admitted workspace destination, through native review; remote_write remains not_attempted.",
+          "dependency": "domain.case_artifacts"
         }
       ]
     },
@@ -431,6 +597,7 @@
             "maintenance.enroll",
             "maintenance.pause",
             "maintenance.qualify",
+            "maintenance.register",
             "maintenance.report",
             "maintenance.resume",
             "maintenance.revoke",
@@ -533,10 +700,16 @@
       "method_ids": [
         "ingest-content"
       ],
-      "required_operations": [],
+      "required_operations": [
+        "content.convert",
+        "content.read",
+        "content.status",
+        "knowledge.append",
+        "knowledge.collect",
+        "knowledge.create"
+      ],
       "effects": [
-        "write_workspace",
-        "write_owner"
+        "write_workspace"
       ],
       "output_kinds": [
         "knowledge_page"
@@ -550,7 +723,14 @@
         {
           "id": "domain.owner_knowledge_pages",
           "kind": "domain",
-          "required": true
+          "required": false,
+          "fulfillment_operations": [
+            "knowledge.append",
+            "knowledge.create",
+            "owner.atlas.collect",
+            "owner.atlas.prepare",
+            "owner.atlas.status"
+          ]
         },
         {
           "id": "host.trusted_review",
@@ -577,6 +757,13 @@
             "knowledge.create"
           ]
         }
+      ],
+      "conditional_effects": [
+        {
+          "effect": "write_owner",
+          "condition": "Only when the owner explicitly selects knowledge_destination owner from a validated active internal workspace and approves the exact source-bound promotion to owner-global private professional knowledge; client and unknown scope remain unavailable.",
+          "dependency": "domain.owner_knowledge_pages"
+        }
       ]
     },
     {
@@ -584,6 +771,7 @@
         "interaction-profile"
       ],
       "required_operations": [
+        "owner.context",
         "owner.status"
       ],
       "effects": [
@@ -596,7 +784,30 @@
         {
           "id": "domain.owner_profile_read",
           "kind": "domain",
+          "required": false,
+          "fulfillment_operations": ["owner.context", "owner.status"]
+        },
+        {
+          "id": "domain.owner_self_declaration",
+          "kind": "domain",
+          "required": false,
+          "fulfillment_operations": [
+            "owner.observation.status",
+            "owner.observation.intake",
+            "owner.observation.reject"
+          ]
+        },
+        {
+          "id": "host.trusted_review",
+          "kind": "host",
           "required": false
+        }
+      ],
+      "conditional_effects": [
+        {
+          "effect": "write_owner",
+          "condition": "Only when the owner explicitly requests a normalized professional declaration and approves its complete owner-global proposal-input review. Intake does not capture an observation, alter active SELF, qualify maintenance or establish independent native episodes.",
+          "dependency": "domain.owner_self_declaration"
         }
       ]
     },
@@ -605,26 +816,59 @@
         "learn-from-logs"
       ],
       "required_operations": [
-        "owner.apply",
-        "owner.propose",
+        "history.read",
+        "history.selection",
         "owner.status"
       ],
       "effects": [
-        "write_owner"
+        "read"
       ],
       "output_kinds": [
+        "reviewable_text",
         "owner_revision"
       ],
       "dependencies": [
         {
           "id": "domain.opt_in_prompt_history",
           "kind": "domain",
-          "required": true
+          "required": true,
+          "fulfillment_operations": [
+            "history.configure",
+            "history.delete",
+            "history.export",
+            "history.read",
+            "history.record",
+            "history.recover",
+            "history.reset",
+            "history.selection",
+            "history.status"
+          ]
+        },
+        {
+          "id": "domain.reviewed_owner_profile",
+          "kind": "domain",
+          "required": false,
+          "fulfillment_operations": [
+            "owner.apply",
+            "owner.confirm_onboarding",
+            "owner.context",
+            "owner.onboarding_review",
+            "owner.propose",
+            "owner.review",
+            "owner.status"
+          ]
         },
         {
           "id": "host.trusted_review",
           "kind": "host",
           "required": true
+        }
+      ],
+      "conditional_effects": [
+        {
+          "effect": "write_owner",
+          "condition": "When the owner explicitly chooses facet saving. owner.apply saves accepted facets; separate trusted whole-profile confirmation and complete fresh generation-bound owner.context readback are required to claim usable personalization. Draft-only extraction writes nothing.",
+          "dependency": "domain.reviewed_owner_profile"
         }
       ]
     },
@@ -686,6 +930,7 @@
             "maintenance.enroll",
             "maintenance.pause",
             "maintenance.qualify",
+            "maintenance.register",
             "maintenance.report",
             "maintenance.resume",
             "maintenance.revoke",
@@ -700,6 +945,7 @@
         "maestro-onboarding"
       ],
       "required_operations": [
+        "owner.context",
         "owner.apply",
         "owner.confirm_onboarding",
         "owner.interview",
@@ -728,11 +974,17 @@
         "maestro-operator"
       ],
       "required_operations": [
+        "owner.context",
+        "owner.status",
         "execution.checkpoint",
         "execution.list",
         "execution.next",
         "execution.pause",
-        "execution.resume"
+        "execution.resume",
+        "daily.status",
+        "daily.enqueue",
+        "daily.drain",
+        "daily.ack"
       ],
       "effects": [
         "write_workspace",
@@ -746,7 +998,13 @@
         {
           "id": "domain.daily_checkpoint_queue",
           "kind": "domain",
-          "required": true
+          "required": true,
+          "fulfillment_operations": [
+            "daily.status",
+            "daily.enqueue",
+            "daily.drain",
+            "daily.ack"
+          ]
         },
         {
           "id": "domain.maintenance_lifecycle",
@@ -792,7 +1050,11 @@
       ],
       "required_operations": [
         "owner.apply",
+        "owner.confirm_onboarding",
+        "owner.context",
+        "owner.onboarding_review",
         "owner.propose",
+        "owner.review",
         "owner.status"
       ],
       "effects": [
@@ -805,7 +1067,16 @@
         {
           "id": "domain.owner_background",
           "kind": "domain",
-          "required": true
+          "required": true,
+          "fulfillment_operations": [
+            "owner.apply",
+            "owner.confirm_onboarding",
+            "owner.context",
+            "owner.onboarding_review",
+            "owner.propose",
+            "owner.review",
+            "owner.status"
+          ]
         },
         {
           "id": "host.trusted_review",
@@ -1120,16 +1391,34 @@
       ],
       "required_operations": [],
       "effects": [
-        "write_workspace"
+        "none"
       ],
       "output_kinds": [
+        "reviewable_text",
         "workspace_artifact"
       ],
       "dependencies": [
         {
-          "id": "domain.learning_workspace",
-          "kind": "domain",
-          "required": true
+          "id": "host.artifact_write",
+          "kind": "host",
+          "required": false
+        },
+        {
+          "id": "host.open_local_artifact",
+          "kind": "host",
+          "required": false
+        },
+        {
+          "id": "host.web_read",
+          "kind": "host",
+          "required": false
+        }
+      ],
+      "conditional_effects": [
+        {
+          "effect": "write_workspace",
+          "condition": "Only on explicit Save, use the admitted host/artifact teaching workspace for the promised HTML lessons, references, mission, resources and demonstrated learning records.",
+          "dependency": "host.artifact_write"
         }
       ]
     },
@@ -1230,7 +1519,11 @@
         {
           "id": "domain.owner_voice_read",
           "kind": "domain",
-          "required": false
+          "required": false,
+          "fulfillment_operations": [
+            "owner.context",
+            "owner.status"
+          ]
         }
       ]
     },
@@ -1252,8 +1545,8 @@
           "required": true
         },
         {
-          "id": "domain.review_dispatch",
-          "kind": "domain",
+          "id": "host.subagents",
+          "kind": "host",
           "required": true
         }
       ]

@@ -1516,3 +1516,288 @@ filesystem surface or stronger marker-transaction claim.
 - Consequences: Preserve exact legacy bindings and truthful partial receipts instead of claiming a transaction across domains. Changed pending bytes remain untouched after active publication. Unpublished stages remain private and non-authoritative; safe physical move/archive stays pending under its separate custody contract. Wider account narratives and multi-case management remain separate. Source/SDK/stdio evidence does not replace hosted or actual client qualification.
 - Refs: issue #545; specs/017-workspace-agent-initialization.md; specs/033-workspace-first-value.md; docs/product-case-setup.md; internal/workspaceagent/setup.go; adapters/mcp/case_setup.go
 - Supersedes: none
+
+
+## LBRV - Offer an explicit local-browser owner review channel
+
+- Date: 2026-11-15
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: A Desktop MCP client may declare no native form elicitation although the canonical protected operations and full current review already exist. Tool permission and chat text cannot confer exact-record owner consent.
+- Decision: Allow a local operator to opt into a short-lived loopback browser review channel at foreground server startup, or explicitly select it while building an ordinary local Desktop pilot. Native form elicitation remains first when advertised. Only a live foreground MCP tool request may use the fallback. Render the complete existing review presentation and approval schema, require an unchecked exact-record checkbox plus conscious approval, and preserve every domain's canonical digest, revision and post-review revalidation. Use an unpredictable single-use URL, independent CSRF secret, exact local Host/Origin validation and a context-bound listener; disclose neither URL nor private review in MCP output or logs.
+- Consequences: Unconfigured and unattended callers remain fail-closed. Decline, cancellation, expiry and browser errors grant no authority. Browser review is a local operator channel, not native MCP form or lifecycle qualification. The ephemeral listener installs no service and emits no reusable approval token. Rebuilding a local pilot is required to adopt its explicit startup selection.
+- Refs: docs/product-local-owner-review.md; adapters/mcp/confirmation.go; adapters/mcp/internal/localreview; adapters/mcp/packaging/desktop_pilot.go
+- Supersedes: none
+
+## NSYN - Admit explicitly inactive synced caches and seed dedicated pilot profiles
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: A dedicated Code profile can contain a cloud-synced plugin cache. Its presence alone does not establish that Code loads it when a supported stored setting explicitly disables sync and loading. Fresh pilot profiles previously left this choice implicit.
+- Decision: Admit bounded synced-cache root membership only when an applicable stored user, local or managed syncClaudeAiPlugins:false disables loading on the supported host. Shared-project false does not grant admission; eligible false wins over true. Preserve all other source admission, exact fingerprints and review/build revalidation. Seed autoMemoryEnabled:false and syncClaudeAiPlugins:false only while creating a new dedicated pilot Code profile, disclose this choice before confirmation and preserve every existing profile.
+- Consequences: The qualifier creates no sync override or profile repair and does not inspect inactive plugin bodies. Active or ambiguous sources still refuse; malformed settings and unsafe roots remain unsupported. The current enforcement minimum 2.1.295 exceeds the setting support minimum 2.1.273. This does not continuously validate configuration after packet construction or qualify ordinary active third-party plugins, native clients or managed remote policy.
+- Refs: specs/063-product-native-plugin.md; docs/product-native-plugin.md; docs/product-pilot.md; adapters/mcp/packaging/native_instructions.go; adapters/mcp/packaging/native_plugins.go; dev/pilot/setup-macos.command; dev/pilot/setup-windows.ps1; https://code.claude.com/docs/en/settings-reference#syncclaudeaiplugins; https://code.claude.com/docs/en/settings#exceptions-to-managed-settings-precedence
+- Supersedes: none
+
+## OCTX - Deliver accepted owner preferences through a bounded session projection
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Onboarding persists reviewed SELF facets, but ordinary MCP metadata and immutable methods do not deliver their accepted text to a fresh Code or Desktop session. Exposing the whole private owner tree or treating model-supplied roles as reader authority would cross the existing privacy contract.
+- Decision: Add an explicit read-only projection of the current fully confirmed track, selecting only canonical facets whose readers include session. The admitted local MCP server fixes that reader; request arguments cannot select a role, path or broader profile. Reuse the canonical owner transition lock, bounded no-follow storage and explicit-facet snapshot projection. Bind the page generation to both body confirmation and canonical selected policy/content, and require the same generation on continuation pages. Keep ordinary context metadata-only with a discovery hint. Treat returned preferences as data without effect authority.
+- Consequences: Fresh sessions can retrieve accepted preferences through the same MCP in both clients. Missing, unconfirmed, stale, unsafe or reader-ineligible data remains unavailable. This local bound-session model does not attest hosted subagent identity, authorize writes or sends, enroll jobs, or export Yoda-only material. Native client delivery and distribution remain separately observed gates.
+- Refs: specs/060-product-owner-memory.md; internal/ownerctx; adapters/mcp/owner_context.go; docs/product-owner-context.md
+- Supersedes: none
+
+## QCDL - Deliver qualified Code packets through the existing pilot
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Ordinary pilot launchers select only the baseline Code export. A separately qualified seven-hook export retains required userConfig options, and adding it after preparation changes the outer inventory. Colleagues need a reviewed route without editing sealed exports, entering private paths or silently starting model checks.
+- Decision: Add an explicit pilot menu action that calls the canonical native review and qualification commands, displays the full current plan and requires separate conscious spend confirmation. Select only a valid native export at the single canonical optional leaf after closed inventory, trusted server, target and exact native binding checks. Exclude only that separately checked subtree from the baseline managed snapshot. Pass the two exact directory options through Code's supported private session settings input; preserve stored profiles and sealed packet bytes.
+- Consequences: Ordinary prepare/open/check-only remains free of model qualification. A canonical MCP-only failure result preserves the baseline route without claiming native capability; malformed or mismatched optional material refuses. Existing results are preserved rather than retried or replaced. Desktop continues its independent MCP extension flow. Source/offline evidence, packet qualification and actual client delivery remain separate; this does not continuously revalidate runtime configuration or qualify active third-party plugins.
+- Refs: specs/063-product-native-plugin.md; docs/product-pilot.md; adapters/mcp/cmd/maestro-mcp/pilot.go; dev/pilot/test-macos.command; dev/pilot/test-windows.ps1; https://code.claude.com/docs/en/settings#change-a-setting-for-one-session; https://code.claude.com/docs/en/settings-reference#pluginconfigs
+- Supersedes: none
+
+## RPAR - Admit a closed native repository review pair
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Pocock code review requires independent foreground Standards and Spec workers, while the native planner admits one specialist and existing refiners cannot inspect files.
+- Decision: Project two canonical repository reviewers with workspace-confined Read, Glob and Grep. Extend only the bound native planner with two fixed correlated slots for these complementary axes. Maestro freezes the actual diff, commits and review sources before submitting both foreground calls together. Both native starts must be observed before either stop advances the pair. Other roles retain their sequential route and no child may delegate. Persist only hashed lifecycle identifiers and axis state, never review content.
+- Consequences: Missing, failed or unmatched starts/stops keep the pair unresolved and block closure/reset; retry only the exact pending dispatch. A completed pair cannot reenter the same turn. Old schema-2 state without the optional pair field remains valid, while older binaries reject the new field. Source and CLI-hook tests do not attest actual model overlap, verdict quality, host enforcement or installation authority.
+- Refs: specs/063-product-native-plugin.md; internal/nativeagentflow; internal/claudeagents; adapters/mcp/hooks.go; bundles/tech-core/skills/pocock-code-review/SKILL.md
+- Supersedes: none
+
+## OPKI - Promote explicitly reviewed internal document knowledge to the owner atlas
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product engineering
+- Context: Verified local-content artifacts belong to one registered workspace, while the existing professional owner atlas is owner-global private knowledge. Copying an artifact's text through an unrelated authored-page operation loses the source-bound ingestion contract; selecting an owner destination must never declassify client material or initialize another store silently.
+- Decision: Extend only existing knowledge.create/knowledge.append with an optional closed knowledge_destination of workspace or owner. Omission and explicit workspace normalize to the existing workspace request so old review, journal and replay identities remain unchanged. Owner promotion requires a currently validated active internal setup, no account/case selection or pending/reconciliation state, and a source outside canonical account/client namespaces. Reuse immutable artifact/source/output/runtime-pack validation and the existing owner atlas engine. A separate full trusted review names the selected source, its workspace/artifact/hash provenance, exact owner-global private destination and proposed text. Recheck admission and source at review and effect. Missing owner scaffolding requires the existing separately reviewed owner.atlas.prepare operation. No model assertion supplies source classification or consent.
+- Consequences: The page belongs to the owner's existing concepts/learnings/development corpus; original sources and converted artifacts remain bound to their original workspace, without a raw copy, new store or cross-workspace artifact read. The promotion is a structural admission plus explicit owner decision, not a semantic guarantee that arbitrary text contains no client data. Artifact pointers may become unavailable when the originating workspace is unavailable. No owner SELF, generated memory, automatic classification, installation or native/runtime qualification follows from this change.
+- Refs: specs/061-product-local-content.md; specs/014-human-atlas-bootstrap.md; specs/007-content-navigation.md; adapters/mcp/content.go; adapters/mcp/owner_atlas.go; issue #464
+- Supersedes: none
+
+## WDOC - Target-specific offline Windows Docling confinement
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: repository maintainers
+- Context: The real offline Docling producer and authenticated runtime only admit Apple Silicon macOS, leaving the Windows product without its canonical converter.
+- Decision: Preserve the existing Darwin closure byte-for-byte and add a separate immutable CPython 3.12 Windows amd64 interpreter/wheel closure. Execute only an authenticated per-conversion copy under an ordinary-user, unique zero-capability AppContainer with snapshot-only read/execute access, bounded writable scratch, stdio-only inherited handles, prohibited child creation and a timeout-controlled kill-on-close Job. Original documents and installed pack ACLs remain unchanged. AppContainer profile creation/removal is a disclosed per-conversion Windows-local effect; no service, firewall, global ACL, model or ambient Python dependency is introduced.
+- Consequences: Source construction, cross-compilation and verified acquisition do not qualify native execution. Real ordinary-user Windows kernel denial controls and real Docling conversion must pass before native qualification or broader readiness claims; organization-owned production signing and modern signed release admission remain separate gates. Unsupported architectures and failed confinement refuse.
+- Refs: specs/010-local-ingestion-runtime.md; internal/ingest/docling; https://learn.microsoft.com/en-us/windows/win32/secauthz/implementing-an-appcontainer; https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute
+- Supersedes: none
+
+## ACNR - Bind shared account narrative saves to the active authenticated account
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: First-case setup registers immutable account/case identities and saves a workspace brief, while the promised shared account narrative has no admitted MCP owner. Reusing workspace pages or the private owner atlas would persist the narrative under a different scope.
+- Decision: Expose closed attended account narrative status/read/save operations for the sole HOME/brain/accounts/<account>/<account>.md page derived from the current active client setup and its authenticated registration. Reuse authored metadata and atlas operations for full current/proposed trusted review, provenance, revision fencing, publication and exact retry. Independently validate up to 32 named account-related case registrations, including the current case, and revalidate the exact binding/registrations before effects. Keep case references as explicit immutable registration tuples; foreign case briefs are not resolved or read.
+- Consequences: The same account registration shared across separately admitted workspaces reaches one narrative without copying it. First-case finish never writes it implicitly. Internal, pending, reconciliation, stale and tampered state refuses. This delivers the narrow account narrative owner, not broad account search/history, foreign brief linking, cross-case promotion, hiring or runtime activation; the broader account scaffold dependency remains unavailable.
+- Refs: docs/product-account-narrative.md; adapters/mcp/account_narrative.go; internal/atlasops/account_existing.go; bundles/base/skills/account-case-setup/resources/account-narrative-mcp.md
+- Supersedes: none
+
+## EPRT - Carry an explicitly selected engineering document runtime in the pilot
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The ordinary unversioned participant kit cannot carry the verified document converter, while production setup requires separate organizational publisher admission. The owner explicitly authorized a complete experimental team pilot with local confirmation before production distribution.
+- Decision: Add one closed engineering runtime pilot choice that reuses an independently pinned public registry, modern signed release verification and canonical explicit Docling placement. Use a fresh engineering-only authority with an at-most-fourteen-day lifetime; old signing secrets are never reused. Bind the exact current-target server, registry, manifest, runtime archive and selected owner/workspace destinations into local review and revalidate before effects. Extend only the corresponding bound Desktop carrier, preserving complete inventory, executing-image and physical-layout checks before authority seeding. Keep normal, stable, enrolled/source and production authority unchanged; preserve both native fingerprints and separately attended native qualification.
+- Consequences: The selected engineering package can prepare the converter without Python, downloads or a service. Declined, stale, expired, foreign or modified preparation remains preserved and unavailable. The fresh issuer is experimental consistency evidence, never organizational publisher admission or native platform signing. Actual target/client qualification, Windows redistribution rights, missing architectures/formats and production updates remain separate explicit gates.
+- Refs: docs/product-pilot.md; specs/010-local-ingestion-runtime.md; adapters/mcp/packaging/engineering_runtime.go; adapters/mcp/packaging/desktop_pilot.go; dev/pilot
+- Supersedes: none
+
+## NTXT - Admit native-text PDF and modern PowerPoint through a separate verified profile
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The complete converter pilot needs PDF and PPTX, while the verified eleven-format profile deliberately excludes them. The pinned Docling version supplies a model-free NativePdfPipeline and a SimplePipeline PowerPoint backend, but their parser inputs are not in the legacy closure.
+- Decision: Add one closed, fully pinned document profile for native encoded PDF text and modern PPTX. PDF uses the native Docling pipeline with an explicit PDFium backend, page provenance and textual fidelity; OCR, table/layout inference, rendered images and a reading-order promise remain unavailable. Protected, nontext or incomplete sources cannot become apparently complete usable artifacts. PPTX uses the native declarative backend with external fetch, processes, macros and unmanaged rendering refused. Select only known embedded profile closures through authenticated lock identity. Preserve the original bridge, locks, inputs, notices, default producer and legacy artifact/review/replay identities, and report availability per actually verified profile.
+- Consequences: Four additional pinned parser packages and real public-interface fixtures are required; no model, remote service, ambient package manager or build script is activated. New archives use fresh engineering authority in the approved pilot and retain the originals. Native client/platform, Windows loader/redistribution and production authority remain separate evidence. Existing source, output, workspace, process and privacy bounds remain unchanged.
+- Refs: PFMT; DOCL; MIDO; specs/010-local-ingestion-runtime.md; specs/061-product-local-content.md; internal/ingest/docling; adapters/mcp/content_status.go
+- Supersedes: none
+
+## WACQ - Authenticate participant acquisition before assembling an offline Windows runtime
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: repository maintainers
+- Context: The experimental Windows carrier must omit third-party interpreters, wheels, DLLs and runtime archives while retaining the signed Maestro server, base bundle and release metadata. An incomplete carrier cannot satisfy the existing whole-release verification contract.
+- Decision: Keep acquisition in a separate preparation package, outside the offline converter. Verify the pinned public engineering authority and existing whole manifest signature first, then a canonical same-key detached recipe bound to purpose, exact manifest/server/target/profile descriptor, input count/bytes, runtime artifact and expiry. A separate conscious local review expires within 30 minutes. Apply revalidates it, fetches only exact compiled public HTTPS inputs with public-address pinning and bounded redirects, preserves a private no-clobber resumable cache, and invokes the canonical profile assembler without executing acquired code. Publish a new complete private release snapshot only after the resulting archive exactly matches its signed identity and ordinary VerifyDirectory succeeds. Existing runtime review and PlaceVerified remain responsible for installation and native qualification.
+- Consequences: The carrier can transfer Maestro-owned components without transferring third-party runtime bytes. This does not establish redistribution permission, legal clearance, production signing, native Windows operation or client readiness. Cache conflicts, stale consent, unknown profiles, changed public inputs and native qualification failures refuse explicitly. Preparation needs network; subsequent converter operation remains offline.
+- Refs: docs/windows-runtime-acquisition.md; internal/ingest/docling/acquisition; specs/010-local-ingestion-runtime.md; WDOC
+- Supersedes: none
+
+
+## EORC - Honor the explicitly selected readable owner-review channel in Code pilots
+
+- Date: 2026-11-16
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Actual Code native forms collapse the complete review record in the observed client, while consent requires the person to read the full current/proposed text. The existing local browser can render that record but previously acted only as a missing-native fallback.
+- Decision: Honor explicit startup local-browser selection even when the foreground request advertises native forms; empty selection remains native-first. Reject native InputResponses whenever browser review is selected. Carry that selection only through explicitly prepared experimental Code pilot metadata and exact startup arguments, binding the admitted owner/workspace and preserving native qualification fingerprints. Reuse existing verified engineering runtime identity when the server is versioned and registry-pinned; keep stable, enrolled and source packet profiles separate.
+- Consequences: The person reads the full existing review before conscious local approval, with unchanged domain digest/revision revalidation and decline/cancel/expiry behavior. No model argument selects a channel, no error triggers a silent fallback, and old native responses cannot approve browser-selected records. Browser Code acceptance and native-form/Desktop UI qualification remain separate evidence.
+- Refs: docs/product-local-owner-review.md; adapters/mcp/confirmation.go; adapters/mcp/packaging/code_pilot.go; specs/063-product-native-plugin.md
+- Supersedes: LBRV
+
+
+## DMFP - Separate public Desktop method instructions from native execution
+
+- Date: 2026-11-17
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Desktop method discovery needs a generic instruction carrier that can coexist with the canonical Code plugin and participant-local MCP extension. Reusing their plugin identity or exporting their private selections would conflate instruction distribution, local execution custody and host qualification.
+- Decision: Add a content-only frontend with the fixed plugin and invocation namespace maestro-desktop-methods. Generate its complete public canonical methods and resources through a shared deterministic packaging factory and reference parser, preserving canonical method IDs, frontmatter, explicit-only restrictions, shared authority/policy, licenses and provenance while recomputing projected hashes and the exact closed inventory. Namespace projection changes instruction references only; existing Code/native identities, normalizers, guards and qualification fingerprints remain authoritative and unchanged. Its manifest carries no MCP configuration, hooks, native agent projections, executable binaries, runtime, private owner/workspace binding, local state or qualification proof. Actual domain effects continue through the separately admitted MCP and its canonical review/custody owners.
+- Consequences: The distinct public identity avoids replacing the existing Code plugin or workspace-derived Desktop MCP extension. Account installation or synchronization may carry only this generic public payload and requires actual host/surface and sync qualification before a delivery claim; it never synchronizes private bindings or grants tools, consent, native-role recognition or runtime authority. Complete shared-authority reads, dependency checks and unavailable behavior remain required. No Chat-versus-Cowork choice, model worker, background executor, second memory, new signing authority or full-parity claim follows. MCPB remains a server/resource carrier rather than an installation of these native instructions. Preserve the current experimental pilot separately until its exact artifacts and acceptance are reviewed.
+- Refs: MQRY; RPKT; NPHK; DPFX; DPMT; NSYN; specs/056-pocock-product-skillset.md; specs/060-product-owner-memory.md; specs/063-product-native-plugin.md; specs/065-product-method-discovery.md
+- Supersedes: none
+
+## OCAP - Admit body-free observations through enrolled capture
+
+- Date: 2026-11-17
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Current lifecycle receipts are diagnostic observations, while method consultation is explicitly not execution. Neither supplies the trusted producer needed by the existing memory capture job.
+- Decision: Queue closed, body-free Stop observations from the actual lifecycle adapter; derive historical committed-result metadata from the confined canonical execution store only inside explicit capture-job review and execution. Preserve observed-only and committed-effect evidence classes without claiming original host invocation. Use existing capture-v2 provenance authority prepared only by explicit setup; runtime producers read existing authority. Only the separately reviewed, qualified and enrolled memory-l1-capture job may admit those signals to canonical memory. Bind workspace, producer version, stable occurrence, source revision/digest and evidence class, and verify the actual source again at dispatch. Exact replay recovers once without reviving corrected or deleted captures. The separate L1 job selects one oldest pending eligible ingestion day per run from the existing bounded canonical cohort, with no arbitrary historical cutoff; its input-only grant and actual evidence period stay fixed through publication.
+- Consequences: Startup and Stop continue to deliver context or diagnostic observations without capturing memory, dreaming, indexing or enrolling. Queries remain read-only. Source metadata never carries prompt, transcript, tool body, objective, summary, document or path text. Provenance attestation grants no native execution authority and does not alter native Agent admission. Actual client qualification remains separate from source and SDK evidence.
+- Refs: MEMO; NPHK; specs/006-memory-persistence.md; specs/060-product-owner-memory.md; specs/062-product-maintenance-service.md; specs/063-product-native-plugin.md; #465
+- Supersedes: none
+
+
+## OSIN - Capture explicitly reviewed owner declarations through one owner job
+
+- Date: 2026-11-17
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The declared self-observation job had no actual producer. Consuming already captured observations would be a no-op, and treating model-supplied source hashes or new review sessions as independent interaction evidence would fabricate provenance.
+- Decision: Add one fixed ownerctx approved-pending declaration envelope with exact trusted review. Derive source identity from canonical owner binding and the closed normalized declaration only, with one conservative fixed declaration cohort. Only explicit owner instruction/correction/endorsement is admitted; the person separately attests relevance, absence of client/document/conversation material and owner-global professional proposal-input use. Use the existing maintenance qualification, enrollment, grant and lease chain in one canonical-owner namespace shared across admitted workspaces. Qualification requires new canonical append/readback/version evidence, not intake, timestamp or replay. Preserve private bounded storage, current terminal denials, reset and existing installed-source publication fences.
+- Consequences: The result is versioned proposal input, never active SELF, independent corroboration, weekly Yoda evidence or native execution authority. Queries/hooks do not create intake or grants. Existing explicit owner initialization admits released legacy observation logs into the persistent native selection-lock scheme without rewriting canonical bytes; active/nonempty legacy locks and unsafe state refuse intact, while ordinary reads remain noncreating. Declines/stale reviews preserve state; source changes and pause/revoke fence publication. A partial canonical append stays truthful and cannot qualify from replay alone. No generic queue, second profile, authorization/key framework, native acceptance, Windows claim or pilot activation is introduced.
+- Refs: specs/013-owner-context.md; specs/060-product-owner-memory.md; specs/062-product-maintenance-service.md; docs/product-mcp-owner.md; docs/product-mcp-maintenance.md; internal/ownerctx/observation_intake.go; internal/maintenance/product_self_observation.go
+- Supersedes: none
+
+## SFRD - Deliver complete Maestro through one enrolled synced source
+
+- Date: 2026-11-17
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The requested distribution experience is one shared synced folder, minimum one-time client setup and routine updates retaining the complete product. Existing Windows cloud-input refusal, attended-only update checks, fixed client publication slots and the MCP-only stable carrier prevent that experience. These are implementation gaps rather than a reason to reduce the requested capabilities.
+- Decision: Extend the existing signed-source installer and client owners. Admit only the finite supported Windows Cloud Files distribution-input case before copying authenticated bytes into private local staging; preserve all private owner-state filesystem protections. Use private versioned client packets and the existing authenticated current record and supported client update interfaces to retain identity, skills, agents, enforcing hooks and their qualification requirements. Include the Desktop instruction frontend in update inventory and report its actual loaded version separately from MCP connection. Offer a bounded availability-only check on first active use of the day through the existing worker and a short conversational update action using the enrolled source. Availability observation grants no source custody, staging or executable activation; apply the existing exact reviewed update at a deliberate supported reconnect boundary. Preserve the configured private brain location, including a Developer-rooted binding, and all owner/workspace state.
+- Consequences: No new updater, background service, trust issuer, signing key or credential store is introduced. Experimental construction and testing retain their existing authority and do not become production signing or activation. Native client install, reload, permission changes and full-capability execution need actual Code/Desktop and Mac/Windows qualification. Offline, partial, expired or unqualified states remain explicit; an availability timestamp or copied library cannot establish current execution. Existing source history, recalls, writer floors, explicit consent and unsupported-host refusal remain effective. A shared path alone is neither client registration nor permission to execute its contents.
+- Refs: SCAR; MPDI; specs/020-release-distribution.md; specs/062-product-maintenance-service.md; specs/063-product-native-plugin.md; specs/065-product-method-discovery.md; docs/product-synced-source.md; docs/product-clients.md; docs/plans/2026-11-03-synced-product-distribution.md
+- Supersedes: none
+
+## EISA - Admit one explicit experimental installed-seed rehearsal profile
+
+- Date: 2026-11-17
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The complete synced-source distribution requires exercising the existing installer and update owners, while the runtime-only experimental pilot deliberately refuses installed or enrolled inputs. Production strict admission is separate. A test-only verifier callback is not a participant installation route.
+- Decision: Construct one closed experimental installed-seed profile with its own literal signed-record purpose/protocol, pinned public engineering registry, exact installer/target and two finite release/source bindings with expiry bounded by the existing authority window. Only a verified opaque admission may enter the separate compile-time experimental command entry. Carry explicit engineering identity through local exact review, plan, installed custody, status, children, source/update/rollback, stable launch, current provider and manager handoff. Reuse the existing installer and client transaction owners. Production entry, strict verifier, default serialization and refusal of the unsigned engineering installer remain unchanged. Preserve the existing admitted physical Developer brain and all owner/workspace state.
+- Consequences: This decision permits source construction and synthetic ephemeral-key tests only; it issues no signed purpose, key, issuer, platform trust, native Agent proof or runtime placement. A valid old runtime-pilot signature is not installed-seed permission. Engineering identity must never be reported as native-strict or used to adopt a production installation. The genuine native client qualifier and retained D3 remain effective; existing runtime pilot exclusions stay intact. Actual role issuance/use, exact artifact placement and activation require their concrete separate review. Production signing and distribution remain separate, with no renewed expiry, general trust override, second updater or background service.
+- Refs: EPRT; SFRD; specs/020-release-distribution.md; specs/063-product-native-plugin.md; internal/installer; adapters/mcp/cmd/maestro-install; adapters/mcp/setup; adapters/mcp/packaging
+- Supersedes: none
+
+## PCRU - Keep authenticated converter updates current without replacing prior metadata
+
+- Date: 2026-11-17
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Complete synced-source updates must retain conversion as well as the backend and clients. Initial authenticated placement already exists and payloads are stored by SHA, but fixed manifest metadata refuses changed releases, the manager does not place updated runtimes, and retained compatibility alone does not establish current source-required pack identity.
+- Decision: Extend the existing authenticated placement and verification owner with minimal private versioned metadata and a validated current selection, preserving prior and legacy bytes. Derive required pack identity and actual server version from the authenticated current installed release, never model input or an older installer. Availability and conversion must refuse an installed pack that does not satisfy that current requirement. Compose exact-reviewed runtime placement/requalification and recovery into the existing manager update/reconcile path; retain partial source-updated/runtime-pending outcomes until all required conditions hold. Reuse known prior authenticated metadata for rollback only through the same current-source and qualification checks.
+- Consequences: Same-pack compatibility and changed-pack updates require distinct evidence. Unknown, corrupt or unsafe selectors never cause silent fallback to an older runtime. Prior metadata and payloads are retained, with no destructive replacement or automatic cleanup. Existing signatures, full input/license inventory, confinement, client range, native Windows qualification and user review remain effective. No new issuer, signing key, installer profile, trust override, MCP installation authority, updater service or real placement is authorized. Legacy uninstalled/runtime-pilot behavior and its exclusions stay unchanged. Source-only tests use synthetic ephemeral-key releases; actual native conversion and placement remain separate gates.
+- Refs: SFRD; specs/020-release-distribution.md; specs/063-product-native-plugin.md; internal/ingest/docling; adapters/mcp/docling.go; adapters/mcp/setup; adapters/mcp/cmd/maestro-install
+- Supersedes: none
+
+
+## CCPF - Preserve one reviewed Code configuration across client handoffs
+
+- Date: 2026-11-18
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The installed pilot discovers ordinary CLI symlinks but its native verifier requires a canonical regular executable. Its manager inherits an unselected Code profile, while complete qualification requires supported effective instructions and settings. Generated standalone management handoffs must retain the same participant choice.
+- Decision: Reuse the existing reviewed client request, current record and management recipe to carry an optional exact private Code configuration directory inside the installation owner, separate from canonical private state and packets. Preserve that selection across qualification, registration, launch and update using child-process environment and safely quoted original handoffs. Refuse profile changes on an existing carrier. The Mac frontend resolves ordinary executable symlinks before the unchanged no-follow verifier, creates private client parents inside the exact owner and provisions a profile only on explicit creation confirmation.
+- Consequences: Existing empty-profile records retain their contract. Existing profile content, owner/brain/source/carrier bindings and enterprise managed policy remain unchanged. Official profile login is separate from qualification; no credentials are copied, native proof bypassed or runtime effects implied by provisioning. Earlier launcher participant files without explicit selections remain preserved pending review rather than silently adopting another profile.
+- Refs: SFRD; EISA; specs/063-product-native-plugin.md; docs/product-clients.md; internal/installer/client_management.go; dev/pilot/templates/installed-seed/Maestro.command
+- Supersedes: none
+
+
+## ICRV - Bind installed-carrier foreground review to the authenticated current record
+
+- Date: 2026-11-18
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: An installed Desktop client can lack native forms although protected onboarding operations already require exact owner review. The current stable carrier cannot durably select the existing local browser, and an unverified serve flag would not establish the selected carrier's review contract.
+- Decision: Extend EORC narrowly to a fresh, explicitly reviewed experimental installed carrier. Its optional owner_review_channel is empty/native-first or local-browser, fixed for that carrier and common to Code and Desktop. Bind the choice into the original client review, materialization and current record, preserve it through cold management and source updates, and derive only the existing ordinary serve flag from that authenticated record. The receiver independently verifies the effective mode, including empty/mismatch, against the same current carrier before and after trusted review and before publication. Changed record, owner, workspace or source refuses; no installation lock spans browser review or domain handlers. Existing standalone pilot gates, hook vectors and genuine native qualification remain unchanged.
+- Consequences: First setup deliberately discloses the shared client effect before the original full confirmation. Mode selection approves no individual write. Every protected request retains the existing complete one-shot loopback review, unchecked checkbox, decline/cancel/expiry handling and canonical revision/source checks. Unsupported profiles and unknown or changed modes refuse; a raw installed browser flag without an authenticated carrier supplies no authority. No silent fallback, model-selected channel, native InputResponses reuse or command-line owner autoapproval is introduced. Actual client acceptance remains separate from source and compiled tests.
+- Refs: https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/594; specs/020-release-distribution.md; specs/063-product-native-plugin.md; docs/product-local-owner-review.md; internal/installer/clients.go; adapters/mcp/confirmation.go
+- Supersedes: EORC
+
+
+## OSWK - Wake the original admitted maintenance worker through owned user-level tasks
+
+- Date: 2026-11-18
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Closing the MCP clients stops their serve-owned maintenance worker. Existing native lifecycle adapters need an explicit installed selection and the maintenance manager must retain the actual experimental role and current-server arguments.
+- Decision: Add an explicitly reviewed experimental installed-carrier opt-in for one uniquely bound user-level discovery pulse. Reuse the original macOS LaunchAgent lifecycle; use a narrow current-user interactive-token Windows Task Scheduler adapter with create-only registration and exact owned-definition readback. Bind stable installation, role, admitted source locator/tuple, owner, Developer brain, workspace and carrier. Invoke only the original independently admitted stable installer and actual current server through a bounded one-shot entry, then the same RunDue, grants, leases, native idle/cancellation and domain publication owners. Review/status never grant jobs; qualify/enroll each job separately.
+- Consequences: Native operations have one total fifteen-second deadline and preserve foreign/unknown jobs. Exact loaded Mac arguments are required before mutating an occupied label. Pause/revoke close wake eligibility before stopping native work, under original publication serialization; no installation lock spans domain execution or browser review. Cold/source updates retain the stable wake definition while reauthenticating current record/image and job qualification; stale state refuses. Windows uses logged-in least-privilege context without passwords or administrative enrollment; battery policy and real native qualification remain explicit. A pulse, loaded task, no_due_work result, actual domain commit and model execution are separate evidence. No daemon, new job grant store, cloud state write, hidden catch-up, clock change or native-proof importer is introduced.
+- Refs: https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/596; specs/062-product-maintenance-service.md; docs/product-maintenance-wake.md; internal/macosadapter; internal/windowsadapter; adapters/mcp/setup/client_wake.go; adapters/mcp/maintenance_worker.go
+- Supersedes: none
+
+
+### OSWK refinement — Windows late native acknowledgement (R3)
+
+The Windows COM acknowledgement can time out while its service-side register or
+enable operation is still completing. Task.Enabled alone therefore cannot own
+pause/revoke eligibility. Keep the original OSWK installation/source/owner/brain/
+workspace/carrier identity and stable task name, but retain a narrowly scoped
+native-definition control in the installer's existing private state area.
+
+Bind that private no-follow/ACL-protected atomic record to the full static wake
+binding digest and a monotonically increasing revision. It is an OS eligibility
+veto, never a job grant, qualification, service or new identity. Worker startup
+and original guarded publication require its valid enabled state alongside the
+exact OS definition. Missing, malformed or foreign state refuses execution.
+
+A freshly reviewed first management action may bootstrap missing control as
+revision zero; pause/revoke may create a disabled tombstone even if the task is
+absent. Existing unsafe/corrupt state is preserved and refused. Windows review
+binds exact action/spec/current record/static binding and durable revision,
+without requiring a pre-veto OS inspection during apply. Under the original
+installation guard, every action advances revision and persists disabled before
+any OS access. Opt-in opens only after exact successful enabled readback, a live
+context and last atomic publication; error/timeout leaves disabled. Pause/revoke
+retains the disabled record before inspecting/stopping/removing the task. A late
+COM operation can affect the task only, never this private control.
+
+A prior opt-in review cannot replay across a pause, including when both OS
+observations report absent. Keep the existing fifteen-second total deadline,
+create-only current-user Task Scheduler behavior and all original maintenance
+grants/leases/idle/source guards. Mac Disabled-plist behavior and legacy bytes
+remain unchanged. Native Windows qualification still requires real Windows;
+the race regression is focused engineering source proof, not that qualification.
+
+Refs: #596, original OSWK decision, independent Walter source review R2.
+
+
+## MWDR - Compose separately qualified model memory and ordinary working context
+
+- Date: 2026-11-18
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The model-maintenance contract had a native Yoda transport but lacked self-service observed registration, a workspace memory executor, a normal bounded working-view consumer and reachable later review of a withheld lifetime candidate. Merely relabelling Yoda or counting provider-specific reprocessing as continuity would violate scope and eligibility.
+- Decision: Reuse the original observed Code runtime, private native session, maintenance grants/supervisor and registration/qualification/enrollment owners for two finite job-specific contracts. Add workspace memory input/output validation and publish through the original memory atomic engine. Retain exact pending lifetime and execution metadata in a bounded same-version sidecar whose bytes are anchored by the canonical L3 filename, leaving original manifest/Artifact schemas unchanged. Later foreground review revalidates source/visibility and exact candidate, republishes byte-identical L2/L3 with approved lifetime and introduces no new L3 content history. The ordinary owner reader intersects current qualified working text with independently accepted session policy; canonical SELF remains unchanged. Preserve existing namespace labels and refuse inconsistency; no person identity is inferred.
+- Consequences: L2/L3 remain useful while lifetime is pending. Original source denial/purge also retires private sidecars. Producer-specific caching/reprocessing remains truthful; lifetime additionally requires distinct eligible L1 source cohorts, so weekly provider/format flips do not manufacture continuity. Deterministic and model weekly enrollment/resume require an explicit pause of the other engine. First-use observation/login, exact registration, genuine native probe, enrollment, real due effect, terminal completion and closed-client wake are separate gates. No global model switch, credentials copy, model-supplied approval, generic command runner, fabricated calendar/native evidence or production activation is introduced.
+- Refs: https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/595; specs/006-memory-persistence.md; specs/041-model-backed-maintenance-activation.md; specs/062-product-maintenance-service.md; docs/model-second-brain.md; internal/maintenance/product_memory_model.go; internal/memory/model_weekly_commit.go
+- Supersedes: none

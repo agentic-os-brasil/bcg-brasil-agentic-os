@@ -1,6 +1,6 @@
 ---
 name: case-sharepoint-map
-description: Percorre a árvore de pastas do SharePoint do caso ativo em profundidade limitada, amostra um arquivo por pasta para reconhecer o tipo de conteúdo, e grava um mapa de navegação único em brain/accounts/<conta>/cases/<caso>/sources/sharepoint-map.md. Use quando o pedido for "mapeia o sharepoint do caso", "monta um mapa da pasta do projeto", "onde fica cada coisa no sharepoint desse caso" ou equivalente.
+description: Percorre a árvore de pastas do SharePoint do caso ativo em profundidade limitada, amostra um arquivo por pasta para reconhecer o tipo de conteúdo, e grava um mapa de navegação único em brain/accounts/{conta}/cases/{caso}/sources/sharepoint-map.md. Use quando o pedido for "mapeia o sharepoint do caso", "monta um mapa da pasta do projeto", "onde fica cada coisa no sharepoint desse caso" ou equivalente.
 ---
 
 # Case SharePoint Map
@@ -45,27 +45,37 @@ explicação, nunca o envelope de segurança nem o destino da escrita.
 
 ## Pré-checagem de MCP (upfront, obrigatória)
 
-Antes de qualquer leitura, verificar se um conector SharePoint/Microsoft 365
-MCP está ativo nesta sessão. Sinais aceitos:
+Antes da leitura remota, verificar o esquema atual e a autoridade do conector
+SharePoint para a raiz deste caso. Nome/prefixo de ferramenta não comprova
+admissão. O domínio `domain.sharepoint_enrollment` precisa fornecer enrollment
+real e verificável; enquanto seu owner estiver indisponível, manter a varredura
+pendente. A receita não implementa enrollment nem autoriza configuração manual.
 
-- Tools MCP com prefixo `mcp__*sharepoint*` ou `mcp__*microsoft*` (ex.:
-  `sharepoint_search`, `sharepoint_folder_search`, `read_resource`).
+Se conector ou enrollment admitido estiver indisponível, parar e informar:
 
-Se nenhum sinal está presente, parar imediatamente e orientar em uma linha:
-
-> "Pra mapear o SharePoint deste caso, ativar o conector no Claude Code
-> (Settings → Connectors → SharePoint / Microsoft 365). Depois pedir
-> `case-sharepoint-map` de novo."
+> "O mapeamento aguarda enrollment do caso e conector SharePoint autorizado.
+> Preservar a raiz pretendida e retomar quando essas capacidades estiverem disponíveis."
 
 Não tentar leitura sem conector. Não gravar nada.
 
 ## Escopo: só o caso ativo
 
-1. Ler `brain/accounts/.active` (`<conta>/<caso>`). Se ausente, parar e
-   orientar [`case-agent-setup`](../case-agent-setup/SKILL.md) primeiro.
-2. Esta skill nunca escreve fora de
-   `brain/accounts/<conta>/cases/<caso>/sources/sharepoint-map.md`. Nenhuma
-   leitura ou escrita cruza para outro caso ou para memória do dono.
+1. Consultar `case.setup.status` no conector Maestro pretendido. Usar apenas
+   workspace e IDs de `setup`/`setup.input` retornados para o caso cliente
+   admitido. Estado ausente, incompleto, conflitante ou em reconciliação segue
+   [`case-agent-setup`](../case-agent-setup/SKILL.md). Nunca ler marcadores de
+   seleção, inferir binding nem criar pastas diretamente.
+2. O destino relativo ao brain do workspace é
+   `accounts/<conta>/cases/<caso>/sources/sharepoint-map.md`, com os IDs desse
+   binding. Ler só essa página por `brain.read`; recusa genérica não comprova
+   ausência. Para uma nova página nomeada pedida explicitamente, `brain.create`
+   pode seguir à revisão integral do estado atual/proposto; criação preserva
+   conteúdo existente. Se a revisão mostrar uma página existente, preservá-la e
+   obter leitura completa de revisão única antes de propor append ou substituição.
+3. Antes de salvar, consultar `brain.status` e ler a receita canônica
+   [authored-brain](../maestro-operator/resources/authored-brain.md), disponível
+   em `maestro://methods/maestro-operator/resources/authored-brain.md`.
+   Outra conta/caso e memória privada permanecem fora do escopo.
 
 ## Fluxo
 
@@ -120,11 +130,16 @@ Não tentar leitura sem conector. Não gravar nada.
    não síntese de material de stakeholder, então uma confirmação por pasta
    seria atrito sem ganho de segurança proporcional. Perguntar: "Gravar este
    mapa? (sim / ajustar / cancelar)".
-10. **Gravar o arquivo único** em
-    `brain/accounts/<conta>/cases/<caso>/sources/sharepoint-map.md` (ver
-    formato abaixo). Se o arquivo já existir, reler antes de sobrescrever: uma
-    nota manual do dono no arquivo anterior é preservada como uma seção à parte
-    ("## Notas do dono"), nunca descartada silenciosamente.
+10. **Gravar a página única pelo owner autoral:** `brain.create(page,text)` se ausente;
+    `brain.update(page,text,expected_page_revision)` se existente. Ler a página
+    inteira em blocos `brain.read` de revisão única e preservar notas manuais
+    na seção "## Notas do dono". Mostrar o corpo inteiro com frontmatter e
+    cobertura real na revisão nativa; argumentos não levam consentimento.
+    Uma confirmação na conversa não substitui essa revisão. Relatar a revisão
+    salva e conferir o corpo completo por readback. `proposed` fica pendente.
+    Na interrupção, repetir o pedido original exato, incluindo revisão esperada;
+    conflito exige nova leitura/revisão, preservando trabalho mais recente.
+    Revisão recusada/indisponível encerra a escrita sem fallback de arquivo/CLI.
 11. **Fechar a rodada.** Reportar: pastas visitadas, pastas dobradas por serem
     pessoais ou repetitivas, se o teto de 30 foi atingido, caminho do arquivo
     gravado.
@@ -182,8 +197,10 @@ updated: YYYY-MM-DD
 
 ## Failure modes & atomicity
 
-- Escrita é de arquivo único e idempotente: uma nova varredura substitui o
-  mapa anterior por inteiro, preservando apenas `## Notas do dono`.
+- A publicação usa o journal autoral e revisão atual: uma nova varredura
+  revisada substitui o mapa, preservando `## Notas do dono` e metadados opcionais.
+  Guardar raiz/enrollment verificados, data, cobertura, limites e referências
+  efetivamente retornadas como proveniência; nunca inventar hash remoto.
 - Falha no meio da varredura (ex. pasta 15 de 30 falha ao listar): reportar
   quais pastas foram cobertas e quais ficaram pendentes; não gravar um mapa
   parcial como se fosse completo — perguntar se grava o que foi coberto até
@@ -204,7 +221,7 @@ updated: YYYY-MM-DD
 
 ## Invariantes
 
-- Nunca lê ou escreve fora do caso ativo declarado em `brain/accounts/.active`.
+- Lê e escreve somente no caso admitido retornado por `case.setup.status`.
 - Nunca escreve fora de `brain/accounts/<conta>/cases/<caso>/sources/sharepoint-map.md`.
 - Sem conector MCP presente, a skill não grava nada.
 - Descoberta é sempre por pasta nomeada, nunca por busca de palavra-chave livre

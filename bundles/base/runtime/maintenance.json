@@ -172,6 +172,19 @@
       "success_boundary": "sanitized observation is versioned as a proposal input, never as an active self facet"
     },
     {
+      "id": "update-availability",
+      "category": "update",
+      "trigger": "daily_or_presence",
+      "executor": "local_adapter",
+      "scope": "owner",
+      "availability": "unavailable",
+      "availability_reason": "requires an enrolled signed source, actual metadata qualification and explicit daily observation enrollment",
+      "default_enabled": false,
+      "unattended": "policy_gated",
+      "writes": ["local_diagnostics"],
+      "success_boundary": "one bounded authenticated metadata observation or explicit source-unavailable diagnosis and its terminal receipt are recorded without source custody, payload staging or release activation"
+    },
+    {
       "id": "update-check",
       "category": "update",
       "trigger": "daily_or_presence",
@@ -209,6 +222,19 @@
       "unattended": "policy_gated",
       "writes": ["local_diagnostics", "derived_health_cache", "bounded_assessment"],
       "success_boundary": "a bounded deep review durably records an allowlisted validated operational repair or a metadata-only structural recommendation; it never applies structural change"
+    },
+    {
+      "id": "memory-weekly",
+      "category": "memory",
+      "trigger": "weekly_or_presence",
+      "executor": "model_adapter",
+      "scope": "workspace",
+      "availability": "unavailable",
+      "availability_reason": "Requires exact workspace model registration, genuine native qualification and separate reviewed enrollment; lifetime remains independently reviewed.",
+      "default_enabled": false,
+      "unattended": "policy_gated",
+      "writes": ["memory_rollups"],
+      "success_boundary": "a job-bound model candidate is validated and atomically committed through the original memory engine with independent lifetime eligibility and review"
     },
     {
       "id": "yoda-self-review-weekly",

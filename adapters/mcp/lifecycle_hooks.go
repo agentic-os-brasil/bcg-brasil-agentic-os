@@ -40,7 +40,15 @@ func (b *Bound) claudeLifecycleContext(event string) (sessionhook.ClaudeOutput, 
 	if err = b.validate(); err != nil {
 		return sessionhook.ClaudeOutput{}, err
 	}
-	return sessionhook.BuildClaudeEvent(packet, event)
+	value, err := sessionhook.BuildClaudeEvent(packet, event)
+	if err != nil || event != "SessionStart" {
+		return value, err
+	}
+	value = b.withWeeklySessionHook(value, event)
+	if err = b.validate(); err != nil {
+		return sessionhook.ClaudeOutput{}, err
+	}
+	return value, nil
 }
 
 // HandleClaudeLifecycleHook delivers passive context and observation only.
@@ -77,11 +85,13 @@ func (b *Bound) HandleClaudeLifecycleHook(event string, in io.Reader, out io.Wri
 			}
 			receipt.IdempotencyKey = lifecycle.IdempotencyKey(receipt.IdempotencyKey, input.PromptID)
 			if err = b.guardPublication(func() error {
-				_, e := lifecycle.RecordConfined(filepath.Join(b.home, "state"), b.workspaceID, receipt)
+				var e error
+				receipt, e = lifecycle.RecordConfined(filepath.Join(b.home, "state"), b.workspaceID, receipt)
 				return e
 			}); err != nil {
 				return errors.New("hook_receipt_unavailable")
 			}
+			b.queueLifecycleSignal(receipt)
 		}
 	} else {
 		value, err = b.claudeLifecycleContext(event)

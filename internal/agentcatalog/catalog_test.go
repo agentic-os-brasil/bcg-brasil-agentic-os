@@ -95,3 +95,34 @@ func mustTestCatalog(t *testing.T) Catalog {
 	}
 	return catalog
 }
+
+func TestCatalogRepositoryReviewPairIsClosedAndSeparate(t *testing.T) {
+	base := mustTestCatalog(t)
+	if len(base.NativeRepositoryReviewPair) != 2 || base.AllowsDelegation("hub", "repository_reviewer", 1) || base.AllowsNativeConsultation("case_agent", "repository_reviewer", 2) {
+		t.Fatal("closed native pair widened the generic graph")
+	}
+	for _, pair := range [][]string{{}, {"repository-spec-reviewer"}, {"repository-spec-reviewer", "repository-spec-reviewer"}, {"repository-spec-reviewer", "repository-standards-reviewer", "third"}} {
+		candidate := base
+		candidate.NativeRepositoryReviewPair = pair
+		if candidate.Validate() == nil {
+			t.Fatalf("invalid pair accepted: %v", pair)
+		}
+	}
+	legacy := base
+	legacy.NativeRepositoryReviewPair = nil
+	legacy.Agents = nil
+	for _, agent := range base.Agents {
+		if agent.Role != "repository_reviewer" {
+			legacy.Agents = append(legacy.Agents, agent)
+		}
+	}
+	if err := legacy.Validate(); err != nil {
+		t.Fatalf("legacy sequential catalog refused: %v", err)
+	}
+	candidate := base
+	candidate.Agents = append([]Agent(nil), base.Agents...)
+	candidate.Agents[5].Role, candidate.Agents[5].InputContract, candidate.Agents[5].ToolAccess = "repository_reviewer", "bounded_repository_review_packet", "scoped"
+	if candidate.Validate() == nil {
+		t.Fatal("third repository axis accepted")
+	}
+}

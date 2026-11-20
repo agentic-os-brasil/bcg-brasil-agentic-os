@@ -20,7 +20,7 @@ or create a standing grant. Unavailable review leaves a draft, not a write.
 Atômica
 
 ## Quando usar
-Ao escrever avaliação de performance (CDC) de membro do time BCG X — Forward Deployed AI Scientist (FoDAIS) ou Sr. Forward Deployed AI Scientist (Sr. FoDAIS). Conduz uma entrevista estruturada com Julia e gera o texto final formatado.
+Ao escrever avaliação de performance (CDC) de membro do time BCG X — Forward Deployed AI Scientist (FoDAIS) ou Sr. Forward Deployed AI Scientist (Sr. FoDAIS). Conduz uma entrevista estruturada com {avaliador}, mediada por {entrevistador}, e gera o texto final formatado para {nome}.
 Rubrica de referência: `Associates & Consultants - Grading Rubrics 2023.pdf` (Brazil Career Development, Out/2023) — FoDAIS usa a rubrica de Associates/Sr. Associates; Sr. FoDAIS usa a rubrica de Consultants. Dimensão **Expertise** foi adicionada por Julia em 2026-08-06 — não existe no PDF original; passou a usar uma lista de comportamentos de referência fornecida por Julia em 2026-08-13 (substitui o rascunho grade-a-grade inicial do Tamagoshi).
 
 ## Como invocar
@@ -32,12 +32,24 @@ Resolva a skill canônica [`interaction-profile`](../interaction-profile/SKILL.m
 
 ---
 
+## Papéis da avaliação
+
+Antes da entrevista, resolva os papéis a partir do pedido explícito atual e do contexto admitido:
+
+- `{avaliador}`: pessoa responsável pelos julgamentos, notas e confirmação do conteúdo da avaliação.
+- `{entrevistador}`: pessoa ou agente que conduz ou intermedeia a entrevista e registra a origem das respostas.
+- `{nome}`: pessoa avaliada; `{cargo}` é o cargo dessa pessoa e determina a rubrica.
+
+Se faltar a identificação de qualquer papel, pergunte antes de iniciar a etapa que depende dele. Reaproveite as identificações já explícitas; pergunte apenas pelo papel ou vínculo que falta. O owner e o interlocutor atual não são automaticamente avaliador, entrevistador ou pessoa avaliada. Papéis diferentes podem ser exercidos pela mesma pessoa somente quando isso estiver explícito; atribuições históricas de autoria nesta skill não vinculam os papéis da sessão atual.
+
+Dirija as perguntas ao {avaliador}. Quando {entrevistador} for outra pessoa ou agente, solicite por esse intermédio os inputs atribuídos a {avaliador}; não trate uma resposta de terceiro como julgamento do avaliador sem confirmação. Registre quem forneceu cada input e mantenha separadas as evidências sobre {nome}. Este método não autoriza contactar terceiros nem enviar mensagens por conta própria.
+
 ## Processo — entrevista em etapas
 
 Conduzir a entrevista **uma etapa por vez**. Não avançar para a próxima antes de receber resposta. Ao final de todas as etapas, gerar o output completo.
 
 ### Etapa 0 — Identificação
-Perguntar:
+Confirmar, se a identificação ainda não estiver estabelecida:
 > "Qual o nome completo da pessoa e qual é o cargo dela? (FoDAIS ou Sr. FoDAIS)"
 
 Registrar internamente: `{nome}`, `{cargo}` → determina qual rubrica aplicar (FoDAIS → rubrica de Associates/Sr. Associates; Sr. FoDAIS → rubrica de Consultants).
@@ -48,13 +60,13 @@ Registrar internamente: `{nome}`, `{cargo}` → determina qual rubrica aplicar (
 Perguntar:
 > "Você tem uma avaliação anterior de {nome} para usar como base? Se tiver, pode subir agora — assim a nova vai ser uma evolução daquela."
 
-Se Julia subir um arquivo:
+Se um arquivo for fornecido explicitamente para esta avaliação:
 - Ler o conteúdo
 - Salvar em `professional/affiliation/cdcs/{nome-em-kebab-case}/` com nome no formato `YYYY-MM-[projeto-ou-ciclo].md`
 - Confirmar: "Salvo. Vou usar essa avaliação como referência durante a entrevista."
 - Carregar como contexto de fundo para todas as etapas seguintes — especialmente Strengths, Areas of Development e Overall Summary, que devem refletir progressão em relação à avaliação anterior
 
-Se Julia não tiver ou quiser pular:
+Se {avaliador} não tiver avaliação anterior ou quiser pular:
 - Prosseguir normalmente sem referência anterior
 
 ---
@@ -116,9 +128,9 @@ Gerar: tabela com as 6 frentes e o nível (heavy/medium/light) de cada uma. Serv
 
 ### Etapa 4 — Grading dimensão por dimensão
 
-Conduzir **uma dimensão por vez** — nunca em lote, nunca agrupando dimensões correlatas. Julia rejeitou explicitamente a abordagem agrupada em avaliações formais: quer garantir que cada nota tenha racional isolado, sem uma dimensão mais forte "carregar" o julgamento de uma mais fraca no mesmo bloco.
+Conduzir **uma dimensão por vez** — nunca em lote, nunca agrupando dimensões correlatas. Cada nota precisa de racional isolado, sem uma dimensão mais forte "carregar" o julgamento de uma mais fraca no mesmo bloco. (Origem metodológica: Julia rejeitou a abordagem agrupada em avaliações formais.)
 
-**Escala de notas (ambos os cargos):** 1 a 4, onde **1 é a nota mais forte** ("top choice to staff") e **4 é a mais fraca** (ainda não é nota negativa — "important AfDs, but does not mean negative leverage"). A escala é invertida em relação à leitura intuitiva — atenção ao comunicar isso a Julia se houver ambiguidade.
+**Escala de notas (ambos os cargos):** 1 a 4, onde **1 é a nota mais forte** ("top choice to staff") e **4 é a mais fraca** (ainda não é nota negativa — "important AfDs, but does not mean negative leverage"). A escala é invertida em relação à leitura intuitiva — esclarecer a escala com {avaliador} se houver ambiguidade.
 
 Dimensões, nesta ordem:
 1. Expertise (conhecimento técnico) — **dimensão nova, adicionada por Julia**; sem subnotas; avaliada a partir de uma lista de comportamentos de referência gerais, não grade-a-grade (ver Rubrica de referência)
@@ -145,10 +157,10 @@ c. Para dimensões com descritores por grade (todas exceto Expertise e Role mode
    > Como foi {nome} aqui? Nota (1/2/3/4)?"
    Para Expertise e Role model (sem descritores por grade): apresentar a lista de comportamentos de referência da dimensão, sem quebra por nota, e perguntar a nota direto:
    > "**[Dimensão]**. Sinais de referência pra essa dimensão: [lista de comportamentos]. Como foi {nome} aqui? Nota (1/2/3/4)?"
-d. Aguardar resposta. Para dimensões com descritores por grade, se a nota não bater claramente com os comportamentos descritos na rúbrica, sinalizar o desvio antes de seguir (ex.: "isso soa mais grade 3 do que grade 2 pela rúbrica — confirma ou me dá mais contexto?") — não aceitar a nota sem checagem quando houver descolamento aparente. Para Expertise e Role model (sem descritores por grade), aceitar a nota de Julia sem essa checagem.
+d. Aguardar resposta. Para dimensões com descritores por grade, se a nota não bater claramente com os comportamentos descritos na rúbrica, sinalizar o desvio antes de seguir (ex.: "isso soa mais grade 3 do que grade 2 pela rúbrica — confirma ou me dá mais contexto?") — não aceitar a nota sem checagem quando houver descolamento aparente. Para Expertise e Role model (sem descritores por grade), aceitar a nota de {avaliador} sem essa checagem.
 e. Depois de fechar a(s) nota(s), escrever um resumo em inglês da dimensão para {nome}, sintetizando o racional por trás da nota. Ordem fixa dentro da dimensão: nota por subdimensão (quando aplicável) → nota geral da dimensão → resumo em inglês. Esses resumos alimentam a síntese de Strengths, Areas of Development e Overall Summary nas etapas seguintes, **e são sempre incluídos no output final**, na seção "DIMENSION SUMMARIES" (regra de Julia em 2026-08-13 — nunca omitir essa seção).
-   O resumo deve ter **dois parágrafos**: o primeiro focado nos pontos fortes da dimensão, o segundo nos pontos de desenvolvimento. Se não houver ponto de desenvolvimento claro (nota 1 sem ressalvas), o segundo parágrafo dá um "spin" construtivo, algo para {nome} pensar como próximo passo de carreira em vez de uma lacuna de performance — mas só se esse spin for genuíno. Não forçar um segundo parágrafo: se a pessoa já demonstrou o comportamento que seria sugerido como próximo passo (Julia vai sinalizar isso), remover o parágrafo e deixar o resumo com um único parágrafo.
-   Quando houver ponto de desenvolvimento real (não spin), o segundo parágrafo segue esta estrutura fixa: (i) o que precisa melhorar; (ii) exemplo(s) concreto(s) de situação em que isso aconteceu, se houver (não inventar se Julia não der um); (iii) como fazer para melhorar esse ponto, de forma acionável.
+   O resumo deve ter **dois parágrafos**: o primeiro focado nos pontos fortes da dimensão, o segundo nos pontos de desenvolvimento. Se não houver ponto de desenvolvimento claro (nota 1 sem ressalvas), o segundo parágrafo dá um "spin" construtivo, algo para {nome} pensar como próximo passo de carreira em vez de uma lacuna de performance — mas só se esse spin for genuíno. Não forçar um segundo parágrafo: se a pessoa já demonstrou o comportamento que seria sugerido como próximo passo (conforme evidência fornecida por {avaliador}), remover o parágrafo e deixar o resumo com um único parágrafo.
+   Quando houver ponto de desenvolvimento real (não spin), o segundo parágrafo segue esta estrutura fixa: (i) o que precisa melhorar; (ii) exemplo(s) concreto(s) de situação em que isso aconteceu, se houver (não inventar se {avaliador} não fornecer um); (iii) como fazer para melhorar esse ponto, de forma acionável.
    Em **cada frase** do resumo (não só em Strengths/AfD): generalizar o ponto primeiro, e só então trazer o exemplo concreto entre parênteses no formato `(e.g., ...)`. Nunca deixar um exemplo específico solto na frase sem antes generalizar o comportamento que ele ilustra.
    Dimensões com subnotas (Problem solving & Insight, Communication and Presence, Practicality & effectiveness) têm **um só resumo consolidado** cobrindo todas as subnotas daquela dimensão — perguntar e registrar a nota de cada subnota separadamente (passos b-d, uma por vez), mas só escrever o resumo em inglês depois de fechar todas as subnotas da dimensão.
 f. Só então avançar para a próxima dimensão.
@@ -160,7 +172,7 @@ Ao final das 7 dimensões, perguntar a **Overall grade**:
 - **Overall** não pode ser numericamente maior (mais fraca) que a nota de Problem Solving & Insight — ou seja, Overall ≤ Problem Solving. Problem Solving define o piso de qualidade da Overall (a Overall nunca pode ser pior que Problem Solving, mas pode ser igual ou melhor). *(Correção de Julia em 2026-08-13 — a regra anterior estava na direção errada.)*
 - **Todas as demais dimensões (incluindo Expertise)** podem ser no máximo 1 ponto numericamente maior (ou seja, uma nota mais fraca) que a Overall — nunca duas ou mais.
 
-Se alguma nota violar a regra, sinalizar a Julia antes de fechar a etapa (ex.: "Communication and Presence ficou 2 notas mais fraca que a Overall — pela regra, o máximo é 1. Confirma os números ou ajustamos?").
+Se alguma nota violar a regra, sinalizar a {avaliador} antes de fechar a etapa (ex.: "Communication and Presence ficou 2 notas mais fraca que a Overall — pela regra, o máximo é 1. Confirma os números ou ajustamos?").
 
 Gerar ao final: tabela com dimensão → nota, mais a Overall grade.
 
@@ -187,9 +199,9 @@ Gerar: 3 blocos, cada um com:
 ---
 
 ### Etapa 7 — Overall Summary
-Por padrão, sintetizar a partir do que já foi coletado nas etapas anteriores (Individual Role, Strengths, Areas of Development, notas por dimensão, Overall grade) — não abrir com pergunta em branco. Só perguntar diretamente a Julia se: (a) faltar contexto suficiente para sintetizar, ou (b) ela pedir para adicionar algo que ainda não apareceu na entrevista.
+Por padrão, sintetizar a partir do que já foi coletado nas etapas anteriores (Individual Role, Strengths, Areas of Development, notas por dimensão, Overall grade) — não abrir com pergunta em branco. Só perguntar a {avaliador}, por meio de {entrevistador} quando necessário, se: (a) faltar contexto suficiente para sintetizar, ou (b) {avaliador} pedir para adicionar algo que ainda não apareceu na entrevista.
 
-Se houver uma avaliação anterior (do mesmo projeto/pessoa ou de referência indicada por Julia) disponível, usá-la como referência de **formato e tamanho** (número de parágrafos, tom de fechamento) — não de conteúdo.
+Se houver uma avaliação anterior (do mesmo projeto/pessoa ou de referência indicada por {avaliador}) disponível, usá-la como referência de **formato e tamanho** (número de parágrafos, tom de fechamento) — não de conteúdo.
 
 Gerar: síntese de tom positivo e construtivo, integrando fortalezas + desenvolvimento + trajetória esperada. Nunca repete literalmente o que já foi dito — eleva. Comprimento segue a referência de formato quando houver uma; na ausência dela, 1 parágrafo é o padrão.
 
@@ -299,10 +311,10 @@ ADDITIONAL COMMENTS AND SPECIAL CIRCUMSTANCES
 ## Rubrica de referência
 
 Fontes:
-- `Associates & Consultants - Grading Rubrics 2023.pdf` (Brazil Career Development, Out/2023), salvo em `C:\Users\Ribeiro Julia\OneDrive - The Boston Consulting Group, Inc\Private\Training\Associates & Consultants - Grading Rubrics 2023.pdf` — rubrica com descritores de grade 1-4 por dimensão (não inclui Role model nem as subnotas de Communication and Presence / Practicality & effectiveness).
-- `Competencies in Action vFINAL (2).pdf`, salvo em `C:\Users\Ribeiro Julia\OneDrive - The Boston Consulting Group, Inc\Private\Training\Case Leader Readiness\Competencies in Action vFINAL (2).pdf` — confirma as subnotas oficiais de Problem solving & Insight, Communication and Presence e Practicality & effectiveness, e é a fonte da dimensão **Role model** (subitens abaixo). Competências são idênticas entre Associate e Consultant, exceto onde uma nota de rodapé indicar divergência.
+- `Associates & Consultants - Grading Rubrics 2023.pdf` (Brazil Career Development, Out/2023) — rubrica com descritores de grade 1-4 por dimensão (não inclui Role model nem as subnotas de Communication and Presence / Practicality & effectiveness).
+- `Competencies in Action vFINAL (2).pdf` — confirma as subnotas oficiais de Problem solving & Insight, Communication and Presence e Practicality & effectiveness, e é a fonte da dimensão **Role model** (subitens abaixo). Competências são idênticas entre Associate e Consultant, exceto onde uma nota de rodapé indicar divergência.
 
-Todo o texto abaixo (exceto a dimensão Expertise, que não existe em nenhum dos dois PDFs) é **citação literal**, sem tradução ou paráfrase — citar sempre assim para Julia, palavra por palavra.
+Todo o texto abaixo (exceto a dimensão Expertise, que não existe em nenhum dos dois PDFs) é **citação literal**, sem tradução ou paráfrase — citar sempre assim para {avaliador}, palavra por palavra.
 
 ### Escala de notas — Associates / Sr. Associates
 | Grade | Descrição |
@@ -338,14 +350,14 @@ Estrutura confirmada por Julia em 2026-08-07 (Problem solving & Insight) e 2026-
 
 **Communication and Presence:**
 - **Verbal communication**: qualidade da comunicação falada em si (clareza, estrutura, articulação de ideias)
-- **Presence**: postura e confiança no espaço da conversa/reunião (subnota nova, adicionada por Julia em 2026-08-11 — não existe separada no PDF, que trata presence como parte dos comportamentos de "Verbal"; sem rubrica literal própria por grade ainda, calibrar com Julia com o tempo)
+- **Presence**: postura e confiança no espaço da conversa/reunião (subnota nova, adicionada por Julia em 2026-08-11 — não existe separada no PDF, que trata presence como parte dos comportamentos de "Verbal"; sem rubrica literal própria por grade ainda, calibrar com {avaliador} somente quando houver contexto e autorização explícitos para essa calibração)
 - **Written communication**: qualidade do material escrito (slides, e-mails, storylines)
 
 **Practicality & effectiveness:**
 - **Prioritizes work effectively, demonstrates business sense and adaptability**
 - **Is reliable and timely, manages team expectations**
 - **Identifies next steps proactively, owns module**
-(Essas 3 subnotas de Practicality & effectiveness também não têm rubrica literal própria por grade no PDF de Grading Rubrics — o PDF só descreve a dimensão como um todo. Usar a rubrica geral da dimensão, abaixo, como referência para as 3, até Julia fornecer descritores específicos por subnota.)
+(Essas 3 subnotas de Practicality & effectiveness também não têm rubrica literal própria por grade no PDF de Grading Rubrics — o PDF só descreve a dimensão como um todo. Usar a rubrica geral da dimensão, abaixo, como referência para as 3, até que descritores específicos por subnota sejam fornecidos explicitamente por {avaliador} e identificados como complemento à fonte.)
 
 ---
 
@@ -359,7 +371,7 @@ Adicionada por Julia em 2026-08-13, fonte `Competencies in Action vFINAL (2).pdf
 - Contributes to positive working environment
 - Handles confidential data responsibly and takes appropriate security precautions
 
-Sem descritores literais por grade (1-4) no PDF de origem — usar os 6 comportamentos acima como referência qualitativa até Julia calibrar descritores específicos por grade.
+Sem descritores literais por grade (1-4) no PDF de origem — usar os 6 comportamentos acima como referência qualitativa até que descritores específicos por grade sejam calibrados explicitamente com {avaliador} e identificados como complemento à fonte.
 
 ---
 
@@ -469,11 +481,11 @@ Adicionada por Julia em 2026-08-06 especificamente para BCG X — não existe na
 ## Regras
 - Nunca pular etapas — a entrevista é linear.
 - Perguntas devem ser diretas e conversar, não ser formulários.
-- Se Julia der uma resposta curta, extrair o máximo dela antes de gerar — não inventar exemplos não mencionados.
+- Se {avaliador} der uma resposta curta, pedir o contexto necessário antes de gerar — não inventar exemplos não mencionados.
 - Strengths e Areas of Development devem usar dimensões diferentes entre si sempre que possível.
 - Overall Summary nunca repete literalmente o que já foi dito nas seções anteriores — sintetiza e eleva.
 - Output final em inglês (padrão BCG para CDCs).
-- Texto gerado deve ser profissional, específico e baseado apenas no que Julia informou.
+- Texto gerado deve ser profissional, específico e baseado apenas nos inputs atribuídos a {avaliador}, nas fontes explicitamente selecionadas e nas evidências confirmadas para {nome}.
 - Exemplos concretos citados no texto (resumos de dimensão, Strengths, Areas of Development, etc.) devem sempre generalizar o ponto primeiro e trazer o exemplo entre parênteses, no formato `(e.g., ...)` — nunca soltos na frase ou introduzidos com travessão.
 - **Nunca usar travessão (—) em nenhum texto gerado por essa skill** — usar vírgula, parênteses ou ponto e vírgula no lugar.
 - A dimensão **Expertise** foi adicionada por Julia especificamente para BCG X e não existe na rubrica oficial de 2023 — usa uma lista de comportamentos de referência fornecida por Julia em 2026-08-13, sem descritores por grade (ver seção "Expertise" na Rubrica de referência).

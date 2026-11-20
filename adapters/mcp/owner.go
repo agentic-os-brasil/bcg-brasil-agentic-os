@@ -16,22 +16,27 @@ func trackSchema() map[string]any {
 	return map[string]any{"type": "string", "enum": []string{"quick", "complete"}}
 }
 func ownerQueries() []any {
-	return append([]any{
+	variants := []any{
+		ownerContextQuery(),
 		variant("owner.status", map[string]any{}),
 		variant("owner.interview", map[string]any{"track": trackSchema()}, "track"),
 		variant("owner.review", map[string]any{"proposal_id": strSchema(96)}, "proposal_id"),
 		variant("owner.onboarding_review", map[string]any{}),
-	}, ownerAtlasQueries()...)
+	}
+	variants = append(variants, ownerSelfObservationQueries()...)
+	return append(variants, ownerAtlasQueries()...)
 }
 func applySchema() map[string]any {
 	s := mutationSchema()
 	s["oneOf"] = append(s["oneOf"].([]any),
+		variant("installation.update_handoff", map[string]any{}),
 		variant("owner.track", map[string]any{"track": trackSchema()}, "track"),
 		variant("owner.propose", map[string]any{"facet": strSchema(64), "evidence": strSchema(4 << 10), "proposed_body": strSchema(12 << 10)}, "facet", "evidence", "proposed_body"),
 		variant("owner.apply", map[string]any{"proposal_id": strSchema(96)}, "proposal_id"),
 		variant("owner.confirm_onboarding", map[string]any{}),
 	)
 	s["oneOf"] = append(s["oneOf"].([]any), ownerAtlasMutations()...)
+	s["oneOf"] = append(s["oneOf"].([]any), ownerSelfObservationMutations()...)
 	return s
 }
 func (b *Bound) ownerRoot() string { return filepath.Join(b.home, "brain") }
@@ -99,6 +104,10 @@ func (b *Bound) handleOwner(ctx context.Context, req *mcp.CallToolRequest, in in
 	var value any
 	var err error
 	switch in.Operation {
+	case "owner.observation.status", "owner.observation.intake", "owner.observation.reject":
+		value, err = b.ownerSelfObservation(ctx, req, in)
+	case "owner.context":
+		return b.readOwnerContext(in)
 	case "owner.status":
 		var s ownerctx.Status
 		s, err = ownerctx.Inspect(b.ownerRoot())
@@ -173,7 +182,11 @@ func (b *Bound) handleOwner(ctx context.Context, req *mcp.CallToolRequest, in in
 		}
 		metadata := map[string]string{"code": code}
 		if code == "confirmation_unavailable" {
-			metadata["next_action"] = "Use the explicit local owner-review/owner-apply or owner-onboarding-review/owner-confirm-onboarding commands; owner-track selects the interview locally."
+			if strings.HasPrefix(in.Operation, "owner.observation.") {
+				metadata["next_action"] = "Keep this owner declaration pending until trusted exact review is available. Do not use profile application, file access or model approval as a fallback."
+			} else {
+				metadata["next_action"] = "Use the explicit local owner-review/owner-apply or owner-onboarding-review/owner-confirm-onboarding commands; owner-track selects the interview locally."
+			}
 		}
 		out := result(metadata, nil)
 		out.IsError = true

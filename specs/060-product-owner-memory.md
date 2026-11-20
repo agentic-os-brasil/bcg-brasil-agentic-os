@@ -27,6 +27,13 @@ Prepare owner metadata and fixed product capture authority only through explicit
 local initialization. Ordinary context/query/startup remains read-only. Existing
 migrated state is preserved; old relocated credentials remain inactive.
 
+Explicit memory initialization also prepares the existing capture-v2
+provenance key for body-free observations. This key attests only closed
+metadata; it grants no tool, agent, client or native-execution authority.
+Runtime producers never bootstrap it. Observations retain their own evidence
+class and cannot borrow `owner_reviewed` provenance. Text capture/correction
+continues to require the exact review below.
+
 Server-originated MCP form elicitation may obtain explicit human confirmation.
 Keep the reviewed envelope server-side, display the full bounded review to the
 client, require action=accept and an explicit approved=true in returned content,
@@ -41,15 +48,29 @@ contain only bounded protocol labels, capability-presence booleans and a closed
 failure stage. Never log reviewed content, raw capabilities, identities, paths
 or transport error text. A diagnostic or passing SDK test is not native host proof.
 
-An explicit local review/confirm command is the supported fallback for clients
-without elicitation. It uses the same canonical review and digest checks. Never
+An explicit local review/confirm command is a supported fallback for clients
+without elicitation. An operator may also explicitly select the foreground-only
+local-browser channel described in `docs/product-local-owner-review.md`. Explicit
+startup selection takes precedence over advertised native forms and rejects
+native InputResponses; empty selection stays native-first. It
+reuses this exact review and canonical apply contract without claiming native
+form or lifecycle qualification. It uses the same canonical review and digest checks. Never
 silently convert a missing host capability into approval or claim native support
 from an SDK test.
 
-Ordinary model queries return owner metadata and interview questions, not the
-body of sensitive SELF facets. Full profile/proposal review is delivered only to
-the trusted client review interaction or explicit local operator. Output receipts
-contain bounded state/digests and omit private paths, secrets and reviewed text.
+Ordinary model queries return owner metadata and interview questions. After
+current final onboarding confirmation, `owner.context` additionally delivers only
+the selected track's canonical facets whose Readers explicitly authorize the
+server-bound `session` reader. It uses bounded pages and a freshness generation;
+unconfirmed, out-of-track and reader-restricted facets remain unavailable. The
+local MCP session cannot attest an individual hosted subagent's identity. This
+projection is personalization data and grants no tool or effect authority. See
+[accepted owner context](../docs/product-owner-context.md).
+
+Full profile/proposal review remains available only through trusted client review
+or the explicit local operator. Review receipts contain bounded state/digests and
+omit private paths, secrets and reviewed text. `maestro_context` remains metadata
+only and advertises the separate explicit read operation.
 
 ## Canonical owner module
 
@@ -191,3 +212,40 @@ MCPB still installs a server/manifest, not the Code plugin's Skills.
 Use synthetic data and focused local tests. Four independent source review lenses
 and hosted CI precede eligible integration. Real clients/models, corporate signing,
 publication and pilot acceptance are distinct and remain explicit.
+
+## Reviewed self-declaration product route (OSIN)
+
+Expose `owner.observation.status` as bounded body-free read-only metadata and
+`owner.observation.intake` / `owner.observation.reject` as closed reviewed writes.
+Intake accepts exactly the five-field normalized declaration described by
+Spec013; the server derives stable owner-bound payload identity and a single
+non-independent declaration cohort. Never accept model trust, source, episode or
+scope assertions. Full review distinguishes declared preference from native
+observed evidence and explicitly obtains material relevance, no-client-material
+and owner-global professional proposal-input attestation.
+
+Hold no owner lock while awaiting the person. Revalidate canonical review/source
+and admitted binding after confirmation, and execute owning mutations inside the
+existing installed-source publication fence. Cancellation, recall, changed source
+or stale review cannot publish approval/control. A successful intake queues only;
+maintenance qualification and enrollment are independent exact reviews. Controls
+preserve canonical terminal denial and unchanged active SELF. The canonical
+`interaction-profile` conditional recipe must discover the available route;
+method packaging alone grants no consent, scheduled work or native proof.
+
+For already initialized owners with released legacy observation logs, the existing
+explicit local `init` route must reach canonical owner initialization and admit
+its persistent selection lock without recreating data. Observation queries and
+review refuse missing required locks without repair. Expose the explicit setup
+prerequisite in the operator guide and conditional method; it is not model
+permission to delete locks or reset the owner.
+
+Propagate the actual request context into both owning declaration mutations.
+After acquiring the observation lock and revalidating current input/review, check
+cancellation immediately before the first authoritative write. Installation
+custody validation alone does not supply this check, and a pre-closure check does
+not cover cancellation during binding validation or owner-lock wait. Keep the
+installed-source fence outside the owner lock; never reacquire it inside. The
+first canonical control append is the commit point: finish its coupled pending
+denial metadata, and retain/report real partial state if a later I/O error occurs.
+Cancellation before that point cannot approve, reject or redact an observation.

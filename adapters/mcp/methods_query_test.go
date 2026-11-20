@@ -535,7 +535,7 @@ func TestMethodPlansResolveRegisteredMaintenanceAndWiki(t *testing.T) {
 		t.Fatalf("unattested host dependencies were presented as admitted: %+v", plan)
 	}
 	want := map[string][]string{
-		"domain.maintenance_lifecycle": {"maintenance.enroll", "maintenance.pause", "maintenance.qualify", "maintenance.report", "maintenance.resume", "maintenance.revoke", "maintenance.run", "maintenance.status"},
+		"domain.maintenance_lifecycle": {"maintenance.enroll", "maintenance.pause", "maintenance.qualify", "maintenance.register", "maintenance.report", "maintenance.resume", "maintenance.revoke", "maintenance.run", "maintenance.status"},
 		"domain.workspace_navigation":  {"wiki.read", "wiki.source", "wiki.status"},
 	}
 	unattested := map[string]bool{"host.trusted_review": true, "host.background_wake": true}
@@ -819,8 +819,9 @@ func TestMethodPlansReflectRegisteredContentWithoutRuntimeAuthority(t *testing.T
 	registered := map[string][]string{
 		"domain.document_conversion_operations": {"content.convert", "content.read", "content.status"},
 		"domain.workspace_knowledge_operations": {"knowledge.append", "knowledge.collect", "knowledge.create"},
+		"domain.owner_knowledge_pages":          {"knowledge.append", "knowledge.create", "owner.atlas.collect", "owner.atlas.prepare", "owner.atlas.status"},
 	}
-	unattested := map[string]bool{"runtime.document_conversion": true, "domain.owner_knowledge_pages": true, "host.trusted_review": true}
+	unattested := map[string]bool{"runtime.document_conversion": true, "host.trusted_review": true}
 	for _, dependency := range plan.Dependencies {
 		if operations, ok := registered[dependency.ID]; ok {
 			if dependency.State != "available" || dependency.Reason != "owning_operations_registered" || !reflect.DeepEqual(dependency.Fulfillment, operations) || len(dependency.Missing) != 0 || dependency.Action == "" {
@@ -846,7 +847,7 @@ func TestMethodPlansReflectRegisteredContentWithoutRuntimeAuthority(t *testing.T
 	}
 	plan.Dependencies = nil
 	methodQueryDecode(t, client, "maestro_query", map[string]any{"operation": "methods.plan", "method_id": "yoda"}, &plan)
-	provider := map[string]bool{"provider.senior_review_model": true, "domain.review_dispatch": true}
+	provider := map[string]bool{"provider.senior_review_model": true, "host.subagents": true}
 	if plan.State != "requirements_unavailable" || plan.Execution != "not_executed" {
 		t.Fatalf("content registration granted provider execution: %+v", plan)
 	}

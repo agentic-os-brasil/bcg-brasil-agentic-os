@@ -19,6 +19,7 @@ import (
 // the canonical strict native verifier; engineering tests compose that same
 // owner in process through VerifyNative, without a command-line trust override.
 type SeededActivationOptions struct {
+	ExperimentalSeed                       *VerifiedExperimentalSeed
 	Self, Version, AuthorityRegistrySHA256 string
 	Plan                                   Plan
 	ReviewDigest                           string
@@ -37,7 +38,7 @@ func ActivateSeeded(ctx context.Context, o SeededActivationOptions) (installtx.S
 	if !o.Confirmed || len(o.ReviewDigest) != 64 || p.PlanDigest != o.ReviewDigest || PlanDigest(p) != o.ReviewDigest {
 		return installtx.State{}, errors.New("explicit confirmed canonical install review is required")
 	}
-	if p.Profile != releasecontract.ModernProfile || p.NativeTrustMode != string(NativeTrustStrict) ||
+	if p.Profile != releasecontract.ModernProfile || !activationAdmissionMatches(p, o.ExperimentalSeed) ||
 		p.BootstrapperVersion != o.Version || p.RegistrySHA256 != o.AuthorityRegistrySHA256 ||
 		p.TargetOS != runtime.GOOS || p.TargetArch != runtime.GOARCH ||
 		filepath.Clean(o.Self) != seedPath(p.ManagedRoot, p.TargetOS, p.Profile) {
@@ -45,13 +46,21 @@ func ActivateSeeded(ctx context.Context, o SeededActivationOptions) (installtx.S
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
+	if o.ExperimentalSeed != nil {
+		if o.VerifyNative != nil {
+			return installtx.State{}, errors.New("experimental activation cannot accept native verifier overrides")
+		}
+		if err := verifyExperimentalActivation(o); err != nil {
+			return installtx.State{}, err
+		}
+	}
 	verifyNative := o.VerifyNative
-	if verifyNative == nil {
+	if verifyNative == nil && o.ExperimentalSeed == nil {
 		verifyNative = func(ctx context.Context, path string) error {
 			return nativeSignatureCheck(ctx, path, NativeTrustStrict)
 		}
 	}
-	if err := verifyNative(ctx, o.Self); err != nil {
+	if err := verifyInstallerArtifact(ctx, Options{ExperimentalSeed: o.ExperimentalSeed, VerifyNative: verifyNative, TargetOS: p.TargetOS, TargetArch: p.TargetArch}, o.Self); err != nil {
 		return installtx.State{}, fmt.Errorf("native installer self-trust: %w", err)
 	}
 	if err := validateRegular(o.Self, maxBootstrapperBytes); err != nil {
@@ -72,7 +81,7 @@ func ActivateSeeded(ctx context.Context, o SeededActivationOptions) (installtx.S
 	recomputed, verified, err := Prepare(Options{
 		UserHome: p.UserHome, ReleaseDir: p.ReleaseDir, Bootstrapper: p.Bootstrapper,
 		AuthorityRegistry: p.AuthorityRegistry, ManagedRoot: p.ManagedRoot, DataRoot: p.DataRoot,
-		TargetOS: p.TargetOS, TargetArch: p.TargetArch, NativeTrustMode: NativeTrustStrict,
+		TargetOS: p.TargetOS, TargetArch: p.TargetArch, NativeTrustMode: NativeTrustMode(p.NativeTrustMode), ExperimentalSeed: o.ExperimentalSeed,
 		VerifyNative: verifyNative,
 	})
 	if err != nil {
@@ -89,6 +98,9 @@ func ActivateSeeded(ctx context.Context, o SeededActivationOptions) (installtx.S
 	if err != nil {
 		return installtx.State{}, err
 	}
+	if err := recheckExperimentalOperation(experimentalOperationOptions(p, o.ExperimentalSeed)); err != nil {
+		return installtx.State{}, err
+	}
 	if err := installtx.Activate(plan, verified, installtx.ActivateOptions{PrepareOptions: options}); err != nil {
 		return installtx.State{}, err
 	}
@@ -100,5 +112,8 @@ func ActivateSeeded(ctx context.Context, o SeededActivationOptions) (installtx.S
 	if err != nil {
 		return installtx.State{}, err
 	}
-	return state, installtx.CheckActivatedServer(p.ManagedRoot, state)
+	if err := installtx.CheckActivatedServer(p.ManagedRoot, state); err != nil {
+		return state, err
+	}
+	return state, recheckExperimentalOperation(experimentalOperationOptions(p, o.ExperimentalSeed))
 }

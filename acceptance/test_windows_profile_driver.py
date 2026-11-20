@@ -44,8 +44,14 @@ class WindowsInspectionDriver(unittest.TestCase):
 if ($errors.Count) { throw ($errors | Out-String) }
 $launcher=@($tokens | Where-Object { $_.Kind -eq 'HereStringLiteral' })
 if ($launcher.Count -ne 1) { throw 'Expected the single shared credentialed launcher' }
-[Management.Automation.Language.Parser]::ParseInput($launcher[0].Value,[ref]$null,[ref]$errors) | Out-Null
+$inner=[Management.Automation.Language.Parser]::ParseInput($launcher[0].Value,[ref]$null,[ref]$errors)
 if ($errors.Count) { throw ($errors | Out-String) }
+$coreCalls=@($inner.FindAll({param($n) $n -is [Management.Automation.Language.CommandAst] -and $n.CommandElements.Count -gt 0 -and $n.CommandElements[0].Extent.Text -ceq '$TestBinary'},$true) | Sort-Object {$_.Extent.StartOffset})
+if ($coreCalls.Count -eq 0) { throw 'Expected actual first native core test command' }
+foreach($name in @('$env:TEMP','$env:TMP','$env:GOTMPDIR')) {
+ $early=@($inner.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq $name -and $n.Right.Extent.Text -ceq '$temporary' -and $n.Extent.StartOffset -lt $coreCalls[0].Extent.StartOffset},$true))
+ if($early.Count -ne 1){throw ('Ordinary child must select its own '+$name+' before the first native core test')}
+}
 """
         script = self.root / "parse.ps1"
         script.write_text(check, encoding="utf-8")
@@ -263,6 +269,84 @@ if ($env:USERPROFILE -cne $userHomeFixture -or $env:HOME -cne $userHomeFixture -
         names = ["datahome", "scheduler", "zipruntime", "arbitrary"]
         result = self.invoke({"schema_version": 1, "packages": [{"name": name} for name in names]})
         self.assert_preaccount_refusal(result, "Inspection qualification requires exactly the four owning packages")
+
+
+
+
+class WindowsDoclingRuntimeProfile(unittest.TestCase):
+    """The new converter profile is closed before the shared account mechanism."""
+
+    def setUp(self):
+        self.pwsh = shutil.which("pwsh")
+        self.assertIsNotNone(self.pwsh)
+        self.temp = tempfile.TemporaryDirectory(dir=os.environ.get("MAESTRO_TEST_TMP"))
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.manifest = self.root / "docling.json"
+
+    def invoke(self, document, *extra):
+        self.manifest.write_text(json.dumps(document), encoding="utf-8")
+        return subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(DRIVER),
+                               "-DoclingManifest", str(self.manifest), "-OutputRoot", str(self.root / "proof"),
+                               *extra], text=True, capture_output=True, timeout=30)
+
+    def document(self):
+        public = "C:\\MaestroNativeEngine-" + "a" * 32
+        return dict(schema_version=1, qualification_profile="windows_docling_runtime_v1",
+                    source_revision="a" * 40, public_root=public, source_root=public + "\\source",
+                    sdk_go=public + "\\sdk\\bin\\go.exe", module_cache=public + "\\modules",
+                    raw_inputs=public + "\\raw", test_binary=public + "\\bin\\docling.test.exe",
+                    inventory_sha256="a" * 64,
+                    required_tests=["TestWindowsNativeConfinement", "TestWindowsNativeConfinementDeadline",
+                                    "TestWindowsSharedImplementationIdentityAcrossEntryModules",
+                                    "TestWindowsRealAuthenticatedDocling"])
+
+    def assert_preaccount_refusal(self, document):
+        result = self.invoke(document)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Docling requires the exact closed native runtime profile", result.stdout + result.stderr)
+        self.assertFalse((self.root / "proof").exists())
+        self.assertNotIn("New-LocalUser", result.stdout + result.stderr)
+
+    def test_docling_rejects_unknown_profile_before_account(self):
+        document = self.document()
+        document["qualification_profile"] = "arbitrary_commands"
+        self.assert_preaccount_refusal(document)
+
+    def test_docling_rejects_open_command_field_before_account(self):
+        document = self.document()
+        document["command"] = "anything"
+        self.assert_preaccount_refusal(document)
+
+    def test_docling_requires_all_native_tests_without_substitution(self):
+        document = self.document()
+        document["required_tests"] = document["required_tests"][:-1]
+        self.assert_preaccount_refusal(document)
+        document = self.document()
+        document["required_tests"][-1] = "TestDummyConverter"
+        self.assert_preaccount_refusal(document)
+
+    def test_docling_and_old_profiles_are_exclusive(self):
+        result = self.invoke(self.document(), "-InspectionManifest", str(self.manifest))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / "proof").exists())
+
+    def test_docling_helper_and_manual_workflow_parse(self):
+        helper = ROOT / "acceptance/windows-docling-profile.ps1"
+        script = self.root / "parse.ps1"
+        script.write_text("$errors=$null; [Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$errors)|Out-Null; if($errors.Count){throw ($errors|Out-String)}", encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-File", str(script), str(helper)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        workflow = (ROOT / ".github/workflows/windows-docling-runtime.yml").read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", workflow)
+        self.assertNotIn("pull_request:", workflow)
+        self.assertIn("./acceptance/windows-core-pilot.ps1 -DoclingManifest", workflow)
+
+    def test_docling_public_acquisition_python_parses_without_execution(self):
+        import ast
+        source = (ROOT / "acceptance/windows-engine-build.ps1").read_text(encoding="utf-8")
+        acquisition = source.split("@'\nimport hashlib,json,os,pathlib,urllib.request\n", 1)[1].split("\n'@ | python -", 1)[0]
+        ast.parse("import hashlib,json,os,pathlib,urllib.request\n" + acquisition)
 
 
 if __name__ == "__main__":
@@ -529,7 +613,7 @@ $values|ConvertTo-Json -Depth 4 -Compress
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         ledger = json.loads(result.stdout)
         self.assertEqual(len(ledger["$adapterParents"]), 61)
-        self.assertEqual(len(ledger["$adapterAssertions"]), 178)
+        self.assertEqual(len(ledger["$adapterAssertions"]), 179)
         self.assertIn("TestMaintenancePublicJourney/owned-background", ledger["$adapterAssertions"])
         for case in ("refusal-diagnostic", "request-capability-withdrawal", "request-url-only",
                      "request-empty-elicitation", "request-explicit-form", "request-form-added"):
@@ -541,7 +625,7 @@ $values|ConvertTo-Json -Depth 4 -Compress
             for format in ("plugin", "mcpb"):
                 self.assertIn(f"TestCompiledStdioWorkflowAndPackets/portable_{format}_{version}", ledger["$adapterAssertions"])
         self.assertEqual(len(ledger["$adapterCommandParents"]), 1)
-        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]), 179)
+        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]), 180)
         self.assertEqual(ledger["$adapterSetupParents"], ["TestModernFactoryFirstInstallAndRestart", "TestDirectInnerInstallRequiresProductionAuthority", "TestModernSyncedSourceLifecycle", "TestSyncedPublicationInterleavingAndReadOnlyReviews"])
         self.assertEqual(len(ledger["$adapterSetupAssertions"]), 22)
         self.assertEqual(len(set(ledger["$adapterSetupAssertions"])), 22)
@@ -550,13 +634,13 @@ $values|ConvertTo-Json -Depth 4 -Compress
         setup_source = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "adapters/mcp/setup").glob("*_test.go"))
         for parent in ledger["$adapterSetupParents"]:
             self.assertIn(f"func {parent}(", setup_source)
-        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]) + len(ledger["$adapterSetupAssertions"]), 201)
+        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]) + len(ledger["$adapterSetupAssertions"]), 202)
         self.assertEqual(ledger["$adapterPackagingParents"], ["TestNativeWindowsOwnedProcessTree"])
         self.assertEqual(ledger["$adapterPackagingAssertions"], ["TestNativeWindowsOwnedProcessTree"] + [
             "TestNativeWindowsOwnedProcessTree/" + child for child in
             ("private-scratch", "cancel", "parent-exit", "output-limit", "nonzero-exit", "pre-cancel")])
         self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]) +
-                         len(ledger["$adapterSetupAssertions"]) + len(ledger["$adapterPackagingAssertions"]), 208)
+                         len(ledger["$adapterSetupAssertions"]) + len(ledger["$adapterPackagingAssertions"]), 209)
 
         for name in ("TestMethodPlansResolveMaintenanceKeepWikiUnavailable", "TestMethodPlansResolveRegisteredMaintenanceAndWiki", "TestAgentResourceCallbacksRevalidateBinding"):
             self.assertIn(name, ledger["$adapterParents"])
@@ -573,6 +657,7 @@ $values|ConvertTo-Json -Depth 4 -Compress
             'TestCompiledClaudeHook/startup_read_only_and_current_context',
             'TestCompiledClaudeHook/malformed_event_and_size_fail_closed',
             'TestCompiledClaudeHook/paths_glob_regex_and_cross_case',
+            'TestCompiledClaudeHook/repository_review_pair',
             'TestCompiledClaudeHook/namespace_and_predispatch',
             'TestCompiledClaudeHook/observations_retries_and_body_privacy',
             'TestCompiledClaudeHook/optional_prompt_identity_never_resets',
@@ -832,4 +917,59 @@ if($guard.Count -ne 1 -or $exclusion.Count -ne 1 -or $guard[0].Extent.EndOffset 
 ''', encoding="utf-8")
         result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER),
                                  str(ROOT / "acceptance/windows-engine-check.ps1")], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_remaining_protocol_preserves_exact_partition_and_unqualified_skips(self):
+        script = self.root / "remaining-proof.ps1"
+        script.write_text(r'''$ErrorActionPreference='Stop'
+$tokens=$null;$errors=$null
+[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$tokens,[ref]$errors)|Out-Null
+$launcher=@($tokens|Where-Object {$_.Kind -eq 'HereStringLiteral'})
+if($errors.Count -or $launcher.Count -ne 1){throw 'Expected original credentialed launcher'}
+$ast=[Management.Automation.Language.Parser]::ParseInput($launcher[0].Value,[ref]$null,[ref]$errors)
+$reader=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Get-RemainingProtocolProof'},$true))
+if($errors.Count -or $reader.Count -ne 1){throw 'Expected original remaining classifier'}
+Invoke-Expression $reader[0].Extent.Text
+$module='github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp'
+$inventory=@{$module=@('TestRemaining','TestProved','TestWindowsWorkspaceInitializationMatchesElevation')}
+$excluded=@('TestProved','TestWindowsWorkspaceInitializationMatchesElevation')
+$valid=@([pscustomobject]@{Package=$module;Test='TestRemaining';Action='pass'})
+$proof=Get-RemainingProtocolProof $inventory $valid $excluded
+if(-not $proof.complete -or $proof.inventory.Count -ne 3 -or $proof.outcomes.Count -ne 1 -or $proof.skipped_coverage_qualified -ne $false){throw 'Exact parent union refused'}
+if(@($proof.inventory|Where-Object {$_.execution -ceq 'elevated_refusal'}).Count -ne 1){throw 'Admin negative disappeared'}
+function Assert-RemainingRefused($Events) {
+ if((Get-RemainingProtocolProof $inventory $Events $excluded).complete){throw 'Unknown, missing, duplicate, excluded or failed evidence qualified'}
+}
+Assert-RemainingRefused @()
+Assert-RemainingRefused @($valid + $valid)
+Assert-RemainingRefused @([pscustomobject]@{Package=$module;Test='TestUnknown';Action='pass'})
+Assert-RemainingRefused @([pscustomobject]@{Package=$module;Test='TestRemaining';Action='fail'})
+Assert-RemainingRefused @([pscustomobject]@{Package=$module;Test='TestRemaining';Action='skip'})
+Assert-RemainingRefused @($valid + [pscustomobject]@{Package=$module;Test='TestProved';Action='pass'})
+$optional=@{$module=@('TestContentRealJourneys')}
+$message='fixture_test.go:1: explicit final retained authenticated engineering fixture and independent registry seed required' + [Environment]::NewLine
+$events=@([pscustomobject]@{Package=$module;Test='TestContentRealJourneys';Action='output';Output=$message},[pscustomobject]@{Package=$module;Test='TestContentRealJourneys';Action='skip'})
+$proof=Get-RemainingProtocolProof $optional $events @()
+if(-not $proof.complete -or $proof.classified_skips.Count -ne 1 -or $proof.skipped_coverage_qualified -ne $false -or $proof.outcomes[0].outcome -cne 'skip'){throw 'Existing explicit fixture SKIP lost its missing-coverage meaning'}
+$events[0].Output='fixture_test.go:1: unknown reason' + [Environment]::NewLine
+if((Get-RemainingProtocolProof $optional $events @()).complete){throw 'Unknown reason was silently classified'}
+$duplicate=@{$module=@('TestRemaining','TestRemaining')}
+$refused=$false
+try {Get-RemainingProtocolProof $duplicate $valid @()|Out-Null} catch {$refused=$true}
+if(-not $refused){throw 'Duplicate compiled inventory accepted'}
+$names=@('TestFoxtrot','TestDelta','TestAlpha','TestEcho','TestCharlie','TestBravo')
+$orderedInventory=@{$module=@($names + $excluded)}
+$orderedEvents=@($names|ForEach-Object {[pscustomobject]@{Package=$module;Test=$_;Action='pass'}})
+$orderedProof=Get-RemainingProtocolProof $orderedInventory $orderedEvents $excluded
+$expectedNames=@('TestAlpha','TestBravo','TestCharlie','TestDelta','TestEcho','TestFoxtrot')
+$expectedInventory=@(($expectedNames + 'TestProved' + 'TestWindowsWorkspaceInitializationMatchesElevation')|ForEach-Object {$module+'/'+$_})
+$expectedOutcomes=@($expectedNames|ForEach-Object {$module+'/'+$_})
+if(-not $orderedProof.complete -or ($orderedProof.inventory.test -join '|') -cne ($expectedInventory -join '|') -or
+ ($orderedProof.outcomes.test -join '|') -cne ($expectedOutcomes -join '|')){throw 'Proof inventory and outcomes must have canonical test-key order'}
+[array]::Reverse($names)
+[array]::Reverse($orderedEvents)
+$reversedProof=Get-RemainingProtocolProof @{$module=@($excluded + $names)} $orderedEvents $excluded
+if(($orderedProof|ConvertTo-Json -Depth 10 -Compress) -cne ($reversedProof|ConvertTo-Json -Depth 10 -Compress)){throw 'Proof changed with compiled inventory or event insertion order'}
+''', encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER)], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

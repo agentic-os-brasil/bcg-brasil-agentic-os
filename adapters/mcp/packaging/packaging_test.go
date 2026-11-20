@@ -136,19 +136,21 @@ func TestCompleteMethodPackets(t *testing.T) {
 				if !bytes.Equal(canonical[:end], installed[:end]) {
 					t.Fatalf("canonical metadata changed: %s", id)
 				}
-				if !bytes.Contains(installed, []byte("../../METHODS.md")) {
-					t.Fatalf("method authority pointer missing: %s", id)
+				authorityEnd := bytes.Index(installed[end:], []byte("\n\n"))
+				if authorityEnd < 0 {
+					t.Fatalf("method authority paragraph incomplete: %s", id)
+				}
+				authority := installed[end : end+authorityEnd]
+				for _, required := range []string{"../../METHODS.md", "../../agent-skill-policy.json", "maestro://methods/METHODS.md", "maestro://methods/agent-skill-policy.json", "maestro_query", "methods.read", "resource_uri", "next_offset", "has_more"} {
+					if !bytes.Contains(authority, []byte(required)) {
+						t.Fatalf("method authority preflight missing %q: %s", required, id)
+					}
 				}
 				switch id {
 				case "maestro-onboarding", "maestro-operator", "dream-memory", "maestro-runtime-checkup", "maestro-environment-setup", "maestro-doctor":
 					// Preserve complete owner and maintenance recipes, removing only
 					// the checked projection authority paragraph and invocation sigil.
-					projected := installed[end:]
-					authorityEnd := bytes.Index(projected, []byte("\n\n"))
-					if authorityEnd < 0 {
-						t.Fatalf("method authority paragraph incomplete: %s", id)
-					}
-					projected = projected[authorityEnd+1:]
+					projected := installed[end+authorityEnd+1:]
 					projected = bytes.ReplaceAll(projected, []byte("maestro-product:"), nil)
 					expected := append([]byte(nil), canonical[end:]...)
 					for _, methodID := range want {
@@ -191,6 +193,15 @@ func TestCompleteMethodPackets(t *testing.T) {
 		method, err := os.ReadFile(filepath.Join(opts.Destination, "skills", id, "SKILL.md"))
 		if err != nil || !bytes.Contains(method, []byte("subagent_type: \"maestro-product:yoda\"")) || bytes.Contains(method, []byte("subagent_type: \"yoda\"")) {
 			t.Errorf("native Agent invocation lost the exact plugin namespace: %s", id)
+		}
+	}
+	review, err := os.ReadFile(filepath.Join(opts.Destination, "skills/pocock-code-review/SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, axis := range []string{"repository-spec-reviewer", "repository-standards-reviewer"} {
+		if !bytes.Contains(review, []byte("Agent(subagent_type=\"maestro-product:"+axis+"\"")) || bytes.Contains(review, []byte("Agent(subagent_type=\""+axis+"\"")) {
+			t.Fatalf("repository review axis lost native namespace: %s", axis)
 		}
 	}
 	grill, err := os.ReadFile(filepath.Join(opts.Destination, "skills/pocock-grill-with-docs/SKILL.md"))

@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -316,6 +317,90 @@ func TestPendingReconcilesCrashAfterStateCommitBeforeRemoval(t *testing.T) {
 	}
 	if _, err := LoadPending(dataRoot); !os.IsNotExist(err) {
 		t.Fatalf("reconciled pending update was not consumed: %v", err)
+	}
+}
+
+// This test admission can only refuse already authenticated inputs. It is not
+// release authority, an EISA constructor, native proof or a transaction writer.
+type reconciliationRestriction struct {
+	allowedManifest            string
+	sourceDenied               bool
+	releaseCalls, expireAtCall int
+}
+
+func (a *reconciliationRestriction) VerifySource(releasecontract.SourceTuple) error {
+	if a.sourceDenied {
+		return errors.New("foreign finite source")
+	}
+	return nil
+}
+func (a *reconciliationRestriction) VerifyReleaseIdentity(string, string) error {
+	return errors.New("reconciliation requires full authenticated release")
+}
+func (a *reconciliationRestriction) VerifyRelease(v releaseverify.VerifiedRelease) error {
+	a.releaseCalls++
+	if v.ManifestSHA256 != a.allowedManifest {
+		return errors.New("signed pending release outside finite admission")
+	}
+	if a.expireAtCall > 0 && a.releaseCalls >= a.expireAtCall {
+		return errors.New("finite admission expired before recovery effects")
+	}
+	return nil
+}
+
+func TestPendingReconciliationNarrowingRefusesBeforeRecoveryEffects(t *testing.T) {
+	for _, name := range []string{"outside_signed_release", "foreign_source", "expiry_after_prepared_validation", "mutated_signature"} {
+		t.Run(name, func(t *testing.T) {
+			data, managed, plan, pending, registry := stagedPendingFixture(t)
+			before, err := os.ReadFile(pendingPath(data))
+			if err != nil {
+				t.Fatal(err)
+			}
+			current, err := installtx.ReadStateForManagedRoot(data, managed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			a := &reconciliationRestriction{allowedManifest: pending.Plan.ManifestSHA256}
+			wantCalls := 1
+			switch name {
+			case "outside_signed_release":
+				a.allowedManifest = strings.Repeat("f", 64)
+			case "foreign_source":
+				a.sourceDenied = true
+				wantCalls = 0
+			case "expiry_after_prepared_validation":
+				a.expireAtCall = 2
+				wantCalls = 2
+			case "mutated_signature":
+				manifestPath := filepath.Join(pending.VerifiedDirectory, releaseverify.ManifestName)
+				body, err := os.ReadFile(manifestPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				body[len(body)-2] ^= 1
+				if err := os.WriteFile(manifestPath, body, 0600); err != nil {
+					t.Fatal(err)
+				}
+				wantCalls = 0
+			}
+			if _, applied, err := ReconcilePendingWithAdmission(data, managed, plan.ID, registry, a); err == nil || applied {
+				t.Fatalf("narrowed recovery admitted invalid inputs: applied=%v err=%v", applied, err)
+			}
+			if a.releaseCalls != wantCalls {
+				t.Fatalf("authenticated release/final-fence calls=%d want=%d", a.releaseCalls, wantCalls)
+			}
+			after, err := os.ReadFile(pendingPath(data))
+			if err != nil || !bytes.Equal(before, after) {
+				t.Fatal("refused recovery changed retained pending evidence")
+			}
+			state, err := installtx.ReadStateForManagedRoot(data, managed)
+			if err != nil || installtx.StateDigest(state) != installtx.StateDigest(current) {
+				t.Fatal("refused recovery changed current state")
+			}
+			if _, err := os.Lstat(filepath.Join(managed, "recovery")); !os.IsNotExist(err) {
+				t.Fatalf("refused recovery created or changed receipt custody: %v", err)
+			}
+		})
 	}
 }
 

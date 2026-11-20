@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -104,7 +105,7 @@ func TestMaintenanceFreshStatusReadOnly(t *testing.T) {
 			before := cadenceTree(t, f)
 			cs := f.connect(t, nil)
 			status := cadenceCall(t, cs, "status", nil, false)
-			if len(status["jobs"].([]any)) != 18 {
+			if len(status["jobs"].([]any)) != 20 {
 				t.Fatal(status)
 			}
 			for _, raw := range status["jobs"].([]any) {
@@ -112,6 +113,10 @@ func TestMaintenanceFreshStatusReadOnly(t *testing.T) {
 				if job["revision"] != float64(0) || job["state"] != "inactive" || job["qualification_state"] != "unqualified" {
 					t.Fatal(job)
 				}
+			}
+			cadenceJob(t, status, maintenance.UpdateAvailabilityJobID)
+			if missing := cadenceCall(t, cs, "report", map[string]any{"job_id": maintenance.UpdateAvailabilityJobID}, true); missing["code"] != "maintenance_rejected" {
+				t.Fatalf("new metadata job did not reach its read-only report owner: %v", missing)
 			}
 			if got := cadenceCall(t, cs, "run", nil, false); got["state"] != "no_due_work" {
 				t.Fatal(got)
@@ -175,7 +180,12 @@ func TestMaintenancePublicJourney(t *testing.T) {
 			}
 			// Empty sources cannot become qualification.
 			cadenceCall(t, cs, "qualify", map[string]any{"job_id": checkpoint, "expected_revision": 0}, true)
-			memoryCall(t, cs, "memory.capture", map[string]any{"text": "private-maintenance-text: retain the next action"}, false)
+			firstCaptured := memoryCall(t, cs, "memory.capture", map[string]any{"text": "private-maintenance-text: retain the next action"}, false)
+			firstCapture := memoryCall(t, cs, "memory.read", map[string]any{"capture_id": firstCaptured["id"]}, false)
+			firstCapturedAt, err := time.Parse(time.RFC3339Nano, firstCapture["recorded_at"].(string))
+			if err != nil {
+				t.Fatal(err)
+			}
 			qualified := cadenceCall(t, cs, "qualify", map[string]any{"job_id": light, "expected_revision": 0}, false)
 			if qualified["qualification_state"] != "qualified" || qualified["state"] != "inactive" {
 				t.Fatal(qualified)
@@ -188,7 +198,7 @@ func TestMaintenancePublicJourney(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			artifact, _, err := engine.ActiveArtifact(workspace, "L1/"+time.Now().UTC().Format("2006-01-02"))
+			artifact, _, err := engine.ActiveArtifact(workspace, "L1/"+firstCapturedAt.UTC().Format("2006-01-02"))
 			if err != nil || !strings.Contains(artifact.Content, "private-maintenance-text") || len(artifact.Sources) == 0 {
 				t.Fatalf("actual L1 absent: %+v %v", artifact, err)
 			}
@@ -234,7 +244,8 @@ func TestMaintenancePublicJourney(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !stdio {
-				clock.Add(int64(4 * time.Hour))
+				// Always cross UTC midnight without changing the capture's ingestion day.
+				clock.Add(int64(28 * time.Hour))
 			}
 			paused := cadenceCall(t, cs, "pause", map[string]any{"job_id": light, "expected_revision": enrolled["revision"]}, false)
 			if got := cadenceCall(t, cs, "run", nil, false); got["state"] != "no_due_work" {
@@ -252,30 +263,34 @@ func TestMaintenancePublicJourney(t *testing.T) {
 					t.Fatal(err)
 				}
 				executionDay := executedAt.UTC().Format("2006-01-02")
-				if executionDay == capturedAt.UTC().Format("2006-01-02") {
-					if receipt["state"] != "succeeded" {
-						t.Fatal(run)
-					}
-					artifact, _, err = engine.ActiveArtifact(workspace, "L1/"+executionDay)
-					if err != nil || !strings.Contains(artifact.Content, "second reviewed action") {
-						t.Fatalf("due L1 missing: %+v %v", artifact, err)
-					}
-				} else {
-					// A late-night run may cross UTC midnight. It processes the
-					// execution day, preserving the prior artifact rather than
-					// inventing synthesis or backfilling yesterday's captures.
-					if receipt["state"] != "reviewed_no_change" {
-						t.Fatal(run)
-					}
-					if _, _, err := engine.ActiveArtifact(workspace, "L1/"+executionDay); !os.IsNotExist(err) {
-						t.Fatalf("source-free execution day produced L1: %v", err)
-					}
-					prior, _, err := engine.ActiveArtifact(workspace, "L1/"+qualifiedArtifact.Period)
-					if err != nil || prior.Content != qualifiedArtifact.Content {
-						t.Fatal("source-free due run changed last-known-good L1")
-					}
+				captureDay := capturedAt.UTC().Format("2006-01-02")
+				if executionDay == captureDay || receipt["state"] != "succeeded" {
+					t.Fatal("cross-midnight due run did not process its pending ingestion day", run)
 				}
-				t.Logf("controlled SDK due state=%s execution_day=%s capture_day=%s", receipt["state"], executionDay, capturedAt.UTC().Format("2006-01-02"))
+				artifact, _, err = engine.ActiveArtifact(workspace, "L1/"+captureDay)
+				if err != nil || !strings.Contains(artifact.Content, "second reviewed action") {
+					t.Fatalf("pending ingestion-day L1 missing: %+v %v", artifact, err)
+				}
+				if qualifiedArtifact.Period == captureDay {
+					if !strings.Contains(artifact.Content, "retain the next action") {
+						t.Fatal("new synthesis lost the earlier reviewed action")
+					}
+				} else if prior, _, err := engine.ActiveArtifact(workspace, "L1/"+qualifiedArtifact.Period); err != nil || !reflect.DeepEqual(prior, qualifiedArtifact) {
+					t.Fatal("pending-day synthesis changed the previous day's last-good artifact", err)
+				}
+				if _, _, err := engine.ActiveArtifact(workspace, "L1/"+executionDay); !os.IsNotExist(err) {
+					t.Fatalf("due run invented an execution-day L1: %v", err)
+				}
+				lastGood := artifact
+				clock.Add(int64(4 * time.Hour))
+				noChange := cadenceCall(t, cs, "run", nil, false)
+				if noChange["state"] != "processed" || len(noChange["receipts"].([]any)) != 1 || noChange["receipts"].([]any)[0].(map[string]any)["state"] != "reviewed_no_change" {
+					t.Fatal("source-free due run did not report honest no-change", noChange)
+				}
+				if current, _, err := engine.ActiveArtifact(workspace, "L1/"+captureDay); err != nil || !reflect.DeepEqual(current, lastGood) {
+					t.Fatal("source-free due run changed the last-good L1", err)
+				}
+				t.Logf("controlled SDK due state=%s execution_day=%s capture_day=%s source_free_state=reviewed_no_change", receipt["state"], executionDay, captureDay)
 			} else if run["state"] != "no_due_work" {
 				t.Fatal(run)
 			}

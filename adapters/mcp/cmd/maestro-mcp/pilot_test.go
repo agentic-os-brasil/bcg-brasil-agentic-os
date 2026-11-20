@@ -6,12 +6,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -19,8 +21,130 @@ import (
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// This exercises canonical packet selection without launching an MCP server or
+// client. A qualifier's MCP-only fallback never promotes native capabilities.
+func TestPilotCodePacketSelectionPreservesCanonicalInventory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("ordinary native owner admission runs in the Windows qualification journey")
+	}
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := product.Options{ProductRoot: filepath.Join(root, "product"), UserHome: filepath.Join(root, "owner"), WorkspacePath: filepath.Join(root, "workspace"), LookupEnv: func(string) (string, bool) { return "", false }}
+	for _, path := range []string{o.ProductRoot, o.UserHome, filepath.Join(root, "exports")} {
+		if err := os.Mkdir(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	home, err := datahome.InitializeFresh(datahome.Options{ProductRoot: o.ProductRoot, UserHome: o.UserHome, LookupEnv: o.LookupEnv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: o.WorkspacePath, DataRoot: filepath.Join(home.Home, "state")}); err != nil {
+		t.Fatal(err)
+	}
+	server, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	image, err := os.ReadFile(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverSHA := fmt.Sprintf("%x", sha256.Sum256(image))
+	host := packaging.Target{OS: runtime.GOOS, Arch: runtime.GOARCH}
+	base := filepath.Join(root, "exports", "code")
+	options := packaging.Options{Destination: base, Server: server, Version: "0.0.0", Binding: o}
+	if err := packaging.BuildPlugin(options); err != nil {
+		t.Fatal(err)
+	}
+	assertBase := func() {
+		t.Helper()
+		selected, status, err := pilotCodePacket(o, host, serverSHA)
+		if err != nil || selected != base || status.NativeMode != "mcp_only" {
+			t.Fatalf("ordinary MCP selection changed: %s %#v %v", selected, status, err)
+		}
+	}
+	assertBase()
+	t.Run("CodePilot exact reviewed channel", func(t *testing.T) {
+		selected := filepath.Join(root, "exports", "reviewed-code")
+		bound := o
+		bound.OwnerReviewChannel = "local-browser"
+		if err := packaging.BuildPlugin(packaging.Options{Destination: selected, Server: server, Version: "0.0.0", Binding: bound, CodePilot: true}); err != nil {
+			t.Fatal(err)
+		}
+		_, args, err := pilotPacketCommand(selected, o)
+		if err != nil || len(args) != 10 || args[8] != "--owner-review-channel" || args[9] != "local-browser" {
+			t.Fatalf("canonical CodePilot rejected: %v %v", args, err)
+		}
+		wrong := o
+		wrong.WorkspacePath = filepath.Join(root, "foreign-workspace")
+		if _, _, err := pilotPacketCommand(selected, wrong); err == nil {
+			t.Fatal("different workspace admitted")
+		}
+		path := filepath.Join(selected, ".mcp.json")
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, replacement := range []string{"unreviewed-channel", "local-browser --extra"} {
+			changed := bytes.ReplaceAll(body, []byte("local-browser"), []byte(replacement))
+			if err := os.WriteFile(path, changed, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, _, err := pilotPacketCommand(selected, o); err == nil {
+				t.Fatal("changed channel/inventory admitted")
+			}
+		}
+		unknown := bytes.ReplaceAll(body, []byte(`"local-browser"`), []byte(`"local-browser", "--unexpected"`))
+		if err := os.WriteFile(path, unknown, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := pilotPacketCommand(selected, o); err == nil {
+			t.Fatal("unknown argument/inventory admitted")
+		}
+		if err := os.WriteFile(path, body, 0600); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if _, _, err := pilotCodePacket(o, host, strings.Repeat("0", 64)); err == nil {
+		t.Fatal("untrusted executable accepted")
+	}
+	if _, _, err := pilotCodePacket(o, packaging.Target{OS: "other", Arch: host.Arch}, serverSHA); err == nil {
+		t.Fatal("other target accepted")
+	}
+	native := filepath.Join(root, "exports", "code-native-qualified")
+	options.Destination = native
+	if err := packaging.BuildPlugin(options); err != nil {
+		t.Fatal(err)
+	}
+	assertBase()
+	extra := filepath.Join(native, "untracked")
+	writePilotFixture(t, extra, []byte("untracked"))
+	if _, _, err := pilotCodePacket(o, host, serverSHA); err == nil {
+		t.Fatal("optional export bypassed its closed inventory")
+	}
+	if err := os.Remove(extra); err != nil {
+		t.Fatal(err)
+	}
+	assertBase()
+	if err := os.Rename(native, native+".retained"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(base, native); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := pilotCodePacket(o, host, serverSHA); err == nil {
+		t.Fatal("optional export symlink accepted")
+	}
+}
 
 // Invoked inside the existing ordinary-account command admission on Windows.
 func assertPilotCheckPackets(t *testing.T) {
@@ -204,12 +328,13 @@ func assertPilotCheckPackets(t *testing.T) {
 		if err := packaging.BuildExtension(options); err != nil {
 			t.Fatal(err)
 		}
-		var legacy bytes.Buffer
-		if err := runPilotCheck(ctx, args, &legacy); err != nil {
-			t.Fatalf("legacy generic rehearsal refused: %v", err)
+		// The checker must run as the packet's actual compiled server image.
+		legacy, err := exec.CommandContext(ctx, binary, append([]string{"pilot-check"}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("legacy generic rehearsal refused: %v\n%s", err, legacy)
 		}
 		var generic pilotReport
-		if err := json.Unmarshal(legacy.Bytes(), &generic); err != nil || generic.DesktopExtension != "" || generic.DesktopPrompt == "" {
+		if err := json.Unmarshal(legacy, &generic); err != nil || generic.DesktopExtension != "" || generic.DesktopPrompt == "" {
 			t.Fatal("generic archive was silently converted to an isolated profile")
 		}
 		if err := os.Remove(options.Destination); err != nil {
@@ -288,6 +413,95 @@ func assertPilotReadinessPrompt(t *testing.T, body []byte, workspaceID string, a
 	for _, forbidden := range []string{"maestro_apply", "maestro_query", "execution.", "brain.", "owner.", "memory.", "methods.", "--mcp-config", "--strict-mcp-config"} {
 		if strings.Contains(desktopPrompt, forbidden) {
 			t.Fatalf("read-only Desktop connection prompt expanded the journey: %s", forbidden)
+		}
+	}
+}
+
+func TestPilotRuntimePromptsMatchBundledDocument(t *testing.T) {
+	_, source, _, _ := runtime.Caller(0)
+	fixture := filepath.Join(filepath.Dir(source), "..", "..", "..", "..", "internal", "ingest", "docling", "testdata", "sample.docx")
+	archive, err := zip.OpenReader(fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer archive.Close()
+	var texts []string
+	var rows [][]string
+	for _, entry := range archive.File {
+		if entry.Name != "word/document.xml" {
+			continue
+		}
+		stream, err := entry.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		decoder := xml.NewDecoder(io.LimitReader(stream, 1<<20))
+		var row []string
+		cell := ""
+		inCell := false
+		for {
+			token, err := decoder.Token()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch element := token.(type) {
+			case xml.StartElement:
+				switch element.Name.Local {
+				case "tr":
+					row = nil
+				case "tc":
+					cell, inCell = "", true
+				case "t":
+					var text string
+					if err := decoder.DecodeElement(&text, &element); err != nil {
+						t.Fatal(err)
+					}
+					texts = append(texts, text)
+					if inCell {
+						cell += text
+					}
+				}
+			case xml.EndElement:
+				switch element.Name.Local {
+				case "tc":
+					row, inCell = append(row, cell), false
+				case "tr":
+					rows = append(rows, row)
+				}
+			}
+		}
+		if err := stream.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const marker = "MAESTRO_DOCLING_OFFLINE_20261101"
+	if !strings.Contains(strings.Join(texts, "\n"), marker) || len(rows) < 2 {
+		t.Fatal("bundled DOCX lost the independent marker/table fixture")
+	}
+	actualRows := map[string]bool{}
+	for _, row := range rows[1:] {
+		actualRows[strings.Join(row, "/")] = true
+	}
+	report := pilotReport{Status: "partial", WorkspaceID: strings.Repeat("a", 32), Runtime: &packaging.EngineeringRuntimeBinding{PackSHA256: strings.Repeat("b", 64)}}
+	var output bytes.Buffer
+	if err := finishPilotReport(&report, &output); err != nil {
+		t.Fatal(err)
+	}
+	for _, prompt := range []string{report.CodePrompt, report.DesktopPrompt} {
+		if !strings.Contains(prompt, marker) || !strings.Contains(prompt, "maestro-pilot.docx") {
+			t.Fatal("runtime prompt lost its bundled source/marker")
+		}
+		pairs := regexp.MustCompile(`[a-z]+/[0-9]+`).FindAllString(prompt, -1)
+		if len(pairs) != len(actualRows) {
+			t.Fatal("runtime prompt and actual DOCX have different table expectations", pairs, actualRows)
+		}
+		for _, pair := range pairs {
+			if !actualRows[pair] {
+				t.Fatal("runtime prompt requires a row absent from the bundled DOCX", pair)
+			}
 		}
 	}
 }
@@ -672,5 +886,134 @@ func assertDesktopPilotNativeMaterialization(t *testing.T, binary, packet, archi
 	}
 	if _, err := packaging.ValidatePacket(packet); err != nil {
 		t.Fatal("negative fixtures changed the original packet", err)
+	}
+}
+
+func TestPilotGuidedJourneyReport(t *testing.T) {
+	const workspaceID = "444df343c3054843e367c8b6b13f4d5d"
+	r := pilotReport{SchemaVersion: 1, Status: "partial", WorkspaceID: workspaceID, DesktopExtension: "Maestro MCP — Ensaio 444df343"}
+	var out bytes.Buffer
+	if err := finishPilotReport(&r, &out); err != nil {
+		t.Fatal(err)
+	}
+	var report map[string]json.RawMessage
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	var readback string
+	if err := json.Unmarshal(report["code_readback_prompt"], &readback); err != nil || readback == "" {
+		t.Fatal("public report must provide a separate read-only restart/readback continuation")
+	}
+	for label, prompt := range map[string]string{"Code": r.CodePrompt, "Desktop": r.DesktopPrompt, "readback": readback} {
+		for _, required := range []string{workspaceID, "memory.search", "memory.read", "capture_id", "MEMORY_ACCEPT", "MEMORY_DECLINE", "next_offset", "4096"} {
+			if !strings.Contains(prompt, required) {
+				t.Fatalf("%s journey omits %s", label, required)
+			}
+		}
+	}
+	for _, required := range []string{"definições e relações", "modelo completo", "não comprova invocação nativa", "memory.capture", "confirmation_declined", "confirmation_unavailable", "FALHA DO CONTROLE", "não apague", "reutilize"} {
+		if !strings.Contains(r.CodePrompt, required) {
+			t.Fatalf("Code guided journey omits its model/memory control: %s", required)
+		}
+	}
+	for _, required := range []string{"somente leitura", "estado e revisão", "reinício informado", "brain.read", "execution.next"} {
+		if !strings.Contains(readback, required) {
+			t.Fatalf("readback continuation omits %s", required)
+		}
+	}
+	for _, mutation := range []string{"maestro_apply", "execution.resume", "execution.checkpoint", "memory.capture", "brain.create", "memory.consolidate", "maintenance.enroll"} {
+		if strings.Contains(readback, mutation) {
+			t.Fatalf("read-only continuation exposes mutation %s", mutation)
+		}
+	}
+	assertPilotReadinessPrompt(t, out.Bytes(), workspaceID, true)
+	t.Run("blocked report releases no continuation", func(t *testing.T) {
+		blocked := pilotReport{SchemaVersion: 1, Status: "blocked", WorkspaceID: workspaceID}
+		var body bytes.Buffer
+		if err := finishPilotReport(&blocked, &body); err == nil {
+			t.Fatal("blocked report must return its blocked status")
+		}
+		var document map[string]json.RawMessage
+		if err := json.Unmarshal(body.Bytes(), &document); err != nil {
+			t.Fatal(err)
+		}
+		var continuation string
+		if err := json.Unmarshal(document["code_readback_prompt"], &continuation); err != nil || continuation != "" {
+			t.Fatal("blocked report must retain an empty readback field")
+		}
+	})
+}
+
+func TestPilotGuidedSelectionUsesActualNextProjection(t *testing.T) {
+	const workspaceID = "444df343c3054843e367c8b6b13f4d5d"
+	marker := "MAESTRO_PILOT_" + workspaceID
+	store := execution.Store{Root: t.TempDir()}
+	input := execution.CreateInput{WorkspaceID: workspaceID, Objective: "Synthetic participant work.", InitialNextStep: "Unrelated synthetic step.", Criteria: []execution.Criterion{{ID: "artifact", Type: execution.CriterionArtifactSnapshot, TargetRef: "bcgos://workspace/pilot"}}, AllowedRefs: []string{"bcgos://workspace/pilot"}}
+	if _, err := store.Create(input); err != nil {
+		t.Fatal(err)
+	}
+	input.InitialNextStep = marker
+	selected, err := store.Create(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, err := store.Start(workspaceID, selected.Contract.ItemID, selected.State.StateRevision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Checkpoint(workspaceID, selected.Contract.ItemID, execution.CheckpointInput{ExpectedRevision: started.State.StateRevision, AttemptID: started.State.ActiveAttemptID, Summary: marker, NextStep: marker}); err != nil {
+		t.Fatal(err)
+	}
+	listed, err := store.List(workspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 2 {
+		t.Fatalf("expected two metadata candidates, got %d", len(listed))
+	}
+	var matches []execution.NextProjection
+	for _, item := range listed {
+		body, err := json.Marshal(item)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var metadata map[string]json.RawMessage
+		if err := json.Unmarshal(body, &metadata); err != nil {
+			t.Fatal(err)
+		}
+		for _, field := range []string{"summary", "next_step"} {
+			if _, ok := metadata[field]; ok {
+				t.Fatalf("execution.list unexpectedly exposes %s", field)
+			}
+		}
+		projection, err := store.Next(workspaceID, item.ItemID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if projection.Summary == marker && projection.NextStep == marker {
+			matches = append(matches, projection)
+		}
+	}
+	if len(matches) != 1 || matches[0].ItemID != selected.Contract.ItemID {
+		t.Fatal("only actual Next projections must identify the marked work")
+	}
+	code, desktop, readback := pilotPrompts(workspaceID)
+	for name, prompt := range map[string]string{"Code": code, "Desktop": desktop, "readback": readback} {
+		listAt := strings.Index(prompt, "execution.list")
+		nextAt := strings.Index(prompt, "para cada item_id listado")
+		selectAt := strings.Index(prompt, "Somente após ler todas as projeções")
+		if listAt < 0 || nextAt <= listAt || selectAt <= nextAt {
+			t.Fatalf("%s must read every listed candidate through execution.next before selecting by summary/next_step", name)
+		}
+		if !strings.Contains(prompt, "execution.list retorna somente metadados") || !strings.Contains(prompt, "128") {
+			t.Fatalf("%s must respect the metadata-only bounded list", name)
+		}
+	}
+	after, err := store.Next(workspaceID, matches[0].ItemID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.State != matches[0].State || after.StateRevision != matches[0].StateRevision {
+		t.Fatal("selection and readback changed work state")
 	}
 }

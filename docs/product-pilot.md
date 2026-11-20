@@ -37,6 +37,53 @@ The constructor checks that the actual native server advertises that flag before
 selecting it. Ordinary packages remain the default; the Desktop package receives
 no Code hooks. Passive context is distinct from qualified native enforcement.
 
+## Explicit engineering runtime kit
+
+An independently reviewed modern canary release and its public registry may be
+selected through the existing constructor:
+
+```sh
+./dev/pilot/build-kit.sh /absolute/local/Developer/full-pilot-kit \
+  --engineering-runtime /absolute/verified-modern-release /absolute/public-registry.json
+```
+
+This closed profile accepts one active `maestro-engineering-pilot-YYYYMMDD`
+issuer and key, with a lifetime of at most 14 days. It verifies the full signed
+release before and after copying it. `RUNTIME.json` discloses actual issuance,
+expiry, version, target, public registry, manifest and runtime archive digests.
+The server comes from that exact signed release; `ARTIFACT.txt` distinguishes its
+provenance from the clean builder source. The initial complete carrier targets
+Darwin ARM64. A runtime-bearing Windows carrier and Intel runtime are unavailable
+until their own platform and distribution gates are satisfied.
+
+The Mac preparer first presents the usual isolated-directory review, then the
+complete native `pilot-runtime-review`. The participant must consciously type
+`ATIVAR CONVERSOR` before `pilot-runtime-apply` rechecks the exact review and calls
+the canonical `PlaceVerified`. A generic preparation digest alone never grants
+this second approval. Signed metadata, actual server identity, target, owner,
+workspace ID and existing runtime/placement digests are bound to the review.
+Decline/stale input leaves placement untouched; differing/partial private data
+is preserved. Successful replay checks the existing runtime without replacing
+it. Startup, connection checks and `content.status` never place or repair it.
+
+The new prepared layout uses only `product/server/maestro-mcp` and its fixed
+public registry under `product/managed/trust`. Both Code and the explicitly
+selected `--engineering-runtime-pilot` Desktop export retain the same version,
+registry, server, manifest and archive identities. Full inventory and exact
+physical executing-image validation precede authority seeding, including the
+controlled Desktop ancestor-alias path. Native selection/configuration
+fingerprints and normal source/enrolled/stable production admission are
+unchanged. This experimental key does not establish organizational publisher
+authority, native platform signing, production enrollment or production updates.
+
+The kit copies a synthetic DOCX into the fresh workspace. Its existing guided
+Code and Desktop journeys request actual conversion and paged derived-artifact
+readback, checking the independent marker/table. The read-only doctor reports
+runtime availability separately from conversion and actual client observation.
+`content.status` owns the actual admitted format list; package presence is not
+format support. Expiry refuses with a newly reviewed kit as the recovery route,
+without changing dates, deleting data or silently renewing trust.
+
 ## Participant flow and preservation
 
 The emitted preparer verifies the generic kit, shows its exact local effects and
@@ -49,17 +96,66 @@ files. It preserves all private state. Foreign, changed and incomplete material
 remains in place; recovery chooses a fresh destination, without deleting a
 previous claim, resetting memory or altering another profile.
 
+Before confirmation, each preparer discloses the settings for its new dedicated
+Code profile. Exclusive creation writes `autoMemoryEnabled:false` and
+`syncClaudeAiPlugins:false` to `client/code/settings.json` as UTF-8 without a BOM.
+These choices disable the client's automatic memory and account-synced plugin
+loading/downloads only in this profile. They do not disable Maestro's governed
+memory. Existing roots preserve all settings/customizations/session data, even
+an absent settings file; preparation never repairs eligibility by overwriting a
+profile. Profiles remain outside managed inventory and the generic kit ZIP.
+This bootstrap does not qualify hooks or promise ordinary active-plugin parity.
+
 Code launches a session-local plugin using a separate CLAUDE_CONFIG_DIR and the
-client's normal login flow. Generic portable packets retain external userConfig
-selection; see the [official Code manifest reference](https://code.claude.com/docs/en/plugins-reference#user-configuration).
+client's normal login flow. Ordinary preparation remains MCP-only or passive
+lifecycle context. **Testar Maestro → 5** is the separate, optional seven-hook
+qualification route. It calls the existing `native-review`, displays its full
+plan and requires an explicit per-session estimate and `QUALIFICAR` confirmation
+before `native-qualify-and-build`. Preparation, ordinary open, connection checks
+and check-only never start model qualification. The current canonical plan allows
+at most three CLI sessions, eight parent turns and 120 seconds per session, with
+an explicitly selected estimated per-session limit in `(0, 1]` USD. Provider
+estimates are not hard billing ceilings; child agents may make further requests.
+There is no canonical price recommendation or default. The participant chooses
+the estimate required to bind the reviewed plan, rather than guessing a quoted
+model price; the complete plan displays its aggregate estimate before consent.
+Admission, normal login and supported-host checks can still refuse before any
+model session. Existing results and private profiles are preserved rather than
+deleted or automatically retried.
+
+A successful result is written to `exports/code-native-qualified`. The checker
+and opener select it only after canonical packet validation, matching host target
+and server SHA, and exact admitted owner/workspace binding. A valid `mcp_only`
+fallback keeps using the ordinary `exports/code`; engineering fixtures, malformed
+exports and changed bindings refuse. The baseline managed inventory excludes only
+this named optional export, which retains its own closed canonical inventory;
+unknown files elsewhere still refuse. Repeating preparation preserves and checks
+both the original managed material and this optional result.
+
+For the qualified packet, the opener supplies exactly `user_home` and `workspace`
+through a new private session settings file under `client/code`, passed as
+`--settings` with `pluginConfigs["maestro-product@inline"].options`. It does not
+rewrite the sealed export, existing settings, credentials, permissions or hook
+configuration. Code supports this session selection through its
+[settings input](https://code.claude.com/docs/en/settings#change-a-setting-for-one-session)
+and [plugin options](https://code.claude.com/docs/en/settings-reference#pluginconfigs).
+Generic portable packets retain external userConfig selection; see the
+[official Code manifest reference](https://code.claude.com/docs/en/plugins-reference#user-configuration).
+The full plan and result are retained as private `native-*.json` diagnostics;
+share only the reviewed `RELATORIO.md`. This delivery path does not continuously
+recompute the qualification configuration fingerprint or establish active
+third-party-plugin parity. Packet qualification and actual client observation
+remain distinct gates.
+
 The prepared Desktop MCPB uses `mcpb --desktop-pilot`: an explicit engineering-only
 profile with a full workspace-ID extension name, a short visible rehearsal label
 and the exact prepared owner/workspace paths in its server argument vector. It
 omits `user_config`: displayed directory defaults did not establish saved MCP
 configuration in an observed Claude Desktop 4.23118.0 rehearsal. The explicit
-preparation review and normal native installation remain required. It is limited
-to ordinary unversioned `0.0.0` rehearsals and rejects signed/enrolled, stable,
-native and lifecycle profiles. The normal product identity and generic packet
+preparation review and normal native installation remain required. The default profile remains limited
+to ordinary unversioned `0.0.0` rehearsals; the explicit runtime profile above is
+the only versioned exception. Both reject enrolled, stable and native carrier
+combinations; Code lifecycle context is separate. The normal product identity and generic packet
 contract remain unchanged. The typed optional inventory binding regenerates the
 exact canonical manifest during validation. `pilot-check` matches it against the
 admitted preparation and includes the exact visible extension in its prompt.
@@ -77,8 +173,10 @@ permissions. Generic, stable and Windows logical roles remain unchanged.
 The public packet validator remains strict about ancestor, leaf and inner links.
 Only the runtime's local engineering MCPB fallback may resolve the managed
 root's parent, append the unchanged basename and strictly validate that physical
-packet. It must be an ordinary DesktopPilot without stable, registry or native
-authority, and its physical server path/digest must match the executing file pin
+packet. It must be either an ordinary unversioned DesktopPilot without registry
+authority or the explicit runtime profile with the same pinned public authority.
+Stable and native carriers still refuse. Its physical server path/digest must
+match the executing file pin
 captured at process startup and rechecked after validation. Later managed reads
 retain the physical root. Owner/workspace paths are never resolved this way;
 no OS alias or installed permission is changed. The pin is bounded file identity,
@@ -100,8 +198,15 @@ keeps the verified executable, test launcher and bounded diagnostic report;
 neither the preparer nor the checker repairs owner ACLs or removes partial data.
 
 The participant opens **Testar Maestro** and chooses a clearly named route.
-Options 3 (Code) and 4 (Desktop) are independent read-only connection checks. Each
-copies one prompt bound to the verified workspace and exact client connector;
+For the complete native Code trial, first use option 3 to open the dedicated Code
+profile and finish its normal login, then return to option 5, review the actual
+plan and consciously authorize its model checks. After qualification, the same
+ordinary Code routes select the validated seven-hook export automatically.
+Desktop continues using the separate MCP extension; it does not install Code's
+seven native hooks or claim Code subagent/skill execution parity.
+Options 3 (Code) and 4 (Desktop) are independent read-only connection checks. Code opens with its exact report prompt as one literal initial argument, without
+clipboard or manual paste. Desktop copies one prompt bound to the verified workspace
+and exact client connector;
 Desktop names the unique local extension and requires neither the Code CLI nor
 a Code work item. Each prompt calls only `maestro_context` once and reports the
 workspace and returned connection-health state. It neither queries work-item
@@ -113,7 +218,14 @@ Option 1 is the complete Code exercise; option 2 is the subsequent Desktop
 continuity/resume exercise. These prompts bind a synthetic trial marker. The
 Desktop continuity prompt discovers the single matching work item and uses its
 current revision, so the participant does not transport execution IDs/revisions.
-The launcher copies a prompt and opens a client only after that explicit choice.
+The launcher opens Code with the selected initial prompt, or copies the Desktop
+prompt and opens that client, only after the explicit menu choice. Ordinary
+**Abrir Code** without a prompt still opens an empty session. On Windows,
+automatic prompt delivery requires a native `claude.exe` application on PATH;
+`.cmd`, `.bat`, `.ps1`, functions and aliases never receive the automatic prompt.
+Use the authorized native installation, or open **Abrir Code.cmd** without arguments
+and manually paste the current diagnostic's CODE.txt or CODE-CONEXAO.txt. This kit
+does not install or rewrite the client; ordinary opening retains its prior resolver.
 For Desktop, the participant confirms installation of the named extension and
 pastes the copied prompt into a new conversation. No directory fields need
 copying or saving. Settings > Extensions > Configure > Enabled is conditional
@@ -133,11 +245,31 @@ hooks and confirmation as `not_tested`; participants record those observations
 after using the clients. Share only the reviewed Markdown report, not owner,
 workspace, client profiles or participant-local generated packets/prompts.
 
+## Desktop owner review channel
+
+The explicit local preparation review discloses selection of `local-browser`
+before PREPARAR or digest confirmation. Both platform preparers build the
+ordinary Desktop pilot with `--owner-review-channel local-browser`; its typed
+inventory and canonical manifest retain that exact startup choice. This explicit channel takes precedence even when native forms are advertised.
+A foreground protected request opens
+its complete review and approval schema in an ephemeral local browser page,
+requiring the initially unchecked checkbox and conscious exact-record approval.
+Decline, cancellation, closing, expiry after at most 150 seconds or opener error
+never approves. No URL or approval token is returned to the model. Generic,
+stable and source profiles remain unchanged. The separately selected experimental
+Code pilot may carry the same channel with `--code-pilot`; its exact local
+binding/channel is retained in immutable inventory, and its native fingerprints
+remain unchanged. Read-only tool permission
+never substitutes for review. See [the channel contract](product-local-owner-review.md).
+Actual Desktop presentation/effect/readback and native hooks remain separately
+observed evidence; this local channel does not qualify MCP native forms.
+
 ## Trust and platform limits
 
-This is an unsigned, unversioned engineering rehearsal. Server release identity,
-production signing, source enrollment and signed update are unavailable; 0.0.0
-is only the portable packet label. Checksums identify integrity, not publisher
+The ordinary profile is an unsigned, unversioned engineering rehearsal; `0.0.0`
+is only its portable packet label. The explicit runtime profile has a pinned
+version and short-lived experimental signature. Production signing, source
+enrollment and signed update remain unavailable in both profiles. Checksums identify integrity, not publisher
 authenticity. Admitted offline conversion and native enforcement keep their
 own qualification requirements. Windows Darwin jobs remain unavailable.
 
@@ -180,3 +312,37 @@ Keep prepared exports/private state local and preserve any policy refusal.
 No new smoke/canary framework or CI band is introduced. Existing focused product
 journeys and direct emitted-preparer verification cover source behavior; full
 affected hosted checks and independent reviews remain promotion gates.
+
+Native Desktop form qualification remains `unavailable` until an actual client advertises and renders the form. Local-browser review is a separate supported channel and does not close a native-form qualification gate.
+
+## Windows participant acquisition adapter
+
+The clean Mac builder accepts `--engineering-acquisition COMPLETE_SIGNED_RELEASE
+PUBLIC_REGISTRY`. Its local complete release is verified normally, but only the
+signed non-runtime basebundle/server, notes, manifest, signatures and the two
+signed sidecars from sibling `runtime-recipe/` enter the Windows ZIP. No runtime
+archive, CPython, wheel or third-party DLL is copied. The development-only
+`dev/pilot/verify-carrier` calls canonical acquisition.Review against the emitted
+closed carrier, including every declared hash and signature, without downloading,
+executing, placing or claiming whole-directory release admission.
+
+The native preparer initializes only the isolated layout, then presents
+`pilot-acquisition-review`: admitted owner/workspace ID, fixed private cache,
+all public inputs, aggregate bytes, worst additional retention, attempt and
+expiry. BAIXAR CONVERSOR approves that complete record. The native apply command
+requires its exact digest/file, rejects altered destination/workspace, and hands
+the original reviewed Plan to acquisition.Acquire. Only Windows/amd64 may acquire.
+The core preserves its finite lock/cache/attempt/expiry rules and returns a new
+complete private snapshot, leaving the incomplete carrier unchanged. The caller
+performs whole VerifyDirectory again. A separate pilot-runtime-review and
+ATIVAR CONVERSOR consent then own canonical PlaceVerified and Windows confinement
+qualification; no download approval grants placement or model execution.
+
+The same preparer exports Code with explicit CodePilot/local-browser selection
+and Desktop with the existing engineering runtime profile. This adapter depends
+on the independently reviewed CodePilot owner-review implementation. The test
+menu preserves optional native-hook qualification as another conscious action.
+Read-only doctor/startup never acquires, places, retries or repairs. Interrupted
+preparations/cache remain private and preserved; choosing a fresh rehearsal is
+the current guided recovery, without claiming automatic resume. Organization
+signing, native Windows acceptance and actual client presentation remain distinct.

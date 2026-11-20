@@ -7,6 +7,8 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/privatelock"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
 	"golang.org/x/sys/windows"
+	"io"
+	"os"
 	"path/filepath"
 	"time"
 )
@@ -74,3 +76,31 @@ func acquireOwnerTransitionFile(path string, create bool) (func() error, error) 
 	}
 }
 func syncPrivateDirectory(path string) error { return winprivate.Sync(path) }
+
+func appendOwnerFile(path string, body []byte, maximum int64) error {
+	dir, err := winprivate.Open(filepath.Dir(path), false)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	file, err := dir.OpenFile(filepath.Base(path), os.O_CREATE|os.O_APPEND|os.O_WRONLY)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if info.Size()+int64(len(body)) > maximum {
+		return errors.New("owner append exceeds bounded size")
+	}
+	n, err := file.Write(body)
+	if err != nil {
+		return err
+	}
+	if n != len(body) {
+		return io.ErrShortWrite
+	}
+	return file.Sync()
+}

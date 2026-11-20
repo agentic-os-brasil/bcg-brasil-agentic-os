@@ -23,9 +23,11 @@
     "capability-recheck",
     "runtime-drift-check",
     "self-observation-capture",
+    "update-availability",
     "update-check",
     "darwin-housekeeping-daily",
     "darwin-deep-weekly",
+    "memory-weekly",
     "yoda-self-review-weekly",
     "darwin-structural-evolution-proposal"
   ]

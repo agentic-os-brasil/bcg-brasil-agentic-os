@@ -11,7 +11,7 @@ import (
 func TestInstallProjectsManagedNativeAgentsIdempotently(t *testing.T) {
 	workspace := t.TempDir()
 	first, err := Install(workspace)
-	if err != nil || first.State != "installed" || len(first.Agents) != 6 {
+	if err != nil || first.State != "installed" || len(first.Agents) != 8 {
 		t.Fatalf("status=%#v err=%v", first, err)
 	}
 	caseBody, err := os.ReadFile(filepath.Join(workspace, ".claude", "agents", "case-agent.md"))
@@ -217,5 +217,54 @@ func TestProjectionRefusesManagedFileSymlink(t *testing.T) {
 	body, err := os.ReadFile(outside)
 	if err != nil || string(body) != managedMarker+"outside\n" {
 		t.Fatalf("outside file changed: body=%q err=%v", body, err)
+	}
+}
+
+func TestRepositoryReviewDispatchAndProjectionUpgrade(t *testing.T) {
+	for _, raw := range []string{`{"subagent_type":"repository-spec-reviewer","run_in_background":true}`, `{"resume":"worker"}`, `{"team_name":"foreign"}`, `{"isolation":"worktree"}`, `{"run_in_background":null}`, `{"run_in_background":"false"}`} {
+		if ForegroundReviewDispatch([]byte(raw)) {
+			t.Fatalf("unsafe dispatch admitted: %s", raw)
+		}
+	}
+	if !ForegroundReviewDispatch([]byte(`{"subagent_type":"repository-spec-reviewer","prompt":"frozen diff","run_in_background":false}`)) {
+		t.Fatal("foreground dispatch refused")
+	}
+	for _, item := range managed {
+		if RepositoryReviewer(item.ID) {
+			continue
+		}
+		current, err := render(item)
+		if err != nil {
+			t.Fatal(err)
+		}
+		prior := strings.Replace(string(current), "maestro_planner profile: Maestro is the main-session hub; ordinary specialists run sequentially, with one closed foreground repository Standards/Spec pair exception and no child delegation.", "bounded sequential maestro_planner profile: Maestro is the main-session hub, one specialist at a time, no child delegation.", 1)
+		if !owned([]byte(prior), item) {
+			t.Fatalf("exact prior projection cannot upgrade: %s", item.ID)
+		}
+		if owned([]byte(prior+"owner edit"), item) {
+			t.Fatalf("owner modification replaceable: %s", item.ID)
+		}
+	}
+}
+
+func TestDesktopMethodReferencesDoNotAdmitNativeIdentities(t *testing.T) {
+	input := []byte(`Agent(subagent_type="repository-spec-reviewer") and Skill tool with "pocock-codebase-design"; managed/agents/yoda/AGENT.md`)
+	body, err := ProjectDesktopMethodInvocations(input)
+	if err != nil || !strings.Contains(string(body), `Agent(subagent_type="maestro-desktop-methods:repository-spec-reviewer")`) || !strings.Contains(string(body), `Skill tool with "pocock-codebase-design"`) {
+		t.Fatalf("inert projection: %s %v", body, err)
+	}
+	for _, name := range []string{DesktopMethodNamespace + ":case-agent", "prefix:" + DesktopMethodNamespace + ":case-agent"} {
+		if _, ok := CanonicalAgentID(name); ok {
+			t.Fatal("Desktop identity became native", name)
+		}
+	}
+	if _, err := NativeAgentID("case-agent", DesktopMethodNamespace); err == nil {
+		t.Fatal("Desktop native ID admitted")
+	}
+	if _, err := Project(DesktopMethodNamespace); err == nil {
+		t.Fatal("Desktop native projection admitted")
+	}
+	if _, err := ProjectAgentInvocations(input, DesktopMethodNamespace); err == nil {
+		t.Fatal("Desktop admitted through native renderer")
 	}
 }

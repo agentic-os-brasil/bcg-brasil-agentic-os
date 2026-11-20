@@ -4,46 +4,216 @@
   "title": "BCG Brasil Agentic OS bounded maintenance command",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "command_id", "job_id", "workspace_id", "trigger", "scheduled_for", "requested_at", "deadline", "proposal_only"],
+  "required": [
+    "schema_version",
+    "command_id",
+    "job_id",
+    "workspace_id",
+    "trigger",
+    "scheduled_for",
+    "requested_at",
+    "deadline",
+    "proposal_only"
+  ],
   "properties": {
-    "schema_version": {"const": 1},
-    "command_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"},
-    "job_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"},
-    "workspace_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"},
-    "trigger": {"enum": ["continuous", "event", "presence", "daily", "weekly", "monthly"]},
-    "event_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"},
-    "scheduled_for": {"type": "string", "format": "date-time"},
-    "requested_at": {"type": "string", "format": "date-time"},
-    "deadline": {"type": "string", "format": "date-time"},
-    "proposal_only": {"type": "boolean"}
+    "schema_version": {
+      "const": 1
+    },
+    "command_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+    },
+    "workspace_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+    },
+    "trigger": {
+      "enum": [
+        "continuous",
+        "event",
+        "presence",
+        "daily",
+        "weekly",
+        "monthly"
+      ]
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+    },
+    "scheduled_for": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "requested_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "deadline": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "proposal_only": {
+      "type": "boolean"
+    },
+    "weekly_mode": {
+      "enum": [
+        "native_probe",
+        "weekly_working"
+      ]
+    }
   },
   "allOf": [
     {
-      "if": {"properties": {"trigger": {"enum": ["continuous", "event"]}}},
-      "then": {"required": ["event_id"]},
-      "else": {"not": {"required": ["event_id"]}}
-    },
-    {
-      "if": {"properties": {"proposal_only": {"const": true}}},
-      "then": {
+      "if": {
         "properties": {
-          "job_id": {"enum": ["darwin-structural-evolution-proposal", "yoda-self-review-weekly"]}
+          "trigger": {
+            "enum": [
+              "continuous",
+              "event"
+            ]
+          }
         }
+      },
+      "then": {
+        "required": [
+          "event_id"
+        ]
       },
       "else": {
         "not": {
-          "properties": {"job_id": {"enum": ["darwin-structural-evolution-proposal", "yoda-self-review-weekly"]}},
-          "required": ["job_id"]
+          "required": [
+            "event_id"
+          ]
         }
       }
     },
     {
-      "if": {"properties": {"job_id": {"const": "darwin-structural-evolution-proposal"}}, "required": ["job_id"]},
-      "then": {"properties": {"proposal_only": {"const": true}, "trigger": {"const": "monthly"}}}
+      "if": {
+        "required": [
+          "weekly_mode"
+        ]
+      },
+      "then": {
+        "properties": {
+          "job_id": {
+            "enum": [
+              "yoda-self-review-weekly",
+              "memory-weekly"
+            ]
+          },
+          "proposal_only": {
+            "const": false
+          },
+          "trigger": {
+            "const": "weekly"
+          }
+        }
+      },
+      "else": {
+        "if": {
+          "properties": {
+            "proposal_only": {
+              "const": true
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "job_id": {
+              "enum": [
+                "darwin-structural-evolution-proposal",
+                "yoda-self-review-weekly"
+              ]
+            }
+          }
+        },
+        "else": {
+          "not": {
+            "properties": {
+              "job_id": {
+                "enum": [
+                  "darwin-structural-evolution-proposal",
+                  "yoda-self-review-weekly"
+                ]
+              }
+            },
+            "required": [
+              "job_id"
+            ]
+          }
+        }
+      }
     },
     {
-      "if": {"properties": {"job_id": {"const": "yoda-self-review-weekly"}}, "required": ["job_id"]},
-      "then": {"properties": {"proposal_only": {"const": true}, "trigger": {"const": "weekly"}}}
+      "if": {
+        "properties": {
+          "job_id": {
+            "const": "darwin-structural-evolution-proposal"
+          }
+        },
+        "required": [
+          "job_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "proposal_only": {
+            "const": true
+          },
+          "trigger": {
+            "const": "monthly"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "job_id": {
+            "const": "yoda-self-review-weekly"
+          }
+        },
+        "required": [
+          "job_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "trigger": {
+            "const": "weekly"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "job_id": {
+            "const": "memory-weekly"
+          }
+        },
+        "required": [
+          "job_id"
+        ]
+      },
+      "then": {
+        "required": [
+          "weekly_mode"
+        ],
+        "properties": {
+          "trigger": {
+            "const": "weekly"
+          },
+          "proposal_only": {
+            "const": false
+          }
+        }
+      }
     }
   ]
 }

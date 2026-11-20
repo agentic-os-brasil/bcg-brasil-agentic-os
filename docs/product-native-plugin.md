@@ -9,15 +9,18 @@ initialization and ordinary MCP operation, use the
 
 | Packet | Native behavior |
 | --- | --- |
-| `plugin` | Builds the complete portable MCP Code packet, including six inert canonical specialist projections, with an explicit native-unavailable reason and no active hooks. Packaging starts no qualification or model session. |
+| `plugin` | Builds the complete portable MCP Code packet, including eight inert canonical specialist projections, with an explicit native-unavailable reason and no active hooks. Packaging starts no qualification or model session. |
 | `plugin --lifecycle-context` | Builds the explicit `mcp_lifecycle` Code packet with three non-enforcing context/observation hooks. It does not qualify native enforcement or project specialists. See the [lifecycle context guide](product-lifecycle-context.md). |
 | `native-qualify-and-build` | Reviews and exercises the exact local target, then immediately builds a native packet only after successful qualification. |
 | `mcpb` | Carries the same shared server and immutable resources for Desktop. It installs neither Code agents/hooks nor Desktop Skills. |
 
-The implemented native profile is bounded sequential `maestro_planner`.
-`native_advisory` remains unavailable. This construction supplies an executable
-qualification path; controlled source tests have not established actual native
-CLI, Code-tab or Desktop acceptance.
+The implemented `maestro_planner` profile keeps ordinary specialists sequential,
+with one closed foreground parallel exception: `repository-standards-reviewer`
+and `repository-spec-reviewer`. `native_advisory` remains unavailable. The existing
+Case → Gamma qualifier does not qualify the review pair's actual overlap or
+verdict quality. This construction supplies an executable qualification path;
+controlled source tests have not established actual native CLI, Code-tab or
+Desktop acceptance.
 
 ## 1. Select the actual target
 
@@ -53,7 +56,11 @@ superset of supported local instruction files, rules, imports and startup-mode
 controls, including missing-source membership. Unbounded additional-directory
 or third-party-plugin sources, unsupported managed-settings directories,
 ambiguous import/alias layouts and unsupported Git worktree settings return
-unavailable. The qualifier never changes the owner's profile automatically.
+unavailable. The qualifier never changes the owner's profile automatically. A nonempty synced
+cache is supported only when an applicable stored user/local/managed
+`syncClaudeAiPlugins:false` already prevents loading; shared-project false alone
+does not. See the [finite plugin profile](product-native-hooks.md) for exact
+source and fingerprint boundaries.
 Implicit/default auto-memory is outside this native profile; ordinary MCP
 operation remains available. Host identity is streamed under a separate
 512-MiB bound, while the packet server retains its 128-MiB payload bound.
@@ -147,6 +154,18 @@ estimated limit is `0.75` USD. Provider billing and CLI limits are estimates,
 not hard spending ceilings. An observed per-session estimate above the reviewed
 amount stops remaining sessions.
 
+The qualification-only read-only startup wrapper streams two complete snapshots
+of the selected owner state and workspace metadata. It covers every subtree,
+refusing aliases, unstable file reads or state beyond **32,768 entries, 512 MiB
+per file and 1 GiB total**. Its exact reviewed `startup_check_seconds` is **45**;
+ordinary seven-hook vectors retain their **5-second** deadlines. An actual
+420,384,047-byte/9,989-entry synthetic owner completed the direct source CLI check
+in 15.163 seconds. This is a measurement, not an availability guarantee at the
+finite limits or on another host. Larger state, including retained acquisition
+cache, may remain unavailable; no subtree is silently skipped. The three-session,
+eight-parent-turn and 120-second per-session limits remain unchanged.
+
+
 ## 3. Confirm that exact review and build
 
 Use the same arguments and the exact `review_digest` from the complete review:
@@ -180,6 +199,48 @@ packet files.
 | Incomplete challenge evidence | Retain the reported private scratch/session metadata and investigate the exact failed control. Assistant claims cannot promote the result. |
 | Timeout | Qualification is unavailable. Cancellation targets the owned Unix process group; independently detached descendants and cleanup remain unattested. Use the exact retained session metadata for diagnosis. |
 
+Each attempted session's valid reported cost estimate contributes to
+`estimated_spend_usd` and `estimated_spend_sessions`, including when execution or
+qualification fails. `estimated_spend_complete` means estimates were available
+for every attempted session; it does not mean qualification succeeded or that
+provider billing is complete. An unavailable estimate remains unknown rather
+than being counted as a known zero. Known estimates never turn an unavailable
+qualification into a qualified result.
+
+A failed attempt retains a private `failure.json` of at most 4096 bytes. Its
+`startup` object counts correlated SessionStart starts/responses (each capped at
+32) and retains at most eight response observations; `capped` identifies either
+truncation. Outcomes are closed to `success`, `error`, `cancelled` or `other`.
+Marker classifications are `malformed`, `missing`, `startup` or `other`;
+`nonce_matched` records only exact equality and never the nonce or message.
+A response's typed exit code remains null when unavailable. No raw hook output,
+messages, paths, authentication data or per-hook timing enters this diagnostic.
+The additive `post` object counts correlated PostToolUse starts/responses and
+uncorrelated responses, with counters capped at 32. It retains at most four
+closed observations: normalized outcome, `exact`/`unattested` binding, tool kind,
+latest tool kind at hook start, last-result kind and nullable typed exit code.
+Tool kinds are `allowed_read`, `allowed_write`, `edit`, `other` or `unbound`;
+these buckets retain no identity or path. `capped` marks either limit. Missing,
+unsuccessful and delayed/interleaved post evidence remain distinguishable while
+actual successful Read PostToolUse is still required. Failure JSON uses compact
+encoding to retain the existing startup/read caps within the same 4096-byte cap.
+
+The additive `read` object reports only attempts at the exact synthetic allowed
+Read, in observed call order. It counts attempts and retains at most eight
+per-attempt boolean records: `canonical_pre`, `post`, `result`,
+`synthetic_content`, `denied` and `error_result`; `truncated` marks overflow.
+`synthetic_content` reflects the verifier's successful-result marker check.
+Flags remain separate per call; evidence from different attempts cannot combine
+into a passing Read. Truncation limits diagnostics, never acceptance. The same
+4096-byte failure-record bound remains enforced, including combined startup and
+Read observations. No tool ID, path, content or timing is retained.
+
+`canonical_flow_check: not_reached` means an earlier control prevented that
+check; `unavailable` means it was reached without a complete observation, and
+`observed` accompanies the existing canonical-flow observation. A false
+`canonical_flow_observed` alone does not establish that the canonical route
+failed.
+
 The command does not install/register Code, suppress native permission prompts,
 clear a live fence or perform global process cleanup. A partial result may be
 printed before a nonzero exit when scratch already exists; assess both the
@@ -204,8 +265,19 @@ result.
 | Timed-out helper | A separate session reports the timeout and blocks the synthetic Edit. |
 | Case → Gamma | The bounded sequential dispatch, native-ID correlation and stops agree with canonical flow metadata. These observations establish neither artifact custody/delivery nor a Yoda verdict or completed work item. |
 
+Candidate pre/post hooks place an exact-call marker in the documented
+`systemMessage` field only after the canonical adapter succeeds. Its SHA256
+uses a versioned domain and a canonical JSON array of event, session, tool-use
+ID, tool name and probe nonce; raw identities and tool content are absent from
+the marker. The verifier binds successful native hook envelopes to that exact
+call instead of the latest assistant tool. An outcome of success, typed exit 0
+and the exact event-bound marker are all required; a marker alone, returned
+content, old nonce-only text or an untagged hook supplies no canonical success.
+This is candidate-local correlation, not signing or install authority; ordinary
+installed hooks remain marker-free. The prior failed trial is not reclassified.
+
 Candidate-only instrumentation checks startup, tags the unchanged canonical
-pre-tool decision using supported `systemMessage`, and adds a separate all-tool
+pre/post-tool result using supported `systemMessage`, and adds a separate all-tool
 scope fence. The scope fence permits only the reviewed controls and bounded
 Case/Gamma dispatch; it cannot supply PASS evidence for normal denial or helper
 failure. Fault injection targets synthetic Edit operations. The negative Read
@@ -231,11 +303,13 @@ prevention guarantee; stop observations remain separate from verified results.
 
 `packet-inventory.json` remains the closed file inventory with exact hashes,
 sizes and modes. `maestro-packet.json` adds the selected OS/architecture,
-method/resource identities, all seven canonical identities and
-fourteen immutable agent assets, policy, provenance, licenses and any admitted
+method/resource identities, all nine canonical identities and
+sixteen immutable agent assets, policy, provenance, licenses and any admitted
 native files. Executable Agent calls use exact `maestro-product:<canonical-id>`
-names. Maestro is the main-session hub; the six specialist projections preserve
-their current tool contracts. Gamma currently performs tool-free bounded packet
+names. Maestro is the main-session hub; the eight specialist projections preserve
+their tool contracts. The repository Standards/Spec pair has only scoped
+Read/Glob/Grep and must run as complementary foreground workers; the ordinary
+Case/Account/refiner sequence remains sequential. Gamma currently performs tool-free bounded packet
 analysis, rather than source inspection or full review custody.
 
 Reference closure distinguishes embedded assets, external-source references and

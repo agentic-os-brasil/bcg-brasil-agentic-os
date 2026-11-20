@@ -34,6 +34,7 @@ func inspectCurrentPacket(ctx context.Context, path, format string, o installer.
 		return packaging.PacketStatus{}, errors.New("current packet verifier executable changed")
 	}
 	args := []string{"packet-verify", "--destination", path, "--packet-format", format, "--carrier-profile", installer.StableClientProfile, "--carrier-id", o.Request.CarrierID, "--carrier-version", installer.StableCarrierVersion}
+	args = installer.ExperimentalChildArgs(args, o.ExperimentalSeed, o.ManagedRoot)
 	body, err := clientCommand(ctx, server, args, o.Request.Workspace)
 	if err != nil {
 		return packaging.PacketStatus{}, err
@@ -46,6 +47,9 @@ func inspectCurrentPacket(ctx context.Context, path, format string, o installer.
 	expectedMode := "mcp_only"
 	if format == "plugin" && o.Request.LifecycleContext {
 		expectedMode = "mcp_lifecycle"
+	}
+	if format == "plugin" && o.Request.NativeEnforcement {
+		expectedMode = "native"
 	}
 	if status.Stable == nil || *status.Stable != expected || status.Format != format || status.ServerSHA256 != serverSHA || status.Version != identity.Version || status.EmbeddedInputsSHA256 != identity.EmbeddedInputsSHA256 || status.RegistrySHA256 != identity.AuthorityRegistrySHA256 || status.NativeMode != expectedMode {
 		return packaging.PacketStatus{}, errors.New("actual current packet verification differs")
