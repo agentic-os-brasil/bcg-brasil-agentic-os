@@ -95,6 +95,7 @@ func (function EligibilityFunc) Evaluate(ctx context.Context, artifact Artifact)
 }
 
 type Engine struct {
+	modelWeekly              *ModelWeeklyCommit
 	ExpectedDailyFingerprint string
 	// PublicationGuard fences the visible commit; the activation lock is already held.
 	PublicationGuard          func(func() error) error
@@ -371,6 +372,12 @@ func (engine *Engine) DreamWeekly(ctx context.Context, workspaceID string, anyDa
 	lifetime.l3Generations, err = engine.l3GenerationCount(workspaceID, l3)
 	if err != nil {
 		return DreamResult{}, fmt.Errorf("verify L3 generation evidence: %w", err)
+	}
+	// Provider-specific reprocessing retains its original cache/provenance, but
+	// identical eligible L1 evidence is not another lifetime continuity event.
+	lifetime.l3Generations, err = engine.l3MaterialGenerationCount(workspaceID, l3, l2, false)
+	if err != nil {
+		return DreamResult{}, fmt.Errorf("verify lifetime source materiality: %w", err)
 	}
 	lifetime.l3EvidenceDigest = sha256.Sum256(artifactSource(lifetime).Content)
 	eligible, reason, err := engine.Eligibility.Evaluate(ctx, lifetime)

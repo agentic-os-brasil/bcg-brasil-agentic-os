@@ -23,6 +23,17 @@ an explicit Code scope; Code registration is optional and separately reviewed.
 You do not need a Git checkout, hand-written request JSON or a manually
 generated identifier.
 
+An optional reviewed `code_configuration_directory` selects an existing private
+Code profile inside the exact owner, separate from product, brain, workspace
+and packets. The same selection is retained in the current record, registration
+review and generated management/update recipes. It cannot change on an existing
+carrier. Native qualification and registration use it through child-process
+environment only; an empty legacy selection keeps the prior contract.
+Profile provisioning and official login are explicit participant actions,
+never credential copying or edits to the ordinary profile. A dedicated profile
+does not suppress effective project instructions or enterprise managed policy;
+the existing qualifier still decides compatibility.
+
 Declining leaves that operation pending. A source observation, activation,
 client regeneration and native registration are separate effects, so the console
 shows the exact review at each required transition. It never grants blanket
@@ -124,6 +135,33 @@ version/help/JSON interface before plugin effects. The scoped local marketplace
 and qualified plugin ID are specific to this carrier. The adapter reads actual
 marketplace/plugin state, uses supported add/install/update commands, then reads
 both inventories again.
+
+For a versioned command source, that original review also shows the exact fixed
+provider command, generated launcher script, catalog revision and narrow host
+command digest. Review remains read-only. After the operator confirms, the
+installer supplies only the host's supported `--accept-command <sha256>` option
+for that exact install/update; it never grants broad command approval. The
+provider, current packet, selected executable and private record are checked
+again before effects. A host missing that option stays pending. Host policy and
+Claude-session safeguards remain in force; a refusal preserves its closed error
+category and does not cause a retry through another execution environment.
+
+Current command-source COPY readback may omit folder-only fields. Registration
+then requires the exact selected-profile cache path, authenticated COPY provider,
+actual cached plugin manifest, independently computed host content-version suffix
+and every canonical plugin byte and directory. The raw host version is retained
+alongside the verified manifest version and content digest. Only the root
+`.in_use` directory with the host's bounded PID-marker schema is treated as host
+metadata; other additions, links, malformed markers and changed payloads refuse
+current registration. This does not default an absent field to false or infer
+freshness from a version prefix. Legacy explicit folder observations retain their
+existing contract.
+
+Windows providers preserve quoted arguments and use an explicit UTF-8 signature
+when their script contains non-ASCII arguments, as required by
+[Windows PowerShell's script decoding](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_character_encoding).
+Existing ASCII provider bytes are preserved. An occupied provider with different
+bytes is preserved for explicit review, never silently rewritten.
 
 If you initially leave Code unselected, return through the same launcher and
 choose Code registration. Select the first executable through its exact review;

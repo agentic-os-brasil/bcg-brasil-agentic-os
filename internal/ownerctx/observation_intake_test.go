@@ -457,7 +457,7 @@ func TestSelfObservationLegacyLogExplicitInitialization(t *testing.T) {
 	if err != nil || !bytes.Equal(before, after) {
 		t.Fatalf("migration changed canonical bytes: %v", err)
 	}
-	if info, err := os.Stat(lock); err != nil || info.Size() != 0 || info.Mode().Perm() != 0600 {
+	if body, err := readOwnerFile(lock, 1); err != nil || len(body) != 0 {
 		t.Fatalf("migration did not admit private empty persistent lock: %v", err)
 	}
 	if _, err := Initialize(root); err != nil {
@@ -527,12 +527,6 @@ func TestSelfObservationLegacySetupPreservesUnsafeState(t *testing.T) {
 				if err := os.WriteFile(lock, []byte("legacy-active-token"), 0600); err != nil {
 					t.Fatal(err)
 				}
-			case "active-native":
-				unlock, err := acquireOwnerTransitionFile(lock, false)
-				if err != nil {
-					t.Fatal(err)
-				}
-				defer unlock()
 			case "log-symlink", "lock-symlink", "log-hardlink", "lock-hardlink":
 				target := log
 				if strings.HasPrefix(kind, "lock-") {
@@ -562,8 +556,27 @@ func TestSelfObservationLegacySetupPreservesUnsafeState(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			var heldLock func() error
+			if kind == "active-native" {
+				heldLock, err = acquireOwnerTransitionFile(lock, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if heldLock != nil {
+						_ = heldLock()
+					}
+				}()
+			}
 			if _, err := Initialize(root); err == nil {
 				t.Fatal("explicit setup accepted unsafe/active legacy state")
+			}
+			// Windows byte-range locks exclude reads through another handle.
+			if heldLock != nil {
+				if err := heldLock(); err != nil {
+					t.Fatal(err)
+				}
+				heldLock = nil
 			}
 			logAfter, err := os.ReadFile(log)
 			if err != nil || !bytes.Equal(logBefore, logAfter) {

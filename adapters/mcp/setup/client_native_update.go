@@ -59,7 +59,7 @@ func ReviewNativeClientUpdate(ctx context.Context, o installer.ClientOptions, n 
 	if err != nil || before != s.Server.SHA256 {
 		return packaging.NativeReview{}, errors.New("current native qualifier identity changed")
 	}
-	body, err := clientCommand(ctx, server, args, o.Request.Workspace)
+	body, err := clientCommandWithProfile(o.Request.CodeConfigurationDirectory)(ctx, server, args, o.Request.Workspace)
 	if err != nil {
 		return packaging.NativeReview{}, err
 	}
@@ -106,6 +106,7 @@ func ApplyNativeClientUpdate(ctx context.Context, o installer.ClientOptions, n N
 	defer cancel()
 	cmd := exec.CommandContext(bounded, server, args...)
 	cmd.Dir = o.Request.Workspace
+	cmd.Env = clientCodeEnvironment(o.Request.CodeConfigurationDirectory)
 	cmd.WaitDelay = 2 * time.Second
 	var output boundedClientOutput
 	cmd.Stdout = &output
@@ -198,12 +199,13 @@ func copyQualifiedClientTree(source, destination, expected string) error {
 			return err
 		}
 		count, copyErr := io.Copy(out, io.LimitReader(in, (128<<20)+1))
+		modeErr := out.Chmod(info.Mode().Perm())
 		syncErr := out.Sync()
 		closeErr := out.Close()
 		if count != info.Size() || count > 128<<20 {
 			return errors.New("qualified native file changed or exceeds bound")
 		}
-		return errors.Join(copyErr, syncErr, closeErr)
+		return errors.Join(copyErr, modeErr, syncErr, closeErr)
 	})
 	if err != nil {
 		return err

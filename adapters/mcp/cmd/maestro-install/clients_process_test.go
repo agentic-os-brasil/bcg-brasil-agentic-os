@@ -1,8 +1,8 @@
 package main
 
 // The positive process witness is compiled only with go test -c. It composes
-// the exact production owners with the existing trusted native-verifier seam,
-// bound to actual independently built seed bytes. Shipping builds contain no
+// the exact production owners with either the existing byte-pinned verifier or
+// an explicitly verified finite experimental role. Shipping builds contain no
 // fixture flag, environment override or native-admission bypass.
 import (
 	"context"
@@ -15,13 +15,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
 )
 
-type clientProcessFixture struct{ Self, Version, Pin, SeedSHA, ManagedRoot, UserHome, Workspace string }
+type clientProcessFixture struct{ Self, Version, Pin, Profile, SeedSHA, ManagedRoot, UserHome, Workspace string }
 
 func TestMain(m *testing.M) {
 	if len(os.Args) > 1 && os.Args[1] == "test-client-hold" {
@@ -30,26 +32,11 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 	if len(os.Args) > 1 && (os.Args[1] == "test-client-launch" || os.Args[1] == "test-client-manage" || os.Args[1] == "test-client-interrupt") {
-		body, err := os.ReadFile(os.Getenv("MAESTRO_CLIENT_PROCESS_FIXTURE"))
+		f, o, err := readClientProcessFixtureOptions()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(2)
 		}
-		var f clientProcessFixture
-		if err = json.Unmarshal(body, &f); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(2)
-		}
-		o := installer.ClientOptions{SeededOperationOptions: installer.SeededOperationOptions{Self: f.Self, Version: f.Version, AuthorityRegistrySHA256: f.Pin, ManagedRoot: f.ManagedRoot, UserHome: f.UserHome, DataRoot: filepath.Join(f.UserHome, ".maestro-install"), VerifyNative: func(_ context.Context, path string) error {
-			body, e := os.ReadFile(path)
-			if e != nil {
-				return e
-			}
-			if fmt.Sprintf("%x", sha256.Sum256(body)) != f.SeedSHA {
-				return errors.New("engineering native seed bytes changed")
-			}
-			return nil
-		}}, Request: installer.ClientRequest{Workspace: f.Workspace}, LookupEnv: func(string) (string, bool) { return "", false }}
 		if os.Args[1] == "test-client-manage" {
 			if len(os.Args) > 2 {
 				o.Request.CarrierID = os.Args[2]
@@ -66,7 +53,7 @@ func TestMain(m *testing.M) {
 				os.Exit(2)
 			}
 			r := *status.Record
-			o.Request = installer.ClientRequest{CarrierID: r.CarrierID, Workspace: r.Binding.Workspace, CodeRoot: r.Materialization.CodeRoot, DesktopPath: r.Materialization.DesktopPath, CodeExecutable: r.Code.Executable, CodeScope: r.Code.Scope}
+			o.Request = installer.ClientRequestFromRecord(r)
 			o.Request.ManualDesktopUpdate = len(os.Args) == 4 && os.Args[3] == "manual-desktop-update"
 			review, e := installer.ReviewClientsSeeded(context.Background(), o)
 			if e != nil {
@@ -88,10 +75,10 @@ func TestMain(m *testing.M) {
 			})
 		} else {
 			if len(os.Args) == 4 {
-				// The same shipping dispatcher/flags run with the existing byte-pinned
-				// engineering native verifier; no fixture path exists in shipping builds.
+				// Preserve the selected verified fixture profile through the same
+				// dispatcher; no fixture path exists in shipping builds.
 				Version, AuthorityRegistrySHA256 = f.Version, f.Pin
-				selected := lifecycleFlags{ManagedRoot: f.ManagedRoot, UserHome: f.UserHome, Workspace: f.Workspace, CarrierID: os.Args[2], HookEvent: os.Args[3]}
+				selected := lifecycleFlags{ExperimentalSeed: o.ExperimentalSeed, ManagedRoot: f.ManagedRoot, UserHome: f.UserHome, Workspace: f.Workspace, CarrierID: os.Args[2], HookEvent: os.Args[3]}
 				_, err = runClientsWithNativeVerifier(context.Background(), "stable-hook", f.Self, selected, "", false, o.VerifyNative)
 				if err != nil {
 					fmt.Fprintln(os.Stderr, err)
@@ -130,17 +117,17 @@ func TestMain(m *testing.M) {
 }
 
 type codeProcessState struct {
-	Root, Marketplace, PluginID, Scope, Version string
-	Market, Installed, Enabled                  bool
+	Root, Marketplace, PluginID, Scope, Version, InstallPath string
+	Market, Installed, Enabled                               bool
 }
 
 func codeProcessWitness(args []string) error {
 	if args[0] == "--version" {
-		fmt.Println("2.1.295 (controlled engineering Code process witness)")
+		fmt.Println("2.1.319 (controlled engineering Code process witness)")
 		return nil
 	}
 	if args[len(args)-1] == "--help" {
-		fmt.Println("supported command --json --scope")
+		fmt.Println("supported command --json --scope --accept-command <sha256>")
 		return nil
 	}
 	path := os.Getenv("MAESTRO_CODE_PROCESS_STATE")
@@ -162,7 +149,15 @@ func codeProcessWitness(args []string) error {
 	if len(args) == 3 && args[1] == "list" {
 		rows := []any{}
 		if s.Installed {
-			rows = append(rows, map[string]any{"id": s.PluginID, "version": s.Version, "scope": s.Scope, "enabled": s.Enabled, "installPath": filepath.Join(s.Root, "plugins", "maestro-product"), "folderVersion": s.Version, "readFromFolder": true})
+			installPath, inPlace := filepath.Join(s.Root, "plugins", "maestro-product"), true
+			if s.InstallPath != "" {
+				installPath, inPlace = s.InstallPath, false
+				s.Version, err = codeProcessManifestVersion(installPath)
+				if err != nil {
+					return err
+				}
+			}
+			rows = append(rows, map[string]any{"id": s.PluginID, "version": s.Version, "scope": s.Scope, "enabled": s.Enabled, "installPath": installPath, "folderVersion": s.Version, "readFromFolder": inPlace})
 		}
 		return json.NewEncoder(os.Stdout).Encode(rows)
 	}
@@ -177,19 +172,23 @@ func codeProcessWitness(args []string) error {
 	if err = log.Close(); err != nil {
 		return err
 	}
-	var manifest struct {
-		Version string `json:"version"`
-	}
 	readVersion := func() error {
-		b, e := os.ReadFile(filepath.Join(s.Root, "plugins", "maestro-product", ".claude-plugin", "plugin.json"))
-		if e != nil {
-			return e
+		body, err := os.ReadFile(filepath.Join(s.Root, ".claude-plugin", "marketplace.json"))
+		if err != nil {
+			return err
 		}
-		if e = json.Unmarshal(b, &manifest); e != nil {
-			return e
+		var catalog struct {
+			Plugins []struct{ Source json.RawMessage }
 		}
-		s.Version = manifest.Version
-		return nil
+		if err := json.Unmarshal(body, &catalog); err != nil {
+			return err
+		}
+		var source struct{ Source string }
+		if len(catalog.Plugins) == 1 && json.Unmarshal(catalog.Plugins[0].Source, &source) == nil && source.Source == "command" {
+			return copyCodeProcessPayload(&s, path, args)
+		}
+		s.Version, err = codeProcessManifestVersion(filepath.Join(s.Root, "plugins", "maestro-product"))
+		return err
 	}
 	switch args[1] {
 	case "marketplace":
@@ -236,4 +235,132 @@ func codeProcessWitness(args []string) error {
 		return err
 	}
 	return json.NewEncoder(os.Stdout).Encode(map[string]string{"command": "engineering-process-witness", "outcome": "success"})
+}
+
+func readClientProcessFixtureOptions() (clientProcessFixture, installer.ClientOptions, error) {
+	var f clientProcessFixture
+	body, err := os.ReadFile(os.Getenv("MAESTRO_CLIENT_PROCESS_FIXTURE"))
+	if err != nil {
+		return f, installer.ClientOptions{}, err
+	}
+	if err = json.Unmarshal(body, &f); err != nil {
+		return f, installer.ClientOptions{}, err
+	}
+	o := installer.ClientOptions{SeededOperationOptions: installer.SeededOperationOptions{Self: f.Self, Version: f.Version, AuthorityRegistrySHA256: f.Pin, ManagedRoot: f.ManagedRoot, UserHome: f.UserHome, DataRoot: filepath.Join(f.UserHome, ".maestro-install"), VerifyNative: func(_ context.Context, path string) error {
+		body, e := os.ReadFile(path)
+		if e != nil {
+			return e
+		}
+		if fmt.Sprintf("%x", sha256.Sum256(body)) != f.SeedSHA {
+			return errors.New("engineering native seed bytes changed")
+		}
+		return nil
+	}}, Request: installer.ClientRequest{Workspace: f.Workspace}, LookupEnv: func(string) (string, bool) { return "", false }}
+	if f.Profile != "" {
+		if f.Profile != installer.ExperimentalSeedProfile {
+			return f, installer.ClientOptions{}, errors.New("unsupported engineering fixture profile")
+		}
+		selected, err := installer.LoadExperimentalInstalledContext(f.ManagedRoot, f.Pin, time.Now)
+		if err != nil {
+			return f, installer.ClientOptions{}, err
+		}
+		if selected.Self != f.Self || selected.Version != f.Version || selected.UserHome != f.UserHome || selected.ManagedRoot != f.ManagedRoot {
+			return f, installer.ClientOptions{}, errors.New("experimental fixture selection changed")
+		}
+		if err := o.VerifyNative(context.Background(), selected.Self); err != nil {
+			return f, installer.ClientOptions{}, err
+		}
+		o.SeededOperationOptions = selected
+	}
+	return f, o, nil
+}
+
+func codeProcessManifestVersion(payload string) (string, error) {
+	body, err := os.ReadFile(filepath.Join(payload, ".claude-plugin", "plugin.json"))
+	if err != nil {
+		return "", err
+	}
+	var manifest struct{ Version string }
+	if err = json.Unmarshal(body, &manifest); err != nil {
+		return "", err
+	}
+	return manifest.Version, nil
+}
+
+// This controlled host verifies the real reviewed digest and copied bytes; it is not vendor qualification.
+func copyCodeProcessPayload(s *codeProcessState, statePath string, args []string) error {
+	const prefix = "maestro-product@maestro-local-"
+	if len(args) != 8 || args[3] != "--scope" || args[5] != "--json" || args[6] != "--accept-command" || !strings.HasPrefix(s.PluginID, prefix) {
+		return errors.New("exact command-source arguments required")
+	}
+	_, o, err := readClientProcessFixtureOptions()
+	if err != nil {
+		return err
+	}
+	o.Request.CarrierID = strings.TrimPrefix(s.PluginID, prefix)
+	status, err := installer.ReadClientsSeeded(context.Background(), o)
+	if err != nil {
+		return err
+	}
+	if status.Record == nil || status.Record.Materialization.Selection == nil || status.Record.Code.PluginID != s.PluginID || status.Record.Code.Scope != args[4] || installer.ClientMarketplaceRoot(*status.Record) != s.Root {
+		return errors.New("command source differs from actual carrier")
+	}
+	review, err := setup.ReviewCodeRegistration(context.Background(), *status.Record, nil)
+	if err != nil {
+		return err
+	}
+	if review.CommandSourceConsent == nil || review.CommandSourceConsent.SHA256 != args[7] {
+		return errors.New("command_source_refused")
+	}
+	payload := filepath.Join(status.Record.Materialization.CodeRoot, "plugins", "maestro-product")
+	original, err := installer.ClientPayloadDigest(payload)
+	if err != nil {
+		return err
+	}
+	cache := statePath + ".cache-" + original
+	if err := os.Mkdir(cache, 0700); err == nil {
+		if err := filepath.WalkDir(payload, func(path string, d os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			rel, err := filepath.Rel(payload, path)
+			if err != nil || rel == "." {
+				return err
+			}
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			target := filepath.Join(cache, rel)
+			if d.IsDir() {
+				return os.Mkdir(target, info.Mode().Perm())
+			}
+			if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+				return errors.New("nonregular copied source")
+			}
+			body, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			return os.WriteFile(target, body, info.Mode().Perm())
+		}); err != nil {
+			return err
+		}
+	} else if !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	copied, err := installer.ClientPayloadDigest(cache)
+	if err != nil || copied != original {
+		return errors.New("controlled host copy differs from original packet")
+	}
+	after, err := installer.ClientPayloadDigest(payload)
+	if err != nil || after != original {
+		return errors.New("original packet changed during controlled copy")
+	}
+	s.Version, err = codeProcessManifestVersion(cache)
+	if err != nil {
+		return err
+	}
+	s.InstallPath = cache
+	return nil
 }

@@ -11,6 +11,55 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// This is the receiving guard, not a mode supplied by a tool or a new source
+// admission. Original readers authenticate the current selected carrier on
+// every validation, including both sides of trusted foreground confirmation.
+// No installation lock is held while waiting for the browser or a domain lock.
+func (b *Bound) validateInstalledOwnerReview(home, workspaceID string) error {
+	if b.options.ManagementCarrierID == "" {
+		if b.options.ManagementInstallerVersion != "" || b.ownerReviewClientSHA256 != "" {
+			return errors.New("owner_review_carrier_changed")
+		}
+		if b.options.OwnerReviewChannel != "" {
+			owning, err := b.sourceContext()
+			if err != nil || owning.required || owning.state != nil || b.options.ExperimentalSeed != nil {
+				return errors.New("owner_review_carrier_unavailable")
+			}
+		}
+		return nil // Existing unbound pilots and native-first diagnostics retain their contracts.
+	}
+	if b.options.ManagementInstallerVersion == "" {
+		return errors.New("owner_review_carrier_unavailable")
+	}
+	if role := b.options.ExperimentalSeed; role != nil && b.options.ManagementInstallerVersion != role.Identity().InstallerVersion {
+		return errors.New("owner_review_carrier_changed")
+	}
+	status, err := installer.ReadClientsSeeded(context.Background(), b.managementClientOptions())
+	if err != nil || status.State != "current_materialization" || status.Record == nil {
+		return errors.New("owner_review_carrier_unavailable")
+	}
+	r := *status.Record
+	if r.Binding.Home != home || r.Binding.WorkspaceID != workspaceID || r.Binding.Workspace != b.options.WorkspacePath || r.Materialization.OwnerReviewChannel != b.options.OwnerReviewChannel {
+		return errors.New("owner_review_carrier_changed")
+	}
+	pin := installer.ClientRecordDigest(r)
+	if b.ownerReviewClientSHA256 != "" && b.ownerReviewClientSHA256 != pin {
+		return errors.New("owner_review_carrier_changed")
+	}
+	if b.ownerReviewClientSHA256 == "" {
+		b.ownerReviewClientSHA256 = pin
+	}
+	return nil
+}
+
+func (b *Bound) managementClientOptions() installer.ClientOptions {
+	name := "maestro-install"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	return installer.ClientOptions{SeededOperationOptions: installer.SeededOperationOptions{ExperimentalSeed: b.options.ExperimentalSeed, Self: filepath.Join(b.options.ProductRoot, name), ManagedRoot: b.options.ProductRoot, UserHome: b.options.UserHome, DataRoot: filepath.Join(b.options.UserHome, ".maestro-install"), Version: b.options.ManagementInstallerVersion, AuthorityRegistrySHA256: b.options.AuthorityRegistrySHA256}, Request: installer.ClientRequest{CarrierID: b.options.ManagementCarrierID, Workspace: b.options.WorkspacePath}, LookupEnv: b.options.LookupEnv}
+}
+
 func (b *Bound) handleManagementHandoff(ctx context.Context, req *mcp.CallToolRequest) *mcp.CallToolResult {
 	if req == nil || req.Session == nil || ctx.Err() != nil {
 		return managementHandoffFailure("foreground_required")
@@ -18,11 +67,7 @@ func (b *Bound) handleManagementHandoff(ctx context.Context, req *mcp.CallToolRe
 	if b.options.ManagementCarrierID == "" || b.options.ManagementInstallerVersion == "" {
 		return managementHandoffFailure("qualified_carrier_context_unavailable")
 	}
-	name := "maestro-install"
-	if runtime.GOOS == "windows" {
-		name += ".exe"
-	}
-	options := installer.ClientOptions{SeededOperationOptions: installer.SeededOperationOptions{ExperimentalSeed: b.options.ExperimentalSeed, Self: filepath.Join(b.options.ProductRoot, name), ManagedRoot: b.options.ProductRoot, UserHome: b.options.UserHome, DataRoot: filepath.Join(b.options.UserHome, ".maestro-install"), Version: b.options.ManagementInstallerVersion, AuthorityRegistrySHA256: b.options.AuthorityRegistrySHA256}, Request: installer.ClientRequest{CarrierID: b.options.ManagementCarrierID, Workspace: b.options.WorkspacePath}}
+	options := b.managementClientOptions()
 	prepared, err := installer.PrepareClientManagementHandoff(ctx, options)
 	if err != nil {
 		return managementHandoffFailure("independent_manager_admission_unavailable")

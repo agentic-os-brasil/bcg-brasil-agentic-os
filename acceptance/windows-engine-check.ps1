@@ -1,5 +1,6 @@
 # Verify exact-source ordinary-account proof before excluding those same positive
 # tests from the elevated host. This reads evidence and changes no account/state.
+param([switch]$RemainingProtocol)
 $ErrorActionPreference = 'Stop'
 $publicRoot = $env:MAESTRO_ENGINE_PUBLIC_ROOT
 $proofRoot = Join-Path $env:RUNNER_TEMP 'native-engine-proof'
@@ -118,3 +119,83 @@ if (@($exclusions | Where-Object { $_ -cnotmatch '^Test[A-Za-z0-9_]+$' }).Count 
 $pattern = '^(' + (($exclusions | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')$'
 if ($env:GITHUB_OUTPUT) { ('host_exclusions=' + $pattern) | Out-File -LiteralPath $env:GITHUB_OUTPUT -Encoding utf8 -Append }
 Write-Output ('Exact-source ordinary engine proof passed before ' + $exclusions.Count + ' host-positive exclusions.')
+
+if ($RemainingProtocol) {
+    $remaining = Read-BoundedEngineJSON (Join-Path $proofRoot 'remaining-protocol-results.json')
+    if ($remaining.schema_version -ne 1 -or $remaining.source_revision -cne $revision -or
+        $remaining.sdk_go_sha256 -cne $manifest.sdk_go_sha256 -or $remaining.actual_standard_user -ne $true -or
+        $remaining.private_current_user_temp -ne $true -or $remaining.original_closed_engine_proof_unchanged -ne $true -or
+        $remaining.complete -ne $true -or $remaining.exit_code -ne 0 -or $remaining.packages_complete -ne $true -or
+        $remaining.log -cne 'adapter-remaining.log' -or $remaining.proof.skipped_coverage_qualified -ne $false) {
+        throw 'Remaining ordinary protocol inventory did not complete on the exact source.'
+    }
+    $remainingLog = Get-Item -LiteralPath (Join-Path $proofRoot $remaining.log) -Force
+    if ($remainingLog -isnot [IO.FileInfo] -or ($remainingLog.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+        $remainingLog.Length -gt 2097152 -or
+        (Get-FileHash -LiteralPath $remainingLog.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -cne $remaining.log_sha256) {
+        throw 'Remaining ordinary protocol log differs from its bounded original.'
+    }
+    $nativeParents = @('TestWindowsCorePilot','TestWindowsDirectoryDurabilityPilot','TestWindowsPrivateStatePilot','TestWindowsOwnerReviewPilot','TestWindowsAuthoredBrainPilot','TestWindowsAuthoredBrainPartialPreparationPilot','TestWindowsPrivateWikiPilot')
+    $expectedExcluded = @($exclusions + $nativeParents + @('TestWindowsWorkspaceInitializationMatchesElevation') | Sort-Object -CaseSensitive -Unique)
+    if (@((Compare-Object $expectedExcluded (@($remaining.exclusions) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) {
+        throw 'Remaining ordinary/elevated partition differs from the original exact proof.'
+    }
+    $inventory = @{}
+    foreach ($property in $remaining.compiled_inventory.PSObject.Properties) {
+        if ($property.Name -cnotmatch '^github\.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp(/[a-zA-Z0-9_-]+)*$' -or
+            @($property.Value | Where-Object {$_ -cnotmatch '^(Test|Example)[A-Za-z0-9_]*$'}).Count -ne 0) {
+            throw 'Remaining compiled inventory contains an unknown package or test name.'
+        }
+        $inventory[$property.Name] = @($property.Value)
+    }
+    foreach ($entry in $manifest.adapter_packages) {
+        $package = $entry.package.Replace('./', 'github.com/agentic-os-brasil/bcg-brasil-agentic-os/')
+        if (-not $inventory.ContainsKey($package) -or
+            @((Compare-Object (@($entry.tests) | Sort-Object -CaseSensitive) (@($inventory[$package]) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) {
+            throw 'Remaining compiled inventory differs from an exact sealed companion.'
+        }
+    }
+    $coveredKeys = @{}
+    $coveredByPackage = @{
+        'mcp' = @($closed['$adapterParents']) + @($closed['$authoredAdapterParents']) + $nativeParents + @('TestWindowsWorkspaceInitializationMatchesElevation')
+        'mcp-command' = $closed['$adapterCommandParents']
+        'setup' = $closed['$adapterSetupParents']
+        'packaging' = $closed['$adapterPackagingParents']
+    }
+    foreach ($entry in $manifest.adapter_packages) {
+        $package = $entry.package.Replace('./', 'github.com/agentic-os-brasil/bcg-brasil-agentic-os/')
+        foreach ($test in $coveredByPackage[$entry.name]) { $coveredKeys[$package + '/' + $test] = $true }
+    }
+    foreach ($package in $inventory.Keys) {
+        foreach ($test in $inventory[$package]) {
+            if (($test -cin $expectedExcluded) -ne $coveredKeys.ContainsKey($package + '/' + $test)) {
+                throw 'A remaining exclusion lost its exact package/proof binding.'
+            }
+        }
+    }
+    foreach ($key in $coveredKeys.Keys) {
+        $split = $key.LastIndexOf('/')
+        if (-not $inventory.ContainsKey($key.Substring(0,$split)) -or
+            @($inventory[$key.Substring(0,$split)] | Where-Object {$_ -ceq $key.Substring($split+1)}).Count -ne 1) {
+            throw 'A required native/admin proof is absent from the exact compiled inventory.'
+        }
+    }
+    $launcherTokens = $null
+    [Management.Automation.Language.Parser]::ParseFile($driver, [ref]$launcherTokens, [ref]$errors) | Out-Null
+    $launcher = @($launcherTokens | Where-Object {$_.Kind -eq 'HereStringLiteral'})
+    if ($errors.Count -or $launcher.Count -ne 1) { throw 'Expected the original credentialed launcher.' }
+    $inner = [Management.Automation.Language.Parser]::ParseInput($launcher[0].Value, [ref]$null, [ref]$errors)
+    $reader = @($inner.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Get-RemainingProtocolProof'}, $true))
+    if ($errors.Count -or $reader.Count -ne 1) { throw 'Expected one original remaining-outcome classifier.' }
+    Invoke-Expression $reader[0].Extent.Text
+    $events = @(Get-Content -LiteralPath $remainingLog.FullName -Encoding UTF8 | ForEach-Object {$_ | ConvertFrom-Json})
+    $verified = Get-RemainingProtocolProof $inventory $events $expectedExcluded
+    $terminals = @($events | Where-Object {-not $_.Test -and $_.Action -cin @('pass','skip','fail')})
+    if (-not $verified.complete -or $verified.skipped_coverage_qualified -ne $false -or
+        @((Compare-Object ($inventory.Keys | Sort-Object -CaseSensitive) (@($terminals.Package) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0 -or
+        @($terminals | Where-Object {$_.Action -ceq 'fail'}).Count -ne 0 -or
+        ($verified | ConvertTo-Json -Depth 10 -Compress) -cne ($remaining.proof | ConvertTo-Json -Depth 10 -Compress)) {
+        throw 'Remaining exact parent partition or original outcome classification changed.'
+    }
+    Write-Output ('Remaining ordinary protocol verified; classified missing qualification=' + $verified.classified_skips.Count)
+}

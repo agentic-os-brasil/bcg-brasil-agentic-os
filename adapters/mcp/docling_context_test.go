@@ -74,10 +74,10 @@ func TestDoclingNoOwningCurrentRetainsOriginalVerifier(t *testing.T) {
 	}
 }
 
-// This fixture is structurally readable initial custody, not a signature or
-// native witness. Qualified publication must refuse Source=nil before those
-// later checks; the ordinary unqualified wrapper keeps its original behavior.
-func doclingRecoveredInitialFixture(t *testing.T) *Bound {
+// Readable initial custody exists only for admitted installation targets.
+// Unsupported hosts retain rejected target metadata to exercise refusal, never
+// a signature or native witness. Supported hosts keep the original plain wrapper.
+func doclingRecoveredInitialFixture(t *testing.T) (*Bound, bool) {
 	t.Helper()
 	b := localReviewFixture(t, "")
 	b.options.CLIVersion = "0.1.43"
@@ -89,17 +89,25 @@ func doclingRecoveredInitialFixture(t *testing.T) *Bound {
 	if err := installtx.WriteState(data, state); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := installtx.ReadSourceState(data, b.options.ProductRoot); err != nil {
-		t.Fatal("readable initial custody precondition", err)
+	_, readErr := installtx.ReadSourceState(data, b.options.ProductRoot)
+	supported := (state.TargetOS == "darwin" || state.TargetOS == "windows") && (state.TargetArch == "amd64" || state.TargetArch == "arm64")
+	if !supported {
+		if readErr == nil {
+			t.Fatal("unsupported installation target acquired readable initial custody")
+		}
+		return b, false
+	}
+	if readErr != nil {
+		t.Fatal("readable initial custody precondition", readErr)
 	}
 	if err := b.validate(); err != nil {
 		t.Fatal("ordinary initial bound precondition", err)
 	}
-	return b
+	return b, true
 }
 
 func TestDoclingClassifierFailureStaysUnavailableAfterInitialRecovery(t *testing.T) {
-	b := doclingRecoveredInitialFixture(t)
+	b, _ := doclingRecoveredInitialFixture(t)
 	observed := errors.New("owning classification temporarily failed")
 	options := b.doclingOptionsWithReader(func(string, string) (installtx.State, error) { return installtx.State{}, observed })
 	if options.ResolveRequirement == nil || options.GuardSelection == nil {
@@ -115,7 +123,7 @@ func TestDoclingClassifierFailureStaysUnavailableAfterInitialRecovery(t *testing
 }
 
 func TestDoclingQualifiedGuardCannotReclassifyRecoveredInitialAsUnqualified(t *testing.T) {
-	b := doclingRecoveredInitialFixture(t)
+	b, supported := doclingRecoveredInitialFixture(t)
 	options := b.doclingOptionsWithReader(func(string, string) (installtx.State, error) {
 		return installtx.State{SchemaVersion: 4, Source: &installtx.SourceControl{}}, nil
 	})
@@ -127,7 +135,14 @@ func TestDoclingQualifiedGuardCannotReclassifyRecoveredInitialAsUnqualified(t *t
 		t.Fatalf("qualified runtime downgraded to Source=nil publication: called=%t err=%v", published, err)
 	}
 	ordinary := false
-	if err := b.guardPublication(func() error { ordinary = true; return nil }); err != nil || !ordinary {
+	err := b.guardPublication(func() error { ordinary = true; return nil })
+	if !supported {
+		if err == nil || ordinary {
+			t.Fatalf("unsupported initial target published: called=%t err=%v", ordinary, err)
+		}
+		return
+	}
+	if err != nil || !ordinary {
 		t.Fatalf("ordinary unqualified publication changed: called=%t err=%v", ordinary, err)
 	}
 }

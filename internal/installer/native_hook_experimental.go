@@ -54,7 +54,7 @@ func PrepareStableNativeHook(ctx context.Context, o ClientOptions, event, select
 		if err != nil {
 			return err
 		}
-		launch, err = nativeHookLaunch(launch, event, selection)
+		launch, err = nativeHookLaunch(launch, event, selection, o.Request.CarrierID)
 		return err
 	})
 	if err == nil {
@@ -63,10 +63,10 @@ func PrepareStableNativeHook(ctx context.Context, o ClientOptions, event, select
 	return launch, err
 }
 
-func nativeHookLaunch(launch QualifiedLaunch, event, selection string) (QualifiedLaunch, error) {
-	if !experimentalNativeHookEvent(event) || !clientSHA.MatchString(selection) || len(launch.Args) == 0 || launch.Args[0] != "serve" {
+func nativeHookLaunch(launch QualifiedLaunch, event, selection, carrier string) (QualifiedLaunch, error) {
+	if !experimentalNativeHookEvent(event) || !clientSHA.MatchString(selection) || !carrierIDPattern.MatchString(carrier) || len(launch.Args) == 0 || launch.Args[0] != "serve" {
 		return QualifiedLaunch{}, errors.New("canonical qualified native launch required")
 	}
-	launch.Args = append([]string{"hook", "--event", event, "--binding-sha256", selection}, launch.Args[1:]...)
+	launch.Args = append([]string{"installed-native-hook", "--event", event, "--binding-sha256", selection, "--carrier-id", carrier}, launch.Args[1:]...)
 	return launch, nil
 }

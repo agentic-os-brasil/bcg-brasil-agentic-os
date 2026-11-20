@@ -16,7 +16,7 @@ status: stable
 x-maestro-profile-version: "1"
 x-maestro-stable-id: managed/model-backed-maintenance-activation
 x-maestro-scope: managed
-x-maestro-source-fingerprint: 7ec32eff72aed0903001679f02a956ada59b92670a11f32593f6823add0ddd92
+x-maestro-source-fingerprint: f413ccfbcde07f07c5e25e4ff6031ff7966f927f3962f559f5190d6e265c2bcf
 x-maestro-freshness: fresh
 x-maestro-status: active
 x-maestro-generator-version: maestro-managed-wiki/0.2
@@ -36,9 +36,16 @@ This managed concept is generated from the reviewed repository source `specs/041
 
 # Spec 041 - Model-backed maintenance activation
 
-Status: contract only. No model-backed maintenance job is activated by this
-specification. The shipped catalog remains fail-closed and `unavailable` until
-every precondition below has executable, reviewed evidence.
+Status: implemented source contract; activation remains separately qualified per
+installation, job and scope. The shipped catalog is default-disabled and
+`unavailable` until the actual selected tuple satisfies every precondition below.
+Shipping source code, a registration proposal or a wake definition activates no job.
+
+The [installed model second-brain flow](repo://docs/model-second-brain.md) connects the
+original native executor, first-use observation and registration, independent
+qualification/enrollment, ordinary derived reader and atomic memory engine.
+The [weekly source core](repo://docs/weekly-yoda-core.md) documents its original seams.
+Source tests do not attest a native model call, real due occurrence or OS wake.
 
 ## Intent
 
@@ -285,8 +292,8 @@ bindings. If compaction cannot preserve an existing policy-bound facet within
 the budget, it fails closed instead of truncating or silently widening storage.
 The owner retains the existing inspect/export/edit/reset controls for canonical
 self data, but the weekly pass itself never surfaces a prompt, proposal or
-notification. Until this silent-compaction publication boundary is implemented
-and qualified, the shipped job remains `unavailable`.
+notification. An installation without current registration, genuine native
+qualification and separate enrollment remains `unavailable`.
 
 Activating this weekly job does not activate interactive Yoda review,
 `agent_orchestration`, Darwin maintenance or any memory job.
@@ -298,7 +305,9 @@ occurrence authority, workspace-scoped snapshot and qualification even if it
 uses the same native runtime or model provider as Yoda.
 
 Its high-watermark covers only sanitized, policy-eligible L1 evidence for one
-workspace and the exact prior active L2/L3/lifetime manifest. Raw client
+workspace and the original weekly engine's exact active L3/lifetime sources.
+The current-week L2 is the original unchanged-input boundary, not another model
+data source. Raw client
 documents, prompts, conversations, credentials and records above the watermark
 are excluded. The model may propose staged L2/L3/lifetime candidates; it cannot
 declare provenance valid, change eligibility policy or approve lifetime
@@ -315,7 +324,7 @@ does not grant Yoda access to workspace memory.
 
 This specification does not:
 
-- implement, register, qualify or activate a model adapter;
+- activate or qualify an adapter merely because its code or this specification ships;
 - choose Claude, Codex, a provider, model, API, network route or billing plan;
 - authorize Maestro to read runtime credentials or reuse private-release custody;
 - enable native schedulers, hooks, unattended execution or a global model flag;

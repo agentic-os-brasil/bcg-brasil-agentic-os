@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -506,6 +507,7 @@ func (b *Bound) handleMemory(ctx context.Context, req *mcp.CallToolRequest, in i
 		var day time.Time
 		day, err = time.Parse("2006-01-02", in.Date)
 		status := "not_requested"
+		synthesis, synthesizer, pendingStatus := "local_deterministic", "", "not_applicable"
 		var out memory.DreamResult
 		if err == nil {
 			if in.Cycle == "daily" {
@@ -555,12 +557,32 @@ func (b *Bound) handleMemory(ctx context.Context, req *mcp.CallToolRequest, in i
 						status = "approved"
 						return true, reason + "; exact candidate approved by the owner", nil
 					})
-					out, err = e.DreamWeekly(ctx, b.workspaceID, day)
+					pending, readErr := e.PendingModelWeeklyLifetime(b.workspaceID, day)
+					switch {
+					case readErr == nil:
+						pendingStatus = "current_exact_candidate"
+						synthesis, synthesizer = "stored_model_candidate_no_model_call", pending.Input.SynthesizerID
+						out, err = e.PromoteModelWeeklyLifetime(ctx, b.workspaceID, pending.Digest())
+					case errors.Is(readErr, memory.ErrModelWeeklySourcesChanged):
+						// This explicit foreground request targets the new current
+						// cohort. The old candidate is never promoted or reused.
+						pendingStatus = "prior_candidate_source_changed"
+						out, err = e.DreamWeekly(ctx, b.workspaceID, day)
+					case errors.Is(readErr, memory.ErrCaptureConflict):
+						err = readErr
+					case errors.Is(readErr, os.ErrNotExist):
+						out, err = e.DreamWeekly(ctx, b.workspaceID, day)
+					default:
+						err = readErr
+					}
 				}
 			}
 		}
 		if err == nil {
-			value = map[string]any{"result": out, "synthesis": "local_deterministic", "synthesizer": e.SynthesizerID, "lifetime_status": status}
+			if synthesizer == "" {
+				synthesizer = e.SynthesizerID
+			}
+			value = map[string]any{"result": out, "synthesis": synthesis, "synthesizer": synthesizer, "lifetime_status": status, "pending_lifetime_status": pendingStatus}
 		}
 
 	default:

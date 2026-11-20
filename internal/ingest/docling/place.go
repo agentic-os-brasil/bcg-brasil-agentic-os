@@ -170,6 +170,11 @@ func PlaceVerified(ctx context.Context, o Options, release releaseverify.Verifie
 		}
 		sort.Sort(sort.Reverse(sort.StringSlice(directories)))
 		for _, directory := range directories {
+			if directory == "." {
+				// Darwin requires the source directory to remain writable for
+				// rename. Keep only this private root unsealed until publication.
+				continue
+			}
 			if err = handle.Chmod(directory, 0555); err != nil {
 				return err
 			}
@@ -178,6 +183,11 @@ func PlaceVerified(ctx context.Context, o Options, release releaseverify.Verifie
 			return err
 		}
 		published = true
+		// Seal through the same retained root, before metadata, qualification
+		// or selection can make this newly published payload available.
+		if err = handle.Chmod(".", 0555); err != nil {
+			return fmt.Errorf("published converter root could not be sealed; current selector preserved: %w", err)
+		}
 	} else if err != nil {
 		return err
 	}

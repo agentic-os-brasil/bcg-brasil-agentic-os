@@ -114,7 +114,7 @@ func TestCodeMethodPayloadBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := fmt.Sprintf("%x", sha256.Sum256(body)); got != "09b514714996867f8a02ebcd33e11817bdfa0b2851c3d07b0b371adb20a277b3" {
+	if got := fmt.Sprintf("%x", sha256.Sum256(body)); got != "decc4fd29c02e82908c15a8a953139a687a5c8cac98d87c2b33f22023c9abdc4" {
 		t.Fatal("Code method bytes changed", got)
 	}
 	agents, err := claudeagents.Project("maestro-product")
@@ -142,7 +142,9 @@ func TestBuildDesktopMethodFrontendClosedDeterministicOutput(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if report.Name != "maestro-desktop-methods" || report.Name == claudeagents.PluginNamespace || report.Mode != "instructions_only" || report.NativeQualification != "unavailable" || report.FileCount != 273 {
+		// 247 canonical method files, six shared assets, one projection, 16 agent
+		// references, two frontend skills, and the manifest and README close this payload.
+		if report.Name != "maestro-desktop-methods" || report.Name == claudeagents.PluginNamespace || report.Mode != "instructions_only" || report.NativeQualification != "unavailable" || report.FileCount != 274 {
 			t.Fatalf("wrong identity/scope: %+v", report)
 		}
 		payload := filepath.Join(root, report.Name)

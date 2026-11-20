@@ -52,6 +52,16 @@
       "role": "data"
     },
     {
+      "source": "bundles/base/agents/repository-spec-reviewer/AGENT.md",
+      "path": "agents/repository-spec-reviewer/AGENT.md",
+      "role": "data"
+    },
+    {
+      "source": "bundles/base/agents/repository-standards-reviewer/AGENT.md",
+      "path": "agents/repository-standards-reviewer/AGENT.md",
+      "role": "data"
+    },
+    {
       "source": "bundles/base/agents/templates/case_agent/AGENT.md",
       "path": "agents/templates/case_agent/AGENT.md",
       "role": "data"
@@ -1082,6 +1092,11 @@
       "role": "data"
     },
     {
+      "source": "bundles/base/skills/account-case-setup/resources/account-narrative-mcp.md",
+      "path": "skills/account-case-setup/resources/account-narrative-mcp.md",
+      "role": "data"
+    },
+    {
       "source": "bundles/base/skills/agent-identity-setup/SKILL.md",
       "path": "skills/agent-identity-setup/SKILL.md",
       "role": "data"
@@ -1377,6 +1392,11 @@
       "role": "data"
     },
     {
+      "source": "bundles/base/skills/interaction-profile/resources/self-observation.md",
+      "path": "skills/interaction-profile/resources/self-observation.md",
+      "role": "data"
+    },
+    {
       "source": "bundles/base/skills/investigate/SKILL.md",
       "path": "skills/investigate/SKILL.md",
       "role": "data"
@@ -1474,6 +1494,11 @@
     {
       "source": "bundles/base/skills/maestro-operator/resources/authored-brain.md",
       "path": "skills/maestro-operator/resources/authored-brain.md",
+      "role": "data"
+    },
+    {
+      "source": "bundles/base/skills/maestro-operator/resources/daily-zip.md",
+      "path": "skills/maestro-operator/resources/daily-zip.md",
       "role": "data"
     },
     {

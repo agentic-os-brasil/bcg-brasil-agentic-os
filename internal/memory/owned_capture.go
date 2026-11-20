@@ -533,10 +533,20 @@ func (engine *Engine) purgeGenerated(workspaceID string) error {
 					return err
 				}
 				current := len(files) > 0
+				names := make([]string, 0, len(files))
+				for _, file := range files {
+					names = append(names, file.Name())
+				}
 				for _, file := range files {
 					body, err := memoryReadFile(filepath.Join(directory, entry.Name(), file.Name()), 1<<20)
 					if err != nil {
 						return err
+					}
+					if file.Name() == "model-weekly.json" {
+						if !modelWeeklySidecarInGeneration(workspaceID, barrier.Generation, body, names) {
+							current = false
+						}
+						continue
 					}
 					var artifact Artifact
 					if err = decodeMemoryJSON(body, &artifact); err != nil {

@@ -608,3 +608,55 @@ Stable carrier identity is included in the reviewed qualification fingerprint
 before the producer runs. Current packet publication cannot reuse an imported
 native proof or silently fall back to the non-enforcing lifecycle/resources-only
 profiles. Existing native custody and qualification requirements remain effective.
+
+The experimental installed native hook uses a distinct closed
+`installed-native-hook` server command. The stable installer preserves the
+current installed executable and its original manifest, client-input and
+engineering-admission pins, adding only the event, carrier and native binding
+selectors. The child independently reloads the signed installation origin and
+reuses the same current-record native admission as the installer: current
+materialization, full native enforcement, no passive lifecycle mode and the
+four-field owner/workspace/home/workspace-ID digest. It compares the supplied
+pins with that admitted result and requires the actual installed server path,
+image digest, target and current server version. The installed bootstrapper
+version still comes from the signed origin when the server updates independently.
+
+Complete current-record admission releases the installation lock before the
+existing product constructor and hook handler acquire their domain locks.
+Those original source and process checks remain active; this does not claim an
+atomic native event across an update. Generic `hook --binding-sha256` remains
+packet-only, and the default build exposes no installed native-hook admission.
+Controlled compiled protocol tests distinguish their test-only constructor from
+signed-source admission and genuine host qualification. Passing the original
+direct-packet qualifier alone does not prove delivery through the installed
+stable plugin; qualify that final ordinary client route separately.
+
+
+## Experimental installed-carrier foreground review (ICRV)
+
+The installed-client flow has a separate explicitly reviewed selection in its
+original private carrier record. A fresh experimentally admitted versioned
+carrier may choose local-browser before full client review; omitted/empty stays
+native-first. This common setting applies to Code and Desktop and grants no
+individual write approval. Existing carriers cannot change modes implicitly.
+Standalone Code/Desktop pilot restrictions and inventories are unchanged; an
+installed carrier does not become an unbound browser pilot.
+
+The stable producer derives only ordinary serve startup arguments from the
+current authenticated materialization. The receiving bound product independently
+requires exact effective-channel equality with that current selected carrier,
+including an omitted channel against a browser-selected record. It pins the
+whole original semantic record identity and repeats the original role, source,
+owner, brain/workspace and record checks before and after trusted confirmation
+and before guarded effects. Raw installed browser selection without a carrier,
+partial metadata, stale or changed state refuses. Empty native-first diagnostics
+without carrier metadata retain their existing route. No installation lock is
+held while waiting for a review. Native hook and genuine qualifier arguments,
+admission and event semantics remain unchanged.
+
+Protected operations reuse the existing foreground one-shot loopback review,
+complete current/proposed content, initially unchecked approval control,
+independent decline/cancel/expiry and canonical revision guards. Browser-selected
+requests cannot reuse native InputResponses; no model argument, tool permission,
+previous approval or startup choice supplies individual consent. Source and
+compiled tests do not qualify the actual final Code/Desktop browser journey.

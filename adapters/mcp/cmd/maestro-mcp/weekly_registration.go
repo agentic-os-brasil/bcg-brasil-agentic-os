@@ -18,7 +18,7 @@ import (
 // activation remain separate owner-reviewed maintenance transactions.
 func configureWeeklyRegistration(o *product.Options, path string) error {
 	if path == "" {
-		o.WeeklyNativeExecutor = packaging.ExecuteWeeklyNative
+		seedMaintenanceExecutors(o)
 		return nil
 	}
 	unavailable := errors.New("weekly_registration_unavailable")
@@ -50,6 +50,13 @@ func configureWeeklyRegistration(o *product.Options, path string) error {
 		return unavailable
 	}
 	o.WeeklyCandidate = &registration
-	o.WeeklyNativeExecutor = packaging.ExecuteWeeklyNative
+	seedMaintenanceExecutors(o)
 	return nil
+}
+
+// A cold installed wake composes fixed code only. Stored reviewed registrations,
+// actual native qualification and current grants remain the sole job authority.
+func seedMaintenanceExecutors(o *product.Options) {
+	o.WeeklyNativeExecutor = packaging.ExecuteWeeklyNative
+	o.MemoryNativeExecutor = packaging.ExecuteMemoryNative
 }

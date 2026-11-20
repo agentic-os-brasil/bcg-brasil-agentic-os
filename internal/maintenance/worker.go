@@ -262,6 +262,10 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 		command.WeeklyMode = worker.product.weeklyPlan.mode
 		command.ProposalOnly = false
 	}
+	if worker.product != nil && worker.product.memoryPlan != nil {
+		command.WeeklyMode = worker.product.memoryPlan.mode
+		command.ProposalOnly = false
+	}
 	if err := command.Validate(now); err != nil {
 		return worker.unavailableReceipt(request.WorkspaceID, occurrence, now, ReasonOccurrenceRejected)
 	}
@@ -335,6 +339,10 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 		bounded.attemptID = attemptID
 		if worker.product.weeklyPlan != nil {
 			binding := worker.product.weeklyPlan.binding(command.WorkspaceID)
+			bounded.weekly = &binding
+		}
+		if worker.product.memoryPlan != nil {
+			binding := worker.product.memoryPlan.binding(command.WorkspaceID)
 			bounded.weekly = &binding
 		}
 		bounded.publication = func(publish func() error) error {
@@ -519,7 +527,7 @@ func (worker Worker) publishOccurrence(ctx context.Context, workspaceID string, 
 	publish := func() error {
 		return worker.Scheduler.WithCurrentLeaseContext(publicationCtx, lease, leaseNow, func() error {
 			closed := false
-			if worker.product != nil && worker.product.weeklyPlan != nil && worker.product.weeklyPlan.committed != nil {
+			if worker.product != nil && (worker.product.weeklyPlan != nil && worker.product.weeklyPlan.committed != nil || worker.product.memoryPlan != nil && worker.product.memoryPlan.committed != nil) {
 				var e error
 				closed, e = worker.product.service.weeklySchedulerAlreadyClosed(occurrence, receipt)
 				if e != nil {

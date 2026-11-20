@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -600,9 +601,12 @@ func withObservationLock(root string, operation func(path string) error) error {
 	if err != nil {
 		return fmt.Errorf("observation lock: %w", err)
 	}
-	lockBody, readErr := readOwnerFile(lockPath, 4096)
-	if readErr != nil || len(lockBody) != 0 {
-		return errors.Join(errors.New("legacy observation lock is active; preserve it"), readErr, unlock())
+	// Windows acquisition checks the held handle; another handle cannot read its locked byte.
+	if runtime.GOOS != "windows" {
+		lockBody, readErr := readOwnerFile(lockPath, 4096)
+		if readErr != nil || len(lockBody) != 0 {
+			return errors.Join(errors.New("legacy observation lock is active; preserve it"), readErr, unlock())
+		}
 	}
 	return errors.Join(operation(filepath.Join(directory, "observations.jsonl")), unlock())
 }
@@ -623,9 +627,11 @@ func withObservationReadSnapshot(root string, operation func([]observationRecord
 	if err != nil {
 		return err
 	}
-	lockBody, readErr := readOwnerFile(filepath.Join(observationDirectory(root), promptHistoryLockName), 4096)
-	if readErr != nil || len(lockBody) != 0 {
-		return errors.Join(errors.New("legacy observation lock is active; preserve it"), readErr, unlock())
+	if runtime.GOOS != "windows" {
+		lockBody, readErr := readOwnerFile(filepath.Join(observationDirectory(root), promptHistoryLockName), 4096)
+		if readErr != nil || len(lockBody) != 0 {
+			return errors.Join(errors.New("legacy observation lock is active; preserve it"), readErr, unlock())
+		}
 	}
 	records, readErr := readObservationRecords(root)
 	if readErr != nil {

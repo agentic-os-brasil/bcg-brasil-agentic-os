@@ -14,6 +14,7 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -24,9 +25,10 @@ func localReviewFixture(t *testing.T, channel string) *Bound {
 	if err != nil {
 		t.Fatal(err)
 	}
+	prepareLocalReviewFixtureRoot(t, root)
 	options := Options{ProductRoot: filepath.Join(root, "product"), UserHome: filepath.Join(root, "owner"), WorkspacePath: filepath.Join(root, "workspace"), OwnerReviewChannel: channel, LookupEnv: func(string) (string, bool) { return "", false }}
 	for _, directory := range []string{options.ProductRoot, options.UserHome} {
-		if err := os.Mkdir(directory, 0700); err != nil {
+		if err := scheduler.EnsurePrivateDirectory(directory); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -70,6 +72,38 @@ func localTrack(t *testing.T, client *mcp.ClientSession) *mcp.CallToolResult {
 		t.Fatal(err)
 	}
 	return out
+}
+
+func TestInstalledOwnerReviewRequiresAuthenticatedCarrier(t *testing.T) {
+	for _, channel := range []string{"", "local-browser"} {
+		t.Run(channel, func(t *testing.T) {
+			b := localReviewFixture(t, channel)
+			b.options.ManagementCarrierID = strings.Repeat("a", 32)
+			b.options.ManagementInstallerVersion = "0.1.59"
+			if err := b.validate(); err == nil {
+				t.Fatal("installed receive path trusted an unverified carrier/channel")
+			}
+		})
+	}
+}
+
+func TestOwnerReviewCarrierChangeDuringReviewCannotApply(t *testing.T) {
+	b := localReviewFixture(t, "local-browser")
+	before := ownerState(t, b)
+	b.localOwnerReview = func(context.Context, string, any) (bool, error) {
+		// Same original trusted-review seam: a changed startup carrier cannot
+		// reuse a review begun without that authenticated installed selection.
+		b.options.ManagementCarrierID = strings.Repeat("a", 32)
+		b.options.ManagementInstallerVersion = "0.1.59"
+		return true, nil
+	}
+	client := localReviewSession(t, b, nil)
+	if out := localTrack(t, client); !out.IsError {
+		t.Fatal("post-review carrier drift authorized an owner write")
+	}
+	if after := ownerState(t, b); after != before {
+		t.Fatal("owner state changed despite carrier drift")
+	}
 }
 func ownerState(t *testing.T, b *Bound) string {
 	t.Helper()

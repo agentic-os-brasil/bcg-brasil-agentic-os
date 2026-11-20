@@ -198,13 +198,16 @@ func (s *Service) weeklyDomainEvidence() (string, string, error) {
 }
 func (s *Service) verifyWeeklyQualification(q *ProductQualification) (string, error) {
 	prefix := "maintenance/workspaces/" + s.workspaceID + "/weekly-native/versions/"
-	if !s.weeklyScoped || !strings.HasPrefix(q.Artifact, prefix) || !strings.HasSuffix(q.Artifact, ".json") || q.Receipt.WeeklyMode != WeeklyNativeProbe {
+	if (q.JobID == YodaSelfReviewWeeklyJobID && !s.weeklyScoped || q.JobID == MemoryModelJobID && s.weeklyScoped || !modelJob(q.JobID)) || !strings.HasPrefix(q.Artifact, prefix) || !strings.HasSuffix(q.Artifact, ".json") || q.Receipt.WeeklyMode != WeeklyNativeProbe {
 		return "", ErrQualificationRequired
 	}
 	id := strings.TrimSuffix(strings.TrimPrefix(q.Artifact, prefix), ".json")
 	evidence, path, err := s.readWeeklyEvidence(id)
 	if err != nil {
 		return "", err
+	}
+	if q.JobID == MemoryModelJobID && evidence.JobID != MemoryModelJobID || q.JobID == YodaSelfReviewWeeklyJobID && evidence.JobID != "" {
+		return "", ErrQualificationRequired
 	}
 	c, err := s.loadControl(q.JobID)
 	if err != nil {

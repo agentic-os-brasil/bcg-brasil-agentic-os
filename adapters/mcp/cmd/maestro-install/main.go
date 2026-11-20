@@ -23,6 +23,10 @@ var AuthorityRegistrySHA256 string
 
 func main() {
 	if err := run(); err != nil {
+		if code, handled := experimentalNativeHookFailure(os.Args[1:]); handled {
+			fmt.Fprintln(os.Stderr, "maestro: hook unavailable; inspect admitted state before retrying")
+			os.Exit(code)
+		}
 		if len(os.Args) > 1 && os.Args[1] == "stable-hook" {
 			fmt.Fprintln(os.Stderr, "maestro: passive lifecycle unavailable; inspect the selected installation and client materialization")
 			os.Exit(1)
@@ -82,6 +86,9 @@ func run() error {
 	if handled, err := experimentalNativeHookCommand(context.Background(), os.Args[1], executable, os.Args[2:], entryRole); handled {
 		return err
 	}
+	if handled, err := experimentalMaintenanceWakeCommand(context.Background(), os.Args[1], executable, os.Args[2:], entryRole); handled {
+		return err
+	}
 	flags := flag.NewFlagSet("maestro-install", flag.ContinueOnError)
 	planJSON := flags.String("confirmed-plan", "", "exact canonical activation plan from the reviewed handoff")
 	digest := flags.String("review-digest", "", "exact setup review digest")
@@ -100,6 +107,7 @@ func run() error {
 	flags.StringVar(&launch.ClientCodeRoot, "client-code-root", "", "fixed generated operator launcher Code destination")
 	flags.StringVar(&launch.ClientDesktopPath, "client-desktop-path", "", "fixed generated operator launcher Desktop destination")
 	flags.StringVar(&launch.ClientCodeExecutable, "client-code-executable", "", "fixed generated operator launcher Code executable")
+	flags.StringVar(&launch.ClientCodeConfigurationDirectory, "client-code-config", "", "reviewed participant-local Code configuration directory")
 	flags.StringVar(&launch.ClientScope, "client-scope", "", "fixed generated operator launcher Code scope")
 	if os.Args[1] == "stable-hook" {
 		flags.StringVar(&launch.HookEvent, "event", "", "exact passive lifecycle event")

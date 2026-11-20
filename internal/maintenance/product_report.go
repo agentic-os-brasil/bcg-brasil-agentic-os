@@ -43,6 +43,9 @@ type ProductDomainReport struct {
 // Report is a closed, read-only projection of independently verified domain
 // output. It never opens an argument-selected path or returns captured text.
 func (s *Service) Report(job string) (ProductDomainReport, error) {
+	if job == MemoryModelJobID {
+		return s.memoryModelReport()
+	}
 	if job == YodaSelfReviewWeeklyJobID {
 		return s.weeklyModelService().weeklyReport()
 	}

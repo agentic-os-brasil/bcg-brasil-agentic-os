@@ -387,7 +387,8 @@ func (lifecycle Lifecycle) removeNative(ctx context.Context, label string) error
 }
 
 func validateNativeLabel(label string) error {
-	if label != "com.bcg.maestro.maintenance" {
+	suffix := strings.TrimPrefix(label, "com.bcg.maestro.maintenance.")
+	if label != "com.bcg.maestro.maintenance" && (!strings.HasPrefix(label, "com.bcg.maestro.maintenance.") || len(suffix) != 64 || strings.Trim(suffix, "0123456789abcdef") != "") {
 		return errors.New("refusing native mutation for an unknown managed label")
 	}
 	return nil

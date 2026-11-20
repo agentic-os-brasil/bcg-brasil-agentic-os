@@ -16,10 +16,10 @@ import (
 )
 
 type lifecycleFlags struct {
-	ExperimentalSeed                                                                                                                                                                                              *installer.VerifiedExperimentalSeed
-	ManagementIntent                                                                                                                                                                                              string
-	ManagedRoot, UserHome, Workspace, ManifestSHA256, ClientInputsSHA256, PlanID, CarrierID, PackageSHA256, NativeContractSHA256, ClientCodeRoot, ClientDesktopPath, ClientCodeExecutable, ClientScope, HookEvent string
-	LifecycleContext                                                                                                                                                                                              bool
+	ExperimentalSeed                                                                                                                                                                                                                                *installer.VerifiedExperimentalSeed
+	ManagementIntent                                                                                                                                                                                                                                string
+	ManagedRoot, UserHome, Workspace, ManifestSHA256, ClientInputsSHA256, PlanID, CarrierID, PackageSHA256, NativeContractSHA256, ClientCodeRoot, ClientDesktopPath, ClientCodeExecutable, ClientCodeConfigurationDirectory, ClientScope, HookEvent string
+	LifecycleContext                                                                                                                                                                                                                                bool
 }
 type lifecycleRequest struct {
 	ManagedRoot string                      `json:"managed_root"`

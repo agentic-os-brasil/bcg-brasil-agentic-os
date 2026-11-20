@@ -42,3 +42,33 @@ generic reviewed kit, then perform local preparation and confirmation. The packe
 README and participant preparation review disclose browser selection. Full Code
 browser readability, decline/accept/stale behavior and independent saved readback
 must still be observed on actual final client bytes before declaring UX qualified.
+
+
+## Experimental installed Code and Desktop
+
+On a fresh experimental installed carrier, the normal participant manager asks
+whether protected foreground MCP changes should use native-first review or the
+complete local-browser review. Pressing Enter keeps native-first. The choice is
+shown again in the full setup review and applies to both Code and Desktop using
+that carrier. It approves no individual write. Choose local-browser when the
+client cannot present the complete exact record through native forms.
+
+The original private current record retains this selection through reopening
+and supported source updates. The installed launcher reads that authenticated
+record; no extension configuration edit, standalone pilot replacement or extra
+server flag is needed. Existing carriers retain their selected mode; this flow
+does not silently convert an old installation or offer an in-place mode change.
+
+Each protected request still opens its own complete review and needs conscious
+approval. Decline, closing, cancellation, expiry or a changed record leaves the
+change unapplied. The receiving server independently checks the selected record
+before and after review and before publication. If source or carrier state
+changes, reconnect through the current supported launcher and obtain a fresh
+review. No lock is held throughout the browser wait. Native-first diagnostic
+sessions without management carrier metadata preserve their existing behavior;
+a raw installed browser flag without an authenticated carrier is refused.
+
+This selection is restricted to explicitly reviewed experimental installed
+carriers. It changes neither production platform trust nor standalone pilot
+packaging restrictions, native hooks or qualification. Passing source tests or
+the installed checker does not establish actual Code/Desktop approval UX.

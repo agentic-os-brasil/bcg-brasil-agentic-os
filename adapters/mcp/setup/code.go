@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -23,12 +24,14 @@ import (
 // A test composition is labelled engineering; production uses bounded exec.
 type ClientCommand func(context.Context, string, []string, string) ([]byte, error)
 type CodeReview struct {
-	Observation     installer.CodeObservation `json:"observation"`
-	BeforePresent   bool                      `json:"before_present"`
-	BeforeEnabled   bool                      `json:"before_enabled"`
-	ExpectedVersion string                    `json:"expected_version"`
-	Actions         [][]string                `json:"actions"`
-	Digest          string                    `json:"review_digest"`
+	Observation          installer.CodeObservation `json:"observation"`
+	ClientRecordSHA256   string                    `json:"client_record_sha256"`
+	CommandSourceConsent *CodeCommandConsent       `json:"command_source_consent,omitempty"`
+	BeforePresent        bool                      `json:"before_present"`
+	BeforeEnabled        bool                      `json:"before_enabled"`
+	ExpectedVersion      string                    `json:"expected_version"`
+	Actions              [][]string                `json:"actions"`
+	Digest               string                    `json:"review_digest"`
 }
 type pluginRow struct {
 	ID             string            `json:"id"`
@@ -71,16 +74,37 @@ type marketplaceRow struct {
 }
 
 func clientCommand(ctx context.Context, path string, args []string, cwd string) ([]byte, error) {
-	bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(bounded, path, args...)
-	cmd.Dir = cwd
-	cmd.WaitDelay = 2 * time.Second
-	var stdout boundedClientOutput
-	cmd.Stdout = &stdout
-	cmd.Stderr = &boundedClientOutput{}
-	err := cmd.Run()
-	return stdout.Bytes(), err
+	return clientCommandWithProfile("")(ctx, path, args, cwd)
+}
+
+// Selection is per child process; never mutate the calling application profile.
+func clientCodeEnvironment(profile string) []string {
+	env := os.Environ()
+	if profile == "" {
+		return env
+	}
+	out := make([]string, 0, len(env)+1)
+	for _, entry := range env {
+		if !strings.HasPrefix(entry, "CLAUDE_CONFIG_DIR=") {
+			out = append(out, entry)
+		}
+	}
+	return append(out, "CLAUDE_CONFIG_DIR="+profile)
+}
+func clientCommandWithProfile(profile string) ClientCommand {
+	return func(ctx context.Context, path string, args []string, cwd string) ([]byte, error) {
+		bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(bounded, path, args...)
+		cmd.Dir = cwd
+		cmd.Env = clientCodeEnvironment(profile)
+		cmd.WaitDelay = 2 * time.Second
+		var stdout boundedClientOutput
+		cmd.Stdout = &stdout
+		cmd.Stderr = &boundedClientOutput{}
+		err := cmd.Run()
+		return stdout.Bytes(), err
+	}
 }
 
 type boundedClientOutput struct{ bytes.Buffer }
@@ -127,7 +151,7 @@ func observeCode(ctx context.Context, r installer.ClientRecord, run ClientComman
 	if run != nil {
 		o.EvidenceClass = "engineering_process_witness"
 	} else {
-		run = clientCommand
+		run = clientCommandWithProfile(r.Code.ConfigurationDirectory)
 	}
 	if !filepath.IsAbs(o.Executable) || filepath.Clean(o.Executable) != o.Executable {
 		return o, false, false, errors.New("explicit absolute Code executable required")
@@ -196,9 +220,9 @@ func observeCode(ctx context.Context, r installer.ClientRecord, run ClientComman
 		}
 		// Cached unrelated plugins need no local-in-place fields. Require all
 		// explicit observations only after selecting the exact Maestro identity.
-		required := []string{"version", "scope", "enabled", "installPath", "readFromFolder"}
+		required := []string{"version", "scope", "enabled", "installPath"}
 		if r.Materialization.Selection == nil {
-			required = append(required, "folderVersion")
+			required = append(required, "readFromFolder", "folderVersion")
 		}
 		for _, name := range required {
 			value, ok := p.fields[name]
@@ -210,16 +234,24 @@ func observeCode(ctx context.Context, r installer.ClientRecord, run ClientComman
 			return o, false, false, errors.New("ambiguous plugin scope; preserved unchanged")
 		}
 		present = true
+		o.CopyManifestVersion, o.CopyContentSHA256 = "", ""
+		currentCopy := false
 		expected := filepath.Join(r.Materialization.CodeRoot, "plugins", "maestro-product")
 		if r.Materialization.Selection == nil {
 			if p.InstallPath != expected || !p.ReadFromFolder {
 				return o, false, false, errors.New("plugin does not read expected local source")
 			}
+		} else if _, explicitFolder := p.fields["readFromFolder"]; !explicitFolder {
+			var err error
+			o.CopyManifestVersion, o.CopyContentSHA256, currentCopy, err = observeCodeCommandCopy(r, p)
+			if err != nil {
+				return o, false, false, err
+			}
 		} else {
 			// COPY is the cross-platform native command-source contract. Code owns
 			// its cache. A current-version observation is accepted only after an
 			// exact byte/mode inventory matches the recorded current packet.
-			if p.ReadFromFolder || !filepath.IsAbs(p.InstallPath) || filepath.Clean(p.InstallPath) != p.InstallPath {
+			if bytes.Equal(p.fields["readFromFolder"], []byte("null")) || p.ReadFromFolder || !filepath.IsAbs(p.InstallPath) || filepath.Clean(p.InstallPath) != p.InstallPath {
 				return o, false, false, errors.New("plugin does not use the expected native copy source")
 			}
 			if p.Version == r.Materialization.Release {
@@ -235,6 +267,7 @@ func observeCode(ctx context.Context, r installer.ClientRecord, run ClientComman
 				if err != nil || copy != source {
 					return o, false, false, errors.New("native Code copy differs from current canonical packet; preserved")
 				}
+				currentCopy = true
 			}
 		}
 		o.InstallPath = p.InstallPath
@@ -246,7 +279,7 @@ func observeCode(ctx context.Context, r installer.ClientRecord, run ClientComman
 		o.Notes = len(p.Notes)
 		current := o.FolderVersion == r.Materialization.Release
 		if r.Materialization.Selection != nil {
-			current = o.InstalledVersion == r.Materialization.Release
+			current = currentCopy
 		}
 		if o.Errors == 0 && current {
 			o.State = "registered"
@@ -262,7 +295,7 @@ func ReviewCodeRegistration(ctx context.Context, r installer.ClientRecord, run C
 	if err != nil {
 		return CodeReview{}, err
 	}
-	review := CodeReview{Observation: o, BeforePresent: present, BeforeEnabled: o.Enabled, ExpectedVersion: r.Materialization.Release, Actions: [][]string{}}
+	review := CodeReview{Observation: o, ClientRecordSHA256: installer.ClientRecordDigest(r), BeforePresent: present, BeforeEnabled: o.Enabled, ExpectedVersion: r.Materialization.Release, Actions: [][]string{}}
 	if !market {
 		review.Actions = append(review.Actions, []string{"plugin", "marketplace", "add", installer.ClientMarketplaceRoot(r), "--scope", o.Scope, "--json"})
 	}
@@ -273,6 +306,25 @@ func ReviewCodeRegistration(ctx context.Context, r installer.ClientRecord, run C
 	}
 	if present && !o.Enabled && len(review.Actions) > 0 {
 		review.Actions = append(review.Actions, []string{"plugin", "disable", o.PluginID, "--scope", o.Scope, "--json"})
+	}
+	for index, args := range review.Actions {
+		if r.Materialization.Selection == nil || len(args) < 2 || args[1] != "install" && args[1] != "update" {
+			continue
+		}
+		execute := run
+		if execute == nil {
+			execute = clientCommandWithProfile(r.Code.ConfigurationDirectory)
+		}
+		help, err := execute(ctx, o.Executable, []string{"plugin", args[1], "--help"}, r.Binding.Workspace)
+		if err != nil || !containsCodeOption(help, "--accept-command") {
+			return CodeReview{}, errors.New("Code command-source consent capability unavailable; preserve registration and use a supported Code host")
+		}
+		consent, err := reviewCodeCommandConsent(r)
+		if err != nil {
+			return CodeReview{}, err
+		}
+		review.CommandSourceConsent = consent
+		review.Actions[index] = append(args, "--accept-command", consent.SHA256)
 	}
 	body, err := releasecontract.CanonicalJSON(review)
 	if err != nil {
@@ -326,7 +378,7 @@ func ApplyCodeRegistration(ctx context.Context, r installer.ClientRecord, run Cl
 	}
 	execute := run
 	if execute == nil {
-		execute = clientCommand
+		execute = clientCommandWithProfile(r.Code.ConfigurationDirectory)
 	}
 	effects := 0
 	drift := func(observation installer.CodeObservation, cause error) (installer.CodeObservation, error) {
@@ -337,7 +389,13 @@ func ApplyCodeRegistration(ctx context.Context, r installer.ClientRecord, run Cl
 		return observation, fmt.Errorf("Code registration stopped before supported command attempts: %w", cause)
 	}
 	for _, args := range review.Actions {
+		if err := checkReviewedCodeConsent(r, review.CommandSourceConsent); err != nil {
+			return drift(review.Observation, err)
+		}
 		if err := checkReviewedCodeIdentity(ctx, review.Observation, execute, r.Binding.Workspace); err != nil {
+			return drift(review.Observation, err)
+		}
+		if err := checkReviewedCodeConsent(r, review.CommandSourceConsent); err != nil {
 			return drift(review.Observation, err)
 		}
 		body, e := execute(ctx, r.Code.Executable, args, r.Binding.Workspace)
@@ -345,10 +403,13 @@ func ApplyCodeRegistration(ctx context.Context, r installer.ClientRecord, run Cl
 		// Result JSON is advisory. Actual supported list readback is the oracle,
 		// including documented nonzero already-disabled outcomes.
 		if e != nil && !(len(args) > 1 && args[1] == "disable") {
-			return installer.CodeObservation{}, fmt.Errorf("Code command incomplete; reconcile actual lists: %w", e)
+			return installer.CodeObservation{}, codeMutationError(body, e)
 		}
 		if len(body) > 1<<20 {
 			return installer.CodeObservation{}, errors.New("Code mutation output bound")
+		}
+		if err := checkReviewedCodeConsent(r, review.CommandSourceConsent); err != nil {
+			return drift(review.Observation, err)
 		}
 	}
 	observation, _, present, err := observeCode(ctx, r, run)

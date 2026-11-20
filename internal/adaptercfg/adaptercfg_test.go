@@ -588,10 +588,11 @@ func TestClaudeUninstallRollsBackHooksAndAgentsWhenProjectionRemovalFails(t *tes
 	}
 }
 
-// Independent six-specialist oracle; transaction code consumes Project instead.
+// Independent eight-specialist oracle; transaction code consumes Project instead.
 var expectedClaudeAgentFiles = []string{
 	"case-agent.md", "client-account-agent.md", "darwin.md",
-	"gamma-guardian.md", "pa-expert.md", "yoda.md",
+	"gamma-guardian.md", "pa-expert.md", "repository-spec-reviewer.md",
+	"repository-standards-reviewer.md", "yoda.md",
 }
 
 func TestStateSnapshotRestoresClaudeAgentsAfterDownstreamFailure(t *testing.T) {

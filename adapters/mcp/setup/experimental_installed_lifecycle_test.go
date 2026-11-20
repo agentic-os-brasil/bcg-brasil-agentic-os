@@ -31,6 +31,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/updateservice"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // This is a source-only engineering rehearsal using actual tagged seed/server
@@ -178,6 +179,7 @@ func TestExperimentalInstalledSeedFiniteSourceLifecycle(t *testing.T) {
 		t.Fatalf("full native profile accepted missing genuine proof: %v", err)
 	}
 	clients := installer.ClientOptions{SeededOperationOptions: seed, Request: installer.ClientRequest{VersionedSlots: true, LifecycleContext: true, CarrierID: strings.Repeat("1", 32), Workspace: ws, CodeRoot: filepath.Join(packetRoot, "resource-code"), DesktopPath: filepath.Join(packetRoot, "resources.mcpb"), CodeScope: "user"}}
+	clients.Request.OwnerReviewChannel = "local-browser"
 	placeRuntime := func(expected built) {
 		review, e := setup.ReviewRuntimeUpdate(ctx, clients)
 		if e != nil {
@@ -201,12 +203,25 @@ func TestExperimentalInstalledSeedFiniteSourceLifecycle(t *testing.T) {
 	materialize := func() installer.ClientRecord {
 		review, e := installer.ReviewClientsSeeded(ctx, clients)
 		must(t, e)
+		if review.Request.OwnerReviewChannel != "local-browser" || !strings.Contains(strings.Join(review.Effects, " "), "both_Code_and_Desktop_without_approving_any_individual_write") {
+			t.Fatal("original review lost the common-client exact-review disclosure")
+		}
 		r, e := setup.ApplyClients(ctx, clients, review.Digest, true)
 		must(t, e)
 		status, e := installer.ReadClientsSeeded(ctx, clients)
 		must(t, e)
-		if r.SchemaVersion != 1 || status.State != "current_materialization" || r.Materialization.NativeEnforcement {
+		if r.SchemaVersion != 1 || status.State != "current_materialization" || r.Materialization.NativeEnforcement || r.Materialization.OwnerReviewChannel != "local-browser" || installer.ClientRequestFromRecord(r).OwnerReviewChannel != "local-browser" {
 			t.Fatal("explicit resources fixture changed record schema or native class")
+		}
+		launch, e := installer.PrepareStableLaunch(ctx, clients)
+		must(t, e)
+		if !strings.HasSuffix(strings.Join(launch.Args, " "), "--owner-review-channel local-browser") {
+			t.Fatal("original stable launch lost the current-record review channel")
+		}
+		changed := clients
+		changed.Request.OwnerReviewChannel = ""
+		if _, e := installer.ReviewClientsSeeded(ctx, changed); e == nil {
+			t.Fatal("an existing carrier changed its reviewed channel")
 		}
 		must(t, setup.VerifyRecordedDesktopContract(r.Materialization.DesktopPath, clients, runtime.GOOS, r.Materialization.DesktopNativeContractSHA256))
 		plugin, e := installer.CurrentClientPluginPath(ctx, clients)
@@ -229,6 +244,54 @@ func TestExperimentalInstalledSeedFiniteSourceLifecycle(t *testing.T) {
 	currentN, err := installtx.ReadSourceState(o.DataRoot, managed)
 	must(t, err)
 	selectedBinding := product.Options{ExperimentalSeed: role, ExperimentalSeedRoot: managed, ProductRoot: managed, UserHome: user, WorkspacePath: ws, AuthorityRegistryPath: filepath.Join(managed, "trust", "release-authority-registry.json"), AuthorityRegistrySHA256: record.RegistrySHA256, CLIVersion: currentN.Server.Version, InstalledManifestSHA256: currentN.Binding.ManifestSHA256, InstalledClientInputsSHA256: currentN.Binding.ClientInputsSHA256}
+	if !t.Run("installed_owner_review_receiver", func(t *testing.T) {
+		selected := selectedBinding
+		selected.OwnerReviewChannel = "local-browser"
+		selected.ManagementCarrierID, selected.ManagementInstallerVersion = clients.Request.CarrierID, seed.Version
+		bound, e := product.Open(selected)
+		must(t, e)
+		for _, change := range []string{"missing-channel", "missing-carrier", "foreign-carrier", "foreign-installer-version"} {
+			altered := selected
+			switch change {
+			case "missing-channel":
+				altered.OwnerReviewChannel = ""
+			case "missing-carrier":
+				altered.ManagementCarrierID, altered.ManagementInstallerVersion = "", ""
+			case "foreign-carrier":
+				altered.ManagementCarrierID = strings.Repeat("f", 32)
+			case "foreign-installer-version":
+				altered.ManagementInstallerVersion = "0.0.0"
+			}
+			if _, e := product.Open(altered); e == nil {
+				t.Fatalf("receiving constructor admitted %s", change)
+			}
+		}
+		a, z := mcp.NewInMemoryTransports()
+		server, e := bound.Server().Connect(ctx, a, nil)
+		must(t, e)
+		defer server.Close()
+		client, e := mcp.NewClient(&mcp.Implementation{Name: "installed-review-source-fixture", Version: "1"}, nil).Connect(ctx, z, nil)
+		must(t, e)
+		defer client.Close()
+		call(t, ctx, client, "maestro_context", map[string]any{}, false)
+		path := filepath.Join(seed.DataRoot, "clients", clients.Request.CarrierID+".json")
+		original := read(t, path)
+		defer func() { must(t, os.WriteFile(path, original, 0600)) }()
+		for _, change := range []string{"channel", "whole-record"} {
+			altered := initialClients
+			if change == "channel" {
+				altered.Materialization.OwnerReviewChannel = ""
+			} else {
+				altered.Code.State = "synthetic-changed-observation"
+			}
+			must(t, os.WriteFile(path, mustJSON(t, altered), 0600))
+			call(t, ctx, client, "maestro_context", map[string]any{}, true)
+			must(t, os.WriteFile(path, original, 0600))
+		}
+		call(t, ctx, client, "maestro_context", map[string]any{}, false)
+	}) {
+		return
+	}
 	if !t.Run("private_packet_native_startup", func(t *testing.T) {
 		candidate := filepath.Join(root, "private-startup-candidate")
 		must(t, packaging.BuildPlugin(packaging.Options{Destination: candidate, Server: installed.CLIPath, Version: currentN.Server.Version, Binding: selectedBinding}))
@@ -322,8 +385,36 @@ func TestExperimentalInstalledSeedFiniteSourceLifecycle(t *testing.T) {
 	nativeCLI := exec.CommandContext(ctx, seed.Self, nativeArgs...)
 	var nativeStdout, nativeStderr bytes.Buffer
 	nativeCLI.Stdout, nativeCLI.Stderr = &nativeStdout, &nativeStderr
-	if err := nativeCLI.Run(); err == nil || nativeStdout.Len() != 0 || !strings.Contains(nativeStderr.String(), "genuinely published full native carrier required") {
-		t.Fatalf("native CLI refusal polluted hook stdout or bypassed native record requirement: stdout=%s stderr=%s err=%v", nativeStdout.String(), nativeStderr.String(), err)
+	nativeErr := nativeCLI.Run()
+	var nativeExit *exec.ExitError
+	if !errors.As(nativeErr, &nativeExit) || nativeExit.ExitCode() != product.HookExitCode("PreToolUse") || nativeStdout.Len() != 0 || strings.TrimSpace(nativeStderr.String()) != "maestro: hook unavailable; inspect admitted state before retrying" {
+		t.Fatalf("native CLI refusal lost event-aware masking or bypassed native record requirement: stdout=%s stderr=%s err=%v", nativeStdout.String(), nativeStderr.String(), nativeErr)
+	}
+	// Bypass the wrapper and call the actual signed/current server command.
+	// A correctly installed signed source and matching release pins still grant
+	// no native admission to this explicitly passive-only fixture.
+	serverNativeArgs := installer.ExperimentalChildArgs([]string{"installed-native-hook", "--event", "PreToolUse", "--binding-sha256", selection, "--carrier-id", clients.Request.CarrierID, "--product-root", managed, "--user-home", user, "--workspace", ws, "--installed-manifest", currentN.Binding.ManifestSHA256, "--installed-client-inputs", currentN.Binding.ClientInputsSHA256}, role, managed)
+	for _, change := range []string{"passive", "owner", "workspace", "carrier"} {
+		t.Run("installed_native_child_refusal_"+change, func(t *testing.T) {
+			args := append([]string(nil), serverNativeArgs...)
+			for i := 1; i+1 < len(args); i += 2 {
+				if change == "owner" && args[i] == "--user-home" || change == "workspace" && args[i] == "--workspace" {
+					args[i+1] = filepath.Join(root, "foreign")
+				}
+				if change == "carrier" && args[i] == "--carrier-id" {
+					args[i+1] = strings.Repeat("f", 32)
+				}
+			}
+			child := exec.CommandContext(ctx, installed.CLIPath, args...)
+			child.Stdin = bytes.NewReader(mustJSON(t, map[string]any{"session_id": "synthetic-denied-native", "prompt_id": "synthetic-turn", "cwd": ws, "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_use_id": "synthetic-probe", "tool_input": map[string]any{"command": "printf synthetic"}, "prompt": "PRIVATE_PAYLOAD_MUST_NOT_BE_LOGGED"}))
+			var output, diagnostic bytes.Buffer
+			child.Stdout, child.Stderr = &output, &diagnostic
+			err := child.Run()
+			var exit *exec.ExitError
+			if !errors.As(err, &exit) || exit.ExitCode() != product.HookExitCode("PreToolUse") || output.Len() != 0 || strings.TrimSpace(diagnostic.String()) != "maestro: hook unavailable; inspect admitted state before retrying" {
+				t.Fatalf("actual installed native child bypassed admission or leaked diagnostics: exit=%v stdout=%s stderr=%s", err, output.String(), diagnostic.String())
+			}
+		})
 	}
 	for _, change := range []string{"absent_carrier", "changed_workspace", "expired_role", "modified_packet"} {
 		t.Run("native_refusal_"+change, func(t *testing.T) {

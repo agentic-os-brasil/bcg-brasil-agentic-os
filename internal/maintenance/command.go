@@ -309,7 +309,10 @@ func validateReservedJobTrigger(jobID string, trigger Trigger) error {
 // execute it, and standalone receipts cannot reconstruct that live authority.
 func weeklyProposalContract(job string, mode WeeklyModelMode, proposal bool) bool {
 	if mode == "" {
+		if job == MemoryModelJobID {
+			return false
+		}
 		return proposal == isProposalOnlyJob(job)
 	}
-	return job == YodaSelfReviewWeeklyJobID && (mode == WeeklyNativeProbe || mode == WeeklyWorking) && !proposal
+	return modelJob(job) && (mode == WeeklyNativeProbe || mode == WeeklyWorking) && !proposal
 }

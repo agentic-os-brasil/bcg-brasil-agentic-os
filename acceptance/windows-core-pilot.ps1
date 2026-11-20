@@ -11,6 +11,7 @@ param(
     [Parameter(ParameterSetName = 'Pilot')][string]$CanonicalManifest,
     [Parameter(ParameterSetName = 'Pilot')][switch]$AuthoredBrain,
     [Parameter(ParameterSetName = 'Pilot')][switch]$PrivateWiki,
+    [Parameter(ParameterSetName = 'Pilot')][switch]$RemainingProtocol,
     [Parameter(Mandatory = $true, ParameterSetName = 'Inspection')][string]$InspectionManifest,
     [Parameter(Mandatory = $true, ParameterSetName = 'Docling')][string]$DoclingManifest
 )
@@ -240,7 +241,7 @@ if ($withManifest) {
         $adapterPackagingAssertions = @('TestNativeWindowsOwnedProcessTree', 'TestNativeWindowsOwnedProcessTree/private-scratch', 'TestNativeWindowsOwnedProcessTree/cancel', 'TestNativeWindowsOwnedProcessTree/parent-exit', 'TestNativeWindowsOwnedProcessTree/output-limit', 'TestNativeWindowsOwnedProcessTree/nonzero-exit', 'TestNativeWindowsOwnedProcessTree/pre-cancel')
         $adapterSetupParents = @('TestModernFactoryFirstInstallAndRestart', 'TestDirectInnerInstallRequiresProductionAuthority', 'TestModernSyncedSourceLifecycle', 'TestSyncedPublicationInterleavingAndReadOnlyReviews')
         $adapterSetupAssertions = @('TestModernFactoryFirstInstallAndRestart', 'TestModernFactoryFirstInstallAndRestart/changed_installed_server/canonical_server_check', 'TestModernFactoryFirstInstallAndRestart/changed_installed_server/existing_install_recovery', 'TestModernFactoryFirstInstallAndRestart/legacy_request_against_modern/healthy_current', 'TestModernFactoryFirstInstallAndRestart/legacy_request_against_modern/changed_current', 'TestDirectInnerInstallRequiresProductionAuthority', 'TestModernSyncedSourceLifecycle', 'TestSyncedPublicationInterleavingAndReadOnlyReviews', 'TestSyncedPublicationInterleavingAndReadOnlyReviews/direct_serve', 'TestSyncedPublicationInterleavingAndReadOnlyReviews/direct_serve/read_only_before_activation', 'TestSyncedPublicationInterleavingAndReadOnlyReviews/direct_serve/read_only_before_activation/source_review', 'TestSyncedPublicationInterleavingAndReadOnlyReviews/direct_serve/read_only_before_activation/rollback_review', 'TestSyncedPublicationInterleavingAndReadOnlyReviews/direct_serve/read_only_before_activation/pending_review', 'TestSyncedPublicationInterleavingAndReadOnlyReviews/direct_serve/read_only_before_activation/canonical_pending_review', 'TestSyncedPublicationInterleavingAndReadOnlyReviews/direct_serve/read_only_before_activation/compiled_source_review_derived_binding', 'TestSyncedPublicationInterleavingAndReadOnlyReviews/direct_serve/read_only_after_real_receipt', 'TestSyncedPublicationInterleavingAndReadOnlyReviews/direct_serve/read_only_after_real_receipt/reconciliation_review', 'TestSyncedPublicationInterleavingAndReadOnlyReviews/direct_serve/read_only_after_real_receipt/reconciliation_error_readback', 'TestSyncedPublicationInterleavingAndReadOnlyReviews/direct_serve/read_only_after_real_receipt/seeded_reconciliation_error_readback', 'TestSyncedPublicationInterleavingAndReadOnlyReviews/direct_serve/read_only_after_real_receipt/qualified_activation_rejection', 'TestSyncedPublicationInterleavingAndReadOnlyReviews/direct_serve/read_only_after_real_receipt/qualified_rollback_rejection', 'TestSyncedPublicationInterleavingAndReadOnlyReviews/bound_carrier')
-        $adapterAssertions = @('TestPublicWorkflow', 'TestCompiledStdioWorkflowAndPackets', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites', 'TestContentUnseededStatus', 'TestIdentityAdvertisesSignedSourceExecutionContract', 'TestProductOpenRefusesLegacySourceStateWithoutMigration', 'TestProductOpenRefusesLegacySourceStateWithoutMigration/library', 'TestProductOpenRefusesLegacySourceStateWithoutMigration/qualified_process', 'TestPackagedMethodsDiscovery', 'TestPackagedMethodsStdioDiscovery', 'TestPackagedMethodCallbacksRevalidateBinding', 'TestAgentResourceCallbacksRevalidateBinding', 'TestCanonicalAgentResourceDiscovery', 'TestMethodQueryDiscoverySDK', 'TestMethodQueryPlanSDK', 'TestMethodPlansResolveMaintenanceKeepWikiUnavailable', 'TestMethodPlansResolveRegisteredMaintenanceAndWiki', 'TestMethodQueryPacketRestartContinuation', 'TestMethodQueryBrainIndexDefaultRequirementsSDK', 'TestMethodQueryArchitectureRecipeRequirementsSDK', 'TestMethodPlansReflectRegisteredContentWithoutRuntimeAuthority', 'TestOwnerConfirmationRefusals', 'TestOwnerChangedDuringTrustedReview', 'TestOwnerLegacyElicitation', 'TestOwnerLocalFallback', 'TestOwnerRejectsModelAuthority', 'TestOwnerUnsafeBindingBeforeEffects', 'TestOwnerQueryNeverInitializes', 'TestOwnerTrackReviewCannotOverwriteConcurrentSelection', 'TestOwnerTrackTrustedForms', 'TestOwnerPublicJourney', 'TestOwnerCompletePublicJourney', 'TestMemoryReviewedCaptureRestart', 'TestMemoryLifecycle', 'TestMemoryLocalFallback', 'TestMemoryWeeklyTrustedPromotion', 'TestMemoryConfirmationRefusals', 'TestMemoryLegacyEligibility', 'TestMemoryQueryNeverInitializes', 'TestMemoryRejectsAuthorityAndUnsafeBinding', 'TestMemoryChangedDuringReviewAndRetarget', 'TestMemoryUTF8Pagination', 'TestMemoryCapacityDoesNotBlockExistingRecords', 'TestMemoryHistoricalFallbackCannotRestoreRemovedText', 'TestMemoryLocalInputRequiresExactClosedRequest', 'TestMemoryLiteralGenerationMarkerDoesNotGrantPromotion', 'TestMemoryReviewedCaptureConcurrentReplay', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/product', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/private-home', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/symlink', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/symlink-ancestor', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/brain-child', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/metadata-child', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/leaf-child', 'TestOwnerConfirmationRefusals/refusal-diagnostic', 'TestOwnerConfirmationRefusals/request-capability-withdrawal', 'TestOwnerConfirmationRefusals/request-url-only', 'TestOwnerConfirmationRefusals/request-empty-elicitation', 'TestOwnerConfirmationRefusals/request-explicit-form', 'TestOwnerConfirmationRefusals/request-form-added', 'TestOwnerConfirmationRefusals/unsupported', 'TestOwnerConfirmationRefusals/decline', 'TestOwnerConfirmationRefusals/cancel', 'TestOwnerConfirmationRefusals/nil-content', 'TestOwnerConfirmationRefusals/false', 'TestOwnerConfirmationRefusals/missing', 'TestOwnerConfirmationRefusals/wrong-type', 'TestOwnerConfirmationRefusals/transport-error', 'TestOwnerChangedDuringTrustedReview/base', 'TestOwnerChangedDuringTrustedReview/proposal', 'TestOwnerChangedDuringTrustedReview/profile', 'TestOwnerChangedDuringTrustedReview/track', 'TestOwnerChangedDuringTrustedReview/same_track', 'TestOwnerChangedDuringTrustedReview/track_aba', 'TestOwnerChangedDuringTrustedReview/binding', 'TestOwnerUnsafeBindingBeforeEffects/workspace', 'TestOwnerUnsafeBindingBeforeEffects/home', 'TestOwnerTrackReviewCannotOverwriteConcurrentSelection/quick', 'TestOwnerTrackReviewCannotOverwriteConcurrentSelection/complete', 'TestOwnerTrackTrustedForms//current', 'TestOwnerTrackTrustedForms//decline', 'TestOwnerTrackTrustedForms//same-value-commit', 'TestOwnerTrackTrustedForms/2025-11-25/current', 'TestOwnerTrackTrustedForms/2025-11-25/decline', 'TestOwnerTrackTrustedForms/2025-11-25/same-value-commit', 'TestOwnerPublicJourney/false', 'TestOwnerPublicJourney/true', 'TestOwnerCompletePublicJourney/false', 'TestOwnerCompletePublicJourney/true', 'TestMemoryReviewedCaptureRestart/false', 'TestMemoryReviewedCaptureRestart/true', 'TestMemoryLifecycle/false', 'TestMemoryLifecycle/true', 'TestMemoryWeeklyTrustedPromotion/SDK', 'TestMemoryWeeklyTrustedPromotion/stdio', 'TestMemoryWeeklyTrustedPromotion/decline', 'TestMemoryWeeklyTrustedPromotion/unsupported', 'TestMemoryWeeklyTrustedPromotion/changed-sources', 'TestMemoryConfirmationRefusals//unsupported', 'TestMemoryConfirmationRefusals//decline', 'TestMemoryConfirmationRefusals//cancel', 'TestMemoryConfirmationRefusals//nil', 'TestMemoryConfirmationRefusals//false', 'TestMemoryConfirmationRefusals//missing', 'TestMemoryConfirmationRefusals//wrong-type', 'TestMemoryConfirmationRefusals//transport-error', 'TestMemoryConfirmationRefusals/2025-11-25/unsupported', 'TestMemoryConfirmationRefusals/2025-11-25/decline', 'TestMemoryConfirmationRefusals/2025-11-25/cancel', 'TestMemoryConfirmationRefusals/2025-11-25/nil', 'TestMemoryConfirmationRefusals/2025-11-25/false', 'TestMemoryConfirmationRefusals/2025-11-25/missing', 'TestMemoryConfirmationRefusals/2025-11-25/wrong-type', 'TestMemoryConfirmationRefusals/2025-11-25/transport-error', 'TestMemoryRejectsAuthorityAndUnsafeBinding/workspace', 'TestMemoryRejectsAuthorityAndUnsafeBinding/home', 'TestMemoryChangedDuringReviewAndRetarget/memory.correct', 'TestMemoryChangedDuringReviewAndRetarget/memory.delete', 'TestMemoryChangedDuringReviewAndRetarget/memory.retention', 'TestMemoryHistoricalFallbackCannotRestoreRemovedText/false', 'TestMemoryHistoricalFallbackCannotRestoreRemovedText/true', 'TestMaintenanceFreshStatusReadOnly', 'TestMaintenancePublicJourney', 'TestMaintenanceConfirmationRefusals', 'TestMaintenanceLegacyQualification', 'TestMaintenanceChangedSourceDuringReview', 'TestMaintenanceClosedSchemas', 'TestMaintenanceLocalFallback', 'TestMaintenanceURLOnlyHostCannotApprove', 'TestMaintenanceRemainingPublicOutputs', 'TestMaintenanceIndexRetentionChangedExecutableRecovery', 'TestMaintenanceFreshStatusReadOnly/false', 'TestMaintenanceFreshStatusReadOnly/true', 'TestMaintenancePublicJourney/false', 'TestMaintenancePublicJourney/true', 'TestMaintenancePublicJourney/owned-background', 'TestMaintenanceConfirmationRefusals/#00', 'TestMaintenanceConfirmationRefusals/2025-11-25', 'TestMaintenanceConfirmationRefusals/#00/decline', 'TestMaintenanceConfirmationRefusals/#00/cancel', 'TestMaintenanceConfirmationRefusals/#00/false', 'TestMaintenanceConfirmationRefusals/#00/missing', 'TestMaintenanceConfirmationRefusals/#00/no-form', 'TestMaintenanceConfirmationRefusals/#00/transport-error', 'TestMaintenanceConfirmationRefusals/2025-11-25/decline', 'TestMaintenanceConfirmationRefusals/2025-11-25/cancel', 'TestMaintenanceConfirmationRefusals/2025-11-25/false', 'TestMaintenanceConfirmationRefusals/2025-11-25/missing', 'TestMaintenanceConfirmationRefusals/2025-11-25/no-form', 'TestMaintenanceConfirmationRefusals/2025-11-25/transport-error', 'TestMaintenanceChangedSourceDuringReview/#00', 'TestMaintenanceChangedSourceDuringReview/2025-11-25', 'TestMaintenanceRemainingPublicOutputs/false', 'TestMaintenanceRemainingPublicOutputs/true', 'TestMaintenanceIndexRetentionChangedExecutableRecovery/skills-index-refresh', 'TestMaintenanceIndexRetentionChangedExecutableRecovery/memory-retention-check', 'TestCompiledStdioWorkflowAndPackets/portable_plugin_0_1_0', 'TestCompiledStdioWorkflowAndPackets/portable_mcpb_0_1_0', 'TestCompiledStdioWorkflowAndPackets/portable_plugin_0_1_1', 'TestCompiledStdioWorkflowAndPackets/portable_mcpb_0_1_1', 'TestCompiledClaudeHook', 'TestCompiledClaudeHook/root_removal_and_allowed_control', 'TestCompiledClaudeHook/startup_read_only_and_current_context', 'TestCompiledClaudeHook/malformed_event_and_size_fail_closed', 'TestCompiledClaudeHook/paths_glob_regex_and_cross_case', 'TestCompiledClaudeHook/namespace_and_predispatch', 'TestCompiledClaudeHook/observations_retries_and_body_privacy', 'TestCompiledClaudeHook/optional_prompt_identity_never_resets', 'TestCompiledClaudeHook/concurrent_reservations_choose_one', 'TestCompiledClaudeHook/private_alias_and_changed_binding', 'TestCompiledClaudeHook/failed_observation_grants_no_child_authority', 'TestCompiledClaudeHook/truncated_state_never_reinitializes', 'TestCompiledClaudeHook/stop_recursion_has_no_completion_effect', 'TestProductHookGeneratedMemoryReadOnly', 'TestPassiveLifecycleMissingMemoryDoesNotInitialize', 'TestPassiveLifecycleRefusalsPreserveState', 'TestPassiveStopOnlyRecordsIdempotentMetadata', 'TestLifecycleMemoryCorrectionAndDeletionHideOldView')
+        $adapterAssertions = @('TestPublicWorkflow', 'TestCompiledStdioWorkflowAndPackets', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites', 'TestContentUnseededStatus', 'TestIdentityAdvertisesSignedSourceExecutionContract', 'TestProductOpenRefusesLegacySourceStateWithoutMigration', 'TestProductOpenRefusesLegacySourceStateWithoutMigration/library', 'TestProductOpenRefusesLegacySourceStateWithoutMigration/qualified_process', 'TestPackagedMethodsDiscovery', 'TestPackagedMethodsStdioDiscovery', 'TestPackagedMethodCallbacksRevalidateBinding', 'TestAgentResourceCallbacksRevalidateBinding', 'TestCanonicalAgentResourceDiscovery', 'TestMethodQueryDiscoverySDK', 'TestMethodQueryPlanSDK', 'TestMethodPlansResolveMaintenanceKeepWikiUnavailable', 'TestMethodPlansResolveRegisteredMaintenanceAndWiki', 'TestMethodQueryPacketRestartContinuation', 'TestMethodQueryBrainIndexDefaultRequirementsSDK', 'TestMethodQueryArchitectureRecipeRequirementsSDK', 'TestMethodPlansReflectRegisteredContentWithoutRuntimeAuthority', 'TestOwnerConfirmationRefusals', 'TestOwnerChangedDuringTrustedReview', 'TestOwnerLegacyElicitation', 'TestOwnerLocalFallback', 'TestOwnerRejectsModelAuthority', 'TestOwnerUnsafeBindingBeforeEffects', 'TestOwnerQueryNeverInitializes', 'TestOwnerTrackReviewCannotOverwriteConcurrentSelection', 'TestOwnerTrackTrustedForms', 'TestOwnerPublicJourney', 'TestOwnerCompletePublicJourney', 'TestMemoryReviewedCaptureRestart', 'TestMemoryLifecycle', 'TestMemoryLocalFallback', 'TestMemoryWeeklyTrustedPromotion', 'TestMemoryConfirmationRefusals', 'TestMemoryLegacyEligibility', 'TestMemoryQueryNeverInitializes', 'TestMemoryRejectsAuthorityAndUnsafeBinding', 'TestMemoryChangedDuringReviewAndRetarget', 'TestMemoryUTF8Pagination', 'TestMemoryCapacityDoesNotBlockExistingRecords', 'TestMemoryHistoricalFallbackCannotRestoreRemovedText', 'TestMemoryLocalInputRequiresExactClosedRequest', 'TestMemoryLiteralGenerationMarkerDoesNotGrantPromotion', 'TestMemoryReviewedCaptureConcurrentReplay', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/product', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/private-home', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/symlink', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/symlink-ancestor', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/brain-child', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/metadata-child', 'TestCLIInitRefusesUnsafeBindingsWithoutWrites/leaf-child', 'TestOwnerConfirmationRefusals/refusal-diagnostic', 'TestOwnerConfirmationRefusals/request-capability-withdrawal', 'TestOwnerConfirmationRefusals/request-url-only', 'TestOwnerConfirmationRefusals/request-empty-elicitation', 'TestOwnerConfirmationRefusals/request-explicit-form', 'TestOwnerConfirmationRefusals/request-form-added', 'TestOwnerConfirmationRefusals/unsupported', 'TestOwnerConfirmationRefusals/decline', 'TestOwnerConfirmationRefusals/cancel', 'TestOwnerConfirmationRefusals/nil-content', 'TestOwnerConfirmationRefusals/false', 'TestOwnerConfirmationRefusals/missing', 'TestOwnerConfirmationRefusals/wrong-type', 'TestOwnerConfirmationRefusals/transport-error', 'TestOwnerChangedDuringTrustedReview/base', 'TestOwnerChangedDuringTrustedReview/proposal', 'TestOwnerChangedDuringTrustedReview/profile', 'TestOwnerChangedDuringTrustedReview/track', 'TestOwnerChangedDuringTrustedReview/same_track', 'TestOwnerChangedDuringTrustedReview/track_aba', 'TestOwnerChangedDuringTrustedReview/binding', 'TestOwnerUnsafeBindingBeforeEffects/workspace', 'TestOwnerUnsafeBindingBeforeEffects/home', 'TestOwnerTrackReviewCannotOverwriteConcurrentSelection/quick', 'TestOwnerTrackReviewCannotOverwriteConcurrentSelection/complete', 'TestOwnerTrackTrustedForms//current', 'TestOwnerTrackTrustedForms//decline', 'TestOwnerTrackTrustedForms//same-value-commit', 'TestOwnerTrackTrustedForms/2025-11-25/current', 'TestOwnerTrackTrustedForms/2025-11-25/decline', 'TestOwnerTrackTrustedForms/2025-11-25/same-value-commit', 'TestOwnerPublicJourney/false', 'TestOwnerPublicJourney/true', 'TestOwnerCompletePublicJourney/false', 'TestOwnerCompletePublicJourney/true', 'TestMemoryReviewedCaptureRestart/false', 'TestMemoryReviewedCaptureRestart/true', 'TestMemoryLifecycle/false', 'TestMemoryLifecycle/true', 'TestMemoryWeeklyTrustedPromotion/SDK', 'TestMemoryWeeklyTrustedPromotion/stdio', 'TestMemoryWeeklyTrustedPromotion/decline', 'TestMemoryWeeklyTrustedPromotion/unsupported', 'TestMemoryWeeklyTrustedPromotion/changed-sources', 'TestMemoryConfirmationRefusals//unsupported', 'TestMemoryConfirmationRefusals//decline', 'TestMemoryConfirmationRefusals//cancel', 'TestMemoryConfirmationRefusals//nil', 'TestMemoryConfirmationRefusals//false', 'TestMemoryConfirmationRefusals//missing', 'TestMemoryConfirmationRefusals//wrong-type', 'TestMemoryConfirmationRefusals//transport-error', 'TestMemoryConfirmationRefusals/2025-11-25/unsupported', 'TestMemoryConfirmationRefusals/2025-11-25/decline', 'TestMemoryConfirmationRefusals/2025-11-25/cancel', 'TestMemoryConfirmationRefusals/2025-11-25/nil', 'TestMemoryConfirmationRefusals/2025-11-25/false', 'TestMemoryConfirmationRefusals/2025-11-25/missing', 'TestMemoryConfirmationRefusals/2025-11-25/wrong-type', 'TestMemoryConfirmationRefusals/2025-11-25/transport-error', 'TestMemoryRejectsAuthorityAndUnsafeBinding/workspace', 'TestMemoryRejectsAuthorityAndUnsafeBinding/home', 'TestMemoryChangedDuringReviewAndRetarget/memory.correct', 'TestMemoryChangedDuringReviewAndRetarget/memory.delete', 'TestMemoryChangedDuringReviewAndRetarget/memory.retention', 'TestMemoryHistoricalFallbackCannotRestoreRemovedText/false', 'TestMemoryHistoricalFallbackCannotRestoreRemovedText/true', 'TestMaintenanceFreshStatusReadOnly', 'TestMaintenancePublicJourney', 'TestMaintenanceConfirmationRefusals', 'TestMaintenanceLegacyQualification', 'TestMaintenanceChangedSourceDuringReview', 'TestMaintenanceClosedSchemas', 'TestMaintenanceLocalFallback', 'TestMaintenanceURLOnlyHostCannotApprove', 'TestMaintenanceRemainingPublicOutputs', 'TestMaintenanceIndexRetentionChangedExecutableRecovery', 'TestMaintenanceFreshStatusReadOnly/false', 'TestMaintenanceFreshStatusReadOnly/true', 'TestMaintenancePublicJourney/false', 'TestMaintenancePublicJourney/true', 'TestMaintenancePublicJourney/owned-background', 'TestMaintenanceConfirmationRefusals/#00', 'TestMaintenanceConfirmationRefusals/2025-11-25', 'TestMaintenanceConfirmationRefusals/#00/decline', 'TestMaintenanceConfirmationRefusals/#00/cancel', 'TestMaintenanceConfirmationRefusals/#00/false', 'TestMaintenanceConfirmationRefusals/#00/missing', 'TestMaintenanceConfirmationRefusals/#00/no-form', 'TestMaintenanceConfirmationRefusals/#00/transport-error', 'TestMaintenanceConfirmationRefusals/2025-11-25/decline', 'TestMaintenanceConfirmationRefusals/2025-11-25/cancel', 'TestMaintenanceConfirmationRefusals/2025-11-25/false', 'TestMaintenanceConfirmationRefusals/2025-11-25/missing', 'TestMaintenanceConfirmationRefusals/2025-11-25/no-form', 'TestMaintenanceConfirmationRefusals/2025-11-25/transport-error', 'TestMaintenanceChangedSourceDuringReview/#00', 'TestMaintenanceChangedSourceDuringReview/2025-11-25', 'TestMaintenanceRemainingPublicOutputs/false', 'TestMaintenanceRemainingPublicOutputs/true', 'TestMaintenanceIndexRetentionChangedExecutableRecovery/skills-index-refresh', 'TestMaintenanceIndexRetentionChangedExecutableRecovery/memory-retention-check', 'TestCompiledStdioWorkflowAndPackets/portable_plugin_0_1_0', 'TestCompiledStdioWorkflowAndPackets/portable_mcpb_0_1_0', 'TestCompiledStdioWorkflowAndPackets/portable_plugin_0_1_1', 'TestCompiledStdioWorkflowAndPackets/portable_mcpb_0_1_1', 'TestCompiledClaudeHook', 'TestCompiledClaudeHook/root_removal_and_allowed_control', 'TestCompiledClaudeHook/startup_read_only_and_current_context', 'TestCompiledClaudeHook/malformed_event_and_size_fail_closed', 'TestCompiledClaudeHook/paths_glob_regex_and_cross_case', 'TestCompiledClaudeHook/repository_review_pair', 'TestCompiledClaudeHook/namespace_and_predispatch', 'TestCompiledClaudeHook/observations_retries_and_body_privacy', 'TestCompiledClaudeHook/optional_prompt_identity_never_resets', 'TestCompiledClaudeHook/concurrent_reservations_choose_one', 'TestCompiledClaudeHook/private_alias_and_changed_binding', 'TestCompiledClaudeHook/failed_observation_grants_no_child_authority', 'TestCompiledClaudeHook/truncated_state_never_reinitializes', 'TestCompiledClaudeHook/stop_recursion_has_no_completion_effect', 'TestProductHookGeneratedMemoryReadOnly', 'TestPassiveLifecycleMissingMemoryDoesNotInitialize', 'TestPassiveLifecycleRefusalsPreserveState', 'TestPassiveStopOnlyRecordsIdempotentMetadata', 'TestLifecycleMemoryCorrectionAndDeletionHideOldView')
         $authoredAdapterParents = @('TestAuthoredBrainCreateAndRestartedRead', 'TestAuthoredBrainReviewedAppendUsesCurrentRevision', 'TestAuthoredBrainEditsAndLinksOneReviewedBrief', 'TestAuthoredBrainExactAppendRetryConverges', 'TestAuthoredBrainReadOnlyRefusalsAndPreservedLegacy', 'TestAuthoredBrainChangedReviewAndUTF8ReadBounds', 'TestAuthoredBrainForeignCaseAliasesRemainOutsideScope', 'TestAuthoredBrainLinkReplayRevalidatesCurrentCaseTarget', 'TestAuthoredBrainCRLFEditsPreserveSurroundingBytes', 'TestAuthoredBrainSDKCreatesPageWithoutConversionArtifact', 'TestAuthoredBrainDuplicateMetadataRefusesCreateAndUpdateWithoutEffects', 'TestAuthoredBrainResourceHasIndependentCanonicalIdentity', 'TestKnowledgeCollectSharesWorkspaceCaseAndPrivateScope')
         $authoredAdapterAssertions = @('TestAuthoredBrainCreateAndRestartedRead', 'TestAuthoredBrainReviewedAppendUsesCurrentRevision', 'TestAuthoredBrainEditsAndLinksOneReviewedBrief', 'TestAuthoredBrainExactAppendRetryConverges', 'TestAuthoredBrainReadOnlyRefusalsAndPreservedLegacy', 'TestAuthoredBrainChangedReviewAndUTF8ReadBounds', 'TestAuthoredBrainForeignCaseAliasesRemainOutsideScope', 'TestAuthoredBrainLinkReplayRevalidatesCurrentCaseTarget', 'TestAuthoredBrainCRLFEditsPreserveSurroundingBytes', 'TestAuthoredBrainSDKCreatesPageWithoutConversionArtifact', 'TestAuthoredBrainDuplicateMetadataRefusesCreateAndUpdateWithoutEffects', 'TestAuthoredBrainResourceHasIndependentCanonicalIdentity', 'TestKnowledgeCollectSharesWorkspaceCaseAndPrivateScope', 'TestAuthoredBrainCreateAndRestartedRead/false', 'TestAuthoredBrainCreateAndRestartedRead/true', 'TestAuthoredBrainReviewedAppendUsesCurrentRevision/false', 'TestAuthoredBrainReviewedAppendUsesCurrentRevision/true', 'TestAuthoredBrainEditsAndLinksOneReviewedBrief/false', 'TestAuthoredBrainEditsAndLinksOneReviewedBrief/true', 'TestAuthoredBrainExactAppendRetryConverges/false', 'TestAuthoredBrainExactAppendRetryConverges/true', 'TestAuthoredBrainForeignCaseAliasesRemainOutsideScope/false', 'TestAuthoredBrainForeignCaseAliasesRemainOutsideScope/true', 'TestAuthoredBrainLinkReplayRevalidatesCurrentCaseTarget/false', 'TestAuthoredBrainLinkReplayRevalidatesCurrentCaseTarget/true', 'TestAuthoredBrainCRLFEditsPreserveSurroundingBytes/false', 'TestAuthoredBrainCRLFEditsPreserveSurroundingBytes/true', 'TestKnowledgeCollectSharesWorkspaceCaseAndPrivateScope/false', 'TestKnowledgeCollectSharesWorkspaceCaseAndPrivateScope/true', 'TestAuthoredBrainDuplicateMetadataRefusesCreateAndUpdateWithoutEffects/create/required-list-first', 'TestAuthoredBrainDuplicateMetadataRefusesCreateAndUpdateWithoutEffects/create/required-object-first', 'TestAuthoredBrainDuplicateMetadataRefusesCreateAndUpdateWithoutEffects/create/required-scalar-first', 'TestAuthoredBrainDuplicateMetadataRefusesCreateAndUpdateWithoutEffects/create/optional-object-scalar', 'TestAuthoredBrainDuplicateMetadataRefusesCreateAndUpdateWithoutEffects/create/optional-object-object', 'TestAuthoredBrainDuplicateMetadataRefusesCreateAndUpdateWithoutEffects/create/optional-list-list', 'TestAuthoredBrainDuplicateMetadataRefusesCreateAndUpdateWithoutEffects/update/required-list-first', 'TestAuthoredBrainDuplicateMetadataRefusesCreateAndUpdateWithoutEffects/update/required-object-first', 'TestAuthoredBrainDuplicateMetadataRefusesCreateAndUpdateWithoutEffects/update/required-scalar-first', 'TestAuthoredBrainDuplicateMetadataRefusesCreateAndUpdateWithoutEffects/update/optional-object-scalar', 'TestAuthoredBrainDuplicateMetadataRefusesCreateAndUpdateWithoutEffects/update/optional-object-object', 'TestAuthoredBrainDuplicateMetadataRefusesCreateAndUpdateWithoutEffects/update/optional-list-list')
         $adapterNames = @($canonical.adapter_packages | ForEach-Object { $_.name })
@@ -350,6 +351,7 @@ if ($withManifest) {
         }
     }
 }
+if ($RemainingProtocol -and -not $withEngine) { throw 'Remaining protocol requires the exact sealed native engine profile.' }
 if ($AtlasTestBinary -and -not (Test-Path -LiteralPath $AtlasTestBinary -PathType Leaf)) {
     throw 'The focused atlas publication witness is missing.'
 }
@@ -470,7 +472,7 @@ try {
     # owner is the standard user; never grant that user access to runner data.
     $launcher = Join-Path $payload 'native-user-launcher.ps1'
     @'
-param([string]$TestBinary, [string]$ProofRoot, [string]$Kit, [string]$AtlasTestBinary, [string]$DoclingTestBinary, [string]$DoclingTestSHA256, [switch]$AuthoredBrain, [switch]$PrivateWiki, [string]$CanonicalManifest, [switch]$Inspection, [string]$ExpectedUserSID, [string]$DoclingManifest, [string]$DoclingProfile, [string]$DoclingProfileSHA256)
+param([string]$TestBinary, [string]$ProofRoot, [string]$Kit, [string]$AtlasTestBinary, [string]$DoclingTestBinary, [string]$DoclingTestSHA256, [switch]$AuthoredBrain, [switch]$PrivateWiki, [string]$CanonicalManifest, [switch]$Inspection, [string]$ExpectedUserSID, [string]$DoclingManifest, [string]$DoclingProfile, [string]$DoclingProfileSHA256, [switch]$RemainingProtocol)
 $ErrorActionPreference = 'Stop'
 try {
     $temporary = Join-Path $ProofRoot 'user-temp'
@@ -527,6 +529,123 @@ try {
     $coreOutput = @(& $TestBinary '-test.run' $pattern '-test.v' '-test.timeout=600s')
     $coreExit = $LASTEXITCODE
     $coreOutput | Write-Output
+
+    # Source-fixed platform/fixture skips remain missing qualification.
+    function Get-RemainingProtocolProof($Inventory, $Events, [string[]]$Excluded) {
+        $skipReasons = @{
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/TestContentOldProfileUnavailable' = @('explicit original E4 engineering fixture and independent seed required', 'old retained profile is darwin/arm64')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/TestContentPolicyRealJourneys' = @('explicit retained current engineering runtime and independent authority seed required')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/TestContentRealJourneys' = @('explicit final retained authenticated engineering fixture and independent registry seed required')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/TestOwnerKnowledgePostReviewChangesAndRefusalsPreserveState' = @('existing source revalidation is unavailable; no native document-knowledge qualification')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/TestOwnerKnowledgePublicSourceBoundJourney' = @('existing source revalidation is unavailable; no native document-knowledge qualification')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/TestOwnerKnowledgeRejectsUnadmittedPromotion' = @('existing source revalidation is unavailable; no native document-knowledge qualification', 'source reader unavailable on this platform')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/TestOwnerKnowledgeRejectsUnattestedArtifactAndModelAssertions' = @('existing source revalidation is unavailable; no native document-knowledge qualification')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/TestOwnerKnowledgeWorkspaceDefaultsRetainRequestIdentity' = @('existing source revalidation is unavailable; no native document-knowledge qualification')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/TestPrivateWikiEventControlRefusesActualOldService' = @('actual old-service witness not selected')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/TestProductDarwinReviewProjectionR1' = @('Darwin private publication is unavailable on Windows; this Unix-positive journey supplies no native Windows qualification')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/TestProductDarwinSDKAndShippingStdioLifecycle' = @('Darwin private publication is unavailable on Windows; this Unix-positive journey supplies no native Windows qualification')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/cmd/maestro-install/TestRuntimeCurrentnessManagerProcess' = @('explicit synthetic manager lifecycle fixture required')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/cmd/maestro-mcp/TestEngineeringRuntimePilotRealJourney' = @('explicit authenticated retained runtime and independent public registry digest required')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/cmd/maestro-mcp/TestInstalledPilotSDKReadsWithoutStartingMaintenanceOrWritingOwnerFiles' = @('ordinary-user Windows owner admission has its separate native qualification')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/cmd/maestro-mcp/TestMigratedHomePublicMCPInit' = @('dedicated ordinary-account Windows external migration proof required')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/cmd/maestro-mcp/TestPilotCodePacketSelectionPreservesCanonicalInventory' = @('ordinary native owner admission runs in the Windows qualification journey')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestCodePilotBindsExplicitChannelAndCanonicalPacket' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestCodePilotCompiledServerRequiresExactStartupChannel' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestCodePilotNativeCandidateKeepsOriginalHookVectors' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestCodePilotNativeReviewDisclosesChannelWithoutChangingQualification' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestCodePilotRefusesOtherPacketAuthorities' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestCompleteMethodPackets' = @('owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestLifecycleAndNativeProfilesAreMutuallyExclusive' = @('owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestLifecycleContextCannotBeProjectedAsDesktopHooks' = @('owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestLifecycleContextCommandPreservesLiteralPluginAndBindingPaths' = @('owner admission unavailable', 'the POSIX command oracle uses the platform shell; Windows has a separate native command contract')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestLifecycleContextPacketIsExplicitAndNonEnforcing' = @('owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestLifecyclePowerShellCommandPreservesLiteralArguments' = @('PowerShell parser oracle unavailable on this host', 'this parser oracle uses a POSIX recorder; native Windows command execution remains separate acceptance')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestMCPOnlyPacketHasExplicitNativeBoundaryAndInventory' = @('owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeAdmissionCannotBeImportedOrTransferToAnotherTarget' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeCommandRunnerBoundsOrdinaryOwnedProcessGroup' = @('native process group boundary unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeControlInstructionAppearingStopsBeforeNextSession' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeControlledSessionsProduceOnlyEngineeringPacket' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeFailedSessionRetainsKnownEstimate' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeHostInspectionPreservesPayloadAndIdentityRefusals' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativePacketExecutesSelectedHookArgumentVectors' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeProofRejectsAssistantClaimsAndMissingPositiveEvidence' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativePublicReviewBindsChangedInstructionClosureBeforeEffects' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativePublicReviewInspectsSupportedSizeCompiledHost' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativePublicReviewRefusesUnsupportedInstructionSources' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeQualificationFingerprintBindsStableCarrierWithoutChangingLegacy' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeReviewAdmitsStoredDisabledSyncedCache' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeReviewRequiresExactConfirmationWithoutWrites' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeReviewStoredSyncOptOutSources' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeStartupActualRuntimeState' = @('explicit fresh synthetic runtime binding required')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeStartupFailureDiagnostics' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeStartupSnapshotCoversLargeRuntimeState' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeStartupSnapshotRefusesAggregateBeyondRuntimeBound' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeStartupSnapshotRefusesOversizeRuntimeFile' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeStoredSyncOptOutAtGitRootLocalScope' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeStoredSyncOptOutBindsSettingsAndCacheMembership' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeStoredSyncOptOutPreservesDiscoveryRefusals' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeStoredSyncOptOutRequiresSupportedHost' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeUnavailableProducesMCPOnlyWithoutScratch' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestNativeUnsupportedProfileRetainsMCPOnlyAndRootAliasBinding' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestQualificationHookCanonicalFailureHasNoMarker' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestQualificationScopeCannotSupplyCanonicalOrFaultPass' = @('native owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestStableInspectorRejectsRelabelledLegacyLaunch' = @('owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestStablePacketRequiresCurrentSignedInstallation' = @('owner admission unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/setup/TestCodeCommandConsentRefusesChangedReviewedInputsBeforeEffects' = @('Windows ACL role is checked by native custody tests', 'Windows alias creation requires host privilege')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/setup/TestCurrentClientShippingNativeRefusal' = @('explicit actual current-client fixture required')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/setup/TestDirectInnerInstallRequiresProductionAuthority' = @('supported actual native runner required')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/setup/TestModernClientRegistrationLifecycle' = @('actual admitted-home engineering runner required', 'explicit immutable baseline or sealed old actual server required')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/setup/TestModernFactoryFirstInstallAndRestart' = @('actual supported native runner required')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/setup/TestModernSyncedSourceLifecycle' = @('actual admitted-home engineering runner required', 'explicit immutable old-modern baseline required for the complete Task2 gate')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/setup/TestSelectedCodeProfileIsPerChildAndLeavesCallerUntouched' = @('printenv unavailable')
+            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/setup/TestSyncedPublicationInterleavingAndReadOnlyReviews' = @('actual admitted-home engineering runner required')
+        }
+        $expected = @{}; $all = @{}
+        foreach ($package in $Inventory.Keys) {
+            foreach ($test in @($Inventory[$package])) {
+                $key = $package + '/' + $test
+                if ($all.ContainsKey($key)) { throw 'Duplicate compiled remaining inventory.' }
+                $all[$key] = $true
+                if ($test -cnotin $Excluded) { $expected[$key] = $true }
+            }
+        }
+        $outcomes = @{}; $outputs = @{}; $skips = @(); $invalid = @()
+        foreach ($event in $Events) {
+            if (-not $event.Test) { continue }
+            $key = $event.Package + '/' + $event.Test
+            if ($event.Action -ceq 'output') {
+                if (-not $outputs.ContainsKey($key)) { $outputs[$key] = '' }
+                $outputs[$key] += $event.Output
+            }
+            if ($event.Action -ceq 'skip') {
+                $parent = $event.Package + '/' + $event.Test.Split('/')[0]
+                $matched = @()
+                if ($skipReasons.ContainsKey($parent)) {
+                    $matched = @($skipReasons[$parent] | Where-Object {
+                        $outputs[$key] -cmatch (': ' + [regex]::Escape($_) + '\r?\n')
+                    })
+                }
+                $conditional = $false
+                if ($parent -ceq 'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging/TestWeeklyConfigurationRefusesAliasesAndTotalSize') {
+                    $conditional = $outputs[$key] -match ': symlink [^\r\n]+: A required privilege is not held by the client\.\r?\n'
+                }
+                if ($matched.Count -eq 0 -and -not $conditional) { $invalid += $key + ':unclassified_skip' }
+                $skips += [ordered]@{test=$key; disposition='not_qualified_existing_platform_or_fixture_skip'; classified=($matched.Count -gt 0 -or $conditional)}
+            }
+            if ($event.Test.Contains('/') -or $event.Action -cnotin @('pass','skip','fail')) { continue }
+            if (-not $expected.ContainsKey($key) -or $outcomes.ContainsKey($key)) { $invalid += $key + ':unknown_or_duplicate' }
+            $outcomes[$key] = $event.Action
+            if ($event.Action -ceq 'fail') { $invalid += $key + ':failed' }
+        }
+        $missing = @($expected.Keys | Where-Object { -not $outcomes.ContainsKey($_) })
+        $partition = @($all.Keys | ForEach-Object {
+            [ordered]@{test=$_; execution= $(if ($expected.ContainsKey($_)) {'remaining_ordinary'} elseif ($_ -cmatch '/TestWindowsWorkspaceInitializationMatchesElevation$') {'elevated_refusal'} else {'previous_exact_ordinary_proof'})}
+        } | Sort-Object test -CaseSensitive)
+        return [ordered]@{complete=($invalid.Count -eq 0 -and $missing.Count -eq 0); inventory=$partition
+            outcomes=@($outcomes.Keys | ForEach-Object {[ordered]@{test=$_; outcome=$outcomes[$_]}} | Sort-Object test -CaseSensitive)
+            classified_skips=$skips; invalid=$invalid; missing=$missing; skipped_coverage_qualified=$false}
+    }
+
     if ($coreExit -ne 0) { throw "Native Core failed with exit $coreExit." }
     $coreLog = $coreOutput -join "`n"
     if ($coreLog -notmatch 'native_windows_environment private_current_user_temp=true' -or
@@ -884,6 +1003,92 @@ try {
             if ($Inspection) { throw 'Inspection contracts remain incomplete; retain all four package logs and classified outcomes.' }
             throw 'Canonical contracts remain incomplete; retain all six package logs and classified outcomes.'
         }
+
+        if ($engineProfile -and $RemainingProtocol) {
+            # Continue inside the same ordinary token before account teardown.
+            # The original closed 61/179 proof above remains unchanged.
+            $alreadyProved = @($manifest.adapter_packages | ForEach-Object { @($_.required_tests) + @($_.authored_required_tests) })
+            $nativeParents = @($families | ForEach-Object { 'TestWindows' + $_ + 'Pilot' })
+            $adminParents = @('TestWindowsWorkspaceInitializationMatchesElevation')
+            $excluded = @($alreadyProved + $nativeParents + $adminParents | Sort-Object -CaseSensitive -Unique)
+            $remainingPattern = '^(' + (($excluded | ForEach-Object {[regex]::Escape($_)}) -join '|') + ')$'
+            $hadGoModulePath = Test-Path Env:PSModulePath
+            $goModulePath = $env:PSModulePath
+            Push-Location -LiteralPath (Join-Path $manifest.source_root 'adapters/mcp')
+            try {
+                # A stock Windows PowerShell descendant resolves its own modules.
+                Remove-Item Env:PSModulePath -ErrorAction SilentlyContinue
+                $listing = @(& $manifest.sdk_go test ./... -list '^(Test|Example)' -json 2>&1 | ForEach-Object {"$_"})
+                if ($LASTEXITCODE -ne 0) { throw 'Remaining exact compiled test discovery failed.' }
+                $inventory = @{}
+                foreach ($line in $listing) {
+                    $event = $line | ConvertFrom-Json
+                    if (-not $inventory.ContainsKey($event.Package)) { $inventory[$event.Package] = @() }
+                    if ($event.Action -ceq 'output' -and $event.Output.Trim() -cmatch '^(Test|Example)[A-Za-z0-9_]*$') {
+                        $inventory[$event.Package] += $event.Output.Trim()
+                    }
+                }
+                foreach ($entry in $manifest.adapter_packages) {
+                    $package = $entry.package.Replace('./', 'github.com/agentic-os-brasil/bcg-brasil-agentic-os/')
+                    if (-not $inventory.ContainsKey($package) -or
+                        @((Compare-Object (@($entry.tests) | Sort-Object -CaseSensitive) (@($inventory[$package]) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) {
+                        throw 'Remaining discovery changed an already sealed adapter inventory.'
+                    }
+                }
+                $coveredKeys = @{}
+                foreach ($entry in $manifest.adapter_packages) {
+                    $package = $entry.package.Replace('./', 'github.com/agentic-os-brasil/bcg-brasil-agentic-os/')
+                    foreach ($test in @($entry.required_tests) + @($entry.authored_required_tests)) {
+                        if ($test) { $coveredKeys[$package + '/' + $test] = $true }
+                    }
+                }
+                foreach ($test in @($nativeParents) + @($adminParents)) {
+                    $coveredKeys['github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/' + $test] = $true
+                }
+                foreach ($package in $inventory.Keys) {
+                    foreach ($test in $inventory[$package]) {
+                        if (($test -cin $excluded) -ne $coveredKeys.ContainsKey($package + '/' + $test)) {
+                            throw 'A global exclusion would omit an unproved package/test or lose a required proof.'
+                        }
+                    }
+                }
+                foreach ($key in $coveredKeys.Keys) {
+                    $split = $key.LastIndexOf('/')
+                    if (-not $inventory.ContainsKey($key.Substring(0,$split)) -or
+                        @($inventory[$key.Substring(0,$split)] | Where-Object {$_ -ceq $key.Substring($split+1)}).Count -ne 1) {
+                        throw 'A required native/admin proof is absent from the exact compiled inventory.'
+                    }
+                }
+                $remaining = @(& $manifest.sdk_go test ./... -skip $remainingPattern -count=1 -json -timeout=20m 2>&1 | ForEach-Object {"$_"})
+                $remainingExit = $LASTEXITCODE
+            } finally {
+                Pop-Location
+                if ($hadGoModulePath) { $env:PSModulePath = $goModulePath }
+                else { Remove-Item Env:PSModulePath -ErrorAction SilentlyContinue }
+            }
+            $remainingBody = ($remaining -join [Environment]::NewLine) + [Environment]::NewLine
+            if ([Text.Encoding]::UTF8.GetByteCount($remainingBody) -gt 2097152) { throw 'Remaining protocol log exceeds its original synthetic bound.' }
+            $remainingLog = Join-Path $ProofRoot 'adapter-remaining.log'
+            [IO.File]::WriteAllText($remainingLog, $remainingBody, [Text.UTF8Encoding]::new($false))
+            $events = @($remaining | ForEach-Object { $_ | ConvertFrom-Json })
+            $proof = Get-RemainingProtocolProof $inventory $events $excluded
+            $packageTerminals = @($events | Where-Object {-not $_.Test -and $_.Action -cin @('pass','skip','fail')})
+            $packagesComplete = @($packageTerminals.Package | Sort-Object -CaseSensitive -Unique).Count -eq $inventory.Count -and
+                @((Compare-Object ($inventory.Keys | Sort-Object -CaseSensitive) (@($packageTerminals.Package) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -eq 0 -and
+                @($packageTerminals | Where-Object {$_.Action -ceq 'fail'}).Count -eq 0
+            $receipt = [ordered]@{schema_version=1; source_revision=$manifest.source_revision
+                sdk_go_sha256=$manifest.sdk_go_sha256; actual_standard_user=$true; private_current_user_temp=$true
+                compiled_inventory=$inventory; exclusions=$excluded
+                original_closed_engine_proof_unchanged=$true; complete=($remainingExit -eq 0 -and $packagesComplete -and $proof.complete)
+                exit_code=$remainingExit; packages_complete=$packagesComplete; proof=$proof
+                log='adapter-remaining.log'; log_sha256=(Get-FileHash -LiteralPath $remainingLog -Algorithm SHA256).Hash.ToLowerInvariant()}
+            $receipt | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $ProofRoot 'remaining-protocol-results.json') -Encoding utf8
+            Write-Output ('remaining_ordinary complete=' + $receipt.complete + ' parents=' + $proof.outcomes.Count + ' nonqualified_skips=' + $proof.classified_skips.Count)
+            if (-not $receipt.complete) {
+                Write-Output ($remaining | Select-Object -Last 80)
+                throw 'Remaining ordinary protocol inventory failed; retain the separate exact outcomes.'
+            }
+        }
     }
     if ($Kit -and -not (Test-Path -LiteralPath (Join-Path $ProofRoot 'native-kit-proof.json') -PathType Leaf)) {
         throw 'The existing public command parent did not produce exact pilot artifact evidence.'
@@ -903,6 +1108,7 @@ try {
     if ($DoclingTestBinary) { $arguments += @('-DoclingTestBinary', "`"$nativeDoclingTest`"", '-DoclingTestSHA256', $doclingHash) }
     if ($AuthoredBrain) { $arguments += '-AuthoredBrain' }
     if ($PrivateWiki) { $arguments += '-PrivateWiki' }
+    if ($RemainingProtocol) { $arguments += '-RemainingProtocol' }
     if ($withManifest) { $arguments += @('-CanonicalManifest', "`"$nativeCanonical`"") }
     if ($withKit) {
         $arguments += @('-Kit', "`"$nativeKit`"")
@@ -911,7 +1117,7 @@ try {
     $priorModulePath = $env:PSModulePath
     try {
         # Stock Windows PowerShell must resolve its own modules, not inherited PowerShell7 modules.
-        if ($withKit) { Remove-Item Env:PSModulePath -ErrorAction SilentlyContinue }
+        Remove-Item Env:PSModulePath -ErrorAction SilentlyContinue
         $process = Start-Process -FilePath $powershell -ArgumentList $arguments -Credential $credential -LoadUserProfile -WorkingDirectory $OutputRoot -RedirectStandardOutput $stdout -RedirectStandardError $stderr -Wait -PassThru
     } finally {
         if ($hadModulePath) { $env:PSModulePath = $priorModulePath }

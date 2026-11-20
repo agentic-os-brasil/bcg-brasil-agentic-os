@@ -607,7 +607,7 @@ $values|ConvertTo-Json -Depth 4 -Compress
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         ledger = json.loads(result.stdout)
         self.assertEqual(len(ledger["$adapterParents"]), 61)
-        self.assertEqual(len(ledger["$adapterAssertions"]), 178)
+        self.assertEqual(len(ledger["$adapterAssertions"]), 179)
         self.assertIn("TestMaintenancePublicJourney/owned-background", ledger["$adapterAssertions"])
         for case in ("refusal-diagnostic", "request-capability-withdrawal", "request-url-only",
                      "request-empty-elicitation", "request-explicit-form", "request-form-added"):
@@ -619,7 +619,7 @@ $values|ConvertTo-Json -Depth 4 -Compress
             for format in ("plugin", "mcpb"):
                 self.assertIn(f"TestCompiledStdioWorkflowAndPackets/portable_{format}_{version}", ledger["$adapterAssertions"])
         self.assertEqual(len(ledger["$adapterCommandParents"]), 1)
-        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]), 179)
+        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]), 180)
         self.assertEqual(ledger["$adapterSetupParents"], ["TestModernFactoryFirstInstallAndRestart", "TestDirectInnerInstallRequiresProductionAuthority", "TestModernSyncedSourceLifecycle", "TestSyncedPublicationInterleavingAndReadOnlyReviews"])
         self.assertEqual(len(ledger["$adapterSetupAssertions"]), 22)
         self.assertEqual(len(set(ledger["$adapterSetupAssertions"])), 22)
@@ -628,13 +628,13 @@ $values|ConvertTo-Json -Depth 4 -Compress
         setup_source = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "adapters/mcp/setup").glob("*_test.go"))
         for parent in ledger["$adapterSetupParents"]:
             self.assertIn(f"func {parent}(", setup_source)
-        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]) + len(ledger["$adapterSetupAssertions"]), 201)
+        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]) + len(ledger["$adapterSetupAssertions"]), 202)
         self.assertEqual(ledger["$adapterPackagingParents"], ["TestNativeWindowsOwnedProcessTree"])
         self.assertEqual(ledger["$adapterPackagingAssertions"], ["TestNativeWindowsOwnedProcessTree"] + [
             "TestNativeWindowsOwnedProcessTree/" + child for child in
             ("private-scratch", "cancel", "parent-exit", "output-limit", "nonzero-exit", "pre-cancel")])
         self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]) +
-                         len(ledger["$adapterSetupAssertions"]) + len(ledger["$adapterPackagingAssertions"]), 208)
+                         len(ledger["$adapterSetupAssertions"]) + len(ledger["$adapterPackagingAssertions"]), 209)
 
         for name in ("TestMethodPlansResolveMaintenanceKeepWikiUnavailable", "TestMethodPlansResolveRegisteredMaintenanceAndWiki", "TestAgentResourceCallbacksRevalidateBinding"):
             self.assertIn(name, ledger["$adapterParents"])
@@ -651,6 +651,7 @@ $values|ConvertTo-Json -Depth 4 -Compress
             'TestCompiledClaudeHook/startup_read_only_and_current_context',
             'TestCompiledClaudeHook/malformed_event_and_size_fail_closed',
             'TestCompiledClaudeHook/paths_glob_regex_and_cross_case',
+            'TestCompiledClaudeHook/repository_review_pair',
             'TestCompiledClaudeHook/namespace_and_predispatch',
             'TestCompiledClaudeHook/observations_retries_and_body_privacy',
             'TestCompiledClaudeHook/optional_prompt_identity_never_resets',
@@ -910,4 +911,46 @@ if($guard.Count -ne 1 -or $exclusion.Count -ne 1 -or $guard[0].Extent.EndOffset 
 ''', encoding="utf-8")
         result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER),
                                  str(ROOT / "acceptance/windows-engine-check.ps1")], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_remaining_protocol_preserves_exact_partition_and_unqualified_skips(self):
+        script = self.root / "remaining-proof.ps1"
+        script.write_text(r'''$ErrorActionPreference='Stop'
+$tokens=$null;$errors=$null
+[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$tokens,[ref]$errors)|Out-Null
+$launcher=@($tokens|Where-Object {$_.Kind -eq 'HereStringLiteral'})
+if($errors.Count -or $launcher.Count -ne 1){throw 'Expected original credentialed launcher'}
+$ast=[Management.Automation.Language.Parser]::ParseInput($launcher[0].Value,[ref]$null,[ref]$errors)
+$reader=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Get-RemainingProtocolProof'},$true))
+if($errors.Count -or $reader.Count -ne 1){throw 'Expected original remaining classifier'}
+Invoke-Expression $reader[0].Extent.Text
+$module='github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp'
+$inventory=@{$module=@('TestRemaining','TestProved','TestWindowsWorkspaceInitializationMatchesElevation')}
+$excluded=@('TestProved','TestWindowsWorkspaceInitializationMatchesElevation')
+$valid=@([pscustomobject]@{Package=$module;Test='TestRemaining';Action='pass'})
+$proof=Get-RemainingProtocolProof $inventory $valid $excluded
+if(-not $proof.complete -or $proof.inventory.Count -ne 3 -or $proof.outcomes.Count -ne 1 -or $proof.skipped_coverage_qualified -ne $false){throw 'Exact parent union refused'}
+if(@($proof.inventory|Where-Object {$_.execution -ceq 'elevated_refusal'}).Count -ne 1){throw 'Admin negative disappeared'}
+function Assert-RemainingRefused($Events) {
+ if((Get-RemainingProtocolProof $inventory $Events $excluded).complete){throw 'Unknown, missing, duplicate, excluded or failed evidence qualified'}
+}
+Assert-RemainingRefused @()
+Assert-RemainingRefused @($valid + $valid)
+Assert-RemainingRefused @([pscustomobject]@{Package=$module;Test='TestUnknown';Action='pass'})
+Assert-RemainingRefused @([pscustomobject]@{Package=$module;Test='TestRemaining';Action='fail'})
+Assert-RemainingRefused @([pscustomobject]@{Package=$module;Test='TestRemaining';Action='skip'})
+Assert-RemainingRefused @($valid + [pscustomobject]@{Package=$module;Test='TestProved';Action='pass'})
+$optional=@{$module=@('TestContentRealJourneys')}
+$message='fixture_test.go:1: explicit final retained authenticated engineering fixture and independent registry seed required' + [Environment]::NewLine
+$events=@([pscustomobject]@{Package=$module;Test='TestContentRealJourneys';Action='output';Output=$message},[pscustomobject]@{Package=$module;Test='TestContentRealJourneys';Action='skip'})
+$proof=Get-RemainingProtocolProof $optional $events @()
+if(-not $proof.complete -or $proof.classified_skips.Count -ne 1 -or $proof.skipped_coverage_qualified -ne $false -or $proof.outcomes[0].outcome -cne 'skip'){throw 'Existing explicit fixture SKIP lost its missing-coverage meaning'}
+$events[0].Output='fixture_test.go:1: unknown reason' + [Environment]::NewLine
+if((Get-RemainingProtocolProof $optional $events @()).complete){throw 'Unknown reason was silently classified'}
+$duplicate=@{$module=@('TestRemaining','TestRemaining')}
+$refused=$false
+try {Get-RemainingProtocolProof $duplicate $valid @()|Out-Null} catch {$refused=$true}
+if(-not $refused){throw 'Duplicate compiled inventory accepted'}
+''', encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER)], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

@@ -59,7 +59,7 @@ func TestContentUnseededStatus(t *testing.T) {
 		t.Fatalf("valid unseeded conversion created an artifact: %v", got)
 	}
 	reason := "authority_unavailable"
-	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
+	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" && runtime.GOOS != "windows" {
 		reason = "platform_unavailable"
 	}
 	if !reflect.DeepEqual(conversion["warnings"], []any{reason}) {

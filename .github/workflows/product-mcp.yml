@@ -127,7 +127,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
@@ -144,6 +144,18 @@ jobs:
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as environment:
               environment.write(f"TMPDIR={temporary}\nGOTMPDIR={temporary}\n")
           PYTHON
+      - name: Select physical Windows temporary root
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          @'
+          import os, pathlib, tempfile
+          root = pathlib.Path(os.environ["RUNNER_TEMP"]).resolve(strict=True)
+          temporary = pathlib.Path(tempfile.mkdtemp(prefix="maestro-product-", dir=root)).resolve(strict=True)
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as environment:
+              for name in ("TEMP", "TMP", "GOTMPDIR"):
+                  environment.write(f"{name}={temporary}\n")
+          '@ | python -
       # shortcut: runner toolcache paths fail Go canonicalization; remove when unchanged witness tests pass there.
       # Related upstream report: https://github.com/golang/go/issues/82447
       - name: Stage Windows SDK for canonical command evidence
@@ -181,13 +193,13 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          ./acceptance/windows-core-pilot.ps1 -TestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/mcp.test.exe') -Server (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/maestro-mcp.exe') -AuthoredBrain -PrivateWiki -AtlasTestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/atlasops.test.exe') -CanonicalManifest (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'engine-build-manifest.json') -OutputRoot (Join-Path $env:RUNNER_TEMP 'native-engine-proof')
+          ./acceptance/windows-core-pilot.ps1 -TestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/mcp.test.exe') -Server (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/maestro-mcp.exe') -AuthoredBrain -PrivateWiki -RemainingProtocol -AtlasTestBinary (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'bin/atlasops.test.exe') -CanonicalManifest (Join-Path $env:MAESTRO_ENGINE_PUBLIC_ROOT 'engine-build-manifest.json') -OutputRoot (Join-Path $env:RUNNER_TEMP 'native-engine-proof')
       - name: Verify exact-source ordinary proof before host-positive exclusions
         id: windows_engine_proof
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          ./acceptance/windows-engine-check.ps1
+          ./acceptance/windows-engine-check.ps1 -RemainingProtocol
       - name: Canonical ledger, HOME, owner, memory and atlas contracts
         if: runner.os != 'Windows'
         run: go test ./internal/execution ./internal/datahome ./internal/ownerctx ./internal/privatelock ./internal/memory ./internal/atlasops ./internal/privatewiki -timeout=300s
@@ -205,16 +217,27 @@ jobs:
         run: go test ./internal/adaptercfg ./internal/claudeadapter ./internal/claudeagents ./internal/nativeagentflow ./internal/sessionctx ./internal/sessionhook ./internal/lifecycle ./internal/workspacepolicy -timeout=300s
       # Compiled/source fixtures do not qualify an actual native client.
       # Exact-source ordinary execution above qualifies only the closed positive
-      # inventory. The elevated host still executes unsafe/elevated/no-bootstrap
-      # refusals and every unexcluded package/test below.
+      # inventory. Remaining ordinary contracts continue inside that same token;
+      # the elevated host separately retains its actual initialization refusal.
       - name: Product protocol, bootstrap refusal and package contracts
         if: runner.os != 'Windows'
         working-directory: adapters/mcp
-        run: go test ./... -timeout=600s
-      - name: Remaining Windows protocol, unsafe-owner and elevated-host contracts
+        run: go test ./... -timeout=20m
+      - name: Explicit elevated Windows initialization refusal
         if: runner.os == 'Windows'
         working-directory: adapters/mcp
-        run: go test ./... -skip '${{ steps.windows_engine_proof.outputs.host_exclusions }}' -timeout=600s
+        shell: pwsh
+        run: |
+          $evidence = @(go test . -run '^TestWindowsWorkspaceInitializationMatchesElevation$' -count=1 -json -timeout=180s)
+          $code = $LASTEXITCODE
+          $evidence | Write-Output
+          $events = @($evidence | ForEach-Object { $_ | ConvertFrom-Json })
+          if ($code -ne 0 -or
+              @($events | Where-Object { $_.Action -ceq 'pass' -and $_.Test -ceq 'TestWindowsWorkspaceInitializationMatchesElevation' }).Count -ne 1 -or
+              @($events | Where-Object { $_.Action -ceq 'skip' }).Count -ne 0 -or
+              @($events | Where-Object { $_.Output -cmatch 'actual elevated host initialization refused without filesystem effects' }).Count -ne 1) {
+            throw 'The original actual elevated initialization refusal did not execute.'
+          }
       - name: Product module static checks
         working-directory: adapters/mcp
         run: go vet ./...
@@ -397,6 +420,26 @@ jobs:
           mkdir "$MAESTRO_CLIENT_REGISTRATION_BASELINE"
           git archive --format=tar f398d32478c19259932c8ecdaebdc4bcf1380cb9 -o "$RUNNER_TEMP/maestro-client-registration-baseline.tar"
           tar -xf "$RUNNER_TEMP/maestro-client-registration-baseline.tar" -C "$MAESTRO_CLIENT_REGISTRATION_BASELINE"
+      # Original inert signed-pack fixture: retain the actual placement error
+      # under this job's physical temporary root before the installed journey.
+      - name: Existing authenticated runtime placement under hosted storage
+        working-directory: .
+        shell: bash
+        run: |
+          evidence="$RUNNER_TEMP/maestro-runtime-placement.jsonl"
+          if ! go test ./internal/ingest/docling -run '^TestAuthenticatedChangedPackPlacementPreservesPrior$' -count=1 -json > "$evidence"; then
+            cat "$evidence"
+            exit 1
+          fi
+          cat "$evidence"
+          python3 - "$evidence" <<'PYCODE'
+          import json, pathlib, sys
+          events = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+          family = "TestAuthenticatedChangedPackPlacementPreservesPrior"
+          assert any(e.get("Action") == "pass" and e.get("Test") == family for e in events), "original runtime placement test missing or skipped"
+          skipped = [e.get("Test") for e in events if e.get("Action") == "skip" and (e.get("Test") == family or e.get("Test", "").startswith(family + "/"))]
+          assert not skipped, "original runtime placement test skipped proof: " + repr(skipped)
+          PYCODE
       # Real current-server generation, installed launch and SDK/stdio; supported
       # client-process witnesses are engineering evidence, not native loading.
       - name: Exact materialization registration recovery and update lifecycle
@@ -404,7 +447,7 @@ jobs:
         shell: bash
         run: |
           evidence="$RUNNER_TEMP/maestro-client-registration.jsonl"
-          if ! go test ./setup -run '^TestModernClientRegistrationLifecycle$' -count=1 -json -timeout=900s > "$evidence"; then
+          if ! go test -tags=maestro_experimental_installed_seed ./setup -run '^TestModernClientRegistrationLifecycle$' -count=1 -json -timeout=900s > "$evidence"; then
             cat "$evidence"
             exit 1
           fi

@@ -19,6 +19,7 @@ import (
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
@@ -504,13 +505,7 @@ func prepareNativeProbe(o Options, root, challenge string, index int, fault stri
 	startup["command"] = "${CLAUDE_PLUGIN_ROOT}/scripts/" + binaryName(o.target.Platform())
 	startup["args"] = append([]string{"native-startup-check", "--nonce", p.nonce}, args(candidate)[1:]...)
 	startup["timeout"] = nativeStartupCheckSeconds
-	failureCommand := "${CLAUDE_PLUGIN_ROOT}/scripts/" + binaryName(o.target.Platform())
-	failureArgs := []string{"native-fault", "--fault", fault}
-	if fault == "missing" {
-		failureCommand = "${CLAUDE_PLUGIN_ROOT}/scripts/absent-native-guard"
-		failureArgs = []string{}
-	}
-	var hook any = map[string]any{"matcher": "Edit", "hooks": []any{map[string]any{"type": "command", "command": failureCommand, "args": failureArgs, "timeout": 1, "onFailure": "block"}}}
+	hook := nativeFaultHook(o, fault)
 	// Preserve native matcher fields: the qualification fault is separate from
 	// the all-tool canonical guard and is the only operational failure per call.
 	var complete map[string]any
@@ -542,6 +537,19 @@ func prepareNativeProbe(o Options, root, challenge string, index int, fault stri
 	accepted = true
 	return p, nil
 }
+
+func nativeFaultHook(o Options, fault string) map[string]any {
+	command := "${CLAUDE_PLUGIN_ROOT}/scripts/" + binaryName(o.target.Platform())
+	args := []string{"native-fault", "--fault", fault}
+	if fault == "missing" {
+		command = "${CLAUDE_PLUGIN_ROOT}/scripts/absent-native-guard"
+		args = []string{}
+	} else {
+		args = installer.ExperimentalChildArgs(args, o.Binding.ExperimentalSeed, o.Binding.ExperimentalSeedRoot)
+	}
+	return map[string]any{"matcher": "Edit", "hooks": []any{map[string]any{"type": "command", "command": command, "args": args, "timeout": 1, "onFailure": "block"}}}
+}
+
 func (p nativeProbe) arguments(budget float64) []string {
 	allowed := filepath.Join(p.challenge, "allowed.txt")
 	edit := filepath.Join(p.challenge, "edit.txt")

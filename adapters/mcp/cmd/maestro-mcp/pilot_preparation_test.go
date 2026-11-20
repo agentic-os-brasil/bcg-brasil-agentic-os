@@ -491,7 +491,10 @@ func TestPilotWindowsCodePromptHandoff(t *testing.T) {
 		t.Fatal("Code launcher producer absent")
 	}
 	launcher := strings.SplitN(setupText[start+len("$code = @'\n"):], "\n'@", 2)[0]
-	base := t.TempDir()
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	root := filepath.Join(base, "prepared space ' literal")
 	tools := filepath.Join(base, "tools")
 	witness := filepath.Join(base, "argv.json")

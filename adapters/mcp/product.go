@@ -36,6 +36,7 @@ type Options struct {
 	// Explicit native startup inputs; declarations never qualify or activate a job.
 	WeeklyCandidate      *maintenance.WeeklyModelRegistration
 	WeeklyNativeExecutor maintenance.WeeklyNativeExecutor
+	MemoryNativeExecutor maintenance.MemoryNativeExecutor
 	// Fixed by the validated stable launcher, never by an MCP argument.
 	ManagementCarrierID, ManagementInstallerVersion string
 }
@@ -50,6 +51,7 @@ type Bound struct {
 	maintenanceClock           func() time.Time
 	maintenanceActivity        func(context.Context) (maintenance.IdleState, error)
 	managementOpen             func(context.Context, string) error
+	ownerReviewClientSHA256    string
 }
 
 func Open(o Options) (*Bound, error) {
@@ -87,6 +89,9 @@ func (b *Bound) validate() error {
 	}
 	if b.home != "" && (b.home != h.Home || b.workspaceID != w.WorkspaceID) {
 		return errors.New("binding_changed")
+	}
+	if err := b.validateInstalledOwnerReview(h.Home, w.WorkspaceID); err != nil {
+		return err
 	}
 	s, err := execution.OpenConfinedStore(root)
 	if err != nil {

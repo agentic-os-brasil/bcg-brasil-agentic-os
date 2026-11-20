@@ -11,4 +11,7 @@ func TestOrdinaryEntryDoesNotRecognizeExperimentalNativeRoute(t *testing.T) {
 	if handled, err := experimentalNativeHookCommand(context.Background(), "stable-native-hook", "not-executed", []string{"--binding-sha256", "invalid"}, nil); handled || err != nil {
 		t.Fatal("ordinary CLI consumed experimental native route")
 	}
+	if _, handled := experimentalNativeHookFailure([]string{"stable-native-hook", "--event", "PreToolUse"}); handled {
+		t.Fatal("ordinary CLI exposed experimental native error handling")
+	}
 }

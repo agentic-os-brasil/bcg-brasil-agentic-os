@@ -104,8 +104,9 @@ func ClientGenerationPaths(r ClientRequest, manifest string) (ClientMaterializat
 }
 
 func ClientRequestFromRecord(r ClientRecord) ClientRequest {
-	request := ClientRequest{CarrierID: r.CarrierID, Workspace: r.Binding.Workspace, CodeRoot: r.Materialization.CodeRoot, DesktopPath: r.Materialization.DesktopPath, CodeExecutable: r.Code.Executable, CodeScope: r.Code.Scope, LifecycleContext: r.Materialization.LifecycleContext}
+	request := ClientRequest{CarrierID: r.CarrierID, Workspace: r.Binding.Workspace, CodeRoot: r.Materialization.CodeRoot, DesktopPath: r.Materialization.DesktopPath, CodeExecutable: r.Code.Executable, CodeConfigurationDirectory: r.Code.ConfigurationDirectory, CodeScope: r.Code.Scope, LifecycleContext: r.Materialization.LifecycleContext}
 	request.NativeEnforcement = r.Materialization.NativeEnforcement
+	request.OwnerReviewChannel = r.Materialization.OwnerReviewChannel
 	request.GenerationID = r.Materialization.GenerationID
 	if s := r.Materialization.Selection; s != nil {
 		request.VersionedSlots = true

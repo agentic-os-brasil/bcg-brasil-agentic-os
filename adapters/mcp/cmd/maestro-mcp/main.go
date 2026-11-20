@@ -33,7 +33,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "maestro: lifecycle context unavailable; inspect the selected binding and explicit preparation")
 			os.Exit(1)
 		}
-		if len(os.Args) > 1 && os.Args[1] == "hook" {
+		if len(os.Args) > 1 && (os.Args[1] == "hook" || os.Args[1] == "installed-native-hook") {
 			event := ""
 			for i, arg := range os.Args {
 				if value, ok := strings.CutPrefix(arg, "--event="); ok {
@@ -60,12 +60,37 @@ func main() {
 			fmt.Fprintln(os.Stderr, "maestro: owner confirmation refused; inspect the selected binding, read the current full owner-review or owner-onboarding-review, then retry with its exact --review-digest and --confirm")
 		} else if len(os.Args) > 1 && os.Args[1] == "owner-track" {
 			fmt.Fprintln(os.Stderr, "maestro: owner track selection refused; inspect the selected binding, then use --track quick|complete with explicit --confirm")
+		} else if len(os.Args) > 1 && os.Args[1] == "runtime-apply" {
+			fmt.Fprintln(os.Stderr, runtimeApplyErrorMessage(err))
 		} else {
 			fmt.Fprintln(os.Stderr, "maestro: operation unavailable; inspect the selected binding before retrying")
 		}
 		os.Exit(1)
 	}
 }
+func runtimeApplyErrorMessage(err error) string {
+	const message = "maestro: operation unavailable; inspect the selected binding before retrying"
+	operation := "filesystem"
+	cause := err
+	var pathError *os.PathError
+	var linkError *os.LinkError
+	if errors.As(err, &pathError) && pathError != nil {
+		operation, cause = pathError.Op, pathError.Err
+	} else if errors.As(err, &linkError) && linkError != nil {
+		operation, cause = linkError.Op, linkError.Err
+	}
+	var errno syscall.Errno
+	if !errors.As(cause, &errno) {
+		return message
+	}
+	switch operation {
+	case "open", "openat", "mkdir", "chmod", "write", "close", "rename", "stat", "lstat", "readdir", "sync", "unlinkat":
+	default:
+		operation = "filesystem"
+	}
+	return fmt.Sprintf("%s [filesystem operation=%s errno=%d]", message, operation, errno)
+}
+
 func run() error {
 	if len(os.Args) > 1 && os.Args[1] == "pilot-check" {
 		return runPilotCheck(context.Background(), os.Args[2:], os.Stdout)

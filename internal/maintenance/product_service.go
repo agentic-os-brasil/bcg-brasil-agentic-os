@@ -34,6 +34,7 @@ var ErrQualificationRequired = errors.New("current actual maintenance qualificat
 type ServiceOptions struct {
 	SourceAdmission                                updateservice.SyncedAdmission            `json:"-"`
 	WeeklyNativeExecutor                           WeeklyNativeExecutor                     `json:"-"`
+	MemoryNativeExecutor                           MemoryNativeExecutor                     `json:"-"`
 	WeeklyCandidate                                *WeeklyModelRegistration                 `json:"-"`
 	DarwinFactory                                  func(DarwinScope) (DarwinBinding, error) `json:"-"`
 	ProductRoot, UserHome, WorkspacePath           string
@@ -286,7 +287,7 @@ func productDigest(value any) string {
 	return hex.EncodeToString(sum[:])
 }
 func productJob(jobID string) bool {
-	return jobID == YodaSelfReviewWeeklyJobID || jobID == SelfObservationCaptureJobID || DarwinJob(jobID) || jobID == MemoryCaptureJobID || jobID == MemoryLightDreamJobID || jobID == MemoryCheckpointJobID || jobID == MemoryDeepDreamJobID || jobID == "skills-index-refresh" || diagnosticJob(jobID)
+	return modelJob(jobID) || jobID == SelfObservationCaptureJobID || DarwinJob(jobID) || jobID == MemoryCaptureJobID || jobID == MemoryLightDreamJobID || jobID == MemoryCheckpointJobID || jobID == MemoryDeepDreamJobID || jobID == "skills-index-refresh" || diagnosticJob(jobID)
 }
 func (s *Service) configuration(jobID string) string {
 	job, _ := findCatalogJob(s.options.Catalog, jobID)
@@ -312,8 +313,14 @@ func (s *Service) loadControl(jobID string) (productControl, error) {
 	if c.SchemaVersion != 1 || c.WorkspaceID != s.workspaceID || c.Binding != s.binding || c.JobID != jobID || c.Revision == 0 {
 		return c, ErrProductConflict
 	}
-	if c.Weekly != nil && (jobID != YodaSelfReviewWeeklyJobID || c.Weekly.Registration.Validate() != nil || !digestPattern.MatchString(c.Weekly.RegistrationReviewSHA256)) {
+	if c.Weekly != nil && (!modelJob(jobID) || c.Weekly.Registration.Descriptor.JobID != jobID || c.Weekly.Registration.Validate() != nil || !digestPattern.MatchString(c.Weekly.RegistrationReviewSHA256)) {
 		return c, ErrProductConflict
+	}
+	if c.Weekly != nil && c.Weekly.MemorySelection != nil {
+		m := c.Weekly.MemorySelection
+		if jobID != MemoryModelJobID || m.ScheduledFor.IsZero() || !digestPattern.MatchString(m.InputSHA256) || m.RegistrationSHA256 != c.Weekly.Registration.Digest() {
+			return c, ErrProductConflict
+		}
 	}
 	if c.Qualification != nil && (c.Qualification.JobID != c.JobID || c.Qualification.WorkspaceID != c.WorkspaceID || c.Qualification.Binding != c.Binding) {
 		return c, ErrProductConflict
@@ -357,6 +364,11 @@ func (s *Service) saveControl(c productControl) error {
 	return scheduler.WritePrivateFileAtomic(s.controlPath(c.JobID), body)
 }
 func (s *Service) withControl(jobID string, fn func() error) error {
+	if weeklyMemoryJob(jobID) {
+		return scheduler.WithPrivateLock(filepath.Join(s.receipts.Root, "workspaces", s.workspaceID, "weekly-memory.guard"), func() error {
+			return scheduler.WithPrivateLock(filepath.Join(filepath.Dir(s.controlPath(jobID)), "control.guard"), fn)
+		})
+	}
 	return scheduler.WithPrivateLock(filepath.Join(filepath.Dir(s.controlPath(jobID)), "control.guard"), fn)
 }
 
@@ -387,7 +399,7 @@ func (s *Service) Status() (ProductStatus, error) {
 		if len(c.Writes) > 0 {
 			item.Writes = append([]string(nil), c.Writes...)
 		}
-		if !productJob(job.ID) || DarwinJob(job.ID) && s.darwin == nil || job.ID == YodaSelfReviewWeeklyJobID && (service.options.WeeklyNativeExecutor == nil || c.Weekly == nil) {
+		if !productJob(job.ID) || DarwinJob(job.ID) && s.darwin == nil || job.ID == YodaSelfReviewWeeklyJobID && (service.options.WeeklyNativeExecutor == nil || c.Weekly == nil) || job.ID == MemoryModelJobID && (service.options.MemoryNativeExecutor == nil || c.Weekly == nil) {
 			item.Reason = "production_binding_unavailable"
 		} else if c.Qualification != nil {
 			if err := service.verifyQualification(c.Qualification); err == nil {
@@ -427,8 +439,11 @@ func (s *Service) Review(op Operation) (ProductReview, error) {
 	if op.JobID == UpdateAvailabilityJobID && !s.updateScoped {
 		return s.updateAvailabilityService().Review(op)
 	}
-	if op.JobID == YodaSelfReviewWeeklyJobID && op.Kind == "register" {
-		return s.weeklyModelService().reviewWeeklyRegistration(op)
+	if modelJob(op.JobID) && op.Kind == "register" {
+		if op.JobID == YodaSelfReviewWeeklyJobID {
+			return s.weeklyModelService().reviewWeeklyRegistration(op)
+		}
+		return s.reviewWeeklyRegistration(op)
 	}
 	if op.JobID == YodaSelfReviewWeeklyJobID && !s.weeklyScoped {
 		return s.weeklyModelService().Review(op)
@@ -487,6 +502,9 @@ func (s *Service) Review(op Operation) (ProductReview, error) {
 		return ProductReview{}, ErrProductConflict
 	}
 	if op.Kind == "enroll" || op.Kind == "resume" {
+		if err := s.checkWeeklyMemoryExclusive(op.JobID); err != nil {
+			return ProductReview{}, err
+		}
 		if err := s.verifyQualification(c.Qualification); err != nil {
 			return ProductReview{}, err
 		}
@@ -496,7 +514,7 @@ func (s *Service) Review(op Operation) (ProductReview, error) {
 	if op.JobID == SelfObservationCaptureJobID || op.JobID == YodaSelfReviewWeeklyJobID {
 		r.Scope = "owner"
 	}
-	if op.JobID == YodaSelfReviewWeeklyJobID && c.Weekly != nil {
+	if modelJob(op.JobID) && c.Weekly != nil {
 		r.WeeklyRegistration, err = cloneWeeklyRegistration(&c.Weekly.Registration)
 		if err != nil {
 			return ProductReview{}, err
@@ -546,8 +564,11 @@ func (s *Service) Apply(ctx context.Context, r ProductReview, confirm func(conte
 	if r.Operation.JobID == UpdateAvailabilityJobID && !s.updateScoped {
 		return s.updateAvailabilityService().Apply(ctx, r, confirm)
 	}
-	if r.Operation.JobID == YodaSelfReviewWeeklyJobID && r.Operation.Kind == "register" {
-		return s.weeklyModelService().applyWeeklyRegistration(ctx, r, confirm)
+	if modelJob(r.Operation.JobID) && r.Operation.Kind == "register" {
+		if r.Operation.JobID == YodaSelfReviewWeeklyJobID {
+			return s.weeklyModelService().applyWeeklyRegistration(ctx, r, confirm)
+		}
+		return s.applyWeeklyRegistration(ctx, r, confirm)
 	}
 	if r.Operation.JobID == YodaSelfReviewWeeklyJobID && !s.weeklyScoped {
 		return s.weeklyModelService().Apply(ctx, r, confirm)
@@ -589,6 +610,11 @@ func (s *Service) Apply(ctx context.Context, r ProductReview, confirm func(conte
 		if c.Revision != r.Operation.ExpectedRevision {
 			return ErrProductConflict
 		}
+		if r.Operation.Kind == "enroll" || r.Operation.Kind == "resume" {
+			if err := s.checkWeeklyMemoryExclusive(r.Operation.JobID); err != nil {
+				return err
+			}
+		}
 		c.Revision++
 		c.OneShot = ""
 		switch r.Operation.Kind {
@@ -627,6 +653,7 @@ func (s *Service) jobStatus(id string) (ProductJobStatus, error) {
 // Existing memory activation lock → control guard → occurrence lease guard →
 // visible publication. Control transitions never acquire memory or lease locks.
 type productExecution struct {
+	memoryPlan   *memoryExecutionPlan
 	weeklyPlan   *weeklyExecutionPlan
 	ctx          context.Context
 	darwinSource *DarwinSource
@@ -709,6 +736,11 @@ func (p *productExecution) guardWithControl(ctx context.Context, publish func() 
 		if c.Revision != p.revision || p.oneShot != "" && c.OneShot != p.oneShot || p.oneShot == "" && c.State != "active" {
 			return ErrProductConflict
 		}
+		if weeklyMemoryJob(p.jobID) && !(p.jobID == MemoryModelJobID && p.oneShot != "") {
+			if err := p.service.checkWeeklyMemoryExclusive(p.jobID); err != nil {
+				return err
+			}
+		}
 		if p.weeklyPlan != nil {
 			if p.weeklyPlan.committed != nil {
 				if err := p.validateWeeklyCommitted(); err != nil {
@@ -726,6 +758,11 @@ func (p *productExecution) guardWithControl(ctx context.Context, publish func() 
 				if c.Qualification == nil || c.Qualification.ID != p.weeklyPlan.qualification || p.service.verifyQualification(c.Qualification) != nil {
 					return ErrQualificationRequired
 				}
+			}
+		}
+		if p.memoryPlan != nil {
+			if err := p.validateMemoryPlan(ctx, c); err != nil {
+				return err
 			}
 		}
 		if p.darwinSource != nil {
@@ -780,6 +817,9 @@ func (s *Service) worker(p *productExecution) Worker {
 	if p.weeklyPlan != nil {
 		handlers[YodaSelfReviewWeeklyJobID] = productWeeklyModelHandler{service: s, plan: p.weeklyPlan}
 	}
+	if p.memoryPlan != nil {
+		handlers[MemoryModelJobID] = productMemoryModelHandler{service: s, plan: p.memoryPlan}
+	}
 	handlers[UpdateCheckJobID] = productUpdateHandler{service: s, expected: p.source, execution: p}
 	handlers[UpdateAvailabilityJobID] = productAvailabilityHandler{service: s, expected: p.source, qualification: p.oneShot != ""}
 	if DarwinJob(p.jobID) && s.darwin != nil && p.darwinSource != nil {
@@ -790,6 +830,11 @@ func (s *Service) worker(p *productExecution) Worker {
 
 func (s *Service) execute(ctx context.Context, p *productExecution, occ scheduler.Occurrence, now time.Time) (Receipt, error) {
 	p.ctx = ctx
+	if p.jobID == MemoryModelJobID {
+		if err := p.selectMemory(ctx, occ, now); err != nil {
+			return Receipt{}, err
+		}
+	}
 	if p.jobID == YodaSelfReviewWeeklyJobID {
 		if err := p.selectWeekly(ctx, occ, now); err != nil {
 			return Receipt{}, err
@@ -801,12 +846,15 @@ func (s *Service) execute(ctx context.Context, p *productExecution, occ schedule
 	if p.weeklyPlan != nil && p.weeklyPlan.committed != nil {
 		return s.reconcileWeeklyCommitted(ctx, p, occ, now)
 	}
+	if p.memoryPlan != nil && p.memoryPlan.committed != nil {
+		return s.reconcileMemoryCommitted(ctx, p, occ, now)
+	}
 	authority := ExecutionAuthority{catalog: s.options.Catalog, occurrences: map[string]OccurrenceAuthorization{}, activated: map[string]bool{p.jobID: true}, attended: p.oneShot != "", preauthorized: p.oneShot == "", ready: true, productBound: true}
 	trigger := TriggerPresence
 	if p.jobID == DarwinMonthlyJobID {
 		trigger = TriggerMonthly
 	}
-	if p.jobID == YodaSelfReviewWeeklyJobID {
+	if modelJob(p.jobID) {
 		trigger = TriggerWeekly
 	}
 	if occ.EventID != "" {
@@ -1107,7 +1155,7 @@ func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatu
 func (s *Service) domainEvidence(jobID string, at time.Time) (string, string, error) {
 	var path, ref string
 	switch jobID {
-	case YodaSelfReviewWeeklyJobID:
+	case YodaSelfReviewWeeklyJobID, MemoryModelJobID:
 		return s.weeklyDomainEvidence()
 	case SelfObservationCaptureJobID:
 		_, p, err := s.readSelfObservationReport("")
@@ -1224,7 +1272,7 @@ func (s *Service) verifyQualification(q *ProductQualification) error {
 	}
 	var path string
 	prefix := "memory/workspaces/" + s.workspaceID + "/versions/"
-	if q.JobID == YodaSelfReviewWeeklyJobID {
+	if modelJob(q.JobID) {
 		var err error
 		path, err = s.verifyWeeklyQualification(q)
 		if err != nil {
@@ -1370,7 +1418,7 @@ func NewProductWeeklyMemoryEngine(home string) (*memory.Engine, error) {
 	return engine, nil
 }
 func scheduleFor(job string) ProductSchedule {
-	if job == YodaSelfReviewWeeklyJobID || job == DarwinWeeklyJobID {
+	if modelJob(job) || job == DarwinWeeklyJobID {
 		return ProductSchedule{Cadence: scheduler.Weekly, Weekday: time.Sunday, MaxCatchUp: 1}
 	}
 	if job == WikiIncrementalJobID {
@@ -1400,7 +1448,7 @@ func (s *Service) sourceState(job string) (string, error) {
 		return s.wikiSourceIdentity(job)
 	}
 	switch job {
-	case YodaSelfReviewWeeklyJobID:
+	case YodaSelfReviewWeeklyJobID, MemoryModelJobID:
 		c, e := s.loadControl(job)
 		if e != nil {
 			return "", e
