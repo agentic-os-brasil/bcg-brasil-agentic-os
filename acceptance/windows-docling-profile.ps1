@@ -57,6 +57,35 @@ function Read-DoclingRuntimeManifest([string]$Path) {
     return $manifest
 }
 
+# Copy only a bounded observation of a private raw capture. Publish the fixed
+# upload leaf only after its fresh staging file is closed and hashable.
+function Copy-DoclingFailureSnapshot([string]$Raw, [string]$Retained, [string]$PrivateStage, [long]$Limit, [bool]$ProducerExited) {
+    if($Limit -lt 0 -or $Limit -gt 4194304 -or (Test-Path -LiteralPath $Retained)){throw 'Snapshot requires a fresh leaf and finite bound.'}
+    $stage=Join-Path $PrivateStage ('.bounded-'+[Guid]::NewGuid().ToString('N'))
+    $source=$null;$target=$null;[long]$copied=0
+    try {
+        $source=[IO.File]::Open($Raw,[IO.FileMode]::Open,[IO.FileAccess]::Read,([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+        [long]$observed=$source.Length;[long]$wanted=[Math]::Min($observed,$Limit)
+        $target=[IO.File]::Open($stage,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+        $buffer=New-Object byte[] 65536
+        while($copied -lt $wanted){
+            $count=$source.Read($buffer,0,[int][Math]::Min($buffer.Length,$wanted-$copied))
+            if($count -eq 0){throw 'Raw capture ended before its observed snapshot.'}
+            $target.Write($buffer,0,$count);$copied+=$count
+        }
+        $target.Flush($true);[long]$after=$source.Length
+    } finally {if($null -ne $target){$target.Dispose()};if($null -ne $source){$source.Dispose()}}
+    if((Get-Item -LiteralPath $stage -Force).Length -ne $copied -or $copied -gt $Limit){throw 'Closed snapshot differs from its bound.'}
+    $hash=(Get-FileHash -LiteralPath $stage -Algorithm SHA256).Hash.ToLowerInvariant()
+    $writerClosed=$false
+    try {$probe=[IO.File]::Open($Raw,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read);$after=$probe.Length;$probe.Dispose();$writerClosed=$true}catch{}
+    # The two-argument move refuses any occupied retained destination.
+    [IO.File]::Move($stage,$Retained)
+    return @{name=[IO.Path]::GetFileName($Retained);raw_length_observed=$observed;raw_length_after_observed=$after
+        retained_bytes=$copied;sha256=$hash;producer_exited=$ProducerExited;writer_closed_observed=$writerClosed
+        snapshot_complete=($ProducerExited -and $writerClosed -and $copied -eq $observed -and $after -eq $observed)}
+}
+
 # Failure-only observation inside the already-admitted ordinary account. Debugger
 # results never qualify conversion, overwrite the baseline log, or authorize export.
 function Invoke-DoclingFailureTrace($Manifest, [string]$ProofRoot, [string]$ExpectedImageSHA256, [int]$BaselineExit) {
@@ -78,12 +107,16 @@ function Invoke-DoclingFailureTrace($Manifest, [string]$ProofRoot, [string]$Expe
         $receipt.debugger_sha256=(Get-FileHash -LiteralPath $debugger -Algorithm SHA256).Hash.ToLowerInvariant()
         $commands=Join-Path $ProofRoot 'docling-loader-commands.txt'
         $stdin=Join-Path $ProofRoot 'docling-loader-stdin.txt'; $symbols=Join-Path $ProofRoot 'docling-loader-symbols'
-        foreach($path in @($traceOut,$traceErr,$commands,$stdin,$symbols)) { if(Test-Path -LiteralPath $path){throw 'Diagnostic output must be fresh.'} }
+        $rawRoot=Join-Path $ProofRoot ('.docling-loader-raw-'+[Guid]::NewGuid().ToString('N'))
+        $rawOut=Join-Path $rawRoot 'stdout.raw';$rawErr=Join-Path $rawRoot 'stderr.raw'
+        foreach($path in @($traceOut,$traceErr,$commands,$stdin,$symbols,$rawRoot)) { if(Test-Path -LiteralPath $path){throw 'Diagnostic output must be fresh.'} }
+        # Inherit the already-private ProofRoot ACL; RAW names are never upload inputs.
+        New-Item -ItemType Directory -Path $rawRoot|Out-Null
         $outputsAdmitted=$true
         # The cpr event precedes execution of the child's loader initialization.
         # !gflag modifies only that debuggee's PEB, never IFEO/system settings.
         $scriptText=@'
-sxe -c ".lastevent;!gflag +sls;g" cpr:child.exe
+sxe -c ".echo MAESTRO_CHILD_CREATE_LOADER_SNAPS;.lastevent;|.;!gflag +sls;g" cpr
 sxe -c ".lastevent;k;g" bpe
 sxe -c ".lastevent;k;gn" 0xc0000142
 sxe -c ".lastevent;k;g" epr:child.exe
@@ -95,11 +128,11 @@ g
         $arguments=@('-o','-G','-hd','-sins','-noshell','-nosqm','-y',('"'+$symbols+'"'),'-cf',('"'+$commands+'"'),('"'+$Manifest.test_binary+'"'),'-test.run','^TestWindowsNativeConfinement$','-test.v','-test.timeout=2400s')
         $receipt.debugger_arguments=$arguments; $receipt.commands_sha256=(Get-FileHash -LiteralPath $commands -Algorithm SHA256).Hash.ToLowerInvariant()
         $watch=[Diagnostics.Stopwatch]::StartNew()
-        $process=Start-Process -FilePath $debugger -ArgumentList $arguments -WorkingDirectory $Manifest.source_root -NoNewWindow -RedirectStandardInput $stdin -RedirectStandardOutput $traceOut -RedirectStandardError $traceErr -PassThru
+        $process=Start-Process -FilePath $debugger -ArgumentList $arguments -WorkingDirectory $Manifest.source_root -NoNewWindow -RedirectStandardInput $stdin -RedirectStandardOutput $rawOut -RedirectStandardError $rawErr -PassThru
         $null=$process.Handle # Retain this launched process, never look it up by name.
         $receipt.status='running'
         while(-not $process.WaitForExit(200)) {
-            [long]$bytes=0;foreach($path in @($traceOut,$traceErr)){if(Test-Path -LiteralPath $path){$bytes+=(Get-Item -LiteralPath $path).Length}}
+            [long]$bytes=0;foreach($path in @($rawOut,$rawErr)){if(Test-Path -LiteralPath $path){$bytes+=(Get-Item -LiteralPath $path).Length}}
             if($bytes -gt 4194304){$receipt.status='output_limit';break}
             if($watch.Elapsed.TotalSeconds -ge 60){$receipt.status='timeout';break}
         }
@@ -116,15 +149,21 @@ g
             } catch {$receipt.cleanup_error_type=$_.Exception.GetType().FullName}
             finally {$process.Dispose()}
         }
-        # Enforce a combined retention cap even if the producer crossed the bound
-        # between polling intervals. Only these fresh diagnostic files are touched.
-        [long]$remaining=4194304;$logs=@()
-        foreach($path in @($traceOut,$traceErr)){
-            if($outputsAdmitted -and (Test-Path -LiteralPath $path)){
-                $file=[IO.File]::Open($path,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::Read)
-                try{$raw=$file.Length;if($raw -gt $remaining){$file.SetLength($remaining)};$retained=$file.Length;$remaining-=$retained}finally{$file.Dispose()}
-                $logs+=@{name=[IO.Path]::GetFileName($path);raw_bytes=$raw;retained_bytes=$retained;sha256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()}
-            }
+        # Only closed, verified bounded copies may occupy the fixed upload names.
+        # An uncertain producer exit withholds them; raw capture remains private.
+        [long]$remaining=4194304;$logs=@();$receipt.retention_status='not_started'
+        if($outputsAdmitted){
+            if($receipt.Contains('owned_debugger_exited') -and $receipt.owned_debugger_exited){
+                try {
+                    foreach($capture in @(@{raw=$rawOut;retained=$traceOut},@{raw=$rawErr;retained=$traceErr})){
+                        if(Test-Path -LiteralPath $capture.raw){
+                            $snapshot=Copy-DoclingFailureSnapshot $capture.raw $capture.retained $rawRoot $remaining $true
+                            $remaining-=$snapshot.retained_bytes;$logs+=$snapshot
+                        }
+                    }
+                    $receipt.retention_status='bounded_snapshots_closed'
+                } catch {$receipt.retention_status='snapshot_failure_unsafe_paths_withheld';$receipt.snapshot_error_type=$_.Exception.GetType().FullName}
+            } else {$receipt.retention_status='withheld_producer_exit_unconfirmed'}
         }
         $receipt.logs=$logs
         $receipt | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $receiptPath -Encoding UTF8
