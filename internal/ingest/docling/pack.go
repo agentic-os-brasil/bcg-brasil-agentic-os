@@ -154,7 +154,7 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 	if !bytes.Equal(entries["bridge.py"].body, target.bridge) || !bytes.Equal(entries["pylock.toml"].body, target.lock) || !bytes.Equal(entries["inputs.json"].body, target.inputs) || !bytes.Equal(entries["parser-licenses.json"].body, target.notices) {
 		return empty, "pack_untrusted"
 	}
-	if !nativeClosureValid(target, entries) {
+	if !nativeClosureValid(target, entries) || !windowsSettingsCompatibilityValid(target, entries) {
 		return empty, "pack_untrusted"
 	}
 	installed := filepath.Join(o.DataRoot, "ingestion", "docling", "installed", selected.SHA256)

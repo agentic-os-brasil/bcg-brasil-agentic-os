@@ -78,3 +78,29 @@ Primary sources:
 - [Microsoft LPAC construction and resource model](https://learn.microsoft.com/en-us/windows/win32/secauthz/implementing-an-appcontainer)
 - [Documented SID derivation and LocalFree ownership](https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-derivecapabilitysidsfromname)
 - [Pinned Chromium setup, commit20f043d5](https://github.com/chromium/chromium/blob/20f043d5ef7456dc6ef4a0652519b171f225f8d2/sandbox/policy/win/sandbox_win.cc)
+
+## Pinned settings import compatibility candidate
+
+The Windows `model-free-documents-v1` assembly applies the fixed
+`pydantic-settings-lazy-asyncio-v1` transform to the authentic 2.16.2 source.
+Its upstream wheel and raw lock remain unchanged. Only the genuine `asyncio`
+import moves from module initialization into the existing coroutine CLI branch;
+real `BaseSettings`, synchronous CLI and coroutine code remain present. This
+avoids initializing unused Windows asynchronous socket machinery during settings
+imports; it does not make asynchronous networking usable inside confinement.
+
+Assembly requires the exact original wheel, source and RECORD identities and
+unique reviewed anchors. Unexpected upstream bytes fail closed. It updates only
+the installed RECORD row for `main.py` and adds explicit compatibility provenance
+with original/installed source and RECORD hashes and the preserved license hash.
+The normal post-transform `pack.json` inventories those final bytes. The pack
+verifier requires that exact transformed contract, and the existing embedded
+implementation identity invalidates older qualification receipts. Other platform
+and legacy profiles remain unchanged.
+
+This is a source compatibility candidate within the same synthetic-only R17
+policy. An inert assembly or passing helper tests do not prove Windows conversion.
+The original native confinement, filesystem/Job/deadline and 13/6/9 conversion
+checks remain required, with all eight strict network-denial assertions intact.
+No new capability, socket permission, mock module or distribution authority is
+introduced by this transform.
