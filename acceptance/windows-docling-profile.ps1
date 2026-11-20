@@ -147,14 +147,14 @@ ln $iment(KERNELBASE)
 .sympath srv*__MAESTRO_SYMBOL_CACHE__
 .echo MAESTRO_SYMBOLS_LOCAL_ONLY
 sxe -c ".echo MAESTRO_CHILD_CREATE_WAITING_FOR_NTDLL;.lastevent;|.;g" cpr
-sxe -c ".echo MAESTRO_CHILD_NTDLL_LOAD_LOADER_SNAPS;.lastevent;|.;.reload /f ntdll.dll;!exts.gflag +sls;dt ntdll!_PEB NtGlobalFlag @$peb;bu /1 $iment(KERNELBASE) \"$$<__MAESTRO_ATTACH_COMMANDS__\";g" ld:ntdll.dll
+sxe -c ".echo MAESTRO_CHILD_NTDLL_LOAD_LOADER_SNAPS;.lastevent;|.;.reload /f ntdll.dll;!exts.gflag +sls;dt ntdll!_PEB NtGlobalFlag @$peb;bu /1 $iment(KERNELBASE) \"$$<__MAESTRO_ATTACH_COMMANDS__\";bl;g" ld:ntdll.dll
 sxe -c ".lastevent;k;g" bpe
 sxe -c ".lastevent;k;gn" 0xc0000142
 sxe -c ".lastevent;k;g" epr:child.exe
 g
 '@
         $scriptText=$scriptText.Replace('__MAESTRO_SYMBOL_CACHE__',$symbols)
-        $scriptText=$scriptText.Replace('__MAESTRO_ATTACH_COMMANDS__',$attachCommands)
+        $scriptText=$scriptText.Replace('__MAESTRO_ATTACH_COMMANDS__',$attachCommands.Replace('\','/'))
         [IO.File]::WriteAllText($attachCommands,$attachText,[Text.UTF8Encoding]::new($false))
         $receipt.kernelbase_attach_commands_sha256=(Get-FileHash -LiteralPath $attachCommands -Algorithm SHA256).Hash.ToLowerInvariant()
         $receipt.symbol_cache=$symbols
