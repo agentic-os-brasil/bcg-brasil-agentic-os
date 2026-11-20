@@ -1837,3 +1837,28 @@ Consume it once; imported JSON or a weekly grant cannot construct it. Changed
 or newly populated managed drop-ins refuse before private input, live drift
 cancels, and final return revalidates. Return distinct actual probe/role session
 identities and usage. No task/context/SELF enters the synthetic probe payload.
+
+## WPKB - Keep native Windows kit bodies separate from root-only signing
+
+- Date: 2026-11-19
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Complete experimental factories already support Windows, but native identity probes require a Windows build while the existing finite engineering key remains in root Mac custody. The existing full-profile native qualification retained proof only.
+- Decision: Extend the proof-only manual workflow with explicit unsigned export and public-metadata assembly. Bind a closed native release pair, one stable bootstrapper, exact source/tree/run and actual eleven-format runtime proof in a hash-pinned receipt. Root signs the original Windows bodies and target-specific finite role through existing owners, returning only bounded public metadata. Native assembly revalidates all original bytes and canonical release/role/generation contracts before invoking the original installed-seed factory.
+- Consequences: No private signing material, replacement issuer, authority renewal, company signing identity or participant profile enters CI. Existing and interrupted staging is preserved. Native assembly does not substitute for actual corporate-device, client, hook, agent or OneDrive acceptance.
+- Refs: #599; specs/020-release-distribution.md; specs/022-guided-pilot-release.md; docs/development/windows-complete-experimental-kit.md; dev/pilot/windows-kit; .github/workflows/windows-docling-runtime.yml
+- Supersedes: none
+
+### WPKB refinement — complete native document scope
+
+The complete experimental kit uses the already accepted NTXT/Spec061
+`model-free-documents-v1` closure, extending the original eleven formats with
+encoded-text PDF and modern PPTX. Windows authenticates 56 package inputs plus
+its interpreter (57 files / 132,964,926 bytes). A distinct
+`windows_docling_documents_v1` proof binds the actual profile/lock/pack, thirteen
+positive format cases, six finite PDF refusals and nine unsafe PPTX cases. The
+schema-v2 export records that profile/lock and refuses historical legacy exports.
+The legacy archive, metadata and default assembler retain their original meaning.
+OCR, visual reconstruction, model downloads and all signing/installation authority
+remain unchanged. The earlier eleven-format construction snapshot is historical
+coverage, not proof of this complete-kit scope. Refs: #599; Spec061 NTXT.

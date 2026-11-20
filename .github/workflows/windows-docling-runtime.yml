@@ -1,37 +1,164 @@
 name: Windows authenticated Docling runtime
 
-# Source construction does not authorize a run. Dispatch requires the separate
-# reviewed public-source qualification scope; this job grants no release trust.
+# The default remains proof-only. Export/assembly are reviewed engineering runs;
+# no release key, company signing identity or participant profile enters CI.
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Proof only, unsigned native export, or signed-public-metadata assembly
+        type: choice
+        options: [proof, export, assemble]
+        default: proof
+      registry_base64:
+        description: Export only - approved public engineering registry, base64 (max 4096 characters)
+        type: string
+      version:
+        description: Export only - initial exact release version
+        type: string
+      next_version:
+        description: Export only - second exact release version
+        type: string
+      installer_version:
+        description: Export only - stable installer version
+        type: string
+      unsigned_run_id:
+        description: Assemble only - successful unsigned export run on this exact commit
+        type: string
+      export_sha256:
+        description: Assemble only - independently reviewed export.json SHA-256
+        type: string
+      public_metadata_base64:
+        description: Assemble only - bounded public metadata produced by windows-kit metadata
+        type: string
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   ordinary-user-docling:
     runs-on: windows-latest
     timeout-minutes: 60
+    env:
+      PILOT_MODE: ${{ inputs.mode }}
+      PILOT_REGISTRY: ${{ inputs.registry_base64 }}
+      PILOT_N: ${{ inputs.version }}
+      PILOT_N1: ${{ inputs.next_version }}
+      PILOT_INSTALLER: ${{ inputs.installer_version }}
+      PILOT_UNSIGNED_RUN: ${{ inputs.unsigned_run_id }}
+      PILOT_EXPORT_SHA: ${{ inputs.export_sha256 }}
+      PILOT_METADATA: ${{ inputs.public_metadata_base64 }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: adapters/mcp/go.mod
+      - name: Validate closed dispatch and create fresh Developer staging
+        shell: pwsh
+        run: |
+          if ($env:PILOT_MODE -cnotin @('proof','export','assemble')) { throw 'Unknown pilot mode.' }
+          if ($env:PILOT_MODE -eq 'export') {
+            foreach ($version in @($env:PILOT_N,$env:PILOT_N1,$env:PILOT_INSTALLER)) {
+              if ($version -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') { throw 'Exact release versions required.' }
+            }
+            if ($env:PILOT_N -ceq $env:PILOT_N1 -or $env:PILOT_REGISTRY.Length -gt 4096 -or -not $env:PILOT_REGISTRY -or $env:PILOT_UNSIGNED_RUN -or $env:PILOT_EXPORT_SHA -or $env:PILOT_METADATA) { throw 'Export requires only its exact public registry and distinct versions.' }
+          } elseif ($env:PILOT_MODE -eq 'assemble') {
+            if ($env:PILOT_UNSIGNED_RUN -cnotmatch '^[1-9][0-9]{0,19}$' -or $env:PILOT_EXPORT_SHA -cnotmatch '^[a-f0-9]{64}$' -or
+                -not $env:PILOT_METADATA -or $env:PILOT_METADATA.Length -gt 32000 -or $env:PILOT_REGISTRY -or $env:PILOT_N -or $env:PILOT_N1 -or $env:PILOT_INSTALLER) { throw 'Assembly requires only the exact original run, receipt pin and bounded public metadata.' }
+          } elseif ($env:PILOT_REGISTRY -or $env:PILOT_N -or $env:PILOT_N1 -or $env:PILOT_INSTALLER -or $env:PILOT_UNSIGNED_RUN -or $env:PILOT_EXPORT_SHA -or $env:PILOT_METADATA) { throw 'Proof-only mode accepts no export or assembly material.' }
+          $developer = Join-Path $env:USERPROFILE 'Developer'
+          if (-not (Test-Path -LiteralPath $developer)) { New-Item -ItemType Directory -Path $developer | Out-Null }
+          if ((Get-Item -LiteralPath $developer -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Physical Developer root required.' }
+          $root = Join-Path $developer ('maestro-windows-kit-' + $env:GITHUB_RUN_ID + '-' + $env:GITHUB_RUN_ATTEMPT)
+          New-Item -ItemType Directory -Path $root -ErrorAction Stop | Out-Null
+          "MAESTRO_WINDOWS_KIT_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Check closed Docling profile admission without creating an account
+        if: inputs.mode != 'assemble'
         shell: pwsh
         run: |
           python -m unittest acceptance.test_windows_profile_driver.WindowsDoclingRuntimeProfile
           if ($LASTEXITCODE -ne 0) { throw 'Docling pre-account admission contracts failed.' }
-      - name: Stage exact public source, verified modules, SDK and pinned runtime inputs
+      - name: Stage exact public source, verified modules, SDK and complete model-free document inputs
+        if: inputs.mode != 'assemble'
         shell: pwsh
         run: |
           ./acceptance/windows-engine-build.ps1 -DoclingRuntime
-      - name: Run actual converter and kernel controls through the existing ordinary-account driver
+      - name: Run actual thirteen-format converter and finite PDF/PPTX controls through the ordinary-account driver
+        if: inputs.mode != 'assemble'
         shell: pwsh
         run: |
           ./acceptance/windows-core-pilot.ps1 -DoclingManifest $env:MAESTRO_WINDOWS_DOCLING_MANIFEST -OutputRoot (Join-Path $env:RUNNER_TEMP 'docling-native-proof')
+      - name: Export exact unsigned native pair after successful ordinary-user proof
+        if: inputs.mode == 'export'
+        shell: pwsh
+        run: |
+          $registry = [Convert]::FromBase64String($env:PILOT_REGISTRY)
+          $registryPath = Join-Path $env:MAESTRO_WINDOWS_KIT_ROOT 'registry.json'
+          [IO.File]::WriteAllBytes($registryPath,$registry)
+          . ./acceptance/windows-docling-profile.ps1
+          $native = Read-DoclingRuntimeManifest $env:MAESTRO_WINDOWS_DOCLING_MANIFEST
+          $env:GOMODCACHE=$native.module_cache
+          $env:GOCACHE=Join-Path $env:MAESTRO_WINDOWS_KIT_ROOT 'go-cache'
+          $env:GOPROXY='off'; $env:GOSUMDB='off'; $env:GOTOOLCHAIN='local'; $env:GOFLAGS='-mod=readonly -buildvcs=false'
+          $tree=(git rev-parse 'HEAD^{tree}').Trim()
+          go run ./dev/pilot/windows-kit --mode export --root $env:GITHUB_WORKSPACE --output (Join-Path $env:MAESTRO_WINDOWS_KIT_ROOT 'export') --raw-inputs $native.raw_inputs --registry $registryPath --proof (Join-Path $env:RUNNER_TEMP 'docling-native-proof/docling-native-proof.json') --proof-log (Join-Path $env:RUNNER_TEMP 'docling-native-proof/docling-native-tests.log') --version $env:PILOT_N --next-version $env:PILOT_N1 --installer-version $env:PILOT_INSTALLER --source-revision $env:GITHUB_SHA --source-tree $tree --producer-run-id $env:GITHUB_RUN_ID
+          if ($LASTEXITCODE -ne 0) { throw 'Native unsigned export refused; staging preserved.' }
+      - name: Retain unsigned pair, stable bootstrap, actual runtime and bounded native proof
+        if: success() && inputs.mode == 'export'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: maestro-windows-unsigned-${{ github.run_id }}-${{ github.sha }}
+          path: ${{ env.MAESTRO_WINDOWS_KIT_ROOT }}/export/unsigned
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+      - name: Require successful original workflow run on the exact reviewed commit
+        if: inputs.mode == 'assemble'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $run=gh api ('repos/' + $env:GITHUB_REPOSITORY + '/actions/runs/' + $env:PILOT_UNSIGNED_RUN) | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $run.head_sha -cne $env:GITHUB_SHA -or $run.head_repository.full_name -cne $env:GITHUB_REPOSITORY -or
+              $run.path -cne '.github/workflows/windows-docling-runtime.yml' -or $run.event -cne 'workflow_dispatch' -or $run.status -cne 'completed' -or $run.conclusion -cne 'success') { throw 'Unsigned producer must be a successful matching native workflow on this exact source.' }
+      - name: Download unchanged unsigned bodies from the original successful run
+        if: inputs.mode == 'assemble'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: maestro-windows-unsigned-${{ inputs.unsigned_run_id }}-${{ github.sha }}
+          path: ${{ env.MAESTRO_WINDOWS_KIT_ROOT }}/unsigned
+          run-id: ${{ inputs.unsigned_run_id }}
+          github-token: ${{ github.token }}
+      - name: Verify public signatures and assemble through the original native factory
+        if: inputs.mode == 'assemble'
+        shell: pwsh
+        run: |
+          $metadataPath=Join-Path $env:MAESTRO_WINDOWS_KIT_ROOT 'public-metadata.base64'
+          [IO.File]::WriteAllText($metadataPath,$env:PILOT_METADATA,[Text.UTF8Encoding]::new($false))
+          foreach ($module in @($env:GITHUB_WORKSPACE,(Join-Path $env:GITHUB_WORKSPACE 'adapters/mcp'))) {
+            Push-Location -LiteralPath $module
+            try { go mod download; if ($LASTEXITCODE -ne 0) { throw 'Exact verifier/factory dependencies unavailable.' }; go mod verify; if ($LASTEXITCODE -ne 0) { throw 'Verifier dependency checksum mismatch.' } } finally { Pop-Location }
+          }
+          $env:GOPROXY='off'; $env:GOSUMDB='off'; $env:GOTOOLCHAIN='local'; $env:GOFLAGS='-mod=readonly -buildvcs=false'
+          $tree=(git rev-parse 'HEAD^{tree}').Trim()
+          go run ./dev/pilot/windows-kit --mode assemble --root $env:GITHUB_WORKSPACE --output (Join-Path $env:MAESTRO_WINDOWS_KIT_ROOT 'assembled') --export (Join-Path $env:MAESTRO_WINDOWS_KIT_ROOT 'unsigned') --export-sha256 $env:PILOT_EXPORT_SHA --metadata $metadataPath --source-revision $env:GITHUB_SHA --source-tree $tree --producer-run-id $env:PILOT_UNSIGNED_RUN
+          if ($LASTEXITCODE -ne 0) { throw 'Original native factory refused assembly; inputs preserved.' }
+      - name: Retain complete generic engineering kit, checksum and short instructions
+        if: success() && inputs.mode == 'assemble'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: maestro-mcp-windows-complete-${{ github.run_id }}-${{ github.sha }}
+          path: |
+            ${{ env.MAESTRO_WINDOWS_KIT_ROOT }}/assembled/Maestro-MCP-Windows.zip
+            ${{ env.MAESTRO_WINDOWS_KIT_ROOT }}/assembled/Maestro-MCP-Windows.zip.sha256
+            ${{ env.MAESTRO_WINDOWS_KIT_ROOT }}/assembled/LEIA-ME-WINDOWS.md
+            ${{ env.MAESTRO_WINDOWS_KIT_ROOT }}/assembled/BUILD-IDENTITY.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
       - name: Retain bounded synthetic proof only
-        if: always()
+        if: always() && inputs.mode != 'assemble'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-authenticated-docling-${{ github.sha }}

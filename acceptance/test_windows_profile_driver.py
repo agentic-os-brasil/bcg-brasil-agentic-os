@@ -292,7 +292,7 @@ class WindowsDoclingRuntimeProfile(unittest.TestCase):
 
     def document(self):
         public = "C:\\MaestroNativeEngine-" + "a" * 32
-        return dict(schema_version=1, qualification_profile="windows_docling_runtime_v1",
+        return dict(schema_version=1, qualification_profile="windows_docling_documents_v1", runtime_profile="model-free-documents-v1", runtime_lock_sha256="38b1a0257c3feec8a5b4b97856e7f2096cdb72ed2bd1734d8e61567bf4757643",
                     source_revision="a" * 40, public_root=public, source_root=public + "\\source",
                     sdk_go=public + "\\sdk\\bin\\go.exe", module_cache=public + "\\modules",
                     raw_inputs=public + "\\raw", test_binary=public + "\\bin\\docling.test.exe",
@@ -307,6 +307,14 @@ class WindowsDoclingRuntimeProfile(unittest.TestCase):
         self.assertIn("Docling requires the exact closed native runtime profile", result.stdout + result.stderr)
         self.assertFalse((self.root / "proof").exists())
         self.assertNotIn("New-LocalUser", result.stdout + result.stderr)
+
+    def test_docling_rejects_legacy_profile_or_lock_before_account(self):
+        for field, value in (("qualification_profile", "windows_docling_runtime_v1"),
+                             ("runtime_profile", "policy-formats-v1"),
+                             ("runtime_lock_sha256", "728aab0b59dd5011070dfc4e9159e3ed6180b1668539f84275f1b88e81f5be58")):
+            document = self.document()
+            document[field] = value
+            self.assert_preaccount_refusal(document)
 
     def test_docling_rejects_unknown_profile_before_account(self):
         document = self.document()
