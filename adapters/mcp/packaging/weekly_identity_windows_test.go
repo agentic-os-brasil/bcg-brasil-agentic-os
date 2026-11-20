@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"math/big"
+	"runtime"
 	"syscall"
 	"testing"
 	"time"
@@ -145,6 +146,29 @@ func weeklySignerFixture() (*weeklyProviderSigner, []weeklyProviderCertificate, 
 	return signer, chain, der
 }
 func TestWeeklyWindowsSelectedPayloadSignerBounds(t *testing.T) {
+	t.Run("native signer snapshot", func(t *testing.T) {
+		signer, chain, der := weeklySignerFixture()
+		var pin runtime.Pinner
+		pin.Pin(signer)
+		pin.Pin(&chain[0])
+		pin.Pin(chain[0].Certificate)
+		pin.Pin(&der[0])
+		defer pin.Unpin()
+		snapshot, err := weeklyReadProviderSigner(uintptr(unsafe.Pointer(signer)))
+		if err != nil || snapshot == signer || *snapshot != *signer {
+			t.Fatalf("same-process native signer snapshot changed ABI fields: %v", err)
+		}
+		expected := sha256.Sum256(der)
+		actual, err := weeklyProviderSignerSHA256(snapshot, snapshot.Chain)
+		if err != nil || actual != hex.EncodeToString(expected[:]) {
+			t.Fatalf("snapshot lost original selected certificate: %v", err)
+		}
+		for _, address := range []uintptr{0, 1} {
+			if snapshot, err := weeklyReadProviderSigner(address); err == nil || snapshot != nil {
+				t.Fatal("unreadable native signer address accepted")
+			}
+		}
+	})
 	signer, chain, der := weeklySignerFixture()
 	expected := sha256.Sum256(der)
 	actual, err := weeklyProviderSignerSHA256(signer, &chain[0])
