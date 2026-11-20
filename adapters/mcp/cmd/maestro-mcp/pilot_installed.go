@@ -192,8 +192,7 @@ func runInstalledPilotCheck(ctx context.Context, args []string, output io.Writer
 	} else if record.Code.ExecutableSHA256 == "" {
 		r.add("code_cli", "not_tested", "absolute_executable_selected_identity_not_yet_observed", "Conclua o registro normal pelo gerenciador; este diagnóstico não executa nem qualifica o Code.")
 	} else {
-		hash, err := installer.ClientFileDigest(record.Code.Executable)
-		if err != nil || hash != record.Code.ExecutableSHA256 {
+		if !installedCodeExecutableMatches(record.Code) {
 			return fail("code_cli", "selected_code_executable_changed")
 		}
 		r.add("code_cli", "passed", "selected_absolute_executable_verified_login_not_tested", "")
@@ -343,4 +342,9 @@ func finishInstalledPilotReport(r *installedPilotReport, output io.Writer) error
 		return encodeErr
 	}
 	return err
+}
+
+func installedCodeExecutableMatches(code installer.CodeObservation) bool {
+	hash, _, err := packaging.InspectNativeExecutable(code.Executable)
+	return err == nil && hash == code.ExecutableSHA256
 }
