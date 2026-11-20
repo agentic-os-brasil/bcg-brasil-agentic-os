@@ -1136,7 +1136,7 @@ try {
     if ($withDocling) {
         $proof = Get-Content -LiteralPath (Join-Path $OutputRoot 'docling-native-proof.json') -Raw -Encoding UTF8 | ConvertFrom-Json
         $expectedSID = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($account.SID.Value))).ToLowerInvariant()
-        if ($proof.qualification_profile -cne 'windows_docling_documents_v1' -or $proof.runtime_profile -cne $doclingRuntime.runtime_profile -or $proof.runtime_lock_sha256 -cne $doclingRuntime.runtime_lock_sha256 -or $proof.runtime_pack_sha256 -cnotmatch '^[a-f0-9]{64}$' -or $proof.pdf_refusals -ne 6 -or $proof.pptx_refusals -ne 9 -or $proof.source_revision -cne $doclingRuntime.source_revision -or
+        if ($proof.qualification_profile -cne $doclingRuntime.qualification_profile -or $proof.runtime_profile -cne $doclingRuntime.runtime_profile -or $proof.runtime_lock_sha256 -cne $doclingRuntime.runtime_lock_sha256 -or $proof.runtime_pack_sha256 -cnotmatch '^[a-f0-9]{64}$' -or $proof.pdf_refusals -ne 6 -or $proof.pptx_refusals -ne 9 -or $proof.source_revision -cne $doclingRuntime.source_revision -or
             $proof.inventory_sha256 -cne $doclingRuntime.inventory_sha256 -or $proof.effective_sid_sha256 -cne $expectedSID -or
             $proof.actual_standard_user -ne $true -or $proof.elevated -ne $false -or $proof.admin_member -ne $false -or $proof.real_formats -ne 13 -or
             @($proof.passed_tests).Count -ne $script:DoclingRuntimeTests.Count -or @((Compare-Object ($script:DoclingRuntimeTests | Sort-Object) (@($proof.passed_tests) | Sort-Object))).Count -ne 0 -or

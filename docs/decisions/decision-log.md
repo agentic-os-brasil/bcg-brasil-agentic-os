@@ -1862,3 +1862,14 @@ The legacy archive, metadata and default assembler retain their original meaning
 OCR, visual reconstruction, model downloads and all signing/installation authority
 remain unchanged. The earlier eleven-format construction snapshot is historical
 coverage, not proof of this complete-kit scope. Refs: #599; Spec061 NTXT.
+
+## RGCI - Confine one registryRead experiment to synthetic Windows proof
+
+- Date: 2026-11-20
+- Status: accepted
+- Owner: repository maintainers
+- Context: The preserved WDOC zero-capability LPAC baseline verifies exact package and ARAP-positive semantics but its actual synthetic Windows proof still reports Winsock startup failure and Python activation-context failure. Neither the denied resource nor a common cause is established. Microsoft documents registryRead as a substantive LPAC registry-read permission.
+- Decision: Permit one isolated, non-distributable Windows source candidate with exactly registryRead and SE_GROUP_ENABLED, derived through the documented API and verified by exact SID, count and attributes on the suspended actual child before resume. Retain LPAC mask6 and every original network/filesystem/process/conversion gate. Run only the original mode=proof workflow on a disposable GitHub-hosted Windows account and synthetic corpus. Label its manifest/proof windows_docling_registry_read_r17; existing baseline export/assembly admission must reject that profile. This decision authorizes the bounded experiment, not a shipping capability policy or real-user registry access.
+- Consequences: Registry readability expands according to the intersection of the ordinary user's permissions and capability/resource ACLs; the exact readable-key set and exclusion of private application settings are unknown. No real profiles, credentials, registry enumeration, global ACL/registry/firewall changes, capability bundles or automatic escalation belong to this experiment. Success proves only this candidate's original synthetic native gates on the measured host. Keep WDOC and the zero-capability evidence unchanged; any real-profile or distribution proposal requires a concrete registry/privacy scope and separate approval.
+- Refs: WDOC; specs/010-local-ingestion-runtime.md; docs/experiments/windows-registry-read-r17.md; internal/ingest/docling/confined_windows.go; acceptance/windows-docling-profile.ps1; .github/workflows/windows-docling-runtime.yml; https://learn.microsoft.com/en-us/windows/win32/secauthz/implementing-an-appcontainer
+- Supersedes: none

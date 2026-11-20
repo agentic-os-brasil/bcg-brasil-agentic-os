@@ -127,6 +127,11 @@ refusal of signing/registry/version inputs. Assembly, ephemeral engineering keys
 and local qualification never replace organization-controlled release authority,
 Windows Authenticode, corporate device acceptance or native client loading.
 
+For the isolated proof-only R17 branch, read the [registryRead experiment policy](experiments/windows-registry-read-r17.md).
+It changes the candidate child to exactly one capability and does not change the
+shipping zero-capability policy described below or authorize real-profile use.
+
+
 Only explicit authenticated `PlaceVerified` runs Windows qualification. It
 creates a fresh private execution snapshot, never a hardlink to the installed
 runtime or source documents. A unique ordinary-user AppContainer profile has

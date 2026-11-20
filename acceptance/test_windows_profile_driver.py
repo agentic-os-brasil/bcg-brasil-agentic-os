@@ -292,7 +292,7 @@ class WindowsDoclingRuntimeProfile(unittest.TestCase):
 
     def document(self):
         public = "C:\\MaestroNativeEngine-" + "a" * 32
-        return dict(schema_version=1, qualification_profile="windows_docling_documents_v1", runtime_profile="model-free-documents-v1", runtime_lock_sha256="38b1a0257c3feec8a5b4b97856e7f2096cdb72ed2bd1734d8e61567bf4757643",
+        return dict(schema_version=1, qualification_profile="windows_docling_registry_read_r17", runtime_profile="model-free-documents-v1", runtime_lock_sha256="38b1a0257c3feec8a5b4b97856e7f2096cdb72ed2bd1734d8e61567bf4757643",
                     source_revision="a" * 40, public_root=public, source_root=public + "\\source",
                     sdk_go=public + "\\sdk\\bin\\go.exe", module_cache=public + "\\modules",
                     raw_inputs=public + "\\raw", test_binary=public + "\\bin\\docling.test.exe",
@@ -309,7 +309,8 @@ class WindowsDoclingRuntimeProfile(unittest.TestCase):
         self.assertNotIn("New-LocalUser", result.stdout + result.stderr)
 
     def test_docling_rejects_legacy_profile_or_lock_before_account(self):
-        for field, value in (("qualification_profile", "windows_docling_runtime_v1"),
+        for field, value in (("qualification_profile", "windows_docling_documents_v1"),
+                             ("qualification_profile", "windows_docling_runtime_v1"),
                              ("runtime_profile", "policy-formats-v1"),
                              ("runtime_lock_sha256", "728aab0b59dd5011070dfc4e9159e3ed6180b1668539f84275f1b88e81f5be58")):
             document = self.document()
@@ -349,6 +350,22 @@ class WindowsDoclingRuntimeProfile(unittest.TestCase):
         self.assertIn("workflow_dispatch:", workflow)
         self.assertNotIn("pull_request:", workflow)
         self.assertIn("./acceptance/windows-core-pilot.ps1 -DoclingManifest", workflow)
+
+    def test_registry_read_experiment_rejects_export_before_staging(self):
+        import textwrap
+        workflow = (ROOT / ".github/workflows/windows-docling-runtime.yml").read_text(encoding="utf-8")
+        step = workflow.split("      - name: Validate closed dispatch and create fresh Developer staging\n", 1)[1].split("      - name:", 1)[0]
+        script = self.root / "closed-dispatch.ps1"
+        script.write_text(textwrap.dedent(step.split("        run: |\n", 1)[1]), encoding="utf-8")
+        for mode in ("export", "assemble", "unknown"):
+            env = os.environ.copy()
+            for name in ("PILOT_REGISTRY", "PILOT_N", "PILOT_N1", "PILOT_INSTALLER", "PILOT_UNSIGNED_RUN", "PILOT_EXPORT_SHA", "PILOT_METADATA"):
+                env[name] = ""
+            env.update(PILOT_MODE=mode, USERPROFILE=str(self.root / "synthetic-host"), GITHUB_RUN_ID="1729", GITHUB_RUN_ATTEMPT="1")
+            result = subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(script)], env=env, text=True, capture_output=True, timeout=30)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("R17 registryRead experiment is proof-only", result.stdout + result.stderr)
+            self.assertFalse((self.root / "synthetic-host").exists())
 
     def test_docling_public_acquisition_python_parses_without_execution(self):
         import ast

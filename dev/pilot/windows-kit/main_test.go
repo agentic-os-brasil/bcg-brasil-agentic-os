@@ -266,7 +266,7 @@ func TestWindowsNativeProofRequiresActualPackAndEveryFormat(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	for _, mode := range []string{"missing-format", "skip", "wrong-pack", "no-standard-user", "legacy-profile", "legacy-lock", "old-format-count", "missing-pdf-positive", "missing-pptx-positive", "missing-pdf-refusal", "missing-pptx-refusal", "missing-profile-observation"} {
+	for _, mode := range []string{"missing-format", "skip", "wrong-pack", "no-standard-user", "legacy-profile", "legacy-lock", "old-format-count", "missing-pdf-positive", "missing-pptx-positive", "missing-pdf-refusal", "missing-pptx-refusal", "missing-profile-observation", "registry-read-experiment"} {
 		t.Run(mode, func(t *testing.T) {
 			var p map[string]any
 			if e := json.Unmarshal(body, &p); e != nil {
@@ -296,6 +296,8 @@ func TestWindowsNativeProofRequiresActualPackAndEveryFormat(t *testing.T) {
 				l = bytes.ReplaceAll(l, []byte("TestWindowsRealAuthenticatedDocling/protected.pdf "), []byte("TestWindowsRealAuthenticatedDocling/no-refusal "))
 			case "missing-pptx-refusal":
 				l = bytes.ReplaceAll(l, []byte("TestWindowsRealAuthenticatedDocling/pptx_macro_payload "), []byte("TestWindowsRealAuthenticatedDocling/no-refusal "))
+			case "registry-read-experiment":
+				p["qualification_profile"] = "windows_docling_registry_read_r17"
 			case "missing-profile-observation":
 				l = bytes.ReplaceAll(l, []byte("maestro_native_runtime_profile="), []byte("not-a-profile-observation="))
 

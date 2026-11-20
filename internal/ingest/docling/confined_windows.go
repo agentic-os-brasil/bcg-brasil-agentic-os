@@ -26,6 +26,7 @@ var userenv = windows.NewLazySystemDLL("userenv.dll")
 var createAppContainerProfile = userenv.NewProc("CreateAppContainerProfile")
 var deleteAppContainerProfile = userenv.NewProc("DeleteAppContainerProfile")
 var accessCheck = windows.NewLazySystemDLL("advapi32.dll").NewProc("AccessCheck")
+var deriveRegistryReadSIDs = windows.NewLazySystemDLL("kernelbase.dll").NewProc("DeriveCapabilitySidsFromName")
 
 const securityCapabilitiesAttribute = 0x00020009
 const childProcessPolicyAttribute = 0x0002000e
@@ -111,7 +112,13 @@ func runWindowsConfined(ctx context.Context, work, executable string, args []str
 		return err
 	}
 	defer attrs.Delete()
-	capabilities := securityCapabilities{SID: sid}
+	// RGCI: isolated synthetic-only candidate, not the WDOC shipping policy.
+	registryReadSID, err := registryReadCapabilitySID()
+	if err != nil {
+		return err
+	}
+	registryRead := windows.SIDAndAttributes{Sid: registryReadSID, Attributes: windows.SE_GROUP_ENABLED}
+	capabilities := securityCapabilities{SID: sid, Capabilities: &registryRead, Count: 1}
 	if err = attrs.Update(securityCapabilitiesAttribute, unsafe.Pointer(&capabilities), unsafe.Sizeof(capabilities)); err != nil {
 		return err
 	}
@@ -197,6 +204,7 @@ func runWindowsConfined(ctx context.Context, work, executable string, args []str
 		return err
 	}
 	runtime.KeepAlive(capabilities)
+	runtime.KeepAlive(registryRead)
 	runtime.KeepAlive(applicationPackagesPolicy)
 	runtime.KeepAlive(inherited)
 	runtime.KeepAlive(block)
@@ -207,7 +215,7 @@ func runWindowsConfined(ctx context.Context, work, executable string, args []str
 		windows.TerminateProcess(process.Process, 1)
 		return err
 	}
-	if err = validateConfinedToken(process.Process, sid); err != nil {
+	if err = validateConfinedToken(process.Process, sid, registryReadSID); err != nil {
 		windows.TerminateJobObject(job, 1)
 		return err
 	}
@@ -402,7 +410,7 @@ func restoreExecutionTree(handles []windows.Handle) error {
 	return result
 }
 
-func validateConfinedToken(process windows.Handle, expected *windows.SID) error {
+func validateConfinedToken(process windows.Handle, expected, registryRead *windows.SID) error {
 	var token windows.Token
 	if err := windows.OpenProcessToken(process, windows.TOKEN_QUERY|windows.TOKEN_DUPLICATE, &token); err != nil {
 		return err
@@ -431,8 +439,8 @@ func validateConfinedToken(process windows.Handle, expected *windows.SID) error 
 	if err := windows.GetTokenInformation(token, 30, &capabilities[0], uint32(len(capabilities)), &returned); err != nil {
 		return err
 	}
-	if returned < 4 || *(*uint32)(unsafe.Pointer(&capabilities[0])) != 0 {
-		return errors.New("converter_token_has_capabilities")
+	if err := validateRegistryReadCapability(capabilities, returned, registryRead); err != nil {
+		return err
 	}
 	return validateLessPrivilegedAppContainer(token, expected)
 }
@@ -469,6 +477,57 @@ func validateLessPrivilegedAppContainer(token windows.Token, expected *windows.S
 	}
 	if privilegeLength > uint32(unsafe.Sizeof(privileges)) || accessStatus == 0 || grantedAccess != 6 {
 		return fmt.Errorf("converter_token_not_less_privileged_appcontainer: access_allowed=%t granted_mask=0x%x", accessStatus != 0, grantedAccess)
+	}
+	return nil
+}
+
+// registryReadCapabilitySID derives only the fixed RGCI experiment permission.
+// The documented API owns both SID arrays and each SID until LocalFree.
+func registryReadCapabilitySID() (*windows.SID, error) {
+	if err := deriveRegistryReadSIDs.Find(); err != nil {
+		return nil, err
+	}
+	name, err := windows.UTF16PtrFromString("registryRead")
+	if err != nil {
+		return nil, err
+	}
+	var groups, capabilities **windows.SID
+	var groupCount, capabilityCount uint32
+	ok, _, callErr := deriveRegistryReadSIDs.Call(uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(&groups)), uintptr(unsafe.Pointer(&groupCount)), uintptr(unsafe.Pointer(&capabilities)), uintptr(unsafe.Pointer(&capabilityCount)))
+	if ok == 0 {
+		return nil, fmt.Errorf("derive fixed registryRead capability: %w", callErr)
+	}
+	defer func() {
+		for _, allocated := range []struct {
+			array **windows.SID
+			count uint32
+		}{{groups, groupCount}, {capabilities, capabilityCount}} {
+			if allocated.array != nil {
+				for _, sid := range unsafe.Slice(allocated.array, allocated.count) {
+					if sid != nil {
+						windows.LocalFree(windows.Handle(unsafe.Pointer(sid)))
+					}
+				}
+				windows.LocalFree(windows.Handle(unsafe.Pointer(allocated.array)))
+			}
+		}
+	}()
+	if groupCount != 1 || capabilityCount != 1 || groups == nil || capabilities == nil || *capabilities == nil || !(*capabilities).IsValid() {
+		return nil, errors.New("registry_read_capability_derivation_shape")
+	}
+	return (*capabilities).Copy()
+}
+
+func validateRegistryReadCapability(body []byte, returned uint32, expected *windows.SID) error {
+	if expected == nil || !expected.IsValid() {
+		return errors.New("converter_token_registry_read_expected_sid_invalid")
+	}
+	if returned < uint32(unsafe.Sizeof(windows.Tokengroups{})) || returned > uint32(len(body)) || len(body) < int(unsafe.Sizeof(windows.Tokengroups{})) {
+		return errors.New("converter_token_registry_read_capability_shape")
+	}
+	actual := (*windows.Tokengroups)(unsafe.Pointer(&body[0]))
+	if actual.GroupCount != 1 || actual.Groups[0].Sid == nil || !actual.Groups[0].Sid.IsValid() || !actual.Groups[0].Sid.Equals(expected) || actual.Groups[0].Attributes != windows.SE_GROUP_ENABLED {
+		return errors.New("converter_token_registry_read_capability_mismatch")
 	}
 	return nil
 }

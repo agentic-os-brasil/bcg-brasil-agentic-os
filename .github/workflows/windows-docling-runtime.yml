@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Proof only, unsigned native export, or signed-public-metadata assembly
+        description: R17 registryRead-only synthetic proof; export and assembly unavailable
         type: choice
-        options: [proof, export, assemble]
+        options: [proof]
         default: proof
       registry_base64:
         description: Export only - approved public engineering registry, base64 (max 4096 characters)
@@ -57,7 +57,7 @@ jobs:
       - name: Validate closed dispatch and create fresh Developer staging
         shell: pwsh
         run: |
-          if ($env:PILOT_MODE -cnotin @('proof','export','assemble')) { throw 'Unknown pilot mode.' }
+          if ($env:PILOT_MODE -cne 'proof') { throw 'R17 registryRead experiment is proof-only; export and assembly are unavailable.' }
           if ($env:PILOT_MODE -eq 'export') {
             foreach ($version in @($env:PILOT_N,$env:PILOT_N1,$env:PILOT_INSTALLER)) {
               if ($version -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') { throw 'Exact release versions required.' }

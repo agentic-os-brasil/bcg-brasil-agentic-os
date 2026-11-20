@@ -100,6 +100,15 @@ is prohibited; a suspended child joins a timeout-controlled kill-on-close Job
 before execution. Only staged authenticated bytes and private scratch receive
 the per-conversion SID; original documents and installed-pack ACLs stay intact.
 
+The isolated RGCI/R17 synthetic candidate is a separate experimental policy:
+exactly one registryRead capability, exact pre-resume SID/count/attribute
+attestation and unchanged LPAC mask6. It is restricted to disposable hosted
+Windows synthetic proof with qualification profile
+`windows_docling_registry_read_r17`; it cannot authorize baseline export,
+assembly, real-profile use or distribution. WDOC's zero-capability baseline and
+its evidence remain unchanged. Read the [R17 policy](../docs/experiments/windows-registry-read-r17.md)
+before preparing, reviewing or interpreting that candidate.
+
 Windows readiness requires actual explicit authenticated placement qualification:
 real synthetic SimplePipeline conversion and native network/filesystem/child
 negative controls precede a private current-user/machine DPAPI proof bound to

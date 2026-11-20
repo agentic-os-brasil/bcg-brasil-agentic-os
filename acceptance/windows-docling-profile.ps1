@@ -1,5 +1,6 @@
 # Typed helpers for the existing windows-core-pilot.ps1 credentialed launcher.
 # No account creation, generic command execution or publisher authority lives here.
+$script:DoclingRuntimeQualificationProfile = 'windows_docling_registry_read_r17'
 $script:DoclingRuntimeTests = @('TestWindowsNativeConfinement', 'TestWindowsNativeConfinementDeadline', 'TestWindowsSharedImplementationIdentityAcrossEntryModules', 'TestWindowsRealAuthenticatedDocling')
 function Read-DoclingRuntimeManifest([string]$Path) {
     $entry = Get-Item -LiteralPath $Path -Force
@@ -7,7 +8,7 @@ function Read-DoclingRuntimeManifest([string]$Path) {
     $manifest = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
     $fields = @('schema_version','qualification_profile','runtime_profile','runtime_lock_sha256','source_revision','public_root','source_root','sdk_go','module_cache','raw_inputs','test_binary','inventory_sha256','required_tests')
     if (@($manifest.PSObject.Properties.Name).Count -ne $fields.Count -or @($manifest.PSObject.Properties.Name | Where-Object { $_ -cnotin $fields }).Count -ne 0 -or
-        $manifest.schema_version -ne 1 -or $manifest.qualification_profile -cne 'windows_docling_documents_v1' -or $manifest.runtime_profile -cne 'model-free-documents-v1' -or $manifest.runtime_lock_sha256 -cne '38b1a0257c3feec8a5b4b97856e7f2096cdb72ed2bd1734d8e61567bf4757643' -or $manifest.source_revision -cnotmatch '^[a-f0-9]{40}$' -or
+        $manifest.schema_version -ne 1 -or $manifest.qualification_profile -cne $script:DoclingRuntimeQualificationProfile -or $manifest.runtime_profile -cne 'model-free-documents-v1' -or $manifest.runtime_lock_sha256 -cne '38b1a0257c3feec8a5b4b97856e7f2096cdb72ed2bd1734d8e61567bf4757643' -or $manifest.source_revision -cnotmatch '^[a-f0-9]{40}$' -or
         $manifest.inventory_sha256 -cnotmatch '^[a-f0-9]{64}$' -or @($manifest.required_tests).Count -ne $script:DoclingRuntimeTests.Count -or
         @((Compare-Object ($script:DoclingRuntimeTests | Sort-Object -CaseSensitive) (@($manifest.required_tests) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) { throw 'Docling requires the exact closed native runtime profile.' }
     if ($manifest.public_root -cnotmatch '^[A-Za-z]:\\MaestroNativeEngine-[a-f0-9]{32}$' -or
@@ -234,6 +235,6 @@ function Invoke-DoclingRuntimeProof($Manifest, [string]$ProofRoot, [string]$Expe
     $profileMatches = [regex]::Matches($body, '(?m)^    native_windows_test.go:[0-9]+: maestro_native_runtime_profile=model-free-documents-v1 lock_sha256=38b1a0257c3feec8a5b4b97856e7f2096cdb72ed2bd1734d8e61567bf4757643\r?$')
     if ($profileMatches.Count -ne 1) { throw 'Actual complete document profile/lock observation is required.' }
     $sidHash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($identity.User.Value))).ToLowerInvariant()
-    $proof=[ordered]@{schema_version=1; qualification_profile='windows_docling_documents_v1'; runtime_profile=$Manifest.runtime_profile; runtime_lock_sha256=$Manifest.runtime_lock_sha256; source_revision=$Manifest.source_revision; inventory_sha256=$Manifest.inventory_sha256; test_binary_sha256=(Get-FileHash -LiteralPath $Manifest.test_binary -Algorithm SHA256).Hash.ToLowerInvariant(); effective_sid_sha256=$sidHash; actual_standard_user=$true; elevated=$false; admin_member=$false; passed_tests=$script:DoclingRuntimeTests; real_formats=13; pdf_refusals=6; pptx_refusals=9; runtime_pack_sha256=$packMatches[0].Groups[1].Value; log_sha256=(Get-FileHash -LiteralPath $log -Algorithm SHA256).Hash.ToLowerInvariant(); shared_implementation_attested=$true; mcp_server_execution='not_attested'; native_client='not_run'; publisher_authority='not_granted'}
+    $proof=[ordered]@{schema_version=1; qualification_profile=$Manifest.qualification_profile; runtime_profile=$Manifest.runtime_profile; runtime_lock_sha256=$Manifest.runtime_lock_sha256; source_revision=$Manifest.source_revision; inventory_sha256=$Manifest.inventory_sha256; test_binary_sha256=(Get-FileHash -LiteralPath $Manifest.test_binary -Algorithm SHA256).Hash.ToLowerInvariant(); effective_sid_sha256=$sidHash; actual_standard_user=$true; elevated=$false; admin_member=$false; passed_tests=$script:DoclingRuntimeTests; real_formats=13; pdf_refusals=6; pptx_refusals=9; runtime_pack_sha256=$packMatches[0].Groups[1].Value; log_sha256=(Get-FileHash -LiteralPath $log -Algorithm SHA256).Hash.ToLowerInvariant(); shared_implementation_attested=$true; mcp_server_execution='not_attested'; native_client='not_run'; publisher_authority='not_granted'}
     $proof | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $ProofRoot 'docling-native-proof.json') -Encoding UTF8
 }

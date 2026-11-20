@@ -63,6 +63,7 @@ func nativeWindowsFixture(t *testing.T) (string, string) {
 
 func TestWindowsNativeConfinement(t *testing.T) {
 	assertWindowsQualificationFailureFactsPrivacy(t)
+	assertRegistryReadCapabilityPolicy(t)
 	work, child := nativeWindowsFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -352,4 +353,48 @@ func TestWindowsConfinementChild(t *testing.T) {
 	}
 	proof, _ := json.Marshal(map[string]bool{"app_container": true, "network_denied": true, "outside_read_denied": true, "outside_write_denied": true, "snapshot_write_denied": true, "scratch_writable": true, "children_denied": true})
 	t.Log("NATIVE_WINDOWS_CONFINEMENT_PASSED", string(proof))
+}
+
+// Pure SID/count/attribute checks complement, never replace, the actual child token query.
+func assertRegistryReadCapabilityPolicy(t *testing.T) {
+	t.Helper()
+	expected, err := registryReadCapabilitySID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreign, err := windows.CreateWellKnownSid(windows.WinWorldSid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name              string
+		count, attributes uint32
+		sid               *windows.SID
+		short             bool
+		want              bool
+	}{
+		{"exact", 1, windows.SE_GROUP_ENABLED, expected, false, true},
+		{"missing", 0, windows.SE_GROUP_ENABLED, expected, false, false},
+		{"extra", 2, windows.SE_GROUP_ENABLED, expected, false, false},
+		{"foreign", 1, windows.SE_GROUP_ENABLED, foreign, false, false},
+		{"nil", 1, windows.SE_GROUP_ENABLED, nil, false, false},
+		{"disabled", 1, 0, expected, false, false},
+		{"extra_attributes", 1, windows.SE_GROUP_ENABLED | windows.SE_GROUP_ENABLED_BY_DEFAULT, expected, false, false},
+		{"truncated", 1, windows.SE_GROUP_ENABLED, expected, true, false},
+	} {
+		t.Run("registry_read_policy_"+tc.name, func(t *testing.T) {
+			groups := windows.Tokengroups{GroupCount: tc.count, Groups: [1]windows.SIDAndAttributes{{Sid: tc.sid, Attributes: tc.attributes}}}
+			body := unsafe.Slice((*byte)(unsafe.Pointer(&groups)), int(unsafe.Sizeof(groups)))
+			returned := uint32(len(body))
+			if tc.short {
+				returned--
+			}
+			if got := validateRegistryReadCapability(body, returned, expected) == nil; got != tc.want {
+				t.Fatalf("exact registryRead policy accepted=%t, want %t", got, tc.want)
+			}
+			if tc.want && validateRegistryReadCapability(body, returned, nil) == nil {
+				t.Fatal("missing expected registryRead SID admitted")
+			}
+		})
+	}
 }

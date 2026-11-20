@@ -231,7 +231,7 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 	if availability.State != "ready" || availability.Profile != profile {
 		t.Fatal("unchanged signed pack cannot requalify after actual repeated smoke")
 	}
-	t.Logf("engineering only: real native Windows converter + zero-capability kernel controls observed; pack_sha256=%s files=%d expanded=%d", assemble.ArchiveSHA256, assemble.Files, assemble.ExpandedBytes)
+	t.Logf("engineering only: real native Windows registryRead-only LPAC experiment controls observed; pack_sha256=%s files=%d expanded=%d", assemble.ArchiveSHA256, assemble.Files, assemble.ExpandedBytes)
 }
 
 func nativeFixtureMetadata(t *testing.T, root string) string {
