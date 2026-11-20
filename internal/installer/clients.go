@@ -588,10 +588,14 @@ func prepareStableLaunch(ctx context.Context, o ClientOptions, event string) (Qu
 		return QualifiedLaunch{}, err
 	}
 	var launch QualifiedLaunch
-	err := installtx.GuardQualifiedCurrent(o.ManagedRoot, o.DataRoot, installtx.ReleaseBinding{}, time.Now(), func() error {
-		r, _, e := readClientRecord(o.SeededOperationOptions, o.Request.CarrierID)
+	var expectedRecord string
+	validate := func() error {
+		r, body, e := readClientRecord(o.SeededOperationOptions, o.Request.CarrierID)
 		if e != nil {
 			return e
+		}
+		if expectedRecord != "" && clientDigest(body) != expectedRecord {
+			return errors.New("stable client record changed during startup")
 		}
 		if o.Request.Workspace != r.Binding.Workspace {
 			return errors.New("stable workspace mismatch")
@@ -621,9 +625,24 @@ func prepareStableLaunch(ctx context.Context, o ClientOptions, event string) (Qu
 			}
 			launch.Args = append([]string{"lifecycle-hook", "--event", event}, launch.Args[1:]...)
 		}
+		if e == nil {
+			expectedRecord = clientDigest(body)
+		}
 		return e
-	})
-	return launch, err
+	}
+	guard := installtx.GuardQualifiedCurrent
+	expected := installtx.ReleaseBinding{}
+	if event == "" {
+		if err := validate(); err != nil {
+			return QualifiedLaunch{}, err
+		}
+		expected = launch.State.Binding
+		guard = installtx.GuardQualifiedReconciliationCurrent
+	}
+	if err := guard(o.ManagedRoot, o.DataRoot, expected, time.Now(), validate); err != nil {
+		return QualifiedLaunch{}, err
+	}
+	return launch, nil
 }
 
 // ObserveClientsSeeded records only fixed typed, package-bound observations.

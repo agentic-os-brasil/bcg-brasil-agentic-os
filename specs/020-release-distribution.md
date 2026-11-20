@@ -654,8 +654,10 @@ product root, user home, workspace and carrier ID. Resolve only that finite reco
 Native-admit Self and revalidate current source expiry, known recall, writer
 floor, actual server, client inputs and exact packets before returning the same
 exact pinned server launch as release-bound mode. Existing startup/request/
-publication process-identity checks remain effective. All status/startup reads
-are nonmigrating, create nothing and never refresh source or invoke a client.
+publication process-identity checks remain effective. Status/startup inspection
+is nonmigrating and never refreshes source or invokes a client. Only normal
+stable startup may recover an exited activation owner through the scoped DSRC
+boundary below; read-only status and lifecycle hooks do not create that guard.
 
 Materialization currency binds immutable active inputs, not source-generation
 timestamps. Metadata-only refresh or repeated identical release needs no
@@ -683,10 +685,20 @@ An existing staged candidate is not binding authority merely because inspection
 succeeds. Verify its exact admitted native launch binding before using its
 contract as the reference; both adoption branches compare the destination's
 actual contract with that reference before swaps or record publication.
-Only explicit digest-bound client reconciliation may use the canonical
-dead-owner reconciliation lock after a real process interruption. It preserves
-live-owner refusal; launch/status and ordinary materialization do not reclaim
-locks or reset custody.
+Explicit digest-bound client reconciliation and normal stable-client startup
+may use the canonical dead-owner reconciliation lock after a real process
+interruption (DSRC). Startup first authenticates exact installed admission,
+current signed source, carrier, owner/workspace and current materialized
+selection; it repeats the original guarded validation after acquiring the
+activation lock. All canonical reclaimers share the existing OS-released
+private lock on one retained empty private per-root recovery guard, held across
+fresh stale-owner/identity/body verification, removal and exclusive reacquisition.
+The retained guard is never unlinked and has an exact regular empty private-file
+inventory contract. An ordinary writer winning exclusive reacquisition is
+preserved and causes refusal. Live/reused/unknown owners and malformed,
+aliased or changed locks refuse. Status, lifecycle hooks and ordinary
+materialization never reclaim locks or reset custody; recovery changes no
+source, client packet, profile or native qualification.
 
 ### Supported client effects and evidence
 

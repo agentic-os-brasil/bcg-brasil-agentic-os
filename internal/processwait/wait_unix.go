@@ -11,9 +11,12 @@ import (
 )
 
 func wait(ctx context.Context, pid int) error {
+	if pid <= 0 || uint64(pid) > uint64(^uint32(0)>>1) {
+		return errors.New("process PID exceeds the native signed range")
+	}
 	process, err := os.FindProcess(pid)
 	if err != nil {
-		return nil
+		return err
 	}
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()

@@ -530,9 +530,9 @@ func GuardQualifiedCurrent(managedRoot, dataRoot string, expected ReleaseBinding
 	return publish()
 }
 
-// GuardQualifiedReconciliationCurrent is used only by an explicitly reviewed
-// client reconciliation. Reuse the canonical dead-owner/live-owner checks;
-// ordinary startup, launch, publication and status never reclaim a lock.
+// GuardQualifiedReconciliationCurrent is used by explicitly reviewed client
+// reconciliation and prevalidated normal stable startup. Callers own admission
+// before recovery; current/source validation is repeated under the acquired lock.
 func GuardQualifiedReconciliationCurrent(managedRoot, dataRoot string, expected ReleaseBinding, now time.Time, publish func() error) error {
 	if publish == nil {
 		return errors.New("reconciliation callback required")

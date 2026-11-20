@@ -945,8 +945,8 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 	if finalState.Source.Sequence != 3 {
 		t.Fatal("rollback reset source history")
 	}
-	// Reconciliation cannot reclaim a live owner's canonical lock; ordinary
-	// launch refuses even a dead lock until this separate reviewed operation.
+	// Live owners remain protected. Only exact prevalidated normal startup may
+	// recover a dead owner without regenerating the current client packets.
 	hold := exec.CommandContext(ctx, process, "test-client-hold")
 	holdIn, e := hold.StdinPipe()
 	must(t, e)
@@ -969,8 +969,28 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 	}
 	must(t, holdIn.Close())
 	must(t, hold.Wait())
-	if _, e = installer.PrepareStableLaunch(ctx, options); e == nil {
-		t.Fatal("ordinary launch reclaimed a dead owner lock")
+	for _, invalid := range []string{"carrier", "workspace", "owner"} {
+		changed := options
+		switch invalid {
+		case "carrier":
+			changed.Request.CarrierID = strings.Repeat("f", 32)
+		case "workspace":
+			changed.Request.Workspace = filepath.Join(root, "foreign-workspace")
+		case "owner":
+			changed.UserHome = filepath.Join(root, "foreign-owner")
+		}
+		if _, e = installer.PrepareStableLaunch(ctx, changed); e == nil || !bytes.Equal(liveLock, read(t, lockPath)) {
+			t.Fatal("invalid startup selection reclaimed a dead owner", invalid, e)
+		}
+	}
+	if _, e = installer.PrepareStableLaunch(ctx, options); e != nil {
+		t.Fatal("exact current startup could not recover its dead owner", e)
+	}
+	if !bytes.Equal(liveRecord, read(t, recordPath)) {
+		t.Fatal("startup recovery changed the current client record")
+	}
+	if _, e = os.Lstat(lockPath); !errors.Is(e, os.ErrNotExist) {
+		t.Fatal("startup recovery did not release activation ownership", e)
 	}
 	materialReview, e = installer.ReviewClientsSeeded(ctx, options)
 	must(t, e)
