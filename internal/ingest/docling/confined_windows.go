@@ -177,7 +177,7 @@ func runWindowsConfined(ctx context.Context, work, executable string, args []str
 	sort.Slice(environment, func(i, j int) bool { return strings.ToUpper(environment[i]) < strings.ToUpper(environment[j]) })
 	block := utf16.Encode([]rune(strings.Join(environment, "\x00") + "\x00\x00"))
 	process := windows.ProcessInformation{}
-	flags := uint32(windows.CREATE_SUSPENDED | windows.CREATE_UNICODE_ENVIRONMENT | windows.EXTENDED_STARTUPINFO_PRESENT | windows.CREATE_NO_WINDOW)
+	flags := uint32(windows.CREATE_SUSPENDED | windows.CREATE_UNICODE_ENVIRONMENT | windows.EXTENDED_STARTUPINFO_PRESENT | windows.DETACHED_PROCESS)
 	if err = windows.CreateProcess(app, commandLine, nil, nil, true, flags, &block[0], directory, &startup.StartupInfo, &process); err != nil {
 		return err
 	}

@@ -120,17 +120,17 @@ function Invoke-DoclingFailureTrace($Manifest, [string]$ProofRoot, [string]$Expe
         # Fetch only matching stock NTDLL/KERNELBASE metadata before the test.
         # Restore a local symbol store before either target can run.
         if($symbols -match '[;"\r\n]'){throw 'Diagnostic symbol cache path is ambiguous.'}
-        # Literal command-file input keeps post-wt reads on separate lines;
-        # an execution command would end an inline breakpoint command list.
+        # Read the matched child functions before resuming initialization;
+        # finite disassembly avoids a command-file execution wait.
         $attachText=@'
 .echo MAESTRO_KERNELBASE_ATTACH_ENTER
 .lastevent
 |.
 r rcx,rdx,r8
-wt -l 2 -or -m KERNELBASE
-.echo MAESTRO_KERNELBASE_ATTACH_RETURN
-r rax
-!exts.gle
+uf KERNELBASE!KernelBaseDllInitialize
+uf KERNELBASE!_KernelBaseBaseDllInitialize
+uf KERNELBASE!ConsoleInitialize
+.echo MAESTRO_KERNELBASE_ATTACH_DISASSEMBLY_DONE
 g
 '@
         $scriptText=@'
