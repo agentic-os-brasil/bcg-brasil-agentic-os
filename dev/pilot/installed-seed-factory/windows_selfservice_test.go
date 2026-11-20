@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -16,8 +17,18 @@ import (
 // separately qualified; only directory creation is substituted on other hosts.
 func TestWindowsSelfServiceExactOwnerAndSelectedProfile(t *testing.T) {
 	shell := "pwsh"
+	var powerShellEnvironment []string
 	if runtime.GOOS == "windows" {
 		shell = "powershell.exe"
+		// Match Maestro.cmd: Windows PowerShell must build its own module path,
+		// rather than inherit the hosting PowerShell process's module selection.
+		powerShellEnvironment = make([]string, 0)
+		for _, entry := range os.Environ() {
+			name, _, _ := strings.Cut(entry, "=")
+			if !strings.EqualFold(name, "PSModulePath") {
+				powerShellEnvironment = append(powerShellEnvironment, entry)
+			}
+		}
 	}
 	powerShell, err := exec.LookPath(shell)
 	if err != nil {
@@ -39,6 +50,7 @@ func TestWindowsSelfServiceExactOwnerAndSelectedProfile(t *testing.T) {
 		// Match atlasTestDataRoot: repair only the new synthetic Developer,
 		// whose default owner can be Administrators on elevated hosted runners.
 		prepare := exec.Command(powerShell, "-NoProfile", "-NonInteractive", "-File", script, "-Fixture", root, "-PrepareFixture")
+		prepare.Env = powerShellEnvironment
 		if output, err := prepare.CombinedOutput(); err != nil {
 			t.Fatalf("initialize synthetic Windows fixture ownership: %s\n%v", output, err)
 		}
@@ -56,6 +68,7 @@ func TestWindowsSelfServiceExactOwnerAndSelectedProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	command := exec.Command(powerShell, "-NoProfile", "-NonInteractive", "-File", script, "-Source", filepath.Join(repo, "dev/pilot/templates/installed-seed/Maestro.ps1"), "-Fixture", root)
+	command.Env = powerShellEnvironment
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("shipped Windows helper behavior: %s\n%v", output, err)
