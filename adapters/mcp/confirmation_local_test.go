@@ -14,6 +14,7 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -24,9 +25,10 @@ func localReviewFixture(t *testing.T, channel string) *Bound {
 	if err != nil {
 		t.Fatal(err)
 	}
+	prepareLocalReviewFixtureRoot(t, root)
 	options := Options{ProductRoot: filepath.Join(root, "product"), UserHome: filepath.Join(root, "owner"), WorkspacePath: filepath.Join(root, "workspace"), OwnerReviewChannel: channel, LookupEnv: func(string) (string, bool) { return "", false }}
 	for _, directory := range []string{options.ProductRoot, options.UserHome} {
-		if err := os.Mkdir(directory, 0700); err != nil {
+		if err := scheduler.EnsurePrivateDirectory(directory); err != nil {
 			t.Fatal(err)
 		}
 	}
