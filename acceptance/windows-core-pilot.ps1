@@ -467,7 +467,7 @@ try {
     }
     $stdout = Join-Path $OutputRoot 'native-test.stdout.log'
     $stderr = Join-Path $OutputRoot 'native-test.stderr.log'
-    # LoadUserProfile does not replace the caller's inherited TEMP/TMP.
+    # LoadUserProfile does not replace inherited TEMP/TMP/GOTMPDIR.
     # Create the synthetic temp inside the credentialed process so its actual
     # owner is the standard user; never grant that user access to runner data.
     $launcher = Join-Path $payload 'native-user-launcher.ps1'
@@ -479,6 +479,7 @@ try {
     New-Item -ItemType Directory -Path $temporary | Out-Null
     $env:TEMP = $temporary
     $env:TMP = $temporary
+    $env:GOTMPDIR = $temporary
     if ($DoclingManifest) {
         if ((Get-FileHash -LiteralPath $DoclingProfile -Algorithm SHA256).Hash.ToLowerInvariant() -cne $DoclingProfileSHA256) { throw 'Docling typed profile changed before ordinary-account admission.' }
         . $DoclingProfile

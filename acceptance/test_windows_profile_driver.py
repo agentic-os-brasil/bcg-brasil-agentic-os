@@ -44,8 +44,14 @@ class WindowsInspectionDriver(unittest.TestCase):
 if ($errors.Count) { throw ($errors | Out-String) }
 $launcher=@($tokens | Where-Object { $_.Kind -eq 'HereStringLiteral' })
 if ($launcher.Count -ne 1) { throw 'Expected the single shared credentialed launcher' }
-[Management.Automation.Language.Parser]::ParseInput($launcher[0].Value,[ref]$null,[ref]$errors) | Out-Null
+$inner=[Management.Automation.Language.Parser]::ParseInput($launcher[0].Value,[ref]$null,[ref]$errors)
 if ($errors.Count) { throw ($errors | Out-String) }
+$coreCalls=@($inner.FindAll({param($n) $n -is [Management.Automation.Language.CommandAst] -and $n.CommandElements.Count -gt 0 -and $n.CommandElements[0].Extent.Text -ceq '$TestBinary'},$true) | Sort-Object {$_.Extent.StartOffset})
+if ($coreCalls.Count -eq 0) { throw 'Expected actual first native core test command' }
+foreach($name in @('$env:TEMP','$env:TMP','$env:GOTMPDIR')) {
+ $early=@($inner.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq $name -and $n.Right.Extent.Text -ceq '$temporary' -and $n.Extent.StartOffset -lt $coreCalls[0].Extent.StartOffset},$true))
+ if($early.Count -ne 1){throw ('Ordinary child must select its own '+$name+' before the first native core test')}
+}
 """
         script = self.root / "parse.ps1"
         script.write_text(check, encoding="utf-8")
