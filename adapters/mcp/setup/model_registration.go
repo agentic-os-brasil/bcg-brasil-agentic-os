@@ -97,15 +97,25 @@ func modelClient(ctx context.Context, o installer.ClientOptions) (installer.Clie
 }
 
 func modelProfileMarker(carrier string) []byte {
+	return purposeProfileMarker(carrier, "bounded-model-maintenance")
+}
+
+func purposeProfileMarker(carrier, purpose string) []byte {
 	body, _ := json.Marshal(struct {
 		SchemaVersion int    `json:"schema_version"`
 		CarrierID     string `json:"carrier_id"`
 		Purpose       string `json:"purpose"`
-	}{1, carrier, "bounded-model-maintenance"})
+	}{1, carrier, purpose})
 	return append(body, '\n')
 }
 
-func ReviewModelProfile(ctx context.Context, o installer.ClientOptions) (review ModelProfileReview, err error) {
+func ReviewModelProfile(ctx context.Context, o installer.ClientOptions) (ModelProfileReview, error) {
+	return reviewPurposeProfile(ctx, o, "model-profiles", "bounded-model-maintenance")
+}
+func ReviewForegroundProfile(ctx context.Context, o installer.ClientOptions) (ModelProfileReview, error) {
+	return reviewPurposeProfile(ctx, o, "foreground-profiles", "bounded-foreground-agents")
+}
+func reviewPurposeProfile(ctx context.Context, o installer.ClientOptions, directory, purpose string) (review ModelProfileReview, err error) {
 	if ctx == nil {
 		return review, errors.New("model profile context required")
 	}
@@ -121,11 +131,11 @@ func ReviewModelProfile(ctx context.Context, o installer.ClientOptions) (review 
 	if err != nil || target.OS != runtime.GOOS || target.Arch != runtime.GOARCH {
 		return review, errors.New("selected supported native Code image required")
 	}
-	root := filepath.Join(o.DataRoot, "model-profiles", r.CarrierID)
+	root := filepath.Join(o.DataRoot, directory, r.CarrierID)
 	review = ModelProfileReview{CarrierID: r.CarrierID, ClientRecordSHA256: installer.ClientRecordDigest(r), Executable: executable, ExecutableSHA256: sha, Root: root, ProfileDirectory: filepath.Join(root, "config"), WorkingDirectory: filepath.Join(root, "workspace"), Effects: []string{"create_or_reuse_only_the_reviewed_owner_private_model_profile", "keep_the_daily_Maestro_profile_and_its_hooks_plugins_and_credentials_unchanged", "seed_autoMemoryEnabled_false_and_syncClaudeAiPlugins_false_only_in_the_new_profile_and_create_private_working_temporary_and_proposal_directories", "authentication_registration_qualification_and_enrollment_require_separate_explicit_actions"}}
 	marker, readErr := scheduler.ReadPrivateStateFile(filepath.Join(root, "model-profile.json"), 4096)
 	if readErr == nil {
-		if !bytes.Equal(marker, modelProfileMarker(r.CarrierID)) {
+		if !bytes.Equal(marker, purposeProfileMarker(r.CarrierID, purpose)) {
 			return ModelProfileReview{}, errors.New("existing model profile purpose differs; preserved unchanged")
 		}
 		for _, p := range []string{root, review.ProfileDirectory, review.WorkingDirectory, filepath.Join(root, "tmp"), filepath.Join(root, "registrations")} {
@@ -144,10 +154,16 @@ func ReviewModelProfile(ctx context.Context, o installer.ClientOptions) (review 
 }
 
 func ApplyModelProfile(ctx context.Context, o installer.ClientOptions, reviewed ModelProfileReview, digest string, confirmed bool) (ModelProfileStatus, error) {
+	return applyPurposeProfile(ctx, o, reviewed, digest, confirmed, ReviewModelProfile, "bounded-model-maintenance")
+}
+func ApplyForegroundProfile(ctx context.Context, o installer.ClientOptions, reviewed ModelProfileReview, digest string, confirmed bool) (ModelProfileStatus, error) {
+	return applyPurposeProfile(ctx, o, reviewed, digest, confirmed, ReviewForegroundProfile, "bounded-foreground-agents")
+}
+func applyPurposeProfile(ctx context.Context, o installer.ClientOptions, reviewed ModelProfileReview, digest string, confirmed bool, read func(context.Context, installer.ClientOptions) (ModelProfileReview, error), purpose string) (ModelProfileStatus, error) {
 	if !confirmed {
 		return ModelProfileStatus{}, errors.New("explicit dedicated model profile preparation review required")
 	}
-	fresh, err := ReviewModelProfile(ctx, o)
+	fresh, err := read(ctx, o)
 	if err != nil {
 		return ModelProfileStatus{}, err
 	}
@@ -163,11 +179,11 @@ func ApplyModelProfile(ctx context.Context, o installer.ClientOptions, reviewed 
 		if err := scheduler.PublishNewPrivateFile(filepath.Join(fresh.ProfileDirectory, "settings.json"), []byte("{\"autoMemoryEnabled\":false,\"syncClaudeAiPlugins\":false}\n")); err != nil {
 			return ModelProfileStatus{}, err
 		}
-		if err := scheduler.PublishNewPrivateFile(filepath.Join(fresh.Root, "model-profile.json"), modelProfileMarker(fresh.CarrierID)); err != nil {
+		if err := scheduler.PublishNewPrivateFile(filepath.Join(fresh.Root, "model-profile.json"), purposeProfileMarker(fresh.CarrierID, purpose)); err != nil {
 			return ModelProfileStatus{}, err
 		}
 	}
-	after, sourceErr := ReviewModelProfile(ctx, o)
+	after, sourceErr := read(ctx, o)
 	if sourceErr != nil || after.ClientRecordSHA256 != fresh.ClientRecordSHA256 || after.ExecutableSHA256 != fresh.ExecutableSHA256 {
 		return ModelProfileStatus{}, errors.New("model profile preparation partial after current selection changed; preserve and reconcile")
 	}
@@ -251,7 +267,13 @@ func modelAuthentication(ctx context.Context, profile ModelProfileReview, env []
 // InspectModelProfile reads actual official authentication metadata; no
 // credential file is opened and no model or login command is invoked.
 func InspectModelProfile(ctx context.Context, o installer.ClientOptions) (ModelProfileStatus, error) {
-	profile, err := ReviewModelProfile(ctx, o)
+	return inspectPurposeProfile(ctx, o, ReviewModelProfile)
+}
+func InspectForegroundProfile(ctx context.Context, o installer.ClientOptions) (ModelProfileStatus, error) {
+	return inspectPurposeProfile(ctx, o, ReviewForegroundProfile)
+}
+func inspectPurposeProfile(ctx context.Context, o installer.ClientOptions, read func(context.Context, installer.ClientOptions) (ModelProfileReview, error)) (ModelProfileStatus, error) {
+	profile, err := read(ctx, o)
 	if err != nil {
 		return ModelProfileStatus{}, err
 	}
@@ -288,8 +310,14 @@ type ModelProfileLoginReview struct {
 	Environment   []string                           `json:"environment"`
 }
 
-func ReviewModelProfileLogin(ctx context.Context, o installer.ClientOptions) (review ModelProfileLoginReview, err error) {
-	profile, err := ReviewModelProfile(ctx, o)
+func ReviewModelProfileLogin(ctx context.Context, o installer.ClientOptions) (ModelProfileLoginReview, error) {
+	return reviewPurposeProfileLogin(ctx, o, ReviewModelProfile)
+}
+func ReviewForegroundProfileLogin(ctx context.Context, o installer.ClientOptions) (ModelProfileLoginReview, error) {
+	return reviewPurposeProfileLogin(ctx, o, ReviewForegroundProfile)
+}
+func reviewPurposeProfileLogin(ctx context.Context, o installer.ClientOptions, read func(context.Context, installer.ClientOptions) (ModelProfileReview, error)) (review ModelProfileLoginReview, err error) {
+	profile, err := read(ctx, o)
 	if err != nil {
 		return review, err
 	}
@@ -312,10 +340,16 @@ func ReviewModelProfileLogin(ctx context.Context, o installer.ClientOptions) (re
 // LoginModelProfile invokes only a separately reviewed official login action,
 // attached to the operator's terminal. It never reads or copies credentials.
 func LoginModelProfile(ctx context.Context, o installer.ClientOptions, reviewed ModelProfileLoginReview, digest string, confirmed bool) (ModelProfileStatus, error) {
+	return loginPurposeProfile(ctx, o, reviewed, digest, confirmed, ReviewModelProfileLogin, ReviewModelProfile, InspectModelProfile)
+}
+func LoginForegroundProfile(ctx context.Context, o installer.ClientOptions, reviewed ModelProfileLoginReview, digest string, confirmed bool) (ModelProfileStatus, error) {
+	return loginPurposeProfile(ctx, o, reviewed, digest, confirmed, ReviewForegroundProfileLogin, ReviewForegroundProfile, InspectForegroundProfile)
+}
+func loginPurposeProfile(ctx context.Context, o installer.ClientOptions, reviewed ModelProfileLoginReview, digest string, confirmed bool, loginReview func(context.Context, installer.ClientOptions) (ModelProfileLoginReview, error), read func(context.Context, installer.ClientOptions) (ModelProfileReview, error), inspect func(context.Context, installer.ClientOptions) (ModelProfileStatus, error)) (ModelProfileStatus, error) {
 	if !confirmed {
 		return ModelProfileStatus{}, errors.New("explicit official model profile login action required")
 	}
-	review, err := ReviewModelProfileLogin(ctx, o)
+	review, err := loginReview(ctx, o)
 	if err != nil {
 		return ModelProfileStatus{}, err
 	}
@@ -336,11 +370,11 @@ func LoginModelProfile(ctx context.Context, o installer.ClientOptions, reviewed 
 	if err := cmd.Run(); err != nil {
 		return ModelProfileStatus{profile.ProfileDirectory, profile.WorkingDirectory, true, "pending", "official_login_incomplete"}, err
 	}
-	fresh, err := ReviewModelProfile(ctx, o)
+	fresh, err := read(ctx, o)
 	if err != nil || fresh.Digest != profile.Digest {
 		return ModelProfileStatus{profile.ProfileDirectory, profile.WorkingDirectory, true, "pending", "profile_or_current_source_changed_during_login"}, errors.New("reviewed model profile changed during official login; reconcile actual authentication")
 	}
-	return InspectModelProfile(ctx, o)
+	return inspect(ctx, o)
 }
 
 func validateModelSelection(s ModelRegistrationSelection) error {

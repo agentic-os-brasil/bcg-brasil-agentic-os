@@ -210,6 +210,7 @@ try {
     'TestCurrentMaintenancePreservesQualifiedRoleAndReleaseArguments',
     'TestDirectInnerInstallRequiresProductionAuthority',
     'TestExplicitNativeRetryUsesFreshReviewedSlotsAndPreservesFailedCandidate',
+    'TestForegroundProfilePreparationAndLoginRequireSeparateConfirmation',
     'TestFullNativeClientMaterializationHasNoResourceOnlyFallback',
     'TestInitialRuntimeOlderUnboundConsumerRemainsExplicitlyPending',
     'TestInterruptedVersionedDesktopReuseRequiresAuthenticatedPriorBinding',

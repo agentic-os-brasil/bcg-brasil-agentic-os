@@ -30,6 +30,14 @@ reader identity. Never read owner files as a fallback. Unavailable/unconfirmed
 context uses standard communication and preserves the owner's current task.
 Follow the onboarding route only when the owner chooses to begin or resume it.
 
+## Independent agent execution in product MCP
+
+For a real independent draft/review through the admitted MCP in Desktop or Code,
+follow [foreground agents](resources/foreground-agents.md). That route measures
+the dedicated profile and reviews each bounded native call before execution.
+Code host Agent/Task remains a separate supported route; loading a role document
+or updating an execution ledger does not execute an agent.
+
 ## SharePoint source choice in product MCP
 
 For an explicit request to configure this workspace's SharePoint folders, query

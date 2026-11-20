@@ -53,13 +53,14 @@ func TestCanonicalAgentResourceDiscovery(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("canonical agent resources: got %d %v; want %d %v", len(got), got, len(want), want)
 	}
-	if methodResources != 253 {
+	if methodResources != 254 {
 		t.Fatalf("method assets lost: %d resources", methodResources)
 	}
 	for _, uri := range []string{
 		"maestro://methods/account-case-setup/resources/account-narrative-mcp.md",
 		"maestro://methods/interaction-profile/resources/self-observation.md",
 		"maestro://methods/maestro-operator/resources/daily-zip.md",
+		"maestro://methods/maestro-operator/resources/foreground-agents.md",
 	} {
 		if !methodURIs[uri] {
 			t.Fatalf("canonical skill resource is missing: %s", uri)
