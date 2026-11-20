@@ -88,6 +88,35 @@ jobs:
         if: inputs.mode != 'assemble'
         shell: pwsh
         run: |
+          $maestroNetworkHostFacts = [ordered]@{diagnostic='windows_network_host_facts'; BFE='unavailable'; MpsSvc='unavailable'; firewall_domain_enabled='unavailable'; firewall_private_enabled='unavailable'; firewall_public_enabled='unavailable'; loopback_exemption_count='unavailable'}
+          foreach ($maestroServiceName in @('BFE','MpsSvc')) {
+            try {
+              $maestroServiceStatus = [string](Get-Service -Name $maestroServiceName -ErrorAction Stop).Status
+              if ($maestroServiceStatus -cin @('Running','Stopped','StartPending','StopPending','ContinuePending','PausePending','Paused')) { $maestroNetworkHostFacts[$maestroServiceName] = $maestroServiceStatus }
+            } catch {}
+          }
+          foreach ($maestroFirewallName in @('Domain','Private','Public')) {
+            try {
+              $maestroFirewallEnabled = [string](Get-NetFirewallProfile -Name $maestroFirewallName -PolicyStore ActiveStore -ErrorAction Stop).Enabled
+              if ($maestroFirewallEnabled -cin @('True','False')) { $maestroNetworkHostFacts['firewall_' + $maestroFirewallName.ToLowerInvariant() + '_enabled'] = $maestroFirewallEnabled -ceq 'True' }
+            } catch {}
+          }
+          # A read-only utility must not replace the original proof's native exit state.
+          $maestroPreviousExitVariable = Get-Variable -Name LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue
+          $maestroPreviousExitValue = if ($null -ne $maestroPreviousExitVariable) { $maestroPreviousExitVariable.Value } else { $null }
+          try {
+            $maestroLoopbackOutput = @(& (Join-Path $env:SystemRoot 'System32/CheckNetIsolation.exe') LoopbackExempt -s 2>$null)
+            if ($LASTEXITCODE -eq 0) {
+              $maestroLoopbackText = $maestroLoopbackOutput -join "`n"
+              $maestroLoopbackList = [regex]::Match($maestroLoopbackText, '\A\s*List[ \t]+Loopback[ \t]+Exempted[ \t]+AppContainers[ \t]*\r?\n(?:\s*\[[1-9][0-9]*\][ \t]*-+[ \t]*\r?\n[ \t]*Name:[ \t]*[^\r\n]*\r?\n[ \t]*SID:[ \t]*(?<sid>S-1-15-2(?:-[0-9]+)+)[ \t]*\r?\n)*\s*OK\.\s*\z')
+              if ($maestroLoopbackList.Success) {
+                $maestroNetworkHostFacts.loopback_exemption_count = $maestroLoopbackList.Groups['sid'].Captures.Count
+              }
+            }
+          } catch {} finally {
+            if ($null -ne $maestroPreviousExitVariable) { $global:LASTEXITCODE = $maestroPreviousExitValue } else { Remove-Variable -Name LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue }
+          }
+          $maestroNetworkHostFacts | ConvertTo-Json -Compress
           $nativeStarted = Get-Date
           try {
             ./acceptance/windows-core-pilot.ps1 -DoclingManifest $env:MAESTRO_WINDOWS_DOCLING_MANIFEST -OutputRoot (Join-Path $env:RUNNER_TEMP 'docling-native-proof')
