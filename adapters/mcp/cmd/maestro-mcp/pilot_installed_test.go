@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -232,5 +234,75 @@ func TestInstalledPilotSDKReadsWithoutStartingMaintenanceOrWritingOwnerFiles(t *
 	}
 	if len(r.Checks) < 3 || r.Checks[0].Reason != "current_in_process_sdk_context_verified_not_host_loading" {
 		t.Fatalf("incorrect SDK evidence: %#v", r.Checks)
+	}
+}
+
+func TestInstalledPilotCodeExecutableUsesNativeHostContract(t *testing.T) {
+	root := t.TempDir()
+	// A bounded Mach-O executable header is sufficient for read-only identity;
+	// none of these synthetic files is ever executed.
+	header := make([]byte, 32)
+	for i, value := range []uint32{0xfeedfacf, 0x0100000c, 0, 2} {
+		binary.LittleEndian.PutUint32(header[i*4:], value)
+	}
+	write := func(name string, body []byte) string {
+		t.Helper()
+		path := filepath.Join(root, name)
+		if err := os.WriteFile(path, body, 0700); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	regular := write("native-regular", header)
+	native := write("native", header)
+	linked := filepath.Join(root, "native-hardlink")
+	if err := os.Link(native, linked); err != nil {
+		t.Fatal(err)
+	}
+	large := write("native-large", header)
+	if err := os.Truncate(large, (128<<20)+1); err != nil {
+		t.Fatal(err)
+	}
+	invalid := write("invalid", []byte("not an executable"))
+	for _, tc := range []struct {
+		name, path string
+		matches    bool
+	}{
+		{"regular host", regular, true},
+		{"hardlinked host", linked, true},
+		{"host above packet limit", large, true},
+		{"invalid native format", invalid, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			file, err := os.Open(tc.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hash := sha256.New()
+			_, copyErr := io.Copy(hash, file)
+			closeErr := file.Close()
+			if copyErr != nil || closeErr != nil {
+				t.Fatal(copyErr, closeErr)
+			}
+			code := installer.CodeObservation{Executable: tc.path, ExecutableSHA256: fmt.Sprintf("%x", hash.Sum(nil))}
+			if got := installedCodeExecutableMatches(code); got != tc.matches {
+				t.Fatalf("installed diagnostic identity match = %v, want %v", got, tc.matches)
+			}
+			changed, err := os.OpenFile(tc.path, os.O_WRONLY|os.O_APPEND, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, writeErr := changed.Write([]byte("changed"))
+			closeErr = changed.Close()
+			if writeErr != nil || closeErr != nil {
+				t.Fatal(writeErr, closeErr)
+			}
+			if installedCodeExecutableMatches(code) {
+				t.Fatal("changed executable bytes were admitted")
+			}
+		})
+	}
+	if installedCodeExecutableMatches(installer.CodeObservation{Executable: filepath.Join(root, "missing"), ExecutableSHA256: strings.Repeat("a", 64)}) {
+		t.Fatal("missing executable was admitted")
 	}
 }
