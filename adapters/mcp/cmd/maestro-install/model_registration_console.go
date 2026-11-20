@@ -44,41 +44,8 @@ func manageClientModelRegistration(ctx context.Context, o installer.ClientOption
 			return err
 		}
 	}
-	profile, err := setup.ReviewModelProfile(ctx, o)
-	if err != nil {
+	if err := prepareClientModelProfile(ctx, o, prompt, confirm, output, false); err != nil {
 		return err
-	}
-	if !profile.Prepared {
-		if err = confirm(profile); err != nil {
-			return err
-		}
-		prepared, err := setup.ApplyModelProfile(ctx, o, profile, profile.Digest, true)
-		if err != nil {
-			return err
-		}
-		if err = json.NewEncoder(output).Encode(prepared); err != nil {
-			return err
-		}
-	}
-	status, err := setup.InspectModelProfile(ctx, o)
-	if err != nil {
-		return err
-	}
-	if status.Authentication != "authenticated" {
-		login, err := setup.ReviewModelProfileLogin(ctx, o)
-		if err != nil {
-			return err
-		}
-		if err = confirm(login); err != nil {
-			return err
-		}
-		status, err = setup.LoginModelProfile(ctx, o, login, login.Digest, true)
-		if err != nil {
-			return err
-		}
-		if status.Authentication != "authenticated" {
-			return setup.ErrModelProfileLoginRequired
-		}
 	}
 	review, err := setup.ReviewModelRegistration(ctx, o, selection)
 	if err != nil {
@@ -202,4 +169,60 @@ func selectModelOwnerPolicy(ctx context.Context, o installer.ClientOptions, prom
 		return policy, errors.New("accepted owner context or history label changed; repeat the policy selection")
 	}
 	return policy, nil
+}
+
+// Only profile preparation/login is shared. Foreground calls and maintenance
+// registration retain their separate exact owner reviews and effect owners.
+func prepareClientModelProfile(ctx context.Context, o installer.ClientOptions, prompt func(string) (string, error), confirm func(any) error, output io.Writer, foreground bool) error {
+	reviewProfile, applyProfile, inspectProfile := setup.ReviewModelProfile, setup.ApplyModelProfile, setup.InspectModelProfile
+	reviewLogin, loginProfile := setup.ReviewModelProfileLogin, setup.LoginModelProfile
+	if foreground {
+		reviewProfile, applyProfile, inspectProfile = setup.ReviewForegroundProfile, setup.ApplyForegroundProfile, setup.InspectForegroundProfile
+		reviewLogin, loginProfile = setup.ReviewForegroundProfileLogin, setup.LoginForegroundProfile
+	}
+	profile, err := reviewProfile(ctx, o)
+	if err != nil {
+		return err
+	}
+	if !profile.Prepared {
+		if err = confirm(profile); err != nil {
+			return err
+		}
+		prepared, err := applyProfile(ctx, o, profile, profile.Digest, true)
+		if err != nil {
+			return err
+		}
+		if err = json.NewEncoder(output).Encode(prepared); err != nil {
+			return err
+		}
+	}
+	status, err := inspectProfile(ctx, o)
+	if err != nil {
+		return err
+	}
+	if status.Authentication != "authenticated" {
+		login, err := reviewLogin(ctx, o)
+		if err != nil {
+			return err
+		}
+		if err = confirm(login); err != nil {
+			return err
+		}
+		status, err = loginProfile(ctx, o, login, login.Digest, true)
+		if err != nil {
+			return err
+		}
+		if status.Authentication != "authenticated" {
+			return setup.ErrModelProfileLoginRequired
+		}
+	}
+
+	return nil
+}
+func manageClientForegroundProfile(ctx context.Context, o installer.ClientOptions, prompt func(string) (string, error), confirm func(any) error, output io.Writer) error {
+	if err := prepareClientModelProfile(ctx, o, prompt, confirm, output, true); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintln(output, "Foreground profile prepared and authenticated. Ask Maestro for agents.status, then announce and request one agents.run with an active role, selected context and explicit provider/model. Each call requires its own review, uses no tools and grants no scheduled work.")
+	return err
 }

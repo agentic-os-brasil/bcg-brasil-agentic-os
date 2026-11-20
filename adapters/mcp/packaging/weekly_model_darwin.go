@@ -210,6 +210,7 @@ func runWeeklyModelProcess(ctx context.Context, spec weeklyModelProcess) ([]byte
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	foregroundStartedAfter := time.Now().Add(-time.Second)
 	if err := cmd.Start(); err != nil {
 		return nil, errors.New("weekly CLI child start failed")
 	}
@@ -240,14 +241,42 @@ func runWeeklyModelProcess(ctx context.Context, spec weeklyModelProcess) ([]byte
 			}
 		}
 	}
+	if runErr == nil && spec.foreground != nil {
+		child, e := spec.foreground.identity.ObserveChild(ctx, cmd.Process, os.Getpid(), foregroundStartedAfter)
+		runErr = e
+		if runErr == nil {
+			spec.foreground.childSHA256 = child.Digest()
+			spec.foreground.reobserveChild = func(c context.Context) error {
+				current, e := spec.foreground.identity.ObserveChild(c, cmd.Process, os.Getpid(), foregroundStartedAfter)
+				if e != nil {
+					return e
+				}
+				if !current.Same(child) {
+					return errors.New("foreground_native_child_changed")
+				}
+				return nil
+			}
+		}
+	}
 	if runErr == nil && spec.native != nil {
 		runErr = spec.native.check(ctx)
+	}
+	if runErr == nil {
+		runErr = spec.checkForeground(ctx)
 	}
 	if runErr == nil {
 		// Registration failure never sends the quoted private input to the child.
 		inputDone = make(chan error, 1)
 		go func() {
-			write := func() error { _, err := inputWrite.Write(spec.Input); return errors.Join(err, inputWrite.Close()) }
+			write := func() error {
+				if spec.foreground != nil {
+					if e := spec.foreground.beforeInput(ctx, spec.Input); e != nil {
+						return e
+					}
+				}
+				_, err := inputWrite.Write(spec.Input)
+				return errors.Join(err, inputWrite.Close())
+			}
 			var err error
 			if spec.native != nil {
 				err = spec.native.session.WriteInput(ctx, actual, write)
@@ -269,6 +298,12 @@ func runWeeklyModelProcess(ctx context.Context, spec weeklyModelProcess) ([]byte
 			inputDone = nil
 			runErr = err
 		default:
+		}
+		if inputJoined {
+			if e := spec.checkForeground(ctx); e != nil {
+				runErr = e
+				break
+			}
 		}
 		if inputJoined && spec.native != nil {
 			if err := spec.native.check(ctx); err != nil {

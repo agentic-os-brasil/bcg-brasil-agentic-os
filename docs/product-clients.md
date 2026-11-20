@@ -300,3 +300,12 @@ installation plus update/readback with two participants. Use the selected shared
 distribution destination and choose each participant's local synchronized folder
 at first setup. Keep actual client/device/CI/signing/publication
 and participant results separate from source review and local integration.
+
+## Independent foreground agents
+
+Use the participant console action `foreground-profile` to prepare and officially
+authenticate the separate private native profile. Then ask Maestro for a real
+independent draft/review through `agents.status` and `agents.run`, following
+the [foreground agent guide](product-foreground-agents.md). Each bounded model
+call receives its own exact owner review. Canonical filesystem changes retain
+their separate review; no maintenance grant or Desktop native hooks are implied.
