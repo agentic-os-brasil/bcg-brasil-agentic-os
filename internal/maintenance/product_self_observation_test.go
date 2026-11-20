@@ -122,7 +122,7 @@ func TestProductSelfObservationSharedOwnerConcurrentWakeAndRevoke(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			queueSelfDeclaration(t, s, "prefer.concurrent")
+			queued := queueSelfDeclaration(t, s, "prefer.concurrent")
 			beforeSource, err := ownerctx.InspectSelfObservationSource(filepath.Join(s.home, "brain"), s.now())
 			if err != nil {
 				t.Fatal(err)
@@ -171,11 +171,13 @@ func TestProductSelfObservationSharedOwnerConcurrentWakeAndRevoke(t *testing.T) 
 			if err != nil || len(observations) < 1 || len(observations) > 2 {
 				t.Fatalf("owner concurrent capture count: %#v %v reports=%#v", observations, err, evidence)
 			}
-			successes := 0
+			// A later wake may replay the exact stored terminal receipt without
+			// executing again. Count distinct full receipts, not response copies.
+			successes := map[Receipt]bool{}
 			for _, result := range evidence {
 				for _, receipt := range result.report.Receipts {
 					if receipt.State == ReceiptSucceeded {
-						successes++
+						successes[receipt] = true
 					}
 				}
 			}
@@ -192,7 +194,7 @@ func TestProductSelfObservationSharedOwnerConcurrentWakeAndRevoke(t *testing.T) 
 				if err != nil || !reflect.DeepEqual(beforeSource, afterSource) || !reflect.DeepEqual(beforeCanonical, observations) {
 					t.Fatal("dual refusal changed authoritative owner source", err)
 				}
-				if successes != 0 {
+				if len(successes) != 0 {
 					t.Fatal("concurrent wake claimed success without canonical capture", evidence)
 				}
 				recovered, err := s.RunDue(context.Background())
@@ -210,13 +212,58 @@ func TestProductSelfObservationSharedOwnerConcurrentWakeAndRevoke(t *testing.T) 
 						}
 					}
 				}
+				successes[recovered.Receipts[0]] = true
 				t.Log("one ordinary wake recovered the same contended owner occurrence")
 				observations, err = ownerctx.ListObservations(filepath.Join(s.home, "brain"))
-			} else if successes != 1 {
+			}
+			if len(successes) != 1 {
 				t.Fatal("concurrent capture lacks exactly one truthful successful receipt", evidence)
 			}
 			if err != nil || len(observations) != 2 {
 				t.Fatalf("owner occurrence did not commit exactly once: %#v %v", observations, err)
+			}
+			owner := s.selfObservationService()
+			var succeeded Receipt
+			for receipt := range successes {
+				succeeded = receipt
+			}
+			durable, err := owner.receipts.Receipts(owner.workspaceID, SelfObservationCaptureJobID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			committed := 0
+			for _, receipt := range durable {
+				if receipt.OccurrenceDigest == succeeded.OccurrenceDigest && receipt.State == ReceiptSucceeded {
+					committed++
+					if receipt != succeeded {
+						t.Fatal("successful response differs from the original durable receipt", receipt, succeeded)
+					}
+				}
+			}
+			calendar, err := owner.scheduler.Receipts(owner.workspaceID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			calendarCommitted := 0
+			for _, receipt := range calendar {
+				occurrence := (Command{JobID: receipt.JobID, Trigger: TriggerPresence, ScheduledFor: receipt.ScheduledFor}).OccurrenceDigest()
+				if occurrence == succeeded.OccurrenceDigest && receipt.State == scheduler.Succeeded {
+					calendarCommitted++
+					if !receipt.AttemptedAt.Equal(succeeded.RecordedAt) {
+						t.Fatal("calendar completion belongs to a different attempt", receipt, succeeded)
+					}
+				}
+			}
+			if committed != 1 || calendarCommitted != 1 {
+				t.Fatalf("owner occurrence has distinct completions: command=%d calendar=%d", committed, calendarCommitted)
+			}
+			captured, err := ownerctx.GetObservation(filepath.Join(s.home, "brain"), queued.ObservationID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			capture, _, err := owner.readSelfObservationReport("")
+			if err != nil || !reflect.DeepEqual(capture.Observations, []selfObservationVersion{{queued.ID, queued.ObservationID, captured.Revision}}) {
+				t.Fatal("completion does not read back the exact reviewed canonical version", capture, err)
 			}
 			if _, err := other.RunDue(context.Background()); err != nil {
 				t.Fatal(err)
