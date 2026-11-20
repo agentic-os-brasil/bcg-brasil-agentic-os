@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -26,13 +27,24 @@ func TestCaptureSignalsActualCodePacketAndMCP(t *testing.T) {
 		Hooks map[string][]struct {
 			Hooks []struct {
 				Command string `json:"command"`
+				Shell   string `json:"shell"`
 			} `json:"hooks"`
 		} `json:"hooks"`
 	}
 	if err = json.Unmarshal(hookBody, &hooks); err != nil {
 		t.Fatal(err)
 	}
-	stop := exec.Command("/bin/bash", "-c", hooks.Hooks["Stop"][0].Hooks[0].Command)
+	stopHook := hooks.Hooks["Stop"][0].Hooks[0]
+	var stop *exec.Cmd
+	if runtime.GOOS == "windows" {
+		if stopHook.Shell != "powershell" {
+			t.Fatal("emitted Windows Stop did not select its native PowerShell shell")
+		}
+		shell := filepath.Join(os.Getenv("SystemRoot"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+		stop = exec.Command(shell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", stopHook.Command)
+	} else {
+		stop = exec.Command("/bin/bash", "-c", stopHook.Command)
+	}
 	stop.Dir = f.options.WorkspacePath
 	for _, value := range os.Environ() {
 		if !strings.HasPrefix(value, "CLAUDE_PLUGIN_ROOT=") {

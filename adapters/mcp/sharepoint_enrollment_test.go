@@ -77,7 +77,14 @@ func assertSharePointEnrollmentJourney(t *testing.T, stdio bool) {
 	}
 	allow = true
 	selected := contentCall(t, cs, "maestro_apply", input, false)
-	for _, needle := range []string{"https://example.sharepoint.com/sites/project/Documents/Exact", "prior_work_retrieval", "workspace_id", root, "current", "proposed"} {
+	var shown struct {
+		Destination string `json:"destination"`
+	}
+	start := strings.Index(presentation, "{")
+	if start < 0 || json.Unmarshal([]byte(presentation[start:]), &shown) != nil || shown.Destination != root {
+		t.Fatal("full review missing exact destination", root)
+	}
+	for _, needle := range []string{"https://example.sharepoint.com/sites/project/Documents/Exact", "prior_work_retrieval", "workspace_id", "current", "proposed"} {
 		if !strings.Contains(presentation, needle) {
 			t.Fatal("full review missing", needle)
 		}
