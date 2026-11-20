@@ -42,6 +42,25 @@ jobs:
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: adapters/mcp/go.mod
+      - name: Verify the Mac shared-source frontend protocol
+        working-directory: .
+        shell: bash
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          evidence="$RUNNER_TEMP/maestro-mac-source-frontend.jsonl"
+          if ! go test ./dev/pilot/installed-seed-factory -run '^TestMacSelfServicePreparesExactOwnerClientsAndPreservesProfile$' -count=1 -json -timeout=180s > "$evidence"; then
+            cat "$evidence"
+            exit 1
+          fi
+          cat "$evidence"
+          python3 - "$evidence" <<'PYTHON'
+          import json, pathlib, sys
+          events = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+          parent = "TestMacSelfServicePreparesExactOwnerClientsAndPreservesProfile"
+          assert sum(e.get("Action") == "pass" and e.get("Test") == parent for e in events) == 1, "exact Mac frontend parent must pass once"
+          assert not any(e.get("Action") in ("skip", "fail") for e in events), "Mac frontend proof skipped or failed"
+          PYTHON
       - name: Build one generic engineering ZIP with the existing constructor
         shell: bash
         env:
@@ -84,6 +103,20 @@ jobs:
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: adapters/mcp/go.mod
+      - name: Verify the Windows PowerShell 5.1 shared-source frontend protocol
+        working-directory: .
+        shell: pwsh
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          $evidence = Join-Path $env:RUNNER_TEMP 'maestro-windows-source-frontend.jsonl'
+          go test ./dev/pilot/installed-seed-factory -run '^TestWindowsSelfServiceExactOwnerAndSelectedProfile$' -count=1 -json -timeout=180s | Tee-Object -FilePath $evidence
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $events = @(Get-Content -LiteralPath $evidence | ForEach-Object { $_ | ConvertFrom-Json })
+          $parent = 'TestWindowsSelfServiceExactOwnerAndSelectedProfile'
+          $passed = @($events | Where-Object { $_.Action -ceq 'pass' -and $_.Test -ceq $parent })
+          $invalid = @($events | Where-Object { $_.Action -in @('skip','fail') })
+          if ($passed.Count -ne 1 -or $invalid.Count -ne 0) { throw 'Exact Windows frontend parent must pass once with no skips or failures' }
       - name: Download the immutable generic ZIP from this producing run
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:

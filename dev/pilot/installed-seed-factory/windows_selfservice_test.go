@@ -1,9 +1,14 @@
 package main
 
 import (
+	"encoding/json"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -11,8 +16,25 @@ import (
 // launcher, installer, Claude, login or GUI. Native Windows ACL checks remain
 // separately qualified; only directory creation is substituted on other hosts.
 func TestWindowsSelfServiceExactOwnerAndSelectedProfile(t *testing.T) {
-	pwsh, err := exec.LookPath("pwsh")
+	shell := "pwsh"
+	var powerShellEnvironment []string
+	if runtime.GOOS == "windows" {
+		shell = "powershell.exe"
+		// Match Maestro.cmd: Windows PowerShell must build its own module path,
+		// rather than inherit the hosting PowerShell process's module selection.
+		powerShellEnvironment = make([]string, 0)
+		for _, entry := range os.Environ() {
+			name, _, _ := strings.Cut(entry, "=")
+			if !strings.EqualFold(name, "PSModulePath") {
+				powerShellEnvironment = append(powerShellEnvironment, entry)
+			}
+		}
+	}
+	powerShell, err := exec.LookPath(shell)
 	if err != nil {
+		if runtime.GOOS == "windows" {
+			t.Fatalf("shipped Windows PowerShell 5.1 is required: %v", err)
+		}
 		t.Skip("PowerShell required for shipped Windows producer behavior")
 	}
 	root := developerFixture(t)
@@ -24,7 +46,29 @@ func TestWindowsSelfServiceExactOwnerAndSelectedProfile(t *testing.T) {
 	if err := os.WriteFile(script, []byte(windowsSelfServiceBehavior), 0600); err != nil {
 		t.Fatal(err)
 	}
-	command := exec.Command(pwsh, "-NoProfile", "-NonInteractive", "-File", script, "-Source", filepath.Join(repo, "dev/pilot/templates/installed-seed/Maestro.ps1"), "-Fixture", root)
+	if runtime.GOOS == "windows" {
+		// Match atlasTestDataRoot: repair only the new synthetic Developer,
+		// whose default owner can be Administrators on elevated hosted runners.
+		prepare := exec.Command(powerShell, "-NoProfile", "-NonInteractive", "-File", script, "-Fixture", root, "-PrepareFixture")
+		prepare.Env = powerShellEnvironment
+		if output, err := prepare.CombinedOutput(); err != nil {
+			t.Fatalf("initialize synthetic Windows fixture ownership: %s\n%v", output, err)
+		}
+	}
+	// Preserve the original private-state writer and its native custody checks.
+	stateParent := filepath.Join(root, "source selection", "owner", ".maestro-install", "config")
+	if err := scheduler.EnsurePrivateDirectory(stateParent); err != nil {
+		t.Fatal(err)
+	}
+	stateBody, err := json.Marshal(installtx.State{SchemaVersion: 4, ManagedRoot: filepath.Join(root, "source selection", "product")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := scheduler.WriteNewPrivateFile(filepath.Join(stateParent, "install-state.json"), stateBody); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command(powerShell, "-NoProfile", "-NonInteractive", "-File", script, "-Source", filepath.Join(repo, "dev/pilot/templates/installed-seed/Maestro.ps1"), "-Fixture", root)
+	command.Env = powerShellEnvironment
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("shipped Windows helper behavior: %s\n%v", output, err)
@@ -32,14 +76,28 @@ func TestWindowsSelfServiceExactOwnerAndSelectedProfile(t *testing.T) {
 	t.Log(string(output))
 }
 
-const windowsSelfServiceBehavior = `param([string]$Source,[string]$Fixture)
+const windowsSelfServiceBehavior = `param([string]$Source,[string]$Fixture,[switch]$PrepareFixture)
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
+if([Environment]::OSVersion.Platform -eq 'Win32NT' -and ($PSVersionTable.PSEdition -cne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1)){throw 'Shipped frontend requires Windows PowerShell Desktop 5.1'}
+if($PrepareFixture){
+  if([Environment]::OSVersion.Platform -ne 'Win32NT'){throw 'Native Windows fixture preparation required'}
+  $directory=Get-Item -LiteralPath $Fixture -Force
+  if(-not $directory.PSIsContainer -or $directory.Name -cne 'Developer' -or ($directory.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw 'Expected fresh synthetic Developer directory'}
+  $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User
+  $acl=New-Object Security.AccessControl.DirectorySecurity
+  $acl.SetSecurityDescriptorSddlForm(('O:{0}D:P(A;OICI;FA;;;{0})(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)' -f $sid.Value))
+  Set-Acl -LiteralPath $Fixture -AclObject $acl
+  $observed=Get-Acl -LiteralPath $Fixture
+  if($observed.GetOwner([Security.Principal.SecurityIdentifier]).Value -cne $sid.Value -or -not $observed.AreAccessRulesProtected){throw 'Synthetic fixture did not retain current-SID owner and protected DACL'}
+  return
+}
+Write-Output ('Frontend protocol shell: {0} {1}; synthetic installer stubs, not installation/client proof' -f $PSVersionTable.PSEdition,$PSVersionTable.PSVersion)
 $Utf8=New-Object System.Text.UTF8Encoding($false)
 $tokens=$null; $errors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile($Source,[ref]$tokens,[ref]$errors)
 if($errors.Count -ne 0){throw 'Shipped PowerShell script does not parse'}
-foreach($name in @('Private-File','Resolve-CodeExecutable','Private-SelectionPath','Require-Disjoint','Prepare-ClientParent','Prepare-CodeConfiguration','Invoke-SelectedCode','Invoke-Management','Ensure-CodeLogin')){
+foreach($name in @('Write-Json','Confirm-Review','Private-File','Resolve-CodeExecutable','Private-SelectionPath','Require-Disjoint','Prepare-ClientParent','Prepare-CodeConfiguration','Invoke-SelectedCode','Invoke-Management','Ensure-CodeLogin')){
   $node=$ast.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq $name},$true)
   if($null -eq $node){throw "Missing shipped helper: $name"}
   Invoke-Expression $node.Extent.Text
@@ -146,5 +204,101 @@ try{
   Invoke-Management -Extra @('--management-intent','update')
   if($script:ManagementExit -ne 9 -or $env:CLAUDE_CONFIG_DIR -cne 'caller-profile'){throw 'Manager exit or caller environment was lost'}
 }finally{if($had){$env:CLAUDE_CONFIG_DIR=$prior}else{Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue}}
+
+# Execute the original source-enrollment producer against a bounded synthetic owner.
+$text=[IO.File]::ReadAllText($Source)
+$start=$text.IndexOf('  $before = Current-Clients')
+$end=$text.IndexOf('  $ClientStatus = Current-Clients',$start)
+if($start -lt 0 -or $end -lt 0){throw 'Missing shipped source enrollment boundary'}
+$sourceProducer=$text.Substring($start,$end-$start)
+$sourceFixture=Join-Path $Fixture 'source selection'
+$sourceOwner=Join-Path $sourceFixture 'owner';$Product=Join-Path $sourceFixture 'product';$Root=Join-Path $sourceFixture 'kit';$Run=Join-Path $sourceFixture 'run'
+$ExpectedSource=Join-Path $sourceFixture 'hydrated team source';$stateParent=Join-Path $sourceOwner '.maestro-install/config'
+foreach($p in @($sourceOwner,$Product,$Root,$Run,$ExpectedSource,$stateParent)){[IO.Directory]::CreateDirectory($p)|Out-Null}
+$statePath=Join-Path $stateParent 'install-state.json'
+$freshState=[IO.File]::ReadAllText($statePath)
+$Config=[PSCustomObject]@{user_home=$sourceOwner;source_root=(Join-Path $Root 'source')}
+$Meta=[PSCustomObject]@{identity=[PSCustomObject]@{source=[PSCustomObject]@{source_id='team';channel='canary';os='windows';arch='amd64'}}}
+$CheckOnly=$false
+$script:SourceReviewCount=0;$script:CheckedSource=$null
+function Current-Clients { [PSCustomObject]@{state='pending'} }
+function Invoke-Management { $script:ManagementExit=0 }
+function Invoke-Installer([string]$Command,$Request,[string[]]$Extra=@()) {
+  if($Command -ceq 'source-review'){
+    $script:SourceReviewCount++
+    $script:SourceRequest=$Request
+    $recorded=[IO.File]::ReadAllText($statePath)|ConvertFrom-Json
+    if($recorded.schema_version -ne 4 -or $recorded.managed_root -cne $Product){throw 'Original owner rejects state'}
+    if($Request.ContainsKey('source_root')){
+      if($Request.source.source_id -cne 'team'){throw 'Reviewed team tuple changed'}
+      $selected=$Request.source_root
+    }else{
+      $selected=$recorded.source_control.locator
+    }
+    if($selected -cne $script:ExpectedSource){throw ('Source choice ignored: '+$selected)}
+    $script:ReviewedRequest=$Request|ConvertTo-Json -Depth 16 -Compress
+    return [PSCustomObject]@{digest='exact-review'}
+  }
+  if($Command -ceq 'source-check'){
+    $script:SourceCheckCount++
+    if($Extra -notcontains 'exact-review' -or $Extra -notcontains '--confirm' -or ($Request|ConvertTo-Json -Depth 16 -Compress) -cne $script:ReviewedRequest){throw 'Source review/digest/confirmation lost'}
+    $script:CheckedSource=$script:ExpectedSource
+    $recorded=[IO.File]::ReadAllText($statePath)|ConvertFrom-Json
+    if($null -eq $recorded.PSObject.Properties['source_control']){
+      $recorded|Add-Member -NotePropertyName source_control -NotePropertyValue ([PSCustomObject]@{locator=$script:ExpectedSource;tuple=$Meta.identity.source})
+      [IO.File]::WriteAllText($statePath,($recorded|ConvertTo-Json -Depth 16),$Utf8)
+    }
+    if($script:SourceAdvanced){return [PSCustomObject]@{state='candidate_staged_activation_unconfirmed';plan_id='exact-plan'}}
+    return [PSCustomObject]@{state='current_signed_release'}
+  }
+  if($Command -ceq 'update-review'){return [PSCustomObject]@{plan_id='exact-plan'}}
+  if($Command -ceq 'update'){
+    if($Extra -notcontains 'exact-plan' -or $Extra -notcontains '--confirm'){throw 'Existing advanced-source review lost'}
+    $script:UpdateApplied=$true;return [PSCustomObject]@{state='activation_readback'}
+  }
+  throw ('Unexpected source owner command: '+$Command)
+}
+function Run-SourceAttempt([string]$Name,[string[]]$Inputs,[string]$Expected,[switch]$Advanced){
+  $script:Run=Join-Path $sourceFixture $Name;[IO.Directory]::CreateDirectory($script:Run)|Out-Null
+  $script:ExpectedSource=$Expected;$script:SourceAdvanced=$Advanced.IsPresent
+  $script:SourceReviewCount=0;$script:SourceCheckCount=0;$script:CheckedSource=$null;$script:UpdateApplied=$false
+  $script:Answers=New-Object 'Collections.Generic.Queue[string]'
+  foreach($answer in $Inputs){$script:Answers.Enqueue($answer)}
+  Invoke-Expression $sourceProducer
+  if($script:CheckedSource -cne $Expected -or $script:SourceReviewCount -ne 1 -or $script:SourceCheckCount -ne 1 -or $script:Answers.Count -ne 0){throw 'Source was not exactly reviewed/applied once'}
+}
+$shared=$ExpectedSource
+Run-SourceAttempt 'first' @($shared,'YES') $shared
+$boundBefore=[IO.File]::ReadAllText($statePath)
+Run-SourceAttempt 'rerun' @('YES') $shared
+if($script:SourceRequest.ContainsKey('source_root') -or $script:SourceRequest.ContainsKey('source') -or [IO.File]::ReadAllText($statePath) -cne $boundBefore){throw 'Rerun resubmitted stale source cache or rewrote custody'}
+foreach($scenario in @('local-test','decline','empty-choice','advanced-source','unknown-schema','wrong-schema-type','malformed','wrong-root','invalid-source')){
+  $body=$freshState
+  switch($scenario){
+    'unknown-schema'{$body='{"schema_version":99}'}
+    'wrong-schema-type'{$body=@{schema_version='4';managed_root=$Product}|ConvertTo-Json}
+    'malformed'{$body='{'}
+    'wrong-root'{$body='{"schema_version":4,"managed_root":"another-root"}'}
+    'invalid-source'{$body=@{schema_version=4;managed_root=$Product;source_control='invalid'}|ConvertTo-Json}
+  }
+  [IO.File]::WriteAllText($statePath,$body,$Utf8)
+  $failed=$false
+  try{
+    switch($scenario){
+      'local-test'{Run-SourceAttempt $scenario @('TESTE-LOCAL','YES') (Join-Path $Root 'source')}
+      'decline'{Run-SourceAttempt $scenario @($shared,'') $shared}
+      'empty-choice'{Run-SourceAttempt $scenario @('') $shared}
+      'advanced-source'{Run-SourceAttempt $scenario @($shared,'YES','YES') $shared -Advanced}
+      default{Run-SourceAttempt $scenario @() $shared}
+    }
+  }catch{$failed=$true}
+  $success=$scenario -in @('local-test','advanced-source')
+  if($failed -eq $success){throw "Wrong source scenario outcome: $scenario"}
+  if($scenario -ceq 'advanced-source' -and -not $script:UpdateApplied){throw 'Advanced first source lost original reviewed activation'}
+  if(-not $success){
+    if($script:SourceCheckCount -ne 0 -or [IO.File]::ReadAllText($statePath) -cne $body){throw "Refusal changed source custody: $scenario"}
+    if($scenario -notin @('decline','empty-choice') -and $script:SourceReviewCount -ne 1){throw "Unknown state bypassed original owner diagnostic: $scenario"}
+  }
+}
 Write-Output 'PASS regular exe selection; exact owner clients; reserved-root and reparse preflight without child creation; explicit profile consent; existing settings preserved; selected child profile; forced official login recovery consent; original manager profile/path/update arguments; exit and caller environment restored'
 `

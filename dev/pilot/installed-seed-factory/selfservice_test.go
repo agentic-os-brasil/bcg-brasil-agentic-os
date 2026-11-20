@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"os"
 	"os/exec"
@@ -124,6 +125,181 @@ func TestMacSelfServicePreparesExactOwnerClientsAndPreservesProfile(t *testing.T
 	if out, err := run("resolve_code_executable \"$OWNER/loop-a\"", ""); err == nil {
 		t.Fatalf("symlink loop accepted %s", out)
 	}
+	t.Run("shared source enrollment", func(t *testing.T) {
+		fixture := filepath.Join(root, "shared-source")
+		owner := filepath.Join(fixture, "owner")
+		product := filepath.Join(fixture, "product")
+		kit := filepath.Join(fixture, "kit")
+		shared := filepath.Join(fixture, "hydrated team source")
+		run := filepath.Join(fixture, "run")
+		for _, path := range []string{filepath.Join(owner, ".maestro-install", "config"), product, filepath.Join(kit, "source"), shared, run} {
+			if err := os.MkdirAll(path, 0700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		state, _ := json.Marshal(installtx.State{SchemaVersion: 4, ManagedRoot: product})
+		if err := os.WriteFile(filepath.Join(owner, ".maestro-install/config/install-state.json"), state, 0600); err != nil {
+			t.Fatal(err)
+		}
+		meta := filepath.Join(fixture, "metadata.json")
+		if err := os.WriteFile(meta, []byte(`{"identity":{"source":{"source_id":"team","channel":"canary","os":"darwin","arch":"arm64"}}}`), 0600); err != nil {
+			t.Fatal(err)
+		}
+		producer := extract("current_clients=false", "# Current installer owns")
+		script := `set -euo pipefail
+umask 077
+fail(){ printf '%s' "$*" >&2; exit 1; }
+jget(){ /usr/bin/plutil -extract "$2" raw -o - "$1"; }
+COMMON=(--fixture)
+fixture_installer(){
+  case "$1" in
+    clients-status) printf '%s' '{"state":"pending"}';;
+    source-review)
+      cat > "$RUN/observed-request.json"
+      printf '%s\n' source-review >> "$RUN/commands"
+      [[ "$(jget "$STATE" schema_version)" == 4 && "$(jget "$STATE" managed_root)" == "$PRODUCT" ]] || { printf 'original owner rejects state' >&2; return 32; }
+      if selected="$(jget "$RUN/observed-request.json" source_root 2>/dev/null)"; then
+        [[ "$(jget "$RUN/observed-request.json" source.source_id)" == team ]] || return 33
+      else
+        selected="$(jget "$STATE" source_control.locator)" || return 34
+      fi
+      [[ "$selected" == "$EXPECTED_SOURCE" ]] || { printf 'source choice ignored: %s' "$selected" >&2; return 31; }
+      printf '%s' '{"digest":"exact-review"}';;
+    source-check)
+      cat > "$RUN/checked-request.json"
+      [[ "$2" == --review-digest && "$3" == exact-review && "$4" == --confirm ]] || return 35
+      /usr/bin/cmp -s "$RUN/observed-request.json" "$RUN/checked-request.json" || return 36
+      if ! /usr/bin/plutil -type source_control "$STATE" >/dev/null 2>&1; then
+        /usr/bin/plutil -insert source_control -dictionary "$STATE"
+        /usr/bin/plutil -insert source_control.locator -string "$EXPECTED_SOURCE" "$STATE"
+      fi
+      if [[ "$SOURCE_ADVANCED" == true ]]; then printf '%s' '{"state":"candidate_staged_activation_unconfirmed","plan_id":"exact-plan"}'; else printf '%s' '{"state":"current_signed_release"}'; fi;;
+    update-review) cat > "$RUN/update-reviewed.json"; printf '%s' '{"plan_id":"exact-plan"}';;
+    update) cat > "$RUN/update-applied.json"; [[ "$2" == --plan-id && "$3" == exact-plan && "$4" == --confirm ]] || return 37; printf '%s' '{"state":"activation_readback"}';;
+    *) return 93;;
+  esac
+}
+INSTALLED=fixture_installer
+manage(){ :; }
+` + extract("json() {", "# Resolve normal installer symlinks") + extract("review_confirm() {", "if [[ ! -e \"$INSTALLED\"") + producer
+		statePath := filepath.Join(owner, ".maestro-install/config/install-state.json")
+		attempt := func(directory, input, expected, advanced string) ([]byte, error) {
+			if err := os.MkdirAll(directory, 0700); err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.Command("/bin/bash", "-c", script)
+			cmd.Env = append(os.Environ(), "ROOT="+kit, "OWNER="+owner, "PRODUCT="+product, "RUN="+directory, "SHARED="+filepath.Join(kit, "source"), "EXPECTED_SOURCE="+expected, "META="+meta, "STATE="+statePath, "SOURCE_ADVANCED="+advanced)
+			cmd.Stdin = strings.NewReader(input)
+			return cmd.CombinedOutput()
+		}
+		out, err := attempt(run, shared+"\nYES\n", shared, "false")
+		if err != nil {
+			t.Fatalf("first source must honor external hydrated folder before review: %s %v", out, err)
+		}
+		var observed struct {
+			SourceRoot string `json:"source_root"`
+		}
+		body, err := os.ReadFile(filepath.Join(run, "checked-request.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(body, &observed); err != nil || observed.SourceRoot != shared {
+			t.Fatalf("wrong reviewed source %s %v", body, err)
+		}
+
+		boundBefore, _ := os.ReadFile(statePath)
+		rerun := filepath.Join(fixture, "rerun")
+		if out, err := attempt(rerun, "YES\n", shared, "false"); err != nil {
+			t.Fatalf("bound source must resume without a new choice: %s %v", out, err)
+		}
+		body, _ = os.ReadFile(filepath.Join(rerun, "observed-request.json"))
+		var request map[string]any
+		if err := json.Unmarshal(body, &request); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := request["source_root"]; ok {
+			t.Fatal("legacy cached path was resubmitted for bound source")
+		}
+		if _, ok := request["source"]; ok {
+			t.Fatal("bound source tuple was replaced by cached distribution metadata")
+		}
+		boundAfter, _ := os.ReadFile(statePath)
+		if string(boundBefore) != string(boundAfter) {
+			t.Fatal("rerun rewrote source custody")
+		}
+		commands, _ := os.ReadFile(filepath.Join(rerun, "commands"))
+		if string(commands) != "source-review\n" {
+			t.Fatalf("source review repeated: %s", commands)
+		}
+		for _, scenario := range []string{"local-test", "decline", "empty-choice", "advanced-source", "unknown-schema", "wrong-schema-type", "malformed", "wrong-root", "invalid-source"} {
+			t.Run(scenario, func(t *testing.T) {
+				body := state
+				if scenario == "unknown-schema" {
+					body = []byte(`{"schema_version":99}`)
+				}
+				if scenario == "wrong-schema-type" {
+					body, _ = json.Marshal(map[string]any{"schema_version": "4", "managed_root": product})
+				}
+				if scenario == "malformed" {
+					body = []byte(`{`)
+				}
+				if scenario == "wrong-root" {
+					body = []byte(`{"schema_version":4,"managed_root":"/another/product"}`)
+				}
+				if scenario == "invalid-source" {
+					body, _ = json.Marshal(map[string]any{"schema_version": 4, "managed_root": product, "source_control": "invalid"})
+				}
+				if err := os.WriteFile(statePath, body, 0600); err != nil {
+					t.Fatal(err)
+				}
+				dir := filepath.Join(fixture, scenario)
+				input, expected, advanced := shared+"\nYES\n", shared, "false"
+				if scenario == "local-test" {
+					input = "TESTE-LOCAL\nYES\n"
+					expected = filepath.Join(kit, "source")
+				}
+				if scenario == "decline" {
+					input = shared + "\n\n"
+				}
+				if scenario == "empty-choice" {
+					input = "\n"
+				}
+				if scenario == "advanced-source" {
+					input = shared + "\nYES\nYES\n"
+					advanced = "true"
+				}
+				if strings.HasPrefix(scenario, "unknown") || scenario == "wrong-schema-type" || scenario == "malformed" || scenario == "wrong-root" || scenario == "invalid-source" {
+					input = ""
+				}
+				out, err := attempt(dir, input, expected, advanced)
+				wantSuccess := scenario == "local-test" || scenario == "advanced-source"
+				if (err == nil) != wantSuccess {
+					t.Fatalf("source scenario %s: %s %v", scenario, out, err)
+				}
+				if scenario == "local-test" && !strings.Contains(string(out), "Ensaio local") {
+					t.Fatal("local sample was presented as a team source")
+				}
+				if scenario == "advanced-source" {
+					if _, err := os.Stat(filepath.Join(dir, "update-applied.json")); err != nil {
+						t.Fatal("advanced first source lost existing reviewed update flow")
+					}
+				}
+				if !wantSuccess {
+					after, _ := os.ReadFile(statePath)
+					if string(after) != string(body) {
+						t.Fatal("refusal rewrote state")
+					}
+					if _, err := os.Stat(filepath.Join(dir, "checked-request.json")); !os.IsNotExist(err) {
+						t.Fatal("refusal invoked source-check")
+					}
+					if strings.Contains(string(out), "Selecione a pasta SOURCE") && scenario != "decline" && scenario != "empty-choice" {
+						t.Fatal("unknown state was treated as unenrolled")
+					}
+				}
+			})
+		}
+	})
+
 }
 
 // The copied fixture is a synthetic identity-protocol process, not a native
