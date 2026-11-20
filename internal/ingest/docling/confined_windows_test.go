@@ -275,8 +275,28 @@ func TestWindowsConfinementChild(t *testing.T) {
 		t.Fatalf("outside read not denied: %v", err)
 	}
 	scratch := filepath.Join(os.Getenv("TMP"), "proof")
-	if err := os.WriteFile(scratch, []byte("synthetic"), 0600); err != nil {
-		t.Fatal(err)
+	scratchPath, scratchErr := windows.UTF16PtrFromString(scratch)
+	if scratchErr != nil {
+		t.Fatal(scratchErr)
+	}
+	// Test file permission through file APIs: failed Winsock initialization in
+	// Go 1.26 can leave os.File writes using an uninitialized network FD kind.
+	scratchFile, scratchErr := windows.CreateFile(scratchPath, windows.GENERIC_WRITE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil, windows.CREATE_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL, 0)
+	if scratchErr != nil {
+		t.Fatal(scratchErr)
+	}
+	scratchBody := []byte("synthetic")
+	var written uint32
+	writeErr := windows.WriteFile(scratchFile, scratchBody, &written, nil)
+	closeErr := windows.CloseHandle(scratchFile)
+	if writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	if written != uint32(len(scratchBody)) {
+		t.Fatalf("scratch file write incomplete: got %d bytes, want %d", written, len(scratchBody))
+	}
+	if closeErr != nil {
+		t.Fatal(closeErr)
 	}
 	if err := os.Remove(scratch); err != nil {
 		t.Fatal(err)
