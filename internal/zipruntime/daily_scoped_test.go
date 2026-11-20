@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -347,14 +349,29 @@ func TestDailyScopedReviewBudgetAndLegacyLargePage(t *testing.T) {
 	}
 }
 func TestDailyScopedAncestryAndLiveBindingGuard(t *testing.T) {
-	t.Run("renamed scope refuses writes", func(t *testing.T) {
+	t.Run("scope cannot redirect writes", func(t *testing.T) {
 		q, root := scopedQueue(t)
 		r, e := q.ReviewEnqueue(scopedCheckpoint(root, "bound"))
 		if e != nil {
 			t.Fatal(e)
 		}
+		beforeRename := dailySnapshot(t, root)
+		closedForRebind := false
 		if e = os.Rename(filepath.Join(root, "brain"), filepath.Join(root, "retained")); e != nil {
-			t.Fatal(e)
+			// Windows denies renaming this directory while the queue holds custody.
+			// Prove that refusal preserves the scope, then release custody explicitly
+			// so the old reviewed operation can be tested against a replacement path.
+			if runtime.GOOS != "windows" || !errors.Is(e, syscall.Errno(32)) {
+				t.Fatal(e)
+			}
+			if !reflect.DeepEqual(beforeRename, dailySnapshot(t, root)) {
+				t.Fatal("refused rename changed the held scope")
+			}
+			q.Close()
+			closedForRebind = true
+			if e = os.Rename(filepath.Join(root, "brain"), filepath.Join(root, "retained")); e != nil {
+				t.Fatal("scope remained unavailable after releasing custody", e)
+			}
 		}
 		if e = os.Mkdir(filepath.Join(root, "brain"), 0700); e != nil {
 			t.Fatal(e)
@@ -362,6 +379,9 @@ func TestDailyScopedAncestryAndLiveBindingGuard(t *testing.T) {
 		before := dailySnapshot(t, root)
 		if _, e = q.Enqueue(r, dailyGuard); e == nil {
 			t.Fatal("renamed scope admitted")
+		}
+		if closedForRebind && e.Error() != "daily_custody_closed" {
+			t.Fatal("released custody did not invalidate the reviewed operation", e)
 		}
 		if !reflect.DeepEqual(before, dailySnapshot(t, root)) {
 			t.Fatal("replacement scope changed")
