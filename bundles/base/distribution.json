@@ -1502,6 +1502,11 @@
       "role": "data"
     },
     {
+      "source": "bundles/base/skills/maestro-operator/resources/foreground-agents.md",
+      "path": "skills/maestro-operator/resources/foreground-agents.md",
+      "role": "data"
+    },
+    {
       "source": "bundles/base/skills/maestro-runtime-checkup/SKILL.md",
       "path": "skills/maestro-runtime-checkup/SKILL.md",
       "role": "data"

@@ -39,6 +39,8 @@ const (
 // Code's precedence/exclude glob engine. Both instruction alternatives and all
 // rules participate even when this particular prompt might not load them.
 type instructionSources struct {
+	home          string
+	lookupEnv     func(string) (string, bool)
 	files         map[string]string
 	active        map[string]bool
 	parsed        map[string]bool
@@ -49,6 +51,18 @@ type instructionSources struct {
 	syncDisabled  bool
 }
 
+func (s *instructionSources) lookupEnvironment(key string) (string, bool) {
+	if s.lookupEnv != nil {
+		return s.lookupEnv(key)
+	}
+	return os.LookupEnv(key)
+}
+func (s *instructionSources) userHomeDirectory() (string, error) {
+	if s.home != "" {
+		return s.home, nil
+	}
+	return os.UserHomeDir()
+}
 func newInstructionSources() *instructionSources {
 	return &instructionSources{files: map[string]string{}, active: map[string]bool{}, parsed: map[string]bool{}, settingsFiles: map[string]nativeSettingsScope{}, plugins: map[string]bool{}}
 }
@@ -125,7 +139,7 @@ func (s *instructionSources) file(path string, instruction bool, depth int) erro
 	defer delete(s.active, path)
 	for _, imported := range imports {
 		if strings.HasPrefix(imported, "~/") {
-			home, err := os.UserHomeDir()
+			home, err := s.userHomeDirectory()
 			if err != nil {
 				return sourceUnsupported("home_import")
 			}
@@ -229,14 +243,14 @@ func (s *instructionSources) environment() error {
 	// Unknown source-expanding controls refuse by presence. Do not fingerprint
 	// arbitrary CLAUDE/ANTHROPIC variables, which may contain credentials.
 	for _, key := range []string{"CLAUDE_CODE_PLUGIN_DIRS", "CLAUDE_CODE_DISABLE_CLAUDE_MDS", "CLAUDE_CODE_AUTO_MEMORY_PATH", "CLAUDE_CODE_AUTO_MEMORY_DIR"} {
-		if _, present := os.LookupEnv(key); present {
+		if _, present := s.lookupEnvironment(key); present {
 			return sourceUnsupported("environment_sources")
 		}
 	}
 	// Deliberate documented instruction/memory controls only, plus HOME for
 	// documented ~/ imports. Values never appear in the plan or diagnostics.
 	for _, key := range []string{"HOME", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_DISABLE_AUTO_MEMORY", "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"} {
-		value, present := os.LookupEnv(key)
+		value, present := s.lookupEnvironment(key)
 		if present && value != "" && key == "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD" {
 			return sourceUnsupported("environment_sources")
 		}
@@ -376,7 +390,7 @@ func (s *instructionSources) ancestry(directory string, settingsPolicy bool) err
 
 func (s *instructionSources) projectLocalRoot(directory string) (string, error) {
 	for _, key := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES", "GIT_DISCOVERY_ACROSS_FILESYSTEM", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS"} {
-		if value, present := os.LookupEnv(key); present && value != "" {
+		if value, present := s.lookupEnvironment(key); present && value != "" {
 			return "", sourceUnsupported("project_environment")
 		}
 	}
@@ -428,7 +442,7 @@ func (s *instructionSources) projectLocalRoot(directory string) (string, error) 
 			}
 
 			s.files["project-local-root"] = root
-			home, _ := os.UserHomeDir()
+			home, _ := s.userHomeDirectory()
 			if root == home {
 				return directory, nil
 			}

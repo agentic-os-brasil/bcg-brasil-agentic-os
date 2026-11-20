@@ -238,6 +238,7 @@ func weeklyCLIEnvironment(values []string, tokens int) ([]string, error) {
 
 // No private stdout/stderr text is included in an error or receipt.
 type weeklyModelProcess struct {
+	foreground           *foregroundProcessBinding
 	native               *weeklyNativeProcessBinding
 	Path                 string
 	Args                 []string

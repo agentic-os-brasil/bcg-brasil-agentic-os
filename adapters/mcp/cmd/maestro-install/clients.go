@@ -391,7 +391,7 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 	action := intent
 	var e error
 	if action == "" {
-		action, e = prompt("Choose status, update, regenerate, reconcile, register-code, maintenance, revalidate-maintenance, desktop-confirm, manual-desktop-update, or rollback: ")
+		action, e = prompt("Choose status, update, regenerate, reconcile, register-code, foreground-profile, maintenance, revalidate-maintenance, desktop-confirm, manual-desktop-update, or rollback: ")
 		if e != nil {
 			return e
 		}
@@ -519,6 +519,8 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 			return e
 		}
 		return json.NewEncoder(output).Encode(result)
+	case "foreground-profile":
+		return manageClientForegroundProfile(ctx, o, prompt, confirm, output)
 	case "maintenance":
 		return manageClientMaintenance(ctx, o, prompt, confirm, output)
 	case "desktop-confirm":
