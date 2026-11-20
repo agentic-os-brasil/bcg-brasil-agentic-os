@@ -957,6 +957,19 @@ $duplicate=@{$module=@('TestRemaining','TestRemaining')}
 $refused=$false
 try {Get-RemainingProtocolProof $duplicate $valid @()|Out-Null} catch {$refused=$true}
 if(-not $refused){throw 'Duplicate compiled inventory accepted'}
+$names=@('TestFoxtrot','TestDelta','TestAlpha','TestEcho','TestCharlie','TestBravo')
+$orderedInventory=@{$module=@($names + $excluded)}
+$orderedEvents=@($names|ForEach-Object {[pscustomobject]@{Package=$module;Test=$_;Action='pass'}})
+$orderedProof=Get-RemainingProtocolProof $orderedInventory $orderedEvents $excluded
+$expectedNames=@('TestAlpha','TestBravo','TestCharlie','TestDelta','TestEcho','TestFoxtrot')
+$expectedInventory=@(($expectedNames + 'TestProved' + 'TestWindowsWorkspaceInitializationMatchesElevation')|ForEach-Object {$module+'/'+$_})
+$expectedOutcomes=@($expectedNames|ForEach-Object {$module+'/'+$_})
+if(-not $orderedProof.complete -or ($orderedProof.inventory.test -join '|') -cne ($expectedInventory -join '|') -or
+ ($orderedProof.outcomes.test -join '|') -cne ($expectedOutcomes -join '|')){throw 'Proof inventory and outcomes must have canonical test-key order'}
+[array]::Reverse($names)
+[array]::Reverse($orderedEvents)
+$reversedProof=Get-RemainingProtocolProof @{$module=@($excluded + $names)} $orderedEvents $excluded
+if(($orderedProof|ConvertTo-Json -Depth 10 -Compress) -cne ($reversedProof|ConvertTo-Json -Depth 10 -Compress)){throw 'Proof changed with compiled inventory or event insertion order'}
 ''', encoding="utf-8")
         result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER)], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
