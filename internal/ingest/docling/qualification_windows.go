@@ -158,8 +158,8 @@ func qualifyPlaced(ctx context.Context, o Options) error {
 			status, _, _ = strings.Cut(status, "stdout=")
 			facts = append(facts, "process_status", status[:min(len(status), 256)])
 		}
-		exception, line := pythonQualificationFailureFacts(stderr.Bytes(), filepath.Join(snapshot, "bridge.py"), pack.target.bridge)
-		facts = append(facts, "python_exception", exception, "python_bridge_line", line)
+		hints := pythonQualificationFailureFacts(stderr.Bytes(), snapshot, pack)
+		facts = append(facts, "python_exception", hints.Exception, "python_bridge_line", hints.BridgeLine, "python_public_source_ordinal", hints.SourceOrdinal, "python_public_source_line", hints.SourceLine, "python_errno_hint", hints.ErrnoHint, "python_winerror_hint", hints.WinerrorHint)
 		slog.Debug("native converter qualification failed", facts...)
 		return errors.New("native_converter_qualification_failed")
 	}
@@ -224,45 +224,103 @@ func qualifyPlaced(ctx context.Context, o Options) error {
 	return scheduler.WritePrivateFileAtomic(path, unsafe.Slice(output.Data, int(output.Size)))
 }
 
-// These are untrusted diagnostic hints from the fixed synthetic qualification,
-// never proof. Only a closed exception name and an in-source exact-path line may
-// leave this function; messages, paths and output bodies stay private.
-func pythonQualificationFailureFacts(stderr []byte, bridgePath string, source []byte) (string, int) {
-	exception, bridgeLine := "unknown", 0
-	if len(stderr) > 64<<10 || len(source) == 0 {
-		return exception, bridgeLine
+// These are untrusted hints from the fixed synthetic qualification, never
+// resource/OS proof. An ordinal refers to entryNames of the authenticated pack.
+// Messages, paths, traceback rows and source bytes never leave this projection.
+type pythonFailureHints struct {
+	Exception     string `json:"python_exception"`
+	BridgeLine    int    `json:"python_bridge_line"`
+	SourceOrdinal int    `json:"python_public_source_ordinal"`
+	SourceLine    int    `json:"python_public_source_line"`
+	ErrnoHint     int    `json:"python_errno_hint"`
+	WinerrorHint  int    `json:"python_winerror_hint"`
+}
+
+func pythonQualificationFailureFacts(stderr []byte, snapshot string, pack verifiedPack) pythonFailureHints {
+	hints := pythonFailureHints{Exception: "unknown"}
+	if len(stderr) > 64<<10 || len(pack.target.bridge) == 0 {
+		return hints
 	}
-	lineCount := bytes.Count(source, []byte("\n"))
-	if source[len(source)-1] != '\n' {
-		lineCount++
+	sourceLines := func(body []byte) int {
+		if len(body) == 0 || bytes.IndexByte(body, 0) >= 0 {
+			return 0
+		}
+		count := bytes.Count(body, []byte("\n"))
+		if body[len(body)-1] != '\n' {
+			count++
+		}
+		return count
 	}
-	framePrefix := "  File \"" + bridgePath + "\", line "
+	absolute := filepath.IsAbs(snapshot)
+	bridgeLines := sourceLines(pack.target.bridge)
+	bridgePrefix := "  File \"" + filepath.Join(snapshot, "bridge.py") + "\", line "
+	lastPath, lastLine := "", 0
 	for _, raw := range bytes.Split(stderr, []byte("\n")) {
 		row := strings.TrimSuffix(string(raw), "\r")
 		if row == "Traceback (most recent call last):" {
-			exception, bridgeLine = "unknown", 0
+			hints = pythonFailureHints{Exception: "unknown"}
+			lastPath, lastLine = "", 0
 			continue
 		}
-		if rest, ok := strings.CutPrefix(row, framePrefix); ok {
-			bridgeLine = 0
+		// Retain the separate legacy meaning: last exact bridge frame in this chain.
+		if rest, ok := strings.CutPrefix(row, bridgePrefix); absolute && ok {
+			hints.BridgeLine = 0
 			text, function, complete := strings.Cut(rest, ", in ")
 			line, err := strconv.Atoi(text)
-			if complete && function != "" && err == nil && line > 0 && line <= lineCount && strconv.Itoa(line) == text {
-				bridgeLine = line
+			if complete && function != "" && err == nil && line > 0 && line <= bridgeLines && strconv.Itoa(line) == text {
+				hints.BridgeLine = line
+			}
+		}
+		// Every new frame replaces the candidate, including malformed/foreign ones.
+		if strings.HasPrefix(strings.TrimLeft(row, " \t"), "File ") {
+			lastPath, lastLine = "", 0
+			if rest, ok := strings.CutPrefix(row, "  File \""); ok {
+				path, rest, complete := strings.Cut(rest, "\", line ")
+				text, function, frame := strings.Cut(rest, ", in ")
+				line, err := strconv.Atoi(text)
+				if complete && frame && function != "" && err == nil && line > 0 && strconv.Itoa(line) == text {
+					lastPath, lastLine = path, line
+				}
 			}
 		}
 		if row == "" || row[0] == ' ' || row[0] == '\t' {
 			continue
 		}
-		name, _, _ := strings.Cut(row, ":")
+		name, message, _ := strings.Cut(row, ":")
 		switch name {
 		case "AssertionError", "RuntimeError", "OSError", "PermissionError", "FileNotFoundError", "ModuleNotFoundError", "ImportError", "ValueError", "TypeError", "KeyError", "AttributeError", "SyntaxError", "ConnectionRefusedError", "TimeoutError", "MemoryError":
-			exception = name
+			hints.Exception = name
 		default:
-			exception = "unknown"
+			hints.Exception = "unknown"
+		}
+		hints.ErrnoHint, hints.WinerrorHint = 0, 0
+		if hints.Exception == "PermissionError" {
+			for _, recognized := range []struct {
+				prefix          string
+				errno, winerror int
+			}{{" [Errno 1]", 1, 0}, {" [Errno 13]", 13, 0}, {" [WinError 5]", 0, 5}} {
+				if message == recognized.prefix || strings.HasPrefix(message, recognized.prefix+" ") {
+					hints.ErrnoHint, hints.WinerrorHint = recognized.errno, recognized.winerror
+					break
+				}
+			}
 		}
 	}
-	return exception, bridgeLine
+	if !absolute || lastPath == "" || lastLine <= 0 {
+		return hints
+	}
+	// Inventory keys are authority. Count bytes only for the one exact matched
+	// plain source; never open a traceback-named path or scan/hash module bodies.
+	for ordinal, name := range entryNames(pack.entries) {
+		if !strings.HasSuffix(name, ".py") || filepath.Join(snapshot, filepath.FromSlash(name)) != lastPath {
+			continue
+		}
+		if lastLine <= sourceLines(pack.entries[name].body) {
+			hints.SourceOrdinal, hints.SourceLine = ordinal+1, lastLine
+		}
+		break
+	}
+	return hints
 }
 
 func qualificationPath(o Options, pack verifiedPack, binding nativeQualification) (string, error) {
