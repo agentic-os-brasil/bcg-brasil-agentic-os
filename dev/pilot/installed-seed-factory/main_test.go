@@ -36,9 +36,18 @@ func TestFactoryRejectsUnauthenticatedBeforeCreatingOutput(t *testing.T) {
 	}
 }
 
-func TestFactoryAssemblesOnlyVerifiedPublicInputsWithoutExecutingThem(t *testing.T) {
+func TestFactoryAssemblesOnlyOnMatchingIdentityProbeHost(t *testing.T) {
 	root := developerFixture(t)
-	options, record, key, registry, now := factoryFixture(t, root)
+	options, record, _, registry, now := factoryFixture(t, root)
+	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+		if err := buildKit(options, func() time.Time { return now }); err == nil || !strings.Contains(err.Error(), "identity probe requires matching target host") {
+			t.Fatalf("cross-target identity probe did not refuse explicitly: %v", err)
+		}
+		if _, err := os.Lstat(options.Output); !os.IsNotExist(err) {
+			t.Fatal("cross-target refusal created output")
+		}
+		return
+	}
 	if err := buildKit(options, func() time.Time { return now }); err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +97,15 @@ func TestFactoryAssemblesOnlyVerifiedPublicInputsWithoutExecutingThem(t *testing
 	if _, err = releaseprovider.ReadSyncedMetadata(filepath.Join(options.Output, "source"), record.Source, pubRegistry); err != nil {
 		t.Fatal(err)
 	}
-	// Tampering or an unlisted source does not create another output or execute an input.
+	if _, err = os.Lstat(filepath.Join(root, "trust")); !os.IsNotExist(err) {
+		t.Fatal("factory changed the original installer context")
+	}
+}
+
+func TestFactoryRejectsInvalidPublicInputsBeforeCreatingOutput(t *testing.T) {
+	root := developerFixture(t)
+	options, record, key, _, now := factoryFixture(t, root)
+	// Portable input refusals happen before the native-host identity probe.
 	for _, kind := range []string{"installer", "role", "initial", "foreign-source", "expired"} {
 		t.Run(kind, func(t *testing.T) {
 			bad := options
@@ -124,7 +141,7 @@ func TestFactoryAssemblesOnlyVerifiedPublicInputsWithoutExecutingThem(t *testing
 		if err != nil {
 			t.Fatal(err)
 		}
-		cmd := exec.Command(goTool(t), "build", "-ldflags", "-X main.Version=0.1.51 -X main.AuthorityRegistrySHA256="+record.RegistrySHA256, "-o", production, "./cmd/maestro-install")
+		cmd := exec.Command(goTool(t), "build", "-mod=readonly", "-trimpath", "-ldflags", "-X main.Version=0.1.51 -X main.AuthorityRegistrySHA256="+record.RegistrySHA256, "-o", production, "./cmd/maestro-install")
 		cmd.Dir = filepath.Join(repo, "adapters/mcp")
 		cmd.Env = append(os.Environ(), "GOOS=darwin", "GOARCH=arm64")
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -152,6 +169,60 @@ func TestFactoryAssemblesOnlyVerifiedPublicInputsWithoutExecutingThem(t *testing
 			t.Fatal("ordinary entry created a kit")
 		}
 	})
+}
+
+func TestFactoryRejectsCompiledInstallerIdentityMismatch(t *testing.T) {
+	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+		t.Skip("genuine trimmed installer identity probe requires its Darwin arm64 host")
+	}
+	root := developerFixture(t)
+	options, record, key, _, now := factoryFixture(t, root)
+	repo, err := filepath.Abs("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct{ name, version, pin string }{
+		{"wrong-pin", "0.1.51", strings.Repeat("e", 64)},
+		{"wrong-version", "0.1.52", record.RegistrySHA256},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(root, test.name+"-installer")
+			command := exec.Command(goTool(t), "build", "-mod=readonly", "-trimpath", "-tags", "maestro_experimental_installed_seed", "-ldflags", "-X main.Version="+test.version+" -X main.AuthorityRegistrySHA256="+test.pin, "-o", path, "./cmd/maestro-install")
+			command.Dir = filepath.Join(repo, "adapters/mcp")
+			command.Env = append(os.Environ(), "GOOS=darwin", "GOARCH=arm64")
+			if output, err := command.CombinedOutput(); err != nil {
+				t.Fatalf("compile actual mismatched installer: %s %v", output, err)
+			}
+			binary, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			changed := record
+			changed.InstallerSHA256 = sum(binary)
+			body, err := json.Marshal(changed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			bad := options
+			bad.Output, bad.Installer = filepath.Join(root, "refused-"+test.name), path
+			bad.Role = writeFixture(t, root, test.name+"-role.json", body)
+			bad.Signature = writeFixture(t, root, test.name+"-role.sig", ed25519.Sign(key, body))
+			if err = buildKit(bad, func() time.Time { return now }); err == nil || !strings.Contains(err.Error(), "staged installer identity probe failed") {
+				t.Fatalf("actual compiled identity mismatch was accepted or masked: %v", err)
+			}
+			staged := filepath.Join(bad.Output, "bootstrap", "trust", installer.ExperimentalSeedAdmissionName)
+			retained, err := os.ReadFile(staged)
+			if err != nil || sum(retained) != sum(body) {
+				t.Fatalf("failed authenticated bootstrap was not retained: %v", err)
+			}
+			if _, err := os.Lstat(filepath.Join(bad.Output, "DISTRIBUTION.json")); !os.IsNotExist(err) {
+				t.Fatal("failed compiled identity probe published a distribution")
+			}
+			if _, err := os.Lstat(filepath.Join(root, "trust")); !os.IsNotExist(err) {
+				t.Fatal("probe repaired the original installer context")
+			}
+		})
+	}
 }
 
 func TestParticipantTemplatesParseAndKeepTheLegacyFactoryBranch(t *testing.T) {
@@ -222,7 +293,7 @@ func factoryFixture(t *testing.T, root string) (factoryOptions, installer.Experi
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(goTool(t), "build", "-tags", "maestro_experimental_installed_seed", "-ldflags", "-X main.Version=0.1.51 -X main.AuthorityRegistrySHA256="+pin, "-o", installerPath, "./cmd/maestro-install")
+	cmd := exec.Command(goTool(t), "build", "-mod=readonly", "-trimpath", "-tags", "maestro_experimental_installed_seed", "-ldflags", "-X main.Version=0.1.51 -X main.AuthorityRegistrySHA256="+pin, "-o", installerPath, "./cmd/maestro-install")
 	cmd.Dir = filepath.Join(repo, "adapters/mcp")
 	cmd.Env = append(os.Environ(), "GOOS=darwin", "GOARCH=arm64")
 	if out, err := cmd.CombinedOutput(); err != nil {
