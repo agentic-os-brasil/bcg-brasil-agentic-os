@@ -29,6 +29,12 @@ var deleteAppContainerProfile = userenv.NewProc("DeleteAppContainerProfile")
 const securityCapabilitiesAttribute = 0x00020009
 const childProcessPolicyAttribute = 0x0002000e
 
+// Windows SDK WinBase.h/WinNT.h definitions not exposed by x/sys v0.47.0.
+// ALL_APPLICATION_PACKAGES opt-out creates LPAC; the token query attests it.
+const allApplicationPackagesPolicyAttribute = 0x0002000f
+const allApplicationPackagesOptOut uint32 = 0x01
+const tokenIsLessPrivilegedAppContainer = 46
+
 type securityCapabilities struct {
 	SID             *windows.SID
 	Capabilities    *windows.SIDAndAttributes
@@ -100,7 +106,7 @@ func runWindowsConfined(ctx context.Context, work, executable string, args []str
 	if _, err = windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation, uintptr(unsafe.Pointer(&limits)), uint32(unsafe.Sizeof(limits))); err != nil {
 		return err
 	}
-	attrs, err := windows.NewProcThreadAttributeList(3)
+	attrs, err := windows.NewProcThreadAttributeList(4)
 	if err != nil {
 		return err
 	}
@@ -108,6 +114,10 @@ func runWindowsConfined(ctx context.Context, work, executable string, args []str
 	capabilities := securityCapabilities{SID: sid}
 	if err = attrs.Update(securityCapabilitiesAttribute, unsafe.Pointer(&capabilities), unsafe.Sizeof(capabilities)); err != nil {
 		return err
+	}
+	applicationPackagesPolicy := allApplicationPackagesOptOut
+	if err = attrs.Update(allApplicationPackagesPolicyAttribute, unsafe.Pointer(&applicationPackagesPolicy), unsafe.Sizeof(applicationPackagesPolicy)); err != nil {
+		return fmt.Errorf("configure converter LPAC: %w", err)
 	}
 	childPolicy := uint32(1) // PROCESS_CREATION_CHILD_PROCESS_RESTRICTED.
 	if err = attrs.Update(childProcessPolicyAttribute, unsafe.Pointer(&childPolicy), unsafe.Sizeof(childPolicy)); err != nil {
@@ -187,6 +197,7 @@ func runWindowsConfined(ctx context.Context, work, executable string, args []str
 		return err
 	}
 	runtime.KeepAlive(capabilities)
+	runtime.KeepAlive(applicationPackagesPolicy)
 	runtime.KeepAlive(inherited)
 	runtime.KeepAlive(block)
 	defer windows.CloseHandle(process.Process)
@@ -404,6 +415,9 @@ func validateConfinedToken(process windows.Handle, expected *windows.SID) error 
 	if isContainer != 1 {
 		return errors.New("converter_token_not_appcontainer")
 	}
+	if err := validateLessPrivilegedAppContainer(token); err != nil {
+		return err
+	}
 	// TOKEN_APPCONTAINER_INFORMATION includes the variable-length SID after its pointer.
 	container := make([]byte, 256)
 	if err := windows.GetTokenInformation(token, 31, &container[0], uint32(len(container)), &returned); err != nil {
@@ -422,6 +436,19 @@ func validateConfinedToken(process windows.Handle, expected *windows.SID) error 
 	}
 	if returned < 4 || *(*uint32)(unsafe.Pointer(&capabilities[0])) != 0 {
 		return errors.New("converter_token_has_capabilities")
+	}
+	return nil
+}
+
+// Reject unsupported queries and malformed/non-LPAC tokens before child resume.
+func validateLessPrivilegedAppContainer(token windows.Token) error {
+	var lessPrivileged, returned uint32
+	size := uint32(unsafe.Sizeof(lessPrivileged))
+	if err := windows.GetTokenInformation(token, tokenIsLessPrivilegedAppContainer, (*byte)(unsafe.Pointer(&lessPrivileged)), size, &returned); err != nil {
+		return fmt.Errorf("query converter LPAC token: %w", err)
+	}
+	if returned != size || lessPrivileged == 0 {
+		return errors.New("converter_token_not_less_privileged_appcontainer")
 	}
 	return nil
 }

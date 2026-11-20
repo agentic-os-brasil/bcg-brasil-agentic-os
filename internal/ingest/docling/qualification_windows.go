@@ -32,6 +32,9 @@ import (
 //go:embed runtime/windows-amd64/qualification.docx
 var qualificationDOCX []byte
 
+// Ordinary-AppContainer receipts cannot qualify the LPAC launch boundary.
+const nativeQualificationSchema = 2
+
 type nativeQualification struct {
 	Schema                               int `json:"schema"`
 	Pack, Manifest, Implementation, Host string
@@ -77,7 +80,7 @@ func qualificationBinding(o Options, pack verifiedPack) (nativeQualification, er
 		return nativeQualification{}, err
 	}
 	hostDigest := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%s\x00%d.%d.%d.%d\x00%d:%d:%d", owner.String(), host, version.MajorVersion, version.MinorVersion, version.BuildNumber, revision, identity.VolumeSerialNumber, identity.FileIndexHigh, identity.FileIndexLow)))
-	return nativeQualification{Schema: 1, Pack: pack.sha, Manifest: pack.manifestSHA, Implementation: implementation, Host: hex.EncodeToString(hostDigest[:]), Source: digest(qualificationDOCX), KernelDenials: true, RealSimplePipeline: true}, nil
+	return nativeQualification{Schema: nativeQualificationSchema, Pack: pack.sha, Manifest: pack.manifestSHA, Implementation: implementation, Host: hex.EncodeToString(hostDigest[:]), Source: digest(qualificationDOCX), KernelDenials: true, RealSimplePipeline: true}, nil
 }
 
 // qualificationStatus reads only. It never launches, repairs, prompts or creates
