@@ -594,6 +594,11 @@ func prepareManagedRoot(ctx context.Context, plan Plan, options Options) (manage
 		return managedRootPreparation{}, err
 	}
 	for _, entry := range entries {
+		if entry.Name() == installtx.ActivationRecoveryGuardName {
+			if err := installtx.ValidateActivationRecoveryGuard(plan.ManagedRoot); err != nil {
+				return managedRootPreparation{}, err
+			}
+		}
 		if !installerOwnedTopLevel(entry.Name(), plan.TargetOS) {
 			return managedRootPreparation{}, fmt.Errorf("managed root contains unrecognized entry %q; preserved without replacement", entry.Name())
 		}
@@ -757,7 +762,8 @@ func ensureNoSymlinkComponents(root, target string) error {
 func installerOwnedTopLevel(name, targetOS string) bool {
 	allowed := map[string]bool{
 		"trust": true, "bin": true, "bundles": true, "recovery": true,
-		".activation.lock": true, "bcgos-bootstrap": true, "maestro-install": true, "maestro-install.exe": true,
+		".activation.lock": true, installtx.ActivationRecoveryGuardName: true,
+		"bcgos-bootstrap": true, "maestro-install": true, "maestro-install.exe": true,
 		installationOwnerName: true,
 	}
 	if targetOS == "windows" {

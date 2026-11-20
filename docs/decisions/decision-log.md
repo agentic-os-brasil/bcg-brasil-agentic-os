@@ -1862,3 +1862,14 @@ The legacy archive, metadata and default assembler retain their original meaning
 OCR, visual reconstruction, model downloads and all signing/installation authority
 remain unchanged. The earlier eleven-format construction snapshot is historical
 coverage, not proof of this complete-kit scope. Refs: #599; Spec061 NTXT.
+
+## DSRC - Recover verified stable startup without racing activation owners
+
+- Date: 2026-11-20
+- Status: accepted
+- Owner: Maestro maintainers
+- Context: A process interrupted during the short activation guard can leave its PID file after exit and block an otherwise current Desktop connector restart. Reviewed client reconciliation can reclaim an exited owner, but its separate read/remove/reacquire steps let concurrent reclaimers delete a successor's live lock.
+- Decision: Permit dead-owner recovery only for normal stable-client startup after exact installed admission, current signed source, carrier, owner/workspace and current materialized selection have been verified. Repeat canonical source/current/client/packet/workspace validation under the acquired activation lock. Serialize every canonical reconciliation/recovery caller with the existing OS-released privatelock on one permanent empty private per-root guard, held across fresh owner/identity/body verification, stale removal and exclusive reacquisition. Retain ordinary exclusive acquisition; if an ordinary writer wins the gap, preserve its lock and refuse.
+- Consequences: Live/reused/unknown owners, malformed/aliased/changed locks and stale or invalid selections remain refused. Existing process-wait callers propagate lookup/access errors; only a positive DWORD PID with an OpenProcess-wrapped Windows ERROR_INVALID_PARAMETER is classified absent, while Unix retains its Signal(0) absence check. Track only the exact regular empty private retained guard in managed-root inventory. Read-only status, lifecycle hooks, ordinary writers, source/packet/profile/qualification custody and client execution authority retain their existing contracts. No age-based lease, process kill, force flag, imported native proof or manually deleted lock is introduced. Source and focused test evidence remain separate from rebuilt artifacts and actual Desktop initialize/tool acceptance.
+- Refs: #614; specs/020-release-distribution.md; specs/063-product-native-plugin.md; internal/installtx/transaction.go; internal/privatelock; internal/installer/clients.go
+- Supersedes: none
