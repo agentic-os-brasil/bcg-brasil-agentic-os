@@ -225,15 +225,15 @@ func logWindowsConfinementFailureContext(t *testing.T) {
 }
 
 type nativeChildReadyOutput struct {
-	bytes.Buffer
-	ready chan struct{}
-	once  sync.Once
-	pid   uint32
+	buffer bytes.Buffer
+	ready  chan struct{}
+	once   sync.Once
+	pid    uint32
 }
 
 func (output *nativeChildReadyOutput) Write(body []byte) (int, error) {
-	n, err := output.Buffer.Write(body)
-	marker := regexp.MustCompile(`NATIVE_CONFINED_CHILD_READY ([0-9]+)`).FindStringSubmatch(output.String())
+	n, err := output.buffer.Write(body)
+	marker := regexp.MustCompile(`NATIVE_CONFINED_CHILD_READY ([0-9]+)`).FindStringSubmatch(output.buffer.String())
 	if len(marker) == 2 {
 		pid, e := strconv.ParseUint(marker[1], 10, 32)
 		if e == nil {

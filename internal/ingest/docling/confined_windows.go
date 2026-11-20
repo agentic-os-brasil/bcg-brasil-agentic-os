@@ -53,6 +53,11 @@ func runWindowsConfined(ctx context.Context, work, executable string, args []str
 		return err
 	}
 	defer custody.Close()
+	monikerName := "Maestro.Docling." + winprivate.Random()
+	// Windows redirects TEMP/TMP beneath the child's isolated LOCALAPPDATA.
+	if err := winprivate.MkdirAll(filepath.Join(work, "data", "Packages", strings.ToLower(monikerName), "AC", "Temp")); err != nil {
+		return err
+	}
 	// Admit the complete freshly-created staging tree before granting the child SID.
 	handles, paths, err := holdExecutionTree(work)
 	if err != nil {
@@ -63,7 +68,7 @@ func runWindowsConfined(ctx context.Context, work, executable string, args []str
 			windows.CloseHandle(h)
 		}
 	}()
-	moniker, err := windows.UTF16PtrFromString("Maestro.Docling." + winprivate.Random())
+	moniker, err := windows.UTF16PtrFromString(monikerName)
 	if err != nil {
 		return err
 	}
