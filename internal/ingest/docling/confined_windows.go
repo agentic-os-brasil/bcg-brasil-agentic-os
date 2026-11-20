@@ -438,21 +438,21 @@ func validateConfinedToken(process windows.Handle, expected *windows.SID) error 
 }
 
 // Attest the actual suspended child's LPAC access semantics, without assigning
-// its token to a thread or changing any resource ACL. World permits both bits
-// for the user half; only an ordinary AppContainer may obtain bit 1 via AAP.
+// its token to a thread or changing any resource ACL. World permits all bits for
+// the user half; require the exact package and ARAP bits but exclude AAP access.
 func validateLessPrivilegedAppContainer(token windows.Token, expected *windows.SID) error {
 	var impersonation windows.Token
 	if err := windows.DuplicateTokenEx(token, windows.TOKEN_QUERY, nil, windows.SecurityIdentification, windows.TokenImpersonation, &impersonation); err != nil {
 		return fmt.Errorf("duplicate converter token for LPAC attestation: %w", err)
 	}
 	defer impersonation.Close()
-	descriptor, err := windows.SecurityDescriptorFromString("O:SYG:SYD:(A;;0x3;;;WD)(A;;0x1;;;AC)(A;;0x2;;;" + expected.String() + ")")
+	descriptor, err := windows.SecurityDescriptorFromString("O:SYG:SYD:(A;;0x7;;;WD)(A;;0x1;;;AC)(A;;0x2;;;" + expected.String() + ")(A;;0x4;;;S-1-15-2-2)")
 	if err != nil {
 		return err
 	}
 	// GENERIC_MAPPING and PRIVILEGE_SET follow the documented Win32 layouts.
 	// DesiredAccess has no generic bits. Buffer insufficiency fails closed.
-	mapping := struct{ Read, Write, Execute, All uint32 }{1, 2, 3, 3}
+	mapping := struct{ Read, Write, Execute, All uint32 }{1, 2, 4, 7}
 	privileges := struct {
 		Count, Control uint32
 		Privilege      [1]windows.LUIDAndAttributes
@@ -467,8 +467,8 @@ func validateLessPrivilegedAppContainer(token windows.Token, expected *windows.S
 	if ok == 0 {
 		return fmt.Errorf("check converter LPAC access: %w", callErr)
 	}
-	if privilegeLength > uint32(unsafe.Sizeof(privileges)) || accessStatus == 0 || grantedAccess != 2 {
-		return errors.New("converter_token_not_less_privileged_appcontainer")
+	if privilegeLength > uint32(unsafe.Sizeof(privileges)) || accessStatus == 0 || grantedAccess != 6 {
+		return fmt.Errorf("converter_token_not_less_privileged_appcontainer: access_allowed=%t granted_mask=0x%x", accessStatus != 0, grantedAccess)
 	}
 	return nil
 }
