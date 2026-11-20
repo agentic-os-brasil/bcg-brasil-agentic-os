@@ -177,7 +177,10 @@ func (weeklyWindowsTrust) signer(state windows.Handle) (string, error) {
 	if signerPointer == 0 {
 		return "", errWeeklyWindowsIdentity
 	}
-	signer := (*weeklyProviderSigner)(unsafe.Pointer(signerPointer))
+	signer, err := weeklyReadProviderSigner(signerPointer)
+	if err != nil {
+		return "", err
+	}
 	if err := weeklyValidateProviderSigner(signer); err != nil {
 		return "", err
 	}
@@ -185,11 +188,22 @@ func (weeklyWindowsTrust) signer(state windows.Handle) (string, error) {
 	if certificatePointer == 0 {
 		return "", errWeeklyWindowsIdentity
 	}
-	selected := (*weeklyProviderCertificate)(unsafe.Pointer(certificatePointer))
-	if selected != signer.Chain {
+	selected := signer.Chain
+	if certificatePointer != uintptr(unsafe.Pointer(selected)) {
 		return "", errWeeklyWindowsIdentity
 	}
 	return weeklyProviderSignerSHA256(signer, selected)
+}
+
+// Copy the fixed native record; its chain stays borrowed until state CLOSE.
+func weeklyReadProviderSigner(address uintptr) (*weeklyProviderSigner, error) {
+	var signer weeklyProviderSigner
+	var read uintptr
+	size := unsafe.Sizeof(signer)
+	if err := windows.ReadProcessMemory(windows.CurrentProcess(), address, (*byte)(unsafe.Pointer(&signer)), size, &read); err != nil || read != size {
+		return nil, errWeeklyWindowsIdentity
+	}
+	return &signer, nil
 }
 func weeklyValidateProviderSigner(signer *weeklyProviderSigner) error {
 	if signer == nil || signer.Size != uint32(unsafe.Sizeof(*signer)) || signer.Error != 0 || signer.SignerType != 0 || signer.Signer == nil || signer.ChainCount == 0 || signer.ChainCount > 16 || signer.Chain == nil || signer.CounterSignerCount > 16 || signer.CounterSignerCount != 0 && signer.CounterSigners == nil {
