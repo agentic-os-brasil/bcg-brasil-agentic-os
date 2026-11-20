@@ -95,7 +95,7 @@ function Invoke-DoclingFailureTrace($Manifest, [string]$ProofRoot, [string]$Expe
         baseline_log_sha256=(Get-FileHash -LiteralPath (Join-Path $ProofRoot 'docling-native-tests.log') -Algorithm SHA256).Hash.ToLowerInvariant()
         source_revision=$Manifest.source_revision; test_binary_sha256=$ExpectedImageSHA256
         status='not_started'; timeout_seconds=60; retained_log_limit_bytes=4194304; no_registry_changes=$true; debuggee_kill_on_debugger_exit=$true
-        public_symbol_prefetch_configured=$true; public_symbol_module='ntdll.dll'; public_symbol_store='https://msdl.microsoft.com/download/symbols'; symbol_network_phase='stopped_parent_before_test_only'}
+        public_symbol_prefetch_configured=$true; public_symbol_modules=@('ntdll.dll','KERNELBASE.dll'); public_symbol_store='https://msdl.microsoft.com/download/symbols'; symbol_network_phase='stopped_parent_before_test_only'}
     $process=$null; $outputsAdmitted=$false; $traceOut=Join-Path $ProofRoot 'docling-loader-trace.stdout.log'; $traceErr=Join-Path $ProofRoot 'docling-loader-trace.stderr.log'
     try {
         if ($env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or [Environment]::OSVersion.Platform -ne 'Win32NT') {
@@ -107,18 +107,32 @@ function Invoke-DoclingFailureTrace($Manifest, [string]$ProofRoot, [string]$Expe
         if ((Get-FileHash -LiteralPath $Manifest.test_binary -Algorithm SHA256).Hash.ToLowerInvariant() -cne $ExpectedImageSHA256) { throw 'Sealed test image changed before diagnostic replay.' }
         $receipt.debugger_sha256=(Get-FileHash -LiteralPath $debugger -Algorithm SHA256).Hash.ToLowerInvariant()
         $commands=Join-Path $ProofRoot 'docling-loader-commands.txt'
+        $attachCommands=Join-Path $ProofRoot 'docling-kernelbase-attach-commands.txt'
         $stdin=Join-Path $ProofRoot 'docling-loader-stdin.txt'; $symbols=Join-Path $ProofRoot 'docling-loader-symbols'
         $rawRoot=Join-Path $ProofRoot ('.docling-loader-raw-'+[Guid]::NewGuid().ToString('N'))
         $rawOut=Join-Path $rawRoot 'stdout.raw';$rawErr=Join-Path $rawRoot 'stderr.raw'
-        foreach($path in @($traceOut,$traceErr,$commands,$stdin,$symbols,$rawRoot)) { if(Test-Path -LiteralPath $path){throw 'Diagnostic output must be fresh.'} }
+        foreach($path in @($traceOut,$traceErr,$commands,$attachCommands,$stdin,$symbols,$rawRoot)) { if(Test-Path -LiteralPath $path){throw 'Diagnostic output must be fresh.'} }
         # Inherit the already-private ProofRoot ACL; RAW names are never upload inputs.
         New-Item -ItemType Directory -Path $rawRoot|Out-Null
         $outputsAdmitted=$true
         # The cpr event precedes execution of the child's loader initialization.
         # !gflag modifies only that debuggee's PEB, never IFEO/system settings.
-        # Fetch only matching stock NTDLL metadata before the Go test/context
-        # starts. Restore a local symbol store before either target can run.
+        # Fetch only matching stock NTDLL/KERNELBASE metadata before the test.
+        # Restore a local symbol store before either target can run.
         if($symbols -match '[;"\r\n]'){throw 'Diagnostic symbol cache path is ambiguous.'}
+        # Literal command-file input keeps post-wt reads on separate lines;
+        # an execution command would end an inline breakpoint command list.
+        $attachText=@'
+.echo MAESTRO_KERNELBASE_ATTACH_ENTER
+.lastevent
+|.
+r rcx,rdx,r8
+wt -l 2 -or -m KERNELBASE
+.echo MAESTRO_KERNELBASE_ATTACH_RETURN
+r rax
+!exts.gle
+g
+'@
         $scriptText=@'
 .echo MAESTRO_PUBLIC_NTDLL_PREFETCH
 .sympath srv*__MAESTRO_SYMBOL_CACHE__*https://msdl.microsoft.com/download/symbols
@@ -126,16 +140,23 @@ function Invoke-DoclingFailureTrace($Manifest, [string]$ProofRoot, [string]$Expe
 lmvm ntdll
 !lmi ntdll
 dt ntdll!_PEB NtGlobalFlag
+.reload /f KERNELBASE.dll
+lmvm KERNELBASE
+!lmi KERNELBASE
+ln $iment(KERNELBASE)
 .sympath srv*__MAESTRO_SYMBOL_CACHE__
 .echo MAESTRO_SYMBOLS_LOCAL_ONLY
 sxe -c ".echo MAESTRO_CHILD_CREATE_WAITING_FOR_NTDLL;.lastevent;|.;g" cpr
-sxe -c ".echo MAESTRO_CHILD_NTDLL_LOAD_LOADER_SNAPS;.lastevent;|.;.reload /f ntdll.dll;!exts.gflag +sls;dt ntdll!_PEB NtGlobalFlag @$peb;g" ld:ntdll.dll
+sxe -c ".echo MAESTRO_CHILD_NTDLL_LOAD_LOADER_SNAPS;.lastevent;|.;.reload /f ntdll.dll;!exts.gflag +sls;dt ntdll!_PEB NtGlobalFlag @$peb;bu /1 $iment(KERNELBASE) \"$$<__MAESTRO_ATTACH_COMMANDS__\";g" ld:ntdll.dll
 sxe -c ".lastevent;k;g" bpe
 sxe -c ".lastevent;k;gn" 0xc0000142
 sxe -c ".lastevent;k;g" epr:child.exe
 g
 '@
         $scriptText=$scriptText.Replace('__MAESTRO_SYMBOL_CACHE__',$symbols)
+        $scriptText=$scriptText.Replace('__MAESTRO_ATTACH_COMMANDS__',$attachCommands)
+        [IO.File]::WriteAllText($attachCommands,$attachText,[Text.UTF8Encoding]::new($false))
+        $receipt.kernelbase_attach_commands_sha256=(Get-FileHash -LiteralPath $attachCommands -Algorithm SHA256).Hash.ToLowerInvariant()
         $receipt.symbol_cache=$symbols
         [IO.File]::WriteAllText($commands,$scriptText,[Text.UTF8Encoding]::new($false))
         [IO.File]::WriteAllText($stdin,'',[Text.UTF8Encoding]::new($false))
