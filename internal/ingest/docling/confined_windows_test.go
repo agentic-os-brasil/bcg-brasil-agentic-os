@@ -62,6 +62,7 @@ func nativeWindowsFixture(t *testing.T) (string, string) {
 }
 
 func TestWindowsNativeConfinement(t *testing.T) {
+	assertWindowsQualificationFailureFactsPrivacy(t)
 	work, child := nativeWindowsFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -280,6 +281,7 @@ func TestWindowsConfinementChild(t *testing.T) {
 	if err := os.Remove(scratch); err != nil {
 		t.Fatal(err)
 	}
+	networkDenied := true
 	for _, address := range []string{"127.0.0.1:9", "[::1]:9", "198.51.100.1:9", "[2001:db8::1]:9"} {
 		for _, protocol := range []string{"tcp", "udp"} {
 			c, err := net.DialTimeout(protocol, address, time.Second)
@@ -290,9 +292,13 @@ func TestWindowsConfinementChild(t *testing.T) {
 				c.Close()
 			}
 			if !errors.Is(err, windows.WSAEACCES) {
-				t.Fatalf("%s %s not kernel-denied: %v", protocol, address, err)
+				networkDenied = false
+				t.Errorf("%s %s not kernel-denied: %v", protocol, address, err)
 			}
 		}
+	}
+	if !networkDenied {
+		t.FailNow()
 	}
 	err := exec.Command(os.Args[0], "-test.run=^$").Run()
 	if err == nil {

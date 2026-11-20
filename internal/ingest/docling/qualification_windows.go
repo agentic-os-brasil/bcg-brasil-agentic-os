@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -154,6 +155,8 @@ func qualifyPlaced(ctx context.Context, o Options) error {
 			status, _, _ = strings.Cut(status, "stdout=")
 			facts = append(facts, "process_status", status[:min(len(status), 256)])
 		}
+		exception, line := pythonQualificationFailureFacts(stderr.Bytes(), filepath.Join(snapshot, "bridge.py"), pack.target.bridge)
+		facts = append(facts, "python_exception", exception, "python_bridge_line", line)
 		slog.Debug("native converter qualification failed", facts...)
 		return errors.New("native_converter_qualification_failed")
 	}
@@ -216,6 +219,47 @@ func qualifyPlaced(ctx context.Context, o Options) error {
 		return scheduler.WriteNewPrivateFile(path, unsafe.Slice(output.Data, int(output.Size)))
 	}
 	return scheduler.WritePrivateFileAtomic(path, unsafe.Slice(output.Data, int(output.Size)))
+}
+
+// These are untrusted diagnostic hints from the fixed synthetic qualification,
+// never proof. Only a closed exception name and an in-source exact-path line may
+// leave this function; messages, paths and output bodies stay private.
+func pythonQualificationFailureFacts(stderr []byte, bridgePath string, source []byte) (string, int) {
+	exception, bridgeLine := "unknown", 0
+	if len(stderr) > 64<<10 || len(source) == 0 {
+		return exception, bridgeLine
+	}
+	lineCount := bytes.Count(source, []byte("\n"))
+	if source[len(source)-1] != '\n' {
+		lineCount++
+	}
+	framePrefix := "  File \"" + bridgePath + "\", line "
+	for _, raw := range bytes.Split(stderr, []byte("\n")) {
+		row := strings.TrimSuffix(string(raw), "\r")
+		if row == "Traceback (most recent call last):" {
+			exception, bridgeLine = "unknown", 0
+			continue
+		}
+		if rest, ok := strings.CutPrefix(row, framePrefix); ok {
+			bridgeLine = 0
+			text, function, complete := strings.Cut(rest, ", in ")
+			line, err := strconv.Atoi(text)
+			if complete && function != "" && err == nil && line > 0 && line <= lineCount && strconv.Itoa(line) == text {
+				bridgeLine = line
+			}
+		}
+		if row == "" || row[0] == ' ' || row[0] == '\t' {
+			continue
+		}
+		name, _, _ := strings.Cut(row, ":")
+		switch name {
+		case "AssertionError", "RuntimeError", "OSError", "PermissionError", "FileNotFoundError", "ModuleNotFoundError", "ImportError", "ValueError", "TypeError", "KeyError", "AttributeError", "SyntaxError", "ConnectionRefusedError", "TimeoutError", "MemoryError":
+			exception = name
+		default:
+			exception = "unknown"
+		}
+	}
+	return exception, bridgeLine
 }
 
 func qualificationPath(o Options, pack verifiedPack, binding nativeQualification) (string, error) {
