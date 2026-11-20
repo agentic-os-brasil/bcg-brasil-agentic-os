@@ -641,9 +641,9 @@ try {
         $missing = @($expected.Keys | Where-Object { -not $outcomes.ContainsKey($_) })
         $partition = @($all.Keys | ForEach-Object {
             [ordered]@{test=$_; execution= $(if ($expected.ContainsKey($_)) {'remaining_ordinary'} elseif ($_ -cmatch '/TestWindowsWorkspaceInitializationMatchesElevation$') {'elevated_refusal'} else {'previous_exact_ordinary_proof'})}
-        } | Sort-Object test -CaseSensitive)
+        } | Sort-Object { $_.test } -CaseSensitive)
         return [ordered]@{complete=($invalid.Count -eq 0 -and $missing.Count -eq 0); inventory=$partition
-            outcomes=@($outcomes.Keys | ForEach-Object {[ordered]@{test=$_; outcome=$outcomes[$_]}} | Sort-Object test -CaseSensitive)
+            outcomes=@($outcomes.Keys | ForEach-Object {[ordered]@{test=$_; outcome=$outcomes[$_]}} | Sort-Object { $_.test } -CaseSensitive)
             classified_skips=$skips; invalid=$invalid; missing=$missing; skipped_coverage_qualified=$false}
     }
 
