@@ -128,7 +128,8 @@ lmvm ntdll
 dt ntdll!_PEB NtGlobalFlag
 .sympath srv*__MAESTRO_SYMBOL_CACHE__
 .echo MAESTRO_SYMBOLS_LOCAL_ONLY
-sxe -c ".echo MAESTRO_CHILD_CREATE_LOADER_SNAPS;.lastevent;|.;.reload /f ntdll.dll;!exts.gflag +sls;dt ntdll!_PEB NtGlobalFlag @$peb;g" cpr
+sxe -c ".echo MAESTRO_CHILD_CREATE_WAITING_FOR_NTDLL;.lastevent;|.;g" cpr
+sxe -c ".echo MAESTRO_CHILD_NTDLL_LOAD_LOADER_SNAPS;.lastevent;|.;.reload /f ntdll.dll;!exts.gflag +sls;dt ntdll!_PEB NtGlobalFlag @$peb;g" ld:ntdll.dll
 sxe -c ".lastevent;k;g" bpe
 sxe -c ".lastevent;k;gn" 0xc0000142
 sxe -c ".lastevent;k;g" epr:child.exe
