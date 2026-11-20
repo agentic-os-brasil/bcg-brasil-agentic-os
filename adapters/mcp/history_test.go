@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/selectedhistory"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -104,7 +105,16 @@ func TestHistoryPublicSelectedSourceConsentAndChange(t *testing.T) {
 			var handler func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error)
 			if mode != "unavailable" {
 				handler = func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-					if !strings.Contains(req.Params.Message, source) || !strings.Contains(req.Params.Message, "session.jsonl") {
+					var shown struct {
+						Plan selectedhistory.Plan `json:"plan"`
+					}
+					start := strings.Index(req.Params.Message, "{")
+					if start < 0 || json.Unmarshal([]byte(req.Params.Message[start:]), &shown) != nil {
+						t.Fatal("native history review JSON unavailable")
+					}
+					sources := shown.Plan.Manifest.Sources
+					if len(sources) != 1 || sources[0].Root != source || sources[0].Workspace != f.options.WorkspacePath ||
+						len(sources[0].Sessions) != 1 || sources[0].Sessions[0].Path != "session.jsonl" {
 						t.Error("exact selected paths missing from native review")
 					}
 					if mode == "changed" {
@@ -128,7 +138,9 @@ func TestHistoryPublicSelectedSourceConsentAndChange(t *testing.T) {
 			}
 			selection := historyCall(t, cs, "maestro_query", "history.selection", map[string]any{"history_manifest": manifest})
 			metadata, _ := json.Marshal(selection)
-			if strings.Contains(string(metadata), "private selected source marker") || strings.Contains(string(metadata), source) {
+			encodedSource, _ := json.Marshal(source)
+			sourceFragment := string(encodedSource[1 : len(encodedSource)-1])
+			if strings.Contains(string(metadata), "private selected source marker") || strings.Contains(string(metadata), sourceFragment) {
 				t.Fatal("selection query disclosed bodies or paths")
 			}
 			fields := map[string]any{"history_manifest": manifest, "history_selection_digest": selection["selection_digest"]}
@@ -141,7 +153,7 @@ func TestHistoryPublicSelectedSourceConsentAndChange(t *testing.T) {
 			} else {
 				out := historyFailure(t, cs, "maestro_apply", "history.read", fields)
 				raw, _ := json.Marshal(out)
-				if strings.Contains(string(raw), source) || strings.Contains(string(raw), "private selected source marker") {
+				if strings.Contains(string(raw), sourceFragment) || strings.Contains(string(raw), "private selected source marker") {
 					t.Fatal("refusal leaked private source")
 				}
 			}
