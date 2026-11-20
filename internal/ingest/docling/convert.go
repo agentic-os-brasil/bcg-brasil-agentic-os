@@ -253,18 +253,22 @@ func (r *Runtime) boundWorkspace(name, id string) bool {
 	return err == nil && state.WorkspaceID == id && state.MetadataStatus == "valid" && state.State == "ready"
 }
 
+// A named buffer keeps optimized I/O paths from bypassing Write's quota.
 type boundedOutput struct {
-	bytes.Buffer
+	buffer  bytes.Buffer
 	maximum int64
 	cancel  context.CancelFunc
 }
+
+func (b *boundedOutput) Bytes() []byte { return b.buffer.Bytes() }
+func (b *boundedOutput) Len() int      { return b.buffer.Len() }
 
 func (b *boundedOutput) Write(p []byte) (int, error) {
 	if int64(b.Len())+int64(len(p)) > b.maximum {
 		b.cancel()
 		return 0, errors.New("process_output_limit")
 	}
-	return b.Buffer.Write(p)
+	return b.buffer.Write(p)
 }
 
 func targetLockSHA() string {
