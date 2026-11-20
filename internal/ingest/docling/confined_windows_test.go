@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,6 +68,7 @@ func TestWindowsNativeConfinement(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	err := runWindowsConfined(ctx, work, child, []string{"-test.run=^TestWindowsConfinementChild$", "-test.v"}, []byte("probe"), &stdout, &stderr)
 	if err != nil {
+		logWindowsConfinementFailureContext(t)
 		t.Fatalf("native confinement failed: %v stderr=%s stdout=%s", err, stderr.String(), stdout.String())
 	}
 	if !strings.Contains(stdout.String(), "NATIVE_WINDOWS_CONFINEMENT_PASSED") {
@@ -93,6 +95,7 @@ func TestWindowsNativeConfinementDeadline(t *testing.T) {
 	select {
 	case <-stdout.ready:
 	case err := <-result:
+		logWindowsConfinementFailureContext(t)
 		t.Fatalf("native child failed before readiness: %v stderr=%s", err, stderr.String())
 	case <-time.After(20 * time.Second):
 		cancel()
@@ -125,6 +128,100 @@ func TestWindowsNativeConfinementDeadline(t *testing.T) {
 		t.Fatalf("actual confined child survived cancellation: state=%d err=%v", state, err)
 	}
 	t.Logf("actual ready child terminated by Job in %s", time.Since(started))
+}
+
+// Observe only the parent's post-failure context, never the child's failed DLL.
+// Do not load USER32: its initialization could alter later parents' inherited
+// desktop context. Inspection failures never change confinement or the verdict.
+func logWindowsConfinementFailureContext(t *testing.T) {
+	t.Helper()
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	var session uint32
+	err := windows.ProcessIdToSessionId(windows.GetCurrentProcessId(), &session)
+	t.Logf("confinement parent-after-failure session_id=%d inspect_error=%v", session, err)
+	// Kernel32 returns the parent's original requested desktop, not the child's
+	// current desktop. Keep nil, empty and bounded/truncated names distinct.
+	var startup windows.StartupInfo
+	if err := windows.GetStartupInfo(&startup); err != nil {
+		t.Logf("confinement parent_original_startup_desktop=unavailable inspect_error=%v", err)
+	} else if startup.Desktop == nil {
+		t.Log("confinement parent_original_startup_desktop=nil")
+	} else {
+		name := make([]uint16, 0, 256)
+		terminated := false
+		for i := 0; i < 256; i++ {
+			unit := *(*uint16)(unsafe.Add(unsafe.Pointer(startup.Desktop), uintptr(i)*unsafe.Sizeof(uint16(0))))
+			if unit == 0 {
+				terminated = true
+				break
+			}
+			name = append(name, unit)
+		}
+		t.Logf("confinement parent_original_startup_desktop=%q terminated_within_bound=%t", windows.UTF16ToString(name), terminated)
+	}
+	integrity := make([]byte, 256)
+	var returned uint32
+	err = windows.GetTokenInformation(windows.GetCurrentProcessToken(), windows.TokenIntegrityLevel, &integrity[0], uint32(len(integrity)), &returned)
+	if err == nil && returned >= uint32(unsafe.Sizeof(windows.Tokenmandatorylabel{})) && returned <= uint32(len(integrity)) {
+		label := (*windows.Tokenmandatorylabel)(unsafe.Pointer(&integrity[0]))
+		if label.Label.Sid != nil && label.Label.Sid.IsValid() && label.Label.Sid.SubAuthorityCount() > 0 {
+			t.Logf("confinement parent-after-failure token_integrity_rid=0x%x", label.Label.Sid.SubAuthority(uint32(label.Label.Sid.SubAuthorityCount()-1)))
+		} else {
+			t.Log("confinement parent-after-failure token_integrity=invalid")
+		}
+	} else {
+		t.Logf("confinement parent-after-failure token_integrity=unavailable bytes=%d inspect_error=%v", returned, err)
+	}
+	runtime.KeepAlive(integrity)
+	moduleName, err := windows.UTF16PtrFromString("user32.dll")
+	if err != nil {
+		t.Logf("confinement parent-after-failure desktop_inspection=unavailable inspect_error=%v", err)
+		return
+	}
+	var user32 windows.Handle
+	// Flags 0 retain an existing module reference, but never load an absent DLL.
+	if err := windows.GetModuleHandleEx(0, moduleName, &user32); err != nil {
+		t.Logf("confinement parent-after-failure desktop_inspection=omitted user32_not_loaded inspect_error=%v", err)
+		return
+	}
+	defer windows.FreeLibrary(user32)
+	information, err := windows.GetProcAddress(user32, "GetUserObjectInformationW")
+	if err != nil {
+		t.Logf("confinement parent-after-failure desktop_inspection=unavailable inspect_error=%v", err)
+		return
+	}
+	for _, object := range []struct {
+		kind, procedure string
+		arguments       []uintptr
+	}{{"window_station", "GetProcessWindowStation", nil}, {"desktop", "GetThreadDesktop", []uintptr{uintptr(windows.GetCurrentThreadId())}}} {
+		procedure, err := windows.GetProcAddress(user32, object.procedure)
+		if err != nil {
+			t.Logf("confinement parent-after-failure %s=unavailable inspect_error=%v", object.kind, err)
+			continue
+		}
+		handle, _, inspectErr := syscall.SyscallN(procedure, object.arguments...)
+		if handle == 0 {
+			t.Logf("confinement parent-after-failure %s=unavailable inspect_error=%v", object.kind, inspectErr)
+			continue
+		}
+		// Borrowed handles belong to the process/thread; do not close or mutate them.
+		var name [256]uint16
+		ok, _, nameErr := syscall.SyscallN(information, handle, 2 /* UOI_NAME */, uintptr(unsafe.Pointer(&name[0])), unsafe.Sizeof(name), uintptr(unsafe.Pointer(&returned)))
+		if ok != 0 && returned <= uint32(unsafe.Sizeof(name)) {
+			t.Logf("confinement parent-after-failure %s_name=%q", object.kind, windows.UTF16ToString(name[:]))
+		} else {
+			t.Logf("confinement parent-after-failure %s_name=unavailable inspect_error=%v", object.kind, nameErr)
+		}
+		// LABEL_SECURITY_INFORMATION returns only mandatory-label information,
+		// not the owner's SID or the discretionary access list.
+		sd, labelErr := windows.GetSecurityInfo(windows.Handle(handle), windows.SE_WINDOW_OBJECT, windows.LABEL_SECURITY_INFORMATION)
+		if labelErr == nil && sd != nil {
+			t.Logf("confinement parent-after-failure %s_mandatory_label=%q (empty means implicit medium)", object.kind, sd.String())
+		} else {
+			t.Logf("confinement parent-after-failure %s_mandatory_label=unavailable inspect_error=%v", object.kind, labelErr)
+		}
+	}
 }
 
 type nativeChildReadyOutput struct {

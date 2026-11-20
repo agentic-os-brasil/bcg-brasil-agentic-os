@@ -179,14 +179,8 @@ func PlaceVerified(ctx context.Context, o Options, release releaseverify.Verifie
 				return err
 			}
 		}
-		if err = heldParent.Rename(filepath.Base(stage), selected.SHA256, false); err != nil {
+		if published, err = publishInstalledStage(handle, heldParent, selected.SHA256); err != nil {
 			return err
-		}
-		published = true
-		// Seal through the same retained root, before metadata, qualification
-		// or selection can make this newly published payload available.
-		if err = handle.Chmod(".", 0555); err != nil {
-			return fmt.Errorf("published converter root could not be sealed; current selector preserved: %w", err)
 		}
 	} else if err != nil {
 		return err

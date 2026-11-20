@@ -88,7 +88,21 @@ jobs:
         if: inputs.mode != 'assemble'
         shell: pwsh
         run: |
-          ./acceptance/windows-core-pilot.ps1 -DoclingManifest $env:MAESTRO_WINDOWS_DOCLING_MANIFEST -OutputRoot (Join-Path $env:RUNNER_TEMP 'docling-native-proof')
+          $nativeStarted = Get-Date
+          try {
+            ./acceptance/windows-core-pilot.ps1 -DoclingManifest $env:MAESTRO_WINDOWS_DOCLING_MANIFEST -OutputRoot (Join-Path $env:RUNNER_TEMP 'docling-native-proof')
+          } catch {
+            $nativeFailure = $_
+            try {
+              $faults = @(Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=$nativeStarted; Id=1000,1001,26} -MaxEvents 50 -ErrorAction SilentlyContinue |
+                Where-Object { $_.Message -match '(?i)\bchild\.exe\b' } |
+                Select-Object -First 5 @{Name='time_utc'; Expression={$_.TimeCreated.ToUniversalTime().ToString('o')}}, ProviderName, Id, @{Name='message'; Expression={$_.Message.Substring(0,[Math]::Min($_.Message.Length,4096))}})
+              $tools = @("${env:ProgramFiles(x86)}\Windows Kits\10\Debuggers\x64\cdb.exe", "${env:ProgramFiles(x86)}\Windows Kits\10\Debuggers\x64\gflags.exe")
+              $diagnostic = @{source_revision=$env:GITHUB_SHA; scope='Failed synthetic child only; no loader attribution inferred'; application_faults=$faults; existing_debugger_tools=@($tools | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })} | ConvertTo-Json -Depth 4
+              [IO.File]::WriteAllText((Join-Path $env:RUNNER_TEMP 'docling-native-proof/windows-child-startup-failure.json'),$diagnostic,[Text.UTF8Encoding]::new($false))
+            } catch { Write-Warning ('Optional native failure evidence unavailable: ' + $_.Exception.Message) }
+            throw $nativeFailure
+          }
       - name: Export exact unsigned native pair after successful ordinary-user proof
         if: inputs.mode == 'export'
         shell: pwsh
@@ -167,5 +181,6 @@ jobs:
             ${{ runner.temp }}/docling-native-proof/docling-native-tests.log
             ${{ runner.temp }}/docling-native-proof/native-test.stdout.log
             ${{ runner.temp }}/docling-native-proof/native-test.stderr.log
+            ${{ runner.temp }}/docling-native-proof/windows-child-startup-failure.json
           if-no-files-found: warn
           retention-days: 7

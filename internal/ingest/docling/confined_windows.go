@@ -252,7 +252,7 @@ func runWindowsConfined(ctx context.Context, work, executable string, args []str
 		return err
 	}
 	if code != 0 {
-		return fmt.Errorf("confined converter exit %d", code)
+		return fmt.Errorf("confined converter exit %d (status=0x%08x pid=%d creation_flags=0x%08x)", code, code, process.ProcessId, flags)
 	}
 	return result
 }

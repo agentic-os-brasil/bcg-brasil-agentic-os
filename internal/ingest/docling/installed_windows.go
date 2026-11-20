@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/winprivate"
 	"os"
 	"path"
@@ -88,4 +90,48 @@ func verifyInstalled(ctx context.Context, root string, entries map[string]entry)
 		return errors.New("installed_file_missing")
 	}
 	return nil
+}
+
+func publishInstalledStage(root *os.Root, _ *scheduler.HeldDirectory, name string) (published bool, err error) {
+	// Go's Windows os.Root withholds DELETE sharing. Retain the original
+	// object while transferring publication to the existing movable owner.
+	guard, err := winprivate.Open(root.Name(), false)
+	if err != nil {
+		return false, err
+	}
+	defer func() { err = errors.Join(err, guard.Close()) }()
+	original, err := root.Stat(".")
+	if err != nil {
+		return false, err
+	}
+	guarded, err := guard.File.Stat()
+	if err != nil {
+		return false, err
+	}
+	if !os.SameFile(original, guarded) {
+		return false, errors.New("converter staging identity changed")
+	}
+	if err := root.Close(); err != nil {
+		return false, err
+	}
+	movable, err := winprivate.OpenMovableDirectory(root.Name())
+	if err != nil {
+		return false, err
+	}
+	defer func() { err = errors.Join(err, movable.Close()) }()
+	admitted, err := movable.Directory().File.Stat()
+	if err != nil {
+		return false, err
+	}
+	if !os.SameFile(guarded, admitted) {
+		return false, errors.New("converter staging identity changed")
+	}
+	published, err = movable.MoveTo(name)
+	if err != nil {
+		return published, err
+	}
+	if err := movable.Directory().File.Chmod(0555); err != nil {
+		return true, fmt.Errorf("published converter root could not be sealed; current selector preserved: %w", err)
+	}
+	return true, nil
 }

@@ -6,11 +6,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"golang.org/x/sys/unix"
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 )
 
 func verifyInstalled(ctx context.Context, root string, entries map[string]entry) error {
@@ -104,4 +106,15 @@ func verifyInstalled(ctx context.Context, root string, entries map[string]entry)
 		return errors.New("installed_file_missing")
 	}
 	return nil
+}
+
+func publishInstalledStage(root *os.Root, parent *scheduler.HeldDirectory, name string) (bool, error) {
+	if err := parent.Rename(filepath.Base(root.Name()), name, false); err != nil {
+		return false, err
+	}
+	// Seal through the same retained root before metadata or qualification.
+	if err := root.Chmod(".", 0555); err != nil {
+		return true, fmt.Errorf("published converter root could not be sealed; current selector preserved: %w", err)
+	}
+	return true, nil
 }

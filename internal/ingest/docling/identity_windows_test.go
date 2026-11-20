@@ -32,4 +32,5 @@ func TestWindowsSharedImplementationIdentityAcrossEntryModules(t *testing.T) {
 		}
 		expected = identity
 	}
+	t.Run("retained_stage_publication", testWindowsPlacementPublishesRetainedStageWithoutReplacement)
 }
