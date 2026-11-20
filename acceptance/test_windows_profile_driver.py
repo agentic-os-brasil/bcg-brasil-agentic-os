@@ -357,15 +357,21 @@ class WindowsDoclingRuntimeProfile(unittest.TestCase):
         step = workflow.split("      - name: Validate closed dispatch and create fresh Developer staging\n", 1)[1].split("      - name:", 1)[0]
         script = self.root / "closed-dispatch.ps1"
         script.write_text(textwrap.dedent(step.split("        run: |\n", 1)[1]), encoding="utf-8")
+        # An existing profile is legitimate; the workflow owns only its staging.
+        profile = self.root / "synthetic-host"
+        profile.mkdir()
+        developer = profile / "Developer"
+        staging = developer / "maestro-windows-kit-1729-1"
         for mode in ("export", "assemble", "unknown"):
             env = os.environ.copy()
             for name in ("PILOT_REGISTRY", "PILOT_N", "PILOT_N1", "PILOT_INSTALLER", "PILOT_UNSIGNED_RUN", "PILOT_EXPORT_SHA", "PILOT_METADATA"):
                 env[name] = ""
-            env.update(PILOT_MODE=mode, USERPROFILE=str(self.root / "synthetic-host"), GITHUB_RUN_ID="1729", GITHUB_RUN_ATTEMPT="1")
+            env.update(PILOT_MODE=mode, USERPROFILE=str(profile), GITHUB_RUN_ID="1729", GITHUB_RUN_ATTEMPT="1")
             result = subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(script)], env=env, text=True, capture_output=True, timeout=30)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("R17 registryRead experiment is proof-only", result.stdout + result.stderr)
-            self.assertFalse((self.root / "synthetic-host").exists())
+            self.assertFalse(developer.exists())
+            self.assertFalse(staging.exists())
 
     def test_docling_public_acquisition_python_parses_without_execution(self):
         import ast
