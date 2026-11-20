@@ -99,8 +99,9 @@ if ($DoclingRuntime) {
 import hashlib,json,os,pathlib,urllib.request
 source=pathlib.Path(os.environ['MAESTRO_DOCLING_ACQUIRE_SOURCE'])
 root=pathlib.Path(os.environ['MAESTRO_DOCLING_ACQUIRE_RAW'])
-inputs=json.loads((source/'internal/ingest/docling/runtime/windows-amd64/inputs.json').read_text())
-assert len(inputs)==52 and sum(x['size'] for x in inputs)==80853273
+inputs=json.loads((source/'internal/ingest/docling/runtime/documents/windows-amd64/inputs.json').read_text())
+assert len(inputs)==56 and sum(x['size'] for x in inputs)==85851562
+assert hashlib.sha256((source/'internal/ingest/docling/runtime/documents/windows-amd64/pylock.toml').read_bytes()).hexdigest()=='38b1a0257c3feec8a5b4b97856e7f2096cdb72ed2bd1734d8e61567bf4757643'
 inputs.append(dict(filename='cpython-3.12.16+20261026-x86_64-pc-windows-msvc-install_only.tar.gz',size=47113364,sha256='590dfcbe3a34c07301e6332e13e2188b98655cd072b08afa45a7998dc4c22bc5',url='https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.12.16%2B20261026-x86_64-pc-windows-msvc-install_only.tar.gz'))
 for item in inputs:
     name=item['filename'];assert pathlib.PurePosixPath(name).name==name and ':' not in name and '\\' not in name
@@ -110,7 +111,7 @@ for item in inputs:
         while chunk:=response.read(1<<20):
             count+=len(chunk);assert count<=item['size'];digest.update(chunk);output.write(chunk)
     assert count==item['size'] and digest.hexdigest()==expected,'pinned input mismatch'
-print('verified_exact_public_runtime_inputs=53 bytes=127966637')
+print('verified_exact_public_runtime_inputs=57 bytes=132964926')
 '@ | python -
   if ($LASTEXITCODE -ne 0) { throw 'Docling exact public runtime acquisition failed.' }
   $testBinary=Join-Path $binaryRoot 'docling.test.exe'
@@ -122,7 +123,7 @@ print('verified_exact_public_runtime_inputs=53 bytes=127966637')
   })
   $records | Set-Content -LiteralPath $inventory -Encoding UTF8
   . (Join-Path $sourceRoot 'acceptance/windows-docling-profile.ps1')
-  $manifest=[ordered]@{schema_version=1;qualification_profile='windows_docling_runtime_v1';source_revision=$revision;public_root=$publicRoot;source_root=$sourceRoot;sdk_go=$sdkGo;module_cache=$env:GOMODCACHE;raw_inputs=$rawRoot;test_binary=$testBinary;inventory_sha256=(Get-FileHash -LiteralPath $inventory -Algorithm SHA256).Hash.ToLowerInvariant();required_tests=$script:DoclingRuntimeTests}
+  $manifest=[ordered]@{schema_version=1;qualification_profile='windows_docling_documents_v1';runtime_profile='model-free-documents-v1';runtime_lock_sha256='38b1a0257c3feec8a5b4b97856e7f2096cdb72ed2bd1734d8e61567bf4757643';source_revision=$revision;public_root=$publicRoot;source_root=$sourceRoot;sdk_go=$sdkGo;module_cache=$env:GOMODCACHE;raw_inputs=$rawRoot;test_binary=$testBinary;inventory_sha256=(Get-FileHash -LiteralPath $inventory -Algorithm SHA256).Hash.ToLowerInvariant();required_tests=$script:DoclingRuntimeTests}
   $manifestPath=Join-Path $publicRoot 'docling-runtime-manifest.json'
   $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
   Read-DoclingRuntimeManifest $manifestPath | Out-Null
