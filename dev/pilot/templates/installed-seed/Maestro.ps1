@@ -246,7 +246,7 @@ try {
     $CodeConfig = Read-Host "Perfil Code privado [$(Join-Path $Owner 'Maestro-Code-Profile')]"
     if (-not $CodeConfig) { $CodeConfig = Join-Path $Owner 'Maestro-Code-Profile' }
     $CodeConfig = Prepare-CodeConfiguration $CodeConfig
-    Write-Json $configPath @{admission_sha256=$Role;user_home=$Owner;workspace=$Work;code_executable=$Code;carrier_id=[Guid]::NewGuid().ToString('N');brain_home=$Brain;source_root=(Join-Path $Root 'source');client_parent=$Clients;code_configuration_directory=$CodeConfig}
+    Write-Json $configPath @{admission_sha256=$Role;user_home=$Owner;workspace=$Work;code_executable=$Code;carrier_id=[Guid]::NewGuid().ToString('N');brain_home=$Brain;client_parent=$Clients;code_configuration_directory=$CodeConfig}
   }
   $null = Private-File $configPath
   $Config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
@@ -280,7 +280,27 @@ try {
   }
   $before = Current-Clients
   if (-not $CheckOnly -and $before.state -cne 'current_materialization') {
-    $request = @{managed_root=$Product;user_home=$Config.user_home;source_root=$Config.source_root;source=$Meta.identity.source}
+    $request = @{managed_root=$Product;user_home=$Config.user_home}
+    # This hint controls only first-choice UI; the installed owner validates state and binds the source.
+    $firstSource = $false
+    try {
+      $sourceState = Join-Path $Config.user_home '.maestro-install/config/install-state.json'
+      $null = Private-File $sourceState
+      $recorded = [IO.File]::ReadAllText($sourceState) | ConvertFrom-Json
+      if (($recorded.schema_version -is [int] -or $recorded.schema_version -is [long]) -and $recorded.schema_version -eq 4 -and $recorded.managed_root -is [string] -and [string]::Equals($recorded.managed_root,$Product,[StringComparison]::OrdinalIgnoreCase)) {
+        $sourceProperty = $recorded.PSObject.Properties['source_control']
+        $firstSource = $null -eq $sourceProperty -or $null -eq $sourceProperty.Value
+      }
+    } catch { $firstSource = $false }
+    if ($firstSource) {
+      Write-Host 'Selecione a pasta SOURCE sincronizada do time e disponivel offline, separada do ZIP local.'
+      Write-Host 'Digite TESTE-LOCAL somente para ensaio com a amostra deste kit; ela nao acompanha a origem do time.'
+      $shared = Read-Host 'Pasta SOURCE (Enter deixa pendente)'
+      if (-not $shared) { Stop-Maestro 'Escolha da origem deixada pendente; nenhuma origem foi inscrita.' }
+      if ($shared -ceq 'TESTE-LOCAL') { $shared = Join-Path $Root 'source'; Write-Host "Ensaio local, sem acompanhar outra pasta compartilhada: $shared" }
+      $request['source_root'] = $shared
+      $request['source'] = $Meta.identity.source
+    }
     $review = Invoke-Installer 'source-review' $request
     Write-Json (Join-Path $Run 'source-review-private.json') $review
     Confirm-Review $review

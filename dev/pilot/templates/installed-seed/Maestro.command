@@ -205,7 +205,7 @@ if [[ ! -e "$CFG" ]]; then
   printf 'Perfil Code privado [%s/Maestro-Code-Profile]: ' "$OWNER"; read -r CODE_CONFIG; CODE_CONFIG="${CODE_CONFIG:-$OWNER/Maestro-Code-Profile}"
   CODE_CONFIG="$(prepare_code_configuration "$CODE_CONFIG")"
   CARRIER="$(/usr/bin/uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]')"
-  json "$CFG" admission_sha256 "$ROLE" user_home "$OWNER" workspace "$WORK" code_executable "$CODE" carrier_id "$CARRIER" brain_home "$BRAIN" source_root "$ROOT/source" client_parent "$CLIENTS" code_configuration_directory "$CODE_CONFIG"
+  json "$CFG" admission_sha256 "$ROLE" user_home "$OWNER" workspace "$WORK" code_executable "$CODE" carrier_id "$CARRIER" brain_home "$BRAIN" client_parent "$CLIENTS" code_configuration_directory "$CODE_CONFIG"
 fi
 [[ -f "$CFG" && ! -L "$CFG" && "$(stat -f '%l' "$CFG")" == 1 && "$(jget "$CFG" admission_sha256)" == "$ROLE" ]] || fail 'Configuração local divergente.'
 OWNER="$(jget "$CFG" user_home)"; WORK="$(jget "$CFG" workspace)"; CARRIER="$(jget "$CFG" carrier_id)"
@@ -214,7 +214,7 @@ CLIENTS="$(jget "$CFG" client_parent 2>/dev/null || true)"; CODE_CONFIG="$(jget 
 [[ "$CLIENTS" == "$OWNER/"* && "$CODE_CONFIG" == "$OWNER/"* ]] || fail 'Seleção dos clientes difere do owner; preserve a configuração.'
 [[ -d "$CLIENTS" && -d "$CODE_CONFIG" ]] || fail 'Seleção privada ausente; preserve a configuração e peça orientação, sem recriar perfil ou clientes.'
 private_dir "$CLIENTS"; private_dir "$CODE_CONFIG"
-BRAIN="$(jget "$CFG" brain_home)"; CODE="$(jget "$CFG" code_executable)"; SHARED="$(jget "$CFG" source_root)"
+BRAIN="$(jget "$CFG" brain_home)"; CODE="$(jget "$CFG" code_executable)"
 [[ -z "${MAESTRO_HOME:-}" || "$MAESTRO_HOME" == "$BRAIN" ]] || fail 'MAESTRO_HOME mudou; preserve o brain e confira a configuração.'
 export MAESTRO_HOME="$BRAIN"
 PRODUCT="$BASE/product"
@@ -245,9 +245,26 @@ if "$INSTALLED" clients-status "${COMMON[@]}" > "$RUN/clients-before-private.jso
   [[ "$(jget "$RUN/clients-before-private.json" state)" != current_materialization ]] || current_clients=true
 fi
 if [[ "${1:-}" != --check-only && "$current_clients" != true ]]; then
-  json "$RUN/source-request.json" managed_root "$PRODUCT" user_home "$OWNER" source_root "$SHARED"
-  /usr/bin/plutil -insert source -dictionary "$RUN/source-request.json"
-  for field in source_id channel os arch; do /usr/bin/plutil -insert "source.$field" -string "$(jget "$META" "identity.source.$field")" "$RUN/source-request.json"; done
+  json "$RUN/source-request.json" managed_root "$PRODUCT" user_home "$OWNER"
+  # This hint controls only first-choice UI; the installed owner validates state and binds the source.
+  source_state="$OWNER/.maestro-install/config/install-state.json"
+  first_source=false
+  if [[ -f "$source_state" && ! -L "$source_state" && "$(stat -f '%l' "$source_state")" == 1 && "$(stat -f '%u' "$source_state")" == "$(id -u)" ]] && /usr/bin/plutil -convert json -o - "$source_state" >/dev/null 2>&1 && [[ "$(/usr/bin/plutil -type schema_version "$source_state")" == integer && "$(jget "$source_state" schema_version)" == 4 && "$(/usr/bin/plutil -type managed_root "$source_state")" == string && "$(jget "$source_state" managed_root)" == "$PRODUCT" ]]; then
+    if source_kind="$(/usr/bin/plutil -type source_control "$source_state" 2>/dev/null)"; then
+      [[ "$source_kind" != null ]] || first_source=true
+    else
+      first_source=true
+    fi
+  fi
+  if [[ "$first_source" == true ]]; then
+    printf '\nSelecione a pasta SOURCE sincronizada do time e disponível offline, separada do ZIP local.\nDigite TESTE-LOCAL somente para ensaio com a amostra deste kit; ela não acompanha a origem do time.\nPasta SOURCE (Enter deixa pendente): '
+    read -r SHARED
+    [[ -n "$SHARED" ]] || fail 'Escolha da origem deixada pendente; nenhuma origem foi inscrita.'
+    if [[ "$SHARED" == TESTE-LOCAL ]]; then SHARED="$ROOT/source"; printf '\nEnsaio local, sem acompanhar outra pasta compartilhada: %s\n' "$SHARED"; fi
+    /usr/bin/plutil -insert source_root -string "$SHARED" "$RUN/source-request.json"
+    /usr/bin/plutil -insert source -dictionary "$RUN/source-request.json"
+    for field in source_id channel os arch; do /usr/bin/plutil -insert "source.$field" -string "$(jget "$META" "identity.source.$field")" "$RUN/source-request.json"; done
+  fi
   "$INSTALLED" source-review < "$RUN/source-request.json" > "$RUN/source-review.json" || fail 'Fonte compartilhada indisponível ou divergente. Mantenha a pasta offline e tente novamente.'
   review_confirm "$RUN/source-review.json"
   digest="$(jget "$RUN/source-review.json" digest)"
