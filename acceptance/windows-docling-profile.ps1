@@ -94,7 +94,8 @@ function Invoke-DoclingFailureTrace($Manifest, [string]$ProofRoot, [string]$Expe
     $receipt = [ordered]@{schema_version=1; diagnostic_only=$true; qualification=$false; baseline_exit_code=$BaselineExit
         baseline_log_sha256=(Get-FileHash -LiteralPath (Join-Path $ProofRoot 'docling-native-tests.log') -Algorithm SHA256).Hash.ToLowerInvariant()
         source_revision=$Manifest.source_revision; test_binary_sha256=$ExpectedImageSHA256
-        status='not_started'; timeout_seconds=60; retained_log_limit_bytes=4194304; no_registry_changes=$true; debuggee_kill_on_debugger_exit=$true}
+        status='not_started'; timeout_seconds=60; retained_log_limit_bytes=4194304; no_registry_changes=$true; debuggee_kill_on_debugger_exit=$true
+        public_symbol_prefetch_configured=$true; public_symbol_module='ntdll.dll'; public_symbol_store='https://msdl.microsoft.com/download/symbols'; symbol_network_phase='stopped_parent_before_test_only'}
     $process=$null; $outputsAdmitted=$false; $traceOut=Join-Path $ProofRoot 'docling-loader-trace.stdout.log'; $traceErr=Join-Path $ProofRoot 'docling-loader-trace.stderr.log'
     try {
         if ($env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or [Environment]::OSVersion.Platform -ne 'Win32NT') {
@@ -115,13 +116,26 @@ function Invoke-DoclingFailureTrace($Manifest, [string]$ProofRoot, [string]$Expe
         $outputsAdmitted=$true
         # The cpr event precedes execution of the child's loader initialization.
         # !gflag modifies only that debuggee's PEB, never IFEO/system settings.
+        # Fetch only matching stock NTDLL metadata before the Go test/context
+        # starts. Restore a local symbol store before either target can run.
+        if($symbols -match '[;"\r\n]'){throw 'Diagnostic symbol cache path is ambiguous.'}
         $scriptText=@'
-sxe -c ".echo MAESTRO_CHILD_CREATE_LOADER_SNAPS;.lastevent;|.;!gflag +sls;g" cpr
+.echo MAESTRO_PUBLIC_NTDLL_PREFETCH
+.sympath srv*__MAESTRO_SYMBOL_CACHE__*https://msdl.microsoft.com/download/symbols
+.reload /f ntdll.dll
+lmvm ntdll
+!lmi ntdll
+dt ntdll!_PEB NtGlobalFlag
+.sympath srv*__MAESTRO_SYMBOL_CACHE__
+.echo MAESTRO_SYMBOLS_LOCAL_ONLY
+sxe -c ".echo MAESTRO_CHILD_CREATE_LOADER_SNAPS;.lastevent;|.;.reload /f ntdll.dll;!exts.gflag +sls;dt ntdll!_PEB NtGlobalFlag @$peb;g" cpr
 sxe -c ".lastevent;k;g" bpe
 sxe -c ".lastevent;k;gn" 0xc0000142
 sxe -c ".lastevent;k;g" epr:child.exe
 g
 '@
+        $scriptText=$scriptText.Replace('__MAESTRO_SYMBOL_CACHE__',$symbols)
+        $receipt.symbol_cache=$symbols
         [IO.File]::WriteAllText($commands,$scriptText,[Text.UTF8Encoding]::new($false))
         [IO.File]::WriteAllText($stdin,'',[Text.UTF8Encoding]::new($false))
         [IO.Directory]::CreateDirectory($symbols)|Out-Null
