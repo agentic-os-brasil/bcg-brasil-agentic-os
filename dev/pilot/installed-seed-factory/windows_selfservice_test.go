@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -14,8 +15,15 @@ import (
 // launcher, installer, Claude, login or GUI. Native Windows ACL checks remain
 // separately qualified; only directory creation is substituted on other hosts.
 func TestWindowsSelfServiceExactOwnerAndSelectedProfile(t *testing.T) {
-	pwsh, err := exec.LookPath("pwsh")
+	shell := "pwsh"
+	if runtime.GOOS == "windows" {
+		shell = "powershell.exe"
+	}
+	powerShell, err := exec.LookPath(shell)
 	if err != nil {
+		if runtime.GOOS == "windows" {
+			t.Fatalf("shipped Windows PowerShell 5.1 is required: %v", err)
+		}
 		t.Skip("PowerShell required for shipped Windows producer behavior")
 	}
 	root := developerFixture(t)
@@ -39,7 +47,7 @@ func TestWindowsSelfServiceExactOwnerAndSelectedProfile(t *testing.T) {
 	if err := os.WriteFile(script, []byte(windowsSelfServiceBehavior), 0600); err != nil {
 		t.Fatal(err)
 	}
-	command := exec.Command(pwsh, "-NoProfile", "-NonInteractive", "-File", script, "-Source", filepath.Join(repo, "dev/pilot/templates/installed-seed/Maestro.ps1"), "-Fixture", root)
+	command := exec.Command(powerShell, "-NoProfile", "-NonInteractive", "-File", script, "-Source", filepath.Join(repo, "dev/pilot/templates/installed-seed/Maestro.ps1"), "-Fixture", root)
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("shipped Windows helper behavior: %s\n%v", output, err)
@@ -50,6 +58,8 @@ func TestWindowsSelfServiceExactOwnerAndSelectedProfile(t *testing.T) {
 const windowsSelfServiceBehavior = `param([string]$Source,[string]$Fixture)
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
+if([Environment]::OSVersion.Platform -eq 'Win32NT' -and ($PSVersionTable.PSEdition -cne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1)){throw 'Shipped frontend requires Windows PowerShell Desktop 5.1'}
+Write-Output ('Frontend protocol shell: {0} {1}; synthetic installer stubs, not installation/client proof' -f $PSVersionTable.PSEdition,$PSVersionTable.PSVersion)
 $Utf8=New-Object System.Text.UTF8Encoding($false)
 $tokens=$null; $errors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile($Source,[ref]$tokens,[ref]$errors)
