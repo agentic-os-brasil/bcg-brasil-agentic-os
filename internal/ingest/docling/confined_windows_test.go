@@ -318,6 +318,28 @@ func TestWindowsConfinementChild(t *testing.T) {
 		}
 	}
 	if !networkDenied {
+		// Observe startup only after every original probe has completed. Neither
+		// this result nor a successful retry can turn those failures into denials.
+		var data windows.WSAData
+		if startupErr := windows.WSAStartup(0x0202, &data); startupErr != nil {
+			var code syscall.Errno
+			if errors.As(startupErr, &code) {
+				t.Logf("NATIVE_WINSOCK_FAILURE_OBSERVATION operation=startup result=%d", uint32(code))
+			} else {
+				t.Log("NATIVE_WINSOCK_FAILURE_OBSERVATION operation=startup result=unavailable")
+			}
+		} else {
+			t.Log("NATIVE_WINSOCK_FAILURE_OBSERVATION operation=startup result=0")
+			cleanupErr := windows.WSACleanup()
+			var code syscall.Errno
+			if cleanupErr == nil {
+				t.Log("NATIVE_WINSOCK_FAILURE_OBSERVATION operation=cleanup result=0")
+			} else if errors.As(cleanupErr, &code) {
+				t.Logf("NATIVE_WINSOCK_FAILURE_OBSERVATION operation=cleanup result=%d", uint32(code))
+			} else {
+				t.Log("NATIVE_WINSOCK_FAILURE_OBSERVATION operation=cleanup result=unavailable")
+			}
+		}
 		t.FailNow()
 	}
 	err := exec.Command(os.Args[0], "-test.run=^$").Run()

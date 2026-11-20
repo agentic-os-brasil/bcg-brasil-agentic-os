@@ -95,7 +95,8 @@ function Invoke-DoclingFailureTrace($Manifest, [string]$ProofRoot, [string]$Expe
         baseline_log_sha256=(Get-FileHash -LiteralPath (Join-Path $ProofRoot 'docling-native-tests.log') -Algorithm SHA256).Hash.ToLowerInvariant()
         source_revision=$Manifest.source_revision; test_binary_sha256=$ExpectedImageSHA256
         status='not_started'; timeout_seconds=60; retained_log_limit_bytes=4194304; no_registry_changes=$true; debuggee_kill_on_debugger_exit=$true
-        public_symbol_prefetch_configured=$true; public_symbol_modules=@('ntdll.dll','KERNELBASE.dll'); public_symbol_store='https://msdl.microsoft.com/download/symbols'; symbol_network_phase='stopped_parent_before_test_only'}
+        public_symbol_prefetch_configured=$true; public_symbol_modules=@('ntdll.dll','KERNELBASE.dll'); public_symbol_store='https://msdl.microsoft.com/download/symbols'; symbol_network_phase='stopped_parent_before_test_only'
+        replay_test='TestWindowsRealAuthenticatedDocling'; module_load_scope='successful_loads_are_not_failed_dll_attribution'}
     $process=$null; $outputsAdmitted=$false; $traceOut=Join-Path $ProofRoot 'docling-loader-trace.stdout.log'; $traceErr=Join-Path $ProofRoot 'docling-loader-trace.stderr.log'
     try {
         if ($env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or [Environment]::OSVersion.Platform -ne 'Win32NT') {
@@ -107,61 +108,41 @@ function Invoke-DoclingFailureTrace($Manifest, [string]$ProofRoot, [string]$Expe
         if ((Get-FileHash -LiteralPath $Manifest.test_binary -Algorithm SHA256).Hash.ToLowerInvariant() -cne $ExpectedImageSHA256) { throw 'Sealed test image changed before diagnostic replay.' }
         $receipt.debugger_sha256=(Get-FileHash -LiteralPath $debugger -Algorithm SHA256).Hash.ToLowerInvariant()
         $commands=Join-Path $ProofRoot 'docling-loader-commands.txt'
-        $attachCommands=Join-Path $ProofRoot 'docling-kernelbase-attach-commands.txt'
         $stdin=Join-Path $ProofRoot 'docling-loader-stdin.txt'; $symbols=Join-Path $ProofRoot 'docling-loader-symbols'
         $rawRoot=Join-Path $ProofRoot ('.docling-loader-raw-'+[Guid]::NewGuid().ToString('N'))
         $rawOut=Join-Path $rawRoot 'stdout.raw';$rawErr=Join-Path $rawRoot 'stderr.raw'
-        foreach($path in @($traceOut,$traceErr,$commands,$attachCommands,$stdin,$symbols,$rawRoot)) { if(Test-Path -LiteralPath $path){throw 'Diagnostic output must be fresh.'} }
+        foreach($path in @($traceOut,$traceErr,$commands,$stdin,$symbols,$rawRoot)) { if(Test-Path -LiteralPath $path){throw 'Diagnostic output must be fresh.'} }
         # Inherit the already-private ProofRoot ACL; RAW names are never upload inputs.
         New-Item -ItemType Directory -Path $rawRoot|Out-Null
         $outputsAdmitted=$true
-        # The cpr event precedes execution of the child's loader initialization.
-        # !gflag modifies only that debuggee's PEB, never IFEO/system settings.
         # Fetch only matching stock NTDLL/KERNELBASE metadata before the test.
-        # Restore a local symbol store before either target can run.
+        # The replay follows the real LPAC Python child without changing its flags.
+        # Restore local symbols before execution; successful loads do not name a failed DLL.
         if($symbols -match '[;"\r\n]'){throw 'Diagnostic symbol cache path is ambiguous.'}
-        # Read the matched child functions before resuming initialization;
-        # finite disassembly avoids a command-file execution wait.
-        $attachText=@'
-.echo MAESTRO_KERNELBASE_ATTACH_ENTER
-.lastevent
-|.
-r rcx,rdx,r8
-uf KERNELBASE!KernelBaseDllInitialize
-uf KERNELBASE!_KernelBaseBaseDllInitialize
-uf KERNELBASE!ConsoleInitialize
-.echo MAESTRO_KERNELBASE_ATTACH_DISASSEMBLY_DONE
-g
-'@
         $scriptText=@'
 .echo MAESTRO_PUBLIC_NTDLL_PREFETCH
 .sympath srv*__MAESTRO_SYMBOL_CACHE__*https://msdl.microsoft.com/download/symbols
 .reload /f ntdll.dll
 lmvm ntdll
 !lmi ntdll
-dt ntdll!_PEB NtGlobalFlag
 .reload /f KERNELBASE.dll
 lmvm KERNELBASE
 !lmi KERNELBASE
-ln $iment(KERNELBASE)
 .sympath srv*__MAESTRO_SYMBOL_CACHE__
 .echo MAESTRO_SYMBOLS_LOCAL_ONLY
-sxe -c ".echo MAESTRO_CHILD_CREATE_WAITING_FOR_NTDLL;.lastevent;|.;g" cpr
-sxe -c ".echo MAESTRO_CHILD_NTDLL_LOAD_LOADER_SNAPS;.lastevent;|.;.reload /f ntdll.dll;!exts.gflag +sls;dt ntdll!_PEB NtGlobalFlag @$peb;bu /1 $iment(KERNELBASE) \"$$<__MAESTRO_ATTACH_COMMANDS__\";bl;g" ld:ntdll.dll
+sxe -c ".echo MAESTRO_PYTHON_CREATE;.lastevent;|.;g" cpr:python.exe
+sxe -c ".echo MAESTRO_MODULE_LOAD_SUCCESS;.lastevent;|.;g" ld
 sxe -c ".lastevent;k;g" bpe
-sxe -c ".lastevent;k;gn" 0xc0000142
-sxe -c ".lastevent;k;g" epr:child.exe
+sxe -c ".echo MAESTRO_ACCESS_DENIED_EXCEPTION;.lastevent;|.;k;gn" 0xc0000022
+sxe -c ".echo MAESTRO_PYTHON_EXIT;.lastevent;|.;g" epr:python.exe
 g
 '@
         $scriptText=$scriptText.Replace('__MAESTRO_SYMBOL_CACHE__',$symbols)
-        $scriptText=$scriptText.Replace('__MAESTRO_ATTACH_COMMANDS__',$attachCommands.Replace('\','/'))
-        [IO.File]::WriteAllText($attachCommands,$attachText,[Text.UTF8Encoding]::new($false))
-        $receipt.kernelbase_attach_commands_sha256=(Get-FileHash -LiteralPath $attachCommands -Algorithm SHA256).Hash.ToLowerInvariant()
         $receipt.symbol_cache=$symbols
         [IO.File]::WriteAllText($commands,$scriptText,[Text.UTF8Encoding]::new($false))
         [IO.File]::WriteAllText($stdin,'',[Text.UTF8Encoding]::new($false))
         [IO.Directory]::CreateDirectory($symbols)|Out-Null
-        $arguments=@('-o','-G','-hd','-sins','-noshell','-nosqm','-y',('"'+$symbols+'"'),'-cf',('"'+$commands+'"'),('"'+$Manifest.test_binary+'"'),'-test.run','^TestWindowsNativeConfinement$','-test.v','-test.timeout=2400s')
+        $arguments=@('-o','-G','-hd','-sins','-noshell','-nosqm','-y',('"'+$symbols+'"'),'-cf',('"'+$commands+'"'),('"'+$Manifest.test_binary+'"'),'-test.run','^TestWindowsRealAuthenticatedDocling$','-test.v','-test.timeout=2400s')
         $receipt.debugger_arguments=$arguments; $receipt.commands_sha256=(Get-FileHash -LiteralPath $commands -Algorithm SHA256).Hash.ToLowerInvariant()
         $watch=[Diagnostics.Stopwatch]::StartNew()
         $process=Start-Process -FilePath $debugger -ArgumentList $arguments -WorkingDirectory $Manifest.source_root -NoNewWindow -RedirectStandardInput $stdin -RedirectStandardOutput $rawOut -RedirectStandardError $rawErr -PassThru
@@ -239,7 +220,7 @@ function Invoke-DoclingRuntimeProof($Manifest, [string]$ProofRoot, [string]$Expe
     $output | Set-Content -LiteralPath $log -Encoding UTF8
     $output | Write-Output
     if ($exit -ne 0 -or $body -match '--- (FAIL|SKIP):') {
-        if ($body -match 'native confinement failed: confined converter exit 3221225794\b') {
+        if ($body -match '(?m)^    native_windows_test.go:[0-9]+: actual shared runtime place failed: exit status 1: [^\r\n]*msg="native converter qualification failed" stage=launch [^\r\n]*process_status="confined converter exit 3221225506 \(status=0xc0000022\b') {
             try { Invoke-DoclingFailureTrace $Manifest $ProofRoot $testImageSHA256 $exit } catch { Write-Output 'docling_failure_trace diagnostic_only=true status=unavailable' }
         }
         throw 'Actual ordinary-account Docling native coverage failed or skipped.'
