@@ -104,3 +104,22 @@ The original native confinement, filesystem/Job/deadline and 13/6/9 conversion
 checks remain required, with all eight strict network-denial assertions intact.
 No new capability, socket permission, mock module or distribution authority is
 introduced by this transform.
+
+## Failure-only native metadata observation
+
+The original native fixture still compares every sorted full entry name,
+UTC/RFC3339Nano modification time and mode string before and after read-only
+status. Any inequality remains fatal. The existing walks additionally retain
+those same observations in memory so a failure can report bounded counts of
+added/removed entries, affected files/directories and modification-time/mode
+changes. A deterministic first difference emits only an exact known-fixture role
+or `unknown`, plus a closed field bitmask. Each count saturates at 1024 and a
+boolean records saturation; no name, path, path hash, raw time/mode, snapshot,
+content, ACL or arbitrary error is logged. Role classification performs no
+additional filesystem reads and does not infer roles from basenames/prefixes.
+
+Pure equality/privacy/count-bound checks run inside the existing original native
+parent. Cross-compilation on Mac does not execute them. This observation changes
+no product/status behavior or permission, and supplies no tolerance, warmup,
+retry or successful outcome for a metadata mismatch. READY alone does not prove
+read-only purity or completion of the subsequent 13/6/9 corpus gates.
