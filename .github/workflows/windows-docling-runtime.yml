@@ -182,5 +182,9 @@ jobs:
             ${{ runner.temp }}/docling-native-proof/native-test.stdout.log
             ${{ runner.temp }}/docling-native-proof/native-test.stderr.log
             ${{ runner.temp }}/docling-native-proof/windows-child-startup-failure.json
+            ${{ runner.temp }}/docling-native-proof/docling-loader-trace.json
+            ${{ runner.temp }}/docling-native-proof/docling-loader-trace.stdout.log
+            ${{ runner.temp }}/docling-native-proof/docling-loader-trace.stderr.log
+            ${{ runner.temp }}/docling-native-proof/docling-loader-commands.txt
           if-no-files-found: warn
           retention-days: 7

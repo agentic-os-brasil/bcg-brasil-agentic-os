@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -28,6 +29,7 @@ func main() {
 	runtime := docling.New(input.Options)
 	switch input.Action {
 	case "place":
+		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
 		registry, err := releaseverify.LoadPinnedAuthorityRegistry(input.Options.AuthorityRegistryPath, input.Options.AuthorityRegistrySHA256, time.Now)
 		if err != nil {
 			fail(err)

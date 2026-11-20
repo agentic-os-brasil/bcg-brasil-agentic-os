@@ -57,6 +57,81 @@ function Read-DoclingRuntimeManifest([string]$Path) {
     return $manifest
 }
 
+# Failure-only observation inside the already-admitted ordinary account. Debugger
+# results never qualify conversion, overwrite the baseline log, or authorize export.
+function Invoke-DoclingFailureTrace($Manifest, [string]$ProofRoot, [string]$ExpectedImageSHA256, [int]$BaselineExit) {
+    $receiptPath=Join-Path $ProofRoot 'docling-loader-trace.json'
+    if(Test-Path -LiteralPath $receiptPath){Write-Output 'docling_failure_trace diagnostic_only=true status=existing_receipt_preserved';return}
+    $receipt = [ordered]@{schema_version=1; diagnostic_only=$true; qualification=$false; baseline_exit_code=$BaselineExit
+        baseline_log_sha256=(Get-FileHash -LiteralPath (Join-Path $ProofRoot 'docling-native-tests.log') -Algorithm SHA256).Hash.ToLowerInvariant()
+        source_revision=$Manifest.source_revision; test_binary_sha256=$ExpectedImageSHA256
+        status='not_started'; timeout_seconds=60; retained_log_limit_bytes=4194304; no_registry_changes=$true; debuggee_kill_on_debugger_exit=$true}
+    $process=$null; $outputsAdmitted=$false; $traceOut=Join-Path $ProofRoot 'docling-loader-trace.stdout.log'; $traceErr=Join-Path $ProofRoot 'docling-loader-trace.stderr.log'
+    try {
+        if ($env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or [Environment]::OSVersion.Platform -ne 'Win32NT') {
+            $receipt.status='not_run_outside_disposable_hosted_windows'; return
+        }
+        $debugger='C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe'
+        $tool=Get-Item -LiteralPath $debugger -Force
+        if ($tool -isnot [IO.FileInfo] -or ($tool.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Stock CDB is not an ordinary file.' }
+        if ((Get-FileHash -LiteralPath $Manifest.test_binary -Algorithm SHA256).Hash.ToLowerInvariant() -cne $ExpectedImageSHA256) { throw 'Sealed test image changed before diagnostic replay.' }
+        $receipt.debugger_sha256=(Get-FileHash -LiteralPath $debugger -Algorithm SHA256).Hash.ToLowerInvariant()
+        $commands=Join-Path $ProofRoot 'docling-loader-commands.txt'
+        $stdin=Join-Path $ProofRoot 'docling-loader-stdin.txt'; $symbols=Join-Path $ProofRoot 'docling-loader-symbols'
+        foreach($path in @($traceOut,$traceErr,$commands,$stdin,$symbols)) { if(Test-Path -LiteralPath $path){throw 'Diagnostic output must be fresh.'} }
+        $outputsAdmitted=$true
+        # The cpr event precedes execution of the child's loader initialization.
+        # !gflag modifies only that debuggee's PEB, never IFEO/system settings.
+        $scriptText=@'
+sxe -c ".lastevent;!gflag +sls;g" cpr:child.exe
+sxe -c ".lastevent;k;g" bpe
+sxe -c ".lastevent;k;gn" 0xc0000142
+sxe -c ".lastevent;k;g" epr:child.exe
+g
+'@
+        [IO.File]::WriteAllText($commands,$scriptText,[Text.UTF8Encoding]::new($false))
+        [IO.File]::WriteAllText($stdin,'',[Text.UTF8Encoding]::new($false))
+        [IO.Directory]::CreateDirectory($symbols)|Out-Null
+        $arguments=@('-o','-G','-hd','-sins','-noshell','-nosqm','-y',('"'+$symbols+'"'),'-cf',('"'+$commands+'"'),('"'+$Manifest.test_binary+'"'),'-test.run','^TestWindowsNativeConfinement$','-test.v','-test.timeout=2400s')
+        $receipt.debugger_arguments=$arguments; $receipt.commands_sha256=(Get-FileHash -LiteralPath $commands -Algorithm SHA256).Hash.ToLowerInvariant()
+        $watch=[Diagnostics.Stopwatch]::StartNew()
+        $process=Start-Process -FilePath $debugger -ArgumentList $arguments -WorkingDirectory $Manifest.source_root -NoNewWindow -RedirectStandardInput $stdin -RedirectStandardOutput $traceOut -RedirectStandardError $traceErr -PassThru
+        $null=$process.Handle # Retain this launched process, never look it up by name.
+        $receipt.status='running'
+        while(-not $process.WaitForExit(200)) {
+            [long]$bytes=0;foreach($path in @($traceOut,$traceErr)){if(Test-Path -LiteralPath $path){$bytes+=(Get-Item -LiteralPath $path).Length}}
+            if($bytes -gt 4194304){$receipt.status='output_limit';break}
+            if($watch.Elapsed.TotalSeconds -ge 60){$receipt.status='timeout';break}
+        }
+        if($process.HasExited){if($receipt.status -ceq 'running'){$receipt.status='completed'};$receipt.debugger_exit_code=$process.ExitCode}
+        $receipt.elapsed_seconds=$watch.Elapsed.TotalSeconds
+        $receipt.test_image_unchanged=((Get-FileHash -LiteralPath $Manifest.test_binary -Algorithm SHA256).Hash.ToLowerInvariant() -ceq $ExpectedImageSHA256)
+    } catch {
+        $receipt.status='diagnostic_error';$receipt.error_type=$_.Exception.GetType().FullName
+    } finally {
+        if($null -ne $process){
+            try {
+                if(-not $process.HasExited){$process.Kill();$receipt.owned_debugger_terminated=$true}
+                $receipt.owned_debugger_exited=$process.WaitForExit(5000)
+            } catch {$receipt.cleanup_error_type=$_.Exception.GetType().FullName}
+            finally {$process.Dispose()}
+        }
+        # Enforce a combined retention cap even if the producer crossed the bound
+        # between polling intervals. Only these fresh diagnostic files are touched.
+        [long]$remaining=4194304;$logs=@()
+        foreach($path in @($traceOut,$traceErr)){
+            if($outputsAdmitted -and (Test-Path -LiteralPath $path)){
+                $file=[IO.File]::Open($path,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::Read)
+                try{$raw=$file.Length;if($raw -gt $remaining){$file.SetLength($remaining)};$retained=$file.Length;$remaining-=$retained}finally{$file.Dispose()}
+                $logs+=@{name=[IO.Path]::GetFileName($path);raw_bytes=$raw;retained_bytes=$retained;sha256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()}
+            }
+        }
+        $receipt.logs=$logs
+        $receipt | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $receiptPath -Encoding UTF8
+        Write-Output ('docling_failure_trace diagnostic_only=true status='+$receipt.status)
+    }
+}
+
 function Invoke-DoclingRuntimeProof($Manifest, [string]$ProofRoot, [string]$ExpectedUserSID) {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $admin = [Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')
@@ -79,6 +154,7 @@ function Invoke-DoclingRuntimeProof($Manifest, [string]$ProofRoot, [string]$Expe
     $env:GOPATH=Join-Path $ProofRoot 'go-path'
     $env:GOTOOLCHAIN='local'; $env:GOPROXY='off'; $env:GOSUMDB='off'; $env:GOFLAGS='-mod=readonly -buildvcs=false'; $env:CGO_ENABLED='0'
     $env:MAESTRO_WINDOWS_DOCLING_QUALIFY='1'; $env:MAESTRO_WINDOWS_DOCLING_TEST_INPUTS=$Manifest.raw_inputs; $env:MAESTRO_WINDOWS_DOCLING_TEST_PROFILE=$Manifest.runtime_profile
+    $testImageSHA256=(Get-FileHash -LiteralPath $Manifest.test_binary -Algorithm SHA256).Hash.ToLowerInvariant()
     $pattern='^(' + ($script:DoclingRuntimeTests -join '|') + ')$'
     Push-Location -LiteralPath $Manifest.source_root
     try { $output=@(& $Manifest.test_binary '-test.run' $pattern '-test.v' '-test.timeout=2400s' 2>&1 | ForEach-Object { "$_" }); $exit=$LASTEXITCODE } finally { Pop-Location }
@@ -87,7 +163,12 @@ function Invoke-DoclingRuntimeProof($Manifest, [string]$ProofRoot, [string]$Expe
     $log=Join-Path $ProofRoot 'docling-native-tests.log'
     $output | Set-Content -LiteralPath $log -Encoding UTF8
     $output | Write-Output
-    if ($exit -ne 0 -or $body -match '--- (FAIL|SKIP):') { throw 'Actual ordinary-account Docling native coverage failed or skipped.' }
+    if ($exit -ne 0 -or $body -match '--- (FAIL|SKIP):') {
+        if ($body -match 'native confinement failed: confined converter exit 3221225794\b') {
+            try { Invoke-DoclingFailureTrace $Manifest $ProofRoot $testImageSHA256 $exit } catch { Write-Output 'docling_failure_trace diagnostic_only=true status=unavailable' }
+        }
+        throw 'Actual ordinary-account Docling native coverage failed or skipped.'
+    }
     foreach($test in $script:DoclingRuntimeTests) { if($body -notmatch ('(?m)^--- PASS: '+[regex]::Escape($test)+' ')){throw 'A required Docling native test did not actually pass.'} }
     foreach($format in @('sample.docx','literal.txt','structured.md','quoted.csv','generic.json','generic.xml','page.html','page.htm','spine.epub','legacy.xls','sheets.xlsx','native.pdf','native.pptx','interactive.pdf','nontext.pdf','scanned.pdf','mixed-image.pdf','mixed.pdf','protected.pdf','pptx_alternate_presentation','pptx_duplicate_slide_selection','pptx_external_relationship','pptx_macro_presentation','pptx_metafile','pptx_macro_payload','pptx_DTD','pptx_slide_type_confusion','pptx_root_decoy','validated_export','installed_tamper','missing_native_runtime')) {
         if($body -notmatch ('(?m)^    --- PASS: TestWindowsRealAuthenticatedDocling/'+[regex]::Escape($format)+' ')){throw 'A required real Docling format did not actually pass.'}

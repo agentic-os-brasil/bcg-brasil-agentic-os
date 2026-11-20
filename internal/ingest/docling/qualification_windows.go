@@ -11,9 +11,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -140,10 +142,24 @@ func qualifyPlaced(ctx context.Context, o Options) error {
 	stdout := boundedOutput{maximum: 2 << 20, cancel: cancel}
 	stderr := boundedOutput{maximum: 64 << 10, cancel: cancel}
 	if err = runConfinedBridge(deadline, work, snapshot, request, &stdout, &stderr); err != nil {
+		facts := []any{"stage", "launch", "error_type", fmt.Sprintf("%T", err), "deadline_exceeded", errors.Is(err, context.DeadlineExceeded), "cancelled", errors.Is(err, context.Canceled), "stdout_bytes", stdout.Len(), "stderr_bytes", stderr.Len()}
+		var code syscall.Errno
+		if errors.As(err, &code) {
+			facts = append(facts, "syscall_code", uint64(code))
+		}
+		if status := err.Error(); strings.HasPrefix(status, "confined converter exit ") {
+			// Keep only the known status line, never joined paths or output bodies.
+			status, _, _ = strings.Cut(status, "\n")
+			status, _, _ = strings.Cut(status, "stderr=")
+			status, _, _ = strings.Cut(status, "stdout=")
+			facts = append(facts, "process_status", status[:min(len(status), 256)])
+		}
+		slog.Debug("native converter qualification failed", facts...)
 		return errors.New("native_converter_qualification_failed")
 	}
 	var response bridgeResponse
 	if decode(stdout.Bytes(), &response) != nil || !response.NetworkDenied || response.Refusal != "" || response.DoclingExport != nil || response.Route != route || !strings.Contains(string(response.Markdown), `MAESTRO\_DOCLING\_OFFLINE\_20261101`) || !bytes.Contains(response.Document, []byte("MAESTRO_DOCLING_OFFLINE_20261101")) {
+		slog.Debug("native converter qualification failed", "stage", "response")
 		return errors.New("native_converter_qualification_failed")
 	}
 	var document struct {
@@ -159,6 +175,7 @@ func qualifyPlaced(ctx context.Context, o Options) error {
 		} `json:"tables"`
 	}
 	if json.Unmarshal(response.Document, &document) != nil || document.Schema != "DoclingDocument" || len(document.Tables) != 1 || document.Tables[0].Data.Rows != 2 || document.Tables[0].Data.Cols != 2 {
+		slog.Debug("native converter qualification failed", "stage", "shape")
 		return errors.New("native_converter_qualification_failed")
 	}
 	cells := map[string]bool{}
@@ -166,6 +183,7 @@ func qualifyPlaced(ctx context.Context, o Options) error {
 		cells[cell.Text] = true
 	}
 	if len(cells) != 4 || !cells["Item"] || !cells["Count"] || !cells["alpha"] || !cells["7"] {
+		slog.Debug("native converter qualification failed", "stage", "cells")
 		return errors.New("native_converter_qualification_failed")
 	}
 	// Revalidate signed bytes and machine/source binding after the actual process.
