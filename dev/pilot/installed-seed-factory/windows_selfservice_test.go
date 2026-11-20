@@ -31,7 +31,19 @@ func TestWindowsSelfServiceExactOwnerAndSelectedProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Use the original private-state writer so Windows fixtures retain current-SID ownership even in elevated CI.
+	script := filepath.Join(root, "windows-selfservice.ps1")
+	if err := os.WriteFile(script, []byte(windowsSelfServiceBehavior), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS == "windows" {
+		// Match atlasTestDataRoot: repair only the new synthetic Developer,
+		// whose default owner can be Administrators on elevated hosted runners.
+		prepare := exec.Command(powerShell, "-NoProfile", "-NonInteractive", "-File", script, "-Fixture", root, "-PrepareFixture")
+		if output, err := prepare.CombinedOutput(); err != nil {
+			t.Fatalf("initialize synthetic Windows fixture ownership: %s\n%v", output, err)
+		}
+	}
+	// Preserve the original private-state writer and its native custody checks.
 	stateParent := filepath.Join(root, "source selection", "owner", ".maestro-install", "config")
 	if err := scheduler.EnsurePrivateDirectory(stateParent); err != nil {
 		t.Fatal(err)
@@ -43,10 +55,6 @@ func TestWindowsSelfServiceExactOwnerAndSelectedProfile(t *testing.T) {
 	if err := scheduler.WriteNewPrivateFile(filepath.Join(stateParent, "install-state.json"), stateBody); err != nil {
 		t.Fatal(err)
 	}
-	script := filepath.Join(root, "windows-selfservice.ps1")
-	if err := os.WriteFile(script, []byte(windowsSelfServiceBehavior), 0600); err != nil {
-		t.Fatal(err)
-	}
 	command := exec.Command(powerShell, "-NoProfile", "-NonInteractive", "-File", script, "-Source", filepath.Join(repo, "dev/pilot/templates/installed-seed/Maestro.ps1"), "-Fixture", root)
 	output, err := command.CombinedOutput()
 	if err != nil {
@@ -55,10 +63,22 @@ func TestWindowsSelfServiceExactOwnerAndSelectedProfile(t *testing.T) {
 	t.Log(string(output))
 }
 
-const windowsSelfServiceBehavior = `param([string]$Source,[string]$Fixture)
+const windowsSelfServiceBehavior = `param([string]$Source,[string]$Fixture,[switch]$PrepareFixture)
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 if([Environment]::OSVersion.Platform -eq 'Win32NT' -and ($PSVersionTable.PSEdition -cne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1)){throw 'Shipped frontend requires Windows PowerShell Desktop 5.1'}
+if($PrepareFixture){
+  if([Environment]::OSVersion.Platform -ne 'Win32NT'){throw 'Native Windows fixture preparation required'}
+  $directory=Get-Item -LiteralPath $Fixture -Force
+  if(-not $directory.PSIsContainer -or $directory.Name -cne 'Developer' -or ($directory.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw 'Expected fresh synthetic Developer directory'}
+  $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User
+  $acl=New-Object Security.AccessControl.DirectorySecurity
+  $acl.SetSecurityDescriptorSddlForm(('O:{0}D:P(A;OICI;FA;;;{0})(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)' -f $sid.Value))
+  Set-Acl -LiteralPath $Fixture -AclObject $acl
+  $observed=Get-Acl -LiteralPath $Fixture
+  if($observed.GetOwner([Security.Principal.SecurityIdentifier]).Value -cne $sid.Value -or -not $observed.AreAccessRulesProtected){throw 'Synthetic fixture did not retain current-SID owner and protected DACL'}
+  return
+}
 Write-Output ('Frontend protocol shell: {0} {1}; synthetic installer stubs, not installation/client proof' -f $PSVersionTable.PSEdition,$PSVersionTable.PSVersion)
 $Utf8=New-Object System.Text.UTF8Encoding($false)
 $tokens=$null; $errors=$null
