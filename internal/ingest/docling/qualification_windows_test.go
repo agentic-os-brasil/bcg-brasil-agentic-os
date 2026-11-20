@@ -49,6 +49,7 @@ func assertWindowsQualificationFailureFactsPrivacy(t *testing.T) {
 		{"zip", trace + frame(filepath.Join(snapshot, "python", "python312.zip", "public_runtime.py"), "1") + "PermissionError: " + secret, want("PermissionError", 0, 0, 0, 0, 0)},
 		{"empty_source", trace + frame(filepath.Join(snapshot, "python", "Lib", "empty.py"), "1") + "PermissionError: " + secret, want("PermissionError", 0, 0, 0, 0, 0)},
 		{"malformed_innermost", trace + frame(module, "2") + "  File \"" + module + "\", line 1\nPermissionError: " + secret, want("PermissionError", 0, 0, 0, 0, 0)},
+		{"tab_delimited_foreign_innermost", trace + frame(module, "2") + "  File\t\"C:\\other\\foreign.py\", line 1, in <module>\nPermissionError: " + secret, want("PermissionError", 0, 0, 0, 0, 0)},
 		{"wrong_indent_innermost", trace + frame(module, "2") + " File \"" + module + "\", line 1, in <module>\nPermissionError: " + secret, want("PermissionError", 0, 0, 0, 0, 0)},
 		{"outside_source", trace + frame(module, "4") + "PermissionError: " + secret, want("PermissionError", 0, 0, 0, 0, 0)},
 		{"overlarge_line", trace + frame(module, "999999999999999999999999999999") + "PermissionError: " + secret, want("PermissionError", 0, 0, 0, 0, 0)},

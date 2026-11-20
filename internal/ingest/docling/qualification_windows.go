@@ -271,8 +271,10 @@ func pythonQualificationFailureFacts(stderr []byte, snapshot string, pack verifi
 				hints.BridgeLine = line
 			}
 		}
-		// Every new frame replaces the candidate, including malformed/foreign ones.
-		if strings.HasPrefix(strings.TrimLeft(row, " \t"), "File ") {
+		// A File token replaces the candidate even with malformed whitespace;
+		// canonical parsing below remains strict and FileNotFoundError is distinct.
+		frameTokens := strings.Fields(row)
+		if len(frameTokens) > 0 && frameTokens[0] == "File" {
 			lastPath, lastLine = "", 0
 			if rest, ok := strings.CutPrefix(row, "  File \""); ok {
 				path, rest, complete := strings.Cut(rest, "\", line ")
