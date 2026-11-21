@@ -87,8 +87,8 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 	build := exec.CommandContext(ctx, "go", "build", "-mod=readonly", "-o", executable, "./internal/ingest/docling/testdata/native-runtime")
 	build.Dir = sourceRoot
 	build.Env = append(os.Environ(), "CGO_ENABLED=0", "GOPROXY=off", "GOSUMDB=off")
-	if body, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("compile actual shared runtime: %v: %s", err, body)
+	if _, err := build.CombinedOutput(); err != nil {
+		t.Fatal("actual shared runtime compilation failed")
 	}
 	options := docling.Options{DataRoot: data, AuthorityRegistryPath: registryPath, AuthorityRegistrySHA256: sum(registry), CLIVersion: "0.1.42"}
 	invoke := func(action string, request ingest.Request, out any) {
@@ -98,10 +98,22 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 		command.Stdin = bytes.NewReader(body)
 		output, err := command.CombinedOutput()
 		if err != nil {
-			t.Fatalf("actual shared runtime %s failed: %v: %s", action, err, output)
+			t.Fatal("actual shared runtime process failed")
 		}
-		if err = json.Unmarshal(output, out); err != nil {
-			t.Fatalf("actual runtime result: %v: %s", err, output)
+		if action == "convert" || action == "export_fixture" {
+			var wire struct {
+				Metadata docling.Conversion `json:"metadata"`
+				Markdown []byte             `json:"markdown"`
+				Document []byte             `json:"document"`
+			}
+			conversion, ok := out.(*docling.Conversion)
+			if !ok || json.Unmarshal(output, &wire) != nil {
+				t.Fatal("actual conversion fixture response invalid")
+			}
+			*conversion = wire.Metadata
+			conversion.Markdown, conversion.Document = wire.Markdown, json.RawMessage(wire.Document)
+		} else if json.Unmarshal(output, out) != nil {
+			t.Fatal("actual runtime metadata response invalid")
 		}
 	}
 	var availability docling.Availability
@@ -136,7 +148,7 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 			var conversion docling.Conversion
 			invoke("convert", ingest.Request{SourcePath: name, WorkspacePath: space, Policy: ingest.DefaultPolicy()}, &conversion)
 			if conversion.Result.Status != ingest.StatusUsable || !conversion.Provenance.NetworkDenied || conversion.Provenance.LockSHA256 != descriptor.LockSHA256 || conversion.Provenance.PackSHA256 != assemble.ArchiveSHA256 {
-				t.Fatalf("real Windows conversion/provenance: %+v", conversion)
+				t.Fatal("real Windows conversion/provenance invalid")
 			}
 			if !bytes.Equal(original, read(t, filepath.Join(space, name))) {
 				t.Fatal("source bytes changed")
@@ -154,7 +166,7 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 				t.Fatal("native document source identity changed")
 			}
 			if got.Result.Status == ingest.StatusUsable && (got.Provenance.PackSHA256 != assemble.ArchiveSHA256 || !got.Provenance.NetworkDenied || got.Provenance.LockSHA256 != descriptor.LockSHA256) {
-				t.Fatalf("native document pack provenance differs: %+v", got)
+				t.Fatal("native document pack provenance differs")
 			}
 			return got
 		}
@@ -176,7 +188,7 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 				body := editXLSX(t, base, test.edit)
 				got := convertDocument(t, "unsafe.pptx", body)
 				if got.Result.Status != ingest.StatusBlocked || len(got.Result.Warnings) != 1 || got.Result.Warnings[0] != "source_format_invalid" || len(got.Document) != 0 || len(got.Markdown) != 0 {
-					t.Fatalf("unsafe PPTX reached actual converter: %+v", got)
+					t.Fatal("unsafe PPTX reached actual converter")
 				}
 			})
 		}
@@ -187,7 +199,7 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 		invoke("export_fixture", ingest.Request{SourcePath: "sample.docx", WorkspacePath: space, Policy: ingest.DefaultPolicy()}, &conversion)
 		invoke("convert", ingest.Request{SourcePath: "validated-export.json", WorkspacePath: space, Policy: ingest.DefaultPolicy()}, &conversion)
 		if conversion.Result.Status != ingest.StatusUsable || !conversion.Provenance.NetworkDenied {
-			t.Fatalf("real export classification+conversion failed: %+v", conversion)
+			t.Fatal("real export classification+conversion failed")
 		}
 	})
 	t.Run("installed_tamper", func(t *testing.T) {
@@ -215,7 +227,7 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 		var conversion docling.Conversion
 		invoke("convert", ingest.Request{SourcePath: "sample.docx", WorkspacePath: space, Policy: ingest.DefaultPolicy()}, &conversion)
 		if conversion.Result.Status != ingest.StatusUnavailable || len(conversion.Result.Warnings) != 1 || conversion.Result.Warnings[0] != "installed_pack_changed" {
-			t.Fatalf("ambient runtime satisfied missing authenticated DLL: %+v", conversion)
+			t.Fatal("ambient runtime satisfied missing authenticated DLL")
 		}
 		put(t, name, original)
 		if err := os.Chmod(name, 0444); err != nil {

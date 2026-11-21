@@ -32,7 +32,7 @@ func TestAuthenticatedNativeDocuments(t *testing.T) {
 		put(t, filepath.Join(space, name), body)
 		got, err := r.Convert(context.Background(), ingest.Request{SourcePath: name, WorkspacePath: space, Policy: ingest.DefaultPolicy()}, id)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatal("actual native document conversion failed")
 		}
 		metadata, _ := json.MarshalIndent(got, "", "  ")
 		put(t, filepath.Join(outputs, name+".result.json"), metadata)
@@ -67,7 +67,7 @@ func TestAuthenticatedNativeDocuments(t *testing.T) {
 func assertNativeDocument(t *testing.T, got docling.Conversion, name, lockSHA256 string) {
 	t.Helper()
 	if got.Result.Status != ingest.StatusUsable || !got.Provenance.NetworkDenied || got.Provenance.LockSHA256 != lockSHA256 {
-		t.Fatalf("actual conversion: %+v", got)
+		t.Fatal("actual conversion metadata invalid")
 	}
 	var document struct {
 		Schema string                     `json:"schema_name"`
@@ -98,7 +98,7 @@ func assertNativeDocument(t *testing.T, got docling.Conversion, name, lockSHA256
 		}
 	}
 	if !pages[1] || !pages[2] {
-		t.Fatal("page/bounding-box provenance missing", pages)
+		t.Fatal("page/bounding-box provenance missing")
 	}
 	for _, picture := range document.Pictures {
 		if len(picture.Image) > 0 && string(picture.Image) != "null" {
@@ -107,11 +107,11 @@ func assertNativeDocument(t *testing.T, got docling.Conversion, name, lockSHA256
 	}
 	if name == "native.pdf" {
 		if got.Result.Parser != "docling.pdf_native_text" || got.Result.Fidelity != ingest.FidelityTextual || len(got.Result.Warnings) != 1 || got.Result.Warnings[0] != "pdf_native_text_only" || !bytes.Contains(got.Markdown, []byte("PAGE ONE 731")) || !bytes.Contains(got.Markdown, []byte("PAGE TWO 947")) || len(document.Tables) != 0 {
-			t.Fatal("native PDF content/fidelity oracle", got.Result)
+			t.Fatal("native PDF content/fidelity oracle")
 		}
 	} else {
 		if got.Result.Parser != "docling.pptx" || got.Result.Fidelity != ingest.FidelityStructured || !bytes.Contains(got.Markdown, []byte("FIRST 421")) || !bytes.Contains(got.Markdown, []byte("SECOND 683")) || len(document.Tables) != 1 || !bytes.Contains(document.Tables[0], []byte(`"text": "41"`)) {
-			t.Fatal("native PPTX text/table oracle", got.Result)
+			t.Fatal("native PPTX text/table oracle")
 		}
 	}
 }
@@ -125,9 +125,9 @@ func assertNativePDFRefusal(t *testing.T, got docling.Conversion, name, want str
 	if name == "interactive.pdf" && got.Result.Status == ingest.StatusUsable {
 		pagePresent := bytes.Contains(got.Markdown, []byte("MAESTRO ACROFORM PAGE TEXT 613"))
 		fieldMissing := !bytes.Contains(got.Markdown, []byte("MAESTRO FIELD VALUE 859")) && !bytes.Contains(got.Document, []byte("MAESTRO FIELD VALUE 859"))
-		t.Fatalf("interactive PDF silently admitted: page_marker_present=%v distinct_field_value_omitted=%v result=%+v", pagePresent, fieldMissing, got.Result)
+		t.Fatalf("interactive PDF silently admitted: page_marker_present=%v distinct_field_value_omitted=%v", pagePresent, fieldMissing)
 	}
 	if got.Result.Status != ingest.StatusUnavailable || len(got.Result.Warnings) != 1 || got.Result.Warnings[0] != want || len(got.Document) != 0 || len(got.Markdown) != 0 {
-		t.Fatalf("finite PDF refusal: %+v", got)
+		t.Fatal("finite PDF refusal invalid")
 	}
 }
