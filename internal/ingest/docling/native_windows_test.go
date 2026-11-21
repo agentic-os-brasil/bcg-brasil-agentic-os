@@ -124,16 +124,20 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 	proofPath := filepath.Join(data, "ingestion", "docling", "windows-qualification.dpapi")
 	proof := read(t, proofPath)
 	beforeEntries := map[string]nativeMetadataEntry{}
-	before := nativeFixtureMetadata(t, data, beforeEntries)
+	beforeHandles := map[string]nativeDirectoryHandleMetadata{}
+	before := nativeFixtureMetadata(t, data, beforeEntries, beforeHandles)
 	invoke("status", ingest.Request{}, &availability)
 	afterEntries := map[string]nativeMetadataEntry{}
-	if availability.State != "ready" || before != nativeFixtureMetadata(t, data, afterEntries) {
+	afterHandles := map[string]nativeDirectoryHandleMetadata{}
+	if availability.State != "ready" || before != nativeFixtureMetadata(t, data, afterEntries, afterHandles) {
 		// Preserve the original short-circuit: READY means that comparison ran
 		// and was unequal. A failed status adds no diagnostic filesystem walk.
 		if availability.State == "ready" {
 			known := nativeMetadataKnownPaths{data, proofPath, filepath.Join(data, "ingestion", "docling", "installed", assemble.ArchiveSHA256)}
 			facts, _ := json.Marshal(nativeMetadataDifference(beforeEntries, afterEntries, known))
 			t.Logf("maestro_native_metadata_difference=%s", facts)
+			handleFacts, _ := json.Marshal(nativeDirectoryHandleCorrelation(beforeEntries, afterEntries, beforeHandles, afterHandles))
+			t.Logf("maestro_native_metadata_handle_observation=%s", handleFacts)
 		}
 		t.Fatalf("status failed proof validation or changed private state: %+v", availability)
 	}
@@ -257,7 +261,7 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 	t.Logf("engineering only: real native Windows registryRead-only LPAC experiment controls observed; pack_sha256=%s files=%d expanded=%d", assemble.ArchiveSHA256, assemble.Files, assemble.ExpandedBytes)
 }
 
-func nativeFixtureMetadata(t *testing.T, root string, observed map[string]nativeMetadataEntry) string {
+func nativeFixtureMetadata(t *testing.T, root string, observed map[string]nativeMetadataEntry, handles ...map[string]nativeDirectoryHandleMetadata) string {
 	t.Helper()
 	var entries []string
 	err := filepath.WalkDir(root, func(name string, item os.DirEntry, err error) error {
@@ -270,12 +274,226 @@ func nativeFixtureMetadata(t *testing.T, root string, observed map[string]native
 		}
 		entries = append(entries, strings.Join([]string{name, info.ModTime().UTC().Format(time.RFC3339Nano), info.Mode().String()}, "|"))
 		observed[name] = nativeMetadataEntry{info.ModTime().UTC().Format(time.RFC3339Nano), info.Mode().String(), info.IsDir()}
+		// Capture the original enumeration row before opening the object: closing
+		// even a read-only handle may refresh NTFS directory-entry replicas.
+		if len(handles) == 1 && info.IsDir() {
+			handles[0][name] = nativeReadDirectoryHandleMetadata(name)
+		}
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return nativeMetadataFingerprint(entries)
+}
+
+// Handle observations are private test memory, never a replacement fingerprint.
+type nativeDirectoryHandleMetadata struct {
+	modified, mode    string
+	volume, high, low uint32
+	valid             bool
+}
+
+func nativeReadDirectoryHandleMetadata(name string) nativeDirectoryHandleMetadata {
+	directory, err := winprivate.Inspect(name)
+	if err != nil {
+		return nativeDirectoryHandleMetadata{}
+	}
+	info, statErr := directory.File.Stat()
+	var identity windows.ByHandleFileInformation
+	identityErr := windows.GetFileInformationByHandle(directory.Handle(), &identity)
+	closeErr := directory.Close()
+	if statErr != nil || identityErr != nil || closeErr != nil || !info.IsDir() ||
+		identity.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 ||
+		identity.FileIndexHigh == 0 && identity.FileIndexLow == 0 ||
+		info.ModTime().UnixNano() != identity.LastWriteTime.Nanoseconds() {
+		return nativeDirectoryHandleMetadata{}
+	}
+	return nativeDirectoryHandleMetadata{
+		modified: info.ModTime().UTC().Format(time.RFC3339Nano), mode: info.Mode().String(),
+		volume: identity.VolumeSerialNumber, high: identity.FileIndexHigh, low: identity.FileIndexLow, valid: true,
+	}
+}
+
+type nativeDirectoryHandleFacts struct {
+	Complete            bool `json:"complete"`
+	SameKeys            bool `json:"same_keys"`
+	SameObjects         bool `json:"same_objects"`
+	BeforeDisagreements int  `json:"before_disagreements"`
+	AfterDisagreements  int  `json:"after_disagreements"`
+	HandleChanges       int  `json:"handle_changes"`
+	EnumerationChanges  int  `json:"enumeration_changes"`
+	QueryErrors         int  `json:"query_errors"`
+	Correlated          bool `json:"correlated"`
+	Saturated           bool `json:"saturated"`
+}
+
+func nativeDirectoryHandleCorrelation(before, after map[string]nativeMetadataEntry, left, right map[string]nativeDirectoryHandleMetadata) nativeDirectoryHandleFacts {
+	facts := nativeDirectoryHandleFacts{Complete: true, SameKeys: len(before) == len(after), SameObjects: true}
+	increment := func(value *int) {
+		if *value < 1024 {
+			(*value)++
+		} else {
+			facts.Saturated = true
+		}
+	}
+	exact := true
+	directories := 0
+	for name, old := range before {
+		current, exists := after[name]
+		if !exists || old.directory != current.directory {
+			facts.SameKeys = false
+			continue
+		}
+		if !old.directory {
+			if old != current {
+				exact = false
+			}
+			continue
+		}
+		directories++
+		a, aOK := left[name]
+		b, bOK := right[name]
+		if !aOK || !a.valid {
+			increment(&facts.QueryErrors)
+		}
+		if !bOK || !b.valid {
+			increment(&facts.QueryErrors)
+		}
+		if !aOK || !bOK || !a.valid || !b.valid {
+			facts.Complete, facts.SameObjects = false, false
+			continue
+		}
+		if a.volume != b.volume || a.high != b.high || a.low != b.low {
+			facts.SameObjects = false
+		}
+		priorDisagreement := old.modified != a.modified
+		if priorDisagreement {
+			increment(&facts.BeforeDisagreements)
+		}
+		if current.modified != b.modified {
+			increment(&facts.AfterDisagreements)
+		}
+		if a.modified != b.modified || a.mode != b.mode {
+			increment(&facts.HandleChanges)
+		}
+		changed := old.modified != current.modified
+		if changed {
+			increment(&facts.EnumerationChanges)
+		}
+		// Exact private key-set correspondence, not equality of public counts.
+		if changed != priorDisagreement || current.modified != a.modified ||
+			old.mode != current.mode || old.mode != a.mode || current.mode != b.mode {
+			exact = false
+		}
+	}
+	if len(left) != directories || len(right) != directories {
+		facts.Complete = false
+	}
+	for name := range left {
+		if row, ok := before[name]; !ok || !row.directory {
+			facts.Complete = false
+		}
+	}
+	for name := range right {
+		if row, ok := after[name]; !ok || !row.directory {
+			facts.Complete = false
+		}
+	}
+	facts.Complete = facts.Complete && facts.SameKeys
+	facts.Correlated = facts.Complete && facts.SameObjects && exact &&
+		facts.EnumerationChanges > 0 && facts.HandleChanges == 0 && !facts.Saturated
+	return facts
+}
+
+func assertNativeDirectoryHandleCorrelation(t *testing.T) {
+	t.Helper()
+	const private = "CLIENT_PRIVATE_DIRECTORY"
+	old := nativeMetadataEntry{"PRIVATE_OLD_TIME", "PRIVATE_MODE", true}
+	fresh := nativeMetadataEntry{"PRIVATE_NEW_TIME", "PRIVATE_MODE", true}
+	held := nativeDirectoryHandleMetadata{fresh.modified, fresh.mode, 7, 8, 9, true}
+	cases := []struct {
+		name                 string
+		edit                 func(map[string]nativeMetadataEntry, map[string]nativeMetadataEntry, map[string]nativeDirectoryHandleMetadata, map[string]nativeDirectoryHandleMetadata)
+		complete, correlated bool
+	}{
+		{"replica_convergence", func(map[string]nativeMetadataEntry, map[string]nativeMetadataEntry, map[string]nativeDirectoryHandleMetadata, map[string]nativeDirectoryHandleMetadata) {
+		}, true, true},
+		{"stable_listing", func(a, b map[string]nativeMetadataEntry, _, _ map[string]nativeDirectoryHandleMetadata) {
+			a[private] = b[private]
+		}, true, false},
+		{"query_error", func(_, _ map[string]nativeMetadataEntry, _, b map[string]nativeDirectoryHandleMetadata) {
+			b[private] = nativeDirectoryHandleMetadata{}
+		}, false, false},
+		{"missing_observation", func(_, _ map[string]nativeMetadataEntry, _, b map[string]nativeDirectoryHandleMetadata) {
+			delete(b, private)
+		}, false, false},
+		{"different_object", func(_, _ map[string]nativeMetadataEntry, _, b map[string]nativeDirectoryHandleMetadata) {
+			row := b[private]
+			row.low++
+			b[private] = row
+		}, true, false},
+		{"handle_changed", func(_, _ map[string]nativeMetadataEntry, _, b map[string]nativeDirectoryHandleMetadata) {
+			row := b[private]
+			row.modified = old.modified
+			b[private] = row
+		}, true, false},
+		{"after_disagrees", func(_, b map[string]nativeMetadataEntry, _, _ map[string]nativeDirectoryHandleMetadata) {
+			b[private] = old
+		}, true, false},
+		{"added_directory", func(_, b map[string]nativeMetadataEntry, _, d map[string]nativeDirectoryHandleMetadata) {
+			b["PRIVATE_ADDED"] = fresh
+			d["PRIVATE_ADDED"] = held
+		}, false, false},
+		{"file_changed", func(a, b map[string]nativeMetadataEntry, _, _ map[string]nativeDirectoryHandleMetadata) {
+			a["PRIVATE_FILE"] = nativeMetadataEntry{old.modified, old.mode, false}
+			b["PRIVATE_FILE"] = nativeMetadataEntry{fresh.modified, old.mode, false}
+		}, true, false},
+		{"mode_changed", func(_, b map[string]nativeMetadataEntry, _, _ map[string]nativeDirectoryHandleMetadata) {
+			row := b[private]
+			row.mode = "PRIVATE_CHANGED_MODE"
+			b[private] = row
+		}, true, false},
+		// Equal counts from different private key sets must never correlate.
+		{"different_discrepancy_key", func(a, b map[string]nativeMetadataEntry, c, d map[string]nativeDirectoryHandleMetadata) {
+			row := held
+			row.modified = old.modified
+			c[private], d[private] = row, row
+			a["PRIVATE_OTHER"] = old
+			b["PRIVATE_OTHER"] = old
+			c["PRIVATE_OTHER"] = held
+			d["PRIVATE_OTHER"] = held
+		}, true, false},
+	}
+	for _, test := range cases {
+		before := map[string]nativeMetadataEntry{private: old}
+		after := map[string]nativeMetadataEntry{private: fresh}
+		left := map[string]nativeDirectoryHandleMetadata{private: held}
+		right := map[string]nativeDirectoryHandleMetadata{private: held}
+		test.edit(before, after, left, right)
+		got := nativeDirectoryHandleCorrelation(before, after, left, right)
+		if got.Complete != test.complete || got.Correlated != test.correlated {
+			t.Fatalf("directory handle diagnostic case %s differed", test.name)
+		}
+		body, err := json.Marshal(got)
+		if err != nil {
+			t.Fatal("directory handle diagnostic unavailable")
+		}
+		for _, marker := range []string{private, "PRIVATE_", old.modified, fresh.modified, old.mode} {
+			if bytes.Contains(body, []byte(marker)) {
+				t.Fatal("private directory metadata escaped diagnostic")
+			}
+		}
+	}
+	before, after := map[string]nativeMetadataEntry{}, map[string]nativeMetadataEntry{}
+	left, right := map[string]nativeDirectoryHandleMetadata{}, map[string]nativeDirectoryHandleMetadata{}
+	for i := 0; i < 1025; i++ {
+		name := strconv.Itoa(i)
+		before[name], after[name], left[name], right[name] = old, fresh, held, held
+	}
+	if got := nativeDirectoryHandleCorrelation(before, after, left, right); !got.Saturated || got.BeforeDisagreements != 1024 || got.EnumerationChanges != 1024 || got.Correlated {
+		t.Fatal("directory handle diagnostic count bound failed")
+	}
 }
 
 // This is the original complete sorted fingerprint, not diagnostic equality.
@@ -394,6 +612,7 @@ func nativeMetadataDifference(before, after map[string]nativeMetadataEntry, know
 // The Mac preparation can compile these checks; it cannot claim they ran.
 func assertNativeMetadataDiagnostic(t *testing.T) {
 	t.Helper()
+	assertNativeDirectoryHandleCorrelation(t)
 	root := `C:\private\CLIENT_MARKER`
 	proof := filepath.Join(root, "ingestion", "docling", "windows-qualification.dpapi")
 	known := nativeMetadataKnownPaths{root: root, proof: proof, pack: filepath.Join(root, "ingestion", "docling", "installed", "pack")}
