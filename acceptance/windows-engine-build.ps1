@@ -208,6 +208,7 @@ try {
     'TestCompatibleDesktopCarrierReusesBytesWithoutChangingPriorSlot',
     'TestCurrentClientShippingNativeRefusal',
     'TestCurrentMaintenancePreservesQualifiedRoleAndReleaseArguments',
+    'TestDesktopOnlyInstalledClientLifecycle',
     'TestDirectInnerInstallRequiresProductionAuthority',
     'TestExplicitNativeRetryUsesFreshReviewedSlotsAndPreservesFailedCandidate',
     'TestForegroundProfilePreparationAndLoginRequireSeparateConfirmation',
