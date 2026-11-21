@@ -231,14 +231,26 @@ func (b *boundedOutput) Write(p []byte) (int, error) {
 // ReadServerIdentity always executes the real protocol with bounded output and
 // a finite deadline. It has no injectable healthy-check path.
 func ReadServerIdentity(path string) (ServerIdentity, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	return ReadServerIdentityContext(context.Background(), path)
+}
+
+// ReadServerIdentityContext retains the probe bound within the caller's lifetime.
+func ReadServerIdentityContext(ctx context.Context, path string) (ServerIdentity, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	command := exec.CommandContext(ctx, path, "identity")
 	command.WaitDelay = time.Second
 	var output boundedOutput
-	command.Stdout = &output
+	// Hide Buffer.ReadFrom so io.Copy cannot bypass the bounded Write.
+	command.Stdout = struct{ io.Writer }{&output}
 	command.Stderr = io.Discard
 	if err := command.Run(); err != nil {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
+		return ServerIdentity{}, fmt.Errorf("server identity: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
 		return ServerIdentity{}, fmt.Errorf("server identity: %w", err)
 	}
 	if err := rejectDuplicateJSONKeys(output.Bytes()); err != nil {
@@ -261,7 +273,10 @@ func ReadServerIdentity(path string) (ServerIdentity, error) {
 	if (identity.SchemaVersion == 1 && hasContract) || (identity.SchemaVersion == 2 && !hasContract) {
 		return identity, errors.New("server identity wire variant mismatch")
 	}
-	return identity, identity.Validate()
+	if err := identity.Validate(); err != nil {
+		return identity, err
+	}
+	return identity, ctx.Err()
 }
 
 // DecodeStrictJSON validates one bounded JSON value, including duplicate keys.

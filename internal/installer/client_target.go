@@ -93,6 +93,13 @@ func validateDesktopClientShape(m ClientMaterialization) error {
 	return nil
 }
 func validateDesktopClientFiles(m ClientMaterialization) error {
+	return validateDesktopClientFilesContext(context.Background(), m)
+}
+
+func validateDesktopClientFilesContext(ctx context.Context, m ClientMaterialization) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := validateDesktopClientShape(m); err != nil {
 		return err
 	}
@@ -104,16 +111,16 @@ func validateDesktopClientFiles(m ClientMaterialization) error {
 			return errors.New("Desktop materialization digest missing")
 		}
 	}
-	archive, err := ClientArchiveDigest(m.DesktopPath)
+	archive, err := ClientArchiveDigestContext(ctx, m.DesktopPath)
 	if err != nil || archive != m.DesktopSHA256 {
 		return errors.New("Desktop target package changed")
 	}
-	methods, err := ClientFileDigest(m.DesktopMethods.Archive)
+	methods, err := ClientFileDigestContext(ctx, m.DesktopMethods.Archive)
 	if err != nil || methods != m.DesktopMethods.SHA256 {
 		return errors.New("Desktop target methods changed")
 	}
 	if filepath.Clean(m.DesktopPath) != m.DesktopPath {
 		return errors.New("Desktop target path differs")
 	}
-	return nil
+	return ctx.Err()
 }

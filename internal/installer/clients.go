@@ -564,6 +564,9 @@ func MaterializeClientsSeeded(ctx context.Context, o ClientOptions, digest strin
 }
 
 func ReadClientsSeeded(ctx context.Context, o ClientOptions) (ClientStatus, error) {
+	if err := ctx.Err(); err != nil {
+		return ClientStatus{}, err
+	}
 	status := ClientStatus{State: "client-materialization-pending", CodeRegistration: "pending", SessionLoading: "pending", HostObservations: "historical_not_refreshed"}
 	if _, err := admitOperationSeed(ctx, o.SeededOperationOptions); err != nil {
 		return status, err
@@ -574,14 +577,14 @@ func ReadClientsSeeded(ctx context.Context, o ClientOptions) (ClientStatus, erro
 	}
 	status.Record = &record
 	status.Phases = ClientPhases(record)
-	s, err := installtx.ValidateQualifiedLaunch(o.ManagedRoot, o.DataRoot, installtx.ReleaseBinding{}, time.Now())
+	s, err := installtx.ValidateQualifiedLaunchContext(ctx, o.ManagedRoot, o.DataRoot, installtx.ReleaseBinding{}, time.Now())
 	if err != nil {
 		status.Reason = "source_or_current_unavailable"
 		return status, err
 	}
 	if !sameClientCurrent(record.Materialization, s) {
 		status.Reason = "current_release_changed"
-		if err := recheckExperimentalOperation(o.SeededOperationOptions); err != nil {
+		if err := recheckExperimentalOperationContext(ctx, o.SeededOperationOptions); err != nil {
 			return status, err
 		}
 		return status, nil
@@ -612,7 +615,10 @@ func ReadClientsSeeded(ctx context.Context, o ClientOptions) (ClientStatus, erro
 		status.Reason = "binding_changed"
 		return status, errors.New("current admitted client binding differs")
 	}
-	if err = validateClientFiles(record.Materialization); err != nil {
+	if err = validateClientFilesContext(ctx, record.Materialization); err != nil {
+		if cancelled := ctx.Err(); cancelled != nil {
+			return status, cancelled
+		}
 		status.Reason = "packet_changed"
 		return status, err
 	}
@@ -625,10 +631,10 @@ func ReadClientsSeeded(ctx context.Context, o ClientOptions) (ClientStatus, erro
 		status.CodeRegistration = "historical_registered_readback"
 	}
 	status.SessionLoading = "native_loading_unattested"
-	if err := recheckExperimentalOperation(o.SeededOperationOptions); err != nil {
+	if err := recheckExperimentalOperationContext(ctx, o.SeededOperationOptions); err != nil {
 		return status, err
 	}
-	return status, nil
+	return status, ctx.Err()
 }
 func PrepareStableLaunch(ctx context.Context, o ClientOptions) (QualifiedLaunch, error) {
 	return prepareStableLaunch(ctx, o, "")
@@ -809,11 +815,24 @@ func writeClientRecord(o SeededOperationOptions, r ClientRecord) error {
 }
 func clientDigest(body []byte) string              { return fmt.Sprintf("%x", sha256.Sum256(body)) }
 func ClientFileDigest(path string) (string, error) { return clientFileDigest(path, false) }
+func ClientFileDigestContext(ctx context.Context, path string) (string, error) {
+	return clientFileDigestContext(ctx, path, false)
+}
 
 // ClientArchiveDigest observes the fixed private archive role through the same
 // descriptor used for hashing. It never changes mode, ACL, bytes or admission.
 func ClientArchiveDigest(path string) (string, error) { return clientFileDigest(path, true) }
+func ClientArchiveDigestContext(ctx context.Context, path string) (string, error) {
+	return clientFileDigestContext(ctx, path, true)
+}
 func clientFileDigest(path string, privateArchive bool) (string, error) {
+	return clientFileDigestContext(context.Background(), path, privateArchive)
+}
+
+func clientFileDigestContext(ctx context.Context, path string, privateArchive bool) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	f, err := scheduler.OpenRegularFile(path)
 	if err != nil {
 		return "", err
@@ -832,7 +851,7 @@ func clientFileDigest(path string, privateArchive bool) (string, error) {
 		return "", errors.New("client file type or bound")
 	}
 	h := sha256.New()
-	n, err := io.Copy(h, io.LimitReader(f, (128<<20)+1))
+	n, err := io.Copy(h, installerReadContext{ctx, io.LimitReader(f, (128<<20)+1)})
 	after, statErr := f.Stat()
 	if err != nil || statErr != nil {
 		return "", errors.Join(err, statErr)
@@ -840,7 +859,7 @@ func clientFileDigest(path string, privateArchive bool) (string, error) {
 	if n != before.Size() || !os.SameFile(before, after) || before.Size() != after.Size() || before.Mode() != after.Mode() || !before.ModTime().Equal(after.ModTime()) {
 		return "", errors.New("client file changed while reading")
 	}
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
+	return fmt.Sprintf("%x", h.Sum(nil)), ctx.Err()
 }
 
 func ClientTreeDigest(root string) (string, error) {
@@ -852,12 +871,22 @@ func ClientTreeDigest(root string) (string, error) {
 func ClientPayloadDigest(root string) (string, error) { return clientTreeDigest(root, true) }
 
 func clientTreeDigest(root string, payloadOnly bool) (string, error) {
+	return clientTreeDigestContext(context.Background(), root, payloadOnly)
+}
+
+func clientTreeDigestContext(ctx context.Context, root string, payloadOnly bool) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if e := scheduler.ValidateDirectory(root); e != nil {
 		return "", e
 	}
 	var vector []string
 	var total int64
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, e error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if e != nil {
 			return e
 		}
@@ -894,7 +923,7 @@ func clientTreeDigest(root string, payloadOnly bool) (string, error) {
 		if len(vector) >= 4096 || total > 256<<20 {
 			return errors.New("client tree bound")
 		}
-		sha, e := ClientFileDigest(p)
+		sha, e := ClientFileDigestContext(ctx, p)
 		if e != nil {
 			return e
 		}
@@ -914,24 +943,31 @@ func clientTreeDigest(root string, payloadOnly bool) (string, error) {
 	}
 	sort.Strings(vector)
 	body, _ := releasecontract.CanonicalJSON(vector)
-	return clientDigest(body), nil
+	return clientDigest(body), ctx.Err()
 }
 func validateClientFiles(m ClientMaterialization) error {
+	return validateClientFilesContext(context.Background(), m)
+}
+
+func validateClientFilesContext(ctx context.Context, m ClientMaterialization) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if m.DesktopOnly() {
-		return validateDesktopClientFiles(m)
+		return validateDesktopClientFilesContext(ctx, m)
 	}
 	if m.Selection != nil {
 		if !clientSHA.MatchString(m.CodeProviderSHA256) {
 			return errors.New("versioned Code provider digest missing")
 		}
-		actual, err := ClientTreeDigest(m.CodeProviderRoot)
+		actual, err := clientTreeDigestContext(ctx, m.CodeProviderRoot, false)
 		if err != nil || actual != m.CodeProviderSHA256 {
 			return errors.New("versioned Code provider changed")
 		}
 		if err := validateClientMethodBinding(m); err != nil {
 			return err
 		}
-		actual, err = ClientFileDigest(m.DesktopMethods.Archive)
+		actual, err = ClientFileDigestContext(ctx, m.DesktopMethods.Archive)
 		if err != nil || actual != m.DesktopMethods.SHA256 {
 			return errors.New("current Desktop methods archive changed")
 		}
@@ -958,10 +994,10 @@ func validateClientFiles(m ClientMaterialization) error {
 		switch b.Kind {
 		case "code":
 			expected = m.CodeRoot + ".previous-" + b.SHA256
-			actual, err = ClientTreeDigest(b.Path)
+			actual, err = clientTreeDigestContext(ctx, b.Path, false)
 		case "desktop":
 			expected = m.DesktopPath + ".previous-" + b.SHA256 + ".mcpb"
-			actual, err = ClientArchiveDigest(b.Path)
+			actual, err = ClientArchiveDigestContext(ctx, b.Path)
 		default:
 			return errors.New("unknown client backup role")
 		}
@@ -969,22 +1005,42 @@ func validateClientFiles(m ClientMaterialization) error {
 			return errors.New("recorded immutable client backup changed; preserved")
 		}
 	}
-	code, e := ClientTreeDigest(m.CodeRoot)
+	code, e := clientTreeDigestContext(ctx, m.CodeRoot, false)
 	if e != nil {
 		return e
 	}
-	desktop, e := ClientArchiveDigest(m.DesktopPath)
+	desktop, e := ClientArchiveDigestContext(ctx, m.DesktopPath)
 	if e != nil {
 		return e
 	}
 	if code != m.CodeTreeSHA256 || desktop != m.DesktopSHA256 {
 		return errors.New("client packet identity changed")
 	}
-	return nil
+	return ctx.Err()
 }
 
 // A configuration selection never expands the admitted installation owner.
 func containsClientOwner(owner, path string) bool {
 	rel, err := filepath.Rel(owner, path)
 	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// installerReadContext preserves cancellation while observing admitted bytes.
+type installerReadContext struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r installerReadContext) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	if len(p) > 32<<10 {
+		p = p[:32<<10]
+	}
+	n, err := r.reader.Read(p)
+	if cancelled := r.ctx.Err(); cancelled != nil {
+		return n, cancelled
+	}
+	return n, err
 }

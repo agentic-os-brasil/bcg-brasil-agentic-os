@@ -260,7 +260,7 @@ func installedPilotSDK(ctx context.Context, o product.Options, id, expectedManif
 	if !pilotKitID.MatchString(expectedManifest) || !pilotKitID.MatchString(expectedRuntime) || o.InstalledManifestSHA256 != "" && o.InstalledManifestSHA256 != expectedManifest {
 		return errors.New("exact Current conversion expectations required")
 	}
-	bound, err := product.Open(o)
+	bound, err := product.OpenContext(ctx, o)
 	if err != nil {
 		return err
 	}
@@ -278,7 +278,7 @@ func installedPilotSDK(ctx context.Context, o product.Options, id, expectedManif
 		<-done
 		return &installedPilotReadbackError{stage: "connect", cause: err}
 	}
-	defer func() { session.Close(); cancel(); <-done }()
+	defer func() { cancel(); session.Close(); <-done }()
 	var metadata struct {
 		WorkspaceID string `json:"workspace_id"`
 		State       string `json:"state"`
@@ -357,7 +357,13 @@ func (e *installedPilotReadbackError) Unwrap() error { return e.cause }
 
 func installedPilotCall(ctx context.Context, session *mcp.ClientSession, stage, name string, args map[string]any, out any) error {
 	// Each signed read keeps its finite bound without consuming the next read's budget.
-	callCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	budget := 20 * time.Second
+	if stage == "content_status" {
+		// Several fifteen-second identity probes and authenticated inventories need
+		// a separate finite request policy; synchronous teardown remains separate.
+		budget = 3 * time.Minute
+	}
+	callCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	err := pilotCall(callCtx, session, name, args, out)
 	if callCtx.Err() != nil {

@@ -16,12 +16,19 @@ import (
 // every validation, including both sides of trusted foreground confirmation.
 // No installation lock is held while waiting for the browser or a domain lock.
 func (b *Bound) validateInstalledOwnerReview(home, workspaceID string) error {
+	return b.validateInstalledOwnerReviewContext(context.Background(), home, workspaceID)
+}
+
+func (b *Bound) validateInstalledOwnerReviewContext(ctx context.Context, home, workspaceID string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if b.options.ManagementCarrierID == "" {
 		if b.options.ManagementInstallerVersion != "" || b.ownerReviewClientSHA256 != "" {
 			return errors.New("owner_review_carrier_changed")
 		}
 		if b.options.OwnerReviewChannel != "" {
-			owning, err := b.sourceContext()
+			owning, err := b.sourceContextWithContext(ctx)
 			if err != nil || owning.required || owning.state != nil || b.options.ExperimentalSeed != nil {
 				return errors.New("owner_review_carrier_unavailable")
 			}
@@ -34,7 +41,10 @@ func (b *Bound) validateInstalledOwnerReview(home, workspaceID string) error {
 	if role := b.options.ExperimentalSeed; role != nil && b.options.ManagementInstallerVersion != role.Identity().InstallerVersion {
 		return errors.New("owner_review_carrier_changed")
 	}
-	status, err := installer.ReadClientsSeeded(context.Background(), b.managementClientOptions())
+	status, err := installer.ReadClientsSeeded(ctx, b.managementClientOptions())
+	if cancelled := ctx.Err(); cancelled != nil {
+		return cancelled
+	}
 	if err != nil || status.State != "current_materialization" || status.Record == nil {
 		return errors.New("owner_review_carrier_unavailable")
 	}
@@ -49,7 +59,7 @@ func (b *Bound) validateInstalledOwnerReview(home, workspaceID string) error {
 	if b.ownerReviewClientSHA256 == "" {
 		b.ownerReviewClientSHA256 = pin
 	}
-	return nil
+	return ctx.Err()
 }
 
 func (b *Bound) managementClientOptions() installer.ClientOptions {

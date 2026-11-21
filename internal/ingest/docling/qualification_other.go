@@ -4,5 +4,10 @@ package docling
 
 import "context"
 
-func qualificationStatus(context.Context, Options, verifiedPack) string { return "" }
-func qualifyPlaced(context.Context, Options) error                      { return nil }
+func qualificationStatus(ctx context.Context, _ Options, _ verifiedPack) string {
+	if ctx.Err() != nil {
+		return "conversion_cancelled"
+	}
+	return ""
+}
+func qualifyPlaced(context.Context, Options) error { return nil }
