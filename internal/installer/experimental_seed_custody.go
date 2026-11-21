@@ -25,6 +25,13 @@ const experimentalSeedOriginName = "experimental-installed-origin.json"
 // LoadExperimentalSeed reads only the fixed public role adjacent to a separately
 // constructed experimental entry. It never discovers a key or accepts a trust flag.
 func LoadExperimentalSeed(root, registryPin, version string, clock func() time.Time) (*VerifiedExperimentalSeed, error) {
+	return LoadExperimentalSeedContext(context.Background(), root, registryPin, version, clock)
+}
+
+func LoadExperimentalSeedContext(ctx context.Context, root, registryPin, version string, clock func() time.Time) (*VerifiedExperimentalSeed, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	read := func(name string, limit int64) ([]byte, error) {
 		path := filepath.Join(root, "trust", name)
 		file, err := scheduler.OpenRegularFile(path)
@@ -35,7 +42,10 @@ func LoadExperimentalSeed(root, registryPin, version string, clock func() time.T
 		if err := scheduler.ValidateSingleLink(file); err != nil {
 			return nil, err
 		}
-		body, err := io.ReadAll(io.LimitReader(file, limit+1))
+		body, err := io.ReadAll(installerReadContext{ctx, io.LimitReader(file, limit+1)})
+		if cancelled := ctx.Err(); cancelled != nil {
+			return nil, cancelled
+		}
 		if err != nil || int64(len(body)) > limit {
 			return nil, errors.New("bounded experimental public input required")
 		}
@@ -60,7 +70,7 @@ func LoadExperimentalSeed(root, registryPin, version string, clock func() time.T
 	if version != "" && role.Identity().InstallerVersion != version {
 		return nil, errors.New("experimental installer version differs from its compiled entry")
 	}
-	return role, nil
+	return role, ctx.Err()
 }
 
 type experimentalSeedOrigin struct {
@@ -107,7 +117,14 @@ func stageExperimentalSeed(p Plan, role *VerifiedExperimentalSeed) error {
 }
 
 func readExperimentalOrigin(o SeededOperationOptions) (experimentalSeedOrigin, error) {
+	return readExperimentalOriginContext(context.Background(), o)
+}
+
+func readExperimentalOriginContext(ctx context.Context, o SeededOperationOptions) (experimentalSeedOrigin, error) {
 	var origin experimentalSeedOrigin
+	if err := ctx.Err(); err != nil {
+		return origin, err
+	}
 	if o.ExperimentalSeed == nil {
 		return origin, errors.New("verified experimental installed-seed role required")
 	}
@@ -129,7 +146,7 @@ func readExperimentalOrigin(o SeededOperationOptions) (experimentalSeedOrigin, e
 	if err != nil || home.Home != origin.BrainHome {
 		return origin, errors.New("experimental installation brain binding changed; preserve original binding")
 	}
-	return origin, nil
+	return origin, ctx.Err()
 }
 
 func experimentalOperationOptions(p Plan, role *VerifiedExperimentalSeed) SeededOperationOptions {
@@ -139,10 +156,17 @@ func experimentalOperationOptions(p Plan, role *VerifiedExperimentalSeed) Seeded
 // VerifyExperimentalInstalledBinding is a read-only child admission check. The
 // opaque role cannot turn a production installation into an experimental one.
 func VerifyExperimentalInstalledBinding(o SeededOperationOptions) error {
+	return VerifyExperimentalInstalledBindingContext(context.Background(), o)
+}
+
+func VerifyExperimentalInstalledBindingContext(ctx context.Context, o SeededOperationOptions) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if o.ExperimentalSeed == nil || filepath.Clean(o.Self) != seedPath(o.ManagedRoot, runtime.GOOS, releasecontract.ModernProfile) {
 		return errors.New("fixed experimental installed seed required")
 	}
-	if err := recheckExperimentalOperation(o); err != nil {
+	if err := recheckExperimentalOperationContext(ctx, o); err != nil {
 		return err
 	}
 	state, err := installtx.ReadSourceState(o.DataRoot, o.ManagedRoot)
@@ -155,29 +179,39 @@ func VerifyExperimentalInstalledBinding(o SeededOperationOptions) error {
 	if state.Source != nil {
 		return o.ExperimentalSeed.VerifySource(state.Source.Tuple)
 	}
-	return nil
+	return ctx.Err()
 }
 
 // This is a narrowing final fence, not a replacement current-state lock. It
 // performs no writes and production's nil-admission branch remains an identity.
 func recheckExperimentalOperation(o SeededOperationOptions) error {
+	return recheckExperimentalOperationContext(context.Background(), o)
+}
+
+func recheckExperimentalOperationContext(ctx context.Context, o SeededOperationOptions) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if o.ExperimentalSeed == nil {
 		return nil
 	}
 	if err := o.ExperimentalSeed.Revalidate(); err != nil {
 		return err
 	}
-	if err := o.ExperimentalSeed.VerifyInstaller(o.Self, o.Version, runtime.GOOS, runtime.GOARCH); err != nil {
+	if err := o.ExperimentalSeed.VerifyInstallerContext(ctx, o.Self, o.Version, runtime.GOOS, runtime.GOARCH); err != nil {
 		return err
 	}
-	if _, err := readExperimentalOrigin(o); err != nil {
+	if _, err := readExperimentalOriginContext(ctx, o); err != nil {
 		return err
 	}
-	fresh, err := LoadExperimentalSeed(o.ManagedRoot, o.AuthorityRegistrySHA256, o.Version, o.ExperimentalSeed.clock)
+	fresh, err := LoadExperimentalSeedContext(ctx, o.ManagedRoot, o.AuthorityRegistrySHA256, o.Version, o.ExperimentalSeed.clock)
+	if cancelled := ctx.Err(); cancelled != nil {
+		return cancelled
+	}
 	if err != nil || fresh.Identity() != o.ExperimentalSeed.Identity() {
 		return errors.New("installed experimental role changed")
 	}
-	return nil
+	return ctx.Err()
 }
 
 // The existing rollback transaction authenticates the previous release. This
@@ -364,7 +398,7 @@ func admitExperimentalOperationSeed(ctx context.Context, o SeededOperationOption
 	if o.VerifyNative != nil {
 		return releaseverify.AuthorityRegistry{}, errors.New("experimental operation cannot accept a native verifier override")
 	}
-	if err := VerifyExperimentalInstalledBinding(o); err != nil {
+	if err := VerifyExperimentalInstalledBindingContext(ctx, o); err != nil {
 		return releaseverify.AuthorityRegistry{}, err
 	}
 	status, err := readExperimentalSeedStatus(ctx, o.Self, execCommand)

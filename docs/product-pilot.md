@@ -197,6 +197,12 @@ Archive validation does not prove Desktop loading. A blocked initialization also
 keeps the verified executable, test launcher and bounded diagnostic report;
 neither the preparer nor the checker repairs owner ACLs or removes partial data.
 
+Installed-profile diagnostics allow a separate finite budget for complete
+runtime authentication. Earlier cancellation still stops the request, and
+cleanup is observed separately. The [installed-checker contract](../specs/063-product-native-plugin.md#isolated-pilot-self-service)
+defines those budgets and preserves all signature, Current and inventory checks.
+A diagnostic pass remains separate from actual Desktop or Code acceptance.
+
 The participant opens **Testar Maestro** and chooses a clearly named route.
 For the complete native Code trial, first use option 3 to open the dedicated Code
 profile and finish its normal login, then return to option 5, review the actual

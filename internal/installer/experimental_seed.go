@@ -2,6 +2,7 @@ package installer
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
@@ -189,6 +190,13 @@ func (v *VerifiedExperimentalSeed) RecordBytes() ([]byte, []byte) {
 }
 
 func (v *VerifiedExperimentalSeed) VerifyInstaller(path, version, targetOS, targetArch string) error {
+	return v.VerifyInstallerContext(context.Background(), path, version, targetOS, targetArch)
+}
+
+func (v *VerifiedExperimentalSeed) VerifyInstallerContext(ctx context.Context, path, version, targetOS, targetArch string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := v.Revalidate(); err != nil {
 		return err
 	}
@@ -211,7 +219,7 @@ func (v *VerifiedExperimentalSeed) VerifyInstaller(path, version, targetOS, targ
 		return errors.New("experimental installer must be a bounded regular file")
 	}
 	hash := sha256.New()
-	n, err := io.Copy(hash, io.LimitReader(file, maxBootstrapperBytes+1))
+	n, err := io.Copy(hash, installerReadContext{ctx, io.LimitReader(file, maxBootstrapperBytes+1)})
 	if err != nil {
 		return err
 	}
@@ -226,7 +234,7 @@ func (v *VerifiedExperimentalSeed) VerifyInstaller(path, version, targetOS, targ
 	if n != before.Size() || after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime()) || !current.Mode().IsRegular() || !os.SameFile(after, current) || hex.EncodeToString(hash.Sum(nil)) != v.record.InstallerSHA256 {
 		return errors.New("experimental installer differs from the exact signed role")
 	}
-	return nil
+	return ctx.Err()
 }
 
 func (v *VerifiedExperimentalSeed) VerifySource(source releasecontract.SourceTuple) error {

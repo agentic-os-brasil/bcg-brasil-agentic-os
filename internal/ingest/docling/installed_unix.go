@@ -14,6 +14,9 @@ import (
 )
 
 func verifyInstalled(ctx context.Context, root string, entries map[string]entry) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	directory, err := scheduler.OpenDirectory(root)
 	if err != nil {
 		return err
@@ -21,6 +24,9 @@ func verifyInstalled(ctx context.Context, root string, entries map[string]entry)
 	defer directory.Close()
 	expectedDirs := map[string]bool{".": true}
 	for name := range entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		for dir := path.Dir(name); dir != "."; dir = path.Dir(dir) {
 			expectedDirs[dir] = true
 		}
@@ -28,6 +34,9 @@ func verifyInstalled(ctx context.Context, root string, entries map[string]entry)
 	count := 0
 	var walk func(*os.File, string) error
 	walk = func(held *os.File, prefix string) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		info, err := held.Stat()
 		if err != nil {
 			return err
@@ -75,7 +84,7 @@ func verifyInstalled(ctx context.Context, root string, entries map[string]entry)
 				} else {
 					var body []byte
 					var info os.FileInfo
-					body, info, err = readOpenedFile(opened, int64(len(expected.body)))
+					body, info, err = readOpenedFileContext(ctx, opened, int64(len(expected.body)))
 					if err == nil && (info.Mode().Perm() != os.FileMode(expected.mode) || !bytes.Equal(body, expected.body)) {
 						err = errors.New("installed_file_changed")
 					}
@@ -103,5 +112,5 @@ func verifyInstalled(ctx context.Context, root string, entries map[string]entry)
 	if count != len(entries) {
 		return errors.New("installed_file_missing")
 	}
-	return nil
+	return ctx.Err()
 }

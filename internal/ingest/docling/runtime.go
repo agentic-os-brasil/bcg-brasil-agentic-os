@@ -49,7 +49,11 @@ func (r *Runtime) Status(ctx context.Context) Availability {
 	if reason != "" {
 		return Availability{State: "unavailable", Reason: reason}
 	}
-	if reason := qualificationStatus(ctx, r.options, pack); reason != "" {
+	reason = qualificationStatus(ctx, r.options, pack)
+	if ctx.Err() != nil {
+		return Availability{State: "unavailable", Reason: "conversion_cancelled"}
+	}
+	if reason != "" {
 		return Availability{State: "unqualified", Reason: reason, PackSHA256: pack.sha}
 	}
 	return Availability{State: "ready", PackSHA256: pack.sha, Profile: pack.target.profile}
