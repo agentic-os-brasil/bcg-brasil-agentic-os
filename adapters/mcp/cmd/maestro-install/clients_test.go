@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 )
 
 func TestFirstClientOwnerReviewChannelIsAnExplicitCommonChoice(t *testing.T) {
@@ -15,7 +18,7 @@ func TestFirstClientOwnerReviewChannelIsAnExplicitCommonChoice(t *testing.T) {
 				t.Fatal("first setup hid the common client scope or individual approval requirement")
 			}
 			return choice, nil
-		})
+		}, false)
 		if choice == "model-approved" {
 			if err == nil {
 				t.Fatal("unknown channel accepted")
@@ -87,4 +90,45 @@ func TestClientCapabilitiesReadOnlyWithoutInstallation(t *testing.T) {
 		t.Fatalf("finite lifecycle capability: %s %v %v", body, e, e2)
 	}
 
+}
+
+func TestDesktopTargetCapabilityAndFrontendRefusals(t *testing.T) {
+	oldArgs, oldVersion, oldPin, oldOutput := os.Args, Version, AuthorityRegistrySHA256, os.Stdout
+	defer func() { os.Args, Version, AuthorityRegistrySHA256, os.Stdout = oldArgs, oldVersion, oldPin, oldOutput }()
+	Version, AuthorityRegistrySHA256 = "0.3.7", strings.Repeat("b", 64)
+	os.Args = []string{"maestro-install", "client-target-capabilities"}
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	os.Stdout = w
+	err = run()
+	w.Close()
+	os.Stdout = oldOutput
+	body, readErr := io.ReadAll(r)
+	var got installer.ClientTargetCapability
+	if err != nil || readErr != nil || json.Unmarshal(body, &got) != nil || got != installer.DesktopClientCapabilities("installer", Version, AuthorityRegistrySHA256) {
+		t.Fatalf("target-aware actual reader must disclose its closed protocol without installation: %s %v %v", body, err, readErr)
+	}
+	os.Args = append(os.Args, "--unreviewed")
+	if err := run(); err == nil {
+		t.Fatal("target capabilities accepted extra arguments")
+	}
+	for _, command := range []string{"manage", "clients-status"} {
+		if handled, err := runClients(context.Background(), command, "", lifecycleFlags{ClientTarget: "both"}, "", false); !handled || err == nil || !strings.Contains(err.Error(), "unsupported client target") {
+			t.Fatalf("unknown target must refuse before installation/discovery: %v %v", handled, err)
+		}
+	}
+	if handled, err := runClients(context.Background(), "code-apply", "", lifecycleFlags{ClientTarget: "desktop"}, "", false); !handled || err == nil {
+		t.Fatal("Code mutation accepted a caller-selected Desktop target")
+	}
+	if err := manageClients(context.Background(), installer.ClientOptions{Request: installer.ClientRequest{Target: "desktop", CodeConfigurationDirectory: "hidden-profile"}}, strings.NewReader(""), io.Discard); err == nil || !strings.Contains(err.Error(), "cannot include Code choices") {
+		t.Fatalf("Desktop choices must refuse before installed state, prompts or effects: %v", err)
+	}
+	var prompts []string
+	_, err = promptClientOwnerReviewChannel(func(prompt string) (string, error) { prompts = append(prompts, prompt); return "", nil }, true)
+	if err != nil || len(prompts) != 1 || strings.Contains(prompts[0], "BOTH Code") || !strings.Contains(prompts[0], "approves no write") {
+		t.Fatalf("Desktop review must describe its actual selected scope: %v %v", prompts, err)
+	}
 }

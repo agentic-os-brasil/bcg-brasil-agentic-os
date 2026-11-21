@@ -1873,3 +1873,15 @@ coverage, not proof of this complete-kit scope. Refs: #599; Spec061 NTXT.
 - Consequences: Live/reused/unknown owners, malformed/aliased/changed locks and stale or invalid selections remain refused. Existing process-wait callers propagate lookup/access errors; only a positive DWORD PID with an OpenProcess-wrapped Windows ERROR_INVALID_PARAMETER is classified absent, while Unix retains its Signal(0) absence check. Track only the exact regular empty private retained guard in managed-root inventory. Read-only status, lifecycle hooks, ordinary writers, source/packet/profile/qualification custody and client execution authority retain their existing contracts. No age-based lease, process kill, force flag, imported native proof or manually deleted lock is introduced. Source and focused test evidence remain separate from rebuilt artifacts and actual Desktop initialize/tool acceptance.
 - Refs: #614; specs/020-release-distribution.md; specs/063-product-native-plugin.md; internal/installtx/transaction.go; internal/privatelock; internal/installer/clients.go
 - Supersedes: none
+
+
+## DTON - Publish an explicitly selected installed Desktop client independently
+
+- Date: 2026-11-20
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The combined current-client owner requires Code slots and genuine Code qualification before publishing the Desktop connector and live method frontend. Desktop cannot be onboarded independently even though its source/transport custody does not consume Code Agent proof. The initial portable experimental packet lacks the authenticated installed launch context and is not an alternative.
+- Decision: Extend the existing client lifecycle with an explicit desktop target, bound into request, review, record and generation identities. An absent target retains the exact legacy both-client meaning and JSON. Desktop-only uses a compatible target-aware installed bootstrap, original stable-launch/source/current-record validation and a Desktop-owned methods/management slot. No Code slot, executable, profile, provider, login or qualifier is fabricated. Code-including selections keep genuine same-call qualification and no-downgrade rules; changing an existing carrier target refuses.
+- Consequences: Old readers refuse the new record schema/capability rather than interpreting a partial record. Desktop method installation, connection and functional checks remain separate host observations. Desktop gains no Code hooks or independent foreground runtime authorization. Ship a newly reviewed compatible bootstrap/kit; existing artifacts and failed observations remain unchanged.
+- Refs: #616; specs/020-release-distribution.md; specs/065-product-method-discovery.md; docs/product-clients.md
+- Supersedes: none

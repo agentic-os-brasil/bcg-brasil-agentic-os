@@ -19,12 +19,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/setup"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/releasepack"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/updateservice"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // Exercise actual untagged shipping defaults after controlled fixture setup;
@@ -86,7 +88,7 @@ func TestCurrentClientShippingNativeRefusal(t *testing.T) {
 
 // Reuse the ordinary factory/source/install owners; the verifier is confined to
 // setup and is never supplied to the six compiled shipping commands above.
-func provisionShippingNativeFixture(t *testing.T, root string) {
+func provisionShippingNativeFixture(t *testing.T, root string, target ...string) {
 	t.Helper()
 	ctx := t.Context()
 	source, err := filepath.Abs("../../..")
@@ -145,6 +147,11 @@ func provisionShippingNativeFixture(t *testing.T, root string) {
 	must(t, os.Mkdir(workspace, 0700))
 	must(t, os.WriteFile(filepath.Join(workspace, "owner.txt"), []byte("retain exact owner workspace bytes"), 0600))
 	request := setup.Request{ReleaseDirectory: release, ManagedRoot: filepath.Join(root, "managed"), UserHome: user, Workspace: workspace, CodePacket: filepath.Join(root, "initial-code"), DesktopPacket: filepath.Join(root, "initial-desktop.mcpb")}
+	if len(target) > 0 {
+		request.Target = target[0]
+		request.CodePacket = ""
+		request.DesktopPacket = ""
+	}
 	review, err := setup.ReviewInstallation(request, config)
 	must(t, err)
 	_, err = setup.Apply(ctx, request, config, review.Digest, true)
@@ -166,10 +173,19 @@ func provisionShippingNativeFixture(t *testing.T, root string) {
 	_, err = rand.Read(carrier)
 	must(t, err)
 	options := installer.ClientOptions{SeededOperationOptions: seed, Request: installer.ClientRequest{CarrierID: fmt.Sprintf("%x", carrier), Workspace: workspace, CodeRoot: filepath.Join(root, "stable-code"), DesktopPath: filepath.Join(root, "stable-desktop.mcpb"), CodeScope: "user", VersionedSlots: true}, LookupEnv: config.LookupEnv}
+	if len(target) > 0 {
+		options.Request.Target = target[0]
+		options.Request.CodeRoot = ""
+		options.Request.CodeScope = ""
+	}
 	clientReview, err := installer.ReviewClientsSeeded(ctx, options)
-	must(t, err)
+	if err != nil {
+		t.Fatalf("fixture current-client review: %v", err)
+	}
 	record, err := setup.ApplyClients(ctx, options, clientReview.Digest, true)
-	must(t, err)
+	if err != nil {
+		t.Fatalf("fixture current-client apply: %v", err)
+	}
 	options.Request = installer.ClientRequestFromRecord(record)
 	status, err := installer.ReadClientsSeeded(ctx, options)
 	must(t, err)
@@ -182,4 +198,89 @@ func provisionShippingNativeFixture(t *testing.T, root string) {
 	setupProof, err := json.MarshalIndent(map[string]any{"fixture_setup": "controlled_in_process_exact_seed_byte_verifier_only", "shipping_entry": "ordinary_untagged", "shipping_native_override": false, "installer_sha256": seedSHA, "active_source_sequence": 1, "manifest_sha256": verified.ManifestSHA256, "client_record": record, "actual_vendor_client_loading": "unattested"}, "", "  ")
 	must(t, err)
 	must(t, os.WriteFile(filepath.Join(root, "shipping-fixture-setup.json"), append(setupProof, '\n'), 0600))
+}
+
+// Reuse the existing signed/source fixture. Native seed attestation is confined
+// to its exact bytes; the source/client/launch owners and server are real.
+func TestDesktopOnlyInstalledClientLifecycle(t *testing.T) {
+	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
+		t.Skip("native installed owner fixture requires supported host")
+	}
+	root := t.TempDir()
+	must(t, os.Chmod(root, 0700))
+	provisionShippingNativeFixture(t, root, "desktop")
+	var fixture struct{ Self, ManagedRoot, UserHome, Workspace string }
+	must(t, json.Unmarshal(read(t, filepath.Join(root, "native-process.json")), &fixture))
+	paths, err := filepath.Glob(filepath.Join(fixture.UserHome, ".maestro-install", "clients", "*.json"))
+	must(t, err)
+	if len(paths) != 1 {
+		t.Fatal("expected exact Desktop record")
+	}
+	var record installer.ClientRecord
+	must(t, json.Unmarshal(read(t, paths[0]), &record))
+	if record.SchemaVersion != 2 || !record.Materialization.DesktopOnly() || record.Code.State != "not_selected" || record.Materialization.CodeRoot != "" || record.Materialization.CodeProviderRoot != "" || record.Materialization.NativeEnforcement {
+		t.Fatalf("Desktop created Code capability: %+v", record)
+	}
+	if record.Materialization.DesktopMethods == nil || !strings.Contains(record.Materialization.DesktopMethods.Archive, ".desktop-methods") {
+		t.Fatal("complete Desktop method frontend missing")
+	}
+	if _, err := os.Lstat(filepath.Join(root, "initial-code")); !os.IsNotExist(err) {
+		t.Fatal("Desktop initial setup fabricated Code packet")
+	}
+	if _, err := os.Lstat(filepath.Join(root, "initial-desktop.mcpb")); !os.IsNotExist(err) {
+		t.Fatal("Desktop initial setup advertised unbound portable connector")
+	}
+	seedSHA := sum(read(t, fixture.Self))
+	o := installer.ClientOptions{SeededOperationOptions: installer.SeededOperationOptions{Self: fixture.Self, Version: "0.3.7", AuthorityRegistrySHA256: sum(read(t, filepath.Join(root, "authority.json"))), ManagedRoot: fixture.ManagedRoot, UserHome: fixture.UserHome, DataRoot: filepath.Join(fixture.UserHome, ".maestro-install"), VerifyNative: func(_ context.Context, path string) error {
+		if sum(read(t, path)) != seedSHA {
+			return errors.New("fixture seed changed")
+		}
+		return nil
+	}}, Request: installer.ClientRequestFromRecord(record), LookupEnv: func(string) (string, bool) { return "", false }}
+	status, err := installer.ReadClientsSeeded(t.Context(), o)
+	must(t, err)
+	if status.State != "current_materialization" || status.CodeRegistration != "not_selected" {
+		t.Fatal("cold Desktop current record unavailable", status)
+	}
+	archive, err := packaging.ValidateArchive(record.Materialization.DesktopPath)
+	must(t, err)
+	if archive.Stable == nil || archive.NativeContractSHA256 != record.Materialization.DesktopNativeContractSHA256 {
+		t.Fatal("Desktop stable native contract missing")
+	}
+	launch, err := installer.PrepareStableLaunch(t.Context(), o)
+	must(t, err)
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, launch.Executable, launch.Args...)
+	command.Dir = fixture.Workspace
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "desktop-target-shipping-refusal", Version: "1"}, nil).Connect(ctx, &mcp.CommandTransport{Command: command, TerminateDuration: time.Second}, nil)
+	if err == nil {
+		cs.Close()
+		t.Fatal("untagged unsigned fixture bypassed independent native installer admission")
+	}
+	if strings.TrimSpace(stderr.String()) != "maestro: operation unavailable; inspect the selected binding before retrying" {
+		t.Fatalf("unexpected shipping startup refusal: %v: %s", err, stderr.String())
+	}
+	replay, err := installer.ReviewClientsSeeded(t.Context(), o)
+	must(t, err)
+	again, err := setup.ApplyClients(t.Context(), o, replay.Digest, true)
+	must(t, err)
+	if again.Materialization.DesktopSHA256 != record.Materialization.DesktopSHA256 {
+		t.Fatal("replay changed admitted Desktop connector")
+	}
+	changed := o
+	changed.Request.Target = ""
+	changed.Request.CodeRoot = filepath.Join(root, "unexpected-code")
+	changed.Request.CodeScope = "user"
+	if _, err := installer.ReviewClientsSeeded(t.Context(), changed); err == nil {
+		t.Fatal("existing Desktop target silently changed to both")
+	}
+	before := read(t, record.Materialization.DesktopPath)
+	must(t, os.WriteFile(record.Materialization.DesktopPath, append(append([]byte{}, before...), byte('x')), 0600))
+	if _, err := installer.ReadClientsSeeded(t.Context(), o); err == nil {
+		t.Fatal("tampered Desktop inventory admitted")
+	}
+	must(t, os.WriteFile(record.Materialization.DesktopPath, before, 0600))
 }
