@@ -110,13 +110,16 @@ jobs:
           GOTOOLCHAIN: local
         run: |
           $evidence = Join-Path $env:RUNNER_TEMP 'maestro-windows-source-frontend.jsonl'
-          go test ./dev/pilot/installed-seed-factory -run '^TestWindowsSelfServiceExactOwnerAndSelectedProfile$' -count=1 -json -timeout=180s | Tee-Object -FilePath $evidence
+          go test ./dev/pilot/installed-seed-factory -run '^(TestWindowsSelfServiceExactOwnerAndSelectedProfile|TestWindowsSelfServiceDesktopSelectionAvoidsCode)$' -count=1 -json -timeout=180s | Tee-Object -FilePath $evidence
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $events = @(Get-Content -LiteralPath $evidence | ForEach-Object { $_ | ConvertFrom-Json })
-          $parent = 'TestWindowsSelfServiceExactOwnerAndSelectedProfile'
-          $passed = @($events | Where-Object { $_.Action -ceq 'pass' -and $_.Test -ceq $parent })
+          $parents = @('TestWindowsSelfServiceExactOwnerAndSelectedProfile', 'TestWindowsSelfServiceDesktopSelectionAvoidsCode')
           $invalid = @($events | Where-Object { $_.Action -in @('skip','fail') })
-          if ($passed.Count -ne 1 -or $invalid.Count -ne 0) { throw 'Exact Windows frontend parent must pass once with no skips or failures' }
+          if ($invalid.Count -ne 0) { throw 'Exact Windows frontend families must have no skips or failures' }
+          foreach ($parent in $parents) {
+            $passed = @($events | Where-Object { $_.Action -ceq 'pass' -and $_.Test -ceq $parent })
+            if ($passed.Count -ne 1) { throw "Exact Windows frontend parent must pass once: $parent" }
+          }
       - name: Download the immutable generic ZIP from this producing run
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
