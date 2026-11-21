@@ -994,3 +994,25 @@ an authenticated carrier refuses. Legacy native-first installed diagnostics
 without management carrier metadata remain supported, while incomplete declared
 carrier metadata refuses. The read-only installed checker derives its mode from
 the same already-authenticated record and never opens an approval screen.
+
+
+### Explicit installed Desktop target (DTON)
+
+The current client request may explicitly select `target: "desktop"`. An omitted
+target retains legacy both-client JSON and meaning; missing Code inputs never
+infer a target. Unknown targets and Code-specific fields on Desktop requests
+refuse. The exact target participates in review, generation, current-record,
+readback and update validation. Existing carrier targets cannot change implicitly.
+
+Desktop-only publication uses the original authenticated stable launcher, current
+source/manifest/server, owner/workspace and Desktop native-contract custody, and
+a complete live method frontend in Desktop-owned finite slots. It requires a
+target-aware actual installed reader and emits a distinct record schema that old
+readers refuse. Code fields/profiles/provider/native proof remain absent; Code
+selection retains every genuine qualifier/no-downgrade requirement.
+
+Participant selection precedes Code discovery/login. Desktop-only never requests
+Code OAuth; independent foreground agents retain their separately reviewed
+profile/runtime/login. Existing complete both-client records and JSON remain
+unchanged. A new compatible kit and actual host acceptance are required; initial
+portable packet import, source construction or copied files do not prove loading.

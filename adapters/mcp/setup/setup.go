@@ -26,6 +26,7 @@ import (
 )
 
 type Request struct {
+	Target           string `json:"target,omitempty"`
 	ReleaseDirectory string `json:"release_directory"`
 	ManagedRoot      string `json:"managed_root"`
 	UserHome         string `json:"user_home"`
@@ -81,6 +82,9 @@ func installOptions(r Request, c Config) installer.Options {
 }
 
 func ReviewInstallation(r Request, c Config) (Review, error) {
+	if r.Target != "" && (r.Target != "desktop" || r.CodePacket != "" || r.DesktopPacket != "") {
+		return Review{}, errors.New("Desktop setup publishes clients only through the installed current-client owner")
+	}
 	plan, verified, err := installer.Prepare(installOptions(r, c))
 	if err != nil {
 		return Review{}, err
@@ -109,6 +113,9 @@ func ReviewInstallation(r Request, c Config) (Review, error) {
 		}
 	}
 	packets := []PacketReview{{Destination: r.CodePacket, Format: "plugin"}, {Destination: r.DesktopPacket, Format: "mcpb"}}
+	if r.Target == "desktop" {
+		packets = []PacketReview{}
+	}
 	for i := range packets {
 		destination := packets[i].Destination
 		if destination == "" || !filepath.IsAbs(destination) || filepath.Clean(destination) != destination || strings.ContainsAny(destination, "\x00\r\n") {
@@ -132,7 +139,7 @@ func ReviewInstallation(r Request, c Config) (Review, error) {
 			return Review{}, err
 		}
 	}
-	if overlap(r.CodePacket, r.DesktopPacket) {
+	if r.Target != "desktop" && overlap(r.CodePacket, r.DesktopPacket) {
 		return Review{}, errors.New("participant packets overlap")
 	}
 	review := Review{SchemaVersion: 1, Request: r, Installation: plan, Home: home, Packets: packets, Effects: []Effect{
@@ -165,6 +172,9 @@ func ReviewInstallation(r Request, c Config) (Review, error) {
 
 func Apply(ctx context.Context, r Request, c Config, digest string, confirmed bool) (Result, error) {
 	result := Result{State: "pending", CodeRegistration: "pending", DesktopLoading: "pending", Content: docling.Availability{State: "unavailable", Reason: "pack_unavailable"}}
+	if r.Target == "desktop" {
+		result.CodeRegistration = "not_selected"
+	}
 	if !confirmed || len(digest) != 64 {
 		return result, errors.New("explicit confirmation and exact review digest required")
 	}

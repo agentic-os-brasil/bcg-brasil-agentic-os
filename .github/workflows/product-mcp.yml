@@ -447,7 +447,7 @@ jobs:
         shell: bash
         run: |
           evidence="$RUNNER_TEMP/maestro-client-registration.jsonl"
-          if ! go test -tags=maestro_experimental_installed_seed ./setup -run '^TestModernClientRegistrationLifecycle$' -count=1 -json -timeout=900s > "$evidence"; then
+          if ! go test -tags=maestro_experimental_installed_seed ./setup -run '^(TestModernClientRegistrationLifecycle|TestDesktopOnlyExperimentalCurrentConsumer)$' -count=1 -json -timeout=900s > "$evidence"; then
             cat "$evidence"
             exit 1
           fi
@@ -455,10 +455,10 @@ jobs:
           python3 - "$evidence" <<'PYCODE'
           import json, pathlib, sys
           events = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
-          family = "TestModernClientRegistrationLifecycle"
-          assert any(e.get("Action") == "pass" and e.get("Test") == family for e in events), "actual client lifecycle missing or skipped"
-          skipped = [e.get("Test") for e in events if e.get("Action") == "skip" and (e.get("Test") == family or e.get("Test", "").startswith(family + "/"))]
-          assert not skipped, "actual client lifecycle skipped proof: " + repr(skipped)
+          for family in ("TestModernClientRegistrationLifecycle", "TestDesktopOnlyExperimentalCurrentConsumer"):
+              assert any(e.get("Action") == "pass" and e.get("Test") == family for e in events), family + " missing or skipped"
+              skipped = [e.get("Test") for e in events if e.get("Action") == "skip" and (e.get("Test") == family or e.get("Test", "").startswith(family + "/"))]
+              assert not skipped, family + " skipped proof: " + repr(skipped)
           PYCODE
 
       - name: Actual shipping client paths preserve native Self admission

@@ -151,6 +151,8 @@ umask 077
 fail(){ printf '%s' "$*" >&2; exit 1; }
 jget(){ /usr/bin/plutil -extract "$2" raw -o - "$1"; }
 COMMON=(--fixture)
+CLIENT_STATUS=("${COMMON[@]}")
+TARGET=""
 fixture_installer(){
   case "$1" in
     clients-status) printf '%s' '{"state":"pending"}';;
@@ -432,3 +434,243 @@ if declare -F prepare_initial_server >/dev/null; then prepare_initial_server; fi
 	}
 
 }
+
+func TestMacSelfServiceDesktopSelectionAvoidsCode(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Mac shell/filesystem contract")
+	}
+	root := developerFixture(t)
+	source, err := os.ReadFile("../templates/installed-seed/Maestro.command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	extract := func(start, end string) string {
+		_, tail, ok := strings.Cut(string(source), start)
+		if !ok {
+			t.Fatalf("missing shipped boundary %q", start)
+		}
+		body, _, ok := strings.Cut(tail, end)
+		if !ok {
+			t.Fatalf("missing shipped end %q", end)
+		}
+		return start + body
+	}
+	dev := filepath.Join(root, "Developer")
+	owner := filepath.Join(dev, "existing owner")
+	base := filepath.Join(dev, "pilot")
+	for _, p := range []string{owner, base} {
+		if err := os.MkdirAll(p, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	installer := filepath.Join(base, "installer-fixture")
+	if err := os.WriteFile(installer, []byte("#!/bin/bash\nprintf '%s\\n' \"$@\" > \"$OBSERVED_ARGS\"\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	script := `set -euo pipefail
+umask 077
+fail(){ printf '%s' "$*" >&2; exit 1; }
+jget(){ /usr/bin/plutil -extract "$2" raw -o - "$1"; }
+private_dir(){ [[ -d "$1" && ! -L "$1" ]] || fail 'Missing fixture private directory'; }
+prepare_client_parent(){ mkdir -p "$OWNER/Maestro-Clients/$ROLE"; printf '%s' "$OWNER/Maestro-Clients/$ROLE"; }
+resolve_code_executable(){ fail 'CODE DISCOVERY MUST NOT RUN'; }
+prepare_code_configuration(){ fail 'CODE PROFILE MUST NOT RUN'; }
+ensure_code_login(){ fail 'CODE LOGIN MUST NOT RUN'; }
+verify_installer(){ :; }
+COMMON=(--fixture)
+` + extract("json() {", "# Resolve normal installer symlinks") + "\n" + extract("if [[ ! -e \"$CFG\" ]]; then", "PRODUCT=\"$BASE/product\"") + "\n" + extract("manage() {", "current_clients=false") + "\nmanage\n" + `
+if [[ ! -e "$BASE/observed-review.json" ]]; then
+  PRODUCT="$BASE/product"; INSTALLED="$BASE/not-installed"; RUN="$BASE/setup-run"; STAGE="$BASE/stage"
+  mkdir "$RUN"
+  fixture_bootstrap(){
+    case "$1" in
+      review) cat > "$BASE/observed-review.json"; printf '%s' '{"review_digest":"reviewed-desktop"}';;
+      apply) cat > "$BASE/observed-apply.json"; [[ "$2" == --review-digest && "$3" == reviewed-desktop && "$4" == --confirm ]] || return 97; printf '{}';;
+      *) return 98;;
+    esac
+  }
+  BOOTSTRAP=fixture_bootstrap
+  review_confirm(){ :; }
+` + extract("if [[ ! -e \"$INSTALLED\" ]]; then", "verify_installer \"$INSTALLED\"\nmanage() {") + "\nfi\n"
+	cfg := filepath.Join(base, "participant.json")
+	argsPath := filepath.Join(base, "args")
+	run := func(input string) ([]byte, error) {
+		cmd := exec.Command("/bin/bash", "-c", script)
+		cmd.Env = append(os.Environ(), "DEV="+dev, "BASE="+base, "ROLE=desktop-fixture", "CFG="+cfg, "MAESTRO_HOME="+filepath.Join(owner, "brain"), "INSTALLED="+installer, "OBSERVED_ARGS="+argsPath)
+		cmd.Stdin = strings.NewReader(input)
+		return cmd.CombinedOutput()
+	}
+	if output, err := run("desktop\n" + owner + "\n" + filepath.Join(dev, "workspace") + "\n"); err != nil {
+		t.Fatalf("explicit Desktop setup must not discover, prepare or authenticate Code: %s %v", output, err)
+	}
+	body, err := os.ReadFile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config map[string]any
+	if err := json.Unmarshal(body, &config); err != nil || config["client_target"] != "desktop" {
+		t.Fatalf("explicit target not retained: %s %v", body, err)
+	}
+	for _, key := range []string{"code_executable", "code_configuration_directory"} {
+		if _, present := config[key]; present {
+			t.Fatalf("Desktop setup created Code placeholder %s", key)
+		}
+	}
+	if output, err := run(""); err != nil {
+		t.Fatalf("same Desktop selection must resume without Code prompts: %s %v", output, err)
+	}
+	args, err := os.ReadFile(argsPath)
+	if err != nil || !strings.Contains(string(args), "--client-target\ndesktop\n") || !strings.Contains(string(args), "--client-desktop-path\n"+filepath.Join(owner, "Maestro-Clients", "desktop-fixture", "maestro-product.mcpb")+"\n") {
+		t.Fatalf("original manager lost explicit Desktop selection: %s %v", args, err)
+	}
+	if strings.Contains(string(args), "--client-code") || strings.Contains(string(args), "--client-scope") {
+		t.Fatalf("Desktop manager received Code inputs: %s", args)
+	}
+	for _, name := range []string{"observed-review.json", "observed-apply.json"} {
+		body, err := os.ReadFile(filepath.Join(base, name))
+		var request map[string]any
+		if err != nil || json.Unmarshal(body, &request) != nil || request["target"] != "desktop" {
+			t.Fatalf("original bootstrap lost reviewed Desktop target: %s %v", body, err)
+		}
+		for _, key := range []string{"code_packet", "desktop_packet"} {
+			if _, present := request[key]; present {
+				t.Fatalf("Desktop bootstrap emitted portable placeholder %s", key)
+			}
+		}
+	}
+	original, err := os.ReadFile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range []string{"unknown-target", "hidden-code"} {
+		var modified map[string]any
+		if err := json.Unmarshal(original, &modified); err != nil {
+			t.Fatal(err)
+		}
+		if scenario == "unknown-target" {
+			modified["client_target"] = "resources-only"
+		} else {
+			modified["code_executable"] = installer
+		}
+		body, _ := json.Marshal(modified)
+		if err := os.WriteFile(cfg, body, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if output, err := run(""); err == nil {
+			t.Fatalf("%s was accepted: %s", scenario, output)
+		}
+		preserved, _ := os.ReadFile(cfg)
+		if string(preserved) != string(body) {
+			t.Fatalf("%s rewrote saved choices", scenario)
+		}
+	}
+}
+
+// Exercise only the shipped result loops: no installer, client or GUI runs.
+func TestParticipantResultCollectorsRespectDesktopTarget(t *testing.T) {
+	root := developerFixture(t)
+	for _, shell := range []string{"mac", "powershell"} {
+		for _, target := range []string{"both", "desktop"} {
+			t.Run(shell+"/"+target, func(t *testing.T) {
+				dir := filepath.Join(root, shell+"-"+target)
+				if err := os.Mkdir(dir, 0700); err != nil {
+					t.Fatal(err)
+				}
+				report := filepath.Join(dir, "RELATORIO.md")
+				if err := os.WriteFile(report, nil, 0600); err != nil {
+					t.Fatal(err)
+				}
+				questions := 6
+				if target == "desktop" {
+					questions = 4
+				}
+				var cmd *exec.Cmd
+				if shell == "mac" {
+					if runtime.GOOS == "windows" {
+						t.Skip("shipped Mac Bash collector")
+					}
+					source, err := os.ReadFile("../templates/installed-seed/Maestro.command")
+					if err != nil {
+						t.Fatal(err)
+					}
+					_, body, found := strings.Cut(string(source), "attest() {")
+					if !found {
+						t.Fatal("missing shipped result collector")
+					}
+					body, _, found = strings.Cut(body, "guard_test_prompt() {")
+					if !found {
+						t.Fatal("missing collector boundary")
+					}
+					cmd = exec.Command("/bin/bash", "-c", "set -euo pipefail\nattest() {"+body+"\nattest\n")
+					selected := target
+					if selected == "both" {
+						selected = ""
+					}
+					cmd.Env = append(os.Environ(), "TARGET="+selected, "RUN="+dir)
+					cmd.Stdin = strings.NewReader(strings.Repeat("passou\n", questions))
+				} else {
+					name := "pwsh"
+					if runtime.GOOS == "windows" {
+						name = "powershell.exe"
+					}
+					powerShell, err := exec.LookPath(name)
+					if err != nil {
+						if runtime.GOOS == "windows" {
+							t.Fatal(err)
+						}
+						t.Skip("PowerShell required")
+					}
+					path := filepath.Join(dir, "collector.ps1")
+					if err := os.WriteFile(path, []byte(participantResultCollectorPowerShell), 0600); err != nil {
+						t.Fatal(err)
+					}
+					source, err := filepath.Abs("../templates/installed-seed/Maestro.ps1")
+					if err != nil {
+						t.Fatal(err)
+					}
+					cmd = exec.Command(powerShell, "-NoProfile", "-NonInteractive", "-File", path, "-Source", source, "-Report", report, "-ClientTarget", target)
+				}
+				output, err := cmd.CombinedOutput()
+				if err != nil {
+					t.Fatalf("shipped collector: %s %v", output, err)
+				}
+				body, err := os.ReadFile(report)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if strings.Count(string(body), "(participante)") != questions {
+					t.Fatalf("wrong relevant result count: %s", body)
+				}
+				if target == "desktop" {
+					if strings.Count(string(body), "not_applicable (alvo Desktop)") != 2 {
+						t.Fatalf("Code/hooks applicability not recorded: %s", body)
+					}
+					if strings.Contains(string(output), "Code: identidade/skills") || strings.Contains(string(output), "Hooks e delega") {
+						t.Fatalf("Desktop user was asked Code/hook questions: %s", output)
+					}
+				} else if strings.Contains(string(body), "not_applicable") || !strings.Contains(string(output), "Code: identidade/skills") || !strings.Contains(string(output), "Hooks e delega") {
+					t.Fatalf("legacy both-client questions changed: %s\n%s", output, body)
+				}
+			})
+		}
+	}
+}
+
+const participantResultCollectorPowerShell = `param([string]$Source,[string]$Report,[string]$ClientTarget)
+$ErrorActionPreference='Stop';Set-StrictMode -Version Latest
+$Utf8=New-Object System.Text.UTF8Encoding($false)
+$tokens=$null;$errors=$null;$ast=[Management.Automation.Language.Parser]::ParseFile($Source,[ref]$tokens,[ref]$errors)
+if($errors.Count){throw 'Shipped frontend does not parse'}
+$collector=$ast.Find({param($n) $n -is [Management.Automation.Language.ForEachStatementAst] -and $n.Extent.Text.StartsWith("foreach (` + "`" + `$label in @('Code: identidade/skills'")},$true)
+if($null -eq $collector){throw 'Missing shipped participant result collector'}
+$script:Answers=New-Object 'Collections.Generic.Queue[string]'
+$count=6;if($ClientTarget -ceq 'desktop'){$count=4}else{$ClientTarget=''}
+for($i=0;$i -lt $count;$i++){$script:Answers.Enqueue('passou')}
+function Read-Host([string]$Prompt){
+  if($script:Answers.Count -eq 0){throw 'Unexpected extra result question'}
+  Write-Host $Prompt
+  return $script:Answers.Dequeue()
+}
+Invoke-Expression $collector.Extent.Text
+if($script:Answers.Count -ne 0){throw 'A relevant result question was omitted'}
+`

@@ -39,6 +39,15 @@ import (
 // finite release binding and current-consumer placement, NOT document conversion, Code or
 // Desktop qualification. Those require their genuine independent evidence.
 func TestExperimentalInstalledSeedFiniteSourceLifecycle(t *testing.T) {
+	experimentalInstalledSeedFiniteSourceLifecycle(t, false)
+}
+
+// Reuse the exact finite fixture while avoiding unrelated runtime/update tails.
+func TestDesktopOnlyExperimentalCurrentConsumer(t *testing.T) {
+	experimentalInstalledSeedFiniteSourceLifecycle(t, true)
+}
+
+func experimentalInstalledSeedFiniteSourceLifecycle(t *testing.T, desktopConsumerOnly bool) {
 	experimentalRuntimeFixtureHost(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
 	defer cancel()
@@ -172,6 +181,83 @@ func TestExperimentalInstalledSeedFiniteSourceLifecycle(t *testing.T) {
 	must(t, err)
 	packetRoot := filepath.Join(root, "private-packets")
 	must(t, os.Mkdir(packetRoot, 0700))
+	desktop := installer.ClientOptions{SeededOperationOptions: seed, Request: installer.ClientRequest{Target: "desktop", VersionedSlots: true, CarrierID: strings.Repeat("d", 32), Workspace: ws, DesktopPath: filepath.Join(packetRoot, "desktop-only.mcpb"), OwnerReviewChannel: "local-browser"}}
+	assertDesktop := func() installer.ClientRecord {
+		t.Helper()
+		review, e := installer.ReviewClientsSeeded(ctx, desktop)
+		must(t, e)
+		if strings.Contains(strings.Join(review.Effects, " "), "publish_fixed_current_record_Code_command_source") {
+			t.Fatal("Desktop review advertises Code publication")
+		}
+		r, e := setup.ApplyClients(ctx, desktop, review.Digest, true)
+		must(t, e)
+		status, e := installer.ReadClientsSeeded(ctx, desktop)
+		must(t, e)
+		if status.Record == nil || r.SchemaVersion != 2 || status.CodeRegistration != "not_selected" || r.Materialization.CodeRoot != "" || r.Materialization.DesktopMethods == nil {
+			t.Fatal("Desktop-only current publication differs")
+		}
+		launch, e := installer.PrepareStableLaunch(ctx, desktop)
+		must(t, e)
+		command := exec.CommandContext(ctx, launch.Executable, launch.Args...)
+		var stderr bytes.Buffer
+		command.Stderr = &stderr
+		client, e := mcp.NewClient(&mcp.Implementation{Name: "desktop-only-current-consumer", Version: "1"}, nil).Connect(ctx, &mcp.CommandTransport{Command: command}, nil)
+		if e != nil {
+			t.Fatalf("Desktop actual current SDK startup: %v: %s", e, stderr.String())
+		}
+		value := call(t, ctx, client, "maestro_context", map[string]any{}, false)
+		if value["workspace_id"] != initialized.WorkspaceID {
+			t.Fatal("Desktop actual SDK workspace differs")
+		}
+		call(t, ctx, client, "maestro_query", map[string]any{"operation": "methods.plan", "method_id": "maestro-onboarding"}, false)
+		must(t, client.Close())
+		handoff, e := installer.PrepareClientManagementHandoff(ctx, desktop)
+		must(t, e)
+		if filepath.Dir(handoff.Launcher) != installer.ClientMethodsRoot(r.Materialization) {
+			t.Fatal("Desktop manager requires Code slot")
+		}
+		if _, e := installer.CurrentClientPluginPath(ctx, desktop); e == nil {
+			t.Fatal("Desktop fabricated current Code plugin")
+		}
+		if _, e := installer.PrepareStableLifecycleHook(ctx, desktop, "SessionStart"); e == nil {
+			t.Fatal("Desktop fabricated Code hook")
+		}
+		return r
+	}
+	// Exercise the original installed diagnostic consumer without Code selection.
+	checkDesktop := func(r installer.ClientRecord) {
+		t.Helper()
+		args := []string{"installed-pilot-check", "--product-root", managed, "--user-home", user, "--workspace", ws, "--carrier-id", r.CarrierID, "--installer-version", record.InstallerVersion, "--experimental-seed-sha256", role.Identity().AdmissionSHA256, "--experimental-installed-root", managed, "--check-only"}
+		output, _ := exec.CommandContext(ctx, installed.CLIPath, args...).Output()
+		var report struct {
+			Target string `json:"client_target"`
+			Checks []struct{ Name, Status, Reason string }
+		}
+		must(t, json.Unmarshal(output, &report))
+		if report.Target != "desktop" {
+			t.Fatalf("actual diagnostic lost admitted Desktop target: %s", output)
+		}
+		foundSDK := false
+		for _, check := range report.Checks {
+			if check.Name == "mcp_connection" && check.Status == "passed" {
+				foundSDK = true
+			}
+			if check.Status == "failed" && (strings.Contains(check.Name, "code") || strings.Contains(check.Reason, "Code")) {
+				t.Fatalf("Desktop diagnostic requires Code: %+v", check)
+			}
+		}
+		if !foundSDK {
+			t.Fatalf("Desktop diagnostic did not observe actual SDK consumer: %s", output)
+		}
+	}
+	initialDesktop := assertDesktop()
+	checkDesktop(initialDesktop)
+	if repeated := assertDesktop(); repeated.Materialization.DesktopSHA256 != initialDesktop.Materialization.DesktopSHA256 {
+		t.Fatal("Desktop replay changed connector")
+	}
+	if desktopConsumerOnly {
+		return
+	}
 	full := installer.ClientOptions{SeededOperationOptions: seed, Request: installer.ClientRequest{VersionedSlots: true, NativeEnforcement: true, GenerationID: strings.Repeat("2", 32), CarrierID: strings.Repeat("3", 32), Workspace: ws, CodeRoot: filepath.Join(packetRoot, "native-code"), DesktopPath: filepath.Join(packetRoot, "native.mcpb"), CodeExecutable: codeHost, CodeScope: "user"}}
 	fullReview, err := installer.ReviewClientsSeeded(ctx, full)
 	must(t, err)
@@ -500,6 +586,10 @@ func TestExperimentalInstalledSeedFiniteSourceLifecycle(t *testing.T) {
 	placeRuntime(next)
 	if _, err := installer.PrepareStableNativeHook(ctx, clients, "PreToolUse", selection); err == nil {
 		t.Fatal("stale pre-update client became native authority")
+	}
+	updatedDesktop := assertDesktop()
+	if updatedDesktop.Materialization.DesktopSHA256 != initialDesktop.Materialization.DesktopSHA256 || updatedDesktop.Materialization.DesktopPath == initialDesktop.Materialization.DesktopPath || updatedDesktop.Materialization.DesktopMethods.Version != next.release.Manifest.Release {
+		t.Fatal("Desktop update lost stable connector reuse or live current methods")
 	}
 	updatedClients := materialize()
 	if updatedClients.Materialization.DesktopSHA256 != initialClients.Materialization.DesktopSHA256 || updatedClients.Materialization.BootstrapServerSHA256 != initialClients.Materialization.BootstrapServerSHA256 || updatedClients.Materialization.ServerSHA256 == initialClients.Materialization.ServerSHA256 {

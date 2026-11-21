@@ -76,3 +76,13 @@ Delivering all method instructions does not fulfill host/provider dependencies
 or qualify graphical protected review. Account sync/coexistence and actual
 chosen-host loading require separate acceptance. See
 [factory and delivery boundary](../docs/product-desktop-methods.md).
+
+
+### Installed Desktop-only frontend
+
+An explicitly reviewed Desktop target publishes the same complete live method
+bootstrap through the existing installed client owner without requiring a Code
+packet or profile. Its immutable method archive and management recipes use a
+Desktop-owned generation slot. Source/current-record/contract verification and
+normal host installation remain required. Instruction availability does not
+provide Code hooks, native Agent proof or a prepared foreground model runtime.

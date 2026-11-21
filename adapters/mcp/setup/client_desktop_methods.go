@@ -18,7 +18,7 @@ func prepareCurrentDesktopMethods(ctx context.Context, o installer.ClientOptions
 		name += ".exe"
 	}
 	server := filepath.Join(o.ManagedRoot, "bin", name)
-	root := o.Request.CodeRoot + ".desktop-methods"
+	root := installer.ClientMethodsRoot(installer.ClientMaterialization{Target: o.Request.Target, CodeRoot: o.Request.CodeRoot, DesktopPath: o.Request.DesktopPath})
 	archive := filepath.Join(root, "maestro-desktop-methods-"+state.Release+".zip")
 	for _, command := range []string{"desktop-methods", "desktop-methods-verify"} {
 		destination := archive

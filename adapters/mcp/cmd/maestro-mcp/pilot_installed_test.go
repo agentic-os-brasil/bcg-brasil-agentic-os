@@ -87,6 +87,52 @@ func TestInstalledPilotPromptsSelectExactAdmittedStableConnector(t *testing.T) {
 	}
 }
 
+func TestInstalledPilotDesktopOnlyReportStartsWithoutCode(t *testing.T) {
+	for _, documents := range []bool{false, true} {
+		t.Run(fmt.Sprint(documents), func(t *testing.T) {
+			var report installedPilotReport
+			body := fmt.Sprintf(`{"schema_version":2,"status":"partial","client_target":"desktop","workspace_id":%q,"desktop_extension":%q}`, strings.Repeat("e", 32), "maestro-connector-"+strings.Repeat("a", 32))
+			if err := json.Unmarshal([]byte(body), &report); err != nil {
+				t.Fatal(err)
+			}
+			if documents {
+				report.Runtime = &packaging.EngineeringRuntimeBinding{PackSHA256: strings.Repeat("b", 64)}
+			}
+			var output bytes.Buffer
+			if err := finishInstalledPilotReport(&report, &output); err != nil {
+				t.Fatal(err)
+			}
+			if report.CodePrompt != "" || report.CodeReadyPrompt != "" || report.CodeReadbackPrompt != "" {
+				t.Fatal("Desktop-only report still requires a Code journey")
+			}
+			for _, required := range []string{report.WorkspaceID, report.DesktopExtension, "methods.plan", "brain.create", "memory.capture", "execution.create", "execution.pause"} {
+				if !strings.Contains(report.DesktopPrompt, required) {
+					t.Fatalf("Desktop initial journey omitted %s", required)
+				}
+			}
+			for _, forbidden := range []string{"execution.resume", "peça o teste Code", "criado no Code", "Conferir conexão Code", "Ensaio completo no Code", "pacote Code"} {
+				if strings.Contains(report.DesktopPrompt, forbidden) || strings.Contains(report.Markdown, forbidden) {
+					t.Fatalf("Desktop-only report retained a Code prerequisite: %s", forbidden)
+				}
+			}
+			if !strings.Contains(report.DesktopReadyPrompt, report.DesktopExtension) || !strings.Contains(report.Markdown, "Desktop") {
+				t.Fatal("Desktop connector identity or guidance missing")
+			}
+			if documents && !strings.Contains(report.DesktopPrompt, "content.convert") {
+				t.Fatal("Desktop target lost the existing document test")
+			}
+		})
+	}
+}
+
+func TestInstalledPilotUnknownClientTargetDoesNotGeneratePrompts(t *testing.T) {
+	report := installedPilotReport{pilotReport: pilotReport{SchemaVersion: 2, Status: "partial", WorkspaceID: strings.Repeat("e", 32), ClientTarget: "foreign"}}
+	var output bytes.Buffer
+	if err := finishInstalledPilotReport(&report, &output); err == nil || report.Status != "blocked" || report.CodePrompt != "" || report.DesktopPrompt != "" {
+		t.Fatal("unsupported client target generated an actionable journey")
+	}
+}
+
 func TestInstalledPilotSelectionRejectsUnclosedOrForeignInputs(t *testing.T) {
 	root := t.TempDir()
 	base := []string{"--product-root", filepath.Join(root, "installed"), "--user-home", filepath.Join(root, "participant"), "--workspace", filepath.Join(root, "existing-work"), "--carrier-id", strings.Repeat("a", 32), "--installer-version", "0.1.51", "--experimental-seed-sha256", strings.Repeat("b", 64), "--experimental-installed-root", filepath.Join(root, "installed"), "--check-only"}
