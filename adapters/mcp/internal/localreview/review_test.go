@@ -40,7 +40,12 @@ func TestExactReviewAndConsciousApproval(t *testing.T) {
 		values := url.Values{"csrf": {csrf[1]}, "action": {"approve"}, "approved": {"yes"}}
 		request, _ := http.NewRequest(http.MethodPost, address, strings.NewReader(values.Encode()))
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		request.Header.Set("Origin", u.Scheme+"://"+u.Host)
+		origin := u.Scheme + "://" + u.Host
+		// Fetch serializes a non-CORS POST's Origin as null under no-referrer.
+		if response.Header.Get("Referrer-Policy") == "no-referrer" {
+			origin = "null"
+		}
+		request.Header.Set("Origin", origin)
 		result, err := http.DefaultClient.Do(request)
 		if err == nil {
 			io.Copy(io.Discard, result.Body)
@@ -99,6 +104,7 @@ func TestDecisionGuardsAndDecline(t *testing.T) {
 	}{
 		{name: "wrong_host", request: func(r *http.Request) { r.Host = "attacker.invalid" }},
 		{name: "wrong_origin", request: func(r *http.Request) { r.Header.Set("Origin", "http://attacker.invalid") }},
+		{name: "null_origin", request: func(r *http.Request) { r.Header.Set("Origin", "null") }},
 		{name: "missing_origin", request: func(r *http.Request) { r.Header.Del("Origin") }},
 		{name: "wrong_nonce", request: func(r *http.Request) { r.URL.Path = "/review/" + strings.Repeat("0", 64) }},
 		{name: "path_traversal", request: func(r *http.Request) { r.URL.Path = "/review/../foreign" }},
