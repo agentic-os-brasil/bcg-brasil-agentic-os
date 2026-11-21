@@ -60,6 +60,12 @@ func run() error {
 		}
 		return json.NewEncoder(os.Stdout).Encode(installer.LifecycleClientCapabilities("installer", Version, AuthorityRegistrySHA256))
 	}
+	if os.Args[1] == "client-target-capabilities" {
+		if len(os.Args) != 2 || Version == "" || AuthorityRegistrySHA256 == "" {
+			return errors.New("installer target capabilities unavailable")
+		}
+		return json.NewEncoder(os.Stdout).Encode(installer.DesktopClientCapabilities("installer", Version, AuthorityRegistrySHA256))
+	}
 	if os.Args[1] == "client-capabilities" {
 		if len(os.Args) != 2 || Version == "" || AuthorityRegistrySHA256 == "" {
 			return errors.New("installer capabilities unavailable")
@@ -104,6 +110,9 @@ func run() error {
 	flags.StringVar(&launch.CarrierID, "carrier-id", "", "fixed admitted stable carrier ID")
 	flags.StringVar(&launch.PackageSHA256, "package-sha256", "", "exact Desktop package shown during native installation")
 	flags.StringVar(&launch.NativeContractSHA256, "native-contract-sha256", "", "exact Desktop native-facing contract")
+	if os.Args[1] == "manage" || os.Args[1] == "clients-status" {
+		flags.StringVar(&launch.ClientTarget, "client-target", "", "explicit installed client target: desktop; absent retains both clients")
+	}
 	flags.StringVar(&launch.ClientCodeRoot, "client-code-root", "", "fixed generated operator launcher Code destination")
 	flags.StringVar(&launch.ClientDesktopPath, "client-desktop-path", "", "fixed generated operator launcher Desktop destination")
 	flags.StringVar(&launch.ClientCodeExecutable, "client-code-executable", "", "fixed generated operator launcher Code executable")

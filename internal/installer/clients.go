@@ -46,6 +46,7 @@ func StableClientCapabilities(component, version, pin string) ClientCapabilities
 }
 
 type ClientRequest struct {
+	Target                     string `json:"target,omitempty"`
 	OwnerReviewChannel         string `json:"owner_review_channel,omitempty"`
 	VersionedSlots             bool   `json:"versioned_slots,omitempty"`
 	NativeEnforcement          bool   `json:"native_enforcement,omitempty"`
@@ -108,6 +109,7 @@ func (b ClientBackup) ValidateBinding(codeRoot, desktopPath string) error {
 }
 
 type ClientMaterialization struct {
+	Target                        string                 `json:"target,omitempty"`
 	OwnerReviewChannel            string                 `json:"owner_review_channel,omitempty"`
 	Selection                     *ClientPacketSelection `json:"selection,omitempty"`
 	CodeProviderRoot              string                 `json:"code_provider_root,omitempty"`
@@ -220,7 +222,7 @@ func readClientRecord(o SeededOperationOptions, id string) (ClientRecord, []byte
 	if err = releasecontract.DecodeStrictJSON(body, &r); err != nil {
 		return r, nil, err
 	}
-	if r.SchemaVersion != 1 || r.Profile != StableClientProfile || r.Protocol != StableClientProtocol || r.CarrierVersion != StableCarrierVersion || r.CarrierID != id || r.Binding.ManagedRoot != o.ManagedRoot || r.Binding.UserHome != o.UserHome || r.Binding.RegistrySHA256 != o.AuthorityRegistrySHA256 {
+	if r.SchemaVersion != clientRecordSchema(r.Materialization.Target) || validateClientTargetRecord(r) != nil || r.Profile != StableClientProfile || r.Protocol != StableClientProtocol || r.CarrierVersion != StableCarrierVersion || r.CarrierID != id || r.Binding.ManagedRoot != o.ManagedRoot || r.Binding.UserHome != o.UserHome || r.Binding.RegistrySHA256 != o.AuthorityRegistrySHA256 {
 		return r, nil, errors.New("client record binding/profile mismatch")
 	}
 	if r.Materialization.Selection != nil {
@@ -228,7 +230,7 @@ func readClientRecord(o SeededOperationOptions, id string) (ClientRecord, []byte
 		if err != nil || expected.CodeRoot != r.Materialization.CodeRoot || expected.DesktopPath != r.Materialization.DesktopPath {
 			return r, nil, errors.New("client record generation differs from reviewed selection")
 		}
-		if r.Materialization.CodeProviderRoot != ClientMarketplaceRoot(r) {
+		if !r.Materialization.DesktopOnly() && r.Materialization.CodeProviderRoot != ClientMarketplaceRoot(r) {
 			return r, nil, errors.New("client record provider differs from selected carrier")
 		}
 	} else if r.Materialization.CodeProviderRoot != "" || r.Materialization.CodeProviderSHA256 != "" {
@@ -270,7 +272,14 @@ func clientBinding(o ClientOptions) (ClientBinding, error) {
 	if err != nil {
 		return ClientBinding{}, err
 	}
-	for _, p := range []string{o.Request.CodeRoot, o.Request.DesktopPath, o.Request.Workspace} {
+	if err := validateClientTarget(o.Request); err != nil {
+		return ClientBinding{}, err
+	}
+	paths := []string{o.Request.DesktopPath, o.Request.Workspace}
+	if !o.Request.DesktopOnly() {
+		paths = append(paths, o.Request.CodeRoot)
+	}
+	for _, p := range paths {
 		if !filepath.IsAbs(p) || filepath.Clean(p) != p || strings.ContainsAny(p, "\x00\r\n") {
 			return ClientBinding{}, errors.New("clean absolute client paths required")
 		}
@@ -278,7 +287,11 @@ func clientBinding(o ClientOptions) (ClientBinding, error) {
 	if filepath.Ext(o.Request.DesktopPath) != ".mcpb" {
 		return ClientBinding{}, errors.New("Desktop package requires .mcpb")
 	}
-	for _, destination := range []string{o.Request.CodeRoot, o.Request.DesktopPath} {
+	destinations := []string{o.Request.DesktopPath}
+	if !o.Request.DesktopOnly() {
+		destinations = append(destinations, o.Request.CodeRoot)
+	}
+	for _, destination := range destinations {
 		if err := scheduler.ValidatePrivateDirectory(filepath.Dir(destination)); err != nil {
 			return ClientBinding{}, err
 		}
@@ -288,7 +301,7 @@ func clientBinding(o ClientOptions) (ClientBinding, error) {
 			}
 		}
 	}
-	if clientOverlap(o.Request.CodeRoot, o.Request.DesktopPath) {
+	if !o.Request.DesktopOnly() && clientOverlap(o.Request.CodeRoot, o.Request.DesktopPath) {
 		return ClientBinding{}, errors.New("client destinations overlap")
 	}
 	if profile := o.Request.CodeConfigurationDirectory; profile != "" {
@@ -304,7 +317,7 @@ func clientBinding(o ClientOptions) (ClientBinding, error) {
 			}
 		}
 	}
-	if o.Request.CodeScope != "user" && o.Request.CodeScope != "local" && o.Request.CodeScope != "project" {
+	if !o.Request.DesktopOnly() && o.Request.CodeScope != "user" && o.Request.CodeScope != "local" && o.Request.CodeScope != "project" {
 		return ClientBinding{}, errors.New("explicit user/local/project scope required")
 	}
 	return ClientBinding{o.ManagedRoot, o.UserHome, h.Home, o.Request.Workspace, w.WorkspaceID, o.AuthorityRegistrySHA256}, nil
@@ -346,6 +359,9 @@ func readClientCapabilities(ctx context.Context, path, component, version, pin s
 	return nil
 }
 func ReviewClientsSeeded(ctx context.Context, o ClientOptions) (ClientReview, error) {
+	if err := validateClientTarget(o.Request); err != nil {
+		return ClientReview{}, err
+	}
 	if _, err := admitOperationSeed(ctx, o.SeededOperationOptions); err != nil {
 		return ClientReview{}, err
 	}
@@ -364,6 +380,21 @@ func ReviewClientsSeeded(ctx context.Context, o ClientOptions) (ClientReview, er
 	}
 	if err = readClientCapabilities(ctx, installedExecutablePath(o.ManagedRoot, s.TargetOS, s.Profile), "server", s.Server.Version, o.AuthorityRegistrySHA256); err != nil {
 		return ClientReview{}, err
+	}
+	if o.Request.DesktopOnly() {
+		launcher := "maestro-install"
+		if s.TargetOS == "windows" {
+			launcher += ".exe"
+		}
+		if err := requireDesktopClientCapabilities(ctx, filepath.Join(o.ManagedRoot, launcher), "installer", o.Version, o.AuthorityRegistrySHA256); err != nil {
+			return ClientReview{}, err
+		}
+		if err := requireDesktopClientCapabilities(ctx, o.Self, "installer", o.Version, o.AuthorityRegistrySHA256); err != nil {
+			return ClientReview{}, err
+		}
+		if err := requireDesktopClientCapabilities(ctx, installedExecutablePath(o.ManagedRoot, s.TargetOS, s.Profile), "server", s.Server.Version, o.AuthorityRegistrySHA256); err != nil {
+			return ClientReview{}, err
+		}
 	}
 	if o.Request.LifecycleContext {
 		launcher := "maestro-install"
@@ -397,7 +428,11 @@ func ReviewClientsSeeded(ctx context.Context, o ClientOptions) (ClientReview, er
 			return ClientReview{}, err
 		}
 		review.Effects[1] = "publish_fresh_manifest_bound_generation_slots_preserving_previous_packets"
-		review.Effects = append(review.Effects, "publish_fixed_current_record_Code_command_source", "prepare_current_Desktop_method_library_with_separate_native_install_status")
+		if o.Request.DesktopOnly() {
+			review.Effects = append(review.Effects, "publish_only_Desktop_connector_and_live_method_frontend_without_Code_profile_hooks_or_qualification", "prepare_current_Desktop_method_library_with_separate_native_install_status")
+		} else {
+			review.Effects = append(review.Effects, "publish_fixed_current_record_Code_command_source", "prepare_current_Desktop_method_library_with_separate_native_install_status")
+		}
 	}
 	if o.Request.NativeEnforcement {
 		if !carrierIDPattern.MatchString(o.Request.GenerationID) {
@@ -412,7 +447,11 @@ func ReviewClientsSeeded(ctx context.Context, o ClientOptions) (ClientReview, er
 		review.Effects = append(review.Effects, "configure_three_non_enforcing_Code_lifecycle_hooks_for_exact_reviewed_selection")
 	}
 	if o.Request.OwnerReviewChannel == "local-browser" {
-		review.Effects = append(review.Effects, "select_local_browser_exact_review_for_protected_foreground_MCP_changes_in_both_Code_and_Desktop_without_approving_any_individual_write")
+		if o.Request.DesktopOnly() {
+			review.Effects = append(review.Effects, "select_local_browser_exact_review_for_protected_foreground_MCP_changes_in_Desktop_without_approving_any_individual_write")
+		} else {
+			review.Effects = append(review.Effects, "select_local_browser_exact_review_for_protected_foreground_MCP_changes_in_both_Code_and_Desktop_without_approving_any_individual_write")
+		}
 	}
 	if o.Request.Reconcile {
 		review.Effects = append(review.Effects, "reclaim_only_dead_installation_lock_and_reconcile_actual_owned_packets")
@@ -420,6 +459,9 @@ func ReviewClientsSeeded(ctx context.Context, o ClientOptions) (ClientReview, er
 	old, body, err := readClientRecord(o.SeededOperationOptions, o.Request.CarrierID)
 	if err == nil {
 		selection := ClientRequestFromRecord(old)
+		if selection.Target != o.Request.Target {
+			return ClientReview{}, errors.New("existing carrier target differs; preserve it and review a separate carrier")
+		}
 		if selection.OwnerReviewChannel != o.Request.OwnerReviewChannel {
 			return ClientReview{}, errors.New("existing carrier owner review channel differs; preserved unchanged")
 		}
@@ -488,10 +530,10 @@ func MaterializeClientsSeeded(ctx context.Context, o ClientOptions, digest strin
 			return fmt.Errorf("activation-applied/client-materialization-pending: %w", e)
 		}
 		paths, pathErr := ClientGenerationPaths(o.Request, s.Binding.ManifestSHA256)
-		if !sameClientCurrent(material, s) || pathErr != nil || material.CodeRoot != paths.CodeRoot || material.DesktopPath != paths.DesktopPath || !sameClientSelection(material.Selection, paths.Selection) || material.LifecycleContext != o.Request.LifecycleContext || material.NativeEnforcement != o.Request.NativeEnforcement || material.GenerationID != o.Request.GenerationID || material.OwnerReviewChannel != o.Request.OwnerReviewChannel {
+		if material.Target != o.Request.Target || !sameClientCurrent(material, s) || pathErr != nil || material.CodeRoot != paths.CodeRoot || material.DesktopPath != paths.DesktopPath || !sameClientSelection(material.Selection, paths.Selection) || material.LifecycleContext != o.Request.LifecycleContext || material.NativeEnforcement != o.Request.NativeEnforcement || material.GenerationID != o.Request.GenerationID || material.OwnerReviewChannel != o.Request.OwnerReviewChannel {
 			return errors.New("materializer returned another current binding")
 		}
-		if material.Selection != nil && (material.CodeProviderRoot != ClientMarketplaceRoot(ClientRecord{CarrierID: o.Request.CarrierID, Materialization: material}) || validateClientMethodBinding(material) != nil) {
+		if material.Selection != nil && (!material.DesktopOnly() && material.CodeProviderRoot != ClientMarketplaceRoot(ClientRecord{CarrierID: o.Request.CarrierID, Materialization: material}) || validateClientMethodBinding(material) != nil) {
 			return errors.New("versioned client provider/frontend differs from reviewed binding")
 		}
 		if e = validateClientFiles(material); e != nil {
@@ -500,9 +542,12 @@ func MaterializeClientsSeeded(ctx context.Context, o ClientOptions, digest strin
 		if _, e = installtx.ValidateQualifiedLaunch(o.ManagedRoot, o.DataRoot, s.Binding, time.Now()); e != nil {
 			return e
 		}
-		result = ClientRecord{SchemaVersion: 1, Profile: StableClientProfile, Protocol: StableClientProtocol, CarrierVersion: StableCarrierVersion, CarrierID: o.Request.CarrierID, Binding: review.Binding, Materialization: material,
+		result = ClientRecord{SchemaVersion: clientRecordSchema(o.Request.Target), Profile: StableClientProfile, Protocol: StableClientProtocol, CarrierVersion: StableCarrierVersion, CarrierID: o.Request.CarrierID, Binding: review.Binding, Materialization: material,
 			Code:    CodeObservation{Executable: o.Request.CodeExecutable, ConfigurationDirectory: o.Request.CodeConfigurationDirectory, Marketplace: "maestro-local-" + o.Request.CarrierID, PluginID: "maestro-product@maestro-local-" + o.Request.CarrierID, Scope: o.Request.CodeScope, State: "registration_pending", EvidenceClass: "not_observed"},
 			Desktop: DesktopObservation{Handoff: "bundle_ready", InstallConfirmation: "awaiting_user_install", Connection: "pending", FunctionalCheck: "pending", EvidenceClass: "not_observed"}}
+		if o.Request.DesktopOnly() {
+			result.Code = CodeObservation{State: "not_selected", EvidenceClass: "not_applicable"}
+		}
 		if previous != nil && previous.Materialization.CodeTreeSHA256 == material.CodeTreeSHA256 && previous.Code.Executable == o.Request.CodeExecutable {
 			result.Code = previous.Code
 		}
@@ -545,6 +590,11 @@ func ReadClientsSeeded(ctx context.Context, o ClientOptions) (ClientStatus, erro
 		o.Request.Workspace = record.Binding.Workspace
 	}
 	selection := ClientRequestFromRecord(record)
+	if o.Request.Target != "" && o.Request.Target != selection.Target {
+		return status, errors.New("current client target differs")
+	}
+	o.Request.Target = selection.Target
+	o.Request.VersionedSlots = selection.VersionedSlots
 	if o.Request.CodeConfigurationDirectory == "" {
 		o.Request.CodeConfigurationDirectory = record.Code.ConfigurationDirectory
 	}
@@ -671,6 +721,9 @@ func observeClientsSeeded(ctx context.Context, o ClientOptions, expectedRecord s
 		r, body, e = readClientRecord(o.SeededOperationOptions, o.Request.CarrierID)
 		if e != nil {
 			return e
+		}
+		if r.Materialization.DesktopOnly() && (code != nil || register != nil) {
+			return errors.New("Code registration is not selected for this carrier")
 		}
 		if clientDigest(body) != expectedRecord {
 			return errors.New("client observation changed")
@@ -864,6 +917,9 @@ func clientTreeDigest(root string, payloadOnly bool) (string, error) {
 	return clientDigest(body), nil
 }
 func validateClientFiles(m ClientMaterialization) error {
+	if m.DesktopOnly() {
+		return validateDesktopClientFiles(m)
+	}
 	if m.Selection != nil {
 		if !clientSHA.MatchString(m.CodeProviderSHA256) {
 			return errors.New("versioned Code provider digest missing")

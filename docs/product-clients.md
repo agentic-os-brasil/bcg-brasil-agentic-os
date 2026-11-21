@@ -39,6 +39,36 @@ client regeneration and native registration are separate effects, so the console
 shows the exact review at each required transition. It never grants blanket
 approval, rewrites a raw client profile or installs a recurring updater.
 
+## Select Desktop without Code
+
+A new installation can explicitly choose **Desktop only** before any Code path,
+profile or login question. The installed manager accepts `--client-target desktop`
+and only a Desktop packet destination. It publishes the complete current Desktop
+connector, canonical live-method bootstrap and fixed management/update launchers
+through the same reviewed installation and source owners. No initial portable
+packet is advertised as the installed connector. Code is reported as `not_selected`.
+
+This target uses a versioned Desktop slot and an independently owned sibling
+`.desktop-methods` directory. Install the generated MCPB and method archive through
+the normal Desktop interface. MCP readiness, method import, actual conversation
+loading and functional acceptance remain separate observations. Desktop does not
+acquire Code hooks or native Code-agent qualification; foreground `agents.run`
+still requires its separately admitted runtime, profile and login.
+
+The target is bound into the exact review, generation identity and schema-2 current
+record. Both the actual admitted installer and current server must advertise the
+Desktop-target capability. Unsupported older readers refuse the new record;
+existing schema-1 requests with no target keep their original both-client meaning
+and digest. An existing carrier cannot change targets or downgrade a complete Code
+profile. Use a separately reviewed carrier for an additional client choice.
+
+Desktop updates retain the original source, owner, workspace, native-contract,
+custody, inventory and recovery checks. Compatible connector bytes may be retained
+while the canonical method archive advances with the current backend. Maintenance
+enrollment stays unchanged; qualifications and actual client reconnection remain
+separately pending until observed. This source feature requires a newly built,
+reviewed and accepted kit; previously issued kits do not gain it automatically.
+
 ## Versioned complete-client source workflow
 
 New console setups select private manifest-bound packet generations and a fixed

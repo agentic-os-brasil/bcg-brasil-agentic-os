@@ -23,6 +23,9 @@ func ClientManagementLauncher(o ClientOptions, update bool) (string, []byte) {
 
 func clientManagementLauncherForOS(o ClientOptions, update bool, targetOS string) (string, []byte) {
 	args := []string{o.Self, "manage", "--product-root", o.ManagedRoot, "--user-home", o.UserHome, "--workspace", o.Request.Workspace, "--carrier-id", o.Request.CarrierID, "--client-code-root", o.Request.CodeRoot, "--client-desktop-path", o.Request.DesktopPath, "--client-code-executable", o.Request.CodeExecutable, "--client-scope", o.Request.CodeScope}
+	if o.Request.DesktopOnly() {
+		args = []string{o.Self, "manage", "--product-root", o.ManagedRoot, "--user-home", o.UserHome, "--workspace", o.Request.Workspace, "--carrier-id", o.Request.CarrierID, "--client-target", "desktop", "--client-desktop-path", o.Request.DesktopPath}
+	}
 	if o.Request.CodeConfigurationDirectory != "" {
 		args = append(args, "--client-code-config", o.Request.CodeConfigurationDirectory)
 	}
@@ -94,12 +97,12 @@ func PrepareClientManagementHandoff(ctx context.Context, o ClientOptions) (Clien
 		generation.Request.CodeRoot = r.Materialization.CodeRoot
 		generation.Request.DesktopPath = r.Materialization.DesktopPath
 		name, expected := ClientManagementLauncher(generation, true)
-		path := filepath.Join(r.Materialization.CodeRoot, name)
+		path := filepath.Join(ClientManagementRoot(r.Materialization), name)
 		if err := verifyManagementFile(path, expected, runtime.GOOS != "windows"); err != nil {
 			return err
 		}
 		if runtime.GOOS == "windows" {
-			path = filepath.Join(r.Materialization.CodeRoot, "Update Maestro.cmd")
+			path = filepath.Join(ClientManagementRoot(r.Materialization), "Update Maestro.cmd")
 			if err := verifyManagementFile(path, ClientWindowsManagementEntry(), false); err != nil {
 				return err
 			}

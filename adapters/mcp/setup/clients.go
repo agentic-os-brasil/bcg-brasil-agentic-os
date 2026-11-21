@@ -37,6 +37,9 @@ func CurrentClientMaterializer(o installer.ClientOptions) installer.ClientMateri
 }
 
 func currentClientMaterializer(o installer.ClientOptions, nativeSHA string, previousDesktop *installer.ClientRecord) installer.ClientMaterializer {
+	if o.Request.DesktopOnly() {
+		return desktopClientMaterializer(o)
+	}
 	if o.Request.VersionedSlots {
 		return versionedClientMaterializer(o, nativeSHA)
 	}
@@ -673,7 +676,7 @@ func inspectFirstDesktopContract(ctx context.Context, o installer.ClientOptions,
 	// the authenticated same-carrier record may identify those historical bytes;
 	// unrelated first-publication destinations still require Current inspection.
 	prior := previousDesktop
-	if o.VersionedManagement && prior != nil && prior.SchemaVersion == 1 && prior.Profile == installer.StableClientProfile && prior.Protocol == installer.StableClientProtocol && prior.CarrierVersion == installer.StableCarrierVersion && prior.CarrierID == o.Request.CarrierID && prior.Binding == binding && prior.Materialization.Selection != nil && !o.Request.ManualDesktopUpdate && prior.Materialization.DesktopNativeContractSHA256 == nativeContract {
+	if o.VersionedManagement && prior != nil && (prior.SchemaVersion == 1 && !o.Request.DesktopOnly() || prior.SchemaVersion == 2 && o.Request.DesktopOnly()) && prior.Materialization.Target == o.Request.Target && prior.Profile == installer.StableClientProfile && prior.Protocol == installer.StableClientProtocol && prior.CarrierVersion == installer.StableCarrierVersion && prior.CarrierID == o.Request.CarrierID && prior.Binding == binding && prior.Materialization.Selection != nil && !o.Request.ManualDesktopUpdate && prior.Materialization.DesktopNativeContractSHA256 == nativeContract {
 		m := prior.Materialization
 		actual, err := installer.ClientArchiveDigest(o.Request.DesktopPath)
 		if err != nil {

@@ -41,6 +41,7 @@ type pilotReport struct {
 	KitID              string                               `json:"kit_id"`
 	ReferenceHost      packaging.Target                     `json:"reference_host"`
 	Target             packaging.Target                     `json:"target"`
+	ClientTarget       string                               `json:"client_target,omitempty"`
 	Markdown           string                               `json:"markdown"`
 	CodePrompt         string                               `json:"code_prompt"`
 	CodeReadbackPrompt string                               `json:"code_readback_prompt"`
@@ -442,6 +443,9 @@ func pilotCall(ctx context.Context, s *mcp.ClientSession, name string, args map[
 }
 
 func finishPilotReport(r *pilotReport, output io.Writer) error {
+	if r.ClientTarget != "" && r.ClientTarget != "desktop" {
+		r.add("client_target", "failed", "client_target_invalid", "Preserve o diagnóstico e a seleção de clientes existente.")
+	}
 	if r.Conversion != nil {
 		if r.Conversion.State == "blocked_identity_mismatch" {
 			r.Status = "blocked"
@@ -456,25 +460,33 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 		}
 	}
 	if r.Status != "blocked" && pilotWorkspaceID.MatchString(r.WorkspaceID) {
-		r.CodePrompt, r.DesktopPrompt, r.CodeReadbackPrompt = pilotPrompts(r.WorkspaceID)
-		r.CodeReadyPrompt = fmt.Sprintf("Use somente o servidor MCP plugin:maestro-product:maestro, declarado pelo plugin Maestro deste ensaio. Chame maestro_context uma única vez, sem parâmetros. Confirme workspace_id exatamente %s e state ready. Mostre o workspace_id e o estado retornados e encerre após essa leitura. Se esse servidor estiver ausente, ambíguo ou recusado, se houver erro ou se os valores divergirem, pare e explique. Esta conferência autoriza somente essa leitura de contexto.", r.WorkspaceID)
+		r.CodePrompt, r.DesktopPrompt, r.CodeReadbackPrompt = pilotPrompts(r.WorkspaceID, r.ClientTarget == "desktop")
+		if r.ClientTarget != "desktop" {
+			r.CodeReadyPrompt = fmt.Sprintf("Use somente o servidor MCP plugin:maestro-product:maestro, declarado pelo plugin Maestro deste ensaio. Chame maestro_context uma única vez, sem parâmetros. Confirme workspace_id exatamente %s e state ready. Mostre o workspace_id e o estado retornados e encerre após essa leitura. Se esse servidor estiver ausente, ambíguo ou recusado, se houver erro ou se os valores divergirem, pare e explique. Esta conferência autoriza somente essa leitura de contexto.", r.WorkspaceID)
+		}
 		if r.DesktopExtension != "" {
 			r.DesktopReadyPrompt = fmt.Sprintf("Use somente a extensão %q deste ensaio, vinculada às pastas aprovadas na preparação. Identifique com segurança o servidor MCP dessa extensão; não escolha outra extensão ou conector de nome semelhante. Chame maestro_context uma única vez, sem parâmetros. Confirme workspace_id exatamente %s e state ready. Mostre somente o workspace_id e o estado de saúde da conexão retornados e encerre após essa leitura. O estado dos trabalhos não foi consultado. Se essa extensão estiver ausente, ambígua ou recusada, se não conseguir identificar seu conector, se houver erro ou se os valores divergirem, pare e explique. Esta conferência autoriza somente essa leitura de contexto.", r.DesktopExtension, r.WorkspaceID)
 			r.DesktopPrompt = fmt.Sprintf("Use a extensão %q deste ensaio, vinculada às pastas aprovadas na preparação. ", r.DesktopExtension) + r.DesktopPrompt
 		}
 		if r.Runtime != nil {
 			documents := fmt.Sprintf(" Depois da jornada acima, teste também o conversor local deste ensaio. Reconfirme o mesmo workspace com maestro_context e consulte content.status. Continue somente com state ready e pack_sha256 exatamente %s; divergência ou indisponibilidade encerra esta parte sem instalar ou reparar nada. Converta apenas o arquivo sintético maestro-pilot.docx, já preparado no workspace, por maestro_apply content.convert. Leia o artifact_ref realmente retornado usando content.read nos formatos markdown e document, em páginas de até 4096 bytes e seguindo a paginação real. Verifique o marcador MAESTRO_DOCLING_OFFLINE_20261101 e a tabela sintética com alpha/7. Mostre a rota, o artefato e o resultado observado. Essa parte autoriza conversão e leitura de artefatos derivados; não altera o estado do trabalho, não captura memória, não salva conhecimento nem usa conversor externo. Registre o que faltou em vez de inferir sucesso da presença do pacote.", r.Runtime.PackSHA256)
-			r.CodePrompt += documents
+			if r.CodePrompt != "" {
+				r.CodePrompt += documents
+			}
 			r.DesktopPrompt += documents
 		}
 		if r.Conversion != nil {
 			if r.Conversion.State == "ready_for_participant_test" {
 				documents := installedConversionJourney(*r.Conversion)
-				r.CodePrompt += documents
+				if r.CodePrompt != "" {
+					r.CodePrompt += documents
+				}
 				r.DesktopPrompt += documents
 			} else {
 				pending := " Conversão de documento: não testada, pois o runtime atual está pendente ou indisponível. Não execute content.convert, não instale ou repare componentes e não use outro conversor; registre essa parte como não testada. As demais etapas acima continuam separadas dessa pendência."
-				r.CodePrompt += pending
+				if r.CodePrompt != "" {
+					r.CodePrompt += pending
+				}
 				r.DesktopPrompt += pending
 			}
 		}
@@ -506,8 +518,13 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 	for _, check := range r.Checks {
 		fmt.Fprintf(&md, "| %s | %s | %s | %s |\n", check.Name, check.Status, check.Reason, check.NextAction)
 	}
-	md.WriteString("\nEste diagnóstico faz apenas leituras locais. Integridade do MCPB e conexão SDK com o pacote Code não comprovam carregamento, login, permissões, hooks ou retomada nos clientes nativos. Os prompts Code e Desktop guiam esse teste com dados sintéticos e confirmação normal do cliente.\n")
-	md.WriteString("\nPara uma conferência rápida somente leitura, use 3 — Conferir conexão Code ou 4 — Conferir conexão Desktop. Esses atalhos mostram o workspace e a saúde da conexão, sem consultar trabalhos. Para o ensaio completo, use 1 — Ensaio completo no Code e depois 2 — Retomar no Desktop. Depois, use 6 — Conferir persistência no Code (somente leitura), sem copiar IDs ou outro texto. Para um reinício frio, feche antes somente as sessões Code e conexões Desktop deste ensaio pelo fluxo normal, preservando outros trabalhos. Abrir uma conversa nova não comprova reinício do servidor; registre o reinício informado pelo participante separadamente. Um diagnóstico bloqueado deve ser enviado ao time antes de abrir clientes.\n")
+	if r.ClientTarget == "desktop" {
+		md.WriteString("\nCliente selecionado: **Desktop**. Este diagnóstico faz apenas leituras locais; o conector e o catálogo verificados não comprovam carregamento no cliente. O prompt Desktop inicia o ensaio sintético sem exigir trabalho anterior em outro cliente. Hooks do Code e agentes com runtime independente exigem sua própria preparação e não foram qualificados por este diagnóstico.\n")
+		md.WriteString("\nUse a conferência de conexão Desktop para uma leitura do workspace e da saúde da conexão, ou o ensaio Desktop para testar métodos, página, memória e continuidade com confirmação normal do cliente. Para um reinício frio, feche somente a conexão Desktop deste ensaio pelo fluxo normal, preservando outros trabalhos. Conversa nova não comprova reinício do servidor; registre o reinício informado separadamente. Um diagnóstico bloqueado deve ser enviado ao time antes de abrir o cliente.\n")
+	} else {
+		md.WriteString("\nEste diagnóstico faz apenas leituras locais. Integridade do MCPB e conexão SDK com o pacote Code não comprovam carregamento, login, permissões, hooks ou retomada nos clientes nativos. Os prompts Code e Desktop guiam esse teste com dados sintéticos e confirmação normal do cliente.\n")
+		md.WriteString("\nPara uma conferência rápida somente leitura, use 3 — Conferir conexão Code ou 4 — Conferir conexão Desktop. Esses atalhos mostram o workspace e a saúde da conexão, sem consultar trabalhos. Para o ensaio completo, use 1 — Ensaio completo no Code e depois 2 — Retomar no Desktop. Depois, use 6 — Conferir persistência no Code (somente leitura), sem copiar IDs ou outro texto. Para um reinício frio, feche antes somente as sessões Code e conexões Desktop deste ensaio pelo fluxo normal, preservando outros trabalhos. Abrir uma conversa nova não comprova reinício do servidor; registre o reinício informado pelo participante separadamente. Um diagnóstico bloqueado deve ser enviado ao time antes de abrir clientes.\n")
+	}
 	r.Markdown = md.String()
 	if err := json.NewEncoder(output).Encode(r); err != nil {
 		return err
@@ -518,7 +535,7 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 	return nil
 }
 
-func pilotPrompts(id string) (string, string, string) {
+func pilotPrompts(id string, desktopOnly bool) (string, string, string) {
 	marker := "MAESTRO_PILOT_" + id
 	page := "knowledge/maestro-pilot-" + id + ".md"
 	selection := fmt.Sprintf("Use execution.list em páginas de até 32 (máximo 128 itens), seguindo next_offset enquanto has_more for true; paginação incompleta encerra o teste. execution.list retorna somente metadados, sem summary ou next_step. Chame execution.next somente com item_id realmente retornado pela lista; faça isso para cada item_id listado, até o mesmo limite de 128, antes de escolher um trabalho. Se a lista estiver vazia, pule execution.next e trate como nenhum trabalho identificado. Somente após ler todas as projeções, identifique os trabalhos cujo summary ou next_step seja exatamente o marcador literal %q, usando somente os campos realmente retornados por execution.next. Não adivinhe IDs nem use a conversa anterior para selecionar. ", marker)
@@ -530,7 +547,14 @@ func pilotPrompts(id string) (string, string, string) {
 	declinedText := "Memória inteiramente fictícia do controle de recusa; este registro deve ser recusado. " + declined
 	memoryReadback := fmt.Sprintf("Leia as capturas L0 deste ensaio usando memory.search com query igual a cada marcador exato %q e %q, limit até 32, seguindo next_offset até -1, no máximo 128 resultados. Ausência é total zero com paginação concluída; não a infira de uma página incompleta. Exija exatamente uma captura aceita e zero capturas do controle de recusa. Use o id e revision realmente retornados para memory.read com capture_id e expected_revision, max_bytes até 4096, seguindo next_offset até terminar; compare o texto completo com %q. Duplicidade, texto divergente ou captura recusada presente é FALHA DO CONTROLE: preserve os dados, não apague nem corrija nada para obter sucesso e pare. Essa leitura verifica L0; memory.context não expõe necessariamente capturas antes de dreaming. Não infira injeção passiva, rollups, digests, dreaming ou agendamento dessa leitura. Ausência não comprova que houve recusa humana: relate a decisão apenas quando observada no fluxo real. ", accepted, declined, acceptedText)
 	memoryExercise := fmt.Sprintf("Controle protegido de memória: antes de gravar, use memory.search com query igual aos marcadores exatos %q e %q, limit até 32 e next_offset até -1 (máximo 128 resultados); pare se não concluir a paginação. Se o marcador de recusa estiver presente, registre FALHA DO CONTROLE e preserve tudo; não apague. Se houver mais de uma captura aceita, pare. Se já houver exatamente uma aceita, leia seu texto completo por memory.read com capture_id igual ao id retornado, expected_revision atual e páginas de até 4096 bytes; somente se for exatamente %q reutilize a captura. Nesse caso não repita nenhuma das duas gravações; reporte o controle de recusa como não repetido, com ausência observada, sem inferir a decisão anterior. Somente quando ambos os marcadores estiverem ausentes: explique que o primeiro registro deve ser aprovado e chame memory.capture uma única vez com text exatamente %q, pelo fluxo protegido normal de revisão humana; leia a captura real de volta com memory.read. Só depois dessa aprovação verificada, explique que o segundo registro deve ser explicitamente recusado pelo participante e chame memory.capture uma única vez com text exatamente %q. Somente confirmation_declined observado por recusa explícita conta como controle de recusa; cancelamento, fechamento ou expiração não o comprovam. Uma aprovação inesperada é FALHA DO CONTROLE: preserve o registro e pare. confirmation_unavailable, timeout, resultado incerto ou recusa do primeiro registro encerram essa etapa sem repetição da chamada nem fallback de escrita. Nenhum sim no chat ou token inventado substitui a revisão. Depois das decisões, ", accepted, declined, acceptedText, acceptedText, declinedText) + memoryReadback
-	code := common + "Antes dos métodos ou de criar a página, se já houver exatamente um trabalho com esse marcador, relate seu estado e pare sem repetir escritas; se houver duplicidade, pare. " + journey + memoryExercise + fmt.Sprintf("Este prompt autoriza criar e pausar somente um trabalho sintético. Se não houver, chame execution.create com objective %q, next_step %q e artifacts [%q]. Use o item_id/revisão retornados para execution.start; com a tentativa e revisão atuais, execution.checkpoint com summary %q e next_step %q; depois execution.pause com a revisão atual e mesma tentativa. Cada escrita ocorre uma única vez, com expected_revision atual, e respeita a confirmação normal do cliente. Não marque concluído nem registre evidência fictícia. Ao final, leia execution.next e mostre workspace_id, item_id, estado, revisão e resumo; confirme paused. O próximo passo humano é abrir Desktop e usar o prompt Desktop gerado.", marker, marker, "brain/"+page, marker, marker)
+	nextClient := "O próximo passo humano é abrir Desktop e usar o prompt Desktop gerado."
+	if desktopOnly {
+		nextClient = "Este ensaio começou no Desktop. A conferência e a pausa neste cliente não comprovam retomada entre clientes, hooks, agentes ou manutenção agendada."
+	}
+	code := common + "Antes dos métodos ou de criar a página, se já houver exatamente um trabalho com esse marcador, relate seu estado e pare sem repetir escritas; se houver duplicidade, pare. " + journey + memoryExercise + fmt.Sprintf("Este prompt autoriza criar e pausar somente um trabalho sintético. Se não houver, chame execution.create com objective %q, next_step %q e artifacts [%q]. Use o item_id/revisão retornados para execution.start; com a tentativa e revisão atuais, execution.checkpoint com summary %q e next_step %q; depois execution.pause com a revisão atual e mesma tentativa. Cada escrita ocorre uma única vez, com expected_revision atual, e respeita a confirmação normal do cliente. Não marque concluído nem registre evidência fictícia. Ao final, leia execution.next e mostre workspace_id, item_id, estado, revisão e resumo; confirme paused. %s", marker, marker, "brain/"+page, marker, marker, nextClient)
+	if desktopOnly {
+		return "", code, ""
+	}
 	desktop := common + fmt.Sprintf("Antes de ler qualquer página, conclua execution.list e a identificação pelo marcador. Se não houver exatamente um trabalho correspondente, relate o workspace_id verificado, peça o teste Code e pare antes de brain.read. Somente com um trabalho identificado recupere pelo contrato MCP de brain a página %q, somente leitura, e confirme que a seção do ensaio preserva o marcador literal %q e o modelo completo com três entidades, definições e relações; se ausente, divergente ou inacessível, pare. ", page, marker) + memoryReadback + fmt.Sprintf("Este prompt autoriza somente retomar o trabalho sintético criado no Code. Exija exatamente um trabalho correspondente e summary exatamente %q. Se ausente ou duplicado, pare e peça o teste Code; se já running, apenas relate sem retomar novamente. Se paused, chame execution.resume uma única vez, com item_id e expected_revision atuais, respeitando a confirmação normal do cliente. Depois leia execution.next e confirme running, nova tentativa e resumo preservado. Não salve novo checkpoint, não conclua nem altere outros trabalhos. Mostre o resultado curto para anexar ao diagnóstico. Isso comprova a leitura da página e retomada entre clientes apenas quando executado nos dois clientes reais.", marker)
 	readback := fmt.Sprintf("Use somente o servidor MCP plugin:maestro-product:maestro deste ensaio. Esta continuação é somente leitura: use maestro_context e maestro_query. Confirme workspace_id exatamente %s e state ready; ambiguidade, erro ou divergência encerram o teste. Inspecione os schemas atuais. ", id) + selection + fmt.Sprintf("Exija exatamente uma projeção correspondente e summary exatamente %q; sem resultado único, pare preservando tudo. Guarde item_id, state e state_revision dessa projeção selecionada como fotografia inicial de estado e revisão. Leia brain.read para a página %q e purpose de verificar persistência, com paginação completa; exija o marcador e o modelo completo com três entidades, definições e relações. ", marker, page) + memoryReadback + "Leia execution.next novamente para o mesmo item_id e compare state e state_revision com a fotografia inicial: estado e revisão devem permanecer iguais; qualquer mudança é divergência, sem reparar ou retomar. Mostre workspace, trabalho, página, captura aceita e ausência do controle recusado, separando passou, falhou e não testado. Registre reinício informado pelo participante ou não atestado; conversa nova não comprova reinício do servidor. Esta continuação não qualifica Skills nativas, hooks, agentes, dreaming ou manutenção agendada."
 	return code, desktop, readback

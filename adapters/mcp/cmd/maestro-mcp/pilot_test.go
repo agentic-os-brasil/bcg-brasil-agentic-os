@@ -997,7 +997,7 @@ func TestPilotGuidedSelectionUsesActualNextProjection(t *testing.T) {
 	if len(matches) != 1 || matches[0].ItemID != selected.Contract.ItemID {
 		t.Fatal("only actual Next projections must identify the marked work")
 	}
-	code, desktop, readback := pilotPrompts(workspaceID)
+	code, desktop, readback := pilotPrompts(workspaceID, false)
 	for name, prompt := range map[string]string{"Code": code, "Desktop": desktop, "readback": readback} {
 		listAt := strings.Index(prompt, "execution.list")
 		nextAt := strings.Index(prompt, "para cada item_id listado")

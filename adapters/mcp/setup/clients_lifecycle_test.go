@@ -196,7 +196,7 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 		t.Fatalf("first-run decline mutated state: %s %v", declineOutput, declineErr)
 	}
 	first := exec.CommandContext(ctx, process, "test-client-manage")
-	first.Stdin = strings.NewReader(syncRoot + "\nclient-team\nYES\n" + codeRoot + "\n" + desktop + "\n" + process + "\nuser\nresources-only\n\nYES\nYES\n")
+	first.Stdin = strings.NewReader(syncRoot + "\nclient-team\nYES\nboth\n" + codeRoot + "\n" + desktop + "\n" + process + "\nuser\nresources-only\n\nYES\nYES\n")
 	firstOutput, err := first.CombinedOutput()
 	must(t, os.WriteFile(filepath.Join(root, "first-run-output.txt"), firstOutput, 0600))
 	if err != nil {
@@ -232,7 +232,7 @@ func TestModernClientRegistrationLifecycle(t *testing.T) {
 	pendingCodeBody, _ := json.Marshal(map[string]any{"Root": pendingRoot, "Scope": "user", "Enabled": false})
 	must(t, os.WriteFile(pendingCodeState, pendingCodeBody, 0600))
 	pendingFirst := exec.CommandContext(ctx, process, "test-client-manage")
-	pendingFirst.Stdin = strings.NewReader(pendingRoot + "\n" + pendingDesktop + "\n\nuser\n\nYES\n")
+	pendingFirst.Stdin = strings.NewReader("both\n" + pendingRoot + "\n" + pendingDesktop + "\n\nuser\n\nYES\n")
 	pendingOutput, pendingErr := pendingFirst.CombinedOutput()
 	must(t, os.WriteFile(filepath.Join(root, "pending-first-console.txt"), pendingOutput, 0600))
 	if pendingErr != nil {
