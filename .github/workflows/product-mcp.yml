@@ -461,6 +461,98 @@ jobs:
               assert not skipped, family + " skipped proof: " + repr(skipped)
           PYCODE
 
+      # Retain closed outcomes only; raw Go Output may contain private fixture envelopes.
+      - name: Summarize existing client lifecycle outcomes
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PYCODE'
+          import json, os, pathlib, re, subprocess
+
+          PARENTS = ("TestModernClientRegistrationLifecycle", "TestDesktopOnlyExperimentalCurrentConsumer")
+          PACKAGE = "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/setup"
+          LIMIT, MAX_HINTS = 8 * 1024 * 1024, 32
+
+          def summarize(data, sources):
+              parents = {p: dict(run=0, pass_count=0, fail=0, skip=0, family_skips=0) for p in PARENTS}
+              result = dict(schema_version=1, parents=parents, package_failed=False,
+                            input_unavailable=data is None, parse_error=False, incomplete=False,
+                            input_capped=False, hints_capped=False, hints_untrusted=True, source_hints=[])
+              hints = set()
+              data = b"" if data is None else data
+              result["input_capped"] = len(data) > LIMIT
+              for line in data[:LIMIT].splitlines():
+                  if not line.strip():
+                      continue
+                  try:
+                      event = json.loads(line)
+                      if not isinstance(event, dict):
+                          raise ValueError()
+                  except (ValueError, UnicodeError):
+                      result["parse_error"] = True
+                      continue
+                  if event.get("Package") != PACKAGE:
+                      continue
+                  action, test = event.get("Action"), event.get("Test")
+                  result["package_failed"] |= action == "fail" and not test
+                  parent = next((p for p in PARENTS if isinstance(test, str) and (test == p or test.startswith(p + "/"))), None)
+                  if parent is None:
+                      continue
+                  if test == parent and action in ("run", "pass", "fail", "skip"):
+                      parents[parent]["pass_count" if action == "pass" else action] += 1
+                  if action == "skip":
+                      parents[parent]["family_skips"] += 1
+                  output = event.get("Output", "")
+                  if action == "output" and isinstance(output, str):
+                      for match in re.finditer(r"(?m)^\s*([A-Za-z0-9_]+_test\.go):([1-9][0-9]{0,5}):", output):
+                          name, number = match.group(1), int(match.group(2))
+                          hint = (parent, name, number)
+                          if name in sources and number <= sources[name] and hint not in hints:
+                              if len(hints) < MAX_HINTS:
+                                  hints.add(hint)
+                              else:
+                                  result["hints_capped"] = True
+              for counts in parents.values():
+                  terminal = [state for state, key in (("pass", "pass_count"), ("fail", "fail"), ("skip", "skip")) if counts[key]]
+                  total = counts["pass_count"] + counts["fail"] + counts["skip"]
+                  counts["status"] = terminal[0] if total == 1 else ("incomplete" if counts["run"] or total else "not_observed")
+              result["source_hints"] = [dict(parent=p, file=f, line=n) for p, f, n in sorted(hints)]
+              result["incomplete"] = result["input_unavailable"] or result["input_capped"] or result["parse_error"] or any(p["status"] in ("incomplete", "not_observed") for p in parents.values())
+              return result
+
+          def main():
+              sources, source_index_unavailable = {}, False
+              try:
+                  names = subprocess.check_output(["git", "ls-tree", "--name-only", "HEAD:adapters/mcp/setup"], text=True, stderr=subprocess.DEVNULL).splitlines()
+                  for name in names:
+                      if re.fullmatch(r"[A-Za-z0-9_]+_test\.go", name):
+                          body = subprocess.check_output(["git", "show", "HEAD:adapters/mcp/setup/" + name], stderr=subprocess.DEVNULL)
+                          sources[name] = len(body.splitlines())
+              except (OSError, subprocess.CalledProcessError):
+                  sources, source_index_unavailable = {}, True
+              root = pathlib.Path(os.environ["RUNNER_TEMP"])
+              try:
+                  with (root / "maestro-client-registration.jsonl").open("rb") as stream:
+                      data = stream.read(LIMIT + 1)
+              except OSError:
+                  data = None
+              result = summarize(data, sources)
+              result["source_index_unavailable"] = source_index_unavailable
+              result["incomplete"] |= source_index_unavailable
+              (root / "maestro-client-registration-summary.json").write_text(json.dumps(result, sort_keys=True) + "\n", encoding="utf-8")
+
+          if __name__ == "__main__":
+              main()
+          PYCODE
+      - name: Retain bounded client lifecycle outcomes
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: modern-client-registration-summary-${{ github.sha }}
+          path: ${{ runner.temp }}/maestro-client-registration-summary.json
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Actual shipping client paths preserve native Self admission
         working-directory: adapters/mcp
         shell: bash
