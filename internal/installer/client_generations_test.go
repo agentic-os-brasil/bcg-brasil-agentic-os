@@ -74,7 +74,10 @@ func TestClientGenerationsRetainOwnerReviewChannel(t *testing.T) {
 
 func TestDesktopClientGenerationHasNoCodeSlot(t *testing.T) {
 	var request ClientRequest
-	body := []byte(`{"target":"desktop","carrier_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","desktop_path":"` + filepath.ToSlash(filepath.Join(t.TempDir(), "maestro.mcpb")) + `","versioned_slots":true}`)
+	body, err := json.Marshal(ClientRequest{Target: "desktop", CarrierID: strings.Repeat("a", 32), DesktopPath: filepath.Join(t.TempDir(), "maestro.mcpb"), VersionedSlots: true})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := json.Unmarshal(body, &request); err != nil {
 		t.Fatal(err)
 	}
