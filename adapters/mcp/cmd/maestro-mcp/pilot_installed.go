@@ -213,6 +213,10 @@ func runInstalledPilotCheck(ctx context.Context, args []string, output io.Writer
 		return fail("document_runtime", "closed_current_runtime_identity_unavailable")
 	}
 	if err := installedPilotSDK(ctx, o, record.Binding.WorkspaceID, state.Binding.ManifestSHA256, expectedRuntime, &r.pilotReport); err != nil {
+		var readback *installedPilotReadbackError
+		if errors.As(err, &readback) {
+			return fail("mcp_readback", readback.Error())
+		}
 		return fail("mcp_readback", "current_in_process_sdk_readback_failed")
 	}
 	for _, name := range []string{"code_client", "desktop_client", "onboarding", "skills", "hooks", "authored_brain", "memory", "conversion"} {
@@ -260,24 +264,29 @@ func installedPilotSDK(ctx context.Context, o product.Options, id, expectedManif
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	done := make(chan error, 1)
 	go func() { done <- bound.Server().Run(ctx, serverTransport) }()
 	client := mcp.NewClient(&mcp.Implementation{Name: "maestro-installed-pilot-check", Version: "1"}, nil)
-	session, err := client.Connect(ctx, clientTransport, nil)
+	connectCtx, connectCancel := context.WithTimeout(ctx, 20*time.Second)
+	session, err := client.Connect(connectCtx, clientTransport, nil)
+	connectCancel()
 	if err != nil {
 		cancel()
 		<-done
-		return err
+		return &installedPilotReadbackError{stage: "connect", cause: err}
 	}
 	defer func() { session.Close(); cancel(); <-done }()
 	var metadata struct {
 		WorkspaceID string `json:"workspace_id"`
 		State       string `json:"state"`
 	}
-	if err := pilotCall(ctx, session, "maestro_context", map[string]any{}, &metadata); err != nil || metadata.WorkspaceID != id || metadata.State != "ready" {
+	if err := installedPilotCall(ctx, session, "context", "maestro_context", map[string]any{}, &metadata); err != nil {
+		return err
+	}
+	if metadata.WorkspaceID != id || metadata.State != "ready" {
 		return errors.New("installed_context_mismatch")
 	}
 	r.add("mcp_connection", "passed", "current_in_process_sdk_context_verified_not_host_loading", "")
@@ -297,7 +306,7 @@ func installedPilotSDK(ctx context.Context, o product.Options, id, expectedManif
 			Next int  `json:"next_offset"`
 			More bool `json:"has_more"`
 		}
-		if err := pilotCall(ctx, session, "maestro_query", map[string]any{"operation": "methods.list", "offset": offset, "limit": 32}, &page); err != nil {
+		if err := installedPilotCall(ctx, session, "methods_list", "maestro_query", map[string]any{"operation": "methods.list", "offset": offset, "limit": 32}, &page); err != nil {
 			return err
 		}
 		if len(page.Items) > 32 || page.Next != offset+len(page.Items) || page.More && page.Next <= offset {
@@ -323,10 +332,41 @@ func installedPilotSDK(ctx context.Context, o product.Options, id, expectedManif
 		State      string `json:"state"`
 		PackSHA256 string `json:"pack_sha256"`
 	}
-	if err := pilotCall(ctx, session, "maestro_query", map[string]any{"operation": "content.status"}, &availability); err != nil {
+	if err := installedPilotCall(ctx, session, "content_status", "maestro_query", map[string]any{"operation": "content.status"}, &availability); err != nil {
 		return err
 	}
 	return installedConversionObservation(r, expectedManifest, expectedRuntime, availability.State, availability.PackSHA256)
+}
+
+type installedPilotReadbackError struct {
+	stage string
+	cause error
+}
+
+func (e *installedPilotReadbackError) Error() string {
+	reason := "failed"
+	if errors.Is(e.cause, context.DeadlineExceeded) {
+		reason = "deadline_exceeded"
+	} else if errors.Is(e.cause, context.Canceled) {
+		reason = "cancelled"
+	}
+	return "current_in_process_sdk_" + e.stage + "_" + reason
+}
+
+func (e *installedPilotReadbackError) Unwrap() error { return e.cause }
+
+func installedPilotCall(ctx context.Context, session *mcp.ClientSession, stage, name string, args map[string]any, out any) error {
+	// Each signed read keeps its finite bound without consuming the next read's budget.
+	callCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	err := pilotCall(callCtx, session, name, args, out)
+	if callCtx.Err() != nil {
+		err = callCtx.Err()
+	}
+	if err != nil {
+		return &installedPilotReadbackError{stage: stage, cause: err}
+	}
+	return nil
 }
 
 func installedExpectedRuntime(role *installer.VerifiedExperimentalSeed, state installtx.State) (string, error) {

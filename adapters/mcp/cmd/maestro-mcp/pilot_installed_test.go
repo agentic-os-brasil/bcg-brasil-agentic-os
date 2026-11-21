@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -14,7 +15,9 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
@@ -271,6 +274,13 @@ func TestInstalledPilotSDKReadsWithoutStartingMaintenanceOrWritingOwnerFiles(t *
 		return out
 	}
 	before := snapshot()
+	var lookups atomic.Int32
+	o.LookupEnv = func(key string) (string, bool) {
+		if key == "MAESTRO_HOME" {
+			lookups.Add(1)
+		}
+		return "", false
+	}
 	r := pilotReport{SchemaVersion: 2, Status: "partial", Checks: []pilotCheck{}}
 	if err := installedPilotSDK(context.Background(), o, space.WorkspaceID, strings.Repeat("b", 64), strings.Repeat("a", 64), &r); err != nil {
 		t.Fatal(err)
@@ -280,6 +290,75 @@ func TestInstalledPilotSDKReadsWithoutStartingMaintenanceOrWritingOwnerFiles(t *
 	}
 	if len(r.Checks) < 3 || r.Checks[0].Reason != "current_in_process_sdk_context_verified_not_host_loading" {
 		t.Fatalf("incorrect SDK evidence: %#v", r.Checks)
+	}
+	t.Run("healthy reads retain their own timeout", func(t *testing.T) {
+		// Installed admission revalidates large signed inventories on every read.
+		// Delay the existing admission seam, keeping each read below twenty seconds.
+		delay := 21 * time.Second / time.Duration(lookups.Load()-2)
+		lookups.Store(0)
+		o.LookupEnv = func(key string) (string, bool) {
+			if key == "MAESTRO_HOME" && lookups.Add(1) > 2 {
+				time.Sleep(delay)
+			}
+			return "", false
+		}
+		slow := pilotReport{SchemaVersion: 2, Status: "partial", Checks: []pilotCheck{}}
+		if err := installedPilotSDK(t.Context(), o, space.WorkspaceID, strings.Repeat("b", 64), strings.Repeat("a", 64), &slow); err != nil {
+			t.Fatalf("healthy cumulative readback failed: %v; checks=%+v; conversion=%+v", err, slow.Checks, slow.Conversion)
+		}
+		if slow.Conversion == nil || slow.Conversion.State != "pending_runtime" || !reflect.DeepEqual(r.Checks, slow.Checks) {
+			t.Fatalf("slow reads lost the canonical catalog or conversion observation: %+v", slow)
+		}
+		if !reflect.DeepEqual(before, snapshot()) {
+			t.Fatal("slow read-only SDK changed owner or workspace files")
+		}
+	})
+	for _, tc := range []struct {
+		name, reason string
+		cancel       bool
+	}{
+		{"caller cancellation", "current_in_process_sdk_context_cancelled", true},
+		{"one read exceeds its timeout", "current_in_process_sdk_context_deadline_exceeded", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			lookups.Store(0)
+			o.LookupEnv = func(key string) (string, bool) {
+				if key == "MAESTRO_HOME" && lookups.Add(1) == 3 {
+					if tc.cancel {
+						cancel()
+					} else {
+						time.Sleep(21 * time.Second)
+					}
+				}
+				return "", false
+			}
+			blocked := pilotReport{SchemaVersion: 2, Status: "partial", Checks: []pilotCheck{}}
+			err := installedPilotSDK(ctx, o, space.WorkspaceID, strings.Repeat("b", 64), strings.Repeat("a", 64), &blocked)
+			if err == nil || err.Error() != tc.reason || len(blocked.Checks) != 0 || blocked.Conversion != nil {
+				t.Fatalf("cancelled/expired read did not fail closed: error=%v; report=%+v", err, blocked)
+			}
+			if !reflect.DeepEqual(before, snapshot()) {
+				t.Fatal("failed read-only SDK changed owner or workspace files")
+			}
+		})
+	}
+}
+
+func TestInstalledPilotReadbackErrorOmitsPrivateCauses(t *testing.T) {
+	for _, tc := range []struct {
+		cause  error
+		reason string
+	}{
+		{errors.New("/private/DO_NOT_EXPORT_PARTICIPANT_SELECTION"), "failed"},
+		{fmt.Errorf("/private/DO_NOT_EXPORT: %w", context.DeadlineExceeded), "deadline_exceeded"},
+		{fmt.Errorf("/private/DO_NOT_EXPORT: %w", context.Canceled), "cancelled"},
+	} {
+		err := &installedPilotReadbackError{stage: "content_status", cause: tc.cause}
+		if err.Error() != "current_in_process_sdk_content_status_"+tc.reason || !errors.Is(err, tc.cause) {
+			t.Fatalf("unsafe or unclassifiable readback error: %v", err)
+		}
 	}
 }
 
