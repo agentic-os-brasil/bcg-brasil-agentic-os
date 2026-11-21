@@ -96,18 +96,11 @@ func (b *Bound) handleMethods(in input) *mcp.CallToolResult {
 		if body == nil {
 			return methodQueryFailure("method_resource_unavailable")
 		}
-		limit := in.MaxBytes
-		if limit == 0 {
-			limit = 4096
-		}
-		if in.Offset < 0 || in.Offset > len(body) || limit < 4 || limit > 4096 || in.Offset < len(body) && !utf8.RuneStart(body[in.Offset]) {
+		page := immutableResourcePage(in.ResourceURI, body, in.Offset, in.MaxBytes, "methods_not_authority")
+		if page == nil {
 			return methodQueryFailure("method_page_invalid")
 		}
-		end := min(in.Offset+limit, len(body))
-		for end > in.Offset && !utf8.Valid(body[in.Offset:end]) {
-			end--
-		}
-		return result(map[string]any{"resource_uri": in.ResourceURI, "text": string(body[in.Offset:end]), "sha256": fmt.Sprintf("%x", sha256.Sum256(body)), "total_bytes": len(body), "offset": in.Offset, "next_offset": end, "has_more": end < len(body), "mode": "methods_not_authority"}, nil)
+		return result(page, nil)
 	}
 	return result(nil, errors.New("invalid_method_operation"))
 }
@@ -131,4 +124,19 @@ func methodQueryFailure(code string) *mcp.CallToolResult {
 	out := result(map[string]any{"code": code, "next_action": "List installed methods and use an exact returned method ID or immutable resource URI and a valid page."}, nil)
 	out.IsError = true
 	return out
+}
+
+// immutableResourcePage shares byte bounds and UTF-8 continuation semantics.
+func immutableResourcePage(uri string, body []byte, offset, limit int, mode string) map[string]any {
+	if limit == 0 {
+		limit = 4096
+	}
+	if offset < 0 || offset > len(body) || limit < 4 || limit > 4096 || offset < len(body) && !utf8.RuneStart(body[offset]) {
+		return nil
+	}
+	end := min(offset+limit, len(body))
+	for end > offset && !utf8.Valid(body[offset:end]) {
+		end--
+	}
+	return map[string]any{"resource_uri": uri, "text": string(body[offset:end]), "sha256": fmt.Sprintf("%x", sha256.Sum256(body)), "total_bytes": len(body), "offset": offset, "next_offset": end, "has_more": end < len(body), "mode": mode}
 }
