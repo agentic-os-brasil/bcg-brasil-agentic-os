@@ -143,7 +143,12 @@ diagnosable without silently becoming isolated extensions.
 
 ## Canonical identities and projection
 
-Maestro remains the main-session hub. Project the canonical ordinary specialists:
+Maestro remains the main-session hub. MCP initialization points tool-only clients
+to context and the complete canonical Maestro role through `agents.read`
+(Spec 065 / ARID). Immutable role availability does not qualify host adoption,
+native specialists, hooks or foreground execution.
+
+Project the canonical ordinary specialists:
 case-agent, client-account-agent, darwin, gamma-guardian, pa-expert and yoda,
 plus the closed repository review pair described under RPAR below.
 Reuse embedded definitions/catalog/templates and one pure projection shared

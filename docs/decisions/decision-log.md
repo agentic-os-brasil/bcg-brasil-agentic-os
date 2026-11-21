@@ -1885,3 +1885,14 @@ coverage, not proof of this complete-kit scope. Refs: #599; Spec061 NTXT.
 - Consequences: Old readers refuse the new record schema/capability rather than interpreting a partial record. Desktop method installation, connection and functional checks remain separate host observations. Desktop gains no Code hooks or independent foreground runtime authorization. Ship a newly reviewed compatible bootstrap/kit; existing artifacts and failed observations remain unchanged.
 - Refs: #616; specs/020-release-distribution.md; specs/065-product-method-discovery.md; docs/product-clients.md
 - Supersedes: none
+
+## ARID - Read canonical agent roles through ordinary MCP tools
+
+- Date: 2026-11-21
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Canonical public agent definitions are already immutable MCP resources, but tool-only clients cannot retrieve the complete hub role and initialization supplies no discovery instructions. Display identity metadata does not carry the role contract.
+- Decision: Add a closed read-only agents.read query for canonical catalogued agent IDs, reusing the existing embedded role bytes and bounded UTF-8 resource pagination. Return the exact public resource URI, full-content hash and size. Initialize with concise guidance to read context, then the complete Maestro role through ordinary tools, respecting system/host instructions, the current user task and accepted owner preferences.
+- Consequences: The three-tool inventory stays unchanged. Display choices remain presentation only; role and method instructions confer no execution, delegation, approval, provider or filesystem authority. Private account/case definitions, path-based reads and broader resource dispatch stay outside this interface. Source and compiled transport tests establish delivery bytes, not actual client adoption or native execution.
+- Refs: specs/065-product-method-discovery.md; specs/063-product-native-plugin.md; adapters/mcp/agents.go; adapters/mcp/agents_query_test.go; MQRY; #470
+- Supersedes: none

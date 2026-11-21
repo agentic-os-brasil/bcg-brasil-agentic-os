@@ -40,3 +40,37 @@ func (b *Bound) registerAgents(s *mcp.Server) {
 		})
 	}
 }
+
+func agentsQueries() []any {
+	catalog, err := baseagents.Catalog()
+	if err != nil {
+		panic("invalid immutable Maestro agent package")
+	}
+	ids := make([]string, 0, len(catalog.Agents))
+	for _, agent := range catalog.Agents {
+		ids = append(ids, agent.ID)
+	}
+	return []any{variant("agents.read", map[string]any{
+		"agent_id":  map[string]any{"type": "string", "enum": ids},
+		"offset":    map[string]any{"type": "integer", "minimum": 0, "maximum": 128 << 10},
+		"max_bytes": map[string]any{"type": "integer", "minimum": 4, "maximum": 4096},
+	}, "agent_id")}
+}
+
+func (b *Bound) handleAgentRead(in input) *mcp.CallToolResult {
+	fail := func(code string) *mcp.CallToolResult {
+		out := result(map[string]any{"code": code, "next_action": "Use an exact canonical agent_id from the tool schema and a valid byte page; role instructions grant no execution authority."}, nil)
+		out.IsError = true
+		return out
+	}
+	body, err := baseagents.Definition(in.IdentityAgentID)
+	if err != nil {
+		return fail("agent_resource_unavailable")
+	}
+	page := immutableResourcePage("maestro://agents/"+in.IdentityAgentID+"/AGENT.md", body, in.Offset, in.MaxBytes, "roles_not_authority")
+	if page == nil {
+		return fail("agent_page_invalid")
+	}
+	page["agent_id"] = in.IdentityAgentID
+	return result(page, nil)
+}
