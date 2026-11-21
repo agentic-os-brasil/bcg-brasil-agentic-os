@@ -3,6 +3,7 @@ package installtx
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -1641,19 +1642,26 @@ func copyVerifiedRegular(source, target string, mode os.FileMode, expectedSize i
 }
 
 func verifyRegularFile(path string, expectedSize int64, expectedSHA256 string) error {
+	return verifyRegularFileContext(context.Background(), path, expectedSize, expectedSHA256)
+}
+
+func verifyRegularFileContext(ctx context.Context, path string, expectedSize int64, expectedSHA256 string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	file, err := openRegular(path, expectedSize)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 	counter := &digestCounter{hash: sha256.New()}
-	if _, err := io.Copy(counter, file); err != nil {
+	if _, err := io.Copy(counter, installReadContext{ctx, file}); err != nil {
 		return err
 	}
 	if counter.size != expectedSize || fmt.Sprintf("%x", counter.hash.Sum(nil)) != expectedSHA256 {
 		return errors.New("file does not match its authenticated size and digest")
 	}
-	return nil
+	return ctx.Err()
 }
 
 func extractVerifiedBundleArchive(
@@ -2027,4 +2035,24 @@ func readJSONStrict(path string, target any) error {
 		return err
 	}
 	return nil
+}
+
+// installReadContext checks cancellation between bounded hashing reads.
+type installReadContext struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r installReadContext) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	if len(p) > 32<<10 {
+		p = p[:32<<10]
+	}
+	n, err := r.reader.Read(p)
+	if cancelled := r.ctx.Err(); cancelled != nil {
+		return n, cancelled
+	}
+	return n, err
 }

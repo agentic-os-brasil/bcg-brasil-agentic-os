@@ -1,6 +1,7 @@
 package installtx
 
 import (
+	"context"
 	"errors"
 	"runtime"
 
@@ -11,6 +12,13 @@ import (
 // before source enrollment. Exact immutable pins are mandatory. Enrolled source
 // custody belongs exclusively to ValidateQualifiedLaunch; this is no fallback.
 func ValidateActivatedCurrent(managedRoot, dataRoot string, expected ReleaseBinding) (State, error) {
+	return ValidateActivatedCurrentContext(context.Background(), managedRoot, dataRoot, expected)
+}
+
+func ValidateActivatedCurrentContext(ctx context.Context, managedRoot, dataRoot string, expected ReleaseBinding) (State, error) {
+	if err := ctx.Err(); err != nil {
+		return State{}, err
+	}
 	if !sha256Pattern.MatchString(expected.ManifestSHA256) || !sha256Pattern.MatchString(expected.ClientInputsSHA256) {
 		return State{}, errors.New("exact initial Current manifest/client binding required")
 	}
@@ -24,13 +32,13 @@ func ValidateActivatedCurrent(managedRoot, dataRoot string, expected ReleaseBind
 	if state.Binding.ManifestSHA256 != expected.ManifestSHA256 || state.Binding.ClientInputsSHA256 != expected.ClientInputsSHA256 {
 		return State{}, errors.New("initial Current release binding changed")
 	}
-	if err = CheckActivatedServer(managedRoot, state); err != nil {
+	if err = CheckActivatedServerContext(ctx, managedRoot, state); err != nil {
 		return State{}, err
 	}
-	if err = verifyReleaseBinding(managedRoot, dataRoot, state, state.Binding, state.Server, true); err != nil {
+	if err = verifyReleaseBindingContext(ctx, managedRoot, dataRoot, state, state.Binding, state.Server, true); err != nil {
 		return State{}, err
 	}
-	return state, nil
+	return state, ctx.Err()
 }
 
 // GuardActivatedCurrent reuses the installation owner and validates the exact

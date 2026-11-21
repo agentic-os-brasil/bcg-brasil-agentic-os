@@ -190,7 +190,7 @@ func (b *Bound) checkSelectedContentSource(ctx context.Context, source, digest s
 	if err := b.workspacePath(source); err != nil {
 		return err
 	}
-	if err := b.DoclingRuntime().RevalidateSource(ctx, ingest.Request{SourcePath: source, WorkspacePath: b.options.WorkspacePath}, b.workspaceID, digest); err != nil {
+	if err := b.DoclingRuntimeContext(ctx).RevalidateSource(ctx, ingest.Request{SourcePath: source, WorkspacePath: b.options.WorkspacePath}, b.workspaceID, digest); err != nil {
 		return err
 	}
 	if err := b.workspacePath(source); err != nil {
@@ -401,7 +401,7 @@ func (b *Bound) handleContent(ctx context.Context, req *mcp.CallToolRequest, in 
 			}
 			contentProgress(ctx, req, 0, "Verifying the local runtime and converting the selected document")
 			var conversion docling.Conversion
-			conversion, err = b.DoclingRuntime().Convert(ctx, ingest.Request{SourcePath: in.SourcePath, WorkspacePath: b.options.WorkspacePath, Policy: ingest.DefaultPolicy()}, b.workspaceID)
+			conversion, err = b.DoclingRuntimeContext(ctx).Convert(ctx, ingest.Request{SourcePath: in.SourcePath, WorkspacePath: b.options.WorkspacePath, Policy: ingest.DefaultPolicy()}, b.workspaceID)
 			if err == nil {
 				err = ctx.Err()
 			}

@@ -1,6 +1,7 @@
 package product
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -26,13 +27,30 @@ type sourceOwningContext struct {
 }
 
 func (b *Bound) sourceRequired() (bool, error) {
-	owning, err := b.sourceContext()
+	return b.sourceRequiredContext(context.Background())
+}
+
+func (b *Bound) sourceRequiredContext(ctx context.Context) (bool, error) {
+	owning, err := b.sourceContextWithContext(ctx)
 	return owning.required, err
 }
 func (b *Bound) sourceContext() (sourceOwningContext, error) {
-	return b.sourceContextWithReader(b.readInstalledSourceState)
+	return b.sourceContextWithContext(context.Background())
+}
+
+func (b *Bound) sourceContextWithContext(ctx context.Context) (sourceOwningContext, error) {
+	return b.sourceContextWithReaderContext(ctx, func(dataRoot, managedRoot string) (installtx.State, error) {
+		return b.readInstalledSourceStateContext(ctx, dataRoot, managedRoot)
+	})
 }
 func (b *Bound) sourceContextWithReader(read sourceStateReader) (sourceOwningContext, error) {
+	return b.sourceContextWithReaderContext(context.Background(), read)
+}
+
+func (b *Bound) sourceContextWithReaderContext(ctx context.Context, read sourceStateReader) (sourceOwningContext, error) {
+	if err := ctx.Err(); err != nil {
+		return sourceOwningContext{}, err
+	}
 	pinned := b.options.InstalledManifestSHA256 != "" || b.options.InstalledClientInputsSHA256 != ""
 	installed := false
 	if b.options.GuardProcess {
@@ -58,6 +76,9 @@ func (b *Bound) sourceContextWithReader(read sourceStateReader) (sourceOwningCon
 	}
 	dataRoot := filepath.Join(b.options.UserHome, ".maestro-install")
 	state, err := read(dataRoot, b.options.ProductRoot)
+	if cancelled := ctx.Err(); cancelled != nil {
+		return sourceOwningContext{}, cancelled
+	}
 	if errors.Is(err, os.ErrNotExist) {
 		return sourceOwningContext{required: installed || pinned}, nil
 	}
@@ -73,15 +94,28 @@ func (b *Bound) sourceContextWithReader(read sourceStateReader) (sourceOwningCon
 }
 
 func (b *Bound) validateInstalledSource() error {
-	required, err := b.sourceRequired()
+	return b.validateInstalledSourceContext(context.Background())
+}
+
+func (b *Bound) validateInstalledSourceContext(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	required, err := b.sourceRequiredContext(ctx)
 	if err != nil {
+		if cancelled := ctx.Err(); cancelled != nil {
+			return cancelled
+		}
 		return ErrSourceRecoveryRequired
 	}
 	if !required {
 		return nil
 	}
-	state, err := b.validatedQualifiedState(b.installedExpectation())
+	state, err := b.validatedQualifiedStateContext(ctx, b.installedExpectation())
 	if err != nil {
+		if cancelled := ctx.Err(); cancelled != nil {
+			return cancelled
+		}
 		return ErrSourceRecoveryRequired
 	}
 	if b.options.GuardProcess {
@@ -93,7 +127,7 @@ func (b *Bound) validateInstalledSource() error {
 			return processidentity.ErrChanged
 		}
 	}
-	return nil
+	return ctx.Err()
 }
 
 func (b *Bound) guardPublication(publish func() error) error {

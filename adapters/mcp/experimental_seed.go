@@ -1,6 +1,7 @@
 package product
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"runtime"
@@ -13,6 +14,13 @@ import (
 )
 
 func (b *Bound) validateExperimentalSeed() error {
+	return b.validateExperimentalSeedContext(context.Background())
+}
+
+func (b *Bound) validateExperimentalSeedContext(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	role := b.options.ExperimentalSeed
 	if role == nil {
 		if b.options.ExperimentalSeedRoot != "" {
@@ -29,7 +37,10 @@ func (b *Bound) validateExperimentalSeed() error {
 		name += ".exe"
 	}
 	o := installer.SeededOperationOptions{ExperimentalSeed: role, Self: filepath.Join(root, name), Version: role.Identity().InstallerVersion, AuthorityRegistrySHA256: b.options.AuthorityRegistrySHA256, UserHome: b.options.UserHome, ManagedRoot: root, DataRoot: filepath.Join(b.options.UserHome, ".maestro-install")}
-	if err := installer.VerifyExperimentalInstalledBinding(o); err != nil {
+	if err := installer.VerifyExperimentalInstalledBindingContext(ctx, o); err != nil {
+		if cancelled := ctx.Err(); cancelled != nil {
+			return cancelled
+		}
 		return errors.New("experimental_seed_binding_unavailable")
 	}
 	state, err := installtx.ReadSourceState(o.DataRoot, root)
@@ -42,7 +53,10 @@ func (b *Bound) validateExperimentalSeed() error {
 			return errors.New("experimental_server_identity_changed")
 		}
 	}
-	return role.Revalidate()
+	if err := role.Revalidate(); err != nil {
+		return err
+	}
+	return ctx.Err()
 }
 
 func (b *Bound) experimentalSourceAdmission() updateservice.SyncedAdmission {
@@ -56,20 +70,34 @@ func (b *Bound) experimentalSourceAdmission() updateservice.SyncedAdmission {
 // existing opaque engineering admission fence. Classification consumes the
 // returned owning snapshot once; these checks never supply state authority.
 func (b *Bound) readInstalledSourceState(dataRoot, managedRoot string) (installtx.State, error) {
-	if err := b.validateExperimentalSeed(); err != nil {
+	return b.readInstalledSourceStateContext(context.Background(), dataRoot, managedRoot)
+}
+
+func (b *Bound) readInstalledSourceStateContext(ctx context.Context, dataRoot, managedRoot string) (installtx.State, error) {
+	if err := ctx.Err(); err != nil {
+		return installtx.State{}, err
+	}
+	if err := b.validateExperimentalSeedContext(ctx); err != nil {
 		return installtx.State{}, err
 	}
 	state, err := installtx.ReadSourceState(dataRoot, managedRoot)
 	if err != nil {
 		return state, err
 	}
-	if err = b.fenceExperimentalState(state); err != nil {
+	if err = b.fenceExperimentalStateContext(ctx, state); err != nil {
 		return installtx.State{}, err
 	}
-	return state, nil
+	return state, ctx.Err()
 }
 func (b *Bound) fenceExperimentalState(state installtx.State) error {
-	if err := b.validateExperimentalSeed(); err != nil {
+	return b.fenceExperimentalStateContext(context.Background(), state)
+}
+
+func (b *Bound) fenceExperimentalStateContext(ctx context.Context, state installtx.State) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := b.validateExperimentalSeedContext(ctx); err != nil {
 		return err
 	}
 	role := b.options.ExperimentalSeed
@@ -84,33 +112,50 @@ func (b *Bound) fenceExperimentalState(state installtx.State) error {
 			return err
 		}
 	}
-	return role.Revalidate()
+	if err := role.Revalidate(); err != nil {
+		return err
+	}
+	return ctx.Err()
 }
 func (b *Bound) validatedQualifiedState(expected installtx.ReleaseBinding) (installtx.State, error) {
-	if err := b.validateExperimentalSeed(); err != nil {
+	return b.validatedQualifiedStateContext(context.Background(), expected)
+}
+
+func (b *Bound) validatedQualifiedStateContext(ctx context.Context, expected installtx.ReleaseBinding) (installtx.State, error) {
+	if err := ctx.Err(); err != nil {
 		return installtx.State{}, err
 	}
-	state, err := installtx.ValidateQualifiedLaunch(b.options.ProductRoot, filepath.Join(b.options.UserHome, ".maestro-install"), expected, time.Now())
+	if err := b.validateExperimentalSeedContext(ctx); err != nil {
+		return installtx.State{}, err
+	}
+	state, err := installtx.ValidateQualifiedLaunchContext(ctx, b.options.ProductRoot, filepath.Join(b.options.UserHome, ".maestro-install"), expected, time.Now())
 	if err != nil {
 		return state, err
 	}
-	if err = b.fenceExperimentalState(state); err != nil {
+	if err = b.fenceExperimentalStateContext(ctx, state); err != nil {
 		return installtx.State{}, err
 	}
-	return state, nil
+	return state, ctx.Err()
 }
 func (b *Bound) validatedActivatedState(expected installtx.ReleaseBinding) (installtx.State, error) {
-	if err := b.validateExperimentalSeed(); err != nil {
+	return b.validatedActivatedStateContext(context.Background(), expected)
+}
+
+func (b *Bound) validatedActivatedStateContext(ctx context.Context, expected installtx.ReleaseBinding) (installtx.State, error) {
+	if err := ctx.Err(); err != nil {
 		return installtx.State{}, err
 	}
-	state, err := installtx.ValidateActivatedCurrent(b.options.ProductRoot, filepath.Join(b.options.UserHome, ".maestro-install"), expected)
+	if err := b.validateExperimentalSeedContext(ctx); err != nil {
+		return installtx.State{}, err
+	}
+	state, err := installtx.ValidateActivatedCurrentContext(ctx, b.options.ProductRoot, filepath.Join(b.options.UserHome, ".maestro-install"), expected)
 	if err != nil {
 		return state, err
 	}
-	if err = b.fenceExperimentalState(state); err != nil {
+	if err = b.fenceExperimentalStateContext(ctx, state); err != nil {
 		return installtx.State{}, err
 	}
-	return state, nil
+	return state, ctx.Err()
 }
 func (b *Bound) withExperimentalSeedFence(action func() error) error {
 	if err := b.validateExperimentalSeed(); err != nil {

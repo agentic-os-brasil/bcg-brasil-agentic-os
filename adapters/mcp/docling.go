@@ -21,28 +21,43 @@ import (
 // DoclingRuntime binds both availability and use to this admitted owner's
 // current authenticated source. Ordinary uninstalled packets retain their
 // original verifier and cannot acquire installed placement authority.
-func (b *Bound) DoclingRuntime() *docling.Runtime { return docling.New(b.doclingOptions()) }
+func (b *Bound) DoclingRuntime() *docling.Runtime {
+	return b.DoclingRuntimeContext(context.Background())
+}
+func (b *Bound) DoclingRuntimeContext(ctx context.Context) *docling.Runtime {
+	return docling.New(b.doclingOptionsContext(ctx))
+}
 func (b *Bound) doclingOptions() docling.Options {
-	return b.doclingOptionsWithReader(b.readInstalledSourceState)
+	return b.doclingOptionsContext(context.Background())
+}
+
+func (b *Bound) doclingOptionsContext(ctx context.Context) docling.Options {
+	return b.doclingOptionsWithReaderContext(ctx, func(dataRoot, managedRoot string) (installtx.State, error) {
+		return b.readInstalledSourceStateContext(ctx, dataRoot, managedRoot)
+	})
 }
 
 func (b *Bound) doclingOptionsWithReader(read sourceStateReader) docling.Options {
+	return b.doclingOptionsWithReaderContext(context.Background(), read)
+}
+
+func (b *Bound) doclingOptionsWithReaderContext(ctx context.Context, read sourceStateReader) docling.Options {
 	o := docling.Options{DataRoot: filepath.Join(b.home, "state"), AuthorityRegistryPath: b.options.AuthorityRegistryPath, AuthorityRegistrySHA256: b.options.AuthorityRegistrySHA256, CLIVersion: b.options.CLIVersion}
-	owning, err := b.sourceContextWithReader(read)
+	owning, err := b.sourceContextWithReaderContext(ctx, read)
 	if err != nil {
 		// A failed owning observation cannot acquire authority by being retried
 		// later inside this same runtime. A fresh request may construct a new one.
 		o.ResolveRequirement = func(context.Context) (docling.Requirement, error) { return docling.Requirement{}, err }
 		o.GuardSelection = func(func() error) error { return err }
 	} else if owning.required {
-		o.ResolveRequirement = func(context.Context) (docling.Requirement, error) { return b.currentDoclingRequirement() }
+		o.ResolveRequirement = func(ctx context.Context) (docling.Requirement, error) { return b.currentDoclingRequirementContext(ctx) }
 		o.GuardSelection = func(publish func() error) error { return b.guardQualifiedPublication(publish) }
 	} else {
 		// A retained schema4 activation already supplies an authenticated Current
 		// requirement, independently of later source enrollment. Raw/uninstalled
 		// calls without that owning state retain their original verifier.
 		if state := owning.state; state != nil && state.SchemaVersion == 4 && state.Source == nil {
-			o.ResolveRequirement = func(context.Context) (docling.Requirement, error) { return b.currentDoclingRequirement() }
+			o.ResolveRequirement = func(ctx context.Context) (docling.Requirement, error) { return b.currentDoclingRequirementContext(ctx) }
 			o.GuardSelection = func(publish func() error) error {
 				return installtx.GuardActivatedCurrent(b.options.ProductRoot, filepath.Join(b.options.UserHome, ".maestro-install"), state.Binding, func() error {
 					if err := b.validate(); err != nil {
@@ -56,15 +71,22 @@ func (b *Bound) doclingOptionsWithReader(read sourceStateReader) docling.Options
 	return o
 }
 func (b *Bound) currentDoclingRequirement() (docling.Requirement, error) {
-	if err := b.validateInstalledSource(); err != nil {
+	return b.currentDoclingRequirementContext(context.Background())
+}
+
+func (b *Bound) currentDoclingRequirementContext(ctx context.Context) (docling.Requirement, error) {
+	if err := ctx.Err(); err != nil {
 		return docling.Requirement{}, err
 	}
-	state, err := b.readInstalledSourceState(filepath.Join(b.options.UserHome, ".maestro-install"), b.options.ProductRoot)
+	if err := b.validateInstalledSourceContext(ctx); err != nil {
+		return docling.Requirement{}, err
+	}
+	state, err := b.readInstalledSourceStateContext(ctx, filepath.Join(b.options.UserHome, ".maestro-install"), b.options.ProductRoot)
 	if err != nil {
 		return docling.Requirement{}, err
 	}
 	if state.Source == nil {
-		state, err = b.validatedActivatedState(state.Binding)
+		state, err = b.validatedActivatedStateContext(ctx, state.Binding)
 		if err != nil {
 			return docling.Requirement{}, err
 		}
@@ -114,10 +136,10 @@ func (b *Bound) currentDoclingRequirement() (docling.Requirement, error) {
 	if err != nil || required.ServerVersion != state.Server.Version {
 		return docling.Requirement{}, errors.New("current converter source/server differs")
 	}
-	if err := b.fenceExperimentalState(state); err != nil {
+	if err := b.fenceExperimentalStateContext(ctx, state); err != nil {
 		return docling.Requirement{}, err
 	}
-	return required, nil
+	return required, ctx.Err()
 }
 
 // RuntimeUpdateReview is a local CLI review, never an MCP mutation. Paths and

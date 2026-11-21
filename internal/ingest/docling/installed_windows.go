@@ -12,6 +12,9 @@ import (
 )
 
 func verifyInstalled(ctx context.Context, root string, entries map[string]entry) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	held, err := winprivate.OpenPinnedTree(root)
 	if err != nil {
 		return err
@@ -19,6 +22,9 @@ func verifyInstalled(ctx context.Context, root string, entries map[string]entry)
 	defer held.Close()
 	directories := map[string]bool{".": true}
 	for name := range entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		for dir := path.Dir(name); dir != "."; dir = path.Dir(dir) {
 			directories[dir] = true
 		}
@@ -26,6 +32,9 @@ func verifyInstalled(ctx context.Context, root string, entries map[string]entry)
 	count := 0
 	var walk func(*winprivate.Directory, string) error
 	walk = func(directory *winprivate.Directory, prefix string) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		children, err := directory.ReadDir(maximumFiles)
 		if err != nil {
 			return err
@@ -65,7 +74,7 @@ func verifyInstalled(ctx context.Context, root string, entries map[string]entry)
 			if err != nil {
 				return err
 			}
-			body, _, err := readOpenedFile(file, int64(len(expected.body)))
+			body, _, err := readOpenedFileContext(ctx, file, int64(len(expected.body)))
 			closeErr := file.Close()
 			if err != nil {
 				return err
@@ -87,5 +96,5 @@ func verifyInstalled(ctx context.Context, root string, entries map[string]entry)
 	if count != len(entries) {
 		return errors.New("installed_file_missing")
 	}
-	return nil
+	return ctx.Err()
 }

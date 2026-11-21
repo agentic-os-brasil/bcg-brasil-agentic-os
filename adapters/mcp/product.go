@@ -59,23 +59,35 @@ type Bound struct {
 }
 
 func Open(o Options) (*Bound, error) {
+	return OpenContext(context.Background(), o)
+}
+
+// OpenContext retains admission while honoring the caller during expensive validation.
+func OpenContext(ctx context.Context, o Options) (*Bound, error) {
 	if o.OwnerReviewChannel != "" && o.OwnerReviewChannel != "local-browser" {
 		return nil, errors.New("owner_review_channel_unavailable")
 	}
 	b := &Bound{options: o}
-	if err := b.validate(); err != nil {
+	if err := b.validateContext(ctx); err != nil {
 		return nil, err
 	}
 	return b, nil
 }
 func (b *Bound) validate() error {
-	if err := b.validateExperimentalSeed(); err != nil {
+	return b.validateContext(context.Background())
+}
+
+func (b *Bound) validateContext(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := b.validateExperimentalSeedContext(ctx); err != nil {
 		return err
 	}
 	if _, err := processidentity.Current(); err != nil {
 		return err
 	}
-	if err := b.validateInstalledSource(); err != nil {
+	if err := b.validateInstalledSourceContext(ctx); err != nil {
 		return err
 	}
 	h, err := resolveBinding(b.options)
@@ -94,7 +106,7 @@ func (b *Bound) validate() error {
 	if b.home != "" && (b.home != h.Home || b.workspaceID != w.WorkspaceID) {
 		return errors.New("binding_changed")
 	}
-	if err := b.validateInstalledOwnerReview(h.Home, w.WorkspaceID); err != nil {
+	if err := b.validateInstalledOwnerReviewContext(ctx, h.Home, w.WorkspaceID); err != nil {
 		return err
 	}
 	s, err := execution.OpenConfinedStore(root)
@@ -104,7 +116,7 @@ func (b *Bound) validate() error {
 	if b.home == "" {
 		b.home, b.workspaceID, b.store = h.Home, w.WorkspaceID, s
 	}
-	return nil
+	return ctx.Err()
 }
 func strSchema(max int) map[string]any {
 	return map[string]any{"type": "string", "minLength": 1, "maxLength": max}
@@ -220,7 +232,7 @@ func (b *Bound) Server() *mcp.Server {
 		return func(ctx context.Context, method string, request mcp.Request) (mcp.Result, error) {
 			switch method {
 			case "tools/list", "resources/list", "prompts/list":
-				if err := b.validate(); err != nil {
+				if err := b.validateContext(ctx); err != nil {
 					return nil, errors.New("product_restart_or_source_recovery_required")
 				}
 			}
@@ -372,7 +384,7 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		if err := resolved.Validate(raw); err != nil {
 			return result(nil, errors.New("invalid_input")), nil
 		}
-		if err := b.validate(); err != nil {
+		if err := b.validateContext(ctx); err != nil {
 			return result(nil, err), nil
 		}
 		var in input

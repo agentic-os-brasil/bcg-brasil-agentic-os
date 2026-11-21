@@ -25,14 +25,26 @@ type verifiedPack struct {
 	target           targetInputs
 }
 
-func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
+func (r *Runtime) verify(ctx context.Context) (verified verifiedPack, reason string) {
+	defer func() {
+		if ctx.Err() != nil {
+			verified, reason = verifiedPack{}, "conversion_cancelled"
+		}
+	}()
 	var empty verifiedPack
+	if ctx.Err() != nil {
+		return empty, "conversion_cancelled"
+	}
 	o := r.options
 	if len(o.AuthorityRegistrySHA256) != 64 || o.AuthorityRegistryPath == "" {
 		return empty, "authority_unavailable"
 	}
-	registryBytes, _, err := readFile(o.AuthorityRegistryPath, 1<<20)
-	if err != nil || digest(registryBytes) != o.AuthorityRegistrySHA256 {
+	registryBytes, _, err := readFileContext(ctx, o.AuthorityRegistryPath, 1<<20)
+	if err != nil {
+		return empty, "authority_unavailable"
+	}
+	registrySHA, err := digestContext(ctx, registryBytes)
+	if err != nil || registrySHA != o.AuthorityRegistrySHA256 {
 		return empty, "authority_unavailable"
 	}
 	registry, err := releaseverify.ParseAuthorityRegistry(bytes.NewReader(registryBytes), time.Now)
@@ -60,11 +72,11 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 	if err != nil {
 		return empty, "pack_selection_unavailable"
 	}
-	manifestBody, _, err := readFile(filepath.Join(base, releaseverify.ManifestName), 1<<20)
+	manifestBody, _, err := readFileContext(ctx, filepath.Join(base, releaseverify.ManifestName), 1<<20)
 	if err != nil {
 		return empty, "pack_unavailable"
 	}
-	signature, _, err := readFile(filepath.Join(base, releaseverify.ManifestSignatureName), ed25519.SignatureSize)
+	signature, _, err := readFileContext(ctx, filepath.Join(base, releaseverify.ManifestSignatureName), ed25519.SignatureSize)
 	if err != nil {
 		return empty, "pack_unavailable"
 	}
@@ -72,7 +84,11 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 	if err != nil {
 		return empty, "pack_untrusted"
 	}
-	if o.ResolveRequirement != nil && digest(manifestBody) != required.ManifestSHA256 {
+	manifestSHA, err := digestContext(ctx, manifestBody)
+	if err != nil {
+		return empty, "pack_untrusted"
+	}
+	if o.ResolveRequirement != nil && manifestSHA != required.ManifestSHA256 {
 		return empty, "current_pack_pending"
 	}
 	compatibility, err := releasecontract.ParseVersionRange(manifest.CompatibleExecutable())
@@ -99,18 +115,22 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 	if selected == nil || selected.Size > maximumArchiveBytes {
 		return empty, "pack_unavailable"
 	}
-	body, _, err := readFile(filepath.Join(base, selected.Name), selected.Size)
-	if err != nil || int64(len(body)) != selected.Size || digest(body) != selected.SHA256 {
+	body, _, err := readFileContext(ctx, filepath.Join(base, selected.Name), selected.Size)
+	if err != nil || int64(len(body)) != selected.Size {
 		return empty, "pack_untrusted"
 	}
-	signature, _, err = readFile(filepath.Join(base, selected.SignatureRef), ed25519.SignatureSize)
+	archiveSHA, err := digestContext(ctx, body)
+	if err != nil || archiveSHA != selected.SHA256 {
+		return empty, "pack_untrusted"
+	}
+	signature, _, err = readFileContext(ctx, filepath.Join(base, selected.SignatureRef), ed25519.SignatureSize)
 	if err != nil || !ed25519.Verify(key, body, signature) {
 		return empty, "pack_untrusted"
 	}
 	if ctx.Err() != nil {
 		return empty, "conversion_cancelled"
 	}
-	entries, err := archiveEntries(body)
+	entries, err := archiveEntriesContext(ctx, body)
 	if err != nil {
 		return empty, "pack_untrusted"
 	}
@@ -145,8 +165,15 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 	}
 	seen := map[string]bool{}
 	for _, file := range pack.Files {
+		if ctx.Err() != nil {
+			return empty, "conversion_cancelled"
+		}
 		e, exists := entries[file.Path]
-		if !exists || seen[file.Path] || file.Path == "pack.json" || file.Size != int64(len(e.body)) || file.Mode != e.mode || file.SHA256 != digest(e.body) {
+		if !exists || seen[file.Path] || file.Path == "pack.json" || file.Size != int64(len(e.body)) || file.Mode != e.mode {
+			return empty, "pack_untrusted"
+		}
+		fileSHA, err := digestContext(ctx, e.body)
+		if err != nil || file.SHA256 != fileSHA {
 			return empty, "pack_untrusted"
 		}
 		seen[file.Path] = true
@@ -167,9 +194,16 @@ func (r *Runtime) verify(ctx context.Context) (verifiedPack, string) {
 			return empty, "current_release_changed"
 		}
 	}
-	return verifiedPack{entries: entries, sha: selected.SHA256, manifestSHA: digest(manifestBody), target: target}, ""
+	return verifiedPack{entries: entries, sha: selected.SHA256, manifestSHA: manifestSHA, target: target}, ""
 }
 func archiveEntries(body []byte) (map[string]entry, error) {
+	return archiveEntriesContext(context.Background(), body)
+}
+
+func archiveEntriesContext(ctx context.Context, body []byte) (map[string]entry, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	compressed := bytes.NewReader(body)
 	gz, err := gzip.NewReader(compressed)
 	if err != nil {
@@ -178,11 +212,14 @@ func archiveEntries(body []byte) (map[string]entry, error) {
 	defer gz.Close()
 	gz.Multistream(false)
 	limited := &io.LimitedReader{R: gz, N: maximumExpandedBytes + 32<<20}
-	tr := tar.NewReader(limited)
+	tr := tar.NewReader(contextReader{ctx, limited})
 	entries := map[string]entry{}
 	aliases := map[string]bool{}
 	var total int64
 	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
 			break
@@ -204,11 +241,17 @@ func archiveEntries(body []byte) (map[string]entry, error) {
 		}
 		data, err := io.ReadAll(io.LimitReader(tr, h.Size+1))
 		if err != nil || int64(len(data)) != h.Size {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			return nil, errors.New("archive_member_size")
 		}
 		entries[h.Name] = entry{data, h.Mode}
 	}
-	tail, err := io.ReadAll(io.LimitReader(gz, 4097))
+	tail, err := io.ReadAll(io.LimitReader(contextReader{ctx, gz}, 4097))
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	if err != nil || len(tail) > 4096 || len(bytes.Trim(tail, "\x00")) != 0 || compressed.Len() != 0 || limited.N <= 0 {
 		return nil, errors.New("archive_trailing_data")
 	}
