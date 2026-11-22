@@ -213,8 +213,9 @@ Low child. The selected read subset is READ_CONTROL, QUERY_VALUE and
 ENUMERATE_SUB_KEYS; the broad subset adds SET_VALUE, CREATE_SUB_KEY, DELETE and
 WRITE_DAC. Capability grants include neither WRITE_OWNER nor CREATE_LINK.
 
-Each actual confined child independently derives the fixed path from its existing
-TMP relationship and requests six fresh handles, one right at a time:
+Each actual confined child uses the working directory explicitly supplied by the
+launcher, requires its absolute clean path and exact fixture marker, and requests
+six fresh handles, one right at a time:
 QUERY_VALUE, ENUMERATE_SUB_KEYS, SET_VALUE, CREATE_SUB_KEY, DELETE and WRITE_DAC.
 Only a successful QUERY_VALUE open reads the fixed artificial 32-byte binary
 sentinel; the child compares it in memory. The child performs no registry

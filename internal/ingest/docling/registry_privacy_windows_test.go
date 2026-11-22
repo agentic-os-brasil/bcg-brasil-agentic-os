@@ -158,14 +158,23 @@ func r17RequireMarker(work string) error {
 	return nil
 }
 
+// The original launcher sets lpCurrentDirectory to its held work root.
+// AppContainer startup can redirect TMP, so it cannot identify that root.
+func r17ChildWork() (string, bool, error) {
+	work, err := os.Getwd()
+	if err != nil {
+		return "", false, r17Check("child_work_read", err)
+	}
+	if !filepath.IsAbs(work) || filepath.Clean(work) != work {
+		return "", false, &r17Failure{"child_work_shape", r17Invalid}
+	}
+	selected, err := r17ReadMarker(work)
+	return work, selected, err
+}
+
 func r17ChildAssessmentSelected(t *testing.T) bool {
 	t.Helper()
-	tmp := os.Getenv("TMP")
-	if !filepath.IsAbs(tmp) || filepath.Clean(tmp) != tmp || filepath.Base(tmp) != "tmp" {
-		r17Diagnostic(t, &r17Failure{"child_marker_tmp_shape", r17Invalid})
-		t.FailNow()
-	}
-	selected, err := r17ReadMarker(filepath.Dir(tmp))
+	_, selected, err := r17ChildWork()
 	if err != nil {
 		r17Diagnostic(t, err)
 		t.FailNow()
@@ -649,12 +658,15 @@ func r17ObserveChild(t *testing.T) {
 		r17Diagnostic(t, err)
 		t.FailNow()
 	}
-	tmp := os.Getenv("TMP")
-	if !filepath.IsAbs(tmp) || filepath.Clean(tmp) != tmp || filepath.Base(tmp) != "tmp" {
-		r17Diagnostic(t, &r17Failure{"child_tmp_shape", r17Invalid})
+	work, selected, err := r17ChildWork()
+	if err == nil && !selected {
+		err = &r17Failure{"marker_missing", r17Invalid}
+	}
+	if err != nil {
+		r17Diagnostic(t, err)
 		t.FailNow()
 	}
-	hash, err := r17WorkHash(filepath.Dir(tmp))
+	hash, err := r17WorkHash(work)
 	if err != nil {
 		r17Diagnostic(t, err)
 		t.FailNow()
@@ -749,6 +761,34 @@ func r17ParseChild(body string) ([]r17Row, error) {
 // They never stand in for the actual two confined-child observations.
 func r17AssertProtocol(t *testing.T) {
 	t.Helper()
+	for _, name := range []string{"absent", "redirected_tmp", "foreign_tmp_marker", "malformed"} {
+		t.Run("child_work_"+name, func(t *testing.T) {
+			work := t.TempDir()
+			t.Chdir(work)
+			redirected := filepath.Join(work, "data", "Packages", "synthetic", "AC", "Temp")
+			t.Setenv("TMP", redirected)
+			markerRoot := work
+			if name == "foreign_tmp_marker" {
+				markerRoot = filepath.Dir(redirected)
+				if err := os.MkdirAll(markerRoot, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if name != "absent" {
+				body := r17MarkerBody()
+				if name == "malformed" {
+					body = []byte("foreign marker")
+				}
+				if err := os.WriteFile(filepath.Join(markerRoot, r17MarkerName), body, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			observed, selected, err := r17ChildWork()
+			if observed != work || selected != (name == "redirected_tmp") || (err != nil) != (name == "malformed") {
+				t.Fatal("child work locator lost exact launcher-root marker selection")
+			}
+		})
+	}
 	metadata := r17Metadata{subkeys: 1, maxSubkey: 2, values: 3, maxValueName: 4, maxValue: 5, security: 6, written: windows.Filetime{LowDateTime: 7, HighDateTime: 8}}
 	for _, test := range []struct {
 		stage string
