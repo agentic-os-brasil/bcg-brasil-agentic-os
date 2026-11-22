@@ -114,11 +114,18 @@ function Invoke-PilotSteps([string]$Client) {`+body+`Invoke-PilotSteps 'desktop'
 }
 
 // Exercise the exact original prompt-consumer statements, not a copied decoder.
-// Alternate defaults on PowerShell 7 expose the BOM-less ANSI-reader failure;
-// this is a decoding contract, not native Windows PowerShell 5.1 qualification.
+// Windows requires Desktop 5.1; alternate defaults also expose the BOM-less
+// ANSI-reader failure on PowerShell 7. Synthetic sinks do not qualify clients.
 func TestParticipantPowerShellPromptConsumersPreserveUTF8(t *testing.T) {
-	powerShell, err := powerShellTool()
+	shell := "pwsh"
+	if runtime.GOOS == "windows" {
+		shell = "powershell.exe"
+	}
+	powerShell, err := exec.LookPath(shell)
 	if err != nil {
+		if runtime.GOOS == "windows" {
+			t.Fatalf("shipped Windows PowerShell 5.1 is required: %v", err)
+		}
 		t.Skip("PowerShell runtime unavailable; native Windows remains unqualified")
 	}
 	dir := developerFixture(t)
@@ -165,6 +172,7 @@ func TestParticipantPowerShellPromptConsumersPreserveUTF8(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, powerShell, "-NoLogo", "-NoProfile", "-Command", `Set-StrictMode -Version Latest; $ErrorActionPreference='Stop'
+if([Environment]::OSVersion.Platform -eq 'Win32NT' -and ($PSVersionTable.PSEdition -cne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1)){throw 'Shipped prompt readers require Windows PowerShell Desktop 5.1'}
 $Run=$env:MAESTRO_UTF8_FIXTURE
 $Utf8=New-Object Text.UTF8Encoding($false)
 $Checked=Get-Content -LiteralPath (Join-Path $Run 'report.json') -Raw -Encoding UTF8|ConvertFrom-Json
@@ -190,8 +198,17 @@ foreach($client in @('code','desktop')){
   $control=Get-Content -LiteralPath $path -Raw
   if($PSVersionTable.PSVersion.Major -ge 6 -and $control -ceq $Checked.code_steps[0].prompt){throw 'Alternate-default control failed to expose ANSI corruption'}
 }
-Write-Host ('PowerShell '+$PSVersionTable.PSVersion+'; decoding default '+$defaultEncoding+'; client/clipboard sinks only; no native qualification')`)
-	cmd.Env = append(os.Environ(), "MAESTRO_UTF8_FIXTURE="+dir)
+Write-Host ('Prompt reader shell: '+$PSVersionTable.PSEdition+' '+$PSVersionTable.PSVersion+'; decoding default '+$defaultEncoding+'; synthetic client/clipboard sinks only; no client qualification')`)
+	cmd.Env = make([]string, 0)
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		// Match Maestro.cmd: Desktop 5.1 selects its own modules even when
+		// hosted by the workflow's PowerShell 7 process.
+		if runtime.GOOS != "windows" || !strings.EqualFold(name, "PSModulePath") {
+			cmd.Env = append(cmd.Env, entry)
+		}
+	}
+	cmd.Env = append(cmd.Env, "MAESTRO_UTF8_FIXTURE="+dir)
 	if dev := os.Getenv("GOCACHE"); strings.Contains(dev, "/Developer/") {
 		base := filepath.Join(strings.SplitN(dev, "/Developer/", 2)[0], "Developer", "ToolData", "powershell-maestro")
 		cmd.Env = append(cmd.Env, "XDG_CACHE_HOME="+filepath.Join(base, "cache"), "XDG_CONFIG_HOME="+filepath.Join(base, "config"), "XDG_DATA_HOME="+filepath.Join(base, "data"))
@@ -206,6 +223,7 @@ Write-Host ('PowerShell '+$PSVersionTable.PSVersion+'; decoding default '+$defau
 		if err != nil || string(body) != text {
 			t.Fatalf("%s original consumer changed UTF-8 bytes: got %q, want %q, error %v", client, body, text, err)
 		}
+		t.Logf("%s original consumer preserved all %d UTF-8 bytes", client, len(body))
 	}
 }
 
