@@ -46,7 +46,10 @@ type ProductAssessmentProvenance struct {
 	ExternalSHA256 string `json:"external_sha256"`
 }
 
-type ProposalStore struct{ Root string }
+type ProposalStore struct {
+	Root  string
+	files *productPrivateFiles
+}
 
 func (store ProposalStore) ValidateReceipt(receipt maintenance.Receipt) error {
 	if receipt.State != maintenance.ReceiptProposalEmitted || receipt.ProposalDigest == "" || receipt.ProposalArtifactID == "" {

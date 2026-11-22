@@ -112,6 +112,20 @@ func (h *HeldDirectory) EnsureDirectory(relative string) error {
 	done()
 	return nil
 }
+
+// HoldDirectory transfers an existing relative child's retained namespace to
+// the caller. The child and its admitted ancestry remain held until Close.
+func (h *HeldDirectory) HoldDirectory(relative string) (*HeldDirectory, error) {
+	parts, err := heldParts(relative)
+	if err != nil || len(parts) == 0 {
+		return nil, errors.New("held child directory required")
+	}
+	d, _, err := h.at(relative, false)
+	if err != nil {
+		return nil, err
+	}
+	return &HeldDirectory{directory: d, path: filepath.Join(h.path, relative)}, nil
+}
 func (h *HeldDirectory) Mkdir(relative string) error {
 	d, n, done, e := h.parent(relative, false)
 	if e != nil {
@@ -216,6 +230,20 @@ func (h *HeldDirectory) ReadPrivateFile(relative string, maximum int64) ([]byte,
 }
 
 func (h *HeldDirectory) UpdatePrivateFile(relative string, maximum int64, update func([]byte) ([]byte, error)) error {
+	return h.updatePrivateFile(relative, maximum, nil, update)
+}
+
+// UpdatePrivateFileGuarded places the final revision check and publication
+// inside the caller's live authority, after acquiring the existing file lock.
+// Metadata writers still cooperate through that lock; this is not an OS CAS.
+func (h *HeldDirectory) UpdatePrivateFileGuarded(relative string, maximum int64, guard func(func() error) error, update func([]byte) ([]byte, error)) error {
+	if guard == nil {
+		return errors.New("private publication guard required")
+	}
+	return h.updatePrivateFile(relative, maximum, guard, update)
+}
+
+func (h *HeldDirectory) updatePrivateFile(relative string, maximum int64, guard func(func() error) error, update func([]byte) ([]byte, error)) error {
 	d, n, done, e := h.parent(relative, true)
 	if e != nil {
 		return e
@@ -224,7 +252,7 @@ func (h *HeldDirectory) UpdatePrivateFile(relative string, maximum int64, update
 	if e = heldDirectoryPrivate(d); e != nil {
 		return e
 	}
-	return updatePrivateFileInDirectory(d, n, maximum, nil, update, false)
+	return updatePrivateFileInDirectory(d, n, maximum, guard, update, false)
 }
 func (h *HeldDirectory) RemoveExact(relative string, maximum int64, expected []byte, guard func(func() error) error) error {
 	if len(expected) == 0 || guard == nil {

@@ -15,7 +15,7 @@ status: stable
 x-maestro-profile-version: "1"
 x-maestro-stable-id: managed/wiki-okf
 x-maestro-scope: managed
-x-maestro-source-fingerprint: f413ccfbcde07f07c5e25e4ff6031ff7966f927f3962f559f5190d6e265c2bcf
+x-maestro-source-fingerprint: 4236015a694b0a4866d2dd3555a31991c9a9369abb69e134e7437e3ad901e599
 x-maestro-freshness: fresh
 x-maestro-status: active
 x-maestro-generator-version: maestro-managed-wiki/0.2
