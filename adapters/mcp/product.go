@@ -15,6 +15,7 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
@@ -87,7 +88,7 @@ func (b *Bound) validateContext(ctx context.Context) error {
 	if _, err := processidentity.Current(); err != nil {
 		return err
 	}
-	if err := b.validateInstalledSourceContext(ctx); err != nil {
+	if err := b.validateInstalledSourceAfterExperimentalCheckContext(ctx, installtx.ReadSourceState); err != nil {
 		return err
 	}
 	h, err := resolveBinding(b.options)

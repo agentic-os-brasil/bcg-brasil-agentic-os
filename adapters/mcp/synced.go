@@ -98,20 +98,60 @@ func (b *Bound) validateInstalledSource() error {
 }
 
 func (b *Bound) validateInstalledSourceContext(ctx context.Context) error {
+	return b.validateInstalledSourceWithContext(ctx, b.sourceRequiredContext, b.validatedQualifiedStateContext)
+}
+
+// validateContext has just performed full experimental installed admission.
+// Share that entry observation only with directly nested read-only work in this
+// call. The full qualified validator and its final experimental fence stay fresh;
+// no observation escapes into another validation, callback or process.
+func (b *Bound) validateInstalledSourceAfterExperimentalCheckContext(ctx context.Context, read sourceStateReader) error {
+	required := func(ctx context.Context) (bool, error) {
+		owning, err := b.sourceContextWithReaderContext(ctx, func(dataRoot, managedRoot string) (installtx.State, error) {
+			state, err := read(dataRoot, managedRoot)
+			if err != nil {
+				return state, err
+			}
+			if err := b.checkExperimentalStateRoleContext(ctx, state); err != nil {
+				return installtx.State{}, err
+			}
+			return state, ctx.Err()
+		})
+		if err == nil && !owning.required {
+			// Pre-enrollment has no qualified-work fence below. Reauthenticate
+			// the complete experimental binding after its classification read.
+			err = b.validateExperimentalSeedContext(ctx)
+		}
+		return owning.required, err
+	}
+	validate := func(ctx context.Context, expected installtx.ReleaseBinding) (installtx.State, error) {
+		state, err := installtx.ValidateQualifiedLaunchContext(ctx, b.options.ProductRoot, filepath.Join(b.options.UserHome, ".maestro-install"), expected, time.Now())
+		if err != nil {
+			return state, err
+		}
+		if err := b.fenceExperimentalStateContext(ctx, state); err != nil {
+			return installtx.State{}, err
+		}
+		return state, ctx.Err()
+	}
+	return b.validateInstalledSourceWithContext(ctx, required, validate)
+}
+
+func (b *Bound) validateInstalledSourceWithContext(ctx context.Context, required func(context.Context) (bool, error), validate func(context.Context, installtx.ReleaseBinding) (installtx.State, error)) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	required, err := b.sourceRequiredContext(ctx)
+	needed, err := required(ctx)
 	if err != nil {
 		if cancelled := ctx.Err(); cancelled != nil {
 			return cancelled
 		}
 		return ErrSourceRecoveryRequired
 	}
-	if !required {
+	if !needed {
 		return nil
 	}
-	state, err := b.validatedQualifiedStateContext(ctx, b.installedExpectation())
+	state, err := validate(ctx, b.installedExpectation())
 	if err != nil {
 		if cancelled := ctx.Err(); cancelled != nil {
 			return cancelled
