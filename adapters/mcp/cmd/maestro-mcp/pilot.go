@@ -25,6 +25,13 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// One selected prompt is delivered per human turn; this is not persisted run state.
+type pilotStep struct {
+	ID     string `json:"id"`
+	Title  string `json:"title"`
+	Prompt string `json:"prompt"`
+}
+
 type pilotCheck struct {
 	Name       string `json:"name"`
 	Status     string `json:"status"`
@@ -43,6 +50,8 @@ type pilotReport struct {
 	Target             packaging.Target                     `json:"target"`
 	ClientTarget       string                               `json:"client_target,omitempty"`
 	Markdown           string                               `json:"markdown"`
+	CodeSteps          []pilotStep                          `json:"code_steps,omitempty"`
+	DesktopSteps       []pilotStep                          `json:"desktop_steps,omitempty"`
 	CodePrompt         string                               `json:"code_prompt"`
 	CodeReadbackPrompt string                               `json:"code_readback_prompt"`
 	CodeReadyPrompt    string                               `json:"code_ready_prompt"`
@@ -460,36 +469,58 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 		}
 	}
 	if r.Status != "blocked" && pilotWorkspaceID.MatchString(r.WorkspaceID) {
-		r.CodePrompt, r.DesktopPrompt, r.CodeReadbackPrompt = pilotPrompts(r.WorkspaceID, r.ClientTarget == "desktop")
+		steps := pilotSteps(r.WorkspaceID)
+		bind := func(source []pilotStep, prefix string) []pilotStep {
+			result := append([]pilotStep(nil), source...)
+			for i := range result {
+				result[i].Prompt = prefix + result[i].Prompt
+			}
+			return result
+		}
+		if r.ClientTarget != "desktop" {
+			r.CodeSteps = bind(steps, "Use somente o servidor MCP plugin:maestro-product:maestro deste ensaio. ")
+		}
+		desktopSteps := steps
+		if r.ClientTarget != "desktop" {
+			desktopSteps = []pilotStep{steps[0], steps[len(steps)-2], steps[len(steps)-1]}
+		}
+		prefix := "Use somente o Maestro deste ensaio. "
+		if r.DesktopExtension != "" {
+			prefix = fmt.Sprintf("Use somente a extensão %q deste ensaio; identifique seu servidor MCP sem escolher conectores semelhantes. ", r.DesktopExtension)
+		}
+		r.DesktopSteps = bind(desktopSteps, prefix)
+
 		if r.ClientTarget != "desktop" {
 			r.CodeReadyPrompt = fmt.Sprintf("Use somente o servidor MCP plugin:maestro-product:maestro, declarado pelo plugin Maestro deste ensaio. Chame maestro_context uma única vez, sem parâmetros. Confirme workspace_id exatamente %s e state ready. Mostre o workspace_id e o estado retornados e encerre após essa leitura. Se esse servidor estiver ausente, ambíguo ou recusado, se houver erro ou se os valores divergirem, pare e explique. Esta conferência autoriza somente essa leitura de contexto.", r.WorkspaceID)
 		}
 		if r.DesktopExtension != "" {
 			r.DesktopReadyPrompt = fmt.Sprintf("Use somente a extensão %q deste ensaio, vinculada às pastas aprovadas na preparação. Identifique com segurança o servidor MCP dessa extensão; não escolha outra extensão ou conector de nome semelhante. Chame maestro_context uma única vez, sem parâmetros. Confirme workspace_id exatamente %s e state ready. Mostre somente o workspace_id e o estado de saúde da conexão retornados e encerre após essa leitura. O estado dos trabalhos não foi consultado. Se essa extensão estiver ausente, ambígua ou recusada, se não conseguir identificar seu conector, se houver erro ou se os valores divergirem, pare e explique. Esta conferência autoriza somente essa leitura de contexto.", r.DesktopExtension, r.WorkspaceID)
-			r.DesktopPrompt = fmt.Sprintf("Use a extensão %q deste ensaio, vinculada às pastas aprovadas na preparação. ", r.DesktopExtension) + r.DesktopPrompt
 		}
+		conversion := ""
 		if r.Runtime != nil {
-			documents := fmt.Sprintf(" Depois da jornada acima, teste também o conversor local deste ensaio. Reconfirme o mesmo workspace com maestro_context e consulte content.status. Continue somente com state ready e pack_sha256 exatamente %s; divergência ou indisponibilidade encerra esta parte sem instalar ou reparar nada. Converta apenas o arquivo sintético maestro-pilot.docx, já preparado no workspace, por maestro_apply content.convert. Leia o artifact_ref realmente retornado usando content.read nos formatos markdown e document, em páginas de até 4096 bytes e seguindo a paginação real. Verifique o marcador MAESTRO_DOCLING_OFFLINE_20261101 e a tabela sintética com alpha/7. Mostre a rota, o artefato e o resultado observado. Essa parte autoriza conversão e leitura de artefatos derivados; não altera o estado do trabalho, não captura memória, não salva conhecimento nem usa conversor externo. Registre o que faltou em vez de inferir sucesso da presença do pacote.", r.Runtime.PackSHA256)
-			if r.CodePrompt != "" {
-				r.CodePrompt += documents
-			}
-			r.DesktopPrompt += documents
+			conversion = fmt.Sprintf("Consulte content.status; continue somente com state ready e pack_sha256 exatamente %s. Converta somente maestro-pilot.docx por maestro_apply content.convert uma única vez. Leia o artifact_ref realmente retornado com content.read nos formatos markdown e document, max_bytes 4096, seguindo next_offset enquanto has_more. Exija paginação completa, marcador MAESTRO_DOCLING_OFFLINE_20261101 e tabela alpha/7. Mostre rota, artefato e resultado; disponibilidade do pacote não comprova conversão.", r.Runtime.PackSHA256)
 		}
 		if r.Conversion != nil {
 			if r.Conversion.State == "ready_for_participant_test" {
-				documents := installedConversionJourney(*r.Conversion)
-				if r.CodePrompt != "" {
-					r.CodePrompt += documents
-				}
-				r.DesktopPrompt += documents
+				conversion = installedConversionJourney(*r.Conversion)
 			} else {
-				pending := " Conversão de documento: não testada, pois o runtime atual está pendente ou indisponível. Não execute content.convert, não instale ou repare componentes e não use outro conversor; registre essa parte como não testada. As demais etapas acima continuam separadas dessa pendência."
-				if r.CodePrompt != "" {
-					r.CodePrompt += pending
-				}
-				r.DesktopPrompt += pending
+				conversion = "Conversão de documento: não testada, pois o runtime atual está pendente ou indisponível. Registre a pendência e encerre sem preparar documento ou executar conversão."
 			}
 		}
+		if conversion != "" {
+			step := pilotStep{ID: "conversion", Title: "Conferir um documento", Prompt: pilotStepScope(r.WorkspaceID) + conversion + " Encerre este turno após o resultado desta etapa."}
+			if r.ClientTarget != "desktop" {
+				r.CodeSteps = append(r.CodeSteps, bind([]pilotStep{step}, "Use somente o servidor MCP plugin:maestro-product:maestro deste ensaio. ")[0])
+			}
+			r.DesktopSteps = append(r.DesktopSteps, bind([]pilotStep{step}, prefix)[0])
+		}
+		// Preserve the existing JSON string fields, with a safe read-only entry.
+		if len(r.CodeSteps) != 0 {
+			r.CodePrompt = r.CodeSteps[0].Prompt
+			r.CodeReadbackPrompt = r.CodeSteps[len(steps)-1].Prompt
+		}
+		r.DesktopPrompt = r.DesktopSteps[0].Prompt
+
 	}
 	var md strings.Builder
 	fmt.Fprintf(&md, "# Maestro MCP — diagnóstico do ensaio\n\nStatus: **%s**.\n\n", r.Status)
@@ -523,7 +554,7 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 		md.WriteString("\nUse a conferência de conexão Desktop para uma leitura do workspace e da saúde da conexão, ou o ensaio Desktop para testar métodos, página, memória e continuidade com confirmação normal do cliente. Para um reinício frio, feche somente a conexão Desktop deste ensaio pelo fluxo normal, preservando outros trabalhos. Conversa nova não comprova reinício do servidor; registre o reinício informado separadamente. Um diagnóstico bloqueado deve ser enviado ao time antes de abrir o cliente.\n")
 	} else {
 		md.WriteString("\nEste diagnóstico faz apenas leituras locais. Integridade do MCPB e conexão SDK com o pacote Code não comprovam carregamento, login, permissões, hooks ou retomada nos clientes nativos. Os prompts Code e Desktop guiam esse teste com dados sintéticos e confirmação normal do cliente.\n")
-		md.WriteString("\nPara uma conferência rápida somente leitura, use 3 — Conferir conexão Code ou 4 — Conferir conexão Desktop. Esses atalhos mostram o workspace e a saúde da conexão, sem consultar trabalhos. Para o ensaio completo, use 1 — Ensaio completo no Code e depois 2 — Retomar no Desktop. Depois, use 6 — Conferir persistência no Code (somente leitura), sem copiar IDs ou outro texto. Para um reinício frio, feche antes somente as sessões Code e conexões Desktop deste ensaio pelo fluxo normal, preservando outros trabalhos. Abrir uma conversa nova não comprova reinício do servidor; registre o reinício informado pelo participante separadamente. Um diagnóstico bloqueado deve ser enviado ao time antes de abrir clientes.\n")
+		md.WriteString("\nPara uma conferência rápida somente leitura, use 3 — Conferir conexão Code ou 4 — Conferir conexão Desktop. Esses atalhos mostram o workspace e a saúde da conexão, sem consultar trabalhos. Para o ensaio completo, use 1 — Testar ou continuar no Code e depois 2 — Continuar no Desktop. Cada escolha abre apenas a etapa atual; avance conscientemente após conferir o resultado no cliente. Uma interrupção volta à conferência somente leitura, sem repetição automática. Depois, use 6 — Conferir persistência no Code (somente leitura), sem copiar IDs ou outro texto. Para um reinício frio, feche antes somente as sessões Code e conexões Desktop deste ensaio pelo fluxo normal, preservando outros trabalhos. Abrir uma conversa nova não comprova reinício do servidor; registre o reinício informado pelo participante separadamente. Um diagnóstico bloqueado deve ser enviado ao time antes de abrir clientes.\n")
 	}
 	r.Markdown = md.String()
 	if err := json.NewEncoder(output).Encode(r); err != nil {
@@ -535,27 +566,38 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 	return nil
 }
 
-func pilotPrompts(id string, desktopOnly bool) (string, string, string) {
+func pilotStepScope(id string) string {
+	return fmt.Sprintf("ETAPA ATUAL SOMENTE. Chame maestro_context e confirme workspace_id exatamente %s e state ready. Inspecione os schemas atuais. Use apenas dados sintéticos e este conector. Ambiguidade, erro, divergência, timeout, confirmation_unavailable ou resultado incerto encerram TODO este turno: informe pendente, preserve a evidência anterior e volte à conferência somente leitura em outro turno. Faça somente a operação desta etapa, uma vez, com a revisão humana normal; sem repetição automática ou aprovação inventada. Ao terminar, mostre passou, falhou ou pendente e encerre. ", id)
+}
+
+func pilotSteps(id string) []pilotStep {
 	marker := "MAESTRO_PILOT_" + id
 	page := "knowledge/maestro-pilot-" + id + ".md"
-	selection := fmt.Sprintf("Use execution.list em páginas de até 32 (máximo 128 itens), seguindo next_offset enquanto has_more for true; paginação incompleta encerra o teste. execution.list retorna somente metadados, sem summary ou next_step. Chame execution.next somente com item_id realmente retornado pela lista; faça isso para cada item_id listado, até o mesmo limite de 128, antes de escolher um trabalho. Se a lista estiver vazia, pule execution.next e trate como nenhum trabalho identificado. Somente após ler todas as projeções, identifique os trabalhos cujo summary ou next_step seja exatamente o marcador literal %q, usando somente os campos realmente retornados por execution.next. Não adivinhe IDs nem use a conversa anterior para selecionar. ", marker)
-	common := fmt.Sprintf("Use somente o Maestro deste ensaio. Primeiro chame maestro_context e confirme workspace_id exatamente %s e state ready. Se houver divergência, conector ambíguo, erro, limite de paginação ou estado inesperado, pare e explique, sem alterar outros casos. Não use outros conectores, shell, arquivos privados ou dados reais. Inspecione os schemas atuais de maestro_query/maestro_apply. ", id) + selection + "Não copie IDs ou revisões manualmente: use os retornados pelas ferramentas. "
-	journey := fmt.Sprintf("Quero testar explicitamente os métodos maestro-onboarding, maestro-operator e pocock-domain-modeling. Descubra cada método com methods.plan com method_id igual ao ID exato de um dos três métodos citados, uma chamada por método. Leia suas instruções via methods.read com resource_uri igual ao instruction_uri retornado pelo plano, em páginas de até 4096 bytes, seguindo next_offset até terminar. Métodos não concedem autorização extra. Conduza o onboarding sintético, uma pergunta por vez; proponha somente dados fictícios, preserve um perfil já existente e não declare conclusão sem a revisão e confirmação humanas exigidas. Essa consulta MCP não comprova invocação nativa de Skill pelo cliente; registre esse alcance sem inferir execução de hooks ou agentes. Demonstre pocock-domain-modeling com três entidades de um projeto fictício, incluindo suas definições e relações. Pelo método maestro-operator, consulte brain.templates e prepare a página sintética %q com título Ensaio Maestro, uma seção contendo o marcador literal %q e uma seção Modelo do ensaio contendo o modelo completo produzido acima, com as três entidades, definições e relações. Use um template retornado e seus metadados autorais obrigatórios. Chame brain.create uma única vez com page e text, pelo fluxo de revisão e confirmação humanas apresentado pelo produto. brain.create preserva uma página já existente ou criada concorrentemente; este ensaio não autoriza brain.update, brain.append ou sobrescrita. A primeira operação na página deve ser brain.create; não sonde uma página possivelmente nova com brain.read. Depois chame brain.read com page e purpose para ler de volta, independentemente do estado do recibo; compare o marcador, o modelo completo efetivamente aprovado e a revisão retornada e pare se houver divergência ou se só o marcador tiver sido salvo. Não invente tokens de aprovação. Se a capacidade estiver indisponível, registre esse bloqueio e pare antes da continuidade. Hooks, invocação nativa de Skills e orquestração devem ser reportados como não testados sem evidência real. Depois execute o controle de memória abaixo antes do trabalho sintético. ", page, marker)
-	accepted := marker + "_MEMORY_ACCEPT"
-	declined := marker + "_MEMORY_DECLINE"
+	accepted, declined := marker+"_MEMORY_ACCEPT", marker+"_MEMORY_DECLINE"
 	acceptedText := "Preferência inteiramente fictícia: conferir o resultado salvo antes da entrega. " + accepted
 	declinedText := "Memória inteiramente fictícia do controle de recusa; este registro deve ser recusado. " + declined
-	memoryReadback := fmt.Sprintf("Leia as capturas L0 deste ensaio usando memory.search com query igual a cada marcador exato %q e %q, limit até 32, seguindo next_offset até -1, no máximo 128 resultados. Ausência é total zero com paginação concluída; não a infira de uma página incompleta. Exija exatamente uma captura aceita e zero capturas do controle de recusa. Use o id e revision realmente retornados para memory.read com capture_id e expected_revision, max_bytes até 4096, seguindo next_offset até terminar; compare o texto completo com %q. Duplicidade, texto divergente ou captura recusada presente é FALHA DO CONTROLE: preserve os dados, não apague nem corrija nada para obter sucesso e pare. Essa leitura verifica L0; memory.context não expõe necessariamente capturas antes de dreaming. Não infira injeção passiva, rollups, digests, dreaming ou agendamento dessa leitura. Ausência não comprova que houve recusa humana: relate a decisão apenas quando observada no fluxo real. ", accepted, declined, acceptedText)
-	memoryExercise := fmt.Sprintf("Controle protegido de memória: antes de gravar, use memory.search com query igual aos marcadores exatos %q e %q, limit até 32 e next_offset até -1 (máximo 128 resultados); pare se não concluir a paginação. Se o marcador de recusa estiver presente, registre FALHA DO CONTROLE e preserve tudo; não apague. Se houver mais de uma captura aceita, pare. Se já houver exatamente uma aceita, leia seu texto completo por memory.read com capture_id igual ao id retornado, expected_revision atual e páginas de até 4096 bytes; somente se for exatamente %q reutilize a captura. Nesse caso não repita nenhuma das duas gravações; reporte o controle de recusa como não repetido, com ausência observada, sem inferir a decisão anterior. Somente quando ambos os marcadores estiverem ausentes: explique que o primeiro registro deve ser aprovado e chame memory.capture uma única vez com text exatamente %q, pelo fluxo protegido normal de revisão humana; leia a captura real de volta com memory.read. Só depois dessa aprovação verificada, explique que o segundo registro deve ser explicitamente recusado pelo participante e chame memory.capture uma única vez com text exatamente %q. Somente confirmation_declined observado por recusa explícita conta como controle de recusa; cancelamento, fechamento ou expiração não o comprovam. Uma aprovação inesperada é FALHA DO CONTROLE: preserve o registro e pare. confirmation_unavailable, timeout, resultado incerto ou recusa do primeiro registro encerram essa etapa sem repetição da chamada nem fallback de escrita. Nenhum sim no chat ou token inventado substitui a revisão. Depois das decisões, ", accepted, declined, acceptedText, acceptedText, declinedText) + memoryReadback
-	nextClient := "O próximo passo humano é abrir Desktop e usar o prompt Desktop gerado."
-	if desktopOnly {
-		nextClient = "Este ensaio começou no Desktop. A conferência e a pausa neste cliente não comprovam retomada entre clientes, hooks, agentes ou manutenção agendada."
+	selection := fmt.Sprintf("Leia execution.list em páginas de até 32, seguindo next_offset enquanto has_more, máximo 128 itens. execution.list retorna somente metadados. Chame execution.next somente com item_id retornado, para cada item_id listado; se a lista estiver vazia, pule execution.next. Somente após ler todas as projeções selecione summary ou next_step exatamente %q. Paginação incompleta ou duplicidade encerra o turno; zero resultados significa ausente. Use IDs, revisões e tentativa realmente retornados, nunca a conversa anterior. ", marker)
+	memory := fmt.Sprintf("Use memory.search para cada marcador exato %q e %q, limit 32, seguindo next_offset até -1, máximo 128 resultados. Conte apenas após paginação completa. Leia cada captura retornada por memory.read com capture_id igual ao id, expected_revision atual e max_bytes 4096, seguindo next_offset até terminar. O único texto aceito esperado é %q. Duplicidade, texto divergente ou presença do controle de recusa é FALHA DO CONTROLE: preserve tudo e pare, não apague. Ausência não comprova recusa explícita; sem confirmation_declined observado, registre recusa não atestada. ", accepted, declined, acceptedText)
+	pageRead := fmt.Sprintf("Leia brain.read para page %q e purpose de conferir o ensaio, em páginas de até 4096 bytes, seguindo next_offset até terminar. Registre a revisão; verifique o marcador %q e o modelo completo com três entidades, definições e relações. Qualquer erro ou paginação incompleta encerra o turno sem inferir ausência nem alterar a página. ", page, marker)
+	expectedPage := fmt.Sprintf("Exija exatamente um trabalho identificado pelo marcador e summary exatamente %q; sem essa condição, encerre antes de ler a página esperada. ", marker) + pageRead
+	method := func(ids string) string {
+		return "Descubra " + ids + " por methods.plan com method_id exato, uma chamada por método; leia methods.read com resource_uri igual ao instruction_uri retornado, max_bytes 4096 e next_offset até terminar. Métodos não concedem autorização extra; consulta MCP não comprova invocação nativa de Skills, hooks ou agentes. "
 	}
-	code := common + "Antes dos métodos ou de criar a página, se já houver exatamente um trabalho com esse marcador, relate seu estado e pare sem repetir escritas; se houver duplicidade, pare. " + journey + memoryExercise + fmt.Sprintf("Este prompt autoriza criar e pausar somente um trabalho sintético. Se não houver, chame execution.create com objective %q, next_step %q e artifacts [%q]. Use o item_id/revisão retornados para execution.start; com a tentativa e revisão atuais, execution.checkpoint com summary %q e next_step %q; depois execution.pause com a revisão atual e mesma tentativa. Cada escrita ocorre uma única vez, com expected_revision atual, e respeita a confirmação normal do cliente. Não marque concluído nem registre evidência fictícia. Ao final, leia execution.next e mostre workspace_id, item_id, estado, revisão e resumo; confirme paused. %s", marker, marker, "brain/"+page, marker, marker, nextClient)
-	if desktopOnly {
-		return "", code, ""
+	step := func(key, title, body string) pilotStep {
+		return pilotStep{ID: key, Title: title, Prompt: pilotStepScope(id) + body + " Encerre após esta etapa; a próxima exige outro pedido pelo menu."}
 	}
-	desktop := common + fmt.Sprintf("Antes de ler qualquer página, conclua execution.list e a identificação pelo marcador. Se não houver exatamente um trabalho correspondente, relate o workspace_id verificado, peça o teste Code e pare antes de brain.read. Somente com um trabalho identificado recupere pelo contrato MCP de brain a página %q, somente leitura, e confirme que a seção do ensaio preserva o marcador literal %q e o modelo completo com três entidades, definições e relações; se ausente, divergente ou inacessível, pare. ", page, marker) + memoryReadback + fmt.Sprintf("Este prompt autoriza somente retomar o trabalho sintético criado no Code. Exija exatamente um trabalho correspondente e summary exatamente %q. Se ausente ou duplicado, pare e peça o teste Code; se já running, apenas relate sem retomar novamente. Se paused, chame execution.resume uma única vez, com item_id e expected_revision atuais, respeitando a confirmação normal do cliente. Depois leia execution.next e confirme running, nova tentativa e resumo preservado. Não salve novo checkpoint, não conclua nem altere outros trabalhos. Mostre o resultado curto para anexar ao diagnóstico. Isso comprova a leitura da página e retomada entre clientes apenas quando executado nos dois clientes reais.", marker)
-	readback := fmt.Sprintf("Use somente o servidor MCP plugin:maestro-product:maestro deste ensaio. Esta continuação é somente leitura: use maestro_context e maestro_query. Confirme workspace_id exatamente %s e state ready; ambiguidade, erro ou divergência encerram o teste. Inspecione os schemas atuais. ", id) + selection + fmt.Sprintf("Exija exatamente uma projeção correspondente e summary exatamente %q; sem resultado único, pare preservando tudo. Guarde item_id, state e state_revision dessa projeção selecionada como fotografia inicial de estado e revisão. Leia brain.read para a página %q e purpose de verificar persistência, com paginação completa; exija o marcador e o modelo completo com três entidades, definições e relações. ", marker, page) + memoryReadback + "Leia execution.next novamente para o mesmo item_id e compare state e state_revision com a fotografia inicial: estado e revisão devem permanecer iguais; qualquer mudança é divergência, sem reparar ou retomar. Mostre workspace, trabalho, página, captura aceita e ausência do controle recusado, separando passou, falhou e não testado. Registre reinício informado pelo participante ou não atestado; conversa nova não comprova reinício do servidor. Esta continuação não qualifica Skills nativas, hooks, agentes, dreaming ou manutenção agendada."
-	return code, desktop, readback
+	reconcile := "Esta etapa é somente leitura: use maestro_context e maestro_query. Consulte owner.status e brain.status. O estado do brain não estabelece existência da página específica: reporte página do ensaio: não verificada. Catálogo, templates ou navegação também não provam presença nem ausência dessa página. " + selection + memory + "Mostre apenas o estado atual verificado de perfil, capturas e trabalho, incluindo estado e revisão. Preserve separadamente a tentativa anterior falha e os resultados atuais. Nenhuma ausência autoriza repetir uma operação incerta. Informe o que ainda precisa de decisão humana, sem executar outra etapa. O reinício informado pelo participante permanece não atestado; uma conversa nova não comprova reinício do servidor."
+	return []pilotStep{
+		step("reconcile", "Conferir ou continuar", reconcile),
+		step("onboarding", "Preparar meu perfil", method("maestro-onboarding")+"Consulte owner.status e preserve perfil já existente. Retome exatamente next_question, uma pergunta fictícia por turno e uma resposta revisada por vez. Use o fluxo do método para esta resposta somente; revisão final e confirmação são turnos separados. Se review_required, apresente a revisão final e peça a confirmação humana normal; se complete, relate completo sem reabrir. Declínio preserva o progresso. O participante repete esta etapa até owner.status confirmar conclusão; uma proposta não é conclusão."),
+		step("page", "Criar e conferir a página", "Se esta etapa foi interrompida ou a página já é conhecida, faça somente a conferência de leitura; não repita uma criação incerta. Uma criação nova exige a escolha consciente do participante. "+method("maestro-operator e pocock-domain-modeling")+fmt.Sprintf("Demonstre um projeto fictício com três entidades, definições e relações. Consulte brain.templates e proponha page %q, título Ensaio Maestro, uma seção com o marcador literal %q e seção Modelo do ensaio com o modelo completo, usando template retornado e metadados autorais obrigatórios. A primeira operação de escrita na página deve ser brain.create uma única vez com page e text, pela revisão humana normal. Página existente ou criada concorrentemente é preservada; relate existente sem atualizar. Após sucesso confirmado, leia brain.read com page e purpose, max_bytes 4096 e next_offset até terminar. Compare texto completo efetivamente aprovado, modelo e revisão retornada; somente o marcador é insuficiente. Se o recibo for incerto, reporte a incerteza e encerre; confira somente leitura em outro turno, sem nova gravação.", page, marker)),
+		step("memory-accept", "Salvar e conferir a memória de teste", memory+fmt.Sprintf("Se a captura aceita já existir exatamente uma vez com o texto esperado, relate já salva sem escrever. Se ambos os marcadores estiverem ausentes e esta for uma tentativa nova conscientemente escolhida pelo participante após a conferência, explique que deve aprovar o registro e chame memory.capture uma única vez com text exatamente %q. Leia de volta o capture_id e revision reais por memory.read paginado, max_bytes 4096, comparando o texto completo. Recusa explícita deste registro é pendência, sem outra operação.", acceptedText)),
+		step("memory-decline", "Testar a recusa da memória", memory+fmt.Sprintf("Esta é uma escolha separada do participante; ausência da captura aceita não impede este controle. Se o controle de recusa estiver ausente, explique que o participante deve RECUSAR explicitamente este registro, e chame memory.capture uma única vez com text exatamente %q. Somente confirmation_declined por recusa explícita observada qualifica este controle. Timeout, cancelamento ou fechamento encerram o turno como pendente, sem repetição. Aprovação inesperada é FALHA DO CONTROLE: preserve o registro e pare. Após decisão explícita, pesquise novamente o marcador de recusa com paginação completa para verificar ausência; ausência sozinha nunca qualifica recusa. Este controle não impede outras etapas separadamente autorizadas.", declinedText)),
+		step("execution-create", "Abrir o trabalho de teste", selection+fmt.Sprintf("Se houver um trabalho, relate seu estado sem escrever. Se ausente, esta escolha explícita autoriza somente execution.create uma vez com objective %q, next_step %q e artifacts [%q]. Não repita uma criação incerta; volte à conferência. Leia execution.next com item_id retornado e mostre o estado e state_revision reais.", marker, marker, "brain/"+page)),
+		step("execution-start", "Iniciar o trabalho", selection+"Exija um único trabalho em estado ready; outro estado é pendência ou já realizado, sem escrita. Chame somente execution.start com item_id e expected_revision atuais uma vez; leia execution.next para o mesmo item e confirme running e a tentativa retornada."),
+		step("execution-checkpoint", "Guardar o ponto de parada", selection+fmt.Sprintf("Exija um único trabalho running com attempt_id atual; se summary já for %q, relate ponto já salvo sem escrita. Chame somente execution.checkpoint uma vez com item_id, expected_revision e attempt_id atuais, summary %q e next_step %q. Leia execution.next e confirme resumo, next_step e revisão reais.", marker, marker, marker)),
+		step("execution-pause", "Pausar o trabalho", selection+fmt.Sprintf("Exija um único trabalho running e summary exatamente %q. Se já paused, relate sem escrita. Chame somente execution.pause uma vez com item_id, expected_revision e attempt_id atuais; leia execution.next e confirme paused e resumo preservado.", marker)),
+		step("execution-resume", "Retomar o trabalho", selection+expectedPage+fmt.Sprintf("Exija um único trabalho paused e summary exatamente %q; se running, relate já retomado sem escrita. Outros estados encerram como pendência. Chame somente execution.resume uma vez com item_id e expected_revision atuais, depois leia execution.next para o mesmo item e confirme running, nova tentativa e resumo preservado. A retomada só comprova passagem entre clientes quando observada nos dois clientes reais.", marker)),
+		step("readback", "Conferir o que ficou salvo", reconcile+expectedPage+"Após leitura completa bem-sucedida, reporte a página verificada e sua revisão. Para aprovar persistência, exija página completa, exatamente uma captura aceita íntegra, zero controles de recusa e um trabalho único; pendências são preservadas. Releia execution.next do mesmo item e confirme estado e revisão inalterados nesta conferência. Memória lida é somente L0, sem prova de injeção passiva, dreaming ou manutenção."),
+	}
 }

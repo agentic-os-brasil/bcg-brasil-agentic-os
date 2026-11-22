@@ -21,7 +21,7 @@ func TestInstalledPilotConversionJourneyBindsCurrentAndKeepsQuickPathsReadOnly(t
 	if r.Runtime != nil || r.Conversion == nil || r.Conversion.State != "ready_for_participant_test" {
 		t.Fatal("diagnostic expectation coerced installed runtime into old pilot authority")
 	}
-	for _, prompt := range []string{r.CodePrompt, r.DesktopPrompt} {
+	for _, prompt := range []string{pilotStepPrompt(t, r.CodeSteps, "conversion"), pilotStepPrompt(t, r.DesktopSteps, "conversion")} {
 		for _, literal := range []string{manifest, pack, pilotDocumentName, pilotDocumentSHA256, "MAESTRO_DOCLING_OFFLINE_20261101", "alpha/7", "result.status usable", "result.source_sha256", "provenance.manifest_sha256", "provenance.pack_sha256", "provenance.network_denied true", "result.artifact_ref", "artifact_id", "content.read", "markdown", "document", "max_bytes 4096", "next_offset", "has_more", "paginação completa", "não capture memória"} {
 			if !strings.Contains(prompt, literal) {
 				t.Fatalf("complete journey lacks real Current/source/provenance/readback requirement %q", literal)
@@ -53,7 +53,7 @@ func TestInstalledPilotConversionUnavailableAndIdentityMismatchNeverBecomePassed
 			if r.Conversion.State != "pending_runtime" || r.Checks[0].Status != "not_tested" || r.Runtime != nil {
 				t.Fatal("unavailable runtime was promoted")
 			}
-			for _, prompt := range []string{r.CodePrompt, r.DesktopPrompt} {
+			for _, prompt := range []string{pilotStepPrompt(t, r.CodeSteps, "conversion"), pilotStepPrompt(t, r.DesktopSteps, "conversion")} {
 				if !strings.Contains(prompt, "Conversão de documento: não testada") || strings.Contains(prompt, "Execute maestro_apply com operation content.convert") {
 					t.Fatal("pending converter received an executable conversion journey")
 				}
