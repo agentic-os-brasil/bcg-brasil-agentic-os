@@ -230,6 +230,32 @@ func r17MetadataFor(key windows.Handle) (r17Metadata, error) {
 	return m, r17Check("key_metadata", err)
 }
 
+// Diagnostics select only fixed field enums; full struct equality remains the
+// acceptance guard. No field value, delta, key identity or sentinel is emitted.
+func r17LeafMetadataMismatchStage(observed, expected r17Metadata) string {
+	stage := ""
+	for _, field := range [...]struct {
+		different bool
+		stage     string
+	}{
+		{observed.subkeys != expected.subkeys, "leaf_metadata_subkeys_changed"},
+		{observed.maxSubkey != expected.maxSubkey, "leaf_metadata_max_subkey_changed"},
+		{observed.values != expected.values, "leaf_metadata_values_changed"},
+		{observed.maxValueName != expected.maxValueName, "leaf_metadata_max_value_name_changed"},
+		{observed.maxValue != expected.maxValue, "leaf_metadata_max_value_bytes_changed"},
+		{observed.security != expected.security, "leaf_metadata_security_bytes_changed"},
+		{observed.written != expected.written, "leaf_metadata_last_write_changed"},
+	} {
+		if field.different {
+			if stage != "" {
+				return "leaf_metadata_multiple_changed"
+			}
+			stage = field.stage
+		}
+	}
+	return stage
+}
+
 type r17FixtureSet struct {
 	anchor, root              windows.Handle
 	leaves                    [5]windows.Handle
@@ -491,19 +517,28 @@ func (s *r17FixtureSet) validate() error {
 		}
 		name, _ := windows.UTF16PtrFromString(def.name)
 		for _, right := range r17Rights {
+			access := right.mask | r17View
+			if right.name == "query_value" {
+				// This parent handle also revalidates owner/DACL/label through
+				// the original descriptor reader. Child probes stay exact-right.
+				access |= windows.READ_CONTROL
+			}
 			var opened windows.Handle
-			if err = windows.RegOpenKeyEx(s.root, name, 0, right.mask|r17View, &opened); err != nil {
+			if err = windows.RegOpenKeyEx(s.root, name, 0, access, &opened); err != nil {
 				return r17Check("parent_right_control", err)
 			}
 			var readErr error
 			if right.name == "query_value" {
-				readErr = r17MatchSentinel(opened, r17Sentinel(s.hash, def.name))
+				readErr = s.validateDescriptor(opened, &def)
+				if readErr == nil {
+					readErr = r17MatchSentinel(opened, r17Sentinel(s.hash, def.name))
+				}
 				if readErr == nil {
 					observed, metadataErr := r17MetadataFor(opened)
 					if metadataErr != nil {
 						readErr = metadataErr
 					} else if observed != s.metadata[i] {
-						readErr = &r17Failure{"leaf_name_changed", r17Invalid}
+						readErr = &r17Failure{r17LeafMetadataMismatchStage(observed, s.metadata[i]), r17Invalid}
 					}
 				}
 			}
@@ -714,6 +749,29 @@ func r17ParseChild(body string) ([]r17Row, error) {
 // They never stand in for the actual two confined-child observations.
 func r17AssertProtocol(t *testing.T) {
 	t.Helper()
+	metadata := r17Metadata{subkeys: 1, maxSubkey: 2, values: 3, maxValueName: 4, maxValue: 5, security: 6, written: windows.Filetime{LowDateTime: 7, HighDateTime: 8}}
+	for _, test := range []struct {
+		stage string
+		edit  func(*r17Metadata)
+	}{
+		{"", func(*r17Metadata) {}},
+		{"leaf_metadata_subkeys_changed", func(m *r17Metadata) { m.subkeys++ }},
+		{"leaf_metadata_max_subkey_changed", func(m *r17Metadata) { m.maxSubkey++ }},
+		{"leaf_metadata_values_changed", func(m *r17Metadata) { m.values++ }},
+		{"leaf_metadata_max_value_name_changed", func(m *r17Metadata) { m.maxValueName++ }},
+		{"leaf_metadata_max_value_bytes_changed", func(m *r17Metadata) { m.maxValue++ }},
+		{"leaf_metadata_security_bytes_changed", func(m *r17Metadata) { m.security++ }},
+		{"leaf_metadata_last_write_changed", func(m *r17Metadata) { m.written.LowDateTime++ }},
+		{"leaf_metadata_last_write_changed", func(m *r17Metadata) { m.written.HighDateTime++ }},
+		{"leaf_metadata_multiple_changed", func(m *r17Metadata) { m.security++; m.values++ }},
+		{"leaf_metadata_multiple_changed", func(m *r17Metadata) { m.subkeys++; m.written.HighDateTime++ }},
+	} {
+		observed := metadata
+		test.edit(&observed)
+		if r17LeafMetadataMismatchStage(observed, metadata) != test.stage || (observed == metadata) != (test.stage == "") {
+			t.Fatal("finite metadata field diagnostic lost full equality or its closed enum")
+		}
+	}
 	for _, qualification := range []string{"", "1"} {
 		for _, actions := range []string{"", "true"} {
 			for _, runner := range []string{"", "github-hosted"} {

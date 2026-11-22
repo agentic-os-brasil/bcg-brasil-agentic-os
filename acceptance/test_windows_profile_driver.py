@@ -429,6 +429,9 @@ ConvertTo-Json -InputObject $observed -Compress
             "truncated": complete[:-20],
             "extra_carriage_return": complete.replace(rows[0] + "\n", rows[0] + "\r\r\n", 1),
         }
+        for field in ("subkeys", "max_subkey", "values", "max_value_name", "max_value_bytes",
+                      "security_bytes", "last_write", "multiple"):
+            invalid["metadata_" + field] = complete + f"R17_REGISTRY_DIAGNOSTIC stage=leaf_metadata_{field}_changed win32_status=13\n"
         for name, body in invalid.items():
             with self.subTest(name=name):
                 self.assertNotEqual(decode(body).returncode, 0)

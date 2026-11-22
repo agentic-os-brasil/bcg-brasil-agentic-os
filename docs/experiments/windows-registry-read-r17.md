@@ -253,3 +253,29 @@ proof receipt remain required. The failure-only loader replay still runs only
 `TestWindowsRealAuthenticatedDocling`; its historical `no_registry_changes=true`
 describes that replay's narrower scope and does not describe the instrumented
 confinement parent. This addition does not rewrite earlier failed observations.
+
+### Parent descriptor and metadata readback
+
+The parent's relative query readback handle additionally requests READ_CONTROL
+and repeats the original exact owner, protected DACL and mandatory-label
+validation on that reopened handle. It then checks the original sentinel and
+compares every metadata field, including security-descriptor length and last
+write time, against the retained full-access handle. No field is omitted or
+normalized. The child still requests each of the original six rights separately;
+its masks, capability, labels, observations and cleanup contract are unchanged.
+
+This is a stronger parent readback candidate, not proof that a missing access
+right caused an earlier metadata mismatch. Microsoft's RegQueryInfoKey contract
+requires KEY_QUERY_VALUE; it does not document access-dependent descriptor-size
+results. READ_CONTROL has a concrete purpose here: the reopened handle also
+reads the actual security descriptor through the existing validator. Native
+acceptance of the complete candidate remains separate from source validation.
+
+A metadata inequality remains fatal and projects only a fixed field enum:
+subkeys, maximum subkey-name length, values, maximum value-name length, maximum
+value bytes, security-descriptor bytes, last write, or multiple differing fields.
+Values, deltas, names, paths, SIDs, sentinel contents and arbitrary errors remain
+private. The full struct comparison controls acceptance; diagnostic
+classification cannot make a mismatch pass. Any diagnostic still refuses a
+complete assessment receipt. No earlier failed observation or preserved state
+is replaced by this candidate.
