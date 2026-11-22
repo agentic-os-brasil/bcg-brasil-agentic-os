@@ -65,6 +65,7 @@ func TestMaintenanceChildDiagnosticsStayClosed(t *testing.T) {
 		interrupted              bool
 	}{
 		{"terminal", "{\"schema_version\":1,\"phase\":\"verification\",\"code\":\"qualification_required\"}\n", "verification", "qualification_required", false},
+		{"weekly-startup", "{\"schema_version\":1,\"phase\":\"admission\",\"code\":\"weekly_registration_unavailable\"}\n", "admission", "weekly_registration_unavailable", false},
 		{"progress", "{\"schema_version\":1,\"phase\":\"execution\",\"code\":\"in_progress\"}\n", "execution", "interrupted", false},
 		{"forced", "{\"schema_version\":1,\"phase\":\"verification\",\"code\":\"qualification_required\"}\n", "verification", "interrupted", true},
 		{"unknown-phase", "{\"schema_version\":1,\"phase\":\"private-error-sentinel\",\"code\":\"maintenance_rejected\"}", "launch", "interrupted", false},
@@ -83,6 +84,15 @@ func TestMaintenanceChildDiagnosticsStayClosed(t *testing.T) {
 				t.Fatal("arbitrary child error escaped")
 			}
 		})
+	}
+	weekly := product.MaintenanceCommandFailure(errors.Join(product.ErrWeeklyRegistrationUnavailable, cause), "admission")
+	if weekly.Diagnostic.Code != "weekly_registration_unavailable" || weekly.Diagnostic.Phase != "admission" ||
+		!errors.Is(weekly, product.ErrWeeklyRegistrationUnavailable) || strings.Contains(weekly.Error(), "private-error-sentinel") {
+		t.Fatal("closed weekly startup refusal was lost or exposed its cause")
+	}
+	untyped := product.MaintenanceCommandFailure(errors.New("weekly_registration_unavailable"), "admission")
+	if untyped.Diagnostic.Code != "maintenance_rejected" {
+		t.Fatal("arbitrary error text gained the weekly startup category")
 	}
 	forged := &product.MaintenanceCommandError{Diagnostic: product.MaintenanceCommandDiagnostic{SchemaVersion: 1, Phase: "private-error-sentinel", Code: "private-error-sentinel"}}
 	if strings.Contains(product.MaintenanceCommandFailure(forged, "input").Error(), "private-error-sentinel") || strings.Contains(forged.Error(), "private-error-sentinel") {

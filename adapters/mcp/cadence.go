@@ -90,6 +90,9 @@ func maintenanceCommandPhase(phase string) string {
 
 var ErrMaintenanceCommandOutputLimit = errors.New("maintenance command output limit")
 
+// ErrWeeklyRegistrationUnavailable is the closed startup registration refusal.
+var ErrWeeklyRegistrationUnavailable = errors.New("weekly_registration_unavailable")
+
 func maintenanceErrorCode(err error) string {
 	switch {
 	case errors.Is(err, ErrMaintenanceCommandOutputLimit):
@@ -98,6 +101,8 @@ func maintenanceErrorCode(err error) string {
 		return "deadline_exceeded"
 	case errors.Is(err, context.Canceled):
 		return "canceled"
+	case errors.Is(err, ErrWeeklyRegistrationUnavailable):
+		return "weekly_registration_unavailable"
 	case errors.Is(err, ErrSourceRecoveryRequired):
 		return "source_recovery_required"
 	case errors.Is(err, processidentity.ErrChanged):
@@ -138,7 +143,7 @@ func validMaintenanceDiagnostic(d MaintenanceCommandDiagnostic) bool {
 		return false
 	}
 	switch d.Code {
-	case "in_progress", "interrupted", "output_limit", "deadline_exceeded", "canceled", "source_recovery_required", "restart_required", "confirmation_unavailable", "confirmation_declined", "revision_conflict", "qualification_required", "maintenance_unavailable", "maintenance_busy", "maintenance_rejected":
+	case "in_progress", "interrupted", "output_limit", "deadline_exceeded", "canceled", "weekly_registration_unavailable", "source_recovery_required", "restart_required", "confirmation_unavailable", "confirmation_declined", "revision_conflict", "qualification_required", "maintenance_unavailable", "maintenance_busy", "maintenance_rejected":
 		return true
 	}
 	return false
