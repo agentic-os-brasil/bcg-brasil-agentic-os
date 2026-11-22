@@ -110,10 +110,10 @@ jobs:
           GOTOOLCHAIN: local
         run: |
           $evidence = Join-Path $env:RUNNER_TEMP 'maestro-windows-source-frontend.jsonl'
-          go test ./dev/pilot/installed-seed-factory -run '^(TestWindowsSelfServiceExactOwnerAndSelectedProfile|TestWindowsSelfServiceDesktopSelectionAvoidsCode)$' -count=1 -json -timeout=180s | Tee-Object -FilePath $evidence
+          go test ./dev/pilot/installed-seed-factory -run '^(TestWindowsSelfServiceExactOwnerAndSelectedProfile|TestWindowsSelfServiceDesktopSelectionAvoidsCode|TestParticipantPowerShellPromptConsumersPreserveUTF8)$' -count=1 -json -timeout=180s | Tee-Object -FilePath $evidence
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $events = @(Get-Content -LiteralPath $evidence | ForEach-Object { $_ | ConvertFrom-Json })
-          $parents = @('TestWindowsSelfServiceExactOwnerAndSelectedProfile', 'TestWindowsSelfServiceDesktopSelectionAvoidsCode')
+          $parents = @('TestWindowsSelfServiceExactOwnerAndSelectedProfile', 'TestWindowsSelfServiceDesktopSelectionAvoidsCode', 'TestParticipantPowerShellPromptConsumersPreserveUTF8')
           $invalid = @($events | Where-Object { $_.Action -in @('skip','fail') })
           if ($invalid.Count -ne 0) { throw 'Exact Windows frontend families must have no skips or failures' }
           foreach ($parent in $parents) {
