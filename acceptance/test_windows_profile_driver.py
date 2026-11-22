@@ -332,9 +332,9 @@ class WindowsDoclingRuntimeProfile(unittest.TestCase):
         document["source_tree"] = "b" * 39 + "Z"
         self.assert_preaccount_refusal(document)
 
-    def test_actual_placement_failure_selects_only_the_closed_loader_trace_signal(self):
-        # Evaluate the actual failure-only dispatch condition. No native proof,
-        # account, registry fixture, debugger or converter is invoked.
+    def test_docling_failure_stops_without_replaying_converter(self):
+        # Exercise the actual failure branch with an inert trace stub. No native
+        # proof, account, registry fixture, debugger or converter is invoked.
         helper = ROOT / "acceptance/windows-docling-profile.ps1"
         script = self.root / "placement-trace-condition.ps1"
         script.write_text(r'''$ErrorActionPreference='Stop'
@@ -342,36 +342,137 @@ $e=$null
 $tree=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$e)
 if($e.Count){throw 'Actual Docling helper must parse'}
 $dispatch=@($tree.FindAll({param($n)
- $n -is [Management.Automation.Language.IfStatementAst] -and $n.Clauses.Count -eq 1 -and
- $n.Clauses[0].Item2.Statements.Count -eq 1 -and
- $n.Clauses[0].Item2.Statements[0] -is [Management.Automation.Language.TryStatementAst] -and
- $n.Clauses[0].Item2.Extent.Text.Contains('Invoke-DoclingFailureTrace ')
+ $n -is [Management.Automation.Language.IfStatementAst] -and
+ $n.Clauses[0].Item1.Extent.Text.Contains('$exit -ne 0 -or $body -match')
 },$true))
-if($dispatch.Count -ne 1){throw 'Expected original failure-only trace dispatch'}
-$expression=$dispatch[0].Clauses[0].Item1.Extent.Text
-$cases=[IO.File]::ReadAllText($args[1])|ConvertFrom-Json
-$observed=@(foreach($body in $cases){[bool](Invoke-Expression $expression)})
-ConvertTo-Json -InputObject $observed -Compress
+if($dispatch.Count -ne 1){throw 'Expected original native failure boundary'}
+function Invoke-DoclingFailureTrace { $script:replays++ }
+foreach($case in @(
+ @{exit=1;body='    native_windows_test.go:121: MAESTRO_NATIVE_RUNTIME_FAILURE operation=place stage=launch process_status=0xc0000022'},
+ @{exit=1;body='--- FAIL: synthetic'},
+ @{exit=0;body='--- SKIP: synthetic'}
+)) {
+ $exit=$case.exit;$body=$case.body;$script:replays=0;$failed=$false
+ try {Invoke-Expression $dispatch[0].Extent.Text} catch {$failed=$true}
+ if(-not $failed -or $script:replays -ne 0){throw 'Failed or skipped coverage must stop without a native replay'}
+}
+Write-Output 'failure_stops_without_replay=true'
 ''', encoding="utf-8")
-        marker = "MAESTRO_NATIVE_RUNTIME_FAILURE operation=place stage=launch process_status=0xc0000022"
-        line = "    native_windows_test.go:121: " + marker
-        cases = [
-            line + "\n", line + "\r\n",
-            "    native_windows_test.go:121: actual shared runtime process failed\n",
-            line.replace("operation=place", "operation=convert") + "\n",
-            line.replace("stage=launch", "stage=response") + "\n",
-            line.replace("0xc0000022", "0xc0000005") + "\n",
-            line + " PRIVATE_BODY\n", "PRIVATE_BODY " + line + "\n",
-            line + "\n" + line + "\n", line + "\r\r\n",
-            "    other_test.go:121: " + marker + "\n",
-        ]
-        fixture = self.root / "placement-failures.json"
-        fixture.write_text(json.dumps(cases), encoding="utf-8")
         result = subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
-                                 str(script), str(helper), str(fixture)],
+                                 str(script), str(helper)],
                                 text=True, capture_output=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(json.loads(result.stdout), [True, True] + [False] * (len(cases) - 2))
+        self.assertIn("failure_stops_without_replay=true", result.stdout)
+
+    def test_docling_bootstrap_environment_is_closed_before_creation_and_restored(self):
+        # Execute the real launch barrier around a harmless stub. A real .NET
+        # ProcessStartInfo observes its inherited environment; no process starts.
+        script = self.root / "docling-launch-environment.ps1"
+        script.write_text(r'''$ErrorActionPreference='Stop'
+$tokens=$null;$errors=$null
+$tree=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$tokens,[ref]$errors)
+if($errors.Count){throw 'Original driver must parse'}
+$calls=@($tree.FindAll({param($n) $n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -ceq 'Start-Process' -and $n.Extent.Text.Contains('-Credential $credential')},$true))
+if($calls.Count -ne 1){throw 'Expected the original credentialed launch'}
+$barrier=$calls[0].Parent
+while($barrier -and $barrier -isnot [Management.Automation.Language.TryStatementAst]){$barrier=$barrier.Parent}
+if(-not $barrier){throw 'Expected original launch restoration boundary'}
+$builder=@($tree.FindAll({param($n)
+ $n -is [Management.Automation.Language.IfStatementAst] -and $n.Clauses[0].Item1.Extent.Text -ceq '$withDocling' -and
+ @($n.Clauses[0].Item2.Statements | Where-Object {$_ -is [Management.Automation.Language.AssignmentStatementAst] -and $_.Left.Extent.Text -ceq '$doclingLaunchEnvironment'}).Count -eq 1
+},$true))
+$withDocling=$true;$OutputRoot=$PSScriptRoot
+$doclingSystemRoot=Join-Path $PSScriptRoot 'windows';$doclingSystemDirectory=Join-Path $doclingSystemRoot 'System32'
+$doclingRuntime=@{sdk_go=(Join-Path $PSScriptRoot 'sdk/bin/go.exe');module_cache=(Join-Path $PSScriptRoot 'modules')}
+$powershell=$PSHOME+'/pwsh';$arguments=@('synthetic');$credential=$null;$stdout='unused';$stderr='unused'
+$env:GITHUB_ACTIONS='true';$env:RUNNER_ENVIRONMENT='github-hosted'
+$env:GH_TOKEN='synthetic-gh';$env:GITHUB_TOKEN='synthetic-github';$env:ACTIONS_RUNTIME_TOKEN='synthetic-actions'
+$env:UNRELATED_SYNTHETIC_SECRET='synthetic-unlisted';$env:USERPROFILE='synthetic-runner-home';$env:HOME='synthetic-runner-home'
+function Start-Process {
+ param($FilePath,$ArgumentList,$Credential,[switch]$LoadUserProfile,$WorkingDirectory,$RedirectStandardOutput,$RedirectStandardError,[switch]$Wait,[switch]$PassThru)
+ $script:launches++
+ $info=[Diagnostics.ProcessStartInfo]::new()
+ $visible=$info.Environment
+ foreach($key in @('GH_TOKEN','GITHUB_TOKEN','ACTIONS_RUNTIME_TOKEN','UNRELATED_SYNTHETIC_SECRET')) {
+  if($visible.ContainsKey($key)){throw 'Inherited credential canary reached process creation'}
+ }
+ $expected=@('SystemRoot','WINDIR','COMSPEC','PATHEXT','PATH','PSModulePath','TEMP','TMP','GOTMPDIR','USERPROFILE','HOME','APPDATA','LOCALAPPDATA','GOROOT','GOMODCACHE','GOCACHE','GOPATH','GOTOOLCHAIN','GOPROXY','GOSUMDB','GOFLAGS','CGO_ENABLED','GITHUB_ACTIONS','RUNNER_ENVIRONMENT')
+ if(@(Compare-Object ($expected|Sort-Object) (@($visible.Keys)|Sort-Object)).Count -ne 0){throw 'Bootstrap environment is not the closed key set'}
+ $subjectHome=Join-Path $OutputRoot 'docling-user-home'
+ if($visible['HOME'] -cne $subjectHome -or $visible['USERPROFILE'] -cne $subjectHome -or $visible['GOMODCACHE'] -cne $doclingRuntime.module_cache -or
+  $visible['GOCACHE'] -cne (Join-Path $OutputRoot 'go-cache') -or $visible['GOPATH'] -cne (Join-Path $OutputRoot 'go-path') -or
+  $visible['PATH'] -notlike ('*'+(Split-Path -Parent $doclingRuntime.sdk_go)+'*') -or $visible['PSModulePath'] -cne (Join-Path $PSHOME 'Modules') -or
+  $visible['GITHUB_ACTIONS'] -cne 'true' -or $visible['RUNNER_ENVIRONMENT'] -cne 'github-hosted') {throw 'Required resolved nonsecret bootstrap binding was lost'}
+ if($script:failLaunch){throw 'synthetic launch failed'}
+ return @{ExitCode=0}
+}
+foreach($fail in @($false,$true)) {
+ $script:failLaunch=$fail;$script:launches=0;$doclingParentEnvironment=$null
+ $hadModulePath=Test-Path Env:PSModulePath;$priorModulePath=$env:PSModulePath
+ $before=[Environment]::GetEnvironmentVariables('Process')
+ if($builder.Count -eq 1){Invoke-Expression $builder[0].Extent.Text}
+ $caught=$null
+ try {Invoke-Expression $barrier.Extent.Text} catch {$caught=$_.Exception.Message}
+ $after=[Environment]::GetEnvironmentVariables('Process')
+ if($script:launches -ne 1 -or ($fail -and $caught -cne 'synthetic launch failed') -or (-not $fail -and $null -ne $caught)){
+  $category=switch -Exact ($caught) {
+   'Inherited credential canary reached process creation' {'inherited_canary'}
+   'Bootstrap environment is not the closed key set' {'unexpected_keys'}
+   'Required resolved nonsecret bootstrap binding was lost' {'required_binding'}
+   'Docling bootstrap environment could not be closed.' {'barrier_keys'}
+   default {'unexpected_launch_error'}
+  }
+  throw ('Actual bootstrap environment contract failed: '+$category)
+ }
+ if($before.Count -ne $after.Count){throw 'Parent environment was not restored'}
+ foreach($key in $before.Keys){if(-not $after.Contains($key) -or $before[$key] -cne $after[$key]){throw 'Parent environment was not restored'}}
+}
+Write-Output 'closed_creation_and_parent_restore=true'
+''', encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+                                 str(script), str(DRIVER)], text=True, capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("closed_creation_and_parent_restore=true", result.stdout)
+
+    def test_docling_account_removal_failure_is_fatal_and_clears_credentials(self):
+        # Run only the existing teardown block with a synthetic removal stub.
+        script = self.root / "docling-account-cleanup.ps1"
+        script.write_text(r'''$ErrorActionPreference='Stop'
+$errors=$null
+$tree=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$errors)
+if($errors.Count){throw 'Original driver must parse'}
+$cleanup=@($tree.FindAll({param($n)
+ $n -is [Management.Automation.Language.TryStatementAst] -and $n.Finally -and
+ @($n.Finally.FindAll({param($c) $c -is [Management.Automation.Language.CommandAst] -and $c.GetCommandName() -ceq 'Remove-LocalUser'},$true)).Count -gt 0
+},$true))
+if($cleanup.Count -ne 1){throw 'Expected original credential cleanup owner'}
+function Remove-LocalUser {
+ param($SID,$ErrorAction)
+ $script:removals++
+ if($ErrorAction -cne 'Stop'){throw 'Account removal must fail closed'}
+ if($script:failRemoval){throw 'synthetic removal failed'}
+}
+foreach($fail in @($false,$true)) {
+ $withDocling=$true;$account=@{SID='synthetic-account'};$script:removals=0;$script:failRemoval=$fail
+ $password='synthetic';$secure='synthetic';$credential='synthetic';$caught=$null
+ try {$output=@(Invoke-Expression ($cleanup[0].Finally.Statements.Extent.Text -join "`n"))} catch {$caught=$_.Exception.Message}
+ if($script:removals -ne 1 -or $null -ne $password -or $null -ne $secure -or $null -ne $credential){throw 'Account cleanup did not clear credential references'}
+ if($fail) {
+  if($caught -cne 'Docling disposable account removal failed; trial incomplete.'){throw 'Removal failure was not a finite fatal outcome'}
+ } elseif($null -ne $caught -or $output -cnotcontains 'docling_subject_cleanup account_removal_completed=true'){throw 'Successful account removal was not observed'}
+}
+Write-Output 'account_cleanup_fails_closed=true'
+''', encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+                                 str(script), str(DRIVER)], text=True, capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("account_cleanup_fails_closed=true", result.stdout)
+
+    def test_docling_checkout_does_not_persist_credentials_or_add_automatic_triggers(self):
+        workflow = (ROOT / ".github/workflows/windows-docling-runtime.yml").read_text(encoding="utf-8")
+        self.assertRegex(workflow, r"uses: actions/checkout@[^\n]+\n        with:\n          persist-credentials: false\n")
+        for trigger in ("pull_request:", "push:", "schedule:", "workflow_run:", "workflow_call:"):
+            self.assertNotIn(trigger, workflow)
 
     def test_registry_assessment_decodes_complete_matrix_and_rejects_invalid_rows(self):
         # Invoke only the pure decoder in the existing helper. No ordinary-user
