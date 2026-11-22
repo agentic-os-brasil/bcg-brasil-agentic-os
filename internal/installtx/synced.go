@@ -551,6 +551,15 @@ func ValidateQualifiedLaunchContext(ctx context.Context, managedRoot, dataRoot s
 // boundary as accepted recalls and activation. It does not acquire domain or
 // maintenance locks, preserving domain -> control -> installation lock order.
 func GuardQualifiedCurrent(managedRoot, dataRoot string, expected ReleaseBinding, now time.Time, publish func() error) error {
+	return GuardQualifiedCurrentContext(context.Background(), managedRoot, dataRoot, expected, now, publish)
+}
+
+// GuardQualifiedCurrentContext preserves installation serialization and admission.
+// Cancellation never reclaims or removes a foreign activation lock.
+func GuardQualifiedCurrentContext(ctx context.Context, managedRoot, dataRoot string, expected ReleaseBinding, now time.Time, publish func() error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if publish == nil {
 		return errors.New("publication callback required")
 	}
@@ -559,7 +568,10 @@ func GuardQualifiedCurrent(managedRoot, dataRoot string, expected ReleaseBinding
 		return err
 	}
 	defer unlock()
-	if _, err := ValidateQualifiedLaunch(managedRoot, dataRoot, expected, now); err != nil {
+	if _, err := ValidateQualifiedLaunchContext(ctx, managedRoot, dataRoot, expected, now); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	return publish()

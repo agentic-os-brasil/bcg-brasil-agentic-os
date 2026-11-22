@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 
+	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/setup"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
@@ -222,38 +223,7 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 		return setup.ApplyNativeClientUpdate(ctx, options, selection, digest, review.ReviewDigest, true)
 	}
 	revalidateMaintenance := func(options installer.ClientOptions) error {
-		if options.Request.DesktopOnly() {
-			fmt.Fprintln(output, "Desktop client preparation grants no maintenance or foreground-model execution. Review those capabilities separately when requested.")
-			return nil
-		}
-		status, err := setup.InspectClientMaintenance(ctx, options)
-		if err != nil {
-			fmt.Fprintln(output, "Maintenance qualification remains pending: current job inputs/status unavailable.")
-			return json.NewEncoder(output).Encode(map[string]string{"maintenance_qualification": "waiting_input", "functional_acceptance": "pending"})
-		}
-		for _, job := range setup.MaintenanceRefreshCandidates(status) {
-			review, err := setup.ReviewClientMaintenance(ctx, options, job)
-			if err != nil {
-				fmt.Fprintln(output, "Maintenance job", job.JobID, "waiting for genuine source inputs; prior enrollment and opt-in preserved.")
-				continue
-			}
-			if err := confirm(review); err != nil {
-				return err
-			}
-			result, err := setup.ApplyClientMaintenance(ctx, options, job, review.ReviewDigest, true)
-			if err != nil {
-				fmt.Fprintln(output, "Maintenance job", job.JobID, "requalification remains pending; it was not marked qualified.")
-				continue
-			}
-			if err := json.NewEncoder(output).Encode(result); err != nil {
-				return err
-			}
-		}
-		status, err = setup.InspectClientMaintenance(ctx, options)
-		if err != nil {
-			return err
-		}
-		return json.NewEncoder(output).Encode(status)
+		return revalidateClientMaintenance(ctx, options, confirm, output)
 	}
 	if o.Request.Target != "" && !o.Request.DesktopOnly() {
 		return errors.New("unsupported client target; nothing applied")
@@ -637,4 +607,49 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 		return err
 	}
 	return revalidateMaintenance(o)
+}
+
+// revalidateClientMaintenance is the manager's existing refresh consumer.
+func revalidateClientMaintenance(ctx context.Context, options installer.ClientOptions, confirm func(any) error, output io.Writer) error {
+	if options.Request.DesktopOnly() {
+		fmt.Fprintln(output, "Desktop client preparation grants no maintenance or foreground-model execution. Review those capabilities separately when requested.")
+		return nil
+	}
+	status, err := setup.InspectClientMaintenance(ctx, options)
+	if err != nil {
+		if writeErr := json.NewEncoder(output).Encode(product.MaintenanceCommandFailure(err, "unknown").Diagnostic); writeErr != nil {
+			return writeErr
+		}
+		fmt.Fprintln(output, "Maintenance qualification remains pending: current job inputs/status unavailable.")
+		return json.NewEncoder(output).Encode(map[string]string{"maintenance_qualification": "waiting_input", "functional_acceptance": "pending"})
+	}
+	for _, job := range setup.MaintenanceRefreshCandidates(status) {
+		review, err := setup.ReviewClientMaintenance(ctx, options, job)
+		if err != nil {
+			if writeErr := json.NewEncoder(output).Encode(product.MaintenanceCommandFailure(err, "unknown").Diagnostic); writeErr != nil {
+				return writeErr
+			}
+			fmt.Fprintln(output, "Maintenance job", job.JobID, "waiting for genuine source inputs; prior enrollment and opt-in preserved.")
+			continue
+		}
+		if err := confirm(review); err != nil {
+			return err
+		}
+		result, err := setup.ApplyClientMaintenance(ctx, options, job, review.ReviewDigest, true)
+		if err != nil {
+			if writeErr := json.NewEncoder(output).Encode(product.MaintenanceCommandFailure(err, "unknown").Diagnostic); writeErr != nil {
+				return writeErr
+			}
+			fmt.Fprintln(output, "Maintenance job", job.JobID, "qualification outcome was not confirmed; inspect current status before a fresh review.")
+			continue
+		}
+		if err := json.NewEncoder(output).Encode(result); err != nil {
+			return err
+		}
+	}
+	status, err = setup.InspectClientMaintenance(ctx, options)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(output).Encode(status)
 }

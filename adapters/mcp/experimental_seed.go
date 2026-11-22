@@ -158,11 +158,15 @@ func (b *Bound) validatedActivatedStateContext(ctx context.Context, expected ins
 	return state, ctx.Err()
 }
 func (b *Bound) withExperimentalSeedFence(action func() error) error {
-	if err := b.validateExperimentalSeed(); err != nil {
+	return b.withExperimentalSeedFenceContext(context.Background(), action)
+}
+
+func (b *Bound) withExperimentalSeedFenceContext(ctx context.Context, action func() error) error {
+	if err := b.validateExperimentalSeedContext(ctx); err != nil {
 		return err
 	}
 	if err := action(); err != nil {
 		return err
 	}
-	return b.validateExperimentalSeed()
+	return b.validateExperimentalSeedContext(ctx)
 }

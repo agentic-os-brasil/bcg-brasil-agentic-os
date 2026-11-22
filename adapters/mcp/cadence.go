@@ -58,8 +58,148 @@ func maintenanceMutations() []any {
 	return append(maintenanceTransitions(), variant("maintenance.run", map[string]any{}))
 }
 
+// MaintenanceCommandDiagnostic contains no source paths, requests or arbitrary errors.
+type MaintenanceCommandDiagnostic struct {
+	SchemaVersion int    `json:"schema_version"`
+	Phase         string `json:"phase"`
+	Code          string `json:"code"`
+}
+
+type MaintenanceCommandError struct {
+	Diagnostic MaintenanceCommandDiagnostic
+	cause      error
+}
+
+func (e *MaintenanceCommandError) Error() string {
+	diagnostic := e.Diagnostic
+	if !validMaintenanceDiagnostic(diagnostic) {
+		diagnostic = MaintenanceCommandDiagnostic{SchemaVersion: 1, Phase: "unknown", Code: "maintenance_rejected"}
+	}
+	return "maestro: maintenance " + diagnostic.Code + " during " + diagnostic.Phase + "; completion was not confirmed; inspect maintenance-status before a fresh maintenance-review"
+}
+func (e *MaintenanceCommandError) Unwrap() error { return e.cause }
+
+func maintenanceCommandPhase(phase string) string {
+	switch phase {
+	case "input", "admission", "review", "confirmation", "reservation", "selection", "execution", "verification", "publication", "output", "launch":
+		return phase
+	default:
+		return "unknown"
+	}
+}
+
+var ErrMaintenanceCommandOutputLimit = errors.New("maintenance command output limit")
+
+func maintenanceErrorCode(err error) string {
+	switch {
+	case errors.Is(err, ErrMaintenanceCommandOutputLimit):
+		return "output_limit"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "deadline_exceeded"
+	case errors.Is(err, context.Canceled):
+		return "canceled"
+	case errors.Is(err, ErrSourceRecoveryRequired):
+		return "source_recovery_required"
+	case errors.Is(err, processidentity.ErrChanged):
+		return "restart_required"
+	case errors.Is(err, errConfirmationUnavailable):
+		return "confirmation_unavailable"
+	case errors.Is(err, errConfirmationDeclined):
+		return "confirmation_declined"
+	case errors.Is(err, maintenance.ErrProductConflict), errors.Is(err, maintenance.ErrCheckpointConflict), errors.Is(err, errOwnerReviewChanged):
+		return "revision_conflict"
+	case errors.Is(err, maintenance.ErrQualificationRequired):
+		return "qualification_required"
+	case errors.Is(err, scheduler.ErrCapabilityUnavailable):
+		return "maintenance_unavailable"
+	case errors.Is(err, scheduler.ErrLeaseBusy):
+		return "maintenance_busy"
+	default:
+		return "maintenance_rejected"
+	}
+}
+
+// MaintenanceCommandFailure preserves only a closed stage/category when displayed.
+func MaintenanceCommandFailure(err error, phase string) *MaintenanceCommandError {
+	var prior *MaintenanceCommandError
+	if errors.As(err, &prior) && prior != nil && validMaintenanceDiagnostic(prior.Diagnostic) && prior.Diagnostic.Code != "in_progress" {
+		return prior
+	}
+	return &MaintenanceCommandError{Diagnostic: MaintenanceCommandDiagnostic{SchemaVersion: 1, Phase: maintenanceCommandPhase(phase), Code: maintenanceErrorCode(err)}, cause: err}
+}
+
+// MaintenanceCommandProgress is fixed metadata; it grants no effects or authority.
+func MaintenanceCommandProgress(phase string) MaintenanceCommandDiagnostic {
+	return MaintenanceCommandDiagnostic{SchemaVersion: 1, Phase: maintenanceCommandPhase(phase), Code: "in_progress"}
+}
+
+func validMaintenanceDiagnostic(d MaintenanceCommandDiagnostic) bool {
+	if d.SchemaVersion != 1 || d.Phase != maintenanceCommandPhase(d.Phase) {
+		return false
+	}
+	switch d.Code {
+	case "in_progress", "interrupted", "output_limit", "deadline_exceeded", "canceled", "source_recovery_required", "restart_required", "confirmation_unavailable", "confirmation_declined", "revision_conflict", "qualification_required", "maintenance_unavailable", "maintenance_busy", "maintenance_rejected":
+		return true
+	}
+	return false
+}
+
+// MaintenanceChildFailure reads only bounded closed diagnostics. An interrupted
+// process has unknown completion, even if it emitted an earlier success-like line.
+func MaintenanceChildFailure(stderr []byte, cause error, interrupted bool) *MaintenanceCommandError {
+	last := MaintenanceCommandDiagnostic{SchemaVersion: 1, Phase: "launch", Code: "interrupted"}
+	if len(stderr) <= 4096 {
+		for _, line := range bytes.Split(stderr, []byte{'\n'}) {
+			if len(line) == 0 || len(line) > 512 {
+				continue
+			}
+			var d MaintenanceCommandDiagnostic
+			decoder := json.NewDecoder(bytes.NewReader(line))
+			decoder.DisallowUnknownFields()
+			if decoder.Decode(&d) == nil && decoder.Decode(new(any)) == io.EOF && validMaintenanceDiagnostic(d) {
+				last = d
+			}
+		}
+	}
+	if interrupted || last.Code == "in_progress" {
+		last.Code = "interrupted"
+	}
+	return &MaintenanceCommandError{Diagnostic: last, cause: cause}
+}
+
+// MaintenanceCommandTimeout retains the original ninety-second process supervision budget.
+const MaintenanceCommandTimeout = 90 * time.Second
+
+// MaintenanceCommandContext can only shorten the local operation's deadline.
+// The native child receives a deadline, never a longer duration or new authority.
+func MaintenanceCommandContext(parent context.Context, propagated string) (context.Context, context.CancelFunc, error) {
+	if parent == nil {
+		return nil, nil, errors.New("maintenance context required")
+	}
+	deadline := time.Now().Add(MaintenanceCommandTimeout)
+	if propagated != "" {
+		supplied, err := time.Parse(time.RFC3339Nano, propagated)
+		if err != nil {
+			return nil, nil, errors.New("invalid maintenance deadline")
+		}
+		if supplied.Before(deadline) {
+			deadline = supplied
+		}
+	}
+	ctx, cancel := context.WithDeadline(parent, deadline)
+	if err := ctx.Err(); err != nil {
+		cancel()
+		return nil, nil, err
+	}
+	return ctx, cancel, nil
+}
+
 func (b *Bound) maintenanceService() (*maintenance.Service, error) {
-	return b.maintenanceServiceWithEligibility(nil)
+	return b.maintenanceServiceContext(context.Background())
+}
+
+func (b *Bound) maintenanceServiceContext(ctx context.Context) (*maintenance.Service, error) {
+	return b.newMaintenanceService(ctx, nil, b.guardPublication, b.guardPublicationContext)
 }
 
 func (b *Bound) maintenanceServiceWithEligibility(eligibility func() error) (*maintenance.Service, error) {
@@ -67,7 +207,11 @@ func (b *Bound) maintenanceServiceWithEligibility(eligibility func() error) (*ma
 }
 
 func (b *Bound) maintenanceServiceWithGuards(eligibility func() error, installedGuard func(func() error) error) (*maintenance.Service, error) {
-	if err := b.validate(); err != nil {
+	return b.newMaintenanceService(context.Background(), eligibility, installedGuard, nil)
+}
+
+func (b *Bound) newMaintenanceService(ctx context.Context, eligibility func() error, installedGuard func(func() error) error, installedGuardContext func(context.Context, func() error) error) (*maintenance.Service, error) {
+	if err := b.validateContext(ctx); err != nil {
 		return nil, err
 	}
 	catalog, err := baseruntime.Maintenance()
@@ -82,7 +226,7 @@ func (b *Bound) maintenanceServiceWithGuards(eligibility func() error, installed
 		WeeklyCandidate:  b.options.WeeklyCandidate, WeeklyNativeExecutor: b.options.WeeklyNativeExecutor, MemoryNativeExecutor: b.options.MemoryNativeExecutor,
 		ProductRoot: b.options.ProductRoot, UserHome: b.options.UserHome,
 		WorkspacePath: b.options.WorkspacePath, LookupEnv: b.options.LookupEnv,
-		DarwinFactory: darwin.NewProductBinding, Catalog: catalog, Adapter: "local", Now: b.maintenanceClock, CLIVersion: b.options.CLIVersion, InstalledGuard: installedGuard, AuthorityRegistryPath: b.options.AuthorityRegistryPath, AuthorityRegistrySHA256: b.options.AuthorityRegistrySHA256,
+		DarwinFactory: darwin.NewProductBinding, Catalog: catalog, Adapter: "local", Now: b.maintenanceClock, CLIVersion: b.options.CLIVersion, InstalledGuard: installedGuard, InstalledGuardContext: installedGuardContext, AuthorityRegistryPath: b.options.AuthorityRegistryPath, AuthorityRegistrySHA256: b.options.AuthorityRegistrySHA256,
 	})
 }
 
@@ -149,15 +293,22 @@ type LocalMaintenanceReview struct {
 }
 
 func (b *Bound) maintenanceReview(in MaintenanceMutation) (*maintenance.Service, maintenance.ProductReview, error) {
+	return b.maintenanceReviewContext(context.Background(), in)
+}
+
+func (b *Bound) maintenanceReviewContext(ctx context.Context, in MaintenanceMutation) (*maintenance.Service, maintenance.ProductReview, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, maintenance.ProductReview{}, err
+	}
 	op, err := maintenanceOperation(in)
 	if err != nil {
 		return nil, maintenance.ProductReview{}, err
 	}
-	service, err := b.maintenanceService()
+	service, err := b.maintenanceServiceContext(ctx)
 	if err != nil {
 		return nil, maintenance.ProductReview{}, err
 	}
-	review, err := service.Review(op)
+	review, err := service.ReviewContext(ctx, op)
 	return service, review, err
 }
 
@@ -168,7 +319,11 @@ func (b *Bound) maintenanceReviewDigest(review maintenance.ProductReview) string
 }
 
 func (b *Bound) MaintenanceReview(in MaintenanceMutation) (LocalMaintenanceReview, error) {
-	_, review, err := b.maintenanceReview(in)
+	return b.MaintenanceReviewContext(context.Background(), in)
+}
+
+func (b *Bound) MaintenanceReviewContext(ctx context.Context, in MaintenanceMutation) (LocalMaintenanceReview, error) {
+	_, review, err := b.maintenanceReviewContext(ctx, in)
 	if err != nil {
 		return LocalMaintenanceReview{}, err
 	}
@@ -179,14 +334,14 @@ func (b *Bound) ApplyMaintenanceReview(ctx context.Context, in MaintenanceMutati
 	if !confirmed {
 		return nil, errConfirmationDeclined
 	}
-	service, review, err := b.maintenanceReview(in)
+	service, review, err := b.maintenanceReviewContext(ctx, in)
 	if err != nil {
 		return nil, err
 	}
 	if digest != b.maintenanceReviewDigest(review) {
 		return nil, maintenance.ErrProductConflict
 	}
-	job, err := service.Apply(ctx, review, func(context.Context, maintenance.ProductReview) error { return b.validate() })
+	job, err := service.Apply(ctx, review, func(ctx context.Context, _ maintenance.ProductReview) error { return b.validateContext(ctx) })
 	if err != nil {
 		return nil, err
 	}
@@ -230,11 +385,15 @@ func maintenanceJobMetadata(job maintenance.ProductJobStatus) maintenanceJobMeta
 }
 
 func (b *Bound) MaintenanceStatus() (any, error) {
-	service, err := b.maintenanceService()
+	return b.MaintenanceStatusContext(context.Background())
+}
+
+func (b *Bound) MaintenanceStatusContext(ctx context.Context) (any, error) {
+	service, err := b.maintenanceServiceContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	status, err := service.Status()
+	status, err := service.StatusContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +405,7 @@ func (b *Bound) MaintenanceStatus() (any, error) {
 }
 
 func (b *Bound) RunMaintenance(ctx context.Context) (any, error) {
-	service, err := b.maintenanceService()
+	service, err := b.maintenanceServiceContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -315,21 +474,7 @@ func maintenanceResult(value any, err error) *mcp.CallToolResult {
 	if errors.As(err, &pending) {
 		return pending.result
 	}
-	code := "maintenance_rejected"
-	switch {
-	case errors.Is(err, processidentity.ErrChanged):
-		code = "restart_required"
-	case errors.Is(err, errConfirmationUnavailable):
-		code = "confirmation_unavailable"
-	case errors.Is(err, errConfirmationDeclined):
-		code = "confirmation_declined"
-	case errors.Is(err, maintenance.ErrProductConflict), errors.Is(err, maintenance.ErrCheckpointConflict), errors.Is(err, errOwnerReviewChanged):
-		code = "revision_conflict"
-	case errors.Is(err, maintenance.ErrQualificationRequired):
-		code = "qualification_required"
-	case errors.Is(err, scheduler.ErrCapabilityUnavailable):
-		code = "maintenance_unavailable"
-	}
+	code := maintenanceErrorCode(err)
 	metadata := map[string]any{"code": code, "retryable": false}
 	if value != nil {
 		metadata["result"] = value
@@ -344,11 +489,11 @@ func maintenanceResult(value any, err error) *mcp.CallToolResult {
 
 func (b *Bound) handleMaintenance(ctx context.Context, req *mcp.CallToolRequest, in input) *mcp.CallToolResult {
 	if in.Operation == "maintenance.status" {
-		value, err := b.MaintenanceStatus()
+		value, err := b.MaintenanceStatusContext(ctx)
 		return maintenanceResult(value, err)
 	}
 	if in.Operation == "maintenance.report" {
-		service, err := b.maintenanceService()
+		service, err := b.maintenanceServiceContext(ctx)
 		if err != nil {
 			return maintenanceResult(nil, err)
 		}
@@ -360,7 +505,7 @@ func (b *Bound) handleMaintenance(ctx context.Context, req *mcp.CallToolRequest,
 		return maintenanceResult(value, err)
 	}
 	mutation := MaintenanceMutation{Operation: in.Operation, JobID: in.JobID, ExpectedRevision: uint64(in.ExpectedRevision), Timezone: in.Timezone}
-	service, review, err := b.maintenanceReview(mutation)
+	service, review, err := b.maintenanceReviewContext(ctx, mutation)
 	if err != nil {
 		return maintenanceResult(nil, err)
 	}
