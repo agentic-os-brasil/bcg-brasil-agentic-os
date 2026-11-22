@@ -366,7 +366,9 @@ Write-Output 'failure_stops_without_replay=true'
 
     def test_docling_bootstrap_environment_is_closed_before_creation_and_restored(self):
         # Execute the real launch barrier around a harmless stub. A real .NET
-        # ProcessStartInfo observes its inherited environment; no process starts.
+        # ProcessStartInfo observes its inherited environment. Materializing its
+        # advertised TEMP models overlap with the actual strict launcher init;
+        # it does not identify who created the directory in a native failure.
         script = self.root / "docling-launch-environment.ps1"
         script.write_text(r'''$ErrorActionPreference='Stop'
 $tokens=$null;$errors=$null
@@ -381,7 +383,20 @@ $builder=@($tree.FindAll({param($n)
  $n -is [Management.Automation.Language.IfStatementAst] -and $n.Clauses[0].Item1.Extent.Text -ceq '$withDocling' -and
  @($n.Clauses[0].Item2.Statements | Where-Object {$_ -is [Management.Automation.Language.AssignmentStatementAst] -and $_.Left.Extent.Text -ceq '$doclingLaunchEnvironment'}).Count -eq 1
 },$true))
-$withDocling=$true;$OutputRoot=$PSScriptRoot
+$launcher=@($tokens | Where-Object {$_.Kind -eq 'HereStringLiteral'})
+if($launcher.Count -ne 1){throw 'Expected the single shared credentialed launcher'}
+$inner=[Management.Automation.Language.Parser]::ParseInput($launcher[0].Value,[ref]$null,[ref]$errors)
+if($errors.Count){throw 'Original launcher must parse'}
+$initializers=@($inner.FindAll({param($n)
+ $n -is [Management.Automation.Language.TryStatementAst] -and $n.Body.Statements.Count -ge 5 -and
+ $n.Body.Statements[0] -is [Management.Automation.Language.AssignmentStatementAst] -and
+ $n.Body.Statements[0].Left.Extent.Text -ceq '$temporary'
+},$true))
+if($initializers.Count -ne 1){throw 'Expected original child temporary-directory initializer'}
+$tempInit=@($initializers[0].Body.Statements | Select-Object -First 5)
+if($tempInit[-1] -isnot [Management.Automation.Language.AssignmentStatementAst] -or
+ $tempInit[-1].Left.Extent.Text -cne '$env:GOTMPDIR'){throw 'Expected complete original child temp initialization'}
+$withDocling=$true
 $doclingSystemRoot=Join-Path $PSScriptRoot 'windows';$doclingSystemDirectory=Join-Path $doclingSystemRoot 'System32'
 $doclingRuntime=@{sdk_go=(Join-Path $PSScriptRoot 'sdk/bin/go.exe');module_cache=(Join-Path $PSScriptRoot 'modules')}
 $powershell=$PSHOME+'/pwsh';$arguments=@('synthetic');$credential=$null;$stdout='unused';$stderr='unused'
@@ -403,18 +418,50 @@ function Start-Process {
   $visible['GOCACHE'] -cne (Join-Path $OutputRoot 'go-cache') -or $visible['GOPATH'] -cne (Join-Path $OutputRoot 'go-path') -or
   $visible['PATH'] -notlike ('*'+(Split-Path -Parent $doclingRuntime.sdk_go)+'*') -or $visible['PSModulePath'] -cne (Join-Path $PSHOME 'Modules') -or
   $visible['GITHUB_ACTIONS'] -cne 'true' -or $visible['RUNNER_ENVIRONMENT'] -cne 'github-hosted') {throw 'Required resolved nonsecret bootstrap binding was lost'}
+ $childTemp=Join-Path $OutputRoot 'user-temp'
+ if($script:preexistingChildTemp){[IO.Directory]::CreateDirectory($childTemp) | Out-Null}
+ [IO.Directory]::CreateDirectory($visible['TEMP']) | Out-Null
+ $ProofRoot=$OutputRoot
+ try {Invoke-Expression ($tempInit.Extent.Text -join "`n")} catch {
+  $script:childTempRefused=$_.CategoryInfo.Category -eq [Management.Automation.ErrorCategory]::ResourceExists -and
+   (Test-Path -LiteralPath $childTemp -PathType Container)
+  throw
+ }
+ foreach($key in @('TEMP','TMP','GOTMPDIR')) {
+  if($visible[$key] -cne $OutputRoot){throw 'Bootstrap temporary directory differs from private output root'}
+  if([Environment]::GetEnvironmentVariable($key,'Process') -cne $childTemp){throw 'Child temporary directory was not rebound'}
+ }
+ if(-not (Test-Path -LiteralPath $childTemp -PathType Container)){throw 'Child temporary directory was not created'}
+ $script:childInitializations++
  if($script:failLaunch){throw 'synthetic launch failed'}
  return @{ExitCode=0}
 }
-foreach($fail in @($false,$true)) {
- $script:failLaunch=$fail;$script:launches=0;$doclingParentEnvironment=$null
+foreach($case in @(
+ @{name='success';fail=$false;preexisting=$false},
+ @{name='throw';fail=$true;preexisting=$false},
+ @{name='preexisting';fail=$false;preexisting=$true}
+)) {
+ $OutputRoot=Join-Path $PSScriptRoot $case.name
+ New-Item -ItemType Directory -Path $OutputRoot | Out-Null
+ $script:failLaunch=$case.fail;$script:preexistingChildTemp=$case.preexisting
+ $script:launches=0;$script:childInitializations=0;$script:childTempRefused=$false;$doclingParentEnvironment=$null
  $hadModulePath=Test-Path Env:PSModulePath;$priorModulePath=$env:PSModulePath
  $before=[Environment]::GetEnvironmentVariables('Process')
  if($builder.Count -eq 1){Invoke-Expression $builder[0].Extent.Text}
  $caught=$null
  try {Invoke-Expression $barrier.Extent.Text} catch {$caught=$_.Exception.Message}
  $after=[Environment]::GetEnvironmentVariables('Process')
- if($script:launches -ne 1 -or ($fail -and $caught -cne 'synthetic launch failed') -or (-not $fail -and $null -ne $caught)){
+ if($before.Count -ne $after.Count){throw 'Parent environment was not restored'}
+ foreach($key in $before.Keys){if(-not $after.Contains($key) -or $before[$key] -cne $after[$key]){throw 'Parent environment was not restored'}}
+ if($case.preexisting) {
+  if($script:launches -ne 1 -or -not $script:childTempRefused -or $script:childInitializations -ne 0 -or $null -eq $caught){
+   throw 'Preexisting child temp must refuse without adoption'
+  }
+  continue
+ }
+ if($script:launches -ne 1 -or $script:childInitializations -ne 1 -or
+  ($case.fail -and $caught -cne 'synthetic launch failed') -or (-not $case.fail -and $null -ne $caught)){
+  if($script:childTempRefused){throw 'Actual bootstrap environment contract failed: bootstrap_child_temp_overlap'}
   $category=switch -Exact ($caught) {
    'Inherited credential canary reached process creation' {'inherited_canary'}
    'Bootstrap environment is not the closed key set' {'unexpected_keys'}
@@ -424,15 +471,15 @@ foreach($fail in @($false,$true)) {
   }
   throw ('Actual bootstrap environment contract failed: '+$category)
  }
- if($before.Count -ne $after.Count){throw 'Parent environment was not restored'}
- foreach($key in $before.Keys){if(-not $after.Contains($key) -or $before[$key] -cne $after[$key]){throw 'Parent environment was not restored'}}
 }
 Write-Output 'closed_creation_and_parent_restore=true'
+Write-Output 'bootstrap_child_temp_separate_and_preexisting_refused=true'
 ''', encoding="utf-8")
         result = subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
                                  str(script), str(DRIVER)], text=True, capture_output=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("closed_creation_and_parent_restore=true", result.stdout)
+        self.assertIn("bootstrap_child_temp_separate_and_preexisting_refused=true", result.stdout)
 
     def test_docling_account_removal_failure_is_fatal_and_clears_credentials(self):
         # Run only the existing teardown block with a synthetic removal stub.
