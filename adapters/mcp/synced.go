@@ -131,32 +131,43 @@ func (b *Bound) validateInstalledSourceContext(ctx context.Context) error {
 }
 
 func (b *Bound) guardPublication(publish func() error) error {
-	if err := b.validate(); err != nil {
+	return b.guardPublicationContext(context.Background(), publish)
+}
+
+func (b *Bound) guardPublicationContext(ctx context.Context, publish func() error) error {
+	if err := b.validateContext(ctx); err != nil {
 		return err
 	}
-	required, err := b.sourceRequired()
+	required, err := b.sourceRequiredContext(ctx)
 	if err != nil {
 		return err
 	}
 	if !required {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		return publish()
 	}
-	return b.guardQualifiedPublication(publish)
+	return b.guardQualifiedPublicationContext(ctx, publish)
 }
 
 // guardQualifiedPublication keeps a caller already classified as qualified
 // within the original qualified installation owner. It cannot recategorize
 // a recovered Source=nil state into the ordinary unqualified wrapper.
 func (b *Bound) guardQualifiedPublication(publish func() error) error {
-	if err := b.validate(); err != nil {
+	return b.guardQualifiedPublicationContext(context.Background(), publish)
+}
+
+func (b *Bound) guardQualifiedPublicationContext(ctx context.Context, publish func() error) error {
+	if err := b.validateContext(ctx); err != nil {
 		return err
 	}
-	return installtx.GuardQualifiedCurrent(b.options.ProductRoot, filepath.Join(b.options.UserHome, ".maestro-install"), b.installedExpectation(), time.Now(), func() error {
+	return installtx.GuardQualifiedCurrentContext(ctx, b.options.ProductRoot, filepath.Join(b.options.UserHome, ".maestro-install"), b.installedExpectation(), time.Now(), func() error {
 		// Repeat running identity and the complete owner/workspace binding
 		// under the same canonical installation lock before publication.
-		if err := b.validate(); err != nil {
+		if err := b.validateContext(ctx); err != nil {
 			return err
 		}
-		return b.withExperimentalSeedFence(publish)
+		return b.withExperimentalSeedFenceContext(ctx, publish)
 	})
 }

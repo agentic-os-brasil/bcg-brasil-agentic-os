@@ -51,8 +51,50 @@ func MaintenanceRefreshCandidates(status ClientMaintenanceStatus) []ClientMainte
 	return jobs
 }
 
-func currentMaintenanceCommand(ctx context.Context, o installer.ClientOptions, command string, input any, digest string) ([]byte, error) {
-	s, err := installtx.ValidateQualifiedLaunch(o.ManagedRoot, o.DataRoot, installtx.ReleaseBinding{}, time.Now())
+// Composition keeps io.Copy/WriteString fast paths from bypassing the bound.
+// Writes drain the complete child stream; truncation remains a terminal refusal.
+type maintenanceCommandOutput struct {
+	data      []byte
+	limit     int
+	truncated bool
+}
+
+func (b *maintenanceCommandOutput) Write(p []byte) (int, error) {
+	consumed := len(p)
+	available := b.limit - len(b.data)
+	if available < 0 {
+		available = 0
+	}
+	if len(p) > available {
+		b.truncated = true
+		p = p[:available]
+	}
+	b.data = append(b.data, p...)
+	return consumed, nil
+}
+func (b *maintenanceCommandOutput) Bytes() []byte { return b.data }
+
+func currentMaintenanceCommand(ctx context.Context, o installer.ClientOptions, command string, input any, digest string) (body []byte, returned error) {
+	phase := "admission"
+	defer func() {
+		if returned != nil {
+			returned = product.MaintenanceCommandFailure(returned, phase)
+		}
+	}()
+	supervision, stopSupervision, err := product.MaintenanceCommandContext(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+	defer stopSupervision()
+	hardDeadline, _ := supervision.Deadline()
+	// Reserve return/cleanup time inside the original 90-second ceiling.
+	// Earlier caller cancellation still stops the supervised child immediately.
+	operation, stopOperation := context.WithDeadline(supervision, hardDeadline.Add(-2*time.Second))
+	defer stopOperation()
+	if err := operation.Err(); err != nil {
+		return nil, err
+	}
+	s, err := installtx.ValidateQualifiedLaunchContext(operation, o.ManagedRoot, o.DataRoot, installtx.ReleaseBinding{}, time.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -61,11 +103,20 @@ func currentMaintenanceCommand(ctx context.Context, o installer.ClientOptions, c
 		name += ".exe"
 	}
 	server := filepath.Join(o.ManagedRoot, "bin", name)
-	launch, err := installer.PrepareQualifiedLaunch(ctx, installer.QualifiedLaunchOptions{SeededOperationOptions: o.SeededOperationOptions, ExpectedBinding: s.Binding, Workspace: o.Request.Workspace})
-	if err != nil || launch.Executable != server {
+	launch, err := installer.PrepareQualifiedLaunch(operation, installer.QualifiedLaunchOptions{SeededOperationOptions: o.SeededOperationOptions, ExpectedBinding: s.Binding, Workspace: o.Request.Workspace})
+	if canceled := operation.Err(); canceled != nil {
+		return nil, canceled
+	}
+	if err != nil {
+		return nil, err
+	}
+	if launch.Executable != server {
 		return nil, errors.New("independently admitted maintenance launch required")
 	}
 	before, err := installer.ClientFileDigest(server)
+	if canceled := operation.Err(); canceled != nil {
+		return nil, canceled
+	}
 	if err != nil || before != s.Server.SHA256 {
 		return nil, errors.New("current maintenance owner changed")
 	}
@@ -73,9 +124,13 @@ func currentMaintenanceCommand(ctx context.Context, o installer.ClientOptions, c
 	if err != nil {
 		return nil, err
 	}
-	bounded, cancel := context.WithTimeout(ctx, 90*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(bounded, server, args...)
+	if err := operation.Err(); err != nil {
+		return nil, err
+	}
+	deadline, _ := operation.Deadline()
+	args = append(args, "--maintenance-deadline", deadline.UTC().Format(time.RFC3339Nano), "--maintenance-progress")
+	phase = "launch"
+	cmd := exec.CommandContext(supervision, server, args...)
 	cmd.Dir = o.Request.Workspace
 	cmd.WaitDelay = 2 * time.Second
 	if input != nil {
@@ -85,17 +140,31 @@ func currentMaintenanceCommand(ctx context.Context, o installer.ClientOptions, c
 		}
 		cmd.Stdin = bytes.NewReader(body)
 	}
-	var output boundedClientOutput
-	cmd.Stdout = &output
-	cmd.Stderr = &boundedClientOutput{}
-	if err := cmd.Run(); err != nil {
+	output := maintenanceCommandOutput{limit: 1 << 20}
+	diagnostic := maintenanceCommandOutput{limit: 4096}
+	cmd.Stdout, cmd.Stderr = &output, &diagnostic
+	runErr := cmd.Run()
+	if output.truncated || diagnostic.truncated {
+		return nil, product.MaintenanceCommandFailure(product.ErrMaintenanceCommandOutputLimit, "output")
+	}
+	if runErr != nil {
+		return nil, product.MaintenanceChildFailure(diagnostic.Bytes(), runErr, supervision.Err() != nil)
+	}
+	phase = "verification"
+	if err := operation.Err(); err != nil {
 		return nil, err
 	}
 	after, err := installer.ClientFileDigest(server)
+	if canceled := operation.Err(); canceled != nil {
+		return nil, canceled
+	}
 	if err != nil || after != before {
 		return nil, errors.New("current maintenance owner changed during operation")
 	}
-	if _, err := installtx.ValidateQualifiedLaunch(o.ManagedRoot, o.DataRoot, s.Binding, time.Now()); err != nil {
+	if _, err := installtx.ValidateQualifiedLaunchContext(operation, o.ManagedRoot, o.DataRoot, s.Binding, time.Now()); err != nil {
+		return nil, err
+	}
+	if err := operation.Err(); err != nil {
 		return nil, err
 	}
 	return output.Bytes(), nil

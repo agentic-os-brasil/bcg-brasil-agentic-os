@@ -86,7 +86,7 @@ func PrepareQualifiedLaunch(ctx context.Context, o QualifiedLaunchOptions) (Qual
 	if _, err := admitOperationSeed(ctx, o.SeededOperationOptions); err != nil {
 		return QualifiedLaunch{}, err
 	}
-	state, err := installtx.ValidateQualifiedLaunch(o.ManagedRoot, o.DataRoot, o.ExpectedBinding, time.Now())
+	state, err := installtx.ValidateQualifiedLaunchContext(ctx, o.ManagedRoot, o.DataRoot, o.ExpectedBinding, time.Now())
 	if err != nil {
 		return QualifiedLaunch{}, err
 	}
@@ -100,7 +100,10 @@ func PrepareQualifiedLaunch(ctx context.Context, o QualifiedLaunchOptions) (Qual
 	if o.Workspace != "" {
 		args = append(args, "--workspace", o.Workspace)
 	}
-	if err := recheckExperimentalOperation(o.SeededOperationOptions); err != nil {
+	if err := recheckExperimentalOperationContext(ctx, o.SeededOperationOptions); err != nil {
+		return QualifiedLaunch{}, err
+	}
+	if err := ctx.Err(); err != nil {
 		return QualifiedLaunch{}, err
 	}
 	return QualifiedLaunch{Executable: installedExecutablePath(o.ManagedRoot, state.TargetOS, state.Profile), Args: args, State: state}, nil

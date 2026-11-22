@@ -17,14 +17,20 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 )
 
-func experimentalCommandFlags(flags *flag.FlagSet, o *product.Options) func() error {
+func experimentalCommandFlags(flags *flag.FlagSet, o *product.Options) func(context.Context) error {
 	digest := flags.String("experimental-seed-sha256", "", "fixed signed engineering installed-seed identity")
 	root := flags.String("experimental-installed-root", "", "fixed reviewed engineering installation")
-	return func() error {
+	return func(ctx context.Context) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if *root == "" || *digest == "" || !filepath.IsAbs(*root) || filepath.Clean(*root) != *root {
 			return errors.New("experimental installed binding is required")
 		}
-		fixed, err := installer.LoadExperimentalInstalledContext(*root, AuthorityRegistrySHA256, time.Now)
+		fixed, err := installer.LoadExperimentalInstalledContextWithContext(ctx, *root, AuthorityRegistrySHA256, time.Now)
+		if canceled := ctx.Err(); canceled != nil {
+			return canceled
+		}
 		if err != nil || fixed.ExperimentalSeed.Identity().AdmissionSHA256 != *digest {
 			return errors.New("experimental signed seed differs")
 		}
@@ -44,7 +50,7 @@ func experimentalCommandFlags(flags *flag.FlagSet, o *product.Options) func() er
 			return errors.New("experimental child is not the exact current server")
 		}
 		o.ExperimentalSeed, o.ExperimentalSeedRoot = role, *root
-		return nil
+		return ctx.Err()
 	}
 }
 
