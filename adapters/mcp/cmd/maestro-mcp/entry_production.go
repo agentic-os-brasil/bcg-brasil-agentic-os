@@ -10,8 +10,8 @@ import (
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 )
 
-func experimentalCommandFlags(*flag.FlagSet, *product.Options) func() error {
-	return func() error { return nil }
+func experimentalCommandFlags(*flag.FlagSet, *product.Options) func(context.Context) error {
+	return func(ctx context.Context) error { return ctx.Err() }
 }
 func experimentalEarlyCommand(context.Context, string, []string, io.Writer) (bool, error) {
 	return false, nil
