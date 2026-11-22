@@ -478,7 +478,17 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 			return result
 		}
 		if r.ClientTarget != "desktop" {
-			r.CodeSteps = bind(steps, "Use somente o servidor MCP plugin:maestro-product:maestro deste ensaio. ")
+			codeSteps := make([]pilotStep, 0, len(steps))
+			for _, step := range steps {
+				if step.ID == "execution-resume" {
+					continue
+				}
+				if step.ID == "execution-pause" {
+					step.Prompt += " Com paused confirmado, oriente o participante: pressione Enter no menu da etapa para voltar e escolha 2 — Continuar no Desktop no menu principal. A continuação acontece no Desktop, em outro pedido."
+				}
+				codeSteps = append(codeSteps, step)
+			}
+			r.CodeSteps = bind(codeSteps, "Use somente o servidor MCP plugin:maestro-product:maestro deste ensaio. ")
 		}
 		desktopSteps := steps
 		if r.ClientTarget != "desktop" {
@@ -517,7 +527,12 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 		// Preserve the existing JSON string fields, with a safe read-only entry.
 		if len(r.CodeSteps) != 0 {
 			r.CodePrompt = r.CodeSteps[0].Prompt
-			r.CodeReadbackPrompt = r.CodeSteps[len(steps)-1].Prompt
+			for _, step := range r.CodeSteps {
+				if step.ID == "readback" {
+					r.CodeReadbackPrompt = step.Prompt
+					break
+				}
+			}
 		}
 		r.DesktopPrompt = r.DesktopSteps[0].Prompt
 

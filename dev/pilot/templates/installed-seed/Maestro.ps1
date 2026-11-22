@@ -372,7 +372,7 @@ try {
   if ($CheckOnly) { exit $checkExit }
   function Assert-TestPrompt([string]$PromptFile) {
     if ($Checked.status -ceq 'blocked') { Stop-Maestro 'O diagnostico bloqueou a jornada. Preserve o relatorio; nenhum cliente sera aberto.' }
-    if (-not (Test-Path -LiteralPath (Join-Path $Run $PromptFile) -PathType Leaf) -or [string]::IsNullOrWhiteSpace((Get-Content -LiteralPath (Join-Path $Run $PromptFile) -Raw))) { Stop-Maestro 'Prompt indisponivel. Reabra o diagnostico antes de continuar.' }
+    if (-not (Test-Path -LiteralPath (Join-Path $Run $PromptFile) -PathType Leaf) -or [string]::IsNullOrWhiteSpace((Get-Content -LiteralPath (Join-Path $Run $PromptFile) -Raw -Encoding UTF8))) { Stop-Maestro 'Prompt indisponivel. Reabra o diagnostico antes de continuar.' }
   }
   function Prepare-ConversionDocument($ClientStatus,[string]$PromptFile) {
     if ($PromptFile -cnotin @('CODE-CONVERSAO.txt','DESKTOP-CONVERSAO.txt')) { Stop-Maestro 'Documento disponivel somente na etapa de documento.' }
@@ -407,7 +407,7 @@ try {
     if ($PromptFile -ceq 'CODE-CONVERSAO.txt') { Prepare-ConversionDocument $ClientStatus $PromptFile }
     Push-Location -LiteralPath $Config.workspace
     try {
-      Invoke-SelectedCode -Arguments @((Get-Content -LiteralPath (Join-Path $Run $PromptFile) -Raw)) | Out-Host
+      Invoke-SelectedCode -Arguments @((Get-Content -LiteralPath (Join-Path $Run $PromptFile) -Raw -Encoding UTF8)) | Out-Host
       if ($script:CodeExit -ne 0) { Stop-Maestro "O Code encerrou com codigo $script:CodeExit. Preserve o relatorio e retome pelo fluxo normal." }
     } finally { Pop-Location }
   }
@@ -423,7 +423,7 @@ try {
     $ClientStatus = Current-Clients
     if ($ClientStatus.state -cne 'current_materialization') { Stop-Maestro 'Pacotes ainda nao estao atuais.' }
     if ($PromptFile -ceq 'DESKTOP-CONVERSAO.txt') { Prepare-ConversionDocument $ClientStatus $PromptFile }
-    Set-Clipboard -Value (Get-Content -LiteralPath (Join-Path $Run $PromptFile) -Raw)
+    Set-Clipboard -Value (Get-Content -LiteralPath (Join-Path $Run $PromptFile) -Raw -Encoding UTF8)
     if (Test-CurrentDesktopInstall $ClientStatus) {
       Write-Host 'A instalacao deste pacote/contrato ja foi confirmada por voce. O instalador da extensao nao sera reaberto; conexao e funcionamento continuam pendentes de teste.'
     } else {

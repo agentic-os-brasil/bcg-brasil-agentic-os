@@ -113,6 +113,102 @@ function Invoke-PilotSteps([string]$Client) {`+body+`Invoke-PilotSteps 'desktop'
 	}
 }
 
+// Exercise the exact original prompt-consumer statements, not a copied decoder.
+// Alternate defaults on PowerShell 7 expose the BOM-less ANSI-reader failure;
+// this is a decoding contract, not native Windows PowerShell 5.1 qualification.
+func TestParticipantPowerShellPromptConsumersPreserveUTF8(t *testing.T) {
+	powerShell, err := powerShellTool()
+	if err != nil {
+		t.Skip("PowerShell runtime unavailable; native Windows remains unqualified")
+	}
+	dir := developerFixture(t)
+	text := "Preferência inteiramente fictícia: conferir o resultado salvo antes da entrega. MAESTRO_PILOT_0123456789abcdef0123456789abcdef_MEMORY_ACCEPT\nUma etapa por vez — revisão e confirmação."
+	steps := []map[string]string{{"id": "memory-accept", "title": "Salvar e conferir a memória de teste", "prompt": text}}
+	fixture, err := json.Marshal(map[string]any{"status": "partial", "code_steps": steps, "desktop_steps": steps})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "report.json"), fixture, 0600); err != nil {
+		t.Fatal(err)
+	}
+	source, err := os.ReadFile("../templates/installed-seed/Maestro.ps1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	extract := func(start, end string) string {
+		t.Helper()
+		_, body, ok := strings.Cut(string(source), start)
+		if !ok {
+			t.Fatalf("original helper missing: %s", start)
+		}
+		body, _, ok = strings.Cut(body, end)
+		if !ok {
+			t.Fatalf("original helper boundary missing: %s", end)
+		}
+		return start + body
+	}
+	consumer := func(body, call string) string {
+		t.Helper()
+		for _, line := range strings.Split(body, "\n") {
+			if strings.Contains(line, call) {
+				return line
+			}
+		}
+		t.Fatalf("original consumer missing: %s", call)
+		return ""
+	}
+	code := consumer(extract("  function Open-Code([string]$PromptFile) {", "  function Test-CurrentDesktopInstall("), "Invoke-SelectedCode -Arguments")
+	desktop := consumer(extract("  function Open-Desktop([string]$PromptFile) {", "  function Invoke-PilotSteps("), "Set-Clipboard -Value")
+	assert := extract("  function Assert-TestPrompt([string]$PromptFile) {", "  function Prepare-ConversionDocument(")
+	selector := extract("  function Invoke-PilotSteps([string]$Client) {", "\n  do {")
+	stop := extract("function Stop-Maestro([string]$Message) {", "function Hash(")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, powerShell, "-NoLogo", "-NoProfile", "-Command", `Set-StrictMode -Version Latest; $ErrorActionPreference='Stop'
+$Run=$env:MAESTRO_UTF8_FIXTURE
+$Utf8=New-Object Text.UTF8Encoding($false)
+$Checked=Get-Content -LiteralPath (Join-Path $Run 'report.json') -Raw -Encoding UTF8|ConvertFrom-Json
+`+stop+assert+selector+`
+function Invoke-SelectedCode([string[]]$Arguments){if($Arguments.Count -ne 1){throw 'Prompt must remain one literal argument'};[IO.File]::WriteAllText((Join-Path $Run 'code-delivery.txt'),$Arguments[0],$Utf8)}
+function Set-Clipboard([string]$Value){[IO.File]::WriteAllText((Join-Path $Run 'desktop-delivery.txt'),$Value,$Utf8)}
+function Open-Code([string]$PromptFile){Assert-TestPrompt $PromptFile
+`+code+`
+}
+function Open-Desktop([string]$PromptFile){Assert-TestPrompt $PromptFile
+`+desktop+`
+}
+$script:answers=[Collections.Generic.Queue[string]]::new()
+function Read-Host([string]$Prompt){if($script:answers.Count -eq 0){throw 'Unexpected question'};return $script:answers.Dequeue()}
+if($PSVersionTable.PSVersion.Major -ge 6){$defaultEncoding=1252}else{$defaultEncoding='Default'}
+$PSDefaultParameterValues['Get-Content:Encoding']=$defaultEncoding
+foreach($client in @('code','desktop')){
+  $script:answers.Enqueue('1');$script:answers.Enqueue('')
+  Invoke-PilotSteps $client
+  $path=Join-Path $Run ($client.ToUpperInvariant()+'-ETAPA.txt')
+  $actual=[IO.File]::ReadAllBytes($path)
+  if($actual.Length -ge 3 -and $actual[0] -eq 239 -and $actual[1] -eq 187 -and $actual[2] -eq 191){throw 'Selector unexpectedly wrote a BOM'}
+  $control=Get-Content -LiteralPath $path -Raw
+  if($PSVersionTable.PSVersion.Major -ge 6 -and $control -ceq $Checked.code_steps[0].prompt){throw 'Alternate-default control failed to expose ANSI corruption'}
+}
+Write-Host ('PowerShell '+$PSVersionTable.PSVersion+'; decoding default '+$defaultEncoding+'; client/clipboard sinks only; no native qualification')`)
+	cmd.Env = append(os.Environ(), "MAESTRO_UTF8_FIXTURE="+dir)
+	if dev := os.Getenv("GOCACHE"); strings.Contains(dev, "/Developer/") {
+		base := filepath.Join(strings.SplitN(dev, "/Developer/", 2)[0], "Developer", "ToolData", "powershell-maestro")
+		cmd.Env = append(cmd.Env, "XDG_CACHE_HOME="+filepath.Join(base, "cache"), "XDG_CONFIG_HOME="+filepath.Join(base, "config"), "XDG_DATA_HOME="+filepath.Join(base, "data"))
+	}
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("original PowerShell consumers: %s %v", output, err)
+	}
+	t.Logf("%s", output)
+	for _, client := range []string{"code", "desktop"} {
+		body, err := os.ReadFile(filepath.Join(dir, client+"-delivery.txt"))
+		if err != nil || string(body) != text {
+			t.Fatalf("%s original consumer changed UTF-8 bytes: got %q, want %q, error %v", client, body, text, err)
+		}
+	}
+}
+
 // Execute the shipped frontend helpers in a synthetic filesystem only.
 // No installer, Claude, authentication, native qualification or GUI is invoked.
 func TestMacSelfServicePreparesExactOwnerClientsAndPreservesProfile(t *testing.T) {

@@ -939,7 +939,11 @@ func TestPilotFreshReconciliationDoesNotProbeUnknownPage(t *testing.T) {
 					t.Fatalf("%s reconciliation omitted %s", client, required)
 				}
 			}
-			for _, id := range []string{"readback", "execution-resume"} {
+			pageReaders := []string{"readback"}
+			if client == "Desktop" {
+				pageReaders = append(pageReaders, "execution-resume")
+			}
+			for _, id := range pageReaders {
 				prompt := pilotStepPrompt(t, steps, id)
 				guard := strings.Index(prompt, "Exija exatamente um trabalho identificado")
 				read := strings.Index(prompt, "Leia brain.read")
@@ -948,6 +952,55 @@ func TestPilotFreshReconciliationDoesNotProbeUnknownPage(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestPilotCombinedRoutePausesCodeBeforeDesktopContinuation(t *testing.T) {
+	for _, conversion := range []bool{false, true} {
+		r := pilotReport{SchemaVersion: 2, Status: "partial", WorkspaceID: strings.Repeat("c", 32), DesktopExtension: "maestro-connector-test"}
+		if conversion {
+			if err := installedConversionObservation(&r, strings.Repeat("a", 64), strings.Repeat("b", 64), "ready", strings.Repeat("b", 64)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var out bytes.Buffer
+		if err := finishPilotReport(&r, &out); err != nil {
+			t.Fatal(err)
+		}
+		for _, step := range r.CodeSteps {
+			if step.ID == "execution-resume" {
+				t.Fatal("ordinary Code route resumes work before the intended Desktop continuation")
+			}
+		}
+		if !strings.Contains(pilotStepPrompt(t, r.DesktopSteps, "execution-resume"), "execution.resume") {
+			t.Fatal("Desktop route lost its expected continuation")
+		}
+		pause := pilotStepPrompt(t, r.CodeSteps, "execution-pause")
+		if !strings.Contains(pause, "Enter") || !strings.Contains(pause, "2 — Continuar no Desktop") || strings.Contains(pause, "execution.resume") {
+			t.Fatal("Code pause must hand the participant to the existing Desktop menu without exposing the next mutation")
+		}
+		if r.CodeReadbackPrompt != pilotStepPrompt(t, r.CodeSteps, "readback") || strings.Contains(r.CodeReadbackPrompt, "content.convert") {
+			t.Fatal("separate Code persistence handoff must select the actual readback even when conversion is present")
+		}
+		for _, operation := range []string{"brain.create", "memory.capture", "execution.create", "execution.resume", "content.convert"} {
+			if strings.Contains(r.CodeReadbackPrompt, operation) {
+				t.Fatalf("Code persistence acquired mutation %s", operation)
+			}
+		}
+	}
+	r := pilotReport{SchemaVersion: 2, Status: "partial", WorkspaceID: strings.Repeat("c", 32), ClientTarget: "desktop", DesktopExtension: "maestro-connector-test"}
+	var out bytes.Buffer
+	if err := finishPilotReport(&r, &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.CodeSteps) != 0 || r.CodeReadbackPrompt != "" {
+		t.Fatal("Desktop-only route acquired a Code prerequisite")
+	}
+	if !strings.Contains(pilotStepPrompt(t, r.DesktopSteps, "execution-resume"), "execution.resume") {
+		t.Fatal("Desktop-only route lost same-client continuation")
+	}
+	if strings.Contains(pilotStepPrompt(t, r.DesktopSteps, "execution-pause"), "2 — Continuar no Desktop") {
+		t.Fatal("Desktop-only route received a cross-client handoff")
 	}
 }
 
