@@ -5,11 +5,13 @@ package setup_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -89,6 +91,97 @@ func assertPendingCodeDesktopConsumer(t *testing.T, ctx context.Context, seed in
 	must(t, err)
 	if status.State != installer.ClientPartialPreparation || status.Preparation == nil || status.Preparation.SelectedTarget != "both" || status.CodeRegistration != installer.ClientCodeQualificationPending {
 		t.Fatal("partial readiness was not reported truthfully", status)
+	}
+	// Exercise the participant's original diagnostic, including the nested
+	// recorded-contract inspector, against the actual partial producer above.
+	beforeDiagnostic := read(t, recordPath)
+	checker := exec.CommandContext(ctx, filepath.Join(seed.ManagedRoot, "bin", "maestro-mcp"), "installed-pilot-check", "--product-root", seed.ManagedRoot, "--user-home", seed.UserHome, "--workspace", workspace, "--carrier-id", record.CarrierID, "--installer-version", seed.Version, "--experimental-seed-sha256", seed.ExperimentalSeed.Identity().AdmissionSHA256, "--experimental-installed-root", seed.ManagedRoot, "--observation-client", "desktop", "--check-only")
+	output, checkErr := checker.Output()
+	var diagnostic struct {
+		Status            string                        `json:"status"`
+		WorkspaceID       string                        `json:"workspace_id"`
+		ClientTarget      string                        `json:"client_target"`
+		ClientPreparation string                        `json:"client_preparation"`
+		CodeRegistration  string                        `json:"code_registration"`
+		CodePrompt        string                        `json:"code_prompt"`
+		CodeSteps         []any                         `json:"code_steps"`
+		DesktopSteps      []struct{ ID, Prompt string } `json:"desktop_steps"`
+		Checks            []struct{ Name, Status, Reason string }
+	}
+	must(t, json.Unmarshal(output, &diagnostic))
+	if checkErr != nil || diagnostic.Status != "partial" || diagnostic.WorkspaceID != workspaceID || diagnostic.ClientTarget != "" || diagnostic.ClientPreparation != installer.ClientPreparationDesktopReady || diagnostic.CodeRegistration != installer.ClientCodeQualificationPending || len(diagnostic.DesktopSteps) == 0 || diagnostic.CodePrompt != "" || len(diagnostic.CodeSteps) != 0 {
+		t.Fatalf("actual partial Desktop diagnostic must retain its journey without qualifying Code: %s: %v", output, checkErr)
+	}
+	for _, name := range []string{"current_clients", "desktop_archive", "desktop_methods", "mcp_connection", "method_catalog"} {
+		found := false
+		for _, check := range diagnostic.Checks {
+			if check.Status == "failed" {
+				t.Fatalf("actual partial Desktop diagnostic failed: %+v", check)
+			}
+			if check.Name == name && check.Status == "passed" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("partial Desktop diagnostic omitted %s", name)
+		}
+	}
+	for _, step := range diagnostic.DesktopSteps {
+		if step.ID == "" || !strings.Contains(step.Prompt, workspaceID) {
+			t.Fatal("partial Desktop journey lost its actual workspace binding")
+		}
+	}
+	if !bytes.Equal(beforeDiagnostic, read(t, recordPath)) {
+		t.Fatal("read-only partial diagnostic changed the canonical record")
+	}
+	must(t, setup.VerifyRecordedDesktopContract(record.Materialization.DesktopPath, o, runtime.GOOS, record.Materialization.DesktopNativeContractSHA256))
+	for _, invalid := range []string{"path", "contract", "target", "workspace", "carrier", "source"} {
+		t.Run("partial Desktop contract refuses "+invalid, func(t *testing.T) {
+			candidate := o
+			path, target, contract := record.Materialization.DesktopPath, runtime.GOOS, record.Materialization.DesktopNativeContractSHA256
+			switch invalid {
+			case "path":
+				path = filepath.Join(packetRoot, "another.mcpb")
+			case "contract":
+				contract = strings.Repeat("f", 64)
+			case "target":
+				target = "windows"
+			case "workspace":
+				candidate.Request.Workspace = filepath.Join(root, "another-workspace")
+			case "carrier":
+				candidate.Request.CarrierID = strings.Repeat("e", 32)
+			case "source":
+				candidate.AuthorityRegistrySHA256 = strings.Repeat("f", 64)
+			}
+			if err := setup.VerifyRecordedDesktopContract(path, candidate, target, contract); err == nil {
+				t.Fatal("partial Desktop inspection accepted a different admitted binding")
+			}
+		})
+	}
+	for _, path := range []string{record.Materialization.DesktopPath, record.Materialization.DesktopMethods.Archive} {
+		original := read(t, path)
+		info, err := os.Stat(path)
+		must(t, err)
+		must(t, os.Chmod(path, 0600))
+		must(t, os.WriteFile(path, append(append([]byte(nil), original...), 'x'), 0600))
+		if err := setup.VerifyRecordedDesktopContract(record.Materialization.DesktopPath, o, runtime.GOOS, record.Materialization.DesktopNativeContractSHA256); err == nil {
+			t.Fatal("partial Desktop inspection accepted a tampered canonical artifact")
+		}
+		blocked, err := exec.CommandContext(ctx, checker.Path, checker.Args[1:]...).Output()
+		if err == nil {
+			t.Fatal("tampered canonical artifact allowed the installed checker to succeed")
+		}
+		var refused struct {
+			Status       string `json:"status"`
+			DesktopSteps []any  `json:"desktop_steps"`
+			CodeSteps    []any  `json:"code_steps"`
+		}
+		must(t, json.Unmarshal(blocked, &refused))
+		if refused.Status != "blocked" || len(refused.DesktopSteps) != 0 || len(refused.CodeSteps) != 0 {
+			t.Fatal("blocked canonical artifact received a fabricated participant journey")
+		}
+		must(t, os.WriteFile(path, original, 0600))
+		must(t, os.Chmod(path, info.Mode().Perm()))
 	}
 	if _, err := installer.CurrentClientPluginPath(ctx, o); err == nil {
 		t.Fatal("pending Code supplied a current plugin")
