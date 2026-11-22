@@ -463,7 +463,7 @@ func TestProductDarwinUnsafeCacheRefusesWithoutRepair(t *testing.T) {
 			case "hardlink":
 				e = os.Link(path, path+".alias")
 			case "mode":
-				e = os.Chmod(path, 0644)
+				e = exposeProductCache(path)
 			}
 			if e != nil {
 				t.Fatal(e)
@@ -473,6 +473,10 @@ func TestProductDarwinUnsafeCacheRefusesWithoutRepair(t *testing.T) {
 				t.Fatal(e)
 			}
 			info, e := os.Stat(path)
+			if e != nil {
+				t.Fatal(e)
+			}
+			protection, e := productCacheProtection(path)
 			if e != nil {
 				t.Fatal(e)
 			}
@@ -514,6 +518,10 @@ func TestProductDarwinUnsafeCacheRefusesWithoutRepair(t *testing.T) {
 			afterInfo, e := os.Stat(path)
 			if e != nil || afterInfo.Mode() != info.Mode() {
 				t.Fatal("refusal repaired permissions")
+			}
+			afterProtection, e := productCacheProtection(path)
+			if e != nil || afterProtection != protection {
+				t.Fatal("refusal repaired native access control")
 			}
 		})
 	}

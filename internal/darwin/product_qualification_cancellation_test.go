@@ -3,7 +3,6 @@ package darwin_test
 import (
 	"context"
 	"errors"
-	"runtime"
 	"testing"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/darwin"
@@ -24,9 +23,6 @@ func (b canceledQualificationInspection) Inspect(job string) (maintenance.Darwin
 }
 
 func TestProductDarwinCancellationDuringQualificationInspectionDoesNotReserve(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Darwin private publication is unavailable on Windows")
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	confirmed := false

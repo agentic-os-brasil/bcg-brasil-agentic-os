@@ -23,8 +23,8 @@ if ($LASTEXITCODE -ne 0 -or $revision -cnotmatch '^[0-9a-f]{40}$' -or $manifest.
     $core.server_sha256 -cne $manifest.public_server_sha256 -or $core.elevated -ne $false -or $core.admin_member -ne $false) {
     throw 'Exact-source ordinary-account engine and shipping proof did not qualify.'
 }
-$expected = @('execution', 'datahome', 'ownerctx', 'memory', 'scheduler', 'processidentity', 'winprivate', 'zipmigration')
-if (@($report.packages).Count -ne 8 -or
+$expected = @('execution', 'datahome', 'ownerctx', 'memory', 'scheduler', 'processidentity', 'winprivate', 'zipmigration', 'darwin')
+if (@($report.packages).Count -ne 9 -or
     @((Compare-Object ($expected | Sort-Object -CaseSensitive) (@($report.packages.name) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0 -or
     @($report.public_families.required_tests).Count -ne 7 -or @($report.public_families.required_assertions).Count -ne 39 -or
     @($report.public_families.outcomes | Where-Object { $_.outcome -cne 'PASS' }).Count -ne 0 -or
@@ -37,7 +37,7 @@ foreach ($entry in @($report.packages) + @($report.adapter_packages) + @($report
     $sealed = @(@($manifest.packages) + @($manifest.adapter_packages) + @($manifest.authored_package) | Where-Object { $_.name -ceq $entry.name })
     if ($sealed.Count -ne 1 -or $entry.sha256 -cne $sealed[0].sha256 -or $entry.package -cne $sealed[0].package -or
         $entry.exit_code -ne 0 -or $entry.inventory_complete -ne $true -or
-        $entry.log -cnotmatch '^(engine-(execution|datahome|ownerctx|memory|scheduler|processidentity|winprivate|zipmigration)|adapter-(mcp|mcp-command|packaging|setup|authored)|authored-atlas)\.log$') {
+        $entry.log -cnotmatch '^(engine-(execution|datahome|ownerctx|memory|scheduler|processidentity|winprivate|zipmigration|darwin)|adapter-(mcp|mcp-command|packaging|setup|authored)|authored-atlas)\.log$') {
         throw 'Owning/adapter report differs from its exact sealed executable inventory.'
     }
     $log = Get-Item -LiteralPath (Join-Path $proofRoot $entry.log) -Force
@@ -92,6 +92,7 @@ foreach ($entry in $report.adapter_packages) {
     $assertions = switch -CaseSensitive ($entry.name) { 'mcp' { $closed['$adapterAssertions'] }; 'mcp-command' { $parents }; 'setup' { $closed['$adapterSetupAssertions'] }; 'packaging' { $closed['$adapterPackagingAssertions'] } }
     if ($entry.qualified -ne $true -or $entry.copied_binary_custody -ne $true -or $entry.proof.qualified -ne $true -or
         @((Compare-Object ($parents | Sort-Object -CaseSensitive) (@($entry.proof.required_tests) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0 -or
+        @((Compare-Object ($assertions | Sort-Object -CaseSensitive) (@($entry.proof.required_assertions) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0 -or
         @((Compare-Object ($assertions | Sort-Object -CaseSensitive) (@($entry.proof.outcomes.test) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0 -or
         @($entry.proof.outcomes.test | Sort-Object -CaseSensitive -Unique).Count -ne @($assertions).Count -or
         @($entry.proof.outcomes | Where-Object { $_.outcome -cne 'PASS' }).Count -ne 0) {

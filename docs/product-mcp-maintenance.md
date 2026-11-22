@@ -191,10 +191,14 @@ opt-in enrollment; monthly work is attended-only and never applies a structural
 change. Per-attempt publication rechecks current inputs and the existing signed
 installation, process, revision and lease guards.
 
-The three Darwin jobs currently require admitted Unix private publication.
-Windows reports `production_binding_unavailable`; its current native private
-kernel remains intact. Automatic repair, Windows Darwin, real client loading,
-production trust and colleague acceptance are separate open gates.
+Daily and weekly Darwin jobs require qualification and separate enrollment;
+monthly assessment remains attended-only and cannot enroll.
+On Windows the original transaction retains its private root and named parents
+through the recovery journal, exclusive artifact, evidence, current pointer and
+readback. Its final metadata publication uses the existing cooperative lock and
+live execution grant. Native ordinary-account domain/MCP proof and installed
+client acceptance remain separate from source construction or compilation.
+Automatic repair, production trust and colleague acceptance remain open gates.
 
 Attended `update-check` may preserve authentic newer source denial even when its
 release is expired or payload-incomplete. This is a custody observation, not

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -21,9 +20,6 @@ import (
 // This is foreground engineering evidence. The ordinary shipping binary uses
 // its system clock, no native/admission override and no real host registration.
 func TestProductDarwinSDKAndShippingStdioLifecycle(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Darwin private publication is unavailable on Windows; this Unix-positive journey supplies no native Windows qualification")
-	}
 	for _, stdio := range []bool{false, true} {
 		t.Run(fmt.Sprint(stdio), func(t *testing.T) {
 			f := newOwnerFixture(t, stdio)

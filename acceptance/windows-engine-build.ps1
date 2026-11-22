@@ -133,7 +133,7 @@ print('verified_exact_public_runtime_inputs=57 bytes=132964926')
 $env:GOCACHE = Join-Path $env:RUNNER_TEMP 'native-engine-build-cache'
 $env:GOTOOLCHAIN = 'local'
 $env:GOFLAGS = '-buildvcs=false'
-$packages = @('execution', 'datahome', 'ownerctx', 'memory', 'scheduler', 'processidentity', 'winprivate', 'zipmigration')
+$packages = @('execution', 'datahome', 'ownerctx', 'memory', 'scheduler', 'processidentity', 'winprivate', 'zipmigration', 'darwin')
 $entries = @()
 $moduleInputs = @('go.mod', 'go.sum', 'adapters/mcp/go.mod', 'adapters/mcp/go.sum') | ForEach-Object {
   [ordered]@{path=$_; sha256=(Get-FileHash -LiteralPath (Join-Path $sourceRoot $_) -Algorithm SHA256).Hash}
