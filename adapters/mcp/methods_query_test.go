@@ -319,6 +319,153 @@ func TestMethodQueryDiscoverySDK(t *testing.T) {
 	}
 }
 
+func TestMethodPlanExactResourcesSDK(t *testing.T) {
+	f := newMethodQueryFixture(t)
+	client := f.connect(t, "")
+	before := methodTreeSnapshot(t, f.root)
+	var plan struct {
+		ID          string                   `json:"method_id"`
+		Instruction string                   `json:"instruction_uri"`
+		Execution   string                   `json:"execution_state"`
+		Effects     []string                 `json:"effects"`
+		Resources   []product.MethodResource `json:"resources"`
+	}
+	methodQueryDecode(t, client, "maestro_query", map[string]any{"operation": "methods.plan", "method_id": "review-explain-change"}, &plan)
+	files, err := techskills.Files("review-explain-change")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Resources) != len(files) {
+		t.Fatalf("exact plan must expose its complete canonical resource descriptors without catalog enumeration: got %d want %d", len(plan.Resources), len(files))
+	}
+	if plan.ID != "review-explain-change" || plan.Instruction != "maestro://methods/review-explain-change/SKILL.md" || plan.Execution != "not_executed" || !reflect.DeepEqual(plan.Effects, []string{"none"}) {
+		t.Fatalf("exact descriptor lookup changed method identity or effect authority: %+v", plan)
+	}
+	seen := map[string]bool{}
+	for _, resource := range plan.Resources {
+		expected, exists := files[resource.Path]
+		if !exists || seen[resource.Path] || resource.URI != "maestro://methods/review-explain-change/"+resource.Path || resource.Bytes != len(expected) || resource.SHA256 != fmt.Sprintf("%x", sha256.Sum256(expected)) {
+			t.Fatalf("plan resource differs from canonical content: %+v", resource)
+		}
+		seen[resource.Path] = true
+		var page struct {
+			URI   string `json:"resource_uri"`
+			Text  string `json:"text"`
+			Hash  string `json:"sha256"`
+			Bytes int    `json:"total_bytes"`
+			More  bool   `json:"has_more"`
+		}
+		methodQueryDecode(t, client, "maestro_query", map[string]any{"operation": "methods.read", "resource_uri": resource.URI}, &page)
+		if page.URI != resource.URI || page.Hash != resource.SHA256 || page.Bytes != resource.Bytes || page.More || page.Text != string(expected) {
+			t.Fatalf("selected descriptor cannot be read through its original immutable reader: %+v", resource)
+		}
+	}
+	if !reflect.DeepEqual(before, methodTreeSnapshot(t, f.root)) {
+		t.Fatal("exact method planning changed owner/workspace/product state")
+	}
+}
+
+func TestMethodPlanReferencedResourcesAndRefusalsSDK(t *testing.T) {
+	f := newMethodQueryFixture(t)
+	client := f.connect(t, "")
+	before := methodTreeSnapshot(t, f.root)
+	for _, id := range []string{"review-explain-change", "interaction-profile", "pocock-implement"} {
+		var plan struct {
+			ID          string                   `json:"method_id"`
+			Instruction string                   `json:"instruction_uri"`
+			Execution   string                   `json:"execution_state"`
+			Explicit    bool                     `json:"user_invoked_only"`
+			Resources   []product.MethodResource `json:"resources"`
+		}
+		response := methodQueryCall(t, client, "maestro_query", map[string]any{"operation": "methods.plan", "method_id": id})
+		if response.IsError || len(response.Content) != 1 {
+			t.Fatal("exact plan payload unavailable", id)
+		}
+		text, ok := response.Content[0].(*mcp.TextContent)
+		if !ok || json.Unmarshal([]byte(text.Text), &plan) != nil {
+			t.Fatal("exact plan payload is not JSON text", id)
+		}
+		var legacyShape map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(text.Text), &legacyShape); err != nil {
+			t.Fatal(err)
+		}
+		delete(legacyShape, "resources")
+		legacyBody, err := json.Marshal(legacyShape)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("STATIC_EXACT_PLAN method_id=%s plan_json_bytes=%d legacy_shape_bytes=%d added_descriptor_bytes=%d", id, len(text.Text), len(legacyBody), len(text.Text)-len(legacyBody))
+		files, err := baseskills.Files(id)
+		if err != nil {
+			files, err = techskills.Files(id)
+		}
+		if err != nil || plan.ID != id || plan.Execution != "not_executed" || len(plan.Resources) != len(files) || plan.Explicit != (id == "pocock-implement") {
+			t.Fatalf("exact or referenced selection lost canonical identity or explicit invocation restrictions: %s: %+v", id, plan)
+		}
+		found := false
+		for _, resource := range plan.Resources {
+			expected, exists := files[resource.Path]
+			if !exists || resource.URI != "maestro://methods/"+id+"/"+resource.Path || resource.Bytes != len(expected) || resource.SHA256 != fmt.Sprintf("%x", sha256.Sum256(expected)) {
+				t.Fatalf("reference descriptor belongs to another method or content: %s: %+v", id, resource)
+			}
+			if resource.Path != "SKILL.md" {
+				continue
+			}
+			found = true
+			if resource.URI != plan.Instruction {
+				t.Fatal("instruction URI differs from selected SKILL.md descriptor", id)
+			}
+			var collected strings.Builder
+			for offset := 0; ; {
+				var page struct {
+					URI    string `json:"resource_uri"`
+					Text   string `json:"text"`
+					Hash   string `json:"sha256"`
+					Bytes  int    `json:"total_bytes"`
+					Offset int    `json:"offset"`
+					Next   int    `json:"next_offset"`
+					More   bool   `json:"has_more"`
+				}
+				methodQueryDecode(t, client, "maestro_query", map[string]any{"operation": "methods.read", "resource_uri": resource.URI, "offset": offset, "max_bytes": 4096}, &page)
+				if page.URI != resource.URI || page.Hash != resource.SHA256 || page.Bytes != resource.Bytes || page.Offset != offset || page.Next != offset+len(page.Text) || len(page.Text) > 4096 || !utf8.ValidString(page.Text) || page.More && page.Next <= offset {
+					t.Fatalf("selected resource lost exact hash, byte count or contiguous UTF-8 paging: %s at %d", id, offset)
+				}
+				collected.WriteString(page.Text)
+				if !page.More {
+					break
+				}
+				offset = page.Next
+			}
+			if collected.String() != string(expected) {
+				t.Fatal("selected/reference instruction differs from canonical bytes", id)
+			}
+		}
+		if !found {
+			t.Fatal("exact lookup omitted its canonical instruction", id)
+		}
+	}
+	for _, args := range []map[string]any{
+		{"operation": "methods.plan", "method_id": "missing-method"},
+		{"operation": "methods.plan", "method_id": "resume"},
+		{"operation": "methods.plan", "method_id": "Review-Explain-Change"},
+		{"operation": "methods.plan", "method_id": "maestro-desktop-methods:review-explain-change"},
+		{"operation": "methods.plan", "method_id": "../owner/private"},
+		{"operation": "methods.plan", "method_id": "review-explain-change", "approved": true},
+		{"operation": "methods.read", "resource_uri": "maestro://methods/review-explain-change/missing.md"},
+		{"operation": "methods.read", "resource_uri": "maestro://methods/../owner/private.md"},
+		{"operation": "methods.read", "resource_uri": "maestro://methods/review-explain-change/SKILL.md", "sha256": strings.Repeat("f", 64)},
+		{"operation": "methods.read", "resource_uri": "maestro://methods/review-explain-change/SKILL.md", "generation": strings.Repeat("f", 64)},
+		{"operation": "methods.read", "resource_uri": "maestro://methods/review-explain-change/SKILL.md", "max_bytes": 4097},
+	} {
+		if !methodQueryCall(t, client, "maestro_query", args).IsError {
+			t.Fatalf("exact lookup admitted unknown selection, arbitrary URI or model-supplied proof: %v", args)
+		}
+	}
+	if !reflect.DeepEqual(before, methodTreeSnapshot(t, f.root)) {
+		t.Fatal("selected/reference lookups or refusals changed owner/workspace/product state")
+	}
+}
+
 func TestMethodQueryPlanSDK(t *testing.T) {
 	f := newMethodQueryFixture(t)
 	client := f.connect(t, "")

@@ -75,7 +75,7 @@ func (b *Bound) handleMethods(in input) *mcp.CallToolResult {
 				}
 				dependencies = append(dependencies, entry)
 			}
-			return result(map[string]any{"method_id": method.ID, "instruction_uri": "maestro://methods/" + method.ID + "/SKILL.md", "user_invoked_only": method.UserInvokedOnly, "selection": "explicit_method_id", "state": state, "execution_state": "not_executed", "operations": operations, "effects": requirements.Effects, "conditional_effects": requirements.ConditionalEffects, "output_kinds": requirements.OutputKinds, "dependencies": dependencies, "mode": "methods_not_authority", "next_action": "Read the method instructions. Confirm actual inputs and named dependencies before an authorized effect; the plan neither executes nor grants approval."}, nil)
+			return result(map[string]any{"method_id": method.ID, "instruction_uri": "maestro://methods/" + method.ID + "/SKILL.md", "resources": method.Resources, "user_invoked_only": method.UserInvokedOnly, "selection": "explicit_method_id", "state": state, "execution_state": "not_executed", "operations": operations, "effects": requirements.Effects, "conditional_effects": requirements.ConditionalEffects, "output_kinds": requirements.OutputKinds, "dependencies": dependencies, "mode": "methods_not_authority", "next_action": "Read the method instructions. Confirm actual inputs and named dependencies before an authorized effect; the plan neither executes nor grants approval."}, nil)
 		}
 		return methodQueryFailure("method_unavailable")
 	case "methods.read":

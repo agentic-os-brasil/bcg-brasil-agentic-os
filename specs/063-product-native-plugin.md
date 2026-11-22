@@ -603,13 +603,24 @@ entry identities and frontmatter while resolving instructions from the actual
 admitted backend. It adds no native agent, hook, approval or filesystem authority.
 An MCPB and this separately installed library remain distinct components.
 
-Each invocation positively identifies the workspace connector, then reads the
-current methods index and agent-skill policy, discovers the complete paged catalog,
-selects an exact current method and obtains its plan. Read every instruction and
-referenced canonical resource through existing methods.read/resource APIs, with
-consistent URI, hash, total length and contiguous page offsets. Discard and reread
-if identities change. Use a genuine host hashing facility when available; never
-claim an independent calculation otherwise. Plans describe effects but grant none.
+Each invocation positively identifies the workspace connector and reads the
+current shared method and agent-skill policies. An explicitly named installed
+method resolves through the existing exact methods.plan owner, which returns its
+complete canonical resource descriptors alongside the unchanged plan fields.
+Require the returned method ID and instruction descriptor to match the selection;
+absent, malformed or mismatched descriptors stop method application. Referenced
+canonical methods resolve through that same exact owner. Operator and open-ended
+discovery retain complete catalog pagination; an unknown ID never permits a
+guessed alias, resource or installed snapshot fallback. Respect user-invoked-only
+restrictions for selected and referenced methods.
+
+Read every instruction and reference required by the active branch through the
+existing methods.read/resource APIs, matching each current descriptor's URI, hash
+and byte count with consistent total length and contiguous UTF-8 page offsets.
+The 4KB content-read bound remains unchanged. Discard the attempt and resolve a
+fresh exact plan before rereading if identities change. Use a genuine host hashing
+facility when available; never claim an independent calculation otherwise.
+Plans describe effects but grant none, and selection still executes no method.
 Cached auxiliary snapshots cannot override current instructions. New methods are
 reachable through operator even without a newly installed slash alias.
 
@@ -619,6 +630,14 @@ still needs normal host review. Bootstrap package version, current backend metho
 identities and actual loaded/functional client evidence remain separate. Missing
 runtime dependencies or native capabilities stay unavailable after reading an
 updated method. This profile does not turn Desktop into an enforcing Code host.
+
+The exact named-plan route is a routing-contract evolution within the existing
+v1 family, not an ordinary live-content refresh. It requires a newly versioned
+library through normal host review/import and a backend returning the selected
+descriptors. Older imported wrappers retain their full-catalog contract; their
+runtime evidence cannot qualify the new route. No installer protocol migration,
+new endpoint, cache, permission or effect authority is introduced. NMPL records
+this bounded amendment to SFRD; qualify a newly compatible kit separately.
 
 The versioned complete Code route in Spec020 retains this specification's genuine
 exact-host qualifier and all canonical specialists and seven-event enforcement.
