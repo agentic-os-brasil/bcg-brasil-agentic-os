@@ -639,6 +639,13 @@ runtime evidence cannot qualify the new route. No installer protocol migration,
 new endpoint, cache, permission or effect authority is introduced. NMPL records
 this bounded amendment to SFRD; qualify a newly compatible kit separately.
 
+The canonical shared METHODS.md also appears in newly generated Code method
+payloads. NMPL intentionally updates that asset to describe exact selected-plan
+routing; Code skill bodies, namespace projections and native-agent payloads stay
+unchanged. Payload regression coverage must permit only that exact shared-policy
+delta, rather than claiming the entire new Code method archive is byte-identical.
+Existing installed library bytes and their qualification remain unchanged.
+
 The versioned complete Code route in Spec020 retains this specification's genuine
 exact-host qualifier and all canonical specialists and seven-event enforcement.
 Stable carrier identity is included in the reviewed qualification fingerprint
