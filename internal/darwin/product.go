@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
@@ -25,7 +24,10 @@ var ErrProductRecovery = maintenance.ErrDarwinRecoveryRequired
 var errCacheCorrupt = errors.New("Darwin cache is corrupt")
 var errCacheForeign = errors.New("Darwin cache belongs to another workspace")
 
-type productBinding struct{ scope maintenance.DarwinScope }
+type productBinding struct {
+	scope maintenance.DarwinScope
+	files *productPrivateFiles
+}
 type localHealth struct {
 	SchemaVersion     int                          `json:"schema_version"`
 	Profile           string                       `json:"profile"`
@@ -102,7 +104,7 @@ func (b *productBinding) health() (localHealth, error) {
 	return localHealth{1, productCacheProfile, b.scope.WorkspaceID, b.scope.Implementation, b.scope.CacheConfiguration, source, "not_observed", coverage, counts}, nil
 }
 func (b *productBinding) readCache() (localHealth, []byte, error) {
-	body, err := scheduler.ReadPrivateStateFile(b.cachePath(), productCacheLimit)
+	body, err := b.files.read(b.cachePath(), productCacheLimit)
 	var cache localHealth
 	if err != nil {
 		return cache, nil, err
@@ -149,18 +151,27 @@ func (b *productBinding) Inspect(job string) (maintenance.DarwinSource, error) {
 	return source, nil
 }
 func (b *productBinding) Handler(job string, source *maintenance.DarwinSource, attended bool) maintenance.Handler {
-	return maintenance.HandlerFunc(func(ctx context.Context, command maintenance.Command, grant maintenance.ExecutionGrant) (maintenance.HandlerResult, error) {
-		if runtime.GOOS == "windows" {
-			return maintenance.HandlerResult{}, errors.New("Darwin private publication unavailable on Windows")
-		}
+	return maintenance.HandlerFunc(func(ctx context.Context, command maintenance.Command, grant maintenance.ExecutionGrant) (handlerResult maintenance.HandlerResult, handlerErr error) {
 		if source == nil || !maintenance.DarwinJob(job) || command.JobID != job || command.WorkspaceID != b.scope.WorkspaceID || job == maintenance.DarwinMonthlyJobID && !attended {
 			return maintenance.HandlerResult{}, errors.New("Darwin scope/authority mismatch")
 		}
 		if err := maintenance.ValidateExecutionGrant(grant, command); err != nil {
 			return maintenance.HandlerResult{}, err
 		}
+		files, release, err := holdProductPrivateFiles(b.scope.Root)
+		if err != nil {
+			return maintenance.HandlerResult{}, err
+		}
+		defer func() {
+			if closeErr := release(); closeErr != nil {
+				handlerErr = errors.Join(handlerErr, ErrProductRecovery, closeErr)
+			}
+		}()
+		bound := *b
+		bound.files = files
+		b := &bound
 		var result maintenance.HandlerResult
-		err := scheduler.WithPrivateLock(filepath.Join(b.scope.Root, "publication.guard"), func() error {
+		err = b.files.withLock(filepath.Join(b.scope.Root, "publication.guard"), func() error {
 			guard := func(publish func() error) error {
 				return maintenance.PublishExecutionGrant(ctx, grant, command, func() error {
 					current, e := b.Inspect(job)
@@ -174,6 +185,11 @@ func (b *productBinding) Handler(job string, source *maintenance.DarwinSource, a
 			if err != nil || !reflect.DeepEqual(current, *source) {
 				return maintenance.ErrProductConflict
 			}
+			if b.files != nil {
+				if err = guard(func() error { return b.files.prepare(job) }); err != nil {
+					return err
+				}
+			}
 			// Recover an immutable same-occurrence result before rebuilding a plan.
 			if evidence, e := b.Evidence(job, command.OccurrenceDigest()); e == nil {
 				if evidence.ExternalSHA256 != source.ExternalSHA256 {
@@ -184,7 +200,7 @@ func (b *productBinding) Handler(job string, source *maintenance.DarwinSource, a
 					return err
 				}
 				if evidence.Recovery != nil {
-					body, e := scheduler.ReadPrivateStateFile(filepath.Join(b.scope.Root, "managed-state", "recovery.json"), productCacheLimit)
+					body, e := b.files.read(filepath.Join(b.scope.Root, "managed-state", "recovery.json"), productCacheLimit)
 					if e != nil {
 						return e
 					}
@@ -276,7 +292,7 @@ func (b *productBinding) Handler(job string, source *maintenance.DarwinSource, a
 							return err
 						}
 					}
-					store := ProposalStore{Root: b.scope.Root}
+					store := ProposalStore{Root: b.scope.Root, files: b.files}
 					artifact := AssessmentProposalArtifact{SchemaVersion: 1, RecordType: "assessment", AgentID: AgentID, JobID: job, OccurrenceDigest: proposalOccurrence, ArtifactID: assessmentArtifactID(job, proposalOccurrence), WindowID: assessment.WindowID, ProposalDigest: proposalDigest(proposalOccurrence, assessment), Assessment: assessment, ScheduledFor: proposalTime.UTC(), RecordedAt: proposalTime.UTC()}
 					artifact.Product = &ProductAssessmentProvenance{WorkspaceID: b.scope.WorkspaceID, Implementation: b.scope.Implementation, Configuration: b.scope.Configuration(job), ExternalSHA256: source.ExternalSHA256}
 					if err = guard(func() error { return store.AppendProduct(artifact) }); err != nil {

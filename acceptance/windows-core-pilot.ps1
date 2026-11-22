@@ -139,7 +139,7 @@ if ($withManifest) {
         if ($actualFields.Count -ne $manifestFields.Count -or @($actualFields | Where-Object { $_ -cnotin $manifestFields }).Count -ne 0) {
             throw 'Engine qualification requires the exact sealed manifest fields.'
         }
-        $expectedPackages = @('execution', 'datahome', 'ownerctx', 'memory', 'scheduler', 'processidentity', 'winprivate', 'zipmigration')
+        $expectedPackages = @('execution', 'datahome', 'ownerctx', 'memory', 'scheduler', 'processidentity', 'winprivate', 'zipmigration', 'darwin')
         foreach ($binding in @(@{path=$TestBinary; hash=$canonical.public_test_binary_sha256}, @{path=$Server; hash=$canonical.public_server_sha256})) {
             if ($binding.hash -cnotmatch '^[0-9a-f]{64}$' -or
                 (Get-FileHash -LiteralPath $binding.path -Algorithm SHA256).Hash.ToLowerInvariant() -cne $binding.hash) {
@@ -151,7 +151,7 @@ if ($withManifest) {
     $actualPackages = @($canonical.packages | ForEach-Object { $_.name })
     if ($canonical.schema_version -ne 1 -or $actualPackages.Count -ne $expectedPackages.Count -or
         @((Compare-Object ($expectedPackages | Sort-Object) ($actualPackages | Sort-Object))).Count -ne 0) {
-        if ($withEngine) { throw 'Engine qualification requires exactly the eight owning packages.' }
+        if ($withEngine) { throw 'Engine qualification requires exactly the nine owning packages.' }
         if ($withInspection) { throw 'Inspection qualification requires exactly the four owning packages.' }
         throw 'Canonical qualification requires exactly the six owning packages.'
     }
@@ -300,7 +300,8 @@ if ($withManifest) {
     }
     if ($withEngine) {
         $canonicalRequired = @{
-            scheduler = @('TestWindowsSecureSchedulerStateWorksAsStandardUser', 'TestWindowsSecureSchedulerRejectsReparseAncestor', 'TestWindowsSecurePathWalkSurvivesAncestorRenameToSymlink', 'TestWindowsSecureLeafIOSurvivesAncestorSwapForEnrollmentReceiptAndLease', 'TestWindowsSecureLeafReadAndRemoveSurviveAncestorSwap', 'TestWindowsLeaseTransactionPinsGuardAndStateToOneDirectory', 'TestPrivateAtomicUpdateSerializesAndRejectsStaleBytes', 'TestWindowsReplacePrivateFileRejectsSymlinkedLeaf')
+            darwin = @('TestNativeEvolutionPersistenceIsExplicitlyUnavailable', 'TestProductDarwinWindowsRetainedTransaction/reparse_artifact', 'TestProductDarwinWindowsRetainedTransaction/reparse_proposal_directory', 'TestProductDarwinWindowsRetainedTransaction/reparse_ancestor', 'TestProductDarwinWindowsRetainedTransaction', 'TestProductDarwinLiveControlSourceAndLeaseFences', 'TestProductDarwinGenuineUpstreamRepairAndReplay', 'TestProductDarwinAssessmentsAndOptIn', 'TestProductDarwinDeclineAndChangedSourceRefuse', 'TestProductDarwinInterruptedProposalRecovery', 'TestProductDarwinInterruptedCacheRecoversExactAppliedTransition', 'TestProductDarwinUnsafeCacheRefusesWithoutRepair', 'TestProductDarwinLaterClockRecoveryR1', 'TestProductDarwinDelayedWeeklyRecoveryR2', 'TestProductDarwinCancellationDuringQualificationInspectionDoesNotReserve')
+            scheduler = @('TestHeldPrivateUpdateGuardPreservesCurrentBytes', 'TestWindowsSecureSchedulerStateWorksAsStandardUser', 'TestWindowsSecureSchedulerRejectsReparseAncestor', 'TestWindowsSecurePathWalkSurvivesAncestorRenameToSymlink', 'TestWindowsSecureLeafIOSurvivesAncestorSwapForEnrollmentReceiptAndLease', 'TestWindowsSecureLeafReadAndRemoveSurviveAncestorSwap', 'TestWindowsLeaseTransactionPinsGuardAndStateToOneDirectory', 'TestPrivateAtomicUpdateSerializesAndRejectsStaleBytes', 'TestWindowsReplacePrivateFileRejectsSymlinkedLeaf')
             winprivate = @('TestWindowsMigrationSourceTreeIsReadOnlyAndPinned', 'TestWindowsMigrationSourceChildRetainsParentCustody', 'TestWindowsMigrationStageResumesAndPublishesTheHeldFile', 'TestWindowsMigrationStageRejectsUnpinnedAndLinkedInputs', 'TestWindowsMigrationMovableRootKeepsArchivedAuthority', 'TestWindowsMigrationRemoveExactRequiresCompleteExpectedBytes', 'TestWindowsMigrationRemoveExactRetainsMarkedObjectAndReader', 'TestWindowsMigrationRemoveExactExposesPostMarkCloseFailure', 'TestWindowsMigrationRemoveExactRejectsUnsafeOrBusyLeaves', 'TestWindowsMigrationStageReplacesCooperativeMetadataUnderLease', 'TestWindowsMigrationLeasedReplacementRefusesUnsafeDestinations', 'TestWindowsMigrationLeasedReplacementReportsMovedAfterLateFailure')
             ownerctx = @('TestReviewedRefinementBindsExactProposalAndBase', 'TestReviewedOnboardingTrackConfirmationAndRestart', 'TestReviewedOwnerRejectsInvalidUTF8BeforeEffects', 'TestWindowsPromptHistoryLockRetainsGuardAcrossReaderAndReacquire', 'TestPromptHistoryFreshReadsNeverInitialize', 'TestPromptHistoryIncompleteReadsNeverRepair', 'TestPromptHistoryPreparationWaitsForExistingMutex', 'TestPromptHistoryExistingReadsPreserveDomainFiles', 'TestWindowsPromptHistoryReadNeverCreatesMissingGuard', 'TestPromptHistoryLegalMetadataEnvelope', 'TestPromptHistoryNearMaxRawBytesSurviveEscapedSerialization')
             execution = @('TestWindowsConfinedStoreRejectsJunctionAndPrivateHardlink', 'TestWindowsConfinedStoreRejectsJunctionAndPrivateHardlink/junction-parent', 'TestWindowsConfinedStoreRejectsJunctionAndPrivateHardlink/private-contract-hardlink')
@@ -318,6 +319,14 @@ if ($withManifest) {
             zipmigration = @('TestCommittedTargetSafetyAndRecovery/unreadable_file', 'TestCommittedTargetSafetyAndRecovery/unreadable_directory', 'TestCopyFailureRetriesAfterPermissionRecovery', 'TestReadOnlyDestinationReportsFailureWithoutSuccessMarker', 'TestExternalOwnerAuthorityRequiresFreshEnrollment', 'TestExternalOwnerControlsPreserveAuthoredNeighbors', 'TestExternalOwnerObservationsRequireFreshAttestation', 'TestExternalCurrentBrainSurvivesLegacyEvolution', 'TestExternalReviewedPlanCannotOmitOrRedirectSource', 'TestExternalControlStagingNeverWritesInsideSource', 'TestExternalPhysicalWriteSetAliasesRefuseBeforeEffects', 'TestExternalPrivateControlDirectoriesRefuseWithoutRepair', 'TestExternalHomeCannotOverlapProfilePublication', 'TestExternalMissingReservedProfileAliasesRefuseBeforeEffects', 'TestExternalDistinctCaseSensitiveRootRemainsSupported', 'TestExternalRollbackRetainedPathsUseArchive', 'TestExternalReservedAuthorityAliasesAreInactive', 'TestExternalProofIsSelfContainedAndStrict', 'TestExternalForeignLocatorDoesNotRevokeOrMoveHome', 'TestExternalPreflightConflictsHaveNoProfileOrSourceEffects', 'TestExternalConflictingPartialAndConcurrentAttemptStayOwned', 'TestExternalRetirementIsFixedDenyOnlyAndInterruptedRollbackResumes', 'TestExternalCaseAuthorityIsArchivedOutsideActiveReaders', 'TestExternalInterruptionAndRollbackRetainNewWork', 'TestExternalLegacyAuthoredStateAndInactiveAuthority')
         }
         $canonicalPolicies = @{
+            darwin = @(
+                @{test='TestEvolutionRecoveryRejectsSymlinkedNamespace'; reason='symlink creation requires platform-specific privileges on Windows'; kind='platform-counterpart'; paired='TestNativeEvolutionPersistenceIsExplicitlyUnavailable'},
+                @{test='TestEvolutionStoreRejectsSymlinkedRoot'; reason='symlink creation requires platform-specific privileges on Windows'; kind='platform-counterpart'; paired='TestNativeEvolutionPersistenceIsExplicitlyUnavailable'},
+                @{test='TestEvolutionStoreRejectsSymlinkedAncestorAboveRoot'; reason='symlink creation requires platform-specific privileges on Windows'; kind='platform-counterpart'; paired='TestNativeEvolutionPersistenceIsExplicitlyUnavailable'},
+                @{test='TestProposalStoreRejectsSymlinkedArtifact'; reason='legacy symlink fixture lacks Windows creation privilege'; kind='platform-counterpart'; paired='TestProductDarwinWindowsRetainedTransaction/reparse_artifact'},
+                @{test='TestProposalStoreRejectsSymlinkedProposalDirectory'; reason='legacy symlink fixture lacks Windows creation privilege'; kind='platform-counterpart'; paired='TestProductDarwinWindowsRetainedTransaction/reparse_proposal_directory'},
+                @{test='TestProposalStoreRejectsSymlinkedAncestorBeforeCreatingStore'; reason='legacy symlink fixture lacks Windows creation privilege'; kind='platform-counterpart'; paired='TestProductDarwinWindowsRetainedTransaction/reparse_ancestor'}
+            )
             scheduler = @(
                 @{test='TestReplacePrivateFileRejectsSymlinkedLeaf'; reason='Unix symlink fixture; Windows reparse coverage lives in private_path_windows_test.go'; kind='platform-counterpart'; paired='TestWindowsReplacePrivateFileRejectsSymlinkedLeaf'},
                 @{test='TestSchedulerRejectsSymlinkedRootAncestorBeforeMkdir'; reason='symlink setup is host-dependent on Windows'; kind='platform-counterpart'; paired='TestWindowsSecureSchedulerRejectsReparseAncestor/root'},
@@ -543,8 +552,6 @@ try {
             'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/TestOwnerKnowledgeRejectsUnattestedArtifactAndModelAssertions' = @('existing source revalidation is unavailable; no native document-knowledge qualification')
             'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/TestOwnerKnowledgeWorkspaceDefaultsRetainRequestIdentity' = @('existing source revalidation is unavailable; no native document-knowledge qualification')
             'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/TestPrivateWikiEventControlRefusesActualOldService' = @('actual old-service witness not selected')
-            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/TestProductDarwinReviewProjectionR1' = @('Darwin private publication is unavailable on Windows; this Unix-positive journey supplies no native Windows qualification')
-            'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/TestProductDarwinSDKAndShippingStdioLifecycle' = @('Darwin private publication is unavailable on Windows; this Unix-positive journey supplies no native Windows qualification')
             'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/cmd/maestro-install/TestRuntimeCurrentnessManagerProcess' = @('explicit synthetic manager lifecycle fixture required')
             'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/cmd/maestro-mcp/TestEngineeringRuntimePilotRealJourney' = @('explicit authenticated retained runtime and independent public registry digest required')
             'github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/cmd/maestro-mcp/TestInstalledPilotSDKReadsWithoutStartingMaintenanceOrWritingOwnerFiles' = @('ordinary-user Windows owner admission has its separate native qualification')
@@ -987,7 +994,7 @@ try {
             $report.original_assertions = @($results | ForEach-Object { $_.canonical_contract_proof.original_assertions })
             $report.classified_skips = @($results | ForEach-Object { $_.canonical_contract_proof.classified_skips })
             $report.unclassified_skips = @($results | ForEach-Object { $_.canonical_contract_proof.unclassified_skips })
-            $report.native_coverage = 'Eight exact owning packages, seven public families with 39 assertions including private wiki, two authored Atlas families, thirteen authored adapter parents and four closed adapter packages including the seven-outcome native owned-process family with 208 selected baseline/setup/source/lifecycle/owned-process outcomes; client loading remains separate.'
+            $report.native_coverage = 'Nine exact owning packages, seven public families with 39 assertions including private wiki, two authored Atlas families, thirteen authored adapter parents and four closed adapter packages including the seven-outcome native owned-process family with 208 selected baseline/setup/source/lifecycle/owned-process outcomes; client loading remains separate.'
         }
         if ($Inspection) {
             $report.elevated = $false; $report.admin_member = $false

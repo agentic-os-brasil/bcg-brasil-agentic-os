@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"syscall"
 	"testing"
 	"time"
 
@@ -63,6 +65,18 @@ func TestProposalStoreIsIdempotentAndBindsExactAssessment(t *testing.T) {
 	}
 }
 
+// Only a genuine Windows symlink producer privilege refusal is nonapplicable.
+// Unexpected filesystem, path and access-control failures remain test failures.
+func requireProposalStoreSymlink(t *testing.T, target, alias string) {
+	t.Helper()
+	if err := os.Symlink(target, alias); err != nil {
+		if runtime.GOOS == "windows" && errors.Is(err, syscall.Errno(1314)) {
+			t.Skip("legacy symlink fixture lacks Windows creation privilege")
+		}
+		t.Fatalf("required symlink fixture failed: %v", err)
+	}
+}
+
 func TestProposalStoreRejectsSymlinkedArtifact(t *testing.T) {
 	root := t.TempDir()
 	store := ProposalStore{Root: root}
@@ -75,9 +89,7 @@ func TestProposalStoreRejectsSymlinkedArtifact(t *testing.T) {
 	if err := os.Rename(path, backup); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(backup, path); err != nil {
-		t.Skipf("symlink capability unavailable: %v", err)
-	}
+	requireProposalStoreSymlink(t, backup, path)
 	if _, err := store.Read(artifact.ArtifactID); err == nil {
 		t.Fatal("symlinked proposal artifact was accepted")
 	}
@@ -86,9 +98,7 @@ func TestProposalStoreRejectsSymlinkedArtifact(t *testing.T) {
 func TestProposalStoreRejectsSymlinkedProposalDirectory(t *testing.T) {
 	root := t.TempDir()
 	outside := t.TempDir()
-	if err := os.Symlink(outside, filepath.Join(root, "proposals")); err != nil {
-		t.Skipf("symlink capability unavailable: %v", err)
-	}
+	requireProposalStoreSymlink(t, outside, filepath.Join(root, "proposals"))
 	if err := (ProposalStore{Root: root}).Append(testAssessmentArtifact(t)); err == nil {
 		t.Fatal("proposal store traversed a symlinked ancestor directory")
 	}
@@ -98,9 +108,7 @@ func TestProposalStoreRejectsSymlinkedAncestorBeforeCreatingStore(t *testing.T) 
 	parent := t.TempDir()
 	outside := t.TempDir()
 	alias := filepath.Join(parent, "alias")
-	if err := os.Symlink(outside, alias); err != nil {
-		t.Skipf("symlink capability unavailable: %v", err)
-	}
+	requireProposalStoreSymlink(t, outside, alias)
 	root := filepath.Join(alias, "darwin")
 	if err := (ProposalStore{Root: root}).Append(testAssessmentArtifact(t)); err == nil {
 		t.Fatal("proposal store traversed a symlinked ancestor")

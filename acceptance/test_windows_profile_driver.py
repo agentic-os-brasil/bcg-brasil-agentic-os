@@ -393,7 +393,7 @@ class WindowsEngineProfile(unittest.TestCase):
         self.assert_preaccount_refusal(self.invoke_engine(document), "Unknown canonical qualification profile")
 
     def test_engine_package_subset_refuses_before_account(self):
-        self.assert_preaccount_refusal(self.invoke_engine(self.engine_document()), "Engine qualification requires exactly the eight owning packages")
+        self.assert_preaccount_refusal(self.invoke_engine(self.engine_document()), "Engine qualification requires exactly the nine owning packages")
 
     def test_engine_public_executable_hash_is_bound(self):
         document = self.engine_document()
@@ -456,7 +456,7 @@ class WindowsEngineProfile(unittest.TestCase):
         server.write_bytes(original_server)
         identity_path.write_text(json.dumps(identity), encoding="utf-8")
         result = self.invoke_engine(document, "-Kit", str(kit), "-KitIdentity", str(identity_path), "-MethodFixture", str(fixture))
-        self.assert_preaccount_refusal(result, "Engine qualification requires exactly the eight owning packages")
+        self.assert_preaccount_refusal(result, "Engine qualification requires exactly the nine owning packages")
 
     def test_exact_kit_requires_complete_matched_evidence(self):
         _, _, identity_path, identity = self.exact_kit_fixture()
@@ -527,7 +527,7 @@ if($powershell -cne (Join-Path $PSHOME 'pwsh.exe')){throw 'Exact artifact mode r
         script = self.root / "engine-proof.ps1"
         script.write_text(r'''$ErrorActionPreference='Stop'
 $tokens=$null; $errors=$null
-[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$tokens,[ref]$errors) | Out-Null
+$driverAST=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$tokens,[ref]$errors)
 if($errors.Count){throw ($errors | Out-String)}
 $launcher=@($tokens | Where-Object {$_.Kind -eq 'HereStringLiteral'})
 if($launcher.Count -ne 1){throw 'Expected the actual shared launcher'}
@@ -544,6 +544,40 @@ if(-not $valid.qualified -or $valid.classified_skips.Count -ne 1 -or $valid.orig
 foreach($invalid in @(($body.Replace('exact unavailable capability','unknown capability')),($body+"--- PASS: TestNative (0.00s)`n"),($body.Replace('--- PASS: TestNative','--- SKIP: TestNative')),($body.Replace('TestNative','TestUnknown')))) {
  if((Get-CanonicalPackageProof $entry $invalid 0 $true).qualified){throw ('Unknown, duplicate, missing or skipped native evidence qualified: '+($invalid | ConvertTo-Json -Compress))}
 }
+
+# Exercise the exact shipped Darwin records through the original proof owner.
+foreach($name in @('$canonicalRequired','$canonicalPolicies')) {
+ $found=@($driverAST.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq $name},$true))
+ if($found.Count -ne 1){throw 'Expected one actual canonical source policy'}
+ Invoke-Expression $found[0].Extent.Text
+}
+$expectedDarwin=@{
+ TestEvolutionRecoveryRejectsSymlinkedNamespace='TestNativeEvolutionPersistenceIsExplicitlyUnavailable'
+ TestEvolutionStoreRejectsSymlinkedRoot='TestNativeEvolutionPersistenceIsExplicitlyUnavailable'
+ TestEvolutionStoreRejectsSymlinkedAncestorAboveRoot='TestNativeEvolutionPersistenceIsExplicitlyUnavailable'
+ TestProposalStoreRejectsSymlinkedArtifact='TestProductDarwinWindowsRetainedTransaction/reparse_artifact'
+ TestProposalStoreRejectsSymlinkedProposalDirectory='TestProductDarwinWindowsRetainedTransaction/reparse_proposal_directory'
+ TestProposalStoreRejectsSymlinkedAncestorBeforeCreatingStore='TestProductDarwinWindowsRetainedTransaction/reparse_ancestor'
+}
+$darwin=@($canonicalPolicies['darwin'])
+if($darwin.Count -ne 6 -or @((Compare-Object (@($expectedDarwin.Keys)|Sort-Object) (@($darwin.test)|Sort-Object) -CaseSensitive)).Count -ne 0){throw 'Darwin legacy classification must remain the exact six named cases'}
+foreach($rule in $darwin) {
+ $expectedReason=if($rule.test.StartsWith('TestEvolution')){'symlink creation requires platform-specific privileges on Windows'}else{'legacy symlink fixture lacks Windows creation privilege'}
+ if($rule.reason -cne $expectedReason -or $rule.paired -cne $expectedDarwin[$rule.test] -or $rule.paired -cnotin $canonicalRequired['darwin']){throw 'Darwin legacy reason/counterpart/mandatory selection changed'}
+ $parent=($rule.paired -split '/')[0]
+ $entry=@{tests=@($rule.test,$parent);canonical_required_tests=@($rule.paired);canonical_original_assertions=@($rule.test);canonical_skip_policy=@($rule)}
+ $pairedPass="--- PASS: $($rule.paired) (0.00s)`n"
+ $actual="=== RUN   $($rule.test)`n    fixture_test.go:1: $($rule.reason)`n--- SKIP: $($rule.test) (0.00s)`n=== RUN   $parent`n"
+ if($parent -cne $rule.paired){$actual+="=== RUN   $($rule.paired)`n"}
+ $actual+=$pairedPass
+ if($parent -cne $rule.paired){$actual+="--- PASS: $parent (0.00s)`n"}
+ $observed=Get-CanonicalPackageProof $entry $actual 0 $true
+ if(-not $observed.qualified -or $observed.classified_skips.Count -ne 1 -or $observed.original_assertions[0].original_outcome -cne 'SKIP'){throw 'Exact Darwin counterpart must retain its observed legacy SKIP'}
+ foreach($invalid in @(($actual.Replace($rule.reason,'unknown arbitrary refusal')),($actual.Replace($pairedPass,'')),($actual.Replace('PASS: '+$rule.paired,'SKIP: '+$rule.paired)),($actual+$pairedPass),($actual+"=== RUN   TestUnknownSkip`n    fixture_test.go:1: unknown`n--- SKIP: TestUnknownSkip (0.00s)`n"))) {
+  if((Get-CanonicalPackageProof $entry $invalid 0 $true).qualified){throw 'Darwin unknown reason/skip or absent/skipped/duplicate counterpart qualified'}
+ }
+}
+
 $policy=@{paired='TestOriginal/same-object-case-contract'}
 $identity=@{kind='selected-directory-case-pair-v1';scope=$policy.paired;selected='C:\owner\state';counterpart='C:\owner\STATE';selected_identity=@(1,2,3);counterpart_identity=@(1,2,3);same_object=$true}
 # Absolute Windows paths are evaluated by the actual Windows parser in CI.
