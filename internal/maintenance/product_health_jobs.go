@@ -97,7 +97,7 @@ type DarwinBinding interface {
 }
 
 func (s *Service) newDarwinBinding() (DarwinBinding, error) {
-	if runtime.GOOS == "windows" || s.options.DarwinFactory == nil {
+	if s.options.DarwinFactory == nil {
 		return nil, nil
 	}
 	ids := []string{DarwinDailyJobID, DarwinWeeklyJobID, DarwinMonthlyJobID}
@@ -163,7 +163,7 @@ func (s *Service) darwinInputs() (DarwinInputs, error) {
 }
 
 func (s *Service) darwinSource(id string) (DarwinSource, error) {
-	if s.darwin == nil || !DarwinJob(id) || runtime.GOOS == "windows" {
+	if s.darwin == nil || !DarwinJob(id) {
 		return DarwinSource{}, scheduler.ErrCapabilityUnavailable
 	}
 	return s.darwin.Inspect(id)

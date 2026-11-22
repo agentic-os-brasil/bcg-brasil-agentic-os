@@ -3,7 +3,6 @@ package product_test
 import (
 	"context"
 	"encoding/json"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -13,9 +12,6 @@ import (
 )
 
 func TestProductDarwinReviewProjectionR1(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Darwin private publication is unavailable on Windows; this Unix-positive journey supplies no native Windows qualification")
-	}
 	for _, stale := range []bool{false, true} {
 		t.Run(map[bool]string{false: "initialization", true: "refresh"}[stale], func(t *testing.T) {
 			f := newOwnerFixture(t, false)

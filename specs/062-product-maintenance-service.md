@@ -1,6 +1,6 @@
 # Spec 062 - Product maintenance service
 
-Status: The landed maintenance and wiki owners retain their existing lifecycle. Signed-source checks and the three closed Darwin health/cache/proposal jobs use that same lifecycle and catalog. The MCP serve process owns a cancellable background adapter over that service. Windows private wiki uses retained-namespace admission; Darwin private publication on Windows remains unavailable. The optional installed closed-client wake has an explicit reviewed native lifecycle under OSWK; source construction and actual Mac/Windows qualification remain separate. Source construction, focused local proof, hosted qualification and installed-client acceptance remain separate. See the [operator workflow](../docs/product-mcp-maintenance.md).
+Status: The landed maintenance and wiki owners retain their existing lifecycle. Signed-source checks and the three closed Darwin health/cache/proposal jobs use that same lifecycle and catalog. The MCP serve process owns a cancellable background adapter over that service. Windows private wiki uses retained-namespace admission; Darwin first-cache and proposal transactions on Windows use operation-local retained namespace custody; actual native qualification remains separate. The optional installed closed-client wake has an explicit reviewed native lifecycle under OSWK; source construction and actual Mac/Windows qualification remain separate. Source construction, focused local proof, hosted qualification and installed-client acceptance remain separate. See the [operator workflow](../docs/product-mcp-maintenance.md).
 
 ## Outcome
 
@@ -371,8 +371,22 @@ Daily stale-cache replacement exposes `manual_refresh_required` and refuses
 before effects. Automatic refresh and compensation remain unavailable under
 #462/#488; preserve retained partial bytes and recovery evidence. Weekly can
 assess current external observations while retaining a stale cache. Monthly
-remains attended-only and structurally inert. Windows Darwin publication stays
-unavailable; no current native kernel or profile is replaced by old stubs.
+remains attended-only and structurally inert.
+
+Windows uses the existing private-file owners through an operation-local retained
+root and named parents. Hold those names through the original recovery journal,
+exclusive cache/proposal, immutable evidence, current pointer and readback.
+Metadata updates acquire the existing file lock before the live publication
+guard; their revision check remains cooperative, not an OS expected-bytes CAS.
+Status and inspection acquire no write custody and initialize nothing. Every
+publication retains the original source, control, process, installation and
+lease fences. Late visible effects remain recovery-required rather than removed
+or relabelled. Existing Unix private publication is unchanged.
+
+The original ordinary-account Windows proof must require the complete domain and
+MCP journeys, including held-name refusal and handle release; compilation or a
+single exclusive-file test cannot qualify this transaction. Installed-client
+acceptance remains separate. No kernel, profile or trust substitute is added.
 
 Issue #498 remains partial until its automatic preservation and native/hosted
 acceptance gates are met. Source preparation is not installed-client acceptance.

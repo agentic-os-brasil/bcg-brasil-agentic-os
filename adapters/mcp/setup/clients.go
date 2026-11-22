@@ -676,7 +676,24 @@ func inspectFirstDesktopContract(ctx context.Context, o installer.ClientOptions,
 	// the authenticated same-carrier record may identify those historical bytes;
 	// unrelated first-publication destinations still require Current inspection.
 	prior := previousDesktop
-	if o.VersionedManagement && prior != nil && (prior.SchemaVersion == 1 && !o.Request.DesktopOnly() || prior.SchemaVersion == 2 && o.Request.DesktopOnly()) && prior.Materialization.Target == o.Request.Target && prior.Profile == installer.StableClientProfile && prior.Protocol == installer.StableClientProtocol && prior.CarrierVersion == installer.StableCarrierVersion && prior.CarrierID == o.Request.CarrierID && prior.Binding == binding && prior.Materialization.Selection != nil && !o.Request.ManualDesktopUpdate && prior.Materialization.DesktopNativeContractSHA256 == nativeContract {
+	preparedBothPredecessor := false
+	if prior != nil && prior.CodePreparationPending() {
+		selected := installer.ClientRequestFromRecord(*prior)
+		generation := selected
+		generation.GenerationID = o.Request.GenerationID
+		paths, err := installer.ClientGenerationPaths(generation, s.Binding.ManifestSHA256)
+		if err != nil || selected.Target != o.Request.Target || paths.CodeRoot != o.Request.CodeRoot || paths.DesktopPath != o.Request.DesktopPath || selected.CodeExecutable != o.Request.CodeExecutable || selected.CodeConfigurationDirectory != o.Request.CodeConfigurationDirectory || selected.CodeScope != o.Request.CodeScope || selected.NativeEnforcement != o.Request.NativeEnforcement || selected.OwnerReviewChannel != o.Request.OwnerReviewChannel {
+			return errors.New("pending Code predecessor differs from the reviewed full selection")
+		}
+		view, err := installer.DesktopPreparationRecord(*prior)
+		if err != nil {
+			return err
+		}
+		prior = &view
+		preparedBothPredecessor = true
+	}
+	compatibleRole := prior != nil && ((prior.SchemaVersion == 1 && !o.Request.DesktopOnly() || prior.SchemaVersion == 2 && o.Request.DesktopOnly()) && prior.Materialization.Target == o.Request.Target || preparedBothPredecessor)
+	if o.VersionedManagement && compatibleRole && prior.Profile == installer.StableClientProfile && prior.Protocol == installer.StableClientProtocol && prior.CarrierVersion == installer.StableCarrierVersion && prior.CarrierID == o.Request.CarrierID && prior.Binding == binding && prior.Materialization.Selection != nil && !o.Request.ManualDesktopUpdate && prior.Materialization.DesktopNativeContractSHA256 == nativeContract {
 		m := prior.Materialization
 		actual, err := installer.ClientArchiveDigest(o.Request.DesktopPath)
 		if err != nil {
@@ -743,7 +760,7 @@ func ConfirmDesktop(ctx context.Context, o installer.ClientOptions, packageSHA, 
 	if err != nil {
 		return installer.ClientRecord{}, err
 	}
-	if status.Record == nil || status.State != "current_materialization" || !confirmed {
+	if status.Record == nil || status.State != "current_materialization" && !(status.State == installer.ClientPartialPreparation && status.Record.CodePreparationPending()) || !confirmed {
 		return installer.ClientRecord{}, errors.New("explicit current Desktop package confirmation required")
 	}
 	r := *status.Record

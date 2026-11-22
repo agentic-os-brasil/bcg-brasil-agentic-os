@@ -65,8 +65,8 @@ func main(){b,_:=json.Marshal(os.Args[1:]);if err:=os.WriteFile(os.Getenv("MAEST
 	if !mac && psErr != nil {
 		t.Skip("frontend interpreters unavailable; delegation/native/Windows runtime not claimed")
 	}
-	macFunctions := extract("Maestro.command", "guard_test_prompt() {", "open_code() {")
-	psFunctions := extract("Maestro.ps1", "  function Assert-TestPrompt(", "  function Open-Code(")
+	macFunctions := extract("Maestro.command", "desktop_clients_available() {", "current_clients=false") + extract("Maestro.command", "guard_test_prompt() {", "open_code() {")
+	psFunctions := extract("Maestro.ps1", "function Test-DesktopPreparation(", "try {\n  $Root =") + extract("Maestro.ps1", "  function Assert-TestPrompt(", "  function Open-Code(")
 	for _, test := range []struct {
 		name, prompt, conversion, status, workspace, manifest, result string
 		empty, called, ok                                             bool

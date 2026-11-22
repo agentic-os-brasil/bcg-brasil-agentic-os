@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,88 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+func TestInstalledOwnerReviewAcceptsCanonicalDesktopPreparationOnly(t *testing.T) {
+	root := t.TempDir()
+	selection := installer.ClientRequest{VersionedSlots: true, NativeEnforcement: true, GenerationID: strings.Repeat("b", 32), CarrierID: strings.Repeat("c", 32), Workspace: filepath.Join(root, "workspace"), CodeRoot: filepath.Join(root, "code"), DesktopPath: filepath.Join(root, "desktop.mcpb"), CodeExecutable: filepath.Join(root, "claude"), CodeScope: "user", OwnerReviewChannel: "local-browser"}
+	projection, err := installer.DesktopPreparationOptions(installer.ClientOptions{Request: selection})
+	if err != nil {
+		t.Fatal(err)
+	}
+	material, err := installer.ClientGenerationPaths(projection.Request, strings.Repeat("d", 64))
+	if err != nil {
+		t.Fatal(err)
+	}
+	material.OwnerReviewChannel = selection.OwnerReviewChannel
+	material.Release = "0.1.0"
+	material.ManifestSHA256 = strings.Repeat("d", 64)
+	material.ClientInputsSHA256 = strings.Repeat("e", 64)
+	material.ServerSHA256 = strings.Repeat("f", 64)
+	material.EmbeddedInputsSHA256 = strings.Repeat("1", 64)
+	material.BundleSHA256 = strings.Repeat("2", 64)
+	material.DesktopSHA256 = strings.Repeat("3", 64)
+	material.DesktopNativeContractSHA256 = strings.Repeat("4", 64)
+	material.BootstrapServerSHA256 = material.ServerSHA256
+	material.BootstrapEmbeddedInputsSHA256 = material.EmbeddedInputsSHA256
+	material.DesktopMethods = &installer.ClientMethodFrontend{BootstrapProtocol: "maestro-live-method-bootstrap-v1", Archive: filepath.Join(installer.ClientMethodsRoot(material), "maestro-desktop-methods-0.1.0.zip"), SHA256: strings.Repeat("5", 64), Version: material.Release, Files: 2}
+	r := installer.ClientRecord{SchemaVersion: 3, Profile: installer.StableClientProfile, Protocol: installer.StableClientProtocol, CarrierVersion: installer.StableCarrierVersion, CarrierID: selection.CarrierID, Binding: installer.ClientBinding{Home: filepath.Join(root, "brain"), Workspace: selection.Workspace, WorkspaceID: strings.Repeat("6", 32)}, Materialization: material, Code: installer.CodeObservation{Executable: selection.CodeExecutable, Marketplace: "maestro-local-" + selection.CarrierID, PluginID: "maestro-product@maestro-local-" + selection.CarrierID, Scope: selection.CodeScope, State: installer.ClientCodeQualificationPending, EvidenceClass: "not_observed"}, Preparation: &installer.ClientPreparation{Phase: installer.ClientPreparationDesktopReady, Selection: selection}}
+	if _, err := installer.DesktopPreparationRecord(r); err != nil {
+		t.Fatal("fixture is not a valid canonical partial shape", err)
+	}
+	check := func(record installer.ClientRecord) error {
+		b := &Bound{options: Options{WorkspacePath: selection.Workspace, OwnerReviewChannel: selection.OwnerReviewChannel}}
+		return b.validateInstalledOwnerReviewSnapshot(context.Background(), r.Binding.Home, r.Binding.WorkspaceID, installer.ClientStatus{State: installer.ClientPartialPreparation, Record: &record})
+	}
+	if err := check(r); err != nil {
+		t.Fatal("canonical complete Desktop with pending Code refused", err)
+	}
+	for _, kind := range []string{"unknown phase", "different prepared role", "Code packet", "Code proof", "Code registered", "selected Desktop", "missing methods", "home", "workspace", "channel"} {
+		t.Run(kind, func(t *testing.T) {
+			body, err := json.Marshal(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var bad installer.ClientRecord
+			if err := json.Unmarshal(body, &bad); err != nil {
+				t.Fatal(err)
+			}
+			switch kind {
+			case "unknown phase":
+				bad.Preparation.Phase = "ready"
+			case "different prepared role":
+				bad.Materialization.Target = ""
+			case "Code packet":
+				bad.Materialization.CodeRoot = selection.CodeRoot
+			case "Code proof":
+				bad.Materialization.NativeEnforcement = true
+			case "Code registered":
+				bad.Code.State = "registered"
+			case "selected Desktop":
+				bad.Preparation.Selection.Target = "desktop"
+			case "missing methods":
+				bad.Materialization.DesktopMethods = nil
+			case "home":
+				bad.Binding.Home = filepath.Join(root, "other-brain")
+			case "workspace":
+				bad.Binding.Workspace = filepath.Join(root, "other-workspace")
+			case "channel":
+				bad.Materialization.OwnerReviewChannel = "other"
+			}
+			if err := check(bad); err == nil {
+				t.Fatal("changed or fabricated client authority accepted")
+			}
+		})
+	}
+	b := &Bound{options: Options{WorkspacePath: selection.Workspace, OwnerReviewChannel: selection.OwnerReviewChannel}}
+	status := installer.ClientStatus{State: installer.ClientPartialPreparation, Record: &r}
+	if err := b.validateInstalledOwnerReviewSnapshot(context.Background(), r.Binding.Home, r.Binding.WorkspaceID, status); err != nil {
+		t.Fatal(err)
+	}
+	r.Desktop.Handoff = "open_requested"
+	if err := b.validateInstalledOwnerReviewSnapshot(context.Background(), r.Binding.Home, r.Binding.WorkspaceID, status); err == nil {
+		t.Fatal("canonical snapshot changed after receiver pin")
+	}
+}
 
 func TestManagementHandoffRequiresFixedAdmittedContextAndRejectsModelPaths(t *testing.T) {
 	b := localReviewFixture(t, "")

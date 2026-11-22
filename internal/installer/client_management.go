@@ -22,6 +22,10 @@ func ClientManagementLauncher(o ClientOptions, update bool) (string, []byte) {
 }
 
 func clientManagementLauncherForOS(o ClientOptions, update bool, targetOS string) (string, []byte) {
+	if o.PreparationSelection != nil {
+		o.Request = *o.PreparationSelection
+		o.PreparationSelection = nil
+	}
 	args := []string{o.Self, "manage", "--product-root", o.ManagedRoot, "--user-home", o.UserHome, "--workspace", o.Request.Workspace, "--carrier-id", o.Request.CarrierID, "--client-code-root", o.Request.CodeRoot, "--client-desktop-path", o.Request.DesktopPath, "--client-code-executable", o.Request.CodeExecutable, "--client-scope", o.Request.CodeScope}
 	if o.Request.DesktopOnly() {
 		args = []string{o.Self, "manage", "--product-root", o.ManagedRoot, "--user-home", o.UserHome, "--workspace", o.Request.Workspace, "--carrier-id", o.Request.CarrierID, "--client-target", "desktop", "--client-desktop-path", o.Request.DesktopPath}
@@ -89,13 +93,15 @@ func PrepareClientManagementHandoff(ctx context.Context, o ClientOptions) (Clien
 		bound := o
 		bound.Request = ClientRequestFromRecord(r)
 		status, err := ReadClientsSeeded(ctx, bound)
-		if err != nil || status.State != "current_materialization" {
+		if err != nil || status.State != "current_materialization" && !(r.CodePreparationPending() && status.State == ClientPartialPreparation) {
 			return errors.New("current management binding unavailable")
 		}
 		// The published launcher was generated with its actual manifest slot paths.
 		generation := bound
-		generation.Request.CodeRoot = r.Materialization.CodeRoot
-		generation.Request.DesktopPath = r.Materialization.DesktopPath
+		if !r.CodePreparationPending() {
+			generation.Request.CodeRoot = r.Materialization.CodeRoot
+			generation.Request.DesktopPath = r.Materialization.DesktopPath
+		}
 		name, expected := ClientManagementLauncher(generation, true)
 		path := filepath.Join(ClientManagementRoot(r.Materialization), name)
 		if err := verifyManagementFile(path, expected, runtime.GOOS != "windows"); err != nil {

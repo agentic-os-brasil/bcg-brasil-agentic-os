@@ -132,6 +132,56 @@ func TestInstalledPilotDesktopOnlyReportStartsWithoutCode(t *testing.T) {
 	}
 }
 
+func TestInstalledPilotDesktopPreparationDoesNotAdvertiseCodeReadiness(t *testing.T) {
+	for _, phase := range []string{"pending_code", "desktop_observation"} {
+		t.Run(phase, func(t *testing.T) {
+			report := installedPilotReport{pilotReport: pilotReport{SchemaVersion: 2, Status: "ready", WorkspaceID: strings.Repeat("e", 32), DesktopExtension: "maestro-connector-" + strings.Repeat("a", 32), CodePrompt: "stale-code-prompt", CodeReadyPrompt: "stale-code-ready", CodeReadbackPrompt: "stale-code-readback", CodeSteps: []pilotStep{{ID: "stale-code"}}}}
+			if phase == "pending_code" {
+				report.ClientPreparation = installer.ClientPreparationDesktopReady
+			} else {
+				report.ObservationClient = "desktop"
+				// Existing qualification remains a recorded fact, not a new observation.
+				report.NativeQualification = "qualified"
+			}
+			var output bytes.Buffer
+			if err := finishInstalledPilotReport(&report, &output); err != nil {
+				t.Fatal(err)
+			}
+			if report.ClientTarget != "" || report.Status != "partial" {
+				t.Fatalf("Desktop preparation changed selected both or claimed full readiness: %+v", report.pilotReport)
+			}
+			if report.CodePrompt != "" || report.CodeReadyPrompt != "" || report.CodeReadbackPrompt != "" || len(report.CodeSteps) != 0 {
+				t.Fatal("pending/unobserved Code retained an actionable prompt")
+			}
+			var journey strings.Builder
+			for _, step := range report.DesktopSteps {
+				journey.WriteString(step.Prompt)
+			}
+			for _, required := range []string{report.WorkspaceID, report.DesktopExtension, "methods.plan", "brain.create", "memory.capture", "execution.create", "execution.pause"} {
+				if !strings.Contains(journey.String(), required) {
+					t.Fatalf("Desktop-first journey omitted %s", required)
+				}
+			}
+			if len(report.DesktopSteps) == 0 || report.DesktopSteps[0].ID != "reconcile" || strings.Contains(report.DesktopPrompt, "criado no Code") || strings.Contains(report.DesktopPrompt, "execution.resume") || !strings.Contains(report.Markdown, "**ambos**") {
+				t.Fatal("Desktop preparation still requires a Code checkpoint or hides selected both")
+			}
+			if phase == "desktop_observation" && report.NativeQualification != "qualified" {
+				t.Fatal("observation scope rewrote the validated prior qualification")
+			}
+		})
+	}
+}
+
+func TestInstalledPilotUnknownObservationDoesNotGeneratePrompts(t *testing.T) {
+	for _, scope := range []string{"code", "both", "Desktop", "foreign"} {
+		report := installedPilotReport{pilotReport: pilotReport{SchemaVersion: 2, Status: "partial", WorkspaceID: strings.Repeat("e", 32), ObservationClient: scope}}
+		var output bytes.Buffer
+		if err := finishInstalledPilotReport(&report, &output); err == nil || report.Status != "blocked" || report.CodePrompt != "" || report.DesktopPrompt != "" {
+			t.Fatalf("unsupported observation %q generated an actionable journey", scope)
+		}
+	}
+}
+
 func TestInstalledPilotUnknownClientTargetDoesNotGeneratePrompts(t *testing.T) {
 	report := installedPilotReport{pilotReport: pilotReport{SchemaVersion: 2, Status: "partial", WorkspaceID: strings.Repeat("e", 32), ClientTarget: "foreign"}}
 	var output bytes.Buffer
@@ -147,6 +197,11 @@ func TestInstalledPilotSelectionRejectsUnclosedOrForeignInputs(t *testing.T) {
 	if err != nil || selected.CarrierID != strings.Repeat("a", 32) || selected.Workspace != filepath.Join(root, "existing-work") {
 		t.Fatalf("exact selections refused: %#v %v", selected, err)
 	}
+	desktopArgs := append(append([]string{}, base...), "--observation-client", "desktop")
+	desktopSelection, err := parseInstalledPilotSelection(desktopArgs)
+	if err != nil || desktopSelection.ObservationClient != "desktop" || desktopSelection.CarrierID != selected.CarrierID || desktopSelection.Workspace != selected.Workspace {
+		t.Fatalf("closed observation scope changed the selected carrier: %+v %v", desktopSelection, err)
+	}
 	for name, args := range map[string][]string{
 		"missing":                nil,
 		"unknown executable":     append(append([]string{}, base...), "--server", "/private/secret"),
@@ -154,6 +209,9 @@ func TestInstalledPilotSelectionRejectsUnclosedOrForeignInputs(t *testing.T) {
 		"foreign installed root": append(append([]string{}, base[:len(base)-3]...), "--experimental-installed-root", filepath.Join(root, "foreign")),
 		"relative product":       {"--product-root", "relative"},
 		"positional":             append(append([]string{}, base...), "other"),
+		"foreign observation":    append(append([]string{}, base...), "--observation-client", "both"),
+		"Code observation":       append(append([]string{}, base...), "--observation-client", "code"),
+		"duplicate observation":  append(append([]string{}, desktopArgs...), "--observation-client", "desktop"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := parseInstalledPilotSelection(args); err == nil {

@@ -398,7 +398,7 @@ fixture_installer(){
 }
 INSTALLED=fixture_installer
 manage(){ :; }
-` + extract("json() {", "# Resolve normal installer symlinks") + extract("review_confirm() {", "if [[ ! -e \"$INSTALLED\"") + producer
+` + extract("json() {", "# Resolve normal installer symlinks") + extract("review_confirm() {", "if [[ ! -e \"$INSTALLED\"") + extract("desktop_clients_available() {", "current_clients=false") + producer
 		statePath := filepath.Join(owner, ".maestro-install/config/install-state.json")
 		attempt := func(directory, input, expected, advanced string) ([]byte, error) {
 			if err := os.MkdirAll(directory, 0700); err != nil {
@@ -868,6 +868,265 @@ func TestParticipantResultCollectorsRespectDesktopTarget(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// Observe the real frontend's command boundary, substituting only authentication
+// and the canonical installed owner. No Code, model, installer or client runs.
+func TestParticipantCodeAcceptanceUsesFreshCanonicalPreparation(t *testing.T) {
+	partial := `{"state":"partial_preparation","preparation":{"phase":"desktop_prepared_code_pending","selected_target":"both","desktop":"prepared","code":"pending_qualification"}}`
+	for _, platform := range []string{"mac", "powershell"} {
+		for _, test := range []struct{ name, status, intent string }{
+			{"initial", `{"state":"unavailable"}`, ""},
+			{"full", `{"state":"current_materialization"}`, ""},
+			{"partial", partial, "resume-code"},
+			{"partial_update", partial, "update"},
+		} {
+			t.Run(platform+"/"+test.name, func(t *testing.T) {
+				root := developerFixture(t)
+				writeFixture(t, root, "canonical-status.json", []byte(test.status))
+				var cmd *exec.Cmd
+				if platform == "mac" {
+					if runtime.GOOS != "darwin" {
+						t.Skip("Mac shell contract")
+					}
+					source, err := os.ReadFile("../templates/installed-seed/Maestro.command")
+					if err != nil {
+						t.Fatal(err)
+					}
+					_, helper, _ := strings.Cut(string(source), "manage() {")
+					helper, _, _ = strings.Cut(helper, "CLIENT_STATUS=(")
+					_, predicate, _ := strings.Cut(string(source), "desktop_clients_available() {")
+					predicate, _, _ = strings.Cut(predicate, "current_clients=false")
+					observer := writeFixture(t, root, "installer", []byte(`#!/bin/bash
+if [[ "$1" == clients-status ]]; then printf checked >> "$ROOT/status-calls"; cat "$ROOT/canonical-status.json"; exit; fi
+[[ "$1" == manage ]] || exit 21
+printf '%s\n' "$@" > "$ROOT/manager-args"
+printf '%s' "$CLAUDE_CONFIG_DIR" > "$ROOT/manager-profile"
+`))
+					if err := os.Chmod(observer, 0700); err != nil {
+						t.Fatal(err)
+					}
+					script := `set -euo pipefail
+fail(){ printf '%s' "$*" >&2; exit 22; }
+verify_installer(){ :; }
+ensure_code_login(){ printf auth >> "$ROOT/auth"; }
+jget(){ /usr/bin/plutil -extract "$2" raw -o - "$1"; }
+TARGET=""; RUN="$ROOT"; CODE="$ROOT/code"; CODE_CONFIG="$ROOT/selected-profile"; CLIENTS="$ROOT/clients"; INSTALLED="$ROOT/installer"; CODE_PREPARATION_PENDING=true
+COMMON=(--workspace "$ROOT/brain" --carrier-id original-carrier); CLIENT_STATUS=("${COMMON[@]}")
+desktop_clients_available() {` + predicate + `
+manage() {` + helper + `
+if [[ "$CASE" == partial_update ]]; then manage --management-intent update; else manage; fi
+[[ "${CLAUDE_CONFIG_DIR}" == caller-profile ]] || fail 'caller profile changed'
+`
+					cmd = exec.Command("/bin/bash", "-c", script)
+					cmd.Stdin = strings.NewReader("YES\n")
+				} else {
+					shell, err := powerShellTool()
+					if err != nil {
+						t.Skip("PowerShell helper contract unavailable")
+					}
+					source, _ := filepath.Abs("../templates/installed-seed/Maestro.ps1")
+					script := `Set-StrictMode -Version Latest; $ErrorActionPreference='Stop'
+$tokens=$null; $errors=$null; $ast=[Management.Automation.Language.Parser]::ParseFile($env:SOURCE,[ref]$tokens,[ref]$errors)
+if($errors.Count){throw 'Shipped source does not parse'}
+foreach($name in @('Invoke-Management','Current-Clients','Test-DesktopPreparation')){
+ $node=$ast.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq $name},$true)
+ if($null -eq $node){throw "Missing shipped helper $name"}; Invoke-Expression $node.Extent.Text
+}
+function Verify-Installer([string]$Path){}
+function Stop-Maestro([string]$Message){throw $Message}
+function Read-Host([string]$Prompt){return 'YES'}
+function Ensure-CodeLogin{[IO.File]::AppendAllText((Join-Path $env:ROOT 'auth'),'auth'); return $true}
+function Test-Owner{
+ if($args[0] -ceq 'clients-status'){[IO.File]::AppendAllText((Join-Path $env:ROOT 'status-calls'),'checked'); $global:LASTEXITCODE=0; return [IO.File]::ReadAllText((Join-Path $env:ROOT 'canonical-status.json'))}
+ if($args[0] -cne 'manage'){throw 'Unexpected owner action'}
+ [IO.File]::WriteAllLines((Join-Path $env:ROOT 'manager-args'),[string[]]$args)
+ [IO.File]::WriteAllText((Join-Path $env:ROOT 'manager-profile'),$env:CLAUDE_CONFIG_DIR)
+ $global:LASTEXITCODE=0
+}
+$Installer='Test-Owner'; $ClientTarget=''; $Common=@('--workspace',(Join-Path $env:ROOT 'brain'),'--carrier-id','original-carrier'); $Manage=$Common
+$Config=[PSCustomObject]@{code_configuration_directory=(Join-Path $env:ROOT 'selected-profile')}
+$script:CodePreparationPending=$true
+if($env:CASE -ceq 'partial_update'){Invoke-Management -Extra @('--management-intent','update')}else{Invoke-Management}
+if($env:CLAUDE_CONFIG_DIR -cne 'caller-profile'){throw 'Caller profile changed'}
+`
+					cmd = exec.Command(shell, "-NoProfile", "-NonInteractive", "-Command", script)
+					cmd.Env = append(os.Environ(), "SOURCE="+source)
+				}
+				if cmd.Env == nil {
+					cmd.Env = os.Environ()
+				}
+				cmd.Env = append(cmd.Env, "ROOT="+root, "CASE="+test.name, "CLAUDE_CONFIG_DIR=caller-profile")
+				if output, err := cmd.CombinedOutput(); err != nil {
+					t.Fatalf("accepted original flow failed: %s %v", output, err)
+				}
+				body, err := os.ReadFile(filepath.Join(root, "manager-args"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				args := strings.Split(strings.TrimSpace(string(body)), "\n")
+				actual := ""
+				for i, arg := range args {
+					if arg == "--management-intent" && i+1 < len(args) {
+						actual = args[i+1]
+					}
+				}
+				if actual != test.intent {
+					t.Fatalf("canonical %s accepted route intent=%q want %q; args=%q", test.name, actual, test.intent, body)
+				}
+				if test.name != "partial_update" {
+					if body, _ := os.ReadFile(filepath.Join(root, "status-calls")); string(body) != "checked" {
+						t.Fatal("accepted route did not obtain fresh canonical status exactly once")
+					}
+				}
+				if body, _ := os.ReadFile(filepath.Join(root, "auth")); string(body) != "auth" {
+					t.Fatal("explicit YES did not follow original authentication exactly once")
+				}
+				if body, _ := os.ReadFile(filepath.Join(root, "manager-profile")); string(body) != filepath.Join(root, "selected-profile") {
+					t.Fatal("manager lost selected Code profile")
+				}
+			})
+		}
+	}
+}
+
+func TestMacSelfServiceDesktopRecheckPreservesEarlierReports(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Mac shell contract")
+	}
+	source, err := os.ReadFile("../templates/installed-seed/Maestro.command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	extract := func(start, end string) string {
+		t.Helper()
+		_, tail, ok := strings.Cut(string(source), start)
+		if !ok {
+			t.Fatal("missing shipped helper")
+		}
+		body, _, ok := strings.Cut(tail, end)
+		if !ok {
+			t.Fatal("missing shipped helper boundary")
+		}
+		return start + body
+	}
+	helpers := extract("private_dir() {", "private_dir \"$DEV/Maestro-Pilot\"") + extract("refresh_report() {", "\nrefresh_report\n")
+	for _, test := range []struct {
+		unsafe bool
+		scope  string
+	}{{false, "desktop"}, {true, "desktop"}, {false, ""}} {
+		t.Run(fmt.Sprintf("unsafe_current_directory_%v_scope_%s", test.unsafe, test.scope), func(t *testing.T) {
+			unsafe := test.unsafe
+			root := developerFixture(t)
+			response := `{"schema_version":2,"evidence_class":"engineering_only","markdown":"Desktop attempt","code_prompt":"","code_readback_prompt":"","desktop_prompt":"Desktop","code_ready_prompt":"","desktop_ready_prompt":"Desktop ready","client_preparation":"desktop_prepared_code_pending"}`
+			writeFixture(t, root, "response.json", []byte(response))
+			server := writeFixture(t, root, "server", []byte("#!/bin/bash\nprintf '%s\\n' \"$*\" >> \"$ROOT/calls\"\ncat \"$ROOT/response.json\"\n"))
+			if err := os.Chmod(server, 0700); err != nil {
+				t.Fatal(err)
+			}
+			body, _ := os.ReadFile(server)
+			writeFixture(t, root, "metadata.json", []byte(`{"server_hashes":["`+sum(body)+`","`+strings.Repeat("f", 64)+`"]}`))
+			script := `set -euo pipefail
+umask 077
+fail(){ printf '%s' "$*" >&2; exit 19; }
+sha(){ local value; value="$(/usr/bin/shasum -a 256 "$1")"; printf '%s' "${value%% *}"; }
+jget(){ /usr/bin/plutil -extract "$2" raw -o - "$1"; }
+verify_installer(){ :; }
+installer_fixture(){ [[ "$1" == clients-status ]] || fail 'unexpected client action'; printf '{}'; }
+DEV="$ROOT"; DIAGNOSTIC_ROOT="$ROOT/diagnostic"; RUN="$DIAGNOSTIC_ROOT"; mkdir "$RUN"
+INSTALLED=installer_fixture; SERVER="$ROOT/server"; META="$ROOT/metadata.json"; VERSION=0.1.1; ROLE=role; PRODUCT="$ROOT/product"
+COMMON=(--workspace "$ROOT/brain" --carrier-id original-carrier); CLIENT_STATUS=("${COMMON[@]}"); PILOT_OBSERVATION_CLIENT="$SCOPE"
+` + helpers + `
+refresh_report
+cp "$RUN/report.json" "$ROOT/earlier-report"
+if [[ "$UNSAFE" == true ]]; then mkdir "$ROOT/foreign"; ln -s "$ROOT/foreign" "$DIAGNOSTIC_ROOT/linked"; RUN="$DIAGNOSTIC_ROOT/linked"; fi
+refresh_report
+[[ "$RUN" == "$DIAGNOSTIC_ROOT/recheck-"* && "$CODE_PREPARATION_PENDING" == true ]] || fail 'recheck lost scope/pending state'
+cmp "$DIAGNOSTIC_ROOT/report.json" "$ROOT/earlier-report" || fail 'earlier diagnostic changed'
+[[ "$(wc -l < "$ROOT/calls" | tr -d ' ')" == 2 ]] || fail 'unexpected number of checker calls'
+expected_scope=0; [[ "$SCOPE" != desktop ]] || expected_scope=2
+[[ "$(/usr/bin/grep -c -- '--observation-client desktop' "$ROOT/calls" || true)" == "$expected_scope" ]] || fail 'observation scope lost'
+`
+			cmd := exec.Command("/bin/bash", "-c", script)
+			cmd.Env = append(os.Environ(), "ROOT="+root, fmt.Sprintf("UNSAFE=%v", unsafe), "SCOPE="+test.scope)
+			output, err := cmd.CombinedOutput()
+			if !unsafe && err != nil {
+				t.Fatalf("fresh scoped recheck failed: %s %v", output, err)
+			}
+			if unsafe {
+				calls, readErr := os.ReadFile(filepath.Join(root, "calls"))
+				if err == nil || readErr != nil || strings.Count(string(calls), "installed-pilot-check") != 1 {
+					t.Fatalf("unsafe current directory was not refused before another checker call: %s %v", output, err)
+				}
+			}
+		})
+	}
+}
+
+func TestMacSelfServiceCodeDeferralKeepsFullDesktopPreparation(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Mac shell contract")
+	}
+	source, err := os.ReadFile("../templates/installed-seed/Maestro.command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, body, ok := strings.Cut(string(source), "manage() {")
+	if !ok {
+		t.Fatal("shipped manager helper missing")
+	}
+	body, _, ok = strings.Cut(body, "CLIENT_STATUS=(")
+	if !ok {
+		t.Fatal("shipped manager boundary missing")
+	}
+	for _, operation := range []string{"prepare-desktop", "update-desktop"} {
+		t.Run(operation, func(t *testing.T) {
+			root := developerFixture(t)
+			installer := filepath.Join(root, "installer-fixture")
+			if err := os.WriteFile(installer, []byte("#!/bin/bash\nprintf '%s\\n' \"$@\" > \"$OBSERVED_ARGS\"\nprintf '%s' \"${CLAUDE_CONFIG_DIR-unset}\" > \"$OBSERVED_PROFILE\"\n"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			script := `set -euo pipefail
+fail(){ printf '%s' "$*" >&2; exit 1; }
+verify_installer(){ :; }
+ensure_code_login(){ printf invoked > "$ROOT/code-invoked"; fail 'Deferred Code must not be invoked'; }
+TARGET=""; CODE="$ROOT/code"; CODE_CONFIG="$ROOT/selected-profile"; CLIENTS="$ROOT/clients"
+COMMON=(--product-root "$ROOT/product" --user-home "$ROOT/owner" --workspace "$ROOT/workspace" --carrier-id same-carrier)
+manage() {` + body + `
+if [[ "$OPERATION" == update-desktop ]]; then manage --management-intent update; else manage; fi
+printf diagnostics-reached > "$ROOT/final-diagnostics"
+`
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "/bin/bash", "-c", script)
+			cmd.Env = append(os.Environ(), "ROOT="+root, "OPERATION="+operation, "INSTALLED="+installer, "OBSERVED_ARGS="+filepath.Join(root, "args"), "OBSERVED_PROFILE="+filepath.Join(root, "profile"), "CLAUDE_CONFIG_DIR=caller-profile")
+			cmd.Stdin = strings.NewReader("\n")
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("deferral must reach Desktop preparation and diagnostics without Code: %s %v", output, err)
+			}
+			args, err := os.ReadFile(filepath.Join(root, "args"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, required := range []string{"--client-code-root\n" + filepath.Join(root, "clients", "code") + "\n", "--client-code-config\n" + filepath.Join(root, "selected-profile") + "\n", "--client-desktop-path\n" + filepath.Join(root, "clients", "maestro-product.mcpb") + "\n", "--management-intent\n" + operation + "\n"} {
+				if !strings.Contains(string(args), required) {
+					t.Fatalf("original selection or preparation intent lost: %s", args)
+				}
+			}
+			if strings.Contains(string(args), "--client-target\ndesktop\n") || strings.Count(string(args), "--management-intent\n") != 1 {
+				t.Fatalf("deferral retargeted the selection or mixed operations: %s", args)
+			}
+			if _, err := os.Lstat(filepath.Join(root, "code-invoked")); !os.IsNotExist(err) {
+				t.Fatal("Code/auth path ran during deferral")
+			}
+			if value, _ := os.ReadFile(filepath.Join(root, "profile")); string(value) != "caller-profile" {
+				t.Fatal("deferral changed the caller profile environment")
+			}
+			if _, err := os.Stat(filepath.Join(root, "final-diagnostics")); err != nil {
+				t.Fatal("deferral exited before final diagnostics")
+			}
+		})
 	}
 }
 

@@ -45,10 +45,29 @@ func (b *Bound) validateInstalledOwnerReviewContext(ctx context.Context, home, w
 	if cancelled := ctx.Err(); cancelled != nil {
 		return cancelled
 	}
-	if err != nil || status.State != "current_materialization" || status.Record == nil {
+	if err != nil {
+		return errors.New("owner_review_carrier_unavailable")
+	}
+	return b.validateInstalledOwnerReviewSnapshot(ctx, home, workspaceID, status)
+}
+
+// Only the canonical reader above supplies this snapshot. Its source admission
+// and material inspection remain mandatory before checking receiver continuity.
+func (b *Bound) validateInstalledOwnerReviewSnapshot(ctx context.Context, home, workspaceID string, status installer.ClientStatus) error {
+	if status.Record == nil {
 		return errors.New("owner_review_carrier_unavailable")
 	}
 	r := *status.Record
+	if status.State != "current_materialization" {
+		if status.State != installer.ClientPartialPreparation || !r.CodePreparationPending() || installer.ClientSelectedTarget(r) != "" || !r.Materialization.DesktopOnly() {
+			return errors.New("owner_review_carrier_unavailable")
+		}
+		// This exact schema3 role has a complete Desktop and an unchanged full
+		// both-client selection. It supplies no Code packet or enforcement proof.
+		if _, err := installer.DesktopPreparationRecord(r); err != nil {
+			return errors.New("owner_review_carrier_unavailable")
+		}
+	}
 	if r.Binding.Home != home || r.Binding.WorkspaceID != workspaceID || r.Binding.Workspace != b.options.WorkspacePath || r.Materialization.OwnerReviewChannel != b.options.OwnerReviewChannel {
 		return errors.New("owner_review_carrier_changed")
 	}

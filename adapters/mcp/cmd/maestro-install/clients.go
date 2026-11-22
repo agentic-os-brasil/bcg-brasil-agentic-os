@@ -135,7 +135,8 @@ func runClientsWithNativeVerifier(ctx context.Context, command, self string, f l
 	if err != nil {
 		return encode(status, err)
 	}
-	if status.Record == nil || status.State != "current_materialization" {
+	partialDesktopConfirmation := command == "desktop-confirm" && status.Record != nil && status.State == installer.ClientPartialPreparation && status.Record.CodePreparationPending()
+	if status.Record == nil || status.State != "current_materialization" && !partialDesktopConfirmation {
 		return encode(status, errors.New("current client materialization required"))
 	}
 	if command == "code-review" {
@@ -173,9 +174,10 @@ func manageClients(ctx context.Context, o installer.ClientOptions, input io.Read
 }
 
 func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, input io.Reader, output io.Writer, intent string) error {
-	if intent != "" && intent != "update" {
+	if intent != "" && intent != "update" && intent != "prepare-desktop" && intent != "update-desktop" && intent != "resume-code" {
 		return errors.New("unsupported management intent; nothing applied")
 	}
+	desktopPreparation := intent == "prepare-desktop" || intent == "update-desktop"
 	reader := bufio.NewReader(io.LimitReader(input, 64<<10))
 	prompt := func(text string) (string, error) {
 		fmt.Fprint(output, text)
@@ -200,10 +202,7 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 		}
 		return nil
 	}
-	applyClients := func(options installer.ClientOptions, digest string) (installer.ClientRecord, error) {
-		if !options.Request.NativeEnforcement {
-			return setup.ApplyClients(ctx, options, digest, true)
-		}
+	applyNativeClients := func(options installer.ClientOptions, digest string) (installer.ClientRecord, error) {
 		var nonce [12]byte
 		if _, err := rand.Read(nonce[:]); err != nil {
 			return installer.ClientRecord{}, err
@@ -222,6 +221,15 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 		}
 		return setup.ApplyNativeClientUpdate(ctx, options, selection, digest, review.ReviewDigest, true)
 	}
+	applyClients := func(options installer.ClientOptions, digest string) (installer.ClientRecord, error) {
+		return applyManagedClients(ctx, options, digest, desktopPreparation, applyNativeClients)
+	}
+	reviewClients := func(options installer.ClientOptions) (installer.ClientReview, error) {
+		if desktopPreparation {
+			return installer.ReviewDesktopPreparationSeeded(ctx, options)
+		}
+		return installer.ReviewClientsSeeded(ctx, options)
+	}
 	revalidateMaintenance := func(options installer.ClientOptions) error {
 		return revalidateClientMaintenance(ctx, options, confirm, output)
 	}
@@ -229,6 +237,9 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 		return errors.New("unsupported client target; nothing applied")
 	}
 	if o.Request.DesktopOnly() {
+		if desktopPreparation || intent == "resume-code" {
+			return errors.New("client preparation intent requires the saved both-client selection")
+		}
 		if o.Request.CodeRoot != "" || o.Request.CodeScope != "" || o.Request.CodeExecutable != "" || o.Request.CodeConfigurationDirectory != "" || o.Request.NativeEnforcement || o.Request.LifecycleContext {
 			return errors.New("Desktop target cannot include Code choices; nothing applied")
 		}
@@ -236,6 +247,9 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 	}
 	status, readErr := installer.ReadClientsSeeded(ctx, o)
 	if status.Record == nil {
+		if intent == "resume-code" {
+			return errors.New("a validated pending Code preparation is required before resuming")
+		}
 		// First run collects ordinary local choices, generates the opaque ID and
 		// enters the same exact reviewed owners. No hand-written JSON, saved
 		// approval or native-client invocation is required to materialize.
@@ -360,10 +374,15 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 				return e
 			}
 		}
+		if desktopPreparation {
+			if _, err := installer.DesktopPreparationOptions(o); err != nil {
+				return err
+			}
+		}
 		if err := reconcileRuntime(ctx, o, confirm, output); err != nil {
 			return err
 		}
-		review, e := installer.ReviewClientsSeeded(ctx, o)
+		review, e := reviewClients(o)
 		if e != nil {
 			return e
 		}
@@ -373,6 +392,9 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 		r, e := applyClients(o, review.Digest)
 		if e != nil {
 			return e
+		}
+		if desktopPreparation {
+			return writeDesktopPreparationStatus(ctx, o, r, intent, output)
 		}
 		fmt.Fprintln(output, "Current client packets are prepared. Install the Desktop connector and live-method bootstrap once through normal host prompts. Reconnect/reload and actual host acceptance remain pending.", r.Materialization.DesktopPath)
 		if r.Materialization.DesktopMethods != nil {
@@ -406,10 +428,18 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 		if o.Request.DesktopOnly() {
 			choices = "Choose status, update, regenerate, reconcile, foreground-profile, maintenance, desktop-confirm, manual-desktop-update, or rollback: "
 		}
+		if r.CodePreparationPending() {
+			choices = "Choose status, prepare-desktop, update-desktop, resume-code, or desktop-confirm: "
+		}
 		action, e = prompt(choices)
 		if e != nil {
 			return e
 		}
+	}
+	operation := action
+	action, desktopPreparation, e = resolveClientManagementAction(r, action)
+	if e != nil {
+		return e
 	}
 	switch action {
 	case "", "status":
@@ -440,6 +470,9 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 		if errors.Is(e, updateservice.ErrCurrent) && status.State == "current_materialization" {
 			if err := reconcileRuntime(ctx, o, confirm, output); err != nil {
 				return err
+			}
+			if desktopPreparation {
+				return writeDesktopPreparationStatus(ctx, o, r, operation, output)
 			}
 			fmt.Fprintln(output, "The installed source and current packet generation are unchanged. No native qualification or model session was repeated. Loading remains separately unverified.")
 			if r.Code.Executable != "" {
@@ -491,6 +524,14 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 			return e
 		}
 	case "regenerate":
+	case "prepare-desktop":
+		if readErr == nil && status.State == "current_materialization" {
+			return writeDesktopPreparationStatus(ctx, o, r, operation, output)
+		}
+	case "resume-code":
+		if readErr != nil || status.State != installer.ClientPartialPreparation || !r.CodePreparationPending() {
+			return errors.New("a current validated pending Code preparation is required before resuming")
+		}
 	case "reconcile":
 		o.Request.Reconcile = true
 	case "manual-desktop-update":
@@ -542,7 +583,7 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 	case "maintenance":
 		return manageClientMaintenance(ctx, o, prompt, confirm, output)
 	case "desktop-confirm":
-		if readErr != nil || status.State != "current_materialization" {
+		if readErr != nil || status.State != "current_materialization" && !(status.State == installer.ClientPartialPreparation && r.CodePreparationPending()) {
 			return errors.New("regenerate current clients before confirming Desktop")
 		}
 		fmt.Fprintln(output, "Install the exact .mcpb through Desktop's normal extension prompts. External-launcher compatibility remains pending native qualification. This records only operator confirmation, never connection or functional evidence.", r.Materialization.DesktopPath)
@@ -562,14 +603,14 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 			return err
 		}
 	}
-	if o.Request.NativeEnforcement {
+	if o.Request.NativeEnforcement && !desktopPreparation {
 		var generation [16]byte
 		if _, err := rand.Read(generation[:]); err != nil {
 			return err
 		}
 		o.Request.GenerationID = hex.EncodeToString(generation[:])
 	}
-	review, e := installer.ReviewClientsSeeded(ctx, o)
+	review, e := reviewClients(o)
 	if e != nil {
 		return e
 	}
@@ -579,6 +620,9 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 	result, e := applyClients(o, review.Digest)
 	if e != nil {
 		return e
+	}
+	if desktopPreparation {
+		return writeDesktopPreparationStatus(ctx, o, result, operation, output)
 	}
 	if result.Code.Executable != "" {
 		registration, err := setup.ReviewCodeRegistration(ctx, result, nil)
@@ -607,6 +651,76 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 		return err
 	}
 	return revalidateMaintenance(o)
+}
+
+func writeDesktopPreparationStatus(ctx context.Context, o installer.ClientOptions, record installer.ClientRecord, operation string, output io.Writer) error {
+	if err := requireDesktopPreparationRecord(record); err != nil {
+		return err
+	}
+	o.Request = installer.ClientRequestFromRecord(record)
+	status, err := installer.ReadClientsSeeded(ctx, o)
+	if err != nil {
+		return err
+	}
+	if status.Record == nil || installer.ClientSelectedTarget(*status.Record) != "" || installer.ClientRecordDigest(*status.Record) != installer.ClientRecordDigest(record) || status.State != "current_materialization" && !(status.State == installer.ClientPartialPreparation && record.CodePreparationPending()) {
+		return errors.New("the reviewed Desktop preparation changed before status readback")
+	}
+	fmt.Fprintln(output, "Desktop connector and complete methods are prepared. Host installation, connection and functional checks remain separate. This operation did not refresh Code registration or model execution.")
+	return json.NewEncoder(output).Encode(struct {
+		installer.ClientStatus
+		OperationScope string `json:"operation_scope"`
+		Operation      string `json:"operation"`
+	}{status, "desktop", operation})
+}
+
+// Canonical ReadClientsSeeded remains the owner of source, native contract,
+// method archive and current-file validation. This receiver checks that its
+// admitted record supports the explicitly requested full Desktop scope.
+func requireDesktopPreparationRecord(record installer.ClientRecord) error {
+	if installer.ClientSelectedTarget(record) != "" || record.Materialization.Selection == nil || record.Materialization.DesktopMethods == nil {
+		return errors.New("Desktop preparation requires the original full both-client profile")
+	}
+	if _, err := installer.DesktopPreparationOptions(installer.ClientOptions{Request: installer.ClientRequestFromRecord(record)}); err != nil {
+		return errors.New("Desktop preparation requires the original full both-client profile")
+	}
+	return nil
+}
+
+// Only this process-composition boundary selects among the existing publishers.
+// The native callback is the original reviewed qualifier above, never CLI data
+// or a supplied qualification receipt.
+func applyManagedClients(ctx context.Context, o installer.ClientOptions, digest string, desktopPreparation bool, native func(installer.ClientOptions, string) (installer.ClientRecord, error)) (installer.ClientRecord, error) {
+	if desktopPreparation {
+		return setup.ApplyDesktopPreparation(ctx, o, digest, true)
+	}
+	if !o.Request.NativeEnforcement {
+		return setup.ApplyClients(ctx, o, digest, true)
+	}
+	if native == nil {
+		return installer.ClientRecord{}, errors.New("original native qualifier unavailable")
+	}
+	return native(o, digest)
+}
+
+func resolveClientManagementAction(record installer.ClientRecord, action string) (string, bool, error) {
+	if record.SchemaVersion == 3 {
+		if _, err := installer.DesktopPreparationRecord(record); err != nil {
+			return "", false, err
+		}
+		if action != "" && action != "status" && action != "update" && action != "prepare-desktop" && action != "update-desktop" && action != "resume-code" && action != "desktop-confirm" {
+			return "", false, errors.New("pending Code preparation requires an explicit preparation or resume action")
+		}
+	}
+	desktop := action == "prepare-desktop" || action == "update-desktop"
+	if desktop {
+		if err := requireDesktopPreparationRecord(record); err != nil {
+			return "", false, err
+		}
+	}
+	if action == "update-desktop" {
+		action = "update"
+	}
+	return action, desktop, nil
 }
 
 // revalidateClientMaintenance is the manager's existing refresh consumer.
