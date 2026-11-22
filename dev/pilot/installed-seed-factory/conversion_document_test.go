@@ -71,18 +71,18 @@ func main(){b,_:=json.Marshal(os.Args[1:]);if err:=os.WriteFile(os.Getenv("MAEST
 		name, prompt, conversion, status, workspace, manifest, result string
 		empty, called, ok                                             bool
 	}{
-		{name: "complete_code_ready", prompt: "CODE.txt", called: true, ok: true},
-		{name: "complete_desktop_ready", prompt: "DESKTOP.txt", called: true, ok: true},
-		{name: "runtime_pending_no_workspace_write", prompt: "CODE.txt", conversion: "pending_runtime", ok: true},
-		{name: "blocked_report", prompt: "CODE.txt", status: "blocked"},
-		{name: "empty_prompt", prompt: "CODE.txt", empty: true},
-		{name: "wrong_runtime_identity", prompt: "CODE.txt", conversion: "blocked_identity_mismatch"},
-		{name: "changed_workspace", prompt: "CODE.txt", workspace: "foreign"},
-		{name: "changed_current_manifest", prompt: "CODE.txt", manifest: strings.Repeat("f", 64)},
+		{name: "complete_code_ready", prompt: "CODE-CONVERSAO.txt", called: true, ok: true},
+		{name: "complete_desktop_ready", prompt: "DESKTOP-CONVERSAO.txt", called: true, ok: true},
+		{name: "runtime_pending_no_workspace_write", prompt: "CODE-CONVERSAO.txt", conversion: "pending_runtime", ok: true},
+		{name: "blocked_report", prompt: "CODE-CONVERSAO.txt", status: "blocked"},
+		{name: "empty_prompt", prompt: "CODE-CONVERSAO.txt", empty: true},
+		{name: "wrong_runtime_identity", prompt: "CODE-CONVERSAO.txt", conversion: "blocked_identity_mismatch"},
+		{name: "changed_workspace", prompt: "CODE-CONVERSAO.txt", workspace: "foreign"},
+		{name: "changed_current_manifest", prompt: "CODE-CONVERSAO.txt", manifest: strings.Repeat("f", 64)},
 		{name: "connection_prompt_is_read_only", prompt: "CODE-CONEXAO.txt"},
 		{name: "readback_prompt_is_read_only", prompt: "CODE-RELEITURA.txt"},
 		{name: "desktop_connection_is_read_only", prompt: "DESKTOP-CONEXAO.txt"},
-		{name: "owner_result_refused", prompt: "CODE.txt", result: "unavailable", called: true},
+		{name: "owner_result_refused", prompt: "CODE-CONVERSAO.txt", result: "unavailable", called: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			for _, platform := range []string{"mac", "powershell"} {

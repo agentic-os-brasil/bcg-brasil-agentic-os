@@ -345,7 +345,7 @@ guard_test_prompt() {
 }
 prepare_conversion_document() {
   local current="$1" prompt="$2" state expected_manifest expected_pack result server_sha
-  [[ "$prompt" == CODE.txt || "$prompt" == DESKTOP.txt ]] || fail 'Documento disponível somente nas opções completas 1 e 2.'
+  [[ "$prompt" == CODE-CONVERSAO.txt || "$prompt" == DESKTOP-CONVERSAO.txt ]] || fail 'Documento disponível somente na etapa de documento.'
   guard_test_prompt "$prompt"
   state="$(jget "$RUN/report.json" conversion.state)"
   if [[ "$state" == pending_runtime ]]; then printf 'Conversão pendente: o runtime atual não está pronto. O restante do ensaio pode continuar; nenhum documento será criado.\n'; return 0; fi
@@ -374,7 +374,7 @@ open_code() {
   [[ "$executable" == /* && -f "$executable" && "$(sha "$executable")" == "$expected" ]] || fail 'O Code selecionado mudou; revise o registro pelo gerenciador.'
   observed_profile="$(jget "$RUN/clients-status.json" record.code.configuration_directory 2>/dev/null || true)"
   [[ "$observed_profile" == "$CODE_CONFIG" ]] || fail 'O perfil Code registrado divergiu; preserve o registro e confira pelo gerenciador.'
-  if [[ "$1" == CODE.txt ]]; then prepare_conversion_document "$RUN/clients-status.json" "$1"; fi
+  if [[ "$1" == CODE-CONVERSAO.txt ]]; then prepare_conversion_document "$RUN/clients-status.json" "$1"; fi
   (cd "$WORK" && /usr/bin/env "CLAUDE_CONFIG_DIR=$CODE_CONFIG" "$executable" "$(cat "$RUN/$1")")
 }
 desktop_install_is_current() {
@@ -395,7 +395,7 @@ open_desktop() {
   packet="$(jget "$RUN/clients-status.json" record.materialization.desktop_path)"
   methods="$(jget "$RUN/clients-status.json" record.materialization.desktop_methods.archive)"
   method_version="$(jget "$RUN/clients-status.json" record.materialization.desktop_methods.version)"
-  if [[ "$1" == DESKTOP.txt ]]; then prepare_conversion_document "$RUN/clients-status.json" "$1"; fi
+  if [[ "$1" == DESKTOP-CONVERSAO.txt ]]; then prepare_conversion_document "$RUN/clients-status.json" "$1"; fi
   /usr/bin/pbcopy < "$RUN/$1"
   if desktop_install_is_current "$RUN/clients-status.json"; then
     printf '\nA instalação deste pacote/contrato já foi confirmada por você. O instalador da extensão não será reaberto; conexão e funcionamento continuam pendentes de teste.\n'
@@ -406,15 +406,41 @@ open_desktop() {
   printf 'Biblioteca de skills %s: %s\nA importação no Desktop não foi observada pelo menu. Se a biblioteca ainda não estiver disponível no cliente, importe esse arquivo pelo fluxo normal.\n' "$method_version" "$methods"
   printf 'Prompt copiado. Abra sua conversa no Desktop, use somente o Maestro deste ensaio, cole uma vez e execute. Depois registre o resultado no menu 7.\n'
 }
+pilot_steps() {
+  local client="$1" index=0 title key prompt_file action
+  while true; do
+    title="$(jget "$RUN/report.json" "${client}_steps.$index.title" 2>/dev/null)" || fail 'Etapas indisponíveis. Reabra o diagnóstico com a versão atual.'
+    printf '\nEtapa atual: %s\nEnvie somente esta etapa. Avance após conferir o resultado no cliente.\n1 — Enviar esta etapa\n2 — Próxima etapa\n3 — Etapa anterior\n4 — Conferir após interrupção\nEnter — Voltar\nEscolha: ' "$title"
+    read -r action
+    case "$action" in
+      1)
+        key="$(jget "$RUN/report.json" "${client}_steps.$index.id")"
+        if [[ "$client" == code ]]; then prompt_file=CODE-ETAPA.txt; else prompt_file=DESKTOP-ETAPA.txt; fi
+        if [[ "$key" == conversion ]]; then
+          if [[ "$client" == code ]]; then prompt_file=CODE-CONVERSAO.txt; else prompt_file=DESKTOP-CONVERSAO.txt; fi
+        fi
+        /usr/bin/plutil -extract "${client}_steps.$index.prompt" raw -o "$RUN/$prompt_file" "$RUN/report.json" || fail 'Etapa indisponível.'
+        if [[ "$client" == code ]]; then open_code "$prompt_file"; else open_desktop "$prompt_file"; fi
+        ;;
+      2)
+        if /usr/bin/plutil -extract "${client}_steps.$((index+1)).title" raw -o - "$RUN/report.json" >/dev/null 2>&1; then index=$((index+1)); else printf 'Última etapa. Registre o resultado no menu 7.\n'; fi
+        ;;
+      3) if (( index > 0 )); then index=$((index-1)); fi;;
+      4) index=0;;
+      '') return;;
+      *) printf 'Escolha uma opção da lista.\n';;
+    esac
+  done
+}
 while [[ -t 0 ]]; do
   if [[ "$TARGET" == desktop ]]; then
-    printf '\n2 — Ensaio completo no Desktop\n4 — Conferir conexão Desktop\n5 — Gerenciar Desktop e métodos\n7 — Registrar resultados e abrir relatório\n8 — Atualizar da pasta compartilhada\nEnter — Sair\nEscolha: '
+    printf '\n2 — Testar ou continuar no Desktop\n4 — Conferir conexão Desktop\n5 — Gerenciar Desktop e métodos\n7 — Registrar resultados e abrir relatório\n8 — Atualizar da pasta compartilhada\nEnter — Sair\nEscolha: '
   else
-  printf '\n1 — Ensaio completo no Code\n2 — Retomar no Desktop (um prompt)\n3 — Conferir conexão Code\n4 — Conferir conexão Desktop\n5 — Gerenciar/qualificar hooks e skills\n6 — Conferir persistência no Code\n7 — Registrar resultados e abrir relatório\n8 — Atualizar da pasta compartilhada\n9 — Renovar login do perfil Code do piloto\nEnter — Sair\nEscolha: '
+  printf '\n1 — Testar ou continuar no Code\n2 — Continuar no Desktop\n3 — Conferir conexão Code\n4 — Conferir conexão Desktop\n5 — Gerenciar/qualificar hooks e skills\n6 — Conferir persistência no Code\n7 — Registrar resultados e abrir relatório\n8 — Atualizar da pasta compartilhada\n9 — Renovar login do perfil Code do piloto\nEnter — Sair\nEscolha: '
   fi
   read -r choice
   case "$choice" in
-    1) open_code CODE.txt;; 2) open_desktop DESKTOP.txt;; 3) open_code CODE-CONEXAO.txt;; 4) open_desktop DESKTOP-CONEXAO.txt;;
+    1) pilot_steps code;; 2) pilot_steps desktop;; 3) open_code CODE-CONEXAO.txt;; 4) open_desktop DESKTOP-CONEXAO.txt;;
     5) manage; printf 'Após concluir, reabra Maestro.command para gerar um diagnóstico atual.\n'; break;;
     6) open_code CODE-RELEITURA.txt;; 7) attest; /usr/bin/open -t "$RUN/RELATORIO.md";;
     8) manage --management-intent update; printf 'Reabra Maestro.command para verificar a nova geração.\n'; break;;

@@ -220,10 +220,18 @@ state nor resumes work. The JSON fields `code_ready_prompt` and additive
 `desktop_ready_prompt` are always strings and empty on blocked admission; emitted
 files are `CODE-CONEXAO.txt` and `DESKTOP-CONEXAO.txt`.
 
-Option 1 is the complete Code exercise; option 2 is the subsequent Desktop
-continuity/resume exercise. These prompts bind a synthetic trial marker. The
-Desktop continuity prompt discovers the single matching work item and uses its
-current revision, so the participant does not transport execution IDs/revisions.
+Options 1 (Code) and 2 (Desktop) open the current-step selector. It starts with
+read-only reconciliation of the existing owner, page, memory and execution
+stores. Only the selected step is sent to the client; later mutation instructions
+remain outside that request. The participant chooses next, previous or
+reconciliation after interruption. Sending a step never advances it automatically.
+Each prompt binds the workspace and selected client, resolves actual IDs,
+revisions and pagination, and ends the whole turn on unresolved review. Missing
+records do not establish human decline or authorize replay. The memory refusal
+control requires an observed explicit decline in its separately selected step.
+The existing string fields are retained as read-only entries; additive
+`code_steps` and `desktop_steps` carry the separately deliverable prompts.
+Conversion and document preparation occur only in the selected document step.
 The launcher opens Code with the selected initial prompt, or copies the Desktop
 prompt and opens that client, only after the explicit menu choice. Ordinary
 **Abrir Code** without a prompt still opens an empty session. On Windows,
