@@ -17,7 +17,9 @@ private state.
 
 Call `maestro_query` with `{"operation":"maintenance.status"}`. The response
 lists job IDs, revision, state, schedule, write set and qualification metadata.
-The closed catalog has eighteen jobs; this binding implements seventeen, with attended-only jobs separated from recurring enrollment:
+The closed catalog has twenty jobs. Each requires its own current binding and
+prerequisites; catalog presence does not establish qualification or activation.
+Attended-only jobs remain separate from recurring enrollment:
 
 | Job | Cadence after separate enrollment | Actual result or prerequisite |
 | --- | --- | --- |
@@ -26,6 +28,7 @@ The closed catalog has eighteen jobs; this binding implements seventeen, with at
 | `memory-light-dream` | Every three hours | Deterministic L1 for one oldest pending eligible ingestion day; no short historical cutoff |
 | `memory-checkpoint` | Every three hours | Checkpoint of real durable scheduler metadata; bootstrap with a successful light dream |
 | `memory-deep-dream` | Weekly, Sunday | Deterministic L2/L3 from eligible canonical ancestry; lifetime text retains its separate review |
+| `memory-weekly` | Weekly, Sunday after separate model registration, qualification and enrollment | Model-backed canonical L2/L3 from eligible workspace L1; lifetime retains independent eligibility and exact review; mutually exclusive with scheduled `memory-deep-dream` |
 | `memory-retention-check` | Daily | Durable diagnosis of actual retention/visibility state; no source deletion |
 | `skills-index-refresh` | Daily | Immutable external index from verified installed routing inputs |
 | `runtime-health-check` | Daily | Durable report of actual available and missing runtime observations |
@@ -35,6 +38,8 @@ The closed catalog has eighteen jobs; this binding implements seventeen, with at
 | `wiki-reconcile` | Weekly/presence | Reconcile actual source/view and recover missing historical events |
 | `wiki-integrity-check` | Daily | Persist body-free current graph diagnosis; no repair |
 | `update-check` | Attended only; never recurring | Authenticated source-custody observation, bounded candidate plan and diagnosis; never activation |
+| `update-availability` | Daily after separate owner-scoped qualification and enrollment | Bounded authenticated metadata observation or explicit source-unavailable diagnosis; no source-custody advancement, payload staging or activation |
+| `yoda-self-review-weekly` | Weekly, Sunday after separate owner model registration, qualification and enrollment | Bounded advisory working facets through Owner Context policy; accepted source/readers and current native tuple required; canonical SELF remains authoritative |
 | `darwin-housekeeping-daily` | Daily after separate opt-in | Finite actual local diagnosis and exclusive first health-cache creation; stale replacement unavailable |
 | `darwin-deep-weekly` | Weekly after separate opt-in | Bounded operational assessment/proposal; existing cache preserved; no authored-document rewrite |
 | `darwin-structural-evolution-proposal` | Attended monthly only; never recurring | Immutable bounded structural proposal/assessment; no application of structural changes |
@@ -45,9 +50,30 @@ captures and ancestry; an empty source or a successful no-op cannot qualify it.
 Skills indexing needs verified installed assets, not an arbitrary product
 directory. A diagnostic can qualify its real execution while its finding is
 missing or unavailable. That qualification does not qualify the reported native
-capability. The remaining `yoda-self-review-weekly` entry retains its explicit
-unavailable reason until its complete execution journey exists. Supporting
+capability. The two model jobs have fixed native executors in the original
+installed runtime, but remain unavailable without their exact reviewed
+registration, genuine native qualification and separate enrollment. Supporting
 workspace capture does not enable owner self-observation or Yoda.
+
+### Register and qualify a model job
+
+Use the installed manager's `maintenance` → `register-model` route for
+`memory-weekly` or `yoda-self-review-weekly`. It observes the exact native Code
+profile and provider/model tuple, stages the bounded declaration, and obtains the
+original backend's registration review. Approval leaves that job inactive and
+unqualified. An ordinary MCP `maintenance.register` request without the required
+staged declaration refuses; it cannot choose executable paths or invent a tuple.
+
+Qualify that exact job separately using real eligible inputs. Model
+qualification is evidence-only: it observes a bounded native process, response,
+termination and reap without publishing memory or working facets. Enroll only
+after inspecting that evidence and reviewing the schedule. The original
+foreground, serve-owned and separately installed wake paths then use the stored
+registration, current qualification and live job/control/lease grant. Cold
+startup composes the fixed executors without registering or activating a job.
+Follow the [installed model second-brain flow](model-second-brain.md) for source
+selection, weekly-engine exclusion, lifetime review and actual output readback.
+Source construction does not prove a native invocation, due result or OS wake.
 
 ### Capture an explicitly reviewed owner declaration
 
@@ -175,11 +201,11 @@ release is expired or payload-incomplete. This is a custody observation, not
 update eligibility or activation. A blocked server uses the independently
 admitted installer's [signed-source recovery route](product-synced-source.md).
 
-The public surface has eight operation variants: `maintenance.status`,
-`maintenance.report`, `maintenance.qualify`, `maintenance.enroll`,
+The public surface has nine operation variants: `maintenance.status`,
+`maintenance.report`, `maintenance.register`, `maintenance.qualify`, `maintenance.enroll`,
 `maintenance.pause`, `maintenance.resume`, `maintenance.revoke` and
-`maintenance.run`. These operation names are separate from the seventeen supported
-job IDs listed above and the full eighteen-entry catalog.
+`maintenance.run`. These operation names are separate from the twenty catalogued
+job IDs and their individual platform, registration and qualification requirements.
 
 ## Review, qualify and enroll
 
@@ -218,12 +244,15 @@ check. The job's reviewed schedule still decides when an occurrence is due;
 the pulse does not create a new schedule or qualify a job. With no active
 enrollment, starting and closing the server creates no maintenance state.
 
-Automatic work requires a real native observation of five minutes idle. Active
+Automatic domain work requires a real native observation of five minutes idle. Active
 or unknown activity leaves due work pending; it does not create a grant, lease
 or domain output. The server keeps observing while work runs and cancels when
 activity returns or observation becomes unavailable. Each publication also
 rechecks eligibility and current authority. An explicit foreground
 `maintenance.run` retains its separate owner-requested behavior.
+The separately qualified and enrolled `update-availability` metadata observation
+may run while the user is active; that exception grants no other job an idle
+exemption or authority to stage or activate an update.
 
 macOS uses the existing HID observer. Windows requires the process's own active
 interactive session and valid input/tick counters. A headless/disconnected
@@ -260,7 +289,9 @@ review current qualification rather than copying an old control record.
 
 Call `maestro_apply` with `{"operation":"maintenance.run"}` to execute active
 due jobs in the foreground. It has no job selector and performs no implicit
-qualification, enrollment, dependency installation or model/provider call.
+qualification, enrollment or dependency installation. A model call requires the
+exact model job's previously reviewed registration, current genuine native
+qualification, active enrollment and live occurrence grant.
 `no_due_work` is a valid result; repeated calls do not invent new occurrences.
 The response contains bounded due/receipt metadata. A wake-up or a process exit
 alone is not proof of a committed domain result.
