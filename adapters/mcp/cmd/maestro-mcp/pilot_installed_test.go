@@ -108,8 +108,12 @@ func TestInstalledPilotDesktopOnlyReportStartsWithoutCode(t *testing.T) {
 			if report.CodePrompt != "" || report.CodeReadyPrompt != "" || report.CodeReadbackPrompt != "" {
 				t.Fatal("Desktop-only report still requires a Code journey")
 			}
+			var journey strings.Builder
+			for _, step := range report.DesktopSteps {
+				journey.WriteString(step.Prompt)
+			}
 			for _, required := range []string{report.WorkspaceID, report.DesktopExtension, "methods.plan", "brain.create", "memory.capture", "execution.create", "execution.pause"} {
-				if !strings.Contains(report.DesktopPrompt, required) {
+				if !strings.Contains(journey.String(), required) {
 					t.Fatalf("Desktop initial journey omitted %s", required)
 				}
 			}
@@ -121,7 +125,7 @@ func TestInstalledPilotDesktopOnlyReportStartsWithoutCode(t *testing.T) {
 			if !strings.Contains(report.DesktopReadyPrompt, report.DesktopExtension) || !strings.Contains(report.Markdown, "Desktop") {
 				t.Fatal("Desktop connector identity or guidance missing")
 			}
-			if documents && !strings.Contains(report.DesktopPrompt, "content.convert") {
+			if documents && !strings.Contains(pilotStepPrompt(t, report.DesktopSteps, "conversion"), "content.convert") {
 				t.Fatal("Desktop target lost the existing document test")
 			}
 		})

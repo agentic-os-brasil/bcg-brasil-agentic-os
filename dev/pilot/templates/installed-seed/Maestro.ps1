@@ -372,10 +372,10 @@ try {
   if ($CheckOnly) { exit $checkExit }
   function Assert-TestPrompt([string]$PromptFile) {
     if ($Checked.status -ceq 'blocked') { Stop-Maestro 'O diagnostico bloqueou a jornada. Preserve o relatorio; nenhum cliente sera aberto.' }
-    if (-not (Test-Path -LiteralPath (Join-Path $Run $PromptFile) -PathType Leaf) -or [string]::IsNullOrWhiteSpace((Get-Content -LiteralPath (Join-Path $Run $PromptFile) -Raw))) { Stop-Maestro 'Prompt indisponivel. Reabra o diagnostico antes de continuar.' }
+    if (-not (Test-Path -LiteralPath (Join-Path $Run $PromptFile) -PathType Leaf) -or [string]::IsNullOrWhiteSpace((Get-Content -LiteralPath (Join-Path $Run $PromptFile) -Raw -Encoding UTF8))) { Stop-Maestro 'Prompt indisponivel. Reabra o diagnostico antes de continuar.' }
   }
   function Prepare-ConversionDocument($ClientStatus,[string]$PromptFile) {
-    if ($PromptFile -cnotin @('CODE.txt','DESKTOP.txt')) { Stop-Maestro 'Documento disponivel somente nas opcoes completas 1 e 2.' }
+    if ($PromptFile -cnotin @('CODE-CONVERSAO.txt','DESKTOP-CONVERSAO.txt')) { Stop-Maestro 'Documento disponivel somente na etapa de documento.' }
     Assert-TestPrompt $PromptFile
     $conversion = $Checked.conversion
     if ($conversion.state -ceq 'pending_runtime') { Write-Host 'Conversao pendente: o runtime atual nao esta pronto. O restante do ensaio pode continuar; nenhum documento sera criado.'; return }
@@ -404,10 +404,10 @@ try {
     $selected = $ClientStatus.record.code.executable
     if (-not [IO.Path]::IsPathRooted($selected) -or (Hash $selected) -cne $ClientStatus.record.code.executable_sha256) { Stop-Maestro 'O Code selecionado mudou. Revise o registro pelo gerenciador.' }
     if ($null -eq $ClientStatus.record.code.PSObject.Properties['configuration_directory'] -or $ClientStatus.record.code.configuration_directory -cne $Config.code_configuration_directory -or $selected -cne $Config.code_executable) { Stop-Maestro 'O perfil Code registrado divergiu. Preserve o registro e confira pelo gerenciador.' }
-    if ($PromptFile -ceq 'CODE.txt') { Prepare-ConversionDocument $ClientStatus $PromptFile }
+    if ($PromptFile -ceq 'CODE-CONVERSAO.txt') { Prepare-ConversionDocument $ClientStatus $PromptFile }
     Push-Location -LiteralPath $Config.workspace
     try {
-      Invoke-SelectedCode -Arguments @((Get-Content -LiteralPath (Join-Path $Run $PromptFile) -Raw)) | Out-Host
+      Invoke-SelectedCode -Arguments @((Get-Content -LiteralPath (Join-Path $Run $PromptFile) -Raw -Encoding UTF8)) | Out-Host
       if ($script:CodeExit -ne 0) { Stop-Maestro "O Code encerrou com codigo $script:CodeExit. Preserve o relatorio e retome pelo fluxo normal." }
     } finally { Pop-Location }
   }
@@ -422,8 +422,8 @@ try {
     Assert-TestPrompt $PromptFile
     $ClientStatus = Current-Clients
     if ($ClientStatus.state -cne 'current_materialization') { Stop-Maestro 'Pacotes ainda nao estao atuais.' }
-    if ($PromptFile -ceq 'DESKTOP.txt') { Prepare-ConversionDocument $ClientStatus $PromptFile }
-    Set-Clipboard -Value (Get-Content -LiteralPath (Join-Path $Run $PromptFile) -Raw)
+    if ($PromptFile -ceq 'DESKTOP-CONVERSAO.txt') { Prepare-ConversionDocument $ClientStatus $PromptFile }
+    Set-Clipboard -Value (Get-Content -LiteralPath (Join-Path $Run $PromptFile) -Raw -Encoding UTF8)
     if (Test-CurrentDesktopInstall $ClientStatus) {
       Write-Host 'A instalacao deste pacote/contrato ja foi confirmada por voce. O instalador da extensao nao sera reaberto; conexao e funcionamento continuam pendentes de teste.'
     } else {
@@ -434,16 +434,39 @@ try {
     Write-Host 'A importacao no Desktop nao foi observada pelo menu. Se a biblioteca ainda nao estiver disponivel, importe esse arquivo pelo fluxo normal.'
     Write-Host 'Prompt copiado. Abra sua conversa no Desktop, use somente o Maestro deste ensaio, cole uma vez e execute. Registre o resultado na opcao 7.'
   }
+  function Invoke-PilotSteps([string]$Client) {
+    $index = 0
+    $property = $Checked.PSObject.Properties[$Client + '_steps']
+    if ($null -eq $property -or @($property.Value).Count -eq 0) { Stop-Maestro 'Etapas indisponiveis. Reabra o diagnostico com a versao atual.' }
+    $steps = @($property.Value)
+    do {
+      Write-Host ("`nEtapa atual: " + $steps[$index].title)
+      Write-Host "Envie somente esta etapa. Avance apos conferir o resultado no cliente.`n1 - Enviar esta etapa`n2 - Proxima etapa`n3 - Etapa anterior`n4 - Conferir apos interrupcao`nEnter - Voltar"
+      $action = Read-Host 'Escolha'
+      switch -CaseSensitive ($action) {
+        '1' {
+          $prefix = $Client.ToUpperInvariant()
+          $file = $prefix + '-ETAPA.txt'
+          if ($steps[$index].id -ceq 'conversion') { $file = $prefix + '-CONVERSAO.txt' }
+          [IO.File]::WriteAllText((Join-Path $Run $file), [string]$steps[$index].prompt, $Utf8)
+          if ($Client -ceq 'code') { Open-Code $file } else { Open-Desktop $file }
+        }
+        '2' { if ($index + 1 -lt $steps.Count) { $index++ } else { Write-Host 'Ultima etapa. Registre o resultado no menu 7.' } }
+        '3' { if ($index -gt 0) { $index-- } }
+        '4' { $index = 0 }
+      }
+    } while ($action -ne '')
+  }
   do {
     if ($ClientTarget -ceq 'desktop') {
-      Write-Host "`n2 - Ensaio completo Desktop`n4 - Conexao Desktop`n5 - Gerenciar Desktop e metodos`n7 - Resultados e relatorio`n8 - Atualizar da pasta compartilhada`nEnter - Sair"
+      Write-Host "`n2 - Testar ou continuar no Desktop`n4 - Conexao Desktop`n5 - Gerenciar Desktop e metodos`n7 - Resultados e relatorio`n8 - Atualizar da pasta compartilhada`nEnter - Sair"
     } else {
-    Write-Host "`n1 - Ensaio completo Code`n2 - Retomar Desktop (um prompt)`n3 - Conexao Code`n4 - Conexao Desktop`n5 - Gerenciar/qualificar hooks e skills`n6 - Persistencia Code`n7 - Resultados e relatorio`n8 - Atualizar da pasta compartilhada`n9 - Renovar login do perfil Code do piloto`nEnter - Sair"
+    Write-Host "`n1 - Testar ou continuar no Code`n2 - Continuar no Desktop`n3 - Conexao Code`n4 - Conexao Desktop`n5 - Gerenciar/qualificar hooks e skills`n6 - Persistencia Code`n7 - Resultados e relatorio`n8 - Atualizar da pasta compartilhada`n9 - Renovar login do perfil Code do piloto`nEnter - Sair"
     }
     $choice = Read-Host 'Escolha'
     switch -CaseSensitive ($choice) {
-      '1' { Open-Code 'CODE.txt' }
-      '2' { Open-Desktop 'DESKTOP.txt' }
+      '1' { Invoke-PilotSteps 'code' }
+      '2' { Invoke-PilotSteps 'desktop' }
       '3' { Open-Code 'CODE-CONEXAO.txt' }
       '4' { Open-Desktop 'DESKTOP-CONEXAO.txt' }
       '5' { Invoke-Management; if ($script:ManagementExit -ne 0) { Write-Host 'Gerenciamento pendente. Preserve o relatorio.' }; Write-Host 'Reabra Maestro.cmd para conferir a nova geracao.'; $choice = '' }
