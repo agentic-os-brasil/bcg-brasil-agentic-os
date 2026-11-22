@@ -59,17 +59,30 @@ func (ExecCommandRunner) Run(ctx context.Context, name string, args []string) (C
 	return result, err
 }
 
-type boundedBuffer struct{ bytes.Buffer }
+// Named storage keeps io.Copy from bypassing the bounded Write method.
+type boundedBuffer struct {
+	data      bytes.Buffer
+	truncated bool
+}
 
 func (buffer *boundedBuffer) Write(value []byte) (int, error) {
-	remaining := maxRunnerOutput - buffer.Len()
+	consumed := len(value)
+	remaining := maxRunnerOutput - buffer.data.Len()
+	if consumed > remaining {
+		buffer.truncated = true
+	}
 	if remaining <= 0 {
-		return len(value), nil
+		return consumed, nil
 	}
 	if len(value) > remaining {
 		value = value[:remaining]
 	}
-	return buffer.Buffer.Write(value)
+	_, err := buffer.data.Write(value)
+	return consumed, err
+}
+
+func (buffer *boundedBuffer) String() string {
+	return buffer.data.String()
 }
 
 type LaunchAgentStatus struct {

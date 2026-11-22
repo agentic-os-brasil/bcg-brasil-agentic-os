@@ -38,6 +38,14 @@ func ObserveIdle(ctx context.Context, threshold time.Duration) (NativeIdleState,
 	if err := command.Run(); err != nil {
 		return "", 0, errors.New("native idle observation failed")
 	}
+	return classifyIdleCapture(&output, threshold)
+}
+
+func classifyIdleCapture(output *boundedBuffer, threshold time.Duration) (NativeIdleState, time.Duration, error) {
+	// A truncated capture cannot establish that the HID counter is unique.
+	if output.truncated {
+		return "", 0, errors.New("native idle observation output exceeded its bound")
+	}
 	idleFor, err := ParseHIDIdleTime(output.String())
 	if err != nil {
 		return "", 0, err
