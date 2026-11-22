@@ -284,9 +284,7 @@ function Invoke-DoclingRuntimeProof($Manifest, [string]$ProofRoot, [string]$Expe
     $output | Set-Content -LiteralPath $log -Encoding UTF8
     $output | Write-Output
     if ($exit -ne 0 -or $body -match '--- (FAIL|SKIP):') {
-        if ([regex]::Matches($body, '(?m)^    native_windows_test\.go:[0-9]+: MAESTRO_NATIVE_RUNTIME_FAILURE operation=place stage=launch process_status=0xc0000022\r?$').Count -eq 1) {
-            try { Invoke-DoclingFailureTrace $Manifest $ProofRoot $testImageSHA256 $exit } catch { Write-Output 'docling_failure_trace diagnostic_only=true status=unavailable' }
-        }
+        # This one-trial proof retains the original failure, never a native replay.
         throw 'Actual ordinary-account Docling native coverage failed or skipped.'
     }
     foreach($test in $script:DoclingRuntimeTests) { if($body -notmatch ('(?m)^--- PASS: '+[regex]::Escape($test)+' ')){throw 'A required Docling native test did not actually pass.'} }
