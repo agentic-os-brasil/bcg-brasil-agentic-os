@@ -747,8 +747,10 @@ func (p *productExecution) guard(publish func() error) error {
 	})
 }
 
-func (p *productExecution) guardWithin(ctx, acquisitionCtx context.Context, publish func() error) error {
+func (p *productExecution) guardWithin(ctx context.Context, publish func() error) error {
 	return p.guardWithControl(ctx, publish, func(action func() error) error {
+		acquisitionCtx, stopAcquisition := context.WithTimeout(ctx, leaseQuarantineGrace)
+		defer stopAcquisition()
 		return scheduler.WithPrivateLockContext(acquisitionCtx, filepath.Join(filepath.Dir(p.service.controlPath(p.jobID)), "control.guard"), action)
 	})
 }
