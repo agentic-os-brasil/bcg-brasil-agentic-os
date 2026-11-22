@@ -100,6 +100,15 @@ func (b *Bound) fenceExperimentalStateContext(ctx context.Context, state install
 	if err := b.validateExperimentalSeedContext(ctx); err != nil {
 		return err
 	}
+	return b.checkExperimentalStateRoleContext(ctx, state)
+}
+
+// Pure membership/lifetime checks, not installed admission. A composed read may
+// use these between its full entry and post-qualified experimental fences.
+func (b *Bound) checkExperimentalStateRoleContext(ctx context.Context, state installtx.State) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	role := b.options.ExperimentalSeed
 	if role == nil {
 		return nil
