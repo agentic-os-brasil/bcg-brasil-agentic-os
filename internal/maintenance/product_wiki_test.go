@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -132,6 +133,86 @@ func TestProductWikiCadenceEnrollmentAndReplay(t *testing.T) {
 			out, err = s.RunDue(context.Background())
 			if err != nil || len(out.Due) != 0 || !reflect.DeepEqual(before, productSnapshot(t, s.home)) {
 				t.Fatal("replay changed durable output")
+			}
+		})
+	}
+}
+
+func TestProductWikiPublicationAcquisitionStartsAfterValidation(t *testing.T) {
+	for _, phase := range []string{"qualification", "terminal"} {
+		t.Run(phase, func(t *testing.T) {
+			var s *Service
+			var active ProductJobStatus
+			if phase == "qualification" {
+				s = productFixture(t)
+				productWikiCommit(t, s, "private-wiki-body: SLOW_VALIDATION_QUALIFICATION")
+			} else {
+				s, active = activeProductWiki(t)
+			}
+			var handlerReturned, delayed, parentLive atomic.Bool
+			s.options.InstalledGuardContext = func(ctx context.Context, publish func() error) error {
+				_, workerBounded := ctx.Deadline()
+				if (phase == "qualification" && workerBounded || handlerReturned.Load()) && delayed.CompareAndSwap(false, true) {
+					// Validation can take longer than a single lock acquisition while
+					// remaining inside the original command's overall deadline.
+					time.Sleep(leaseQuarantineGrace + leaseQuarantineGrace/4)
+					parentLive.Store(ctx.Err() == nil)
+				}
+				return publish()
+			}
+			if phase == "qualification" {
+				review, err := s.Review(Operation{Kind: "qualify", JobID: WikiReconcileJobID})
+				if err != nil {
+					t.Fatal(err)
+				}
+				qualified, err := s.Apply(context.Background(), review, approveProduct)
+				if err != nil {
+					t.Fatalf("qualify after slow validation (parent live=%v): %v", parentLive.Load(), err)
+				}
+				stored, err := s.loadControl(WikiReconcileJobID)
+				if err != nil || qualified.Qualification == nil || stored.Qualification == nil || s.verifyQualification(stored.Qualification) != nil {
+					t.Fatalf("actual qualification was not durably verified: %+v %v", qualified, err)
+				}
+			} else {
+				pending, err := s.engine.InspectPrivateWikiMaintenance(s.workspaceID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				p := &productExecution{service: s, jobID: WikiIncrementalJobID, revision: active.Revision, source: pending.SourceIdentity}
+				worker := s.worker(p)
+				worker.Jobs = nil
+				worker.LocalQualification = map[string]string{WikiIncrementalJobID: active.Qualification.ID}
+				worker.ActivatedJobs = []string{WikiIncrementalJobID}
+				actual := worker.Handlers[WikiIncrementalJobID].(Handler)
+				worker.Handlers[WikiIncrementalJobID] = HandlerFunc(func(ctx context.Context, command Command, grant ExecutionGrant) (HandlerResult, error) {
+					result, err := actual.ExecuteAuthorized(ctx, command, grant)
+					if err == nil && result.State == ReceiptSucceeded {
+						handlerReturned.Store(true)
+					}
+					return result, err
+				})
+				out, err := worker.Run(context.Background(), WakeRequest{WorkspaceID: s.workspaceID, Trigger: TriggerEvent, EventID: pending.EventID, Now: s.now(), OwnerID: "publication-phase-witness", Preauthorized: true, IdleState: IdleConfirmed})
+				if err != nil || len(out.Receipts) != 1 || out.Receipts[0].State != ReceiptSucceeded {
+					t.Fatalf("terminal publication after slow validation (parent live=%v): %+v %v", parentLive.Load(), out, err)
+				}
+				after, err := s.engine.InspectPrivateWikiMaintenance(s.workspaceID)
+				if err != nil || after.State != "current" || after.Generation == pending.Generation || after.SourceIdentity != pending.SourceIdentity {
+					t.Fatalf("actual domain result missing: %+v %v", after, err)
+				}
+				receipts, err := s.receipts.Receipts(s.workspaceID, WikiIncrementalJobID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				found := false
+				for _, receipt := range receipts {
+					found = found || receipt.AttemptID == out.Receipts[0].AttemptID && receipt.State == ReceiptSucceeded
+				}
+				if !found {
+					t.Fatal("successful terminal receipt was not durably stored")
+				}
+			}
+			if !delayed.Load() || !parentLive.Load() {
+				t.Fatal("test did not reach slow validation inside the original live command budget")
 			}
 		})
 	}
