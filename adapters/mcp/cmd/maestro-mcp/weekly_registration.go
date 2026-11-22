@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"io"
 	"path/filepath"
 	"strings"
@@ -22,7 +21,7 @@ func configureWeeklyRegistration(o *product.Options, path string) error {
 		seedMaintenanceExecutors(o)
 		return nil
 	}
-	unavailable := errors.New("weekly_registration_unavailable")
+	unavailable := product.ErrWeeklyRegistrationUnavailable
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path || strings.ContainsAny(path, "\x00\r\n") {
 		return unavailable
 	}

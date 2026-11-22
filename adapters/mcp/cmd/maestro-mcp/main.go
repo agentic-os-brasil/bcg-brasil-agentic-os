@@ -11,6 +11,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -46,12 +47,13 @@ func main() {
 			fmt.Fprintln(os.Stderr, "maestro: hook unavailable; inspect admitted state before retrying")
 			os.Exit(product.HookExitCode(event))
 		}
-		if errors.Is(err, product.ErrSourceRecoveryRequired) {
+		if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "maintenance-") {
+			_ = json.NewEncoder(os.Stderr).Encode(product.MaintenanceCommandFailure(err, "input").Diagnostic)
+		} else if errors.Is(err, product.ErrSourceRecoveryRequired) {
 			fmt.Fprintln(os.Stderr, "maestro: signed source recovery required; use the independently admitted local maestro-install source-review/source-check route before restarting")
 		} else if errors.Is(err, packaging.ErrDesktopPilotInterpolation) {
 			fmt.Fprintln(os.Stderr, "maestro: Desktop rehearsal path contains MCPB interpolation; select a local rehearsal path without ${")
-		} else if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "maintenance-") {
-			fmt.Fprintln(os.Stderr, "maestro: maintenance operation refused; inspect maintenance-status, review JSON stdin with maintenance-review, then maintenance-apply with the same request, exact --review-digest and explicit --confirm")
+
 		} else if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "knowledge-") {
 			fmt.Fprintln(os.Stderr, "maestro: knowledge operation refused; read knowledge-review from JSON stdin, then use knowledge-apply with the same request, exact --review-digest and explicit --confirm")
 		} else if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "memory-") {
@@ -91,7 +93,7 @@ func runtimeApplyErrorMessage(err error) string {
 	return fmt.Sprintf("%s [filesystem operation=%s errno=%d]", message, operation, errno)
 }
 
-func run() error {
+func run() (runErr error) {
 	if len(os.Args) > 1 && os.Args[1] == "pilot-check" {
 		return runPilotCheck(context.Background(), os.Args[2:], os.Stdout)
 	}
@@ -134,7 +136,7 @@ func run() error {
 		return json.NewEncoder(os.Stdout).Encode(installer.StableClientCapabilities("server", Version, AuthorityRegistrySHA256))
 	}
 	flags := flag.NewFlagSet("maestro-mcp", flag.ContinueOnError)
-	if os.Args[1] == "hook" || os.Args[1] == "lifecycle-hook" {
+	if os.Args[1] == "hook" || os.Args[1] == "lifecycle-hook" || strings.HasPrefix(os.Args[1], "maintenance-") {
 		flags.SetOutput(io.Discard)
 	}
 	var o product.Options
@@ -160,9 +162,15 @@ func run() error {
 	var confirmed, packet, lifecycleContext, desktopPilot, engineeringRuntimePilot, codePilot bool
 	var runtimeRelease, acquisitionReviewFile string
 	var weeklyRegistrationFile *string
+	var maintenanceDeadline string
+	var maintenanceProgress bool
 	var selectedPacket packaging.PacketStatus
 	switch os.Args[1] {
 	case "serve", "maintenance-review", "maintenance-apply", "maintenance-status", "maintenance-run":
+		if os.Args[1] != "serve" {
+			flags.StringVar(&maintenanceDeadline, "maintenance-deadline", "", "restrictive deadline propagated by the original local manager")
+			flags.BoolVar(&maintenanceProgress, "maintenance-progress", false, "emit finite metadata-only progress for the original manager")
+		}
 		weeklyRegistrationFile = flags.String("weekly-registration-file", "", "explicit local weekly model declaration; loading neither qualifies nor activates it")
 	}
 	if os.Args[1] == "mcpb" {
@@ -231,7 +239,36 @@ func run() error {
 	if err := flags.Parse(os.Args[2:]); err != nil {
 		return err
 	}
-	if err := bindExperimental(); err != nil {
+	var commandCtx context.Context = context.Background()
+	var observeMaintenance func(string)
+	switch os.Args[1] {
+	case "maintenance-review", "maintenance-apply", "maintenance-status", "maintenance-run":
+		ctx, stopBudget, err := product.MaintenanceCommandContext(commandCtx, maintenanceDeadline)
+		if err != nil {
+			return err
+		}
+		defer stopBudget()
+		ctx, stopSignal := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+		defer stopSignal()
+		stopRead := context.AfterFunc(ctx, func() { _ = os.Stdin.Close() })
+		defer stopRead()
+		phase, progressCount := "admission", 0
+		observeMaintenance = func(next string) {
+			phase = next
+			if maintenanceProgress && progressCount < 32 {
+				_ = json.NewEncoder(os.Stderr).Encode(product.MaintenanceCommandProgress(next))
+				progressCount++
+			}
+		}
+		defer func() {
+			if runErr != nil {
+				runErr = product.MaintenanceCommandFailure(runErr, phase)
+			}
+		}()
+		commandCtx = maintenance.WithOperationObserver(ctx, observeMaintenance)
+		observeMaintenance("admission")
+	}
+	if err := bindExperimental(commandCtx); err != nil {
 		return err
 	}
 	authoritySeeded := false
@@ -531,33 +568,46 @@ func run() error {
 		encoder.SetIndent("", "  ")
 		return encoder.Encode(value)
 	case "maintenance-review", "maintenance-apply", "maintenance-status", "maintenance-run":
-		bound, err := product.Open(o)
+		ctx := commandCtx
+		observe := observeMaintenance
+		bound, err := product.OpenContext(ctx, o)
 		if err != nil {
 			return err
 		}
 		var value any
 		if os.Args[1] == "maintenance-status" {
-			value, err = bound.MaintenanceStatus()
+			observe("verification")
+			value, err = bound.MaintenanceStatusContext(ctx)
 		} else if os.Args[1] == "maintenance-run" {
-			value, err = bound.RunMaintenance(context.Background())
+			observe("execution")
+			value, err = bound.RunMaintenance(ctx)
 		} else {
+			observe("input")
 			body, readErr := io.ReadAll(io.LimitReader(os.Stdin, (16<<10)+1))
 			if readErr != nil || len(body) > 16<<10 {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
 				return errors.New("maintenance_input_size")
 			}
 			request, decodeErr := product.DecodeMaintenanceMutation(body)
 			if decodeErr != nil {
 				return decodeErr
 			}
+			observe("review")
 			if os.Args[1] == "maintenance-review" {
-				value, err = bound.MaintenanceReview(request)
+				value, err = bound.MaintenanceReviewContext(ctx, request)
 			} else {
-				value, err = bound.ApplyMaintenanceReview(context.Background(), request, reviewDigest, confirmed)
+				value, err = bound.ApplyMaintenanceReview(ctx, request, reviewDigest, confirmed)
 			}
 		}
 		if err != nil {
 			return err
 		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		observe("output")
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
 		return encoder.Encode(value)

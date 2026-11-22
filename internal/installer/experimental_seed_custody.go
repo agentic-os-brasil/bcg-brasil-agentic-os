@@ -236,7 +236,13 @@ func verifyExperimentalRollback(o SeededOperationOptions) error {
 // LoadExperimentalInstalledContext derives participant selections only from the
 // existing fixed private origin, never a shared publisher record or tool input.
 func LoadExperimentalInstalledContext(root, pin string, clock func() time.Time) (SeededOperationOptions, error) {
-	role, err := LoadExperimentalSeed(root, pin, "", clock)
+	return LoadExperimentalInstalledContextWithContext(context.Background(), root, pin, clock)
+}
+
+// LoadExperimentalInstalledContextWithContext preserves the same origin, role
+// and binding checks while consuming the original operation's remaining budget.
+func LoadExperimentalInstalledContextWithContext(ctx context.Context, root, pin string, clock func() time.Time) (SeededOperationOptions, error) {
+	role, err := LoadExperimentalSeedContext(ctx, root, pin, "", clock)
 	if err != nil {
 		return SeededOperationOptions{}, err
 	}
@@ -252,7 +258,10 @@ func LoadExperimentalInstalledContext(root, pin string, clock func() time.Time) 
 		return SeededOperationOptions{}, errors.New("fixed experimental origin required")
 	}
 	o := SeededOperationOptions{ExperimentalSeed: role, Self: seedPath(root, runtime.GOOS, releasecontract.ModernProfile), Version: role.Identity().InstallerVersion, AuthorityRegistrySHA256: pin, ManagedRoot: root, UserHome: origin.UserHome, DataRoot: origin.DataRoot}
-	return o, VerifyExperimentalInstalledBinding(o)
+	if err := VerifyExperimentalInstalledBindingContext(ctx, o); err != nil {
+		return SeededOperationOptions{}, err
+	}
+	return o, ctx.Err()
 }
 
 func buildClientsWithSeedFence(ctx context.Context, o ClientOptions, state installtx.State, binding ClientBinding, previous *ClientRecord, build ClientMaterializer) (ClientMaterialization, error) {
