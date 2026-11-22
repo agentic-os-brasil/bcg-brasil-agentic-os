@@ -2,10 +2,13 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest"
@@ -33,6 +36,65 @@ func captureFixtureEmit(t *testing.T, value any) []byte {
 		t.Fatal("private test pipe read failed")
 	}
 	return body
+}
+
+func TestFixturePlacementFailureProjectionIsClosedAndBodyFree(t *testing.T) {
+	const status = "confined converter exit 3221225506 (status=0xc0000022 pid=123 creation_flags=0x00080004)"
+	attrs := func(stage, process string) []slog.Attr {
+		return []slog.Attr{slog.String("stage", stage), slog.String("process_status", process)}
+	}
+	for _, test := range []struct {
+		name    string
+		message string
+		attrs   []slog.Attr
+		want    bool
+	}{
+		{"actual_launch_status", "native converter qualification failed", attrs("launch", status), true},
+		{"private_other_attribute_discarded", "native converter qualification failed", append(attrs("launch", status), slog.String("private", "PRIVATE_BODY_MARKER")), true},
+		{"other_message", "PRIVATE_BODY_MARKER", attrs("launch", status), false},
+		{"other_stage", "native converter qualification failed", attrs("response", status), false},
+		{"other_status", "native converter qualification failed", attrs("launch", strings.ReplaceAll(status, "0xc0000022", "0xc0000005")), false},
+		{"decimal_status_mismatch", "native converter qualification failed", attrs("launch", strings.ReplaceAll(status, "3221225506", "1")), false},
+		{"missing_status", "native converter qualification failed", []slog.Attr{slog.String("stage", "launch")}, false},
+		{"typed_status_required", "native converter qualification failed", []slog.Attr{slog.String("stage", "launch"), slog.Int("process_status", 1)}, false},
+		{"duplicate_stage", "native converter qualification failed", append(attrs("launch", status), slog.String("stage", "launch")), false},
+		{"duplicate_status", "native converter qualification failed", append(attrs("launch", status), slog.String("process_status", status)), false},
+		{"zero_pid", "native converter qualification failed", attrs("launch", strings.ReplaceAll(status, "pid=123", "pid=0")), false},
+		{"overflow_pid", "native converter qualification failed", attrs("launch", strings.ReplaceAll(status, "pid=123", "pid=4294967296")), false},
+		{"noncanonical_flags", "native converter qualification failed", attrs("launch", strings.ReplaceAll(status, "0x00080004", "0x80004")), false},
+		{"trailing_private_body", "native converter qualification failed", attrs("launch", status+" PRIVATE_BODY_MARKER"), false},
+		{"over_bound", "native converter qualification failed", attrs("launch", status+strings.Repeat("x", 257)), false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var projection placementFailureProjection
+			slog.New(&projection).LogAttrs(context.Background(), slog.LevelDebug, test.message, test.attrs...)
+			want := "synthetic_place_failed"
+			if test.want {
+				want = placementLaunchAccessDenied
+			}
+			if got := projection.message(); got != want || len(got) > 128 || strings.Contains(got, "PRIVATE_BODY_MARKER") {
+				t.Fatal("placement failure lost its closed body-free projection")
+			}
+		})
+	}
+	for _, mode := range []string{"duplicate_record", "attached_attributes", "group"} {
+		t.Run(mode, func(t *testing.T) {
+			var projection placementFailureProjection
+			logger := slog.New(&projection)
+			logger.LogAttrs(context.Background(), slog.LevelDebug, "native converter qualification failed", attrs("launch", status)...)
+			switch mode {
+			case "duplicate_record":
+				logger.LogAttrs(context.Background(), slog.LevelDebug, "native converter qualification failed", attrs("launch", status)...)
+			case "attached_attributes":
+				_ = logger.With("private", "PRIVATE_BODY_MARKER")
+			case "group":
+				_ = logger.WithGroup("private")
+			}
+			if projection.message() != "synthetic_place_failed" {
+				t.Fatal("ambiguous placement diagnostic selected the loader trace")
+			}
+		})
+	}
 }
 
 func TestFixtureConversionWirePreservesExactBodies(t *testing.T) {

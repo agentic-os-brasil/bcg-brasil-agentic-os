@@ -59,23 +59,35 @@ type Bound struct {
 }
 
 func Open(o Options) (*Bound, error) {
+	return OpenContext(context.Background(), o)
+}
+
+// OpenContext retains admission while honoring the caller during expensive validation.
+func OpenContext(ctx context.Context, o Options) (*Bound, error) {
 	if o.OwnerReviewChannel != "" && o.OwnerReviewChannel != "local-browser" {
 		return nil, errors.New("owner_review_channel_unavailable")
 	}
 	b := &Bound{options: o}
-	if err := b.validate(); err != nil {
+	if err := b.validateContext(ctx); err != nil {
 		return nil, err
 	}
 	return b, nil
 }
 func (b *Bound) validate() error {
-	if err := b.validateExperimentalSeed(); err != nil {
+	return b.validateContext(context.Background())
+}
+
+func (b *Bound) validateContext(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := b.validateExperimentalSeedContext(ctx); err != nil {
 		return err
 	}
 	if _, err := processidentity.Current(); err != nil {
 		return err
 	}
-	if err := b.validateInstalledSource(); err != nil {
+	if err := b.validateInstalledSourceContext(ctx); err != nil {
 		return err
 	}
 	h, err := resolveBinding(b.options)
@@ -94,7 +106,7 @@ func (b *Bound) validate() error {
 	if b.home != "" && (b.home != h.Home || b.workspaceID != w.WorkspaceID) {
 		return errors.New("binding_changed")
 	}
-	if err := b.validateInstalledOwnerReview(h.Home, w.WorkspaceID); err != nil {
+	if err := b.validateInstalledOwnerReviewContext(ctx, h.Home, w.WorkspaceID); err != nil {
 		return err
 	}
 	s, err := execution.OpenConfinedStore(root)
@@ -104,7 +116,7 @@ func (b *Bound) validate() error {
 	if b.home == "" {
 		b.home, b.workspaceID, b.store = h.Home, w.WorkspaceID, s
 	}
-	return nil
+	return ctx.Err()
 }
 func strSchema(max int) map[string]any {
 	return map[string]any{"type": "string", "minLength": 1, "maxLength": max}
@@ -215,12 +227,12 @@ func (b *Bound) Server() *mcp.Server {
 	if version == "" {
 		version = "unavailable"
 	}
-	s := mcp.NewServer(&mcp.Implementation{Name: "maestro-product", Version: version}, nil)
+	s := mcp.NewServer(&mcp.Implementation{Name: "maestro-product", Version: version}, &mcp.ServerOptions{Instructions: `Maestro is the professional Chief of Staff and user-facing orchestration hub. On first use, call maestro_context, then maestro_query with {"operation":"agents.read","agent_id":"maestro"}. Read every page using next_offset until has_more is false before applying the canonical role guidance. Respect system and host instructions, the current user task and accepted owner preferences (read owner.context when available). agent_identity contains display preferences only. Role and method instructions grant no tool, delegation, approval, filesystem, external-action or model authority. Discover methods with methods.list, inspect the selected methods.plan and read its complete methods.read resources; instruction availability does not prove native activation or host adoption.`})
 	s.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, request mcp.Request) (mcp.Result, error) {
 			switch method {
 			case "tools/list", "resources/list", "prompts/list":
-				if err := b.validate(); err != nil {
+				if err := b.validateContext(ctx); err != nil {
 					return nil, errors.New("product_restart_or_source_recovery_required")
 				}
 			}
@@ -234,7 +246,7 @@ func (b *Bound) Server() *mcp.Server {
 	queryPresentation, queryContracts := toolPresentation(query)
 	apply := productApplySchema()
 	applyPresentation, applyContracts := toolPresentation(apply)
-	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read foreground agent availability, immutable methods and requirements, accepted session-readable owner context, owner metadata/questions, execution continuation, eligible memory, authored pages, converted content, named workspace knowledge, maintenance status or private wiki through bounded pages. Full private owner review and reader-restricted text remain protected." + queryContracts, InputSchema: queryPresentation, Annotations: readonly}, b.handle("query", query))
+	s.AddTool(&mcp.Tool{Name: "maestro_query", Description: "Read canonical agent roles, foreground agent availability, immutable methods and requirements, accepted session-readable owner context, owner metadata/questions, execution continuation, eligible memory, authored pages, converted content, named workspace knowledge, maintenance status or private wiki through bounded pages. Full private owner review and reader-restricted text remain protected." + queryContracts, InputSchema: queryPresentation, Annotations: readonly}, b.handle("query", query))
 	s.AddTool(&mcp.Tool{Name: "maestro_apply", Description: "Execute one exactly reviewed independent foreground draft/review, author reviewed workspace pages, convert documents, apply reviewed knowledge/owner/memory changes, qualify and enroll exact maintenance jobs, or run active due work. Maintenance lifecycle changes require trusted exact review; execution uses revision/attempt and artifact checks." + applyContracts, InputSchema: applyPresentation}, b.handle("apply", apply))
 	b.registerMethods(s)
 	return s
@@ -246,7 +258,7 @@ func productQuerySchema() map[string]any {
 		variant("execution.next", map[string]any{"item_id": strSchema(96)}, "item_id"),
 		variant("execution.contract", map[string]any{"item_id": strSchema(96)}, "item_id"),
 	}
-	for _, group := range [][]any{foregroundQueries(), accountNarrativeQueries(), dailyQueries(), historyQueries(), sharepointEnrollmentQueries(), caseSetupQueries(), ownerQueries(), agentIdentityQueries(), memoryQueries(), methodsQueries(), contentQueries(), brainQueries(), maintenanceQueries(), wikiQueries()} {
+	for _, group := range [][]any{agentsQueries(), foregroundQueries(), accountNarrativeQueries(), dailyQueries(), historyQueries(), sharepointEnrollmentQueries(), caseSetupQueries(), ownerQueries(), agentIdentityQueries(), memoryQueries(), methodsQueries(), contentQueries(), brainQueries(), maintenanceQueries(), wikiQueries()} {
 		variants = append(variants, group...)
 	}
 	return map[string]any{"type": "object", "oneOf": variants}
@@ -372,7 +384,7 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 		if err := resolved.Validate(raw); err != nil {
 			return result(nil, errors.New("invalid_input")), nil
 		}
-		if err := b.validate(); err != nil {
+		if err := b.validateContext(ctx); err != nil {
 			return result(nil, err), nil
 		}
 		var in input
@@ -394,13 +406,16 @@ func (b *Bound) handle(kind string, schema map[string]any) mcp.ToolHandler {
 			return result(nil, errors.New("input_size")), nil
 		}
 		if kind == "context" {
-			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "agent_identity": b.managedIdentityContext(), "next_max_bytes": 2048, "owner": map[string]any{"context_operation": "owner.context", "reader": "session", "max_page_bytes": 4096, "requires": "current_confirmed_onboarding", "authority": "owner_profile_data_only"}, "memory": map[string]any{"context_operation": "memory.context", "max_page_bytes": 4096, "synthesis": "local_deterministic", "lifetime": "two_l3_generations_and_exact_owner_review"}, "methods": map[string]any{"list_operation": "methods.list", "read_operation": "methods.read", "plan_operation": "methods.plan", "max_page_bytes": 4096, "mode": "methods_not_authority"}}, nil), nil
+			return result(map[string]any{"workspace_id": b.workspaceID, "state": "ready", "evidence": "artifact_snapshot", "agent_identity": b.managedIdentityContext(), "agents": map[string]any{"read_operation": "agents.read", "agent_id": "maestro", "max_page_bytes": 4096, "mode": "roles_not_authority"}, "next_max_bytes": 2048, "owner": map[string]any{"context_operation": "owner.context", "reader": "session", "max_page_bytes": 4096, "requires": "current_confirmed_onboarding", "authority": "owner_profile_data_only"}, "memory": map[string]any{"context_operation": "memory.context", "max_page_bytes": 4096, "synthesis": "local_deterministic", "lifetime": "two_l3_generations_and_exact_owner_review"}, "methods": map[string]any{"list_operation": "methods.list", "read_operation": "methods.read", "plan_operation": "methods.plan", "max_page_bytes": 4096, "mode": "methods_not_authority"}}, nil), nil
 		}
 		if in.Operation == "installation.update_handoff" {
 			return b.handleManagementHandoff(ctx, req), nil
 		}
 		if strings.HasPrefix(in.Operation, "sharepoint.enrollment.") {
 			return b.handleSharepointEnrollment(ctx, req, in), nil
+		}
+		if in.Operation == "agents.read" {
+			return b.handleAgentRead(in), nil
 		}
 		if strings.HasPrefix(in.Operation, "agents.") {
 			return b.handleForeground(ctx, req, in), nil

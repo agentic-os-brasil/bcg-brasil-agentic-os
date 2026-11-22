@@ -114,6 +114,9 @@ func qualificationStatus(ctx context.Context, o Options, pack verifiedPack) stri
 	if decode(unsafe.Slice(output.Data, int(output.Size)), &actual) != nil || actual != expected {
 		return "requalification_required"
 	}
+	if ctx.Err() != nil {
+		return "conversion_cancelled"
+	}
 	return ""
 }
 
@@ -124,7 +127,11 @@ func qualifyPlaced(ctx context.Context, o Options) error {
 	if reason != "" {
 		return fmt.Errorf("placed converter unavailable: %s", reason)
 	}
-	if qualificationStatus(ctx, o, pack) == "" {
+	qualification := qualificationStatus(ctx, o, pack)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if qualification == "" {
 		return nil
 	}
 	binding, err := qualificationBinding(o, pack)

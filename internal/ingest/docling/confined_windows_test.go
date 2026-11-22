@@ -64,10 +64,27 @@ func nativeWindowsFixture(t *testing.T) (string, string) {
 func TestWindowsNativeConfinement(t *testing.T) {
 	assertWindowsQualificationFailureFactsPrivacy(t)
 	assertRegistryReadCapabilityPolicy(t)
+	r17AssertProtocol(t)
 	work, child := nativeWindowsFixture(t)
+	var registryFixtures *r17FixtureSet
+	var registryErr error
+	if r17HostedAssessment(os.Getenv("MAESTRO_WINDOWS_DOCLING_QUALIFY"), os.Getenv("GITHUB_ACTIONS"), os.Getenv("RUNNER_ENVIRONMENT")) {
+		registryFixtures, registryErr = r17Prepare(work)
+		defer registryFixtures.finish(t)
+		if registryErr == nil {
+			registryErr = r17CreateMarker(work)
+		}
+		if registryErr != nil {
+			r17Diagnostic(t, registryErr)
+			t.FailNow()
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	var stdout, stderr bytes.Buffer
+	if registryFixtures != nil {
+		registryFixtures.childrenStopped = false
+	}
 	err := runWindowsConfined(ctx, work, child, []string{"-test.run=^TestWindowsConfinementChild$", "-test.v"}, []byte("probe"), &stdout, &stderr)
 	if err != nil {
 		logWindowsConfinementFailureContext(t)
@@ -76,12 +93,51 @@ func TestWindowsNativeConfinement(t *testing.T) {
 	if !strings.Contains(stdout.String(), "NATIVE_WINDOWS_CONFINEMENT_PASSED") {
 		t.Fatalf("real child did not finish controls: %s", stdout.String())
 	}
+	var first []r17Row
+	if registryFixtures != nil {
+		registryFixtures.childrenStopped = true
+		first, registryErr = r17ParseChild(stdout.String())
+		if registryErr == nil {
+			registryErr = r17RequireMarker(work)
+		}
+		if registryErr == nil {
+			registryErr = registryFixtures.validate()
+		}
+		if registryErr != nil {
+			r17Diagnostic(t, registryErr)
+			t.FailNow()
+		}
+	}
 	// Classification and conversion require a second fresh profile over the same staging.
 	stdout.Reset()
 	stderr.Reset()
+	if registryFixtures != nil {
+		registryFixtures.childrenStopped = false
+	}
 	if err = runWindowsConfined(ctx, work, child, []string{"-test.run=^TestWindowsConfinementChild$"}, []byte("probe"), &stdout, &stderr); err != nil {
 		t.Fatalf("repeated confined phase: %v stderr=%s", err, stderr.String())
 	}
+	if registryFixtures == nil {
+		return // Ordinary local suites preserve the original two-call proof.
+	}
+	registryFixtures.childrenStopped = true
+	second, registryErr := r17ParseChild(stdout.String())
+	if registryErr == nil {
+		registryErr = r17RequireMarker(work)
+	}
+	if registryErr == nil {
+		registryErr = registryFixtures.validate()
+	}
+	if registryErr == nil {
+		registryErr = registryFixtures.cleanup()
+	}
+	if registryErr != nil {
+		r17Diagnostic(t, registryErr)
+		t.FailNow()
+	}
+	fmt.Fprintln(os.Stdout, "R17_REGISTRY_CLEANUP state=complete")
+	// Publish only after both actual children, unchanged fixtures and cleanup.
+	r17Publish(first, second)
 }
 
 func TestWindowsNativeConfinementDeadline(t *testing.T) {
@@ -352,7 +408,13 @@ func TestWindowsConfinementChild(t *testing.T) {
 		t.Fatalf("child denial was not a process creation failure: %v", err)
 	}
 	proof, _ := json.Marshal(map[string]bool{"app_container": true, "network_denied": true, "outside_read_denied": true, "outside_write_denied": true, "snapshot_write_denied": true, "scratch_writable": true, "children_denied": true})
-	t.Log("NATIVE_WINDOWS_CONFINEMENT_PASSED", string(proof))
+	if r17ChildAssessmentSelected(t) {
+		r17ObserveChild(t)
+		// Direct output preserves the same marker in the non-verbose phase.
+		fmt.Fprintln(os.Stdout, "NATIVE_WINDOWS_CONFINEMENT_PASSED", string(proof))
+	} else {
+		t.Log("NATIVE_WINDOWS_CONFINEMENT_PASSED", string(proof))
+	}
 }
 
 // Pure SID/count/attribute checks complement, never replace, the actual child token query.

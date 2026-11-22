@@ -1863,6 +1863,40 @@ OCR, visual reconstruction, model downloads and all signing/installation authori
 remain unchanged. The earlier eleven-format construction snapshot is historical
 coverage, not proof of this complete-kit scope. Refs: #599; Spec061 NTXT.
 
+## DSRC - Recover verified stable startup without racing activation owners
+
+- Date: 2026-11-20
+- Status: accepted
+- Owner: Maestro maintainers
+- Context: A process interrupted during the short activation guard can leave its PID file after exit and block an otherwise current Desktop connector restart. Reviewed client reconciliation can reclaim an exited owner, but its separate read/remove/reacquire steps let concurrent reclaimers delete a successor's live lock.
+- Decision: Permit dead-owner recovery only for normal stable-client startup after exact installed admission, current signed source, carrier, owner/workspace and current materialized selection have been verified. Repeat canonical source/current/client/packet/workspace validation under the acquired activation lock. Serialize every canonical reconciliation/recovery caller with the existing OS-released privatelock on one permanent empty private per-root guard, held across fresh owner/identity/body verification, stale removal and exclusive reacquisition. Retain ordinary exclusive acquisition; if an ordinary writer wins the gap, preserve its lock and refuse.
+- Consequences: Live/reused/unknown owners, malformed/aliased/changed locks and stale or invalid selections remain refused. Existing process-wait callers propagate lookup/access errors; only a positive DWORD PID with an OpenProcess-wrapped Windows ERROR_INVALID_PARAMETER is classified absent, while Unix retains its Signal(0) absence check. Track only the exact regular empty private retained guard in managed-root inventory. Read-only status, lifecycle hooks, ordinary writers, source/packet/profile/qualification custody and client execution authority retain their existing contracts. No age-based lease, process kill, force flag, imported native proof or manually deleted lock is introduced. Source and focused test evidence remain separate from rebuilt artifacts and actual Desktop initialize/tool acceptance.
+- Refs: #614; specs/020-release-distribution.md; specs/063-product-native-plugin.md; internal/installtx/transaction.go; internal/privatelock; internal/installer/clients.go
+- Supersedes: none
+
+
+## DTON - Publish an explicitly selected installed Desktop client independently
+
+- Date: 2026-11-20
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The combined current-client owner requires Code slots and genuine Code qualification before publishing the Desktop connector and live method frontend. Desktop cannot be onboarded independently even though its source/transport custody does not consume Code Agent proof. The initial portable experimental packet lacks the authenticated installed launch context and is not an alternative.
+- Decision: Extend the existing client lifecycle with an explicit desktop target, bound into request, review, record and generation identities. An absent target retains the exact legacy both-client meaning and JSON. Desktop-only uses a compatible target-aware installed bootstrap, original stable-launch/source/current-record validation and a Desktop-owned methods/management slot. No Code slot, executable, profile, provider, login or qualifier is fabricated. Code-including selections keep genuine same-call qualification and no-downgrade rules; changing an existing carrier target refuses.
+- Consequences: Old readers refuse the new record schema/capability rather than interpreting a partial record. Desktop method installation, connection and functional checks remain separate host observations. Desktop gains no Code hooks or independent foreground runtime authorization. Ship a newly reviewed compatible bootstrap/kit; existing artifacts and failed observations remain unchanged.
+- Refs: #616; specs/020-release-distribution.md; specs/065-product-method-discovery.md; docs/product-clients.md
+- Supersedes: none
+
+## ARID - Read canonical agent roles through ordinary MCP tools
+
+- Date: 2026-11-21
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: Canonical public agent definitions are already immutable MCP resources, but tool-only clients cannot retrieve the complete hub role and initialization supplies no discovery instructions. Display identity metadata does not carry the role contract.
+- Decision: Add a closed read-only agents.read query for canonical catalogued agent IDs, reusing the existing embedded role bytes and bounded UTF-8 resource pagination. Return the exact public resource URI, full-content hash and size. Initialize with concise guidance to read context, then the complete Maestro role through ordinary tools, respecting system/host instructions, the current user task and accepted owner preferences.
+- Consequences: The three-tool inventory stays unchanged. Display choices remain presentation only; role and method instructions confer no execution, delegation, approval, provider or filesystem authority. Private account/case definitions, path-based reads and broader resource dispatch stay outside this interface. Source and compiled transport tests establish delivery bytes, not actual client adoption or native execution.
+- Refs: specs/065-product-method-discovery.md; specs/063-product-native-plugin.md; adapters/mcp/agents.go; adapters/mcp/agents_query_test.go; MQRY; #470
+- Supersedes: none
+
 ## RGCI - Confine one registryRead experiment to synthetic Windows proof
 
 - Date: 2026-11-20

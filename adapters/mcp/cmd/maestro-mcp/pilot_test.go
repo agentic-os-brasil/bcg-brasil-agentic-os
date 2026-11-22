@@ -275,17 +275,16 @@ func assertPilotCheckPackets(t *testing.T) {
 				}
 			}
 		}
-		for _, selector := range []string{"methods.plan com method_id", "methods.read com resource_uri", "instruction_uri", "4096", "next_offset", "brain.templates", "brain.create uma única vez com page e text", "A primeira operação na página deve ser brain.create", "independentemente do estado do recibo"} {
-			if !strings.Contains(report.CodePrompt, selector) {
-				t.Fatalf("generated public prompt omits a required method selector or read bound: %s", selector)
+		pagePrompt := pilotStepPrompt(t, report.CodeSteps, "page")
+		for _, selector := range []string{"methods.plan com method_id", "methods.read com resource_uri", "instruction_uri", "4096", "next_offset", "brain.templates", "brain.create uma única vez com page e text", "texto completo efetivamente aprovado"} {
+			if !strings.Contains(pagePrompt, selector) {
+				t.Fatalf("page step omitted its method/readback contract: %s", selector)
 			}
 		}
-		if gate, journey := strings.Index(report.CodePrompt, "Antes dos métodos ou de criar a página"), strings.Index(report.CodePrompt, "Quero testar explicitamente os métodos"); gate < 0 || journey <= gate {
-			t.Fatal("repeat-work gate must precede the method and page journey")
+		if strings.Contains(report.CodePrompt, "brain.create") || strings.Contains(report.DesktopPrompt, "execution.resume") {
+			t.Fatal("initial reconciliation exposes another mutation")
 		}
-		if gate, page := strings.Index(report.DesktopPrompt, "pare antes de brain.read"), strings.Index(report.DesktopPrompt, "Somente com um trabalho identificado recupere"); gate < 0 || page <= gate {
-			t.Fatal("Desktop must report the verified context and stop before page reads when no unique Code work exists")
-		}
+
 	}
 	if report.KitID != kitID || !strings.Contains(report.Markdown, kitID) || !strings.Contains(report.Markdown, runtime.GOOS+"/"+runtime.GOARCH) {
 		t.Fatal("shareable Markdown lost the actual host or bounded local kit identifier")
@@ -490,7 +489,7 @@ func TestPilotRuntimePromptsMatchBundledDocument(t *testing.T) {
 	if err := finishPilotReport(&report, &output); err != nil {
 		t.Fatal(err)
 	}
-	for _, prompt := range []string{report.CodePrompt, report.DesktopPrompt} {
+	for _, prompt := range []string{pilotStepPrompt(t, report.CodeSteps, "conversion"), pilotStepPrompt(t, report.DesktopSteps, "conversion")} {
 		if !strings.Contains(prompt, marker) || !strings.Contains(prompt, "maestro-pilot.docx") {
 			t.Fatal("runtime prompt lost its bundled source/marker")
 		}
@@ -889,6 +888,122 @@ func assertDesktopPilotNativeMaterialization(t *testing.T, binary, packet, archi
 	}
 }
 
+func TestPilotInitialHandoffIsReadOnlyAndBounded(t *testing.T) {
+	r := pilotReport{SchemaVersion: 1, Status: "partial", WorkspaceID: strings.Repeat("c", 32), DesktopExtension: "maestro-connector-test"}
+	var out bytes.Buffer
+	if err := finishPilotReport(&r, &out); err != nil {
+		t.Fatal(err)
+	}
+	for name, prompt := range map[string]string{"Code": r.CodePrompt, "Desktop": r.DesktopPrompt} {
+		if len(prompt) > 4096 {
+			t.Fatalf("%s initial handoff is %d bytes; later steps remain in this request", name, len(prompt))
+		}
+		for _, operation := range []string{"brain.create", "memory.capture", "execution.create", "execution.resume", "content.convert"} {
+			if strings.Contains(prompt, operation) {
+				t.Fatalf("%s reconciliation exposes downstream mutation %s", name, operation)
+			}
+		}
+	}
+	var report map[string]json.RawMessage
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"code_steps", "desktop_steps"} {
+		var steps []struct{ ID, Title, Prompt string }
+		if err := json.Unmarshal(report[field], &steps); err != nil || len(steps) < 2 {
+			t.Fatalf("%s missing separately deliverable steps: %v", field, err)
+		}
+		if steps[0].ID != "reconcile" {
+			t.Fatalf("%s must open with read-only reconciliation", field)
+		}
+	}
+}
+
+func TestPilotFreshReconciliationDoesNotProbeUnknownPage(t *testing.T) {
+	for _, target := range []string{"", "desktop"} {
+		r := pilotReport{SchemaVersion: 2, Status: "partial", WorkspaceID: strings.Repeat("c", 32), ClientTarget: target, DesktopExtension: "maestro-connector-test"}
+		var out bytes.Buffer
+		if err := finishPilotReport(&r, &out); err != nil {
+			t.Fatal(err)
+		}
+		for client, steps := range map[string][]pilotStep{"Code": r.CodeSteps, "Desktop": r.DesktopSteps} {
+			if len(steps) == 0 {
+				continue
+			}
+			initial := steps[0].Prompt
+			if strings.Contains(initial, "brain.read") {
+				t.Fatalf("%s fresh reconciliation probes an unknown page; brain_rejected cannot establish absence", client)
+			}
+			for _, required := range []string{"brain.status", "página do ensaio: não verificada", "memory.search", "execution.list"} {
+				if !strings.Contains(initial, required) {
+					t.Fatalf("%s reconciliation omitted %s", client, required)
+				}
+			}
+			pageReaders := []string{"readback"}
+			if client == "Desktop" {
+				pageReaders = append(pageReaders, "execution-resume")
+			}
+			for _, id := range pageReaders {
+				prompt := pilotStepPrompt(t, steps, id)
+				guard := strings.Index(prompt, "Exija exatamente um trabalho identificado")
+				read := strings.Index(prompt, "Leia brain.read")
+				if guard < 0 || read <= guard {
+					t.Fatalf("%s/%s reads the pilot page before establishing its current marked-work precondition", client, id)
+				}
+			}
+		}
+	}
+}
+
+func TestPilotCombinedRoutePausesCodeBeforeDesktopContinuation(t *testing.T) {
+	for _, conversion := range []bool{false, true} {
+		r := pilotReport{SchemaVersion: 2, Status: "partial", WorkspaceID: strings.Repeat("c", 32), DesktopExtension: "maestro-connector-test"}
+		if conversion {
+			if err := installedConversionObservation(&r, strings.Repeat("a", 64), strings.Repeat("b", 64), "ready", strings.Repeat("b", 64)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var out bytes.Buffer
+		if err := finishPilotReport(&r, &out); err != nil {
+			t.Fatal(err)
+		}
+		for _, step := range r.CodeSteps {
+			if step.ID == "execution-resume" {
+				t.Fatal("ordinary Code route resumes work before the intended Desktop continuation")
+			}
+		}
+		if !strings.Contains(pilotStepPrompt(t, r.DesktopSteps, "execution-resume"), "execution.resume") {
+			t.Fatal("Desktop route lost its expected continuation")
+		}
+		pause := pilotStepPrompt(t, r.CodeSteps, "execution-pause")
+		if !strings.Contains(pause, "Enter") || !strings.Contains(pause, "2 — Continuar no Desktop") || strings.Contains(pause, "execution.resume") {
+			t.Fatal("Code pause must hand the participant to the existing Desktop menu without exposing the next mutation")
+		}
+		if r.CodeReadbackPrompt != pilotStepPrompt(t, r.CodeSteps, "readback") || strings.Contains(r.CodeReadbackPrompt, "content.convert") {
+			t.Fatal("separate Code persistence handoff must select the actual readback even when conversion is present")
+		}
+		for _, operation := range []string{"brain.create", "memory.capture", "execution.create", "execution.resume", "content.convert"} {
+			if strings.Contains(r.CodeReadbackPrompt, operation) {
+				t.Fatalf("Code persistence acquired mutation %s", operation)
+			}
+		}
+	}
+	r := pilotReport{SchemaVersion: 2, Status: "partial", WorkspaceID: strings.Repeat("c", 32), ClientTarget: "desktop", DesktopExtension: "maestro-connector-test"}
+	var out bytes.Buffer
+	if err := finishPilotReport(&r, &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.CodeSteps) != 0 || r.CodeReadbackPrompt != "" {
+		t.Fatal("Desktop-only route acquired a Code prerequisite")
+	}
+	if !strings.Contains(pilotStepPrompt(t, r.DesktopSteps, "execution-resume"), "execution.resume") {
+		t.Fatal("Desktop-only route lost same-client continuation")
+	}
+	if strings.Contains(pilotStepPrompt(t, r.DesktopSteps, "execution-pause"), "2 — Continuar no Desktop") {
+		t.Fatal("Desktop-only route received a cross-client handoff")
+	}
+}
+
 func TestPilotGuidedJourneyReport(t *testing.T) {
 	const workspaceID = "444df343c3054843e367c8b6b13f4d5d"
 	r := pilotReport{SchemaVersion: 1, Status: "partial", WorkspaceID: workspaceID, DesktopExtension: "Maestro MCP — Ensaio 444df343"}
@@ -911,8 +1026,12 @@ func TestPilotGuidedJourneyReport(t *testing.T) {
 			}
 		}
 	}
-	for _, required := range []string{"definições e relações", "modelo completo", "não comprova invocação nativa", "memory.capture", "confirmation_declined", "confirmation_unavailable", "FALHA DO CONTROLE", "não apague", "reutilize"} {
-		if !strings.Contains(r.CodePrompt, required) {
+	var journey strings.Builder
+	for _, step := range r.CodeSteps {
+		journey.WriteString(step.Prompt)
+	}
+	for _, required := range []string{"definições e relações", "modelo completo", "não comprova invocação nativa", "memory.capture", "confirmation_declined", "confirmation_unavailable", "FALHA DO CONTROLE", "não apague", "já salva"} {
+		if !strings.Contains(journey.String(), required) {
 			t.Fatalf("Code guided journey omits its model/memory control: %s", required)
 		}
 	}
@@ -997,7 +1116,12 @@ func TestPilotGuidedSelectionUsesActualNextProjection(t *testing.T) {
 	if len(matches) != 1 || matches[0].ItemID != selected.Contract.ItemID {
 		t.Fatal("only actual Next projections must identify the marked work")
 	}
-	code, desktop, readback := pilotPrompts(workspaceID)
+	report := pilotReport{SchemaVersion: 1, Status: "partial", WorkspaceID: workspaceID}
+	var output bytes.Buffer
+	if err := finishPilotReport(&report, &output); err != nil {
+		t.Fatal(err)
+	}
+	code, desktop, readback := report.CodePrompt, report.DesktopPrompt, report.CodeReadbackPrompt
 	for name, prompt := range map[string]string{"Code": code, "Desktop": desktop, "readback": readback} {
 		listAt := strings.Index(prompt, "execution.list")
 		nextAt := strings.Index(prompt, "para cada item_id listado")
@@ -1015,5 +1139,57 @@ func TestPilotGuidedSelectionUsesActualNextProjection(t *testing.T) {
 	}
 	if after.State != matches[0].State || after.StateRevision != matches[0].StateRevision {
 		t.Fatal("selection and readback changed work state")
+	}
+}
+
+func pilotStepPrompt(t *testing.T, steps []pilotStep, id string) string {
+	t.Helper()
+	for _, step := range steps {
+		if step.ID == id {
+			return step.Prompt
+		}
+	}
+	t.Fatalf("missing selected step %s", id)
+	return ""
+}
+
+func TestPilotStepsCarryOnlyTheirCurrentMutation(t *testing.T) {
+	mutations := []string{"brain.create", "memory.capture", "execution.create", "execution.start", "execution.checkpoint", "execution.pause", "execution.resume", "content.convert"}
+	allowed := map[string]string{"page": "brain.create", "memory-accept": "memory.capture", "memory-decline": "memory.capture", "execution-create": "execution.create", "execution-start": "execution.start", "execution-checkpoint": "execution.checkpoint", "execution-pause": "execution.pause", "execution-resume": "execution.resume", "conversion": "content.convert"}
+	for _, target := range []string{"", "desktop"} {
+		r := pilotReport{SchemaVersion: 2, Status: "partial", WorkspaceID: strings.Repeat("a", 32), ClientTarget: target, DesktopExtension: "maestro-connector-" + strings.Repeat("b", 32)}
+		if err := installedConversionObservation(&r, strings.Repeat("c", 64), strings.Repeat("d", 64), "ready", strings.Repeat("d", 64)); err != nil {
+			t.Fatal(err)
+		}
+		var output bytes.Buffer
+		if err := finishPilotReport(&r, &output); err != nil {
+			t.Fatal(err)
+		}
+		for client, steps := range map[string][]pilotStep{"Code": r.CodeSteps, "Desktop": r.DesktopSteps} {
+			seen := map[string]bool{}
+			for _, step := range steps {
+				if seen[step.ID] || step.Title == "" || step.Prompt == "" {
+					t.Fatalf("%s invalid selectable step: %+v", client, step)
+				}
+				seen[step.ID] = true
+				if len(step.Prompt) > 4096 {
+					t.Fatalf("%s/%s prompt grew to %d bytes", client, step.ID, len(step.Prompt))
+				}
+				for _, mutation := range mutations {
+					if strings.Contains(step.Prompt, mutation) && allowed[step.ID] != mutation {
+						t.Fatalf("%s/%s exposed later operation %s", client, step.ID, mutation)
+					}
+				}
+				if !strings.Contains(step.Prompt, r.WorkspaceID) || !strings.Contains(step.Prompt, "TODO este turno") {
+					t.Fatalf("%s/%s lost workspace/stop boundary", client, step.ID)
+				}
+				if client == "Desktop" && !strings.Contains(step.Prompt, r.DesktopExtension) {
+					t.Fatal("step lost exact Desktop isolation")
+				}
+			}
+		}
+		if target == "desktop" && len(r.CodeSteps) != 0 {
+			t.Fatal("Desktop-only target gained Code steps")
+		}
 	}
 }

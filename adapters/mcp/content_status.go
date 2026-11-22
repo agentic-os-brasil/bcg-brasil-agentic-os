@@ -29,7 +29,7 @@ type contentAvailability struct {
 func (b *Bound) contentStatus(ctx context.Context) contentAvailability {
 	// Ready authenticates the exact embedded bridge, lock, complete parser inputs
 	// and installed inventory. Policy alone is never installed availability.
-	availability := b.DoclingRuntime().Status(ctx)
+	availability := b.DoclingRuntimeContext(ctx).Status(ctx)
 	out := contentAvailability{Availability: availability}
 	var extensions []string
 	for extension, admitted := range ingest.DefaultPolicy().AllowedExts {

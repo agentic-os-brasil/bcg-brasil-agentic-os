@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"os"
@@ -10,7 +12,220 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
+
+// Exercise the original selector without starting a client, installer or clipboard.
+// Navigation is a human choice: sending a step never advances or replays it.
+func TestParticipantStepDeliveryHasRealRequestBoundaries(t *testing.T) {
+	for _, platform := range []string{"mac", "windows"} {
+		t.Run(platform, func(t *testing.T) {
+			dir := developerFixture(t)
+			steps := []map[string]string{
+				{"id": "reconcile", "title": "Conferir ou continuar", "prompt": "READ-ONLY-CURRENT"},
+				{"id": "memory-accept", "title": "Salvar a memória", "prompt": "ONLY-MEMORY-CURRENT"},
+				{"id": "conversion", "title": "Conferir documento", "prompt": "ONLY-CONVERSION-CURRENT"},
+			}
+			fixture, err := json.Marshal(map[string]any{"desktop_steps": steps})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "report.json"), fixture, 0600); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			var cmd *exec.Cmd
+			if platform == "mac" {
+				if runtime.GOOS != "darwin" {
+					t.Skip("Mac Bash/plutil contract")
+				}
+				source, err := os.ReadFile("../templates/installed-seed/Maestro.command")
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, body, ok := strings.Cut(string(source), "pilot_steps() {")
+				if !ok {
+					t.Fatal("original selector missing")
+				}
+				body, _, ok = strings.Cut(body, "while [[ -t 0 ]]; do")
+				if !ok {
+					t.Fatal("original menu boundary missing")
+				}
+				cmd = exec.CommandContext(ctx, "/bin/bash", "-c", `set -euo pipefail
+jget(){ /usr/bin/plutil -extract "$2" raw -o - "$1"; }
+fail(){ printf '%s' "$*" >&2; exit 1; }
+count=0
+open_desktop(){ count=$((count+1)); /bin/cp "$RUN/$1" "$RUN/delivery-$count.txt"; printf '%s\n' "$1" >> "$RUN/files.txt"; }
+pilot_steps() {`+body+`pilot_steps desktop`)
+				cmd.Env = append(os.Environ(), "RUN="+dir)
+				// Send, choose next, send, return to reconciliation, send,
+				// choose the document step and send. No automatic advancement.
+				cmd.Stdin = strings.NewReader("1\n2\n1\n4\n1\n2\n2\n1\n\n")
+			} else {
+				powerShell, err := powerShellTool()
+				if err != nil {
+					t.Skip("PowerShell runtime unavailable; Windows remains unqualified")
+				}
+				source, err := os.ReadFile("../templates/installed-seed/Maestro.ps1")
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, body, ok := strings.Cut(string(source), "  function Invoke-PilotSteps([string]$Client) {")
+				if !ok {
+					t.Fatal("original selector missing")
+				}
+				body, _, ok = strings.Cut(body, "\n  do {")
+				if !ok {
+					t.Fatal("original menu boundary missing")
+				}
+				cmd = exec.CommandContext(ctx, powerShell, "-NoLogo", "-NoProfile", "-Command", `Set-StrictMode -Version Latest; $ErrorActionPreference='Stop'
+$Run=$env:MAESTRO_STEP_FIXTURE
+$Utf8=New-Object Text.UTF8Encoding($false)
+$Checked=Get-Content -LiteralPath (Join-Path $Run 'report.json') -Raw|ConvertFrom-Json
+$script:answers=[Collections.Generic.Queue[string]]::new()
+@('1','2','1','4','1','2','2','1','')|ForEach-Object{$script:answers.Enqueue($_)}
+$script:count=0
+function Read-Host([string]$Prompt){if($script:answers.Count -eq 0){throw 'Unexpected question'};return $script:answers.Dequeue()}
+function Stop-Maestro([string]$Message){throw $Message}
+function Open-Desktop([string]$File){$script:count++;[IO.File]::WriteAllText((Join-Path $Run ('delivery-'+$script:count+'.txt')),[IO.File]::ReadAllText((Join-Path $Run $File)),$Utf8);[IO.File]::AppendAllText((Join-Path $Run 'files.txt'),$File+"`+"`n"+`",$Utf8)}
+function Invoke-PilotSteps([string]$Client) {`+body+`Invoke-PilotSteps 'desktop'`)
+				cmd.Env = append(os.Environ(), "MAESTRO_STEP_FIXTURE="+dir)
+				if dev := os.Getenv("GOCACHE"); strings.Contains(dev, "/Developer/") {
+					base := filepath.Join(strings.SplitN(dev, "/Developer/", 2)[0], "Developer", "ToolData", "powershell-maestro")
+					cmd.Env = append(cmd.Env, "XDG_CACHE_HOME="+filepath.Join(base, "cache"), "XDG_CONFIG_HOME="+filepath.Join(base, "config"), "XDG_DATA_HOME="+filepath.Join(base, "data"))
+				}
+			}
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("original selector: %s %v", output, err)
+			}
+			for index, want := range []string{"READ-ONLY-CURRENT", "ONLY-MEMORY-CURRENT", "READ-ONLY-CURRENT", "ONLY-CONVERSION-CURRENT"} {
+				body, err := os.ReadFile(filepath.Join(dir, fmt.Sprintf("delivery-%d.txt", index+1)))
+				if err != nil || string(body) != want {
+					t.Fatalf("delivery %d crossed a turn boundary: %q %v", index+1, body, err)
+				}
+			}
+			files, err := os.ReadFile(filepath.Join(dir, "files.txt"))
+			if err != nil || strings.Join(strings.Fields(string(files)), ",") != "DESKTOP-ETAPA.txt,DESKTOP-ETAPA.txt,DESKTOP-ETAPA.txt,DESKTOP-CONVERSAO.txt" {
+				t.Fatalf("document preparation leaked into another step: %s %v", files, err)
+			}
+		})
+	}
+}
+
+// Exercise the exact original prompt-consumer statements, not a copied decoder.
+// Windows requires Desktop 5.1; alternate defaults also expose the BOM-less
+// ANSI-reader failure on PowerShell 7. Synthetic sinks do not qualify clients.
+func TestParticipantPowerShellPromptConsumersPreserveUTF8(t *testing.T) {
+	shell := "pwsh"
+	if runtime.GOOS == "windows" {
+		shell = "powershell.exe"
+	}
+	powerShell, err := exec.LookPath(shell)
+	if err != nil {
+		if runtime.GOOS == "windows" {
+			t.Fatalf("shipped Windows PowerShell 5.1 is required: %v", err)
+		}
+		t.Skip("PowerShell runtime unavailable; native Windows remains unqualified")
+	}
+	dir := developerFixture(t)
+	text := "Preferência inteiramente fictícia: conferir o resultado salvo antes da entrega. MAESTRO_PILOT_0123456789abcdef0123456789abcdef_MEMORY_ACCEPT\nUma etapa por vez — revisão e confirmação."
+	steps := []map[string]string{{"id": "memory-accept", "title": "Salvar e conferir a memória de teste", "prompt": text}}
+	fixture, err := json.Marshal(map[string]any{"status": "partial", "code_steps": steps, "desktop_steps": steps})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "report.json"), fixture, 0600); err != nil {
+		t.Fatal(err)
+	}
+	source, err := os.ReadFile("../templates/installed-seed/Maestro.ps1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	extract := func(start, end string) string {
+		t.Helper()
+		_, body, ok := strings.Cut(string(source), start)
+		if !ok {
+			t.Fatalf("original helper missing: %s", start)
+		}
+		body, _, ok = strings.Cut(body, end)
+		if !ok {
+			t.Fatalf("original helper boundary missing: %s", end)
+		}
+		return start + body
+	}
+	consumer := func(body, call string) string {
+		t.Helper()
+		for _, line := range strings.Split(body, "\n") {
+			if strings.Contains(line, call) {
+				return line
+			}
+		}
+		t.Fatalf("original consumer missing: %s", call)
+		return ""
+	}
+	code := consumer(extract("  function Open-Code([string]$PromptFile) {", "  function Test-CurrentDesktopInstall("), "Invoke-SelectedCode -Arguments")
+	desktop := consumer(extract("  function Open-Desktop([string]$PromptFile) {", "  function Invoke-PilotSteps("), "Set-Clipboard -Value")
+	assert := extract("  function Assert-TestPrompt([string]$PromptFile) {", "  function Prepare-ConversionDocument(")
+	selector := extract("  function Invoke-PilotSteps([string]$Client) {", "\n  do {")
+	stop := extract("function Stop-Maestro([string]$Message) {", "function Hash(")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, powerShell, "-NoLogo", "-NoProfile", "-Command", `Set-StrictMode -Version Latest; $ErrorActionPreference='Stop'
+if([Environment]::OSVersion.Platform -eq 'Win32NT' -and ($PSVersionTable.PSEdition -cne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1)){throw 'Shipped prompt readers require Windows PowerShell Desktop 5.1'}
+$Run=$env:MAESTRO_UTF8_FIXTURE
+$Utf8=New-Object Text.UTF8Encoding($false)
+$Checked=Get-Content -LiteralPath (Join-Path $Run 'report.json') -Raw -Encoding UTF8|ConvertFrom-Json
+`+stop+assert+selector+`
+function Invoke-SelectedCode([string[]]$Arguments){if($Arguments.Count -ne 1){throw 'Prompt must remain one literal argument'};[IO.File]::WriteAllText((Join-Path $Run 'code-delivery.txt'),$Arguments[0],$Utf8)}
+function Set-Clipboard([string]$Value){[IO.File]::WriteAllText((Join-Path $Run 'desktop-delivery.txt'),$Value,$Utf8)}
+function Open-Code([string]$PromptFile){Assert-TestPrompt $PromptFile
+`+code+`
+}
+function Open-Desktop([string]$PromptFile){Assert-TestPrompt $PromptFile
+`+desktop+`
+}
+$script:answers=[Collections.Generic.Queue[string]]::new()
+function Read-Host([string]$Prompt){if($script:answers.Count -eq 0){throw 'Unexpected question'};return $script:answers.Dequeue()}
+if($PSVersionTable.PSVersion.Major -ge 6){$defaultEncoding=1252}else{$defaultEncoding='Default'}
+$PSDefaultParameterValues['Get-Content:Encoding']=$defaultEncoding
+foreach($client in @('code','desktop')){
+  $script:answers.Enqueue('1');$script:answers.Enqueue('')
+  Invoke-PilotSteps $client
+  $path=Join-Path $Run ($client.ToUpperInvariant()+'-ETAPA.txt')
+  $actual=[IO.File]::ReadAllBytes($path)
+  if($actual.Length -ge 3 -and $actual[0] -eq 239 -and $actual[1] -eq 187 -and $actual[2] -eq 191){throw 'Selector unexpectedly wrote a BOM'}
+  $control=Get-Content -LiteralPath $path -Raw
+  if($PSVersionTable.PSVersion.Major -ge 6 -and $control -ceq $Checked.code_steps[0].prompt){throw 'Alternate-default control failed to expose ANSI corruption'}
+}
+Write-Host ('Prompt reader shell: '+$PSVersionTable.PSEdition+' '+$PSVersionTable.PSVersion+'; decoding default '+$defaultEncoding+'; synthetic client/clipboard sinks only; no client qualification')`)
+	cmd.Env = make([]string, 0)
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		// Match Maestro.cmd: Desktop 5.1 selects its own modules even when
+		// hosted by the workflow's PowerShell 7 process.
+		if runtime.GOOS != "windows" || !strings.EqualFold(name, "PSModulePath") {
+			cmd.Env = append(cmd.Env, entry)
+		}
+	}
+	cmd.Env = append(cmd.Env, "MAESTRO_UTF8_FIXTURE="+dir)
+	if dev := os.Getenv("GOCACHE"); strings.Contains(dev, "/Developer/") {
+		base := filepath.Join(strings.SplitN(dev, "/Developer/", 2)[0], "Developer", "ToolData", "powershell-maestro")
+		cmd.Env = append(cmd.Env, "XDG_CACHE_HOME="+filepath.Join(base, "cache"), "XDG_CONFIG_HOME="+filepath.Join(base, "config"), "XDG_DATA_HOME="+filepath.Join(base, "data"))
+	}
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("original PowerShell consumers: %s %v", output, err)
+	}
+	t.Logf("%s", output)
+	for _, client := range []string{"code", "desktop"} {
+		body, err := os.ReadFile(filepath.Join(dir, client+"-delivery.txt"))
+		if err != nil || string(body) != text {
+			t.Fatalf("%s original consumer changed UTF-8 bytes: got %q, want %q, error %v", client, body, text, err)
+		}
+		t.Logf("%s original consumer preserved all %d UTF-8 bytes", client, len(body))
+	}
+}
 
 // Execute the shipped frontend helpers in a synthetic filesystem only.
 // No installer, Claude, authentication, native qualification or GUI is invoked.
@@ -151,6 +366,8 @@ umask 077
 fail(){ printf '%s' "$*" >&2; exit 1; }
 jget(){ /usr/bin/plutil -extract "$2" raw -o - "$1"; }
 COMMON=(--fixture)
+CLIENT_STATUS=("${COMMON[@]}")
+TARGET=""
 fixture_installer(){
   case "$1" in
     clients-status) printf '%s' '{"state":"pending"}';;
@@ -432,3 +649,243 @@ if declare -F prepare_initial_server >/dev/null; then prepare_initial_server; fi
 	}
 
 }
+
+func TestMacSelfServiceDesktopSelectionAvoidsCode(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Mac shell/filesystem contract")
+	}
+	root := developerFixture(t)
+	source, err := os.ReadFile("../templates/installed-seed/Maestro.command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	extract := func(start, end string) string {
+		_, tail, ok := strings.Cut(string(source), start)
+		if !ok {
+			t.Fatalf("missing shipped boundary %q", start)
+		}
+		body, _, ok := strings.Cut(tail, end)
+		if !ok {
+			t.Fatalf("missing shipped end %q", end)
+		}
+		return start + body
+	}
+	dev := filepath.Join(root, "Developer")
+	owner := filepath.Join(dev, "existing owner")
+	base := filepath.Join(dev, "pilot")
+	for _, p := range []string{owner, base} {
+		if err := os.MkdirAll(p, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	installer := filepath.Join(base, "installer-fixture")
+	if err := os.WriteFile(installer, []byte("#!/bin/bash\nprintf '%s\\n' \"$@\" > \"$OBSERVED_ARGS\"\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	script := `set -euo pipefail
+umask 077
+fail(){ printf '%s' "$*" >&2; exit 1; }
+jget(){ /usr/bin/plutil -extract "$2" raw -o - "$1"; }
+private_dir(){ [[ -d "$1" && ! -L "$1" ]] || fail 'Missing fixture private directory'; }
+prepare_client_parent(){ mkdir -p "$OWNER/Maestro-Clients/$ROLE"; printf '%s' "$OWNER/Maestro-Clients/$ROLE"; }
+resolve_code_executable(){ fail 'CODE DISCOVERY MUST NOT RUN'; }
+prepare_code_configuration(){ fail 'CODE PROFILE MUST NOT RUN'; }
+ensure_code_login(){ fail 'CODE LOGIN MUST NOT RUN'; }
+verify_installer(){ :; }
+COMMON=(--fixture)
+` + extract("json() {", "# Resolve normal installer symlinks") + "\n" + extract("if [[ ! -e \"$CFG\" ]]; then", "PRODUCT=\"$BASE/product\"") + "\n" + extract("manage() {", "current_clients=false") + "\nmanage\n" + `
+if [[ ! -e "$BASE/observed-review.json" ]]; then
+  PRODUCT="$BASE/product"; INSTALLED="$BASE/not-installed"; RUN="$BASE/setup-run"; STAGE="$BASE/stage"
+  mkdir "$RUN"
+  fixture_bootstrap(){
+    case "$1" in
+      review) cat > "$BASE/observed-review.json"; printf '%s' '{"review_digest":"reviewed-desktop"}';;
+      apply) cat > "$BASE/observed-apply.json"; [[ "$2" == --review-digest && "$3" == reviewed-desktop && "$4" == --confirm ]] || return 97; printf '{}';;
+      *) return 98;;
+    esac
+  }
+  BOOTSTRAP=fixture_bootstrap
+  review_confirm(){ :; }
+` + extract("if [[ ! -e \"$INSTALLED\" ]]; then", "verify_installer \"$INSTALLED\"\nmanage() {") + "\nfi\n"
+	cfg := filepath.Join(base, "participant.json")
+	argsPath := filepath.Join(base, "args")
+	run := func(input string) ([]byte, error) {
+		cmd := exec.Command("/bin/bash", "-c", script)
+		cmd.Env = append(os.Environ(), "DEV="+dev, "BASE="+base, "ROLE=desktop-fixture", "CFG="+cfg, "MAESTRO_HOME="+filepath.Join(owner, "brain"), "INSTALLED="+installer, "OBSERVED_ARGS="+argsPath)
+		cmd.Stdin = strings.NewReader(input)
+		return cmd.CombinedOutput()
+	}
+	if output, err := run("desktop\n" + owner + "\n" + filepath.Join(dev, "workspace") + "\n"); err != nil {
+		t.Fatalf("explicit Desktop setup must not discover, prepare or authenticate Code: %s %v", output, err)
+	}
+	body, err := os.ReadFile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config map[string]any
+	if err := json.Unmarshal(body, &config); err != nil || config["client_target"] != "desktop" {
+		t.Fatalf("explicit target not retained: %s %v", body, err)
+	}
+	for _, key := range []string{"code_executable", "code_configuration_directory"} {
+		if _, present := config[key]; present {
+			t.Fatalf("Desktop setup created Code placeholder %s", key)
+		}
+	}
+	if output, err := run(""); err != nil {
+		t.Fatalf("same Desktop selection must resume without Code prompts: %s %v", output, err)
+	}
+	args, err := os.ReadFile(argsPath)
+	if err != nil || !strings.Contains(string(args), "--client-target\ndesktop\n") || !strings.Contains(string(args), "--client-desktop-path\n"+filepath.Join(owner, "Maestro-Clients", "desktop-fixture", "maestro-product.mcpb")+"\n") {
+		t.Fatalf("original manager lost explicit Desktop selection: %s %v", args, err)
+	}
+	if strings.Contains(string(args), "--client-code") || strings.Contains(string(args), "--client-scope") {
+		t.Fatalf("Desktop manager received Code inputs: %s", args)
+	}
+	for _, name := range []string{"observed-review.json", "observed-apply.json"} {
+		body, err := os.ReadFile(filepath.Join(base, name))
+		var request map[string]any
+		if err != nil || json.Unmarshal(body, &request) != nil || request["target"] != "desktop" {
+			t.Fatalf("original bootstrap lost reviewed Desktop target: %s %v", body, err)
+		}
+		for _, key := range []string{"code_packet", "desktop_packet"} {
+			if _, present := request[key]; present {
+				t.Fatalf("Desktop bootstrap emitted portable placeholder %s", key)
+			}
+		}
+	}
+	original, err := os.ReadFile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range []string{"unknown-target", "hidden-code"} {
+		var modified map[string]any
+		if err := json.Unmarshal(original, &modified); err != nil {
+			t.Fatal(err)
+		}
+		if scenario == "unknown-target" {
+			modified["client_target"] = "resources-only"
+		} else {
+			modified["code_executable"] = installer
+		}
+		body, _ := json.Marshal(modified)
+		if err := os.WriteFile(cfg, body, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if output, err := run(""); err == nil {
+			t.Fatalf("%s was accepted: %s", scenario, output)
+		}
+		preserved, _ := os.ReadFile(cfg)
+		if string(preserved) != string(body) {
+			t.Fatalf("%s rewrote saved choices", scenario)
+		}
+	}
+}
+
+// Exercise only the shipped result loops: no installer, client or GUI runs.
+func TestParticipantResultCollectorsRespectDesktopTarget(t *testing.T) {
+	root := developerFixture(t)
+	for _, shell := range []string{"mac", "powershell"} {
+		for _, target := range []string{"both", "desktop"} {
+			t.Run(shell+"/"+target, func(t *testing.T) {
+				dir := filepath.Join(root, shell+"-"+target)
+				if err := os.Mkdir(dir, 0700); err != nil {
+					t.Fatal(err)
+				}
+				report := filepath.Join(dir, "RELATORIO.md")
+				if err := os.WriteFile(report, nil, 0600); err != nil {
+					t.Fatal(err)
+				}
+				questions := 6
+				if target == "desktop" {
+					questions = 4
+				}
+				var cmd *exec.Cmd
+				if shell == "mac" {
+					if runtime.GOOS == "windows" {
+						t.Skip("shipped Mac Bash collector")
+					}
+					source, err := os.ReadFile("../templates/installed-seed/Maestro.command")
+					if err != nil {
+						t.Fatal(err)
+					}
+					_, body, found := strings.Cut(string(source), "attest() {")
+					if !found {
+						t.Fatal("missing shipped result collector")
+					}
+					body, _, found = strings.Cut(body, "guard_test_prompt() {")
+					if !found {
+						t.Fatal("missing collector boundary")
+					}
+					cmd = exec.Command("/bin/bash", "-c", "set -euo pipefail\nattest() {"+body+"\nattest\n")
+					selected := target
+					if selected == "both" {
+						selected = ""
+					}
+					cmd.Env = append(os.Environ(), "TARGET="+selected, "RUN="+dir)
+					cmd.Stdin = strings.NewReader(strings.Repeat("passou\n", questions))
+				} else {
+					name := "pwsh"
+					if runtime.GOOS == "windows" {
+						name = "powershell.exe"
+					}
+					powerShell, err := exec.LookPath(name)
+					if err != nil {
+						if runtime.GOOS == "windows" {
+							t.Fatal(err)
+						}
+						t.Skip("PowerShell required")
+					}
+					path := filepath.Join(dir, "collector.ps1")
+					if err := os.WriteFile(path, []byte(participantResultCollectorPowerShell), 0600); err != nil {
+						t.Fatal(err)
+					}
+					source, err := filepath.Abs("../templates/installed-seed/Maestro.ps1")
+					if err != nil {
+						t.Fatal(err)
+					}
+					cmd = exec.Command(powerShell, "-NoProfile", "-NonInteractive", "-File", path, "-Source", source, "-Report", report, "-ClientTarget", target)
+				}
+				output, err := cmd.CombinedOutput()
+				if err != nil {
+					t.Fatalf("shipped collector: %s %v", output, err)
+				}
+				body, err := os.ReadFile(report)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if strings.Count(string(body), "(participante)") != questions {
+					t.Fatalf("wrong relevant result count: %s", body)
+				}
+				if target == "desktop" {
+					if strings.Count(string(body), "not_applicable (alvo Desktop)") != 2 {
+						t.Fatalf("Code/hooks applicability not recorded: %s", body)
+					}
+					if strings.Contains(string(output), "Code: identidade/skills") || strings.Contains(string(output), "Hooks e delega") {
+						t.Fatalf("Desktop user was asked Code/hook questions: %s", output)
+					}
+				} else if strings.Contains(string(body), "not_applicable") || !strings.Contains(string(output), "Code: identidade/skills") || !strings.Contains(string(output), "Hooks e delega") {
+					t.Fatalf("legacy both-client questions changed: %s\n%s", output, body)
+				}
+			})
+		}
+	}
+}
+
+const participantResultCollectorPowerShell = `param([string]$Source,[string]$Report,[string]$ClientTarget)
+$ErrorActionPreference='Stop';Set-StrictMode -Version Latest
+$Utf8=New-Object System.Text.UTF8Encoding($false)
+$tokens=$null;$errors=$null;$ast=[Management.Automation.Language.Parser]::ParseFile($Source,[ref]$tokens,[ref]$errors)
+if($errors.Count){throw 'Shipped frontend does not parse'}
+$collector=$ast.Find({param($n) $n -is [Management.Automation.Language.ForEachStatementAst] -and $n.Extent.Text.StartsWith("foreach (` + "`" + `$label in @('Code: identidade/skills'")},$true)
+if($null -eq $collector){throw 'Missing shipped participant result collector'}
+$script:Answers=New-Object 'Collections.Generic.Queue[string]'
+$count=6;if($ClientTarget -ceq 'desktop'){$count=4}else{$ClientTarget=''}
+for($i=0;$i -lt $count;$i++){$script:Answers.Enqueue('passou')}
+function Read-Host([string]$Prompt){
+  if($script:Answers.Count -eq 0){throw 'Unexpected extra result question'}
+  Write-Host $Prompt
+  return $script:Answers.Dequeue()
+}
+Invoke-Expression $collector.Extent.Text
+if($script:Answers.Count -ne 0){throw 'A relevant result question was omitted'}
+`

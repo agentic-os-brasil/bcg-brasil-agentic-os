@@ -6,10 +6,10 @@ function Read-DoclingRuntimeManifest([string]$Path) {
     $entry = Get-Item -LiteralPath $Path -Force
     if ($entry -isnot [IO.FileInfo] -or ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $entry.Length -gt 65536) { throw 'Docling manifest must be a bounded ordinary file.' }
     $manifest = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
-    $fields = @('schema_version','qualification_profile','runtime_profile','runtime_lock_sha256','source_revision','public_root','source_root','sdk_go','module_cache','raw_inputs','test_binary','inventory_sha256','required_tests')
+    $fields = @('schema_version','qualification_profile','runtime_profile','runtime_lock_sha256','source_revision','source_tree','public_root','source_root','sdk_go','module_cache','raw_inputs','test_binary','inventory_sha256','required_tests')
     if (@($manifest.PSObject.Properties.Name).Count -ne $fields.Count -or @($manifest.PSObject.Properties.Name | Where-Object { $_ -cnotin $fields }).Count -ne 0 -or
         $manifest.schema_version -ne 1 -or $manifest.qualification_profile -cne $script:DoclingRuntimeQualificationProfile -or $manifest.runtime_profile -cne 'model-free-documents-v1' -or $manifest.runtime_lock_sha256 -cne '38b1a0257c3feec8a5b4b97856e7f2096cdb72ed2bd1734d8e61567bf4757643' -or $manifest.source_revision -cnotmatch '^[a-f0-9]{40}$' -or
-        $manifest.inventory_sha256 -cnotmatch '^[a-f0-9]{64}$' -or @($manifest.required_tests).Count -ne $script:DoclingRuntimeTests.Count -or
+        $manifest.source_tree -cnotmatch '^[a-f0-9]{40}$' -or $manifest.inventory_sha256 -cnotmatch '^[a-f0-9]{64}$' -or @($manifest.required_tests).Count -ne $script:DoclingRuntimeTests.Count -or
         @((Compare-Object ($script:DoclingRuntimeTests | Sort-Object -CaseSensitive) (@($manifest.required_tests) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0) { throw 'Docling requires the exact closed native runtime profile.' }
     if ($manifest.public_root -cnotmatch '^[A-Za-z]:\\MaestroNativeEngine-[a-f0-9]{32}$' -or
         -not [string]::Equals([IO.Path]::GetFullPath($manifest.public_root), $manifest.public_root, [StringComparison]::OrdinalIgnoreCase)) { throw 'Docling public input root is not the fresh sealed engine root.' }
@@ -189,6 +189,66 @@ g
     }
 }
 
+# Pure finite log decoder. It performs no token, registry or process operations.
+# Completeness is distinct from measured contrasts and confers no admission.
+function Test-R17HostedAssessment {
+    return ($env:MAESTRO_WINDOWS_DOCLING_QUALIFY -ceq '1' -and $env:GITHUB_ACTIONS -ceq 'true' -and $env:RUNNER_ENVIRONMENT -ceq 'github-hosted')
+}
+
+function ConvertFrom-R17RegistryAssessmentLog([string]$Body) {
+    if ([Text.Encoding]::UTF8.GetByteCount($Body) -gt 4194304) { throw 'R17 assessment log exceeds its finite bound.' }
+    $fixtures=@('owner_only','capability_read','capability_broad','foreign_capability','integrity_pair')
+    $rights=@('query_value','enumerate_sub_keys','set_value','create_sub_key','delete','write_dac')
+    $phases=@('first','second')
+    $definition='R17_REGISTRY_DEFINITION version=maestro-r17-registry-assessment-v1 sha256=024fcb4fe0a6d92eaff4a933c5d25dc7c9fb7a63a68b778839c79458fd50be8e'
+    $rowPattern='\AR17_REGISTRY_OBSERVATION phase=(first|second) fixture_enum=(owner_only|capability_read|capability_broad|foreign_capability|integrity_pair) right_enum=(query_value|enumerate_sub_keys|set_value|create_sub_key|delete|write_dac) win32_status=(0|[1-9][0-9]{0,9}) sentinel_match=(true|false)\z'
+    $seen=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $rows=[Collections.Generic.List[object]]::new()
+    $lookup=@{}; $definitionCount=0; $cleanupCount=0
+    foreach ($rawLine in $Body.Split("`n")) {
+        $line=$rawLine
+        if ($line.EndsWith("`r")) { $line=$line.Substring(0,$line.Length-1) }
+        if (-not $line.Contains('R17_REGISTRY_')) { continue }
+        if ($line -ceq $definition) { $definitionCount++; continue }
+        if ($line -ceq 'R17_REGISTRY_CLEANUP state=complete') { $cleanupCount++; continue }
+        $match=[regex]::Match($line,$rowPattern)
+        if (-not $match.Success) { throw 'R17 assessment contains an unknown, diagnostic or malformed protocol line.' }
+        [uint32]$status=0
+        if (-not [uint32]::TryParse($match.Groups[4].Value,[Globalization.NumberStyles]::None,[Globalization.CultureInfo]::InvariantCulture,[ref]$status)) { throw 'R17 assessment status is outside unsigned LSTATUS.' }
+        $phase=$match.Groups[1].Value; $fixture=$match.Groups[2].Value; $right=$match.Groups[3].Value
+        $sentinelMatch=$match.Groups[5].Value -ceq 'true'
+        $key=$phase+'/'+$fixture+'/'+$right
+        if (-not $seen.Add($key) -or $sentinelMatch -ne ($right -ceq 'query_value' -and $status -eq 0)) { throw 'R17 assessment has a duplicate row or invalid sentinel observation.' }
+        $row=[ordered]@{phase=$phase;fixture_enum=$fixture;right_enum=$right;win32_status=$status;sentinel_match=$sentinelMatch}
+        $rows.Add($row); $lookup[$key]=$row
+    }
+    if ($definitionCount -ne 1 -or $cleanupCount -ne 1 -or $rows.Count -ne 60) { throw 'R17 assessment requires one exact definition, terminal cleanup and 60 observations.' }
+    foreach ($phase in $phases) { foreach ($fixture in $fixtures) { foreach ($right in $rights) {
+        if (-not $seen.Contains($phase+'/'+$fixture+'/'+$right)) { throw 'R17 assessment matrix is incomplete.' }
+    } } }
+    $contrasts=[Collections.Generic.List[object]]::new()
+    $discriminating=$false
+    foreach ($phase in $phases) {
+        $readEligible=$lookup[$phase+'/capability_read/query_value'].win32_status -eq 0
+        foreach ($comparison in @('owner_only','foreign_capability')) {
+            $differs=$readEligible -ne ($lookup[$phase+'/'+$comparison+'/query_value'].win32_status -eq 0)
+            $contrasts.Add([ordered]@{phase=$phase;right_enum='query_value';comparison_enum=$comparison+'_vs_capability_read';eligibility_differs=$differs})
+            $discriminating=$discriminating -or $differs
+        }
+        foreach ($right in @('set_value','create_sub_key','delete','write_dac')) {
+            $broadEligible=$lookup[$phase+'/capability_broad/'+$right].win32_status -eq 0
+            foreach ($comparison in @('capability_read','integrity_pair')) {
+                $differs=$broadEligible -ne ($lookup[$phase+'/'+$comparison+'/'+$right].win32_status -eq 0)
+                $contrasts.Add([ordered]@{phase=$phase;right_enum=$right;comparison_enum=$comparison+'_vs_capability_broad';eligibility_differs=$differs})
+                $discriminating=$discriminating -or $differs
+            }
+        }
+    }
+    return [ordered]@{definition_version='maestro-r17-registry-assessment-v1';definition_sha256='024fcb4fe0a6d92eaff4a933c5d25dc7c9fb7a63a68b778839c79458fd50be8e'
+        complete=$true;discriminating=$discriminating;all_denied=(@($rows | Where-Object {$_.win32_status -eq 0}).Count -eq 0)
+        phase_ordinals=@([ordered]@{phase='first';ordinal=1},[ordered]@{phase='second';ordinal=2});observations=@($rows.ToArray());contrasts=@($contrasts.ToArray())}
+}
+
 function Invoke-DoclingRuntimeProof($Manifest, [string]$ProofRoot, [string]$ExpectedUserSID) {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $admin = [Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')
@@ -211,6 +271,9 @@ function Invoke-DoclingRuntimeProof($Manifest, [string]$ProofRoot, [string]$Expe
     $env:GOPATH=Join-Path $ProofRoot 'go-path'
     $env:GOTOOLCHAIN='local'; $env:GOPROXY='off'; $env:GOSUMDB='off'; $env:GOFLAGS='-mod=readonly -buildvcs=false'; $env:CGO_ENABLED='0'
     $env:MAESTRO_WINDOWS_DOCLING_QUALIFY='1'; $env:MAESTRO_WINDOWS_DOCLING_TEST_INPUTS=$Manifest.raw_inputs; $env:MAESTRO_WINDOWS_DOCLING_TEST_PROFILE=$Manifest.runtime_profile
+    # The existing credentialed launcher inherits these hosted markers. They
+    # prevent accidental local fixture writes; they are not host attestation.
+    $hostedAssessment=Test-R17HostedAssessment
     $testImageSHA256=(Get-FileHash -LiteralPath $Manifest.test_binary -Algorithm SHA256).Hash.ToLowerInvariant()
     $pattern='^(' + ($script:DoclingRuntimeTests -join '|') + ')$'
     Push-Location -LiteralPath $Manifest.source_root
@@ -221,7 +284,7 @@ function Invoke-DoclingRuntimeProof($Manifest, [string]$ProofRoot, [string]$Expe
     $output | Set-Content -LiteralPath $log -Encoding UTF8
     $output | Write-Output
     if ($exit -ne 0 -or $body -match '--- (FAIL|SKIP):') {
-        if ($body -match '(?m)^    native_windows_test.go:[0-9]+: actual shared runtime place failed: exit status 1: [^\r\n]*msg="native converter qualification failed" stage=launch [^\r\n]*process_status="confined converter exit 3221225506 \(status=0xc0000022\b') {
+        if ([regex]::Matches($body, '(?m)^    native_windows_test\.go:[0-9]+: MAESTRO_NATIVE_RUNTIME_FAILURE operation=place stage=launch process_status=0xc0000022\r?$').Count -eq 1) {
             try { Invoke-DoclingFailureTrace $Manifest $ProofRoot $testImageSHA256 $exit } catch { Write-Output 'docling_failure_trace diagnostic_only=true status=unavailable' }
         }
         throw 'Actual ordinary-account Docling native coverage failed or skipped.'
@@ -234,7 +297,20 @@ function Invoke-DoclingRuntimeProof($Manifest, [string]$ProofRoot, [string]$Expe
     if ($packMatches.Count -ne 1) { throw 'Exactly one actual converter pack identity is required.' }
     $profileMatches = [regex]::Matches($body, '(?m)^    native_windows_test.go:[0-9]+: maestro_native_runtime_profile=model-free-documents-v1 lock_sha256=38b1a0257c3feec8a5b4b97856e7f2096cdb72ed2bd1734d8e61567bf4757643\r?$')
     if ($profileMatches.Count -ne 1) { throw 'Actual complete document profile/lock observation is required.' }
+    $assessment=$null
+    if ($hostedAssessment) {
+        $assessment=ConvertFrom-R17RegistryAssessmentLog $body
+        if ((Get-FileHash -LiteralPath $Manifest.test_binary -Algorithm SHA256).Hash.ToLowerInvariant() -cne $testImageSHA256) { throw 'Sealed R17 test image changed during its original proof.' }
+    } elseif ($body.Contains('R17_REGISTRY_')) { throw 'Unexpected R17 assessment protocol outside the hosted qualification scope.' }
     $sidHash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($identity.User.Value))).ToLowerInvariant()
     $proof=[ordered]@{schema_version=1; qualification_profile=$Manifest.qualification_profile; runtime_profile=$Manifest.runtime_profile; runtime_lock_sha256=$Manifest.runtime_lock_sha256; source_revision=$Manifest.source_revision; inventory_sha256=$Manifest.inventory_sha256; test_binary_sha256=(Get-FileHash -LiteralPath $Manifest.test_binary -Algorithm SHA256).Hash.ToLowerInvariant(); effective_sid_sha256=$sidHash; actual_standard_user=$true; elevated=$false; admin_member=$false; passed_tests=$script:DoclingRuntimeTests; real_formats=13; pdf_refusals=6; pptx_refusals=9; runtime_pack_sha256=$packMatches[0].Groups[1].Value; log_sha256=(Get-FileHash -LiteralPath $log -Algorithm SHA256).Hash.ToLowerInvariant(); shared_implementation_attested=$true; mcp_server_execution='not_attested'; native_client='not_run'; publisher_authority='not_granted'}
     $proof | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $ProofRoot 'docling-native-proof.json') -Encoding UTF8
+    if (-not $hostedAssessment) { return }
+    $registryReceipt=[ordered]@{schema_version=1;assessment=$assessment;qualification=$false;policy_decision='RGCI';qualification_profile=$Manifest.qualification_profile
+        runtime_profile=$Manifest.runtime_profile;runtime_lock_sha256=$Manifest.runtime_lock_sha256;source_revision=$Manifest.source_revision;source_tree=$Manifest.source_tree
+        inventory_sha256=$Manifest.inventory_sha256;test_binary_sha256=$testImageSHA256;original_log_sha256=$proof.log_sha256;runtime_pack_sha256=$packMatches[0].Groups[1].Value
+        original_native_parents=$script:DoclingRuntimeTests;real_formats=13;pdf_refusals=6;pptx_refusals=9;original_lpac_access_mask=6;original_enabled_capability='registryRead'
+        fixture_cleanup='complete';fixture_custody='cooperative';same_user_atomic_custody=$false;handle_eligibility_only=$true;registry_writes_executed_by_child=$false
+        real_profile_authority='not_granted';export_admission='not_granted';publisher_authority='not_granted';native_client='not_run'}
+    $registryReceipt | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $ProofRoot 'docling-registry-assessment.json') -Encoding UTF8
 }

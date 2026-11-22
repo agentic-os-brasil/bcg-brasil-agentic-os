@@ -59,7 +59,9 @@ foreach($name in @('$env:TEMP','$env:TMP','$env:GOTMPDIR')) {
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_workflow_windows_blocks_parse(self):
-        for workflow_path in (".github/workflows/data-home-inspection.yml", ".github/workflows/windows-native-engine.yml"):
+        for workflow_path, expected_blocks in (
+                (".github/workflows/data-home-inspection.yml", 3),
+                (".github/workflows/windows-native-engine.yml", 4)):
             workflow = (ROOT / workflow_path).read_text(encoding="utf-8")
             current = []
             blocks = []
@@ -75,7 +77,7 @@ foreach($name in @('$env:TEMP','$env:TMP','$env:GOTMPDIR')) {
                             break
                         body.append(child)
                     blocks.append(textwrap.dedent("\n".join(body)))
-            self.assertEqual(len(blocks), 3)
+            self.assertEqual(len(blocks), expected_blocks, workflow_path)
             for index, body in enumerate(blocks):
                 script = self.root / f"workflow-{index}.ps1"
                 script.write_text(body, encoding="utf-8")
@@ -293,7 +295,7 @@ class WindowsDoclingRuntimeProfile(unittest.TestCase):
     def document(self):
         public = "C:\\MaestroNativeEngine-" + "a" * 32
         return dict(schema_version=1, qualification_profile="windows_docling_registry_read_r17", runtime_profile="model-free-documents-v1", runtime_lock_sha256="38b1a0257c3feec8a5b4b97856e7f2096cdb72ed2bd1734d8e61567bf4757643",
-                    source_revision="a" * 40, public_root=public, source_root=public + "\\source",
+                    source_revision="a" * 40, source_tree="b" * 40, public_root=public, source_root=public + "\\source",
                     sdk_go=public + "\\sdk\\bin\\go.exe", module_cache=public + "\\modules",
                     raw_inputs=public + "\\raw", test_binary=public + "\\bin\\docling.test.exe",
                     inventory_sha256="a" * 64,
@@ -321,6 +323,134 @@ class WindowsDoclingRuntimeProfile(unittest.TestCase):
         document = self.document()
         document["qualification_profile"] = "arbitrary_commands"
         self.assert_preaccount_refusal(document)
+
+    def test_docling_requires_exact_source_tree_before_account(self):
+        document = self.document()
+        document.pop("source_tree")
+        self.assert_preaccount_refusal(document)
+        document = self.document()
+        document["source_tree"] = "b" * 39 + "Z"
+        self.assert_preaccount_refusal(document)
+
+    def test_actual_placement_failure_selects_only_the_closed_loader_trace_signal(self):
+        # Evaluate the actual failure-only dispatch condition. No native proof,
+        # account, registry fixture, debugger or converter is invoked.
+        helper = ROOT / "acceptance/windows-docling-profile.ps1"
+        script = self.root / "placement-trace-condition.ps1"
+        script.write_text(r'''$ErrorActionPreference='Stop'
+$e=$null
+$tree=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$e)
+if($e.Count){throw 'Actual Docling helper must parse'}
+$dispatch=@($tree.FindAll({param($n)
+ $n -is [Management.Automation.Language.IfStatementAst] -and $n.Clauses.Count -eq 1 -and
+ $n.Clauses[0].Item2.Statements.Count -eq 1 -and
+ $n.Clauses[0].Item2.Statements[0] -is [Management.Automation.Language.TryStatementAst] -and
+ $n.Clauses[0].Item2.Extent.Text.Contains('Invoke-DoclingFailureTrace ')
+},$true))
+if($dispatch.Count -ne 1){throw 'Expected original failure-only trace dispatch'}
+$expression=$dispatch[0].Clauses[0].Item1.Extent.Text
+$cases=[IO.File]::ReadAllText($args[1])|ConvertFrom-Json
+$observed=@(foreach($body in $cases){[bool](Invoke-Expression $expression)})
+ConvertTo-Json -InputObject $observed -Compress
+''', encoding="utf-8")
+        marker = "MAESTRO_NATIVE_RUNTIME_FAILURE operation=place stage=launch process_status=0xc0000022"
+        line = "    native_windows_test.go:121: " + marker
+        cases = [
+            line + "\n", line + "\r\n",
+            "    native_windows_test.go:121: actual shared runtime process failed\n",
+            line.replace("operation=place", "operation=convert") + "\n",
+            line.replace("stage=launch", "stage=response") + "\n",
+            line.replace("0xc0000022", "0xc0000005") + "\n",
+            line + " PRIVATE_BODY\n", "PRIVATE_BODY " + line + "\n",
+            line + "\n" + line + "\n", line + "\r\r\n",
+            "    other_test.go:121: " + marker + "\n",
+        ]
+        fixture = self.root / "placement-failures.json"
+        fixture.write_text(json.dumps(cases), encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+                                 str(script), str(helper), str(fixture)],
+                                text=True, capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads(result.stdout), [True, True] + [False] * (len(cases) - 2))
+
+    def test_registry_assessment_decodes_complete_matrix_and_rejects_invalid_rows(self):
+        # Invoke only the pure decoder in the existing helper. No ordinary-user
+        # driver, Windows API, token, registry fixture or test executable runs.
+        helper = ROOT / "acceptance/windows-docling-profile.ps1"
+        script = self.root / "decode-r17.ps1"
+        script.write_text(
+            "$ErrorActionPreference='Stop'\n. $args[0]\n"
+            "ConvertFrom-R17RegistryAssessmentLog ([IO.File]::ReadAllText($args[1])) | ConvertTo-Json -Depth 8\n",
+            encoding="utf-8")
+        log = self.root / "assessment.log"
+        fixtures = ("owner_only", "capability_read", "capability_broad", "foreign_capability", "integrity_pair")
+        rights = ("query_value", "enumerate_sub_keys", "set_value", "create_sub_key", "delete", "write_dac")
+        definition = ("R17_REGISTRY_DEFINITION version=maestro-r17-registry-assessment-v1 "
+                      "sha256=024fcb4fe0a6d92eaff4a933c5d25dc7c9fb7a63a68b778839c79458fd50be8e")
+        rows = [f"R17_REGISTRY_OBSERVATION phase={phase} fixture_enum={fixture} right_enum={right} win32_status=5 sentinel_match=false"
+                for phase in ("first", "second") for fixture in fixtures for right in rights]
+        complete = "\n".join(["R17_REGISTRY_CLEANUP state=complete", definition, *rows]) + "\n"
+
+        def decode(body):
+            log.write_text(body, encoding="utf-8")
+            return subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(script), str(helper), str(log)],
+                                  text=True, capture_output=True, timeout=30)
+
+        denied = decode(complete)
+        self.assertEqual(denied.returncode, 0, denied.stdout + denied.stderr)
+        receipt = json.loads(denied.stdout)
+        self.assertTrue(receipt["complete"])
+        self.assertTrue(receipt["all_denied"])
+        self.assertFalse(receipt["discriminating"])
+        self.assertEqual(len(receipt["observations"]), 60)
+        self.assertEqual(receipt["phase_ordinals"], [{"phase": "first", "ordinal": 1}, {"phase": "second", "ordinal": 2}])
+        readable = complete.replace("fixture_enum=capability_read right_enum=query_value win32_status=5 sentinel_match=false",
+                                    "fixture_enum=capability_read right_enum=query_value win32_status=0 sentinel_match=true")
+        measured = decode(readable)
+        self.assertEqual(measured.returncode, 0, measured.stdout + measured.stderr)
+        self.assertTrue(json.loads(measured.stdout)["discriminating"])
+        self.assertFalse(json.loads(measured.stdout)["all_denied"])
+        invalid = {
+            "missing": complete.replace(rows[0] + "\n", "", 1),
+            "duplicate": complete + rows[0] + "\n",
+            "unknown_fixture": complete.replace("fixture_enum=owner_only", "fixture_enum=foreign", 1),
+            "unknown_phase": complete.replace("phase=first", "phase=third", 1),
+            "overflow": complete.replace("win32_status=5", "win32_status=4294967296", 1),
+            "negative_status": complete.replace("win32_status=5", "win32_status=-1", 1),
+            "noncanonical_status": complete.replace("win32_status=5", "win32_status=05", 1),
+            "unexpected_field": complete.replace(rows[0], rows[0] + " extra=1", 1),
+            "sentinel_without_read": complete.replace("sentinel_match=false", "sentinel_match=true", 1),
+            "successful_wrong_sentinel": complete.replace("win32_status=5", "win32_status=0", 1),
+            "bad_definition": complete.replace("sha256=024f", "sha256=124f", 1),
+            "duplicate_definition": complete + definition + "\n",
+            "missing_cleanup": complete.replace("R17_REGISTRY_CLEANUP state=complete\n", "", 1),
+            "diagnostic": complete + "R17_REGISTRY_DIAGNOSTIC stage=internal win32_status=13\n",
+            "raw_child_row": complete + "R17_REGISTRY_ROW fixture_enum=owner_only right_enum=query_value win32_status=5 sentinel_match=false\n",
+            "truncated": complete[:-20],
+            "extra_carriage_return": complete.replace(rows[0] + "\n", rows[0] + "\r\r\n", 1),
+        }
+        for name, body in invalid.items():
+            with self.subTest(name=name):
+                self.assertNotEqual(decode(body).returncode, 0)
+
+    def test_registry_assessment_requires_existing_hosted_qualification_markers(self):
+        helper = ROOT / "acceptance/windows-docling-profile.ps1"
+        script = self.root / "r17-hosted-guard.ps1"
+        script.write_text(
+            "$ErrorActionPreference='Stop'\n. $args[0]\n"
+            "Test-R17HostedAssessment | ConvertTo-Json\n", encoding="utf-8")
+        for qualification in ("", "1"):
+            for actions in ("", "true"):
+                for runner in ("", "github-hosted"):
+                    with self.subTest(qualification=qualification, actions=actions, runner=runner):
+                        env = os.environ.copy()
+                        env.update(MAESTRO_WINDOWS_DOCLING_QUALIFY=qualification,
+                                   GITHUB_ACTIONS=actions, RUNNER_ENVIRONMENT=runner)
+                        result = subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(script), str(helper)],
+                                                env=env, text=True, capture_output=True, timeout=30)
+                        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                        self.assertEqual(json.loads(result.stdout),
+                                         qualification == "1" and actions == "true" and runner == "github-hosted")
 
     def test_docling_rejects_open_command_field_before_account(self):
         document = self.document()
@@ -416,7 +546,7 @@ class WindowsEngineProfile(unittest.TestCase):
         self.assert_preaccount_refusal(self.invoke_engine(document), "Unknown canonical qualification profile")
 
     def test_engine_package_subset_refuses_before_account(self):
-        self.assert_preaccount_refusal(self.invoke_engine(self.engine_document()), "Engine qualification requires exactly the eight owning packages")
+        self.assert_preaccount_refusal(self.invoke_engine(self.engine_document()), "Engine qualification requires exactly the nine owning packages")
 
     def test_engine_public_executable_hash_is_bound(self):
         document = self.engine_document()
@@ -479,7 +609,7 @@ class WindowsEngineProfile(unittest.TestCase):
         server.write_bytes(original_server)
         identity_path.write_text(json.dumps(identity), encoding="utf-8")
         result = self.invoke_engine(document, "-Kit", str(kit), "-KitIdentity", str(identity_path), "-MethodFixture", str(fixture))
-        self.assert_preaccount_refusal(result, "Engine qualification requires exactly the eight owning packages")
+        self.assert_preaccount_refusal(result, "Engine qualification requires exactly the nine owning packages")
 
     def test_exact_kit_requires_complete_matched_evidence(self):
         _, _, identity_path, identity = self.exact_kit_fixture()
@@ -550,7 +680,7 @@ if($powershell -cne (Join-Path $PSHOME 'pwsh.exe')){throw 'Exact artifact mode r
         script = self.root / "engine-proof.ps1"
         script.write_text(r'''$ErrorActionPreference='Stop'
 $tokens=$null; $errors=$null
-[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$tokens,[ref]$errors) | Out-Null
+$driverAST=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$tokens,[ref]$errors)
 if($errors.Count){throw ($errors | Out-String)}
 $launcher=@($tokens | Where-Object {$_.Kind -eq 'HereStringLiteral'})
 if($launcher.Count -ne 1){throw 'Expected the actual shared launcher'}
@@ -567,6 +697,40 @@ if(-not $valid.qualified -or $valid.classified_skips.Count -ne 1 -or $valid.orig
 foreach($invalid in @(($body.Replace('exact unavailable capability','unknown capability')),($body+"--- PASS: TestNative (0.00s)`n"),($body.Replace('--- PASS: TestNative','--- SKIP: TestNative')),($body.Replace('TestNative','TestUnknown')))) {
  if((Get-CanonicalPackageProof $entry $invalid 0 $true).qualified){throw ('Unknown, duplicate, missing or skipped native evidence qualified: '+($invalid | ConvertTo-Json -Compress))}
 }
+
+# Exercise the exact shipped Darwin records through the original proof owner.
+foreach($name in @('$canonicalRequired','$canonicalPolicies')) {
+ $found=@($driverAST.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq $name},$true))
+ if($found.Count -ne 1){throw 'Expected one actual canonical source policy'}
+ Invoke-Expression $found[0].Extent.Text
+}
+$expectedDarwin=@{
+ TestEvolutionRecoveryRejectsSymlinkedNamespace='TestNativeEvolutionPersistenceIsExplicitlyUnavailable'
+ TestEvolutionStoreRejectsSymlinkedRoot='TestNativeEvolutionPersistenceIsExplicitlyUnavailable'
+ TestEvolutionStoreRejectsSymlinkedAncestorAboveRoot='TestNativeEvolutionPersistenceIsExplicitlyUnavailable'
+ TestProposalStoreRejectsSymlinkedArtifact='TestProductDarwinWindowsRetainedTransaction/reparse_artifact'
+ TestProposalStoreRejectsSymlinkedProposalDirectory='TestProductDarwinWindowsRetainedTransaction/reparse_proposal_directory'
+ TestProposalStoreRejectsSymlinkedAncestorBeforeCreatingStore='TestProductDarwinWindowsRetainedTransaction/reparse_ancestor'
+}
+$darwin=@($canonicalPolicies['darwin'])
+if($darwin.Count -ne 6 -or @((Compare-Object (@($expectedDarwin.Keys)|Sort-Object) (@($darwin.test)|Sort-Object) -CaseSensitive)).Count -ne 0){throw 'Darwin legacy classification must remain the exact six named cases'}
+foreach($rule in $darwin) {
+ $expectedReason=if($rule.test.StartsWith('TestEvolution')){'symlink creation requires platform-specific privileges on Windows'}else{'legacy symlink fixture lacks Windows creation privilege'}
+ if($rule.reason -cne $expectedReason -or $rule.paired -cne $expectedDarwin[$rule.test] -or $rule.paired -cnotin $canonicalRequired['darwin']){throw 'Darwin legacy reason/counterpart/mandatory selection changed'}
+ $parent=($rule.paired -split '/')[0]
+ $entry=@{tests=@($rule.test,$parent);canonical_required_tests=@($rule.paired);canonical_original_assertions=@($rule.test);canonical_skip_policy=@($rule)}
+ $pairedPass="--- PASS: $($rule.paired) (0.00s)`n"
+ $actual="=== RUN   $($rule.test)`n    fixture_test.go:1: $($rule.reason)`n--- SKIP: $($rule.test) (0.00s)`n=== RUN   $parent`n"
+ if($parent -cne $rule.paired){$actual+="=== RUN   $($rule.paired)`n"}
+ $actual+=$pairedPass
+ if($parent -cne $rule.paired){$actual+="--- PASS: $parent (0.00s)`n"}
+ $observed=Get-CanonicalPackageProof $entry $actual 0 $true
+ if(-not $observed.qualified -or $observed.classified_skips.Count -ne 1 -or $observed.original_assertions[0].original_outcome -cne 'SKIP'){throw 'Exact Darwin counterpart must retain its observed legacy SKIP'}
+ foreach($invalid in @(($actual.Replace($rule.reason,'unknown arbitrary refusal')),($actual.Replace($pairedPass,'')),($actual.Replace('PASS: '+$rule.paired,'SKIP: '+$rule.paired)),($actual+$pairedPass),($actual+"=== RUN   TestUnknownSkip`n    fixture_test.go:1: unknown`n--- SKIP: TestUnknownSkip (0.00s)`n"))) {
+  if((Get-CanonicalPackageProof $entry $invalid 0 $true).qualified){throw 'Darwin unknown reason/skip or absent/skipped/duplicate counterpart qualified'}
+ }
+}
+
 $policy=@{paired='TestOriginal/same-object-case-contract'}
 $identity=@{kind='selected-directory-case-pair-v1';scope=$policy.paired;selected='C:\owner\state';counterpart='C:\owner\STATE';selected_identity=@(1,2,3);counterpart_identity=@(1,2,3);same_object=$true}
 # Absolute Windows paths are evaluated by the actual Windows parser in CI.
@@ -643,9 +807,13 @@ $values|ConvertTo-Json -Depth 4 -Compress
         result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(parser), str(DRIVER), str(ROOT / "acceptance/windows-engine-check.ps1")], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         ledger = json.loads(result.stdout)
-        self.assertEqual(len(ledger["$adapterParents"]), 61)
-        self.assertEqual(len(ledger["$adapterAssertions"]), 179)
+        self.assertEqual(len(ledger["$adapterParents"]), 63)
+        self.assertEqual(len(ledger["$adapterAssertions"]), 185)
         self.assertIn("TestMaintenancePublicJourney/owned-background", ledger["$adapterAssertions"])
+        darwin_parents = ['TestProductDarwinSDKAndShippingStdioLifecycle', 'TestProductDarwinReviewProjectionR1']
+        darwin_outcomes = ['TestProductDarwinSDKAndShippingStdioLifecycle', 'TestProductDarwinSDKAndShippingStdioLifecycle/false', 'TestProductDarwinSDKAndShippingStdioLifecycle/true', 'TestProductDarwinReviewProjectionR1', 'TestProductDarwinReviewProjectionR1/initialization', 'TestProductDarwinReviewProjectionR1/refresh']
+        self.assertEqual([name for name in ledger["$adapterParents"] if name in darwin_parents], darwin_parents)
+        self.assertEqual([name for name in ledger["$adapterAssertions"] if name.split("/")[0] in darwin_parents], darwin_outcomes)
         for case in ("refusal-diagnostic", "request-capability-withdrawal", "request-url-only",
                      "request-empty-elicitation", "request-explicit-form", "request-form-added"):
             self.assertIn(f"TestOwnerConfirmationRefusals/{case}", ledger["$adapterAssertions"])
@@ -656,7 +824,7 @@ $values|ConvertTo-Json -Depth 4 -Compress
             for format in ("plugin", "mcpb"):
                 self.assertIn(f"TestCompiledStdioWorkflowAndPackets/portable_{format}_{version}", ledger["$adapterAssertions"])
         self.assertEqual(len(ledger["$adapterCommandParents"]), 1)
-        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]), 180)
+        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]), 186)
         self.assertEqual(ledger["$adapterSetupParents"], ["TestModernFactoryFirstInstallAndRestart", "TestDirectInnerInstallRequiresProductionAuthority", "TestModernSyncedSourceLifecycle", "TestSyncedPublicationInterleavingAndReadOnlyReviews"])
         self.assertEqual(len(ledger["$adapterSetupAssertions"]), 22)
         self.assertEqual(len(set(ledger["$adapterSetupAssertions"])), 22)
@@ -665,13 +833,13 @@ $values|ConvertTo-Json -Depth 4 -Compress
         setup_source = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "adapters/mcp/setup").glob("*_test.go"))
         for parent in ledger["$adapterSetupParents"]:
             self.assertIn(f"func {parent}(", setup_source)
-        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]) + len(ledger["$adapterSetupAssertions"]), 202)
+        self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]) + len(ledger["$adapterSetupAssertions"]), 208)
         self.assertEqual(ledger["$adapterPackagingParents"], ["TestNativeWindowsOwnedProcessTree"])
         self.assertEqual(ledger["$adapterPackagingAssertions"], ["TestNativeWindowsOwnedProcessTree"] + [
             "TestNativeWindowsOwnedProcessTree/" + child for child in
             ("private-scratch", "cancel", "parent-exit", "output-limit", "nonzero-exit", "pre-cancel")])
         self.assertEqual(len(ledger["$adapterAssertions"]) + len(ledger["$adapterCommandParents"]) +
-                         len(ledger["$adapterSetupAssertions"]) + len(ledger["$adapterPackagingAssertions"]), 209)
+                         len(ledger["$adapterSetupAssertions"]) + len(ledger["$adapterPackagingAssertions"]), 215)
 
         for name in ("TestMethodPlansResolveMaintenanceKeepWikiUnavailable", "TestMethodPlansResolveRegisteredMaintenanceAndWiki", "TestAgentResourceCallbacksRevalidateBinding"):
             self.assertIn(name, ledger["$adapterParents"])
@@ -847,6 +1015,63 @@ if($sealed -eq 0){throw 'Expected an actual sealed-engine caller'}
                                         capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0, f"{workflow.name}: {result.stdout}{result.stderr}")
         self.assertGreater(selected, 0, "No actual sealed-engine workflow callers were checked")
+
+    def test_darwin_companion_requires_all_actual_outcomes(self):
+        script = self.root / "darwin-companion-proof.ps1"
+        script.write_text(r"""$ErrorActionPreference='Stop'
+$e=$null; $tokens=$null
+$outer=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$tokens,[ref]$e)
+if($e.Count){throw ($e | Out-String)}
+$checker=[Management.Automation.Language.Parser]::ParseFile($args[1],[ref]$null,[ref]$e)
+$reader=@($checker.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Read-EngineLiteralArray'},$true))
+Invoke-Expression $reader[0].Extent.Text
+$entry=@{}; $closed=@{}
+foreach($binding in @(@{name='$adapterParents';field='required_tests'},@{name='$adapterAssertions';field='required_assertions'})){
+ $name=$binding.name
+ $assignment=@($outer.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq $name},$true))
+ if($assignment.Count -ne 1){throw 'Expected one actual closed MCP source ledger'}
+ $entry[$binding.field]=@(Read-EngineLiteralArray $assignment[0])
+ $closed[$name]=$entry[$binding.field]
+}
+$darwin=@('TestProductDarwinSDKAndShippingStdioLifecycle','TestProductDarwinSDKAndShippingStdioLifecycle/false','TestProductDarwinSDKAndShippingStdioLifecycle/true','TestProductDarwinReviewProjectionR1','TestProductDarwinReviewProjectionR1/initialization','TestProductDarwinReviewProjectionR1/refresh')
+foreach($test in $darwin){if($test -cnotin $entry.required_assertions -or $test.Split('/')[0] -cnotin $entry.required_tests){throw 'Both actual Darwin MCP families and their closed outcomes must be selected'}}
+$launcher=@($tokens | Where-Object {$_.Kind -eq 'HereStringLiteral'})
+$inner=[Management.Automation.Language.Parser]::ParseInput($launcher[0].Value,[ref]$null,[ref]$e)
+$parser=@($inner.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Get-EnginePublicProof'},$true))
+if($parser.Count -ne 1){throw 'Expected original ordinary-account public proof parser'}
+Invoke-Expression $parser[0].Extent.Text
+$body=($entry.required_assertions|ForEach-Object {'--- PASS: '+$_+' (0.00s)'}) -join "`n"
+$body+="`n"
+if(-not (Get-EnginePublicProof $entry $body 0).qualified){throw 'Exact MCP cohort including Darwin outcomes refused'}
+foreach($test in $darwin){
+ $partial=($entry.required_assertions|Where-Object {$_ -cne $test}|ForEach-Object {'--- PASS: '+$_+' (0.00s)'}) -join "`n"
+ foreach($bad in @($partial,$body.Replace('PASS: '+$test+' (','SKIP: '+$test+' ('),$body.Replace('PASS: '+$test+' (','FAIL: '+$test+' ('),($body+'--- PASS: '+$test+" (0.00s)`n"))){
+  if((Get-EnginePublicProof $entry $bad 0).qualified){throw 'Missing/skipped/failed/duplicated Darwin outcome qualified'}
+ }
+}
+if((Get-EnginePublicProof $entry ($body+"--- PASS: TestProductDarwinReviewProjectionR1/unknown (0.00s)`n") 0).qualified -or
+   (Get-EnginePublicProof $entry $body 1).qualified){throw 'Unknown outcome or nonzero Darwin cohort qualified'}
+$loops=@($checker.FindAll({param($n) $n -is [Management.Automation.Language.ForEachStatementAst] -and $n.Extent.Text.StartsWith('foreach ($entry in $report.adapter_packages)')},$true))
+if($loops.Count -ne 1){throw 'Expected actual host exclusion adapter verification loop'}
+$declaredAssertions=@($entry.required_assertions)
+$proof=Get-EnginePublicProof $entry $body 0
+$report=@{adapter_packages=@(@{name='mcp';qualified=$true;copied_binary_custody=$true;proof=$proof})}
+Invoke-Expression $loops[0].Extent.Text
+foreach($test in $darwin){
+ $proof.required_assertions=@($declaredAssertions|Where-Object {$_ -cne $test})
+ $refused=$false
+ try{Invoke-Expression $loops[0].Extent.Text}catch{$refused=$true}
+ if(-not $refused){throw 'Host exclusion accepted a missing declared Darwin assertion'}
+}
+$proof.required_assertions=@($declaredAssertions)+@('TestProductDarwinReviewProjectionR1/unknown')
+$refused=$false
+try{Invoke-Expression $loops[0].Extent.Text}catch{$refused=$true}
+if(-not $refused){throw 'Host exclusion accepted an unknown declared Darwin assertion'}
+""", encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoProfile", "-File", str(script), str(DRIVER),
+                                 str(ROOT / "acceptance/windows-engine-check.ps1")],
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_owned_process_companion_requires_all_actual_outcomes(self):
         script = self.root / "owned-process-proof.ps1"

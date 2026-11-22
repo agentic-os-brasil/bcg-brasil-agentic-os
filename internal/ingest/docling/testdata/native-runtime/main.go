@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest"
@@ -27,7 +28,8 @@ func main() {
 	runtime := docling.New(input.Options)
 	switch input.Action {
 	case "place":
-		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
+		var failure placementFailureProjection
+		slog.SetDefault(slog.New(&failure))
 		registry, err := releaseverify.LoadPinnedAuthorityRegistry(input.Options.AuthorityRegistryPath, input.Options.AuthorityRegistrySHA256, time.Now)
 		if err != nil {
 			fail("synthetic_registry_unavailable")
@@ -37,7 +39,7 @@ func main() {
 			fail("synthetic_release_unverified")
 		}
 		if err = docling.PlaceVerified(context.Background(), input.Options, release); err != nil {
-			fail("synthetic_place_failed")
+			fail(failure.message())
 		}
 		emit(runtime.Status(context.Background()))
 	case "status":
@@ -59,6 +61,65 @@ func main() {
 	default:
 		fail("synthetic_action_unknown")
 	}
+}
+
+const placementLaunchAccessDenied = "MAESTRO_NATIVE_RUNTIME_FAILURE operation=place stage=launch process_status=0xc0000022"
+
+// This fixture observes only the original qualification record's typed fields.
+// It never renders log records, child output, paths, errors or document bodies.
+type placementFailureProjection struct{ state atomic.Uint32 }
+
+func (*placementFailureProjection) Enabled(context.Context, slog.Level) bool { return true }
+func (p *placementFailureProjection) WithAttrs(attrs []slog.Attr) slog.Handler {
+	if len(attrs) != 0 {
+		p.state.Store(2) // Only the original direct record is understood.
+	}
+	return p
+}
+func (p *placementFailureProjection) WithGroup(name string) slog.Handler {
+	if name != "" {
+		p.state.Store(2)
+	}
+	return p
+}
+func (p *placementFailureProjection) Handle(_ context.Context, record slog.Record) error {
+	if record.Message != "native converter qualification failed" {
+		return nil
+	}
+	stage, status := "", ""
+	stageCount, statusCount := 0, 0
+	record.Attrs(func(attr slog.Attr) bool {
+		if attr.Key == "stage" {
+			stageCount++
+			if attr.Value.Kind() == slog.KindString {
+				stage = attr.Value.String()
+			}
+		}
+		if attr.Key == "process_status" {
+			statusCount++
+			if attr.Value.Kind() == slog.KindString {
+				status = attr.Value.String()
+			}
+		}
+		return true
+	})
+	if stageCount != 1 || statusCount != 1 || stage != "launch" || len(status) > 256 {
+		p.state.Store(2)
+		return nil
+	}
+	var pid, flags uint32
+	const format = "confined converter exit 3221225506 (status=0xc0000022 pid=%d creation_flags=0x%08x)"
+	count, err := fmt.Sscanf(status, "confined converter exit 3221225506 (status=0xc0000022 pid=%d creation_flags=0x%x)", &pid, &flags)
+	if err != nil || count != 2 || pid == 0 || status != fmt.Sprintf(format, pid, flags) || !p.state.CompareAndSwap(0, 1) {
+		p.state.Store(2)
+	}
+	return nil
+}
+func (p *placementFailureProjection) message() string {
+	if p.state.Load() == 1 {
+		return placementLaunchAccessDenied
+	}
+	return "synthetic_place_failed"
 }
 
 // Fixture-only transport. Production Conversion intentionally keeps bodies out

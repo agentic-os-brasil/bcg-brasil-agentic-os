@@ -3,6 +3,7 @@ package installtx
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -307,11 +308,18 @@ func observeSource(dataRoot, managedRoot, locator string, g releaseverify.Verifi
 }
 
 func installedRegistry(managedRoot string, state State) (releaseverify.AuthorityRegistry, error) {
-	path := filepath.Join(managedRoot, "bin", executableForProfile(state.TargetOS, state.Profile))
-	if err := verifyRegularFile(path, state.Server.Size, state.Server.SHA256); err != nil {
+	return installedRegistryContext(context.Background(), managedRoot, state)
+}
+
+func installedRegistryContext(ctx context.Context, managedRoot string, state State) (releaseverify.AuthorityRegistry, error) {
+	if err := ctx.Err(); err != nil {
 		return releaseverify.AuthorityRegistry{}, err
 	}
-	i, err := releasecontract.ReadServerIdentity(path)
+	path := filepath.Join(managedRoot, "bin", executableForProfile(state.TargetOS, state.Profile))
+	if err := verifyRegularFileContext(ctx, path, state.Server.Size, state.Server.SHA256); err != nil {
+		return releaseverify.AuthorityRegistry{}, err
+	}
+	i, err := releasecontract.ReadServerIdentityContext(ctx, path)
 	if err != nil {
 		return releaseverify.AuthorityRegistry{}, err
 	}
@@ -322,14 +330,21 @@ func installedRegistry(managedRoot string, state State) (releaseverify.Authority
 	if err != nil {
 		return releaseverify.AuthorityRegistry{}, err
 	}
-	return r, nil
+	return r, ctx.Err()
 }
 
 func verifyReleaseBinding(managedRoot, dataRoot string, state State, b ReleaseBinding, server ExecutableIdentity, verifyBundle bool) error {
+	return verifyReleaseBindingContext(context.Background(), managedRoot, dataRoot, state, b, server, verifyBundle)
+}
+
+func verifyReleaseBindingContext(ctx context.Context, managedRoot, dataRoot string, state State, b ReleaseBinding, server ExecutableIdentity, verifyBundle bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if !validReleaseBinding(b) || server.ExecutionContract != releasecontract.SyncedSourceContract {
 		return errors.New("authenticated source-aware release binding required")
 	}
-	r, err := installedRegistry(managedRoot, state)
+	r, err := installedRegistryContext(ctx, managedRoot, state)
 	if err != nil {
 		return err
 	}
@@ -337,9 +352,9 @@ func verifyReleaseBinding(managedRoot, dataRoot string, state State, b ReleaseBi
 		return err
 	}
 	if verifyBundle {
-		return verifyBoundBundle(managedRoot, dataRoot, state.BundleVersion, b)
+		return verifyBoundBundleContext(ctx, managedRoot, dataRoot, state.BundleVersion, b)
 	}
-	return nil
+	return ctx.Err()
 }
 
 func verifyReleaseWithRegistry(r releaseverify.KeyRegistry, state State, b ReleaseBinding, server ExecutableIdentity) error {
@@ -371,10 +386,17 @@ func verifyReleaseWithRegistry(r releaseverify.KeyRegistry, state State, b Relea
 }
 
 func verifyBoundBundle(managedRoot, dataRoot, version string, b ReleaseBinding) error {
+	return verifyBoundBundleContext(context.Background(), managedRoot, dataRoot, version, b)
+}
+
+func verifyBoundBundleContext(ctx context.Context, managedRoot, dataRoot, version string, b ReleaseBinding) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := ensureSafePath(dataRoot, b.BundleArchive); err != nil {
 		return err
 	}
-	if err := verifyRegularFile(b.BundleArchive, b.BundleSize, b.BundleSHA256); err != nil {
+	if err := verifyRegularFileContext(ctx, b.BundleArchive, b.BundleSize, b.BundleSHA256); err != nil {
 		return err
 	}
 	file, err := openRegular(b.BundleArchive, b.BundleSize)
@@ -382,12 +404,12 @@ func verifyBoundBundle(managedRoot, dataRoot, version string, b ReleaseBinding) 
 		return err
 	}
 	defer file.Close()
-	gz, err := gzip.NewReader(file)
+	gz, err := gzip.NewReader(installReadContext{ctx, file})
 	if err != nil {
 		return err
 	}
 	defer gz.Close()
-	tr := tar.NewReader(gz)
+	tr := tar.NewReader(installReadContext{ctx, gz})
 	root := filepath.Join(managedRoot, "bundles", version)
 	if err := ensureSafePath(managedRoot, root); err != nil {
 		return err
@@ -396,6 +418,9 @@ func verifyBoundBundle(managedRoot, dataRoot, version string, b ReleaseBinding) 
 	files := 0
 	var total int64
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
 			break
@@ -427,10 +452,10 @@ func verifyBoundBundle(managedRoot, dataRoot, version string, b ReleaseBinding) 
 				return errors.New("installed bundle file differs")
 			}
 			hash := sha256.New()
-			if _, err := io.Copy(hash, tr); err != nil {
+			if _, err := io.Copy(hash, installReadContext{ctx, tr}); err != nil {
 				return err
 			}
-			if err := verifyRegularFile(path, h.Size, fmt.Sprintf("%x", hash.Sum(nil))); err != nil {
+			if err := verifyRegularFileContext(ctx, path, h.Size, fmt.Sprintf("%x", hash.Sum(nil))); err != nil {
 				return err
 			}
 			if (info.Mode().Perm()&0111 != 0) != (h.Mode&0111 != 0) {
@@ -444,6 +469,9 @@ func verifyBoundBundle(managedRoot, dataRoot, version string, b ReleaseBinding) 
 		return errors.New("empty authenticated bundle")
 	}
 	return filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if cancelled := ctx.Err(); cancelled != nil {
+			return cancelled
+		}
 		if err != nil {
 			return err
 		}
@@ -467,6 +495,13 @@ func verifyBoundBundle(managedRoot, dataRoot, version string, b ReleaseBinding) 
 // ValidateQualifiedLaunch is a read-only admission check. It never refreshes
 // the sync folder, enrolls source custody, repairs state or activates payloads.
 func ValidateQualifiedLaunch(managedRoot, dataRoot string, expected ReleaseBinding, now time.Time) (State, error) {
+	return ValidateQualifiedLaunchContext(context.Background(), managedRoot, dataRoot, expected, now)
+}
+
+func ValidateQualifiedLaunchContext(ctx context.Context, managedRoot, dataRoot string, expected ReleaseBinding, now time.Time) (State, error) {
+	if err := ctx.Err(); err != nil {
+		return State{}, err
+	}
 	if (expected.ManifestSHA256 == "") != (expected.ClientInputsSHA256 == "") {
 		return State{}, errors.New("incomplete carrier release binding: manifest and client-input pins are required together")
 	}
@@ -486,7 +521,7 @@ func ValidateQualifiedLaunch(managedRoot, dataRoot string, expected ReleaseBindi
 	if err := validateSourceShape(state.Source); err != nil {
 		return State{}, err
 	}
-	r, err := installedRegistry(managedRoot, state)
+	r, err := installedRegistryContext(ctx, managedRoot, state)
 	if err != nil {
 		return State{}, err
 	}
@@ -503,19 +538,28 @@ func ValidateQualifiedLaunch(managedRoot, dataRoot string, expected ReleaseBindi
 	if err := releaseEligible(state.Source, state.Release, state.Binding); err != nil {
 		return State{}, err
 	}
-	if err := CheckActivatedServer(managedRoot, state); err != nil {
+	if err := CheckActivatedServerContext(ctx, managedRoot, state); err != nil {
 		return State{}, err
 	}
-	if err := verifyReleaseBinding(managedRoot, dataRoot, state, state.Binding, state.Server, true); err != nil {
+	if err := verifyReleaseBindingContext(ctx, managedRoot, dataRoot, state, state.Binding, state.Server, true); err != nil {
 		return State{}, err
 	}
-	return state, nil
+	return state, ctx.Err()
 }
 
 // GuardQualifiedCurrent couples a domain publication to the same serialization
 // boundary as accepted recalls and activation. It does not acquire domain or
 // maintenance locks, preserving domain -> control -> installation lock order.
 func GuardQualifiedCurrent(managedRoot, dataRoot string, expected ReleaseBinding, now time.Time, publish func() error) error {
+	return GuardQualifiedCurrentContext(context.Background(), managedRoot, dataRoot, expected, now, publish)
+}
+
+// GuardQualifiedCurrentContext preserves installation serialization and admission.
+// Cancellation never reclaims or removes a foreign activation lock.
+func GuardQualifiedCurrentContext(ctx context.Context, managedRoot, dataRoot string, expected ReleaseBinding, now time.Time, publish func() error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if publish == nil {
 		return errors.New("publication callback required")
 	}
@@ -524,15 +568,18 @@ func GuardQualifiedCurrent(managedRoot, dataRoot string, expected ReleaseBinding
 		return err
 	}
 	defer unlock()
-	if _, err := ValidateQualifiedLaunch(managedRoot, dataRoot, expected, now); err != nil {
+	if _, err := ValidateQualifiedLaunchContext(ctx, managedRoot, dataRoot, expected, now); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	return publish()
 }
 
-// GuardQualifiedReconciliationCurrent is used only by an explicitly reviewed
-// client reconciliation. Reuse the canonical dead-owner/live-owner checks;
-// ordinary startup, launch, publication and status never reclaim a lock.
+// GuardQualifiedReconciliationCurrent is used by explicitly reviewed client
+// reconciliation and prevalidated normal stable startup. Callers own admission
+// before recovery; current/source validation is repeated under the acquired lock.
 func GuardQualifiedReconciliationCurrent(managedRoot, dataRoot string, expected ReleaseBinding, now time.Time, publish func() error) error {
 	if publish == nil {
 		return errors.New("reconciliation callback required")

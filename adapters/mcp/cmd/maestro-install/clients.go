@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 
+	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/setup"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
@@ -40,6 +41,15 @@ func runClientsWithNativeVerifier(ctx context.Context, command, self string, f l
 		return false, nil
 	}
 	o := installer.ClientOptions{SeededOperationOptions: installer.SeededOperationOptions{ExperimentalSeed: f.ExperimentalSeed, Self: self, Version: Version, AuthorityRegistrySHA256: AuthorityRegistrySHA256, ManagedRoot: f.ManagedRoot, UserHome: f.UserHome, DataRoot: filepath.Join(f.UserHome, ".maestro-install"), VerifyNative: verifyNative}, Request: installer.ClientRequest{CarrierID: f.CarrierID, Workspace: f.Workspace}}
+	if f.ClientTarget != "" && f.ClientTarget != "desktop" {
+		return true, errors.New("unsupported client target")
+	}
+	if f.ClientTarget != "" {
+		if command != "manage" && command != "clients-status" {
+			return true, errors.New("client target selection is valid only for manage or clients-status")
+		}
+		o.Request.Target = f.ClientTarget
+	}
 	if command == "manage" {
 		o.Request.CodeRoot = f.ClientCodeRoot
 		o.Request.DesktopPath = f.ClientDesktopPath
@@ -99,7 +109,7 @@ func runClientsWithNativeVerifier(ctx context.Context, command, self string, f l
 		if err = releasecontract.DecodeStrictJSON(body, &r); err != nil {
 			return true, err
 		}
-		if f.ManagedRoot != "" && f.ManagedRoot != r.ManagedRoot || f.UserHome != "" && f.UserHome != r.UserHome || f.CarrierID != "" && f.CarrierID != r.Client.CarrierID || f.Workspace != "" && f.Workspace != r.Client.Workspace {
+		if f.ClientTarget != "" && f.ClientTarget != r.Client.Target || f.ManagedRoot != "" && f.ManagedRoot != r.ManagedRoot || f.UserHome != "" && f.UserHome != r.UserHome || f.CarrierID != "" && f.CarrierID != r.Client.CarrierID || f.Workspace != "" && f.Workspace != r.Client.Workspace {
 			return true, errors.New("fixed client request differs")
 		}
 		o.ManagedRoot = r.ManagedRoot
@@ -140,8 +150,12 @@ func runClientsWithNativeVerifier(ctx context.Context, command, self string, f l
 	return encode(r, e)
 }
 
-func promptClientOwnerReviewChannel(prompt func(string) (string, error)) (string, error) {
-	channel, err := prompt("For protected foreground MCP changes in BOTH Code and Desktop, choose native-first (Enter) or local-browser for complete one-shot review in this computer's browser. Each change still requires its own approval; this carrier choice approves no write [native-first]: ")
+func promptClientOwnerReviewChannel(prompt func(string) (string, error), desktopOnly bool) (string, error) {
+	clients := "BOTH Code and Desktop"
+	if desktopOnly {
+		clients = "Desktop"
+	}
+	channel, err := prompt("For protected foreground MCP changes in " + clients + ", choose native-first (Enter) or local-browser for complete one-shot review in this computer's browser. Each change still requires its own approval; this carrier choice approves no write [native-first]: ")
 	if err != nil {
 		return "", err
 	}
@@ -209,34 +223,16 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 		return setup.ApplyNativeClientUpdate(ctx, options, selection, digest, review.ReviewDigest, true)
 	}
 	revalidateMaintenance := func(options installer.ClientOptions) error {
-		status, err := setup.InspectClientMaintenance(ctx, options)
-		if err != nil {
-			fmt.Fprintln(output, "Maintenance qualification remains pending: current job inputs/status unavailable.")
-			return json.NewEncoder(output).Encode(map[string]string{"maintenance_qualification": "waiting_input", "functional_acceptance": "pending"})
+		return revalidateClientMaintenance(ctx, options, confirm, output)
+	}
+	if o.Request.Target != "" && !o.Request.DesktopOnly() {
+		return errors.New("unsupported client target; nothing applied")
+	}
+	if o.Request.DesktopOnly() {
+		if o.Request.CodeRoot != "" || o.Request.CodeScope != "" || o.Request.CodeExecutable != "" || o.Request.CodeConfigurationDirectory != "" || o.Request.NativeEnforcement || o.Request.LifecycleContext {
+			return errors.New("Desktop target cannot include Code choices; nothing applied")
 		}
-		for _, job := range setup.MaintenanceRefreshCandidates(status) {
-			review, err := setup.ReviewClientMaintenance(ctx, options, job)
-			if err != nil {
-				fmt.Fprintln(output, "Maintenance job", job.JobID, "waiting for genuine source inputs; prior enrollment and opt-in preserved.")
-				continue
-			}
-			if err := confirm(review); err != nil {
-				return err
-			}
-			result, err := setup.ApplyClientMaintenance(ctx, options, job, review.ReviewDigest, true)
-			if err != nil {
-				fmt.Fprintln(output, "Maintenance job", job.JobID, "requalification remains pending; it was not marked qualified.")
-				continue
-			}
-			if err := json.NewEncoder(output).Encode(result); err != nil {
-				return err
-			}
-		}
-		status, err = setup.InspectClientMaintenance(ctx, options)
-		if err != nil {
-			return err
-		}
-		return json.NewEncoder(output).Encode(status)
+		o.Request.VersionedSlots = true
 	}
 	status, readErr := installer.ReadClientsSeeded(ctx, o)
 	if status.Record == nil {
@@ -258,7 +254,7 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 		if e != nil {
 			return fmt.Errorf("complete the admitted installation before first client setup: %w", e)
 		}
-		if o.Request.CarrierID != "" && (o.Request.CodeRoot == "" || o.Request.DesktopPath == "" || o.Request.CodeScope == "") {
+		if o.Request.CarrierID != "" && (o.Request.DesktopPath == "" || !o.Request.DesktopOnly() && (o.Request.CodeRoot == "" || o.Request.CodeScope == "")) {
 			return fmt.Errorf("existing selected carrier unavailable; preserve it and inspect clients-status: %w", readErr)
 		}
 		if state.Source == nil {
@@ -292,7 +288,22 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 				return e
 			}
 		}
-		if o.Request.CodeRoot == "" {
+		if o.Request.Target == "" && o.Request.CodeRoot == "" && o.Request.CodeExecutable == "" && o.Request.CodeScope == "" {
+			selected, err := prompt("Choose clients: both Code and Desktop (Enter) or desktop: ")
+			if err != nil {
+				return err
+			}
+			if selected != "" && selected != "both" && selected != "desktop" {
+				return errors.New("unsupported client target; nothing applied")
+			}
+			if selected == "desktop" {
+				if o.Request.CodeConfigurationDirectory != "" || o.Request.NativeEnforcement || o.Request.LifecycleContext {
+					return errors.New("Desktop target cannot include hidden Code choices; nothing applied")
+				}
+				o.Request.Target = selected
+			}
+		}
+		if !o.Request.DesktopOnly() && o.Request.CodeRoot == "" {
 			o.Request.CodeRoot, e = prompt("Choose a new participant-local Code marketplace folder: ")
 			if e != nil {
 				return e
@@ -304,7 +315,7 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 				return e
 			}
 		}
-		if o.Request.CodeScope == "" {
+		if !o.Request.DesktopOnly() && o.Request.CodeScope == "" {
 			o.Request.CodeExecutable, e = prompt("Select the installed Code executable, or Enter to leave registration pending: ")
 			if e != nil {
 				return e
@@ -344,7 +355,7 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 			o.Request.GenerationID = hex.EncodeToString(generation[:])
 		}
 		if o.ExperimentalSeed != nil {
-			o.Request.OwnerReviewChannel, e = promptClientOwnerReviewChannel(prompt)
+			o.Request.OwnerReviewChannel, e = promptClientOwnerReviewChannel(prompt, o.Request.DesktopOnly())
 			if e != nil {
 				return e
 			}
@@ -391,7 +402,11 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 	action := intent
 	var e error
 	if action == "" {
-		action, e = prompt("Choose status, update, regenerate, reconcile, register-code, foreground-profile, maintenance, revalidate-maintenance, desktop-confirm, manual-desktop-update, or rollback: ")
+		choices := "Choose status, update, regenerate, reconcile, register-code, foreground-profile, maintenance, revalidate-maintenance, desktop-confirm, manual-desktop-update, or rollback: "
+		if o.Request.DesktopOnly() {
+			choices = "Choose status, update, regenerate, reconcile, foreground-profile, maintenance, desktop-confirm, manual-desktop-update, or rollback: "
+		}
+		action, e = prompt(choices)
 		if e != nil {
 			return e
 		}
@@ -481,6 +496,9 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 	case "manual-desktop-update":
 		o.Request.ManualDesktopUpdate = true
 	case "register-code":
+		if o.Request.DesktopOnly() {
+			return errors.New("Desktop carrier has no Code selection; prepare a separately reviewed Code-including carrier")
+		}
 		// A first deferred choice may have produced a reviewed candidate before
 		// the manual custody step. Re-prompt that same still-unselected choice
 		// and require full current regeneration before any registration effect.
@@ -577,7 +595,11 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 			}
 		}
 	}
-	fmt.Fprintln(output, "Current client packets are prepared and Code registration was inspected. Use a deliberate reload/reconnect/new session to activate. Desktop's once-installed live-method bootstrap reads current canonical instructions; ordinary recipe changes need no reimport. Missing bootstrap or changed native permissions still require normal host review. Actual native/Desktop functional acceptance remains pending.")
+	if !o.Request.DesktopOnly() {
+		fmt.Fprintln(output, "Current client packets are prepared and Code registration was inspected. Use a deliberate reload/reconnect/new session to activate. Desktop's once-installed live-method bootstrap reads current canonical instructions; ordinary recipe changes need no reimport. Missing bootstrap or changed native permissions still require normal host review. Actual native/Desktop functional acceptance remains pending.")
+	} else {
+		fmt.Fprintln(output, "Current Desktop connector and complete methods are prepared without Code. Install through normal host prompts; actual connection and functionality remain pending.")
+	}
 	if result.Materialization.DesktopMethods != nil {
 		fmt.Fprintln(output, "Desktop method library:", result.Materialization.DesktopMethods.Archive)
 	}
@@ -585,4 +607,49 @@ func manageClientsWithIntent(ctx context.Context, o installer.ClientOptions, inp
 		return err
 	}
 	return revalidateMaintenance(o)
+}
+
+// revalidateClientMaintenance is the manager's existing refresh consumer.
+func revalidateClientMaintenance(ctx context.Context, options installer.ClientOptions, confirm func(any) error, output io.Writer) error {
+	if options.Request.DesktopOnly() {
+		fmt.Fprintln(output, "Desktop client preparation grants no maintenance or foreground-model execution. Review those capabilities separately when requested.")
+		return nil
+	}
+	status, err := setup.InspectClientMaintenance(ctx, options)
+	if err != nil {
+		if writeErr := json.NewEncoder(output).Encode(product.MaintenanceCommandFailure(err, "unknown").Diagnostic); writeErr != nil {
+			return writeErr
+		}
+		fmt.Fprintln(output, "Maintenance qualification remains pending: current job inputs/status unavailable.")
+		return json.NewEncoder(output).Encode(map[string]string{"maintenance_qualification": "waiting_input", "functional_acceptance": "pending"})
+	}
+	for _, job := range setup.MaintenanceRefreshCandidates(status) {
+		review, err := setup.ReviewClientMaintenance(ctx, options, job)
+		if err != nil {
+			if writeErr := json.NewEncoder(output).Encode(product.MaintenanceCommandFailure(err, "unknown").Diagnostic); writeErr != nil {
+				return writeErr
+			}
+			fmt.Fprintln(output, "Maintenance job", job.JobID, "waiting for genuine source inputs; prior enrollment and opt-in preserved.")
+			continue
+		}
+		if err := confirm(review); err != nil {
+			return err
+		}
+		result, err := setup.ApplyClientMaintenance(ctx, options, job, review.ReviewDigest, true)
+		if err != nil {
+			if writeErr := json.NewEncoder(output).Encode(product.MaintenanceCommandFailure(err, "unknown").Diagnostic); writeErr != nil {
+				return writeErr
+			}
+			fmt.Fprintln(output, "Maintenance job", job.JobID, "qualification outcome was not confirmed; inspect current status before a fresh review.")
+			continue
+		}
+		if err := json.NewEncoder(output).Encode(result); err != nil {
+			return err
+		}
+	}
+	status, err = setup.InspectClientMaintenance(ctx, options)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(output).Encode(status)
 }

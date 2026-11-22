@@ -3,6 +3,13 @@
 Status: isolated synthetic CI candidate; no shipping or real-profile authority.
 Decision: [RGCI](../decisions/decision-log.md#rgci---confine-one-registryread-experiment-to-synthetic-windows-proof).
 
+The original statements below that no setup code writes registry values or
+changes resource ACLs describe the **pre-assessment experiment**. The later
+[finite fixture assessment](#finite-registry-fixture-assessment--source-only)
+adds an explicitly separate transient artificial-key scope. Read that section
+before interpreting newer logs. Historical source and failed observations stay
+preserved; the new source is not evidence that the fixtures have run.
+
 ## Run and interpret
 
 1. Review the exact candidate commit against preserved zero-capability commit
@@ -142,3 +149,107 @@ distributed product and normal recursive package discovery; the original Windows
 parent still builds its child for Windows. Pure byte roundtrip success does not
 attest actual Windows PDF/PPTX semantics. The earlier metadata inequality remains
 unexplained and its original fatal guard is unchanged.
+
+## Finite registry fixture assessment — source only
+
+This addition implements a reviewed local-source proposal against experimental
+commit `1161e6f3fe27ee04888c0ef52befce7f8d6cb97c`. Local construction and
+cross-compilation authorize neither fixture creation nor hosted execution.
+Root must separately approve an exact-source run in a disposable ordinary
+Windows account. Production launch, sole enabled `registryRead` capability,
+pre-resume token attester, LPAC mask6, environment and original proof inventory
+remain unchanged. R17 export and assembly still refuse.
+
+Only `TestWindowsNativeConfinement` prepares one fresh volatile root and five
+fixed direct leaves under the actual process user's existing
+`HKEY_USERS/<user>/Software` anchor, in the 64-bit view. Root and leaf names are
+derived internally from the original cleaned work path; callers supply no SID,
+registry path, mask or inherited registry handle. Each create must report a new
+key. Existing, unsupported or ambiguous state is preserved without permission
+repair, privilege enablement or elevation. Other parents, including
+`TestWindowsRealAuthenticatedDocling`, do not prepare these fixtures.
+
+Preparation additionally requires all three **existing** markers:
+`MAESTRO_WINDOWS_DOCLING_QUALIFY=1`, `GITHUB_ACTIONS=true` and
+`RUNNER_ENVIRONMENT=github-hosted`. The existing credentialed launcher inherits
+its caller's environment and the existing Docling helper sets qualification=1;
+no production child environment is changed. These markers protect against
+accidental local-suite writes, rather than attest a host against forgery.
+Ordinary local suites retain both original confinement calls and assertions,
+with no assessment setup, rows, registry access or new parent skip.
+
+After verified setup, the parent exclusively creates a fixed marker in its
+known private work root. Its only bytes are the constant definition version and
+hash. Each child checks that bounded file before any assessment registry access;
+absence preserves its original behavior. The enabled parent requires all 30
+observations per child, so a missing marker cannot silently omit the assessment.
+The marker carries no registry path, user identity, capability or permission
+selector. The driver requires a complete assessment receipt in hosted scope;
+outside that scope it keeps the original proof and rejects unexpected R17 rows.
+The environment-inheritance expectation follows Microsoft's
+[Start-Process contract](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/start-process);
+actual hosted propagation remains a native execution check.
+
+The protected explicit DACL has ordered allow ACEs: OWNER RIGHTS gets
+READ_CONTROL (`0x20000`), the setup user gets KEY_ALL_ACCESS (`0xf003f`), and the
+optional fixed capability gets the exact measured subset below. OWNER RIGHTS
+suppresses the owner's implicit WRITE_DAC; no deny-WRITE_DAC ACE masks the broad
+control. Actual owner, ACE order/types/flags/masks/trustees, protection, label,
+sentinel and fixed key metadata are checked in memory before and after both
+original child executions.
+
+| Fixed fixture | Optional capability grant | Mandatory label |
+| --- | --- | --- |
+| `owner_only` | None | Low, no-write-up |
+| `capability_read` | `registryRead`, `0x00020009` | Low, no-write-up |
+| `capability_broad` | `registryRead`, `0x0007000f` | Low, no-write-up |
+| `foreign_capability` | Fixed unequal `internetClient`, `0x00020009` | Low, no-write-up |
+| `integrity_pair` | `registryRead`, `0x0007000f` | Medium, no-write-up |
+
+The foreign SID appears only in the artificial fixture ACL, never the child
+token. Low/Medium labels use only handle-based LABEL_SECURITY_INFORMATION and
+one NW ACE; setup requires an actual Medium parent and measurements an actual
+Low child. The selected read subset is READ_CONTROL, QUERY_VALUE and
+ENUMERATE_SUB_KEYS; the broad subset adds SET_VALUE, CREATE_SUB_KEY, DELETE and
+WRITE_DAC. Capability grants include neither WRITE_OWNER nor CREATE_LINK.
+
+Each actual confined child independently derives the fixed path from its existing
+TMP relationship and requests six fresh handles, one right at a time:
+QUERY_VALUE, ENUMERATE_SUB_KEYS, SET_VALUE, CREATE_SUB_KEY, DELETE and WRITE_DAC.
+Only a successful QUERY_VALUE open reads the fixed artificial 32-byte binary
+sentinel; the child compares it in memory. The child performs no registry
+mutation, subkey enumeration or real-value reads. Success measures **handle
+eligibility**, not an executed registry write or exhaustive operational access.
+
+Direct stdout carries exactly 30 finite rows even in the second non-verbose
+child. The parent validates every row and the unchanged original passed marker,
+then publishes 60 observations with its own first/second ordinals only after
+both original calls succeed, readback is unchanged and cleanup completes. The
+original shared 20-second child context stays unchanged. Parser controls run
+inside that existing parent; no additional test parent or runner is added.
+
+Cleanup rechecks cooperative custody after both children have stopped, closes
+held leaf handles and deletes only the five fixed leaves, then the exact fresh
+root relative to retained parent handles. It confirms root absence. Failed
+setup, changed shape or unconfirmed child termination preserves names and emits
+a bounded incomplete diagnostic. Volatility is a fallback lifecycle property,
+not a cleanup-success claim. This contract provides **cooperative custody**;
+it makes no physical identity/atomic-CAS guarantee against a malicious process
+running as the same user.
+
+The separate `docling-registry-assessment.json` binds definition version/hash,
+source revision/tree, sealed inventory/test-image identity, original policy and
+runtime profile/lock, actual runtime pack, original log and both phase ordinals.
+Rows retain only fixed enums, unsigned numeric LSTATUS and sentinel equality.
+Missing, duplicate, unknown, malformed, diagnostic or truncated protocol data
+refuses a receipt. Completeness and discriminating contrasts are separate:
+60 all-denied observations are complete and explicitly non-discriminating.
+Neither outcome qualifies real profiles, global write exclusion, private-key
+exclusion, export, publisher authority or participant distribution.
+
+The original four-parent/13-format/6-PDF/9-PPTX gates, eight strict network
+denials, filesystem/snapshot/descendant/Job/deadline assertions and baseline
+proof receipt remain required. The failure-only loader replay still runs only
+`TestWindowsRealAuthenticatedDocling`; its historical `no_registry_changes=true`
+describes that replay's narrower scope and does not describe the instrumented
+confinement parent. This addition does not rewrite earlier failed observations.

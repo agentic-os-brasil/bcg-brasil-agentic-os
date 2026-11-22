@@ -145,19 +145,26 @@ func runInstalledPilotCheck(ctx context.Context, args []string, output io.Writer
 		return fail("current_clients", "current_workspace_binding_mismatch")
 	}
 	r.WorkspaceID = record.Binding.WorkspaceID
+	r.ClientTarget = record.Materialization.Target
 	r.CodeRegistration, r.SessionLoading = status.CodeRegistration, status.SessionLoading
 	if status.Phases != nil {
 		r.NativeQualification = status.Phases.NativeQualification
 	}
 	r.add("current_clients", "passed", "current_record_and_exact_selected_files_verified", "")
-	plugin := filepath.Join(record.Materialization.CodeRoot, "plugins", "maestro-product")
-	packet, err := packaging.ValidatePacket(plugin)
-	if err != nil || packet.Format != "plugin" || packet.Target != r.Target || packet.ServerSHA256 != state.Server.SHA256 || packet.RegistrySHA256 != AuthorityRegistrySHA256 || packet.Stable == nil || packet.Stable.ID != record.CarrierID {
-		return fail("code_packet", "current_code_packet_unavailable")
-	}
-	r.add("code_packet", "passed", "current_canonical_packet_verified_not_native_loading", "")
-	r.add("code_profile", "passed", packet.NativeMode, "O perfil descreve os arquivos verificados; não comprova carregamento ou execução nesta sessão.")
 	m := record.Materialization
+	if m.DesktopOnly() {
+		r.NativeQualification = "not_applicable"
+		r.add("code_packet", "not_applicable", "code_not_selected", "")
+		r.add("code_profile", "not_applicable", "code_not_selected", "")
+	} else {
+		plugin := filepath.Join(m.CodeRoot, "plugins", "maestro-product")
+		packet, err := packaging.ValidatePacket(plugin)
+		if err != nil || packet.Format != "plugin" || packet.Target != r.Target || packet.ServerSHA256 != state.Server.SHA256 || packet.RegistrySHA256 != AuthorityRegistrySHA256 || packet.Stable == nil || packet.Stable.ID != record.CarrierID {
+			return fail("code_packet", "current_code_packet_unavailable")
+		}
+		r.add("code_packet", "passed", "current_canonical_packet_verified_not_native_loading", "")
+		r.add("code_profile", "passed", packet.NativeMode, "O perfil descreve os arquivos verificados; não comprova carregamento ou execução nesta sessão.")
+	}
 	carrier := packaging.StableCarrier{Profile: record.Profile, Protocol: record.Protocol, ID: record.CarrierID, Version: record.CarrierVersion}
 	if err := packaging.InspectReusedStableExtension(m.DesktopPath, carrier, m.DesktopSHA256, m.BootstrapServerSHA256, m.BootstrapEmbeddedInputsSHA256, m.DesktopNativeContractSHA256); err != nil {
 		return fail("desktop_archive", "recorded_desktop_archive_changed")
@@ -187,13 +194,14 @@ func runInstalledPilotCheck(ctx context.Context, args []string, output io.Writer
 		return fail("desktop_methods", "current_method_bootstrap_changed")
 	}
 	r.add("desktop_methods", "passed", "current_bootstrap_archive_verified_host_installation_unobserved", "")
-	if record.Code.Executable == "" || !filepath.IsAbs(record.Code.Executable) {
+	if m.DesktopOnly() {
+		r.add("code_cli", "not_applicable", "code_not_selected", "")
+	} else if record.Code.Executable == "" || !filepath.IsAbs(record.Code.Executable) {
 		r.add("code_cli", "not_tested", "no_absolute_executable_selected", "Selecione o Claude Code uma vez pelo gerenciador admitido.")
 	} else if record.Code.ExecutableSHA256 == "" {
 		r.add("code_cli", "not_tested", "absolute_executable_selected_identity_not_yet_observed", "Conclua o registro normal pelo gerenciador; este diagnóstico não executa nem qualifica o Code.")
 	} else {
-		hash, err := installer.ClientFileDigest(record.Code.Executable)
-		if err != nil || hash != record.Code.ExecutableSHA256 {
+		if !installedCodeExecutableMatches(record.Code) {
 			return fail("code_cli", "selected_code_executable_changed")
 		}
 		r.add("code_cli", "passed", "selected_absolute_executable_verified_login_not_tested", "")
@@ -205,9 +213,17 @@ func runInstalledPilotCheck(ctx context.Context, args []string, output io.Writer
 		return fail("document_runtime", "closed_current_runtime_identity_unavailable")
 	}
 	if err := installedPilotSDK(ctx, o, record.Binding.WorkspaceID, state.Binding.ManifestSHA256, expectedRuntime, &r.pilotReport); err != nil {
+		var readback *installedPilotReadbackError
+		if errors.As(err, &readback) {
+			return fail("mcp_readback", readback.Error())
+		}
 		return fail("mcp_readback", "current_in_process_sdk_readback_failed")
 	}
 	for _, name := range []string{"code_client", "desktop_client", "onboarding", "skills", "hooks", "authored_brain", "memory", "conversion"} {
+		if m.DesktopOnly() && (name == "code_client" || name == "hooks") {
+			r.add(name, "not_applicable", "code_not_selected", "")
+			continue
+		}
 		r.add(name, "not_tested", "native_journey_not_observed", "Use a jornada existente nos clientes reais e registre os resultados; o diagnóstico não executa esta funcionalidade.")
 	}
 	return finishInstalledPilotReport(&r, output)
@@ -244,28 +260,33 @@ func installedPilotSDK(ctx context.Context, o product.Options, id, expectedManif
 	if !pilotKitID.MatchString(expectedManifest) || !pilotKitID.MatchString(expectedRuntime) || o.InstalledManifestSHA256 != "" && o.InstalledManifestSHA256 != expectedManifest {
 		return errors.New("exact Current conversion expectations required")
 	}
-	bound, err := product.Open(o)
+	bound, err := product.OpenContext(ctx, o)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	done := make(chan error, 1)
 	go func() { done <- bound.Server().Run(ctx, serverTransport) }()
 	client := mcp.NewClient(&mcp.Implementation{Name: "maestro-installed-pilot-check", Version: "1"}, nil)
-	session, err := client.Connect(ctx, clientTransport, nil)
+	connectCtx, connectCancel := context.WithTimeout(ctx, 20*time.Second)
+	session, err := client.Connect(connectCtx, clientTransport, nil)
+	connectCancel()
 	if err != nil {
 		cancel()
 		<-done
-		return err
+		return &installedPilotReadbackError{stage: "connect", cause: err}
 	}
-	defer func() { session.Close(); cancel(); <-done }()
+	defer func() { cancel(); session.Close(); <-done }()
 	var metadata struct {
 		WorkspaceID string `json:"workspace_id"`
 		State       string `json:"state"`
 	}
-	if err := pilotCall(ctx, session, "maestro_context", map[string]any{}, &metadata); err != nil || metadata.WorkspaceID != id || metadata.State != "ready" {
+	if err := installedPilotCall(ctx, session, "context", "maestro_context", map[string]any{}, &metadata); err != nil {
+		return err
+	}
+	if metadata.WorkspaceID != id || metadata.State != "ready" {
 		return errors.New("installed_context_mismatch")
 	}
 	r.add("mcp_connection", "passed", "current_in_process_sdk_context_verified_not_host_loading", "")
@@ -285,7 +306,7 @@ func installedPilotSDK(ctx context.Context, o product.Options, id, expectedManif
 			Next int  `json:"next_offset"`
 			More bool `json:"has_more"`
 		}
-		if err := pilotCall(ctx, session, "maestro_query", map[string]any{"operation": "methods.list", "offset": offset, "limit": 32}, &page); err != nil {
+		if err := installedPilotCall(ctx, session, "methods_list", "maestro_query", map[string]any{"operation": "methods.list", "offset": offset, "limit": 32}, &page); err != nil {
 			return err
 		}
 		if len(page.Items) > 32 || page.Next != offset+len(page.Items) || page.More && page.Next <= offset {
@@ -311,10 +332,47 @@ func installedPilotSDK(ctx context.Context, o product.Options, id, expectedManif
 		State      string `json:"state"`
 		PackSHA256 string `json:"pack_sha256"`
 	}
-	if err := pilotCall(ctx, session, "maestro_query", map[string]any{"operation": "content.status"}, &availability); err != nil {
+	if err := installedPilotCall(ctx, session, "content_status", "maestro_query", map[string]any{"operation": "content.status"}, &availability); err != nil {
 		return err
 	}
 	return installedConversionObservation(r, expectedManifest, expectedRuntime, availability.State, availability.PackSHA256)
+}
+
+type installedPilotReadbackError struct {
+	stage string
+	cause error
+}
+
+func (e *installedPilotReadbackError) Error() string {
+	reason := "failed"
+	if errors.Is(e.cause, context.DeadlineExceeded) {
+		reason = "deadline_exceeded"
+	} else if errors.Is(e.cause, context.Canceled) {
+		reason = "cancelled"
+	}
+	return "current_in_process_sdk_" + e.stage + "_" + reason
+}
+
+func (e *installedPilotReadbackError) Unwrap() error { return e.cause }
+
+func installedPilotCall(ctx context.Context, session *mcp.ClientSession, stage, name string, args map[string]any, out any) error {
+	// Each signed read keeps its finite bound without consuming the next read's budget.
+	budget := 20 * time.Second
+	if stage == "content_status" {
+		// Several fifteen-second identity probes and authenticated inventories need
+		// a separate finite request policy; synchronous teardown remains separate.
+		budget = 3 * time.Minute
+	}
+	callCtx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+	err := pilotCall(callCtx, session, name, args, out)
+	if callCtx.Err() != nil {
+		err = callCtx.Err()
+	}
+	if err != nil {
+		return &installedPilotReadbackError{stage: stage, cause: err}
+	}
+	return nil
 }
 
 func installedExpectedRuntime(role *installer.VerifiedExperimentalSeed, state installtx.State) (string, error) {
@@ -343,4 +401,9 @@ func finishInstalledPilotReport(r *installedPilotReport, output io.Writer) error
 		return encodeErr
 	}
 	return err
+}
+
+func installedCodeExecutableMatches(code installer.CodeObservation) bool {
+	hash, _, err := packaging.InspectNativeExecutable(code.Executable)
+	return err == nil && hash == code.ExecutableSHA256
 }

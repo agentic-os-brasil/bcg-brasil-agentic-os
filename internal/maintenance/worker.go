@@ -346,13 +346,14 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 			bounded.weekly = &binding
 		}
 		bounded.publication = func(publish func() error) error {
-			publicationCtx, stopPublication := context.WithTimeout(workerCtx, leaseQuarantineGrace)
-			defer stopPublication()
-			return worker.product.guardWithin(workerCtx, publicationCtx, func() error {
+			return worker.product.guardWithin(workerCtx, func() error {
 				if err := workerCtx.Err(); err != nil {
 					return err
 				}
-				return worker.Scheduler.WithCurrentLeaseContext(publicationCtx, lease, worker.product.service.now(), publish)
+				leaseNow := worker.product.service.now()
+				publicationCtx, stopPublication := context.WithTimeout(workerCtx, leaseQuarantineGrace)
+				defer stopPublication()
+				return worker.Scheduler.WithCurrentLeaseContext(publicationCtx, lease, leaseNow, publish)
 			})
 		}
 		grant = bounded
@@ -518,13 +519,13 @@ func rejectedTerminalReceipt(receipt Receipt) Receipt {
 }
 
 func (worker Worker) publishOccurrence(ctx context.Context, workspaceID string, occurrence scheduler.Occurrence, now time.Time, lease scheduler.Lease, receipt Receipt) error {
-	publicationCtx, stopPublication := context.WithTimeout(ctx, leaseQuarantineGrace)
-	defer stopPublication()
 	leaseNow := now
 	if worker.product != nil {
 		leaseNow = worker.product.service.now()
 	}
 	publish := func() error {
+		publicationCtx, stopPublication := context.WithTimeout(ctx, leaseQuarantineGrace)
+		defer stopPublication()
 		return worker.Scheduler.WithCurrentLeaseContext(publicationCtx, lease, leaseNow, func() error {
 			closed := false
 			if worker.product != nil && (worker.product.weeklyPlan != nil && worker.product.weeklyPlan.committed != nil || worker.product.memoryPlan != nil && worker.product.memoryPlan.committed != nil) {
@@ -548,7 +549,7 @@ func (worker Worker) publishOccurrence(ctx context.Context, workspaceID string, 
 		})
 	}
 	if worker.product != nil {
-		return worker.product.publishTerminalWithin(ctx, publicationCtx, publish)
+		return worker.product.publishTerminalWithin(ctx, publish)
 	}
 	return publish()
 }

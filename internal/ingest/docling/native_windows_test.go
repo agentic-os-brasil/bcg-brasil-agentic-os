@@ -98,6 +98,9 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 		command.Stdin = bytes.NewReader(body)
 		output, err := command.CombinedOutput()
 		if err != nil {
+			if action == "place" && bytes.Equal(output, []byte("MAESTRO_NATIVE_RUNTIME_FAILURE operation=place stage=launch process_status=0xc0000022\n")) {
+				t.Fatal("MAESTRO_NATIVE_RUNTIME_FAILURE operation=place stage=launch process_status=0xc0000022")
+			}
 			t.Fatal("actual shared runtime process failed")
 		}
 		if action == "convert" || action == "export_fixture" {

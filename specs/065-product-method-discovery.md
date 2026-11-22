@@ -27,6 +27,26 @@ entry points, not extra canonical methods.
 Unknown IDs, namespace aliases, URI traversal/encoding, private references and
 invalid pages refuse. Resource reads never resolve a URI into a filesystem path.
 
+## Canonical agent role discovery (ARID)
+
+Initialization directs first use to `maestro_context`, then
+`maestro_query` with `{"operation":"agents.read","agent_id":"maestro"}`.
+Context advertises this read separately from presentation-only display identities.
+Read every page before applying the role guidance, within system/host instructions,
+the current user task and accepted owner preferences from `owner.context` when available.
+
+`agents.read` accepts only canonical agent IDs from the public embedded catalog.
+It returns the exact existing `maestro://agents/<agent-id>/AGENT.md` bytes,
+full-resource SHA256/size, valid UTF-8 text and explicit byte continuation.
+Offset and max_bytes use the same bounds as `methods.read`; default page size is
+4096 bytes. Unknown IDs, aliases, paths, URI inputs, private instances, invalid
+pages and foreign fields refuse. This query reads no private agent file and
+initializes no state. Role text is marked `roles_not_authority`; it neither grants
+execution nor changes native hook, foreground runtime, activation or user authority.
+The MCP tool count remains three. SDK and restarted compiled-stdio reconstruction,
+resource/hash equivalence, negative requests and unchanged-state snapshots prove
+source delivery. Actual host loading and adoption require separate acceptance.
+
 ## Requirements and authority
 
 One embedded declaration covers every canonical ID exactly once. Required MCP
@@ -76,3 +96,13 @@ Delivering all method instructions does not fulfill host/provider dependencies
 or qualify graphical protected review. Account sync/coexistence and actual
 chosen-host loading require separate acceptance. See
 [factory and delivery boundary](../docs/product-desktop-methods.md).
+
+
+### Installed Desktop-only frontend
+
+An explicitly reviewed Desktop target publishes the same complete live method
+bootstrap through the existing installed client owner without requiring a Code
+packet or profile. Its immutable method archive and management recipes use a
+Desktop-owned generation slot. Source/current-record/contract verification and
+normal host installation remain required. Instruction availability does not
+provide Code hooks, native Agent proof or a prepared foreground model runtime.

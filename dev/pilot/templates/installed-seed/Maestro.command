@@ -164,6 +164,7 @@ prepare_client_parent() {
   printf '%s' "$parent/$ROLE"
 }
 ensure_code_login() {
+  [[ "${TARGET:-}" != desktop ]] || fail 'Este alvo Desktop não configura login Code.'
   local answer
   if [[ "${1:-}" != force ]] && /usr/bin/env "CLAUDE_CONFIG_DIR=$CODE_CONFIG" "$CODE" auth status > "$RUN/code-auth-private.json" 2> "$RUN/code-auth-private.log" && [[ "$(jget "$RUN/code-auth-private.json" loggedIn 2>/dev/null || true)" == true ]]; then return; fi
   printf '\nO perfil Code do piloto precisa de login oficial. Nenhuma credencial será copiada. Abrir login agora? Digite YES; Enter deixa pendente: '
@@ -177,6 +178,9 @@ CFG="$BASE/participant.json"
 if [[ ! -e "$CFG" ]]; then
   [[ "${1:-}" != --check-only ]] || fail 'Ainda não preparado. Abra Maestro.command uma vez para escolher seu workspace e revisar a instalação.'
   printf '\nMaestro MCP — piloto experimental\nO programa e os relatórios ficam em Developer. Seu brain existente será preservado.\n'
+  printf 'Clientes: both para Code e Desktop, ou desktop sem configurar Code [both]: '; read -r TARGET
+  case "$TARGET" in ''|both) TARGET="";; desktop) ;; *) fail 'Escolha both ou desktop; nenhuma seleção foi salva.';; esac
+  CODE=""; CODE_CONFIG=""
   printf 'Diretório do owner existente em Developer [%s; Enter se nunca usou Maestro]: ' "$DEV"; read -r OWNER; OWNER="${OWNER:-$DEV}"
   [[ "$OWNER" == "$DEV" || "$OWNER" == "$DEV/"* ]] || fail 'Selecione o owner existente em Developer; não crie outro para contornar uma instalação.'
   [[ -d "$OWNER" && ! -L "$OWNER" ]] || fail 'O owner deve ser um diretório local existente.'
@@ -185,6 +189,7 @@ if [[ ! -e "$CFG" ]]; then
   printf 'Workspace em Developer [%s/Maestro-Workspace]: ' "$DEV"; read -r WORK; WORK="${WORK:-$DEV/Maestro-Workspace}"
   [[ "$WORK" == /* && ! -L "$WORK" && -d "$(dirname "$WORK")" ]] || fail 'Escolha uma pasta local com o diretório pai existente.'
   WORK="$(cd "$(dirname "$WORK")" && pwd -P)/$(basename "$WORK")"; [[ "$WORK" == "$DEV/"* ]] || fail 'O workspace deve ficar em Developer.'
+  if [[ "$TARGET" != desktop ]]; then
   default_code="$(command -v claude || true)"
   if [[ -z "$default_code" ]]; then
     for candidate in "$HOME/.local/bin/claude" /opt/homebrew/bin/claude /usr/local/bin/claude; do
@@ -194,6 +199,7 @@ if [[ ! -e "$CFG" ]]; then
   if [[ -n "$default_code" ]]; then default_code="$(resolve_code_executable "$default_code" || true)"; fi
   printf 'Executável absoluto do Claude Code [%s]: ' "$default_code"; read -r CODE; CODE="${CODE:-$default_code}"
   CODE="$(resolve_code_executable "$CODE")" || fail 'Instale o Claude Code pelo fluxo normal e escolha o executável absoluto.'
+  fi
   BRAIN="${MAESTRO_HOME:-}"
   if [[ -z "$BRAIN" && -e "$OWNER/.maestro-home.json" ]]; then BRAIN="$(jget "$OWNER/.maestro-home.json" home)"; fi
   if [[ -z "$BRAIN" && -e "$OWNER/.maestro" ]]; then BRAIN="$OWNER/.maestro"; fi
@@ -202,19 +208,32 @@ if [[ ! -e "$CFG" ]]; then
   fi
   [[ "$BRAIN" == "$DEV/"* ]] || fail 'O brain selecionado fica fora de Developer. Preserve-o e peça orientação ao time; este piloto não migra dados.'
   CLIENTS="$(prepare_client_parent)"
+  if [[ "$TARGET" != desktop ]]; then
   printf 'Perfil Code privado [%s/Maestro-Code-Profile]: ' "$OWNER"; read -r CODE_CONFIG; CODE_CONFIG="${CODE_CONFIG:-$OWNER/Maestro-Code-Profile}"
   CODE_CONFIG="$(prepare_code_configuration "$CODE_CONFIG")"
+  fi
   CARRIER="$(/usr/bin/uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]')"
+  if [[ "$TARGET" == desktop ]]; then
+    json "$CFG" admission_sha256 "$ROLE" user_home "$OWNER" workspace "$WORK" carrier_id "$CARRIER" brain_home "$BRAIN" client_parent "$CLIENTS" client_target desktop
+  else
   json "$CFG" admission_sha256 "$ROLE" user_home "$OWNER" workspace "$WORK" code_executable "$CODE" carrier_id "$CARRIER" brain_home "$BRAIN" client_parent "$CLIENTS" code_configuration_directory "$CODE_CONFIG"
+  fi
 fi
 [[ -f "$CFG" && ! -L "$CFG" && "$(stat -f '%l' "$CFG")" == 1 && "$(jget "$CFG" admission_sha256)" == "$ROLE" ]] || fail 'Configuração local divergente.'
 OWNER="$(jget "$CFG" user_home)"; WORK="$(jget "$CFG" workspace)"; CARRIER="$(jget "$CFG" carrier_id)"
+TARGET="$(jget "$CFG" client_target 2>/dev/null || true)"
+case "$TARGET" in ''|desktop) ;; *) fail 'Alvo local desconhecido; preserve participant.json.';; esac
 CLIENTS="$(jget "$CFG" client_parent 2>/dev/null || true)"; CODE_CONFIG="$(jget "$CFG" code_configuration_directory 2>/dev/null || true)"
-[[ -n "$CLIENTS" && -n "$CODE_CONFIG" ]] || fail 'Esta preparação é anterior ao perfil isolado. Preserve participant.json e o brain; envie o relatório para revisar a continuação do mesmo owner.'
-[[ "$CLIENTS" == "$OWNER/"* && "$CODE_CONFIG" == "$OWNER/"* ]] || fail 'Seleção dos clientes difere do owner; preserve a configuração.'
-[[ -d "$CLIENTS" && -d "$CODE_CONFIG" ]] || fail 'Seleção privada ausente; preserve a configuração e peça orientação, sem recriar perfil ou clientes.'
-private_dir "$CLIENTS"; private_dir "$CODE_CONFIG"
-BRAIN="$(jget "$CFG" brain_home)"; CODE="$(jget "$CFG" code_executable)"
+CODE="$(jget "$CFG" code_executable 2>/dev/null || true)"
+[[ -n "$CLIENTS" && "$CLIENTS" == "$OWNER/"* && -d "$CLIENTS" ]] || fail 'Seleção privada dos clientes ausente ou fora do owner; preserve a configuração.'
+private_dir "$CLIENTS"
+if [[ "$TARGET" == desktop ]]; then
+  [[ -z "$CODE" && -z "$CODE_CONFIG" ]] || fail 'A seleção Desktop contém configuração Code; preserve a configuração.'
+else
+  [[ -n "$CODE_CONFIG" && "$CODE_CONFIG" == "$OWNER/"* && -d "$CODE_CONFIG" ]] || fail 'Esta preparação é anterior ao perfil isolado, ou o perfil está ausente. Preserve participant.json e o brain; envie o relatório.'
+  private_dir "$CODE_CONFIG"
+fi
+BRAIN="$(jget "$CFG" brain_home)"
 [[ -z "${MAESTRO_HOME:-}" || "$MAESTRO_HOME" == "$BRAIN" ]] || fail 'MAESTRO_HOME mudou; preserve o brain e confira a configuração.'
 export MAESTRO_HOME="$BRAIN"
 PRODUCT="$BASE/product"
@@ -228,7 +247,11 @@ review_confirm() {
 }
 if [[ ! -e "$INSTALLED" ]]; then
   [[ "${1:-}" != --check-only ]] || fail 'Instalação pendente. Abra Maestro.command para revisar.'
+  if [[ "$TARGET" == desktop ]]; then
+    json "$RUN/setup-request.json" release_directory "$STAGE/initial-release" managed_root "$PRODUCT" user_home "$OWNER" workspace "$WORK" target desktop
+  else
   json "$RUN/setup-request.json" release_directory "$STAGE/initial-release" managed_root "$PRODUCT" user_home "$OWNER" workspace "$WORK" code_packet "$BASE/initial-code" desktop_packet "$BASE/initial-desktop.mcpb"
+  fi
   "$BOOTSTRAP" review < "$RUN/setup-request.json" > "$RUN/setup-review.json" || fail 'A revisão recusou os dados. O brain e a instalação anterior foram preservados.'
   review_confirm "$RUN/setup-review.json"
   digest="$(jget "$RUN/setup-review.json" review_digest)"
@@ -237,12 +260,21 @@ fi
 verify_installer "$INSTALLED"
 manage() {
   verify_installer "$INSTALLED"
+  if [[ "$TARGET" == desktop ]]; then
+    "$INSTALLED" manage "${COMMON[@]}" --client-target desktop --client-desktop-path "$CLIENTS/maestro-product.mcpb" "$@"
+  else
   ensure_code_login
   /usr/bin/env "CLAUDE_CONFIG_DIR=$CODE_CONFIG" "$INSTALLED" manage "${COMMON[@]}" --client-code-root "$CLIENTS/code" --client-desktop-path "$CLIENTS/maestro-product.mcpb" --client-code-executable "$CODE" --client-code-config "$CODE_CONFIG" --client-scope user "$@"
+  fi
 }
+CLIENT_STATUS=("${COMMON[@]}")
+if [[ "$TARGET" == desktop ]]; then CLIENT_STATUS+=(--client-target desktop); fi
 current_clients=false
-if "$INSTALLED" clients-status "${COMMON[@]}" > "$RUN/clients-before-private.json" 2> "$RUN/clients-before-private.log"; then
-  [[ "$(jget "$RUN/clients-before-private.json" state)" != current_materialization ]] || current_clients=true
+if "$INSTALLED" clients-status "${CLIENT_STATUS[@]}" > "$RUN/clients-before-private.json" 2> "$RUN/clients-before-private.log"; then
+  if [[ "$(jget "$RUN/clients-before-private.json" state)" == current_materialization ]]; then
+    [[ "$(jget "$RUN/clients-before-private.json" record.materialization.target 2>/dev/null || true)" == "$TARGET" ]] || fail 'O alvo atual difere da seleção salva; preserve o carrier e revise pelo gerenciador.'
+    current_clients=true
+  fi
 fi
 if [[ "${1:-}" != --check-only && "$current_clients" != true ]]; then
   json "$RUN/source-request.json" managed_root "$PRODUCT" user_home "$OWNER"
@@ -280,7 +312,7 @@ if [[ "${1:-}" != --check-only && "$current_clients" != true ]]; then
   if ! manage; then printf '\nRegistro/qualificação pendente. O relatório abaixo preserva esse estado.\n'; fi
 fi
 # Current installer owns path, generation and registration verification.
-"$INSTALLED" clients-status "${COMMON[@]}" > "$RUN/clients-status.json" || true
+"$INSTALLED" clients-status "${CLIENT_STATUS[@]}" > "$RUN/clients-status.json" || true
 SERVER="$PRODUCT/bin/maestro-mcp"
 [[ -f "$SERVER" && ! -L "$SERVER" && "$(stat -f '%l' "$SERVER")" == 1 ]] || fail 'Backend atual indisponível.'
 server_sha="$(sha "$SERVER")"
@@ -298,6 +330,10 @@ attest() {
   printf '\nObservações suas (não são provas automáticas). Use passou, falhou ou nao-testei.\n'
   printf '\n## Observações do participante\n\nAutodeclarações; não substituem qualificação nativa.\n' >> "$RUN/RELATORIO.md"
   for label in 'Code: identidade/skills' 'Desktop: conexão/skills' 'Onboarding e mesmo workspace' 'Memória: salvar e reler' 'Hooks e delegação' 'Conversão de documento'; do
+    if [[ "${TARGET:-}" == desktop && ( "$label" == 'Code: identidade/skills' || "$label" == 'Hooks e delegação' ) ]]; then
+      printf '\n- %s: not_applicable (alvo Desktop)\n' "$label" >> "$RUN/RELATORIO.md"
+      continue
+    fi
     printf '%s: ' "$label"; read -r answer
     case "$answer" in passou|falhou|nao-testei) ;; *) answer=nao-testei;; esac
     printf '\n- %s: %s (participante)\n' "$label" "$answer" >> "$RUN/RELATORIO.md"
@@ -309,7 +345,7 @@ guard_test_prompt() {
 }
 prepare_conversion_document() {
   local current="$1" prompt="$2" state expected_manifest expected_pack result server_sha
-  [[ "$prompt" == CODE.txt || "$prompt" == DESKTOP.txt ]] || fail 'Documento disponível somente nas opções completas 1 e 2.'
+  [[ "$prompt" == CODE-CONVERSAO.txt || "$prompt" == DESKTOP-CONVERSAO.txt ]] || fail 'Documento disponível somente na etapa de documento.'
   guard_test_prompt "$prompt"
   state="$(jget "$RUN/report.json" conversion.state)"
   if [[ "$state" == pending_runtime ]]; then printf 'Conversão pendente: o runtime atual não está pronto. O restante do ensaio pode continuar; nenhum documento será criado.\n'; return 0; fi
@@ -328,8 +364,9 @@ prepare_conversion_document() {
   printf 'Documento sintético preparado ou já presente sem sobrescrita. Conversão e execução nativa ainda não foram testadas; siga o prompt no cliente.\n'
 }
 open_code() {
+  [[ "$TARGET" != desktop ]] || fail 'Este alvo Desktop não seleciona Code.'
   guard_test_prompt "$1"
-  "$INSTALLED" clients-status "${COMMON[@]}" > "$RUN/clients-status.json" || fail 'Registro atual indisponível.'
+  "$INSTALLED" clients-status "${CLIENT_STATUS[@]}" > "$RUN/clients-status.json" || fail 'Registro atual indisponível.'
   [[ "$(jget "$RUN/clients-status.json" state)" == current_materialization && "$(jget "$RUN/clients-status.json" record.code.state)" == registered && "$(jget "$RUN/clients-status.json" record.code.enabled)" == true ]] || fail 'Code ainda não está registrado e habilitado; conclua pelo gerenciador.'
   "$INSTALLED" client-plugin-path "${COMMON[@]}" > "$RUN/current-plugin.txt" || fail 'Plugin atual não admitido.'
   local executable expected observed_profile
@@ -337,7 +374,7 @@ open_code() {
   [[ "$executable" == /* && -f "$executable" && "$(sha "$executable")" == "$expected" ]] || fail 'O Code selecionado mudou; revise o registro pelo gerenciador.'
   observed_profile="$(jget "$RUN/clients-status.json" record.code.configuration_directory 2>/dev/null || true)"
   [[ "$observed_profile" == "$CODE_CONFIG" ]] || fail 'O perfil Code registrado divergiu; preserve o registro e confira pelo gerenciador.'
-  if [[ "$1" == CODE.txt ]]; then prepare_conversion_document "$RUN/clients-status.json" "$1"; fi
+  if [[ "$1" == CODE-CONVERSAO.txt ]]; then prepare_conversion_document "$RUN/clients-status.json" "$1"; fi
   (cd "$WORK" && /usr/bin/env "CLAUDE_CONFIG_DIR=$CODE_CONFIG" "$executable" "$(cat "$RUN/$1")")
 }
 desktop_install_is_current() {
@@ -353,12 +390,12 @@ desktop_install_is_current() {
 open_desktop() {
   local packet methods method_version
   guard_test_prompt "$1"
-  "$INSTALLED" clients-status "${COMMON[@]}" > "$RUN/clients-status.json" || fail 'Registro atual indisponível.'
+  "$INSTALLED" clients-status "${CLIENT_STATUS[@]}" > "$RUN/clients-status.json" || fail 'Registro atual indisponível.'
   [[ "$(jget "$RUN/clients-status.json" state)" == current_materialization ]] || fail 'Pacotes ainda não estão atuais.'
   packet="$(jget "$RUN/clients-status.json" record.materialization.desktop_path)"
   methods="$(jget "$RUN/clients-status.json" record.materialization.desktop_methods.archive)"
   method_version="$(jget "$RUN/clients-status.json" record.materialization.desktop_methods.version)"
-  if [[ "$1" == DESKTOP.txt ]]; then prepare_conversion_document "$RUN/clients-status.json" "$1"; fi
+  if [[ "$1" == DESKTOP-CONVERSAO.txt ]]; then prepare_conversion_document "$RUN/clients-status.json" "$1"; fi
   /usr/bin/pbcopy < "$RUN/$1"
   if desktop_install_is_current "$RUN/clients-status.json"; then
     printf '\nA instalação deste pacote/contrato já foi confirmada por você. O instalador da extensão não será reaberto; conexão e funcionamento continuam pendentes de teste.\n'
@@ -369,11 +406,41 @@ open_desktop() {
   printf 'Biblioteca de skills %s: %s\nA importação no Desktop não foi observada pelo menu. Se a biblioteca ainda não estiver disponível no cliente, importe esse arquivo pelo fluxo normal.\n' "$method_version" "$methods"
   printf 'Prompt copiado. Abra sua conversa no Desktop, use somente o Maestro deste ensaio, cole uma vez e execute. Depois registre o resultado no menu 7.\n'
 }
+pilot_steps() {
+  local client="$1" index=0 title key prompt_file action
+  while true; do
+    title="$(jget "$RUN/report.json" "${client}_steps.$index.title" 2>/dev/null)" || fail 'Etapas indisponíveis. Reabra o diagnóstico com a versão atual.'
+    printf '\nEtapa atual: %s\nEnvie somente esta etapa. Avance após conferir o resultado no cliente.\n1 — Enviar esta etapa\n2 — Próxima etapa\n3 — Etapa anterior\n4 — Conferir após interrupção\nEnter — Voltar\nEscolha: ' "$title"
+    read -r action
+    case "$action" in
+      1)
+        key="$(jget "$RUN/report.json" "${client}_steps.$index.id")"
+        if [[ "$client" == code ]]; then prompt_file=CODE-ETAPA.txt; else prompt_file=DESKTOP-ETAPA.txt; fi
+        if [[ "$key" == conversion ]]; then
+          if [[ "$client" == code ]]; then prompt_file=CODE-CONVERSAO.txt; else prompt_file=DESKTOP-CONVERSAO.txt; fi
+        fi
+        /usr/bin/plutil -extract "${client}_steps.$index.prompt" raw -o "$RUN/$prompt_file" "$RUN/report.json" || fail 'Etapa indisponível.'
+        if [[ "$client" == code ]]; then open_code "$prompt_file"; else open_desktop "$prompt_file"; fi
+        ;;
+      2)
+        if /usr/bin/plutil -extract "${client}_steps.$((index+1)).title" raw -o - "$RUN/report.json" >/dev/null 2>&1; then index=$((index+1)); else printf 'Última etapa. Registre o resultado no menu 7.\n'; fi
+        ;;
+      3) if (( index > 0 )); then index=$((index-1)); fi;;
+      4) index=0;;
+      '') return;;
+      *) printf 'Escolha uma opção da lista.\n';;
+    esac
+  done
+}
 while [[ -t 0 ]]; do
-  printf '\n1 — Ensaio completo no Code\n2 — Retomar no Desktop (um prompt)\n3 — Conferir conexão Code\n4 — Conferir conexão Desktop\n5 — Gerenciar/qualificar hooks e skills\n6 — Conferir persistência no Code\n7 — Registrar resultados e abrir relatório\n8 — Atualizar da pasta compartilhada\n9 — Renovar login do perfil Code do piloto\nEnter — Sair\nEscolha: '
+  if [[ "$TARGET" == desktop ]]; then
+    printf '\n2 — Testar ou continuar no Desktop\n4 — Conferir conexão Desktop\n5 — Gerenciar Desktop e métodos\n7 — Registrar resultados e abrir relatório\n8 — Atualizar da pasta compartilhada\nEnter — Sair\nEscolha: '
+  else
+  printf '\n1 — Testar ou continuar no Code\n2 — Continuar no Desktop\n3 — Conferir conexão Code\n4 — Conferir conexão Desktop\n5 — Gerenciar/qualificar hooks e skills\n6 — Conferir persistência no Code\n7 — Registrar resultados e abrir relatório\n8 — Atualizar da pasta compartilhada\n9 — Renovar login do perfil Code do piloto\nEnter — Sair\nEscolha: '
+  fi
   read -r choice
   case "$choice" in
-    1) open_code CODE.txt;; 2) open_desktop DESKTOP.txt;; 3) open_code CODE-CONEXAO.txt;; 4) open_desktop DESKTOP-CONEXAO.txt;;
+    1) pilot_steps code;; 2) pilot_steps desktop;; 3) open_code CODE-CONEXAO.txt;; 4) open_desktop DESKTOP-CONEXAO.txt;;
     5) manage; printf 'Após concluir, reabra Maestro.command para gerar um diagnóstico atual.\n'; break;;
     6) open_code CODE-RELEITURA.txt;; 7) attest; /usr/bin/open -t "$RUN/RELATORIO.md";;
     8) manage --management-intent update; printf 'Reabra Maestro.command para verificar a nova geração.\n'; break;;

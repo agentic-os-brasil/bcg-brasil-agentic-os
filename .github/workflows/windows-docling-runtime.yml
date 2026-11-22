@@ -207,6 +207,7 @@ jobs:
           name: windows-authenticated-docling-${{ github.sha }}
           path: |
             ${{ runner.temp }}/docling-native-proof/docling-native-proof.json
+            ${{ runner.temp }}/docling-native-proof/docling-registry-assessment.json
             ${{ runner.temp }}/docling-native-proof/docling-native-tests.log
             ${{ runner.temp }}/docling-native-proof/native-test.stdout.log
             ${{ runner.temp }}/docling-native-proof/native-test.stderr.log

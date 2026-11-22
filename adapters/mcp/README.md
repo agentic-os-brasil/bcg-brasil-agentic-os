@@ -90,6 +90,15 @@ The Code plugin includes all 92 canonical methods and two operator/resume aliase
 MCP exposes 92 prompts plus immutable method, policy, provenance, license and
 canonical agent resources. The compiled identity and emitted packet diagnostics
 enumerate the exact current resources and their byte identities.
+On first use, the initialize instructions point to `maestro_context`, then
+`maestro_query` with `{"operation":"agents.read","agent_id":"maestro"}`.
+Follow `next_offset` while `has_more` to read the full canonical role, respecting
+system/host instructions, the current user task and accepted owner preferences
+from `owner.context` when available. The closed `agent_id` enum also exposes the
+other public canonical role definitions; it accepts no private instance or path.
+Pages retain the existing resource URI, complete hash and size, with at most 4096
+UTF-8 bytes. Display identities remain presentation only and role text grants no
+execution authority. These source contracts do not prove host adoption.
 Method availability is distinct from functional/native parity; check the adapter
 policy and actual operations before use. Both formats carry the native executable, six canonical runtime/memory files and
 complete method resources. The Desktop MCPB does not install native Skills. The recipes preserve host authority and owner

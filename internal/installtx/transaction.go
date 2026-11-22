@@ -3,6 +3,7 @@ package installtx
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -18,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/privatelock"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processwait"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
@@ -28,6 +30,8 @@ import (
 const (
 	PlanName    = "activation-plan.json"
 	ReceiptName = "activation-receipt.json"
+	// ActivationRecoveryGuardName is retained empty; only its OS lock is released.
+	ActivationRecoveryGuardName = ".activation-recovery.guard"
 )
 
 var versionPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
@@ -1638,19 +1642,26 @@ func copyVerifiedRegular(source, target string, mode os.FileMode, expectedSize i
 }
 
 func verifyRegularFile(path string, expectedSize int64, expectedSHA256 string) error {
+	return verifyRegularFileContext(context.Background(), path, expectedSize, expectedSHA256)
+}
+
+func verifyRegularFileContext(ctx context.Context, path string, expectedSize int64, expectedSHA256 string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	file, err := openRegular(path, expectedSize)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 	counter := &digestCounter{hash: sha256.New()}
-	if _, err := io.Copy(counter, file); err != nil {
+	if _, err := io.Copy(counter, installReadContext{ctx, file}); err != nil {
 		return err
 	}
 	if counter.size != expectedSize || fmt.Sprintf("%x", counter.hash.Sum(nil)) != expectedSHA256 {
 		return errors.New("file does not match its authenticated size and digest")
 	}
-	return nil
+	return ctx.Err()
 }
 
 func extractVerifiedBundleArchive(
@@ -1888,6 +1899,10 @@ func acquireLock(managedRoot string) (func(), error) {
 }
 
 func acquireReconciliationLock(managedRoot string) (func(), error) {
+	return acquireReconciliationLockWith(managedRoot, processwait.UntilExit, os.Remove)
+}
+
+func acquireReconciliationLockWith(managedRoot string, wait func(int, time.Duration) error, remove func(string) error) (func(), error) {
 	unlock, err := acquireLock(managedRoot)
 	if err == nil {
 		return unlock, nil
@@ -1895,29 +1910,81 @@ func acquireReconciliationLock(managedRoot string) (func(), error) {
 	if !errors.Is(err, os.ErrExist) {
 		return nil, err
 	}
-	path := filepath.Join(managedRoot, ".activation.lock")
-	body, readErr := os.ReadFile(path)
-	if readErr != nil {
-		return nil, fmt.Errorf("read interrupted activation lock: %w", readErr)
+	guard, err := privatelock.Acquire(filepath.Join(managedRoot, ActivationRecoveryGuardName))
+	if err != nil {
+		return nil, err
 	}
-	if len(body) == 0 || len(body) > 32 || !strings.HasSuffix(string(body), "\n") {
-		return nil, errors.New("interrupted activation lock is malformed")
+	defer guard()
+	if err := ValidateActivationRecoveryGuard(managedRoot); err != nil {
+		return nil, err
+	}
+	// Another canonical reclaimer may have completed while this caller waited.
+	unlock, err = acquireLock(managedRoot)
+	if err == nil {
+		return unlock, nil
+	}
+	if !errors.Is(err, os.ErrExist) {
+		return nil, err
+	}
+	path := filepath.Join(managedRoot, ".activation.lock")
+	body, before, err := readActivationLock(path)
+	if err != nil {
+		return nil, err
 	}
 	pid, parseErr := strconv.Atoi(strings.TrimSuffix(string(body), "\n"))
-	if parseErr != nil || pid <= 0 || pid == os.Getpid() {
+	if parseErr != nil || pid <= 0 || pid == os.Getpid() || string(body) != strconv.Itoa(pid)+"\n" {
 		return nil, errors.New("interrupted activation lock has an invalid owner")
 	}
-	if waitErr := processwait.UntilExit(pid, 100*time.Millisecond); waitErr != nil {
+	if waitErr := wait(pid, 100*time.Millisecond); waitErr != nil {
 		return nil, fmt.Errorf("activation lock owner may still be running: %w", waitErr)
 	}
-	currentBody, readErr := os.ReadFile(path)
-	if readErr != nil || !bytes.Equal(currentBody, body) {
+	currentBody, after, readErr := readActivationLock(path)
+	if readErr != nil || !os.SameFile(before, after) || before.Mode() != after.Mode() || !before.ModTime().Equal(after.ModTime()) || !bytes.Equal(currentBody, body) {
 		return nil, errors.New("activation lock changed during stale-owner verification")
 	}
-	if err := os.Remove(path); err != nil {
+	if err := remove(path); err != nil {
 		return nil, fmt.Errorf("remove stale activation lock: %w", err)
 	}
+	// Ordinary O_EXCL writers do not take the recovery guard. Preserve a winner.
 	return acquireLock(managedRoot)
+}
+
+// ValidateActivationRecoveryGuard inspects the exact retained private empty file
+// without creating it or changing its ownership, bytes, permissions or OS lock.
+func ValidateActivationRecoveryGuard(managedRoot string) error {
+	file, err := scheduler.OpenRegularFile(filepath.Join(managedRoot, ActivationRecoveryGuardName))
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	if err := scheduler.ValidatePrivateFile(file, 0600); err != nil {
+		return err
+	}
+	info, err := file.Stat()
+	if err != nil || info.Size() != 0 {
+		return errors.New("activation recovery guard must remain empty")
+	}
+	return nil
+}
+
+func readActivationLock(path string) ([]byte, os.FileInfo, error) {
+	file, err := scheduler.OpenRegularFile(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer file.Close()
+	if err := scheduler.ValidatePrivateFile(file, 0600); err != nil {
+		return nil, nil, err
+	}
+	info, err := file.Stat()
+	if err != nil || info.Size() < 1 || info.Size() > 32 {
+		return nil, nil, errors.New("interrupted activation lock is malformed")
+	}
+	body, err := io.ReadAll(io.LimitReader(file, 33))
+	if err != nil || int64(len(body)) != info.Size() {
+		return nil, nil, errors.New("interrupted activation lock changed while reading")
+	}
+	return body, info, nil
 }
 
 func writeJSONAtomic(path string, value any, mode os.FileMode) error {
@@ -1968,4 +2035,24 @@ func readJSONStrict(path string, target any) error {
 		return err
 	}
 	return nil
+}
+
+// installReadContext checks cancellation between bounded hashing reads.
+type installReadContext struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r installReadContext) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	if len(p) > 32<<10 {
+		p = p[:32<<10]
+	}
+	n, err := r.reader.Read(p)
+	if cancelled := r.ctx.Err(); cancelled != nil {
+		return n, cancelled
+	}
+	return n, err
 }

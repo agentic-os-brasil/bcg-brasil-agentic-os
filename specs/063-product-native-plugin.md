@@ -88,6 +88,19 @@ permissions, calls a model, applies mutations or activates a client. An admissio
 failure preserves a finite typed diagnostic reason without disclosing owner
 contents, native SIDs or raw private error bodies.
 
+The installed-profile checker gives connection, context and each catalog read
+their own twenty-second request budget. Its authenticated `content.status`
+read has a separate three-minute policy because repeated fifteen-second Current
+identity probes and complete signed inventories can outlast the fast-read
+budget. Earlier caller deadlines and cancellation remain authoritative.
+Request context flows through the SDK entry guard, installed-role and Current
+validation, bounded identity subprocesses, converter hashes and inventory walks;
+cancellation cannot produce readiness at the final source or qualification
+fence. The session lifetime is cancelled before graceful SDK closure. These are
+finite request budgets with cooperative cancellation, not a hard wall-clock
+guarantee for synchronous cleanup, atomic cryptography or operating-system
+reads. Full authentication and every original binding fence remain required.
+
 Participant wrappers retain each report exclusively under a sibling diagnostics
 directory, outside managed packet inventories. They also capture initialization
 failure after the verified executable is available, preserving partial data.
@@ -143,7 +156,12 @@ diagnosable without silently becoming isolated extensions.
 
 ## Canonical identities and projection
 
-Maestro remains the main-session hub. Project the canonical ordinary specialists:
+Maestro remains the main-session hub. MCP initialization points tool-only clients
+to context and the complete canonical Maestro role through `agents.read`
+(Spec 065 / ARID). Immutable role availability does not qualify host adoption,
+native specialists, hooks or foreground execution.
+
+Project the canonical ordinary specialists:
 case-agent, client-account-agent, darwin, gamma-guardian, pa-expert and yoda,
 plus the closed repository review pair described under RPAR below.
 Reuse embedded definitions/catalog/templates and one pure projection shared

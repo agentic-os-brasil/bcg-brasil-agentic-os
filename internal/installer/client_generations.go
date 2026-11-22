@@ -15,6 +15,7 @@ import (
 // ClientPacketSelection retains the reviewed stable output selections while
 // each release publishes into a fresh sibling slot.
 type ClientPacketSelection struct {
+	Target      string `json:"target,omitempty"`
 	CodeRoot    string `json:"code_root"`
 	DesktopPath string `json:"desktop_path"`
 }
@@ -48,6 +49,10 @@ func ClientPhases(r ClientRecord) *ClientUpdatePhases {
 	if r.Code.State == "registered" {
 		p.CodeRegistration = "historical_supported_CLI_readback"
 	}
+	if r.Materialization.DesktopOnly() {
+		p.CodeRegistration = "not_selected"
+		p.NativeQualification = "not_applicable_Desktop_has_no_Code_hooks"
+	}
 	if r.Materialization.NativeEnforcement {
 		p.NativeQualification = "genuine_producer_observed_for_packet_not_current_session"
 	}
@@ -62,7 +67,7 @@ func validateClientMethodBinding(m ClientMaterialization) error {
 		return nil
 	}
 	f := m.DesktopMethods
-	if f == nil || f.BootstrapProtocol != "maestro-live-method-bootstrap-v1" || f.Version != m.Release || f.Files < 1 || f.Files > 4096 || !clientSHA.MatchString(f.SHA256) || f.Archive != filepath.Join(m.CodeRoot+".desktop-methods", "maestro-desktop-methods-"+m.Release+".zip") {
+	if f == nil || f.BootstrapProtocol != "maestro-live-method-bootstrap-v1" || f.Version != m.Release || f.Files < 1 || f.Files > 4096 || !clientSHA.MatchString(f.SHA256) || f.Archive != filepath.Join(ClientMethodsRoot(m), "maestro-desktop-methods-"+m.Release+".zip") {
 		return errors.New("Desktop method frontend differs from current generation")
 	}
 	return nil
@@ -73,7 +78,10 @@ func sameClientSelection(a, b *ClientPacketSelection) bool {
 }
 
 func ClientGenerationPaths(r ClientRequest, manifest string) (ClientMaterialization, error) {
-	m := ClientMaterialization{CodeRoot: r.CodeRoot, DesktopPath: r.DesktopPath}
+	m := ClientMaterialization{Target: r.Target, CodeRoot: r.CodeRoot, DesktopPath: r.DesktopPath}
+	if err := validateClientTarget(r); err != nil {
+		return m, err
+	}
 	if !r.VersionedSlots {
 		if r.GenerationID != "" {
 			return m, errors.New("legacy clients have no packet generation ID")
@@ -86,7 +94,11 @@ func ClientGenerationPaths(r ClientRequest, manifest string) (ClientMaterializat
 	if r.GenerationID != "" && !carrierIDPattern.MatchString(r.GenerationID) {
 		return m, errors.New("closed 32-hex packet generation ID required")
 	}
-	for _, path := range []string{r.CodeRoot, r.DesktopPath} {
+	paths := []string{r.DesktopPath}
+	if !r.DesktopOnly() {
+		paths = append(paths, r.CodeRoot)
+	}
+	for _, path := range paths {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path || strings.ContainsAny(path, "\x00\r\n") {
 			return m, errors.New("versioned client selection must be clean absolute paths")
 		}
@@ -94,17 +106,23 @@ func ClientGenerationPaths(r ClientRequest, manifest string) (ClientMaterializat
 	if filepath.Ext(r.DesktopPath) != ".mcpb" {
 		return m, errors.New("versioned Desktop selection requires .mcpb")
 	}
-	m.Selection = &ClientPacketSelection{CodeRoot: r.CodeRoot, DesktopPath: r.DesktopPath}
-	identity := sha256.Sum256([]byte(r.CarrierID + "\x00" + manifest + "\x00" + r.GenerationID))
+	m.Selection = &ClientPacketSelection{Target: r.Target, CodeRoot: r.CodeRoot, DesktopPath: r.DesktopPath}
+	generationIdentity := r.CarrierID + "\x00" + manifest + "\x00" + r.GenerationID
+	if r.DesktopOnly() {
+		generationIdentity += "\x00desktop"
+	}
+	identity := sha256.Sum256([]byte(generationIdentity))
 	suffix := ".generation-" + fmt.Sprintf("%x", identity[:16])
 	m.GenerationID = r.GenerationID
-	m.CodeRoot = r.CodeRoot + suffix
+	if !r.DesktopOnly() {
+		m.CodeRoot = r.CodeRoot + suffix
+	}
 	m.DesktopPath = strings.TrimSuffix(r.DesktopPath, ".mcpb") + suffix + ".mcpb"
 	return m, nil
 }
 
 func ClientRequestFromRecord(r ClientRecord) ClientRequest {
-	request := ClientRequest{CarrierID: r.CarrierID, Workspace: r.Binding.Workspace, CodeRoot: r.Materialization.CodeRoot, DesktopPath: r.Materialization.DesktopPath, CodeExecutable: r.Code.Executable, CodeConfigurationDirectory: r.Code.ConfigurationDirectory, CodeScope: r.Code.Scope, LifecycleContext: r.Materialization.LifecycleContext}
+	request := ClientRequest{Target: r.Materialization.Target, CarrierID: r.CarrierID, Workspace: r.Binding.Workspace, CodeRoot: r.Materialization.CodeRoot, DesktopPath: r.Materialization.DesktopPath, CodeExecutable: r.Code.Executable, CodeConfigurationDirectory: r.Code.ConfigurationDirectory, CodeScope: r.Code.Scope, LifecycleContext: r.Materialization.LifecycleContext}
 	request.NativeEnforcement = r.Materialization.NativeEnforcement
 	request.OwnerReviewChannel = r.Materialization.OwnerReviewChannel
 	request.GenerationID = r.Materialization.GenerationID
@@ -116,6 +134,9 @@ func ClientRequestFromRecord(r ClientRecord) ClientRequest {
 }
 
 func ClientMarketplaceRoot(r ClientRecord) string {
+	if r.Materialization.DesktopOnly() {
+		return ""
+	}
 	if s := r.Materialization.Selection; s != nil {
 		return s.CodeRoot + ".provider-" + r.CarrierID
 	}
@@ -140,7 +161,7 @@ func CurrentClientPluginPath(ctx context.Context, o ClientOptions) (string, erro
 	if err != nil {
 		return "", err
 	}
-	if r.Materialization.Selection == nil || r.Binding.Workspace != o.Request.Workspace {
+	if r.Materialization.DesktopOnly() || r.Materialization.Selection == nil || r.Binding.Workspace != o.Request.Workspace {
 		return "", errors.New("current versioned client binding required")
 	}
 	bound := o

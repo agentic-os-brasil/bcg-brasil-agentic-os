@@ -97,7 +97,7 @@ type DarwinBinding interface {
 }
 
 func (s *Service) newDarwinBinding() (DarwinBinding, error) {
-	if runtime.GOOS == "windows" || s.options.DarwinFactory == nil {
+	if s.options.DarwinFactory == nil {
 		return nil, nil
 	}
 	ids := []string{DarwinDailyJobID, DarwinWeeklyJobID, DarwinMonthlyJobID}
@@ -163,26 +163,40 @@ func (s *Service) darwinInputs() (DarwinInputs, error) {
 }
 
 func (s *Service) darwinSource(id string) (DarwinSource, error) {
-	if s.darwin == nil || !DarwinJob(id) || runtime.GOOS == "windows" {
+	if s.darwin == nil || !DarwinJob(id) {
 		return DarwinSource{}, scheduler.ErrCapabilityUnavailable
 	}
 	return s.darwin.Inspect(id)
 }
 
 func (s *Service) qualifyDarwin(ctx context.Context, r ProductReview) (ProductJobStatus, error) {
+	if err := ctx.Err(); err != nil {
+		return ProductJobStatus{}, err
+	}
+	observeOperation(ctx, "selection")
 	source, err := s.darwinSource(r.Operation.JobID)
+	if canceled := ctx.Err(); canceled != nil {
+		return ProductJobStatus{}, canceled
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return ProductJobStatus{}, err
+	}
 	if err != nil || productDigest(source) != r.SourceState {
 		return ProductJobStatus{}, ErrProductConflict
 	}
 	if source.CacheState == "stale" && r.Operation.JobID == DarwinDailyJobID {
 		return ProductJobStatus{}, ErrDarwinRepairUnavailable
 	}
+	observeOperation(ctx, "reservation")
 	token, err := attemptID()
 	if err != nil {
 		return ProductJobStatus{}, err
 	}
 	var revision uint64
 	err = s.withControl(r.Operation.JobID, func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		c, e := s.loadControl(r.Operation.JobID)
 		if e != nil {
 			return e
@@ -193,6 +207,9 @@ func (s *Service) qualifyDarwin(ctx context.Context, r ProductReview) (ProductJo
 		c.Revision++
 		c.OneShot = token
 		revision = c.Revision
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		return s.saveControl(c)
 	})
 	if err != nil {
@@ -201,6 +218,7 @@ func (s *Service) qualifyDarwin(ctx context.Context, r ProductReview) (ProductJo
 	p := &productExecution{service: s, jobID: r.Operation.JobID, revision: revision, oneShot: token, darwinSource: &source}
 	now := s.now().UTC()
 	occ := scheduler.Occurrence{JobID: p.jobID, ScheduledFor: now}
+	observeOperation(ctx, "execution")
 	receipt, err := s.execute(ctx, p, occ, now)
 	if err != nil {
 		if report, e := s.darwin.Report(p.jobID); e == nil && report.RecoveryState != "" {
@@ -208,8 +226,16 @@ func (s *Service) qualifyDarwin(ctx context.Context, r ProductReview) (ProductJo
 		}
 		return ProductJobStatus{}, err
 	}
+	observeOperation(ctx, "verification")
+	if err := ctx.Err(); err != nil {
+		return ProductJobStatus{}, err
+	}
 	evidence, evidenceErr := s.darwin.Evidence(p.jobID, receipt.OccurrenceDigest)
+	if err := ctx.Err(); err != nil {
+		return ProductJobStatus{}, err
+	}
 	if receipt.State == ReceiptReviewedNoChange && errors.Is(evidenceErr, os.ErrNotExist) {
+		observeOperation(ctx, "publication")
 		err = p.guard(func() error {
 			c, e := s.loadControl(p.jobID)
 			if e != nil {
@@ -217,12 +243,15 @@ func (s *Service) qualifyDarwin(ctx context.Context, r ProductReview) (ProductJo
 			}
 			c.OneShot = ""
 			c.Revision++
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			return s.saveControl(c)
 		})
 		if err != nil {
 			return ProductJobStatus{}, err
 		}
-		out, e := s.jobStatus(p.jobID)
+		out, e := s.jobStatusContext(ctx, p.jobID)
 		out.Reason = "reviewed_no_change"
 		return out, e
 	}
@@ -237,6 +266,10 @@ func (s *Service) qualifyDarwin(ctx context.Context, r ProductReview) (ProductJo
 	if err = s.verifyQualification(&q); err != nil {
 		return ProductJobStatus{}, err
 	}
+	if err := ctx.Err(); err != nil {
+		return ProductJobStatus{}, err
+	}
+	observeOperation(ctx, "publication")
 	err = p.guard(func() error {
 		c, e := s.loadControl(p.jobID)
 		if e != nil {
@@ -245,12 +278,15 @@ func (s *Service) qualifyDarwin(ctx context.Context, r ProductReview) (ProductJo
 		c.Revision++
 		c.OneShot = ""
 		c.Qualification = &q
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		return s.saveControl(c)
 	})
 	if err != nil {
 		return ProductJobStatus{}, err
 	}
-	return s.jobStatus(p.jobID)
+	return s.jobStatusContext(ctx, p.jobID)
 }
 
 func (s *Service) verifyDarwinQualification(q *ProductQualification) error {

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 type cacheRecovery struct {
@@ -56,7 +55,7 @@ func (b *productBinding) originalProposalSchedule(j cacheRecovery) (time.Time, e
 		return j.ScheduledFor, nil
 	}
 	path := filepath.Join(b.scope.Root, "proposals", assessmentArtifactID(j.JobID, j.OccurrenceDigest)+".json")
-	body, err := scheduler.ReadPrivateStateFile(path, productCacheLimit)
+	body, err := b.files.read(path, productCacheLimit)
 	if err != nil {
 		return time.Time{}, errors.Join(ErrProductRecovery, err)
 	}
@@ -84,7 +83,7 @@ func (b *productBinding) validRecovery(j cacheRecovery) bool {
 	return j.SchemaVersion == 1 && j.WorkspaceID == b.scope.WorkspaceID && maintenance.DarwinJob(j.JobID) && !j.RequestedAt.IsZero() && validEvolutionSHA(j.OccurrenceDigest) && validEvolutionSHA(j.ExternalSHA256) && (j.Kind == "" || j.Kind == "cache" || j.Kind == "assessment") && (j.Phase == "prepared" || j.Phase == "committed" || j.Phase == "compensated") && (j.CompletedOccurrenceDigest == "") == (j.CompletedArtifactSHA256 == "") && (j.CompletedOccurrenceDigest == "" || validEvolutionSHA(j.CompletedOccurrenceDigest) && validEvolutionSHA(j.CompletedArtifactSHA256))
 }
 func (b *productBinding) activeEvidence(job string) (maintenance.DarwinEvidence, error) {
-	body, err := scheduler.ReadPrivateStateFile(filepath.Join(b.evidenceRoot(job), "current.json"), 1024)
+	body, err := b.files.read(filepath.Join(b.evidenceRoot(job), "current.json"), 1024)
 	if err != nil {
 		return maintenance.DarwinEvidence{}, err
 	}
@@ -117,7 +116,7 @@ func (b *productBinding) recoveryClosed(j cacheRecovery) (bool, error) {
 	return true, nil
 }
 func (b *productBinding) recoverPrepared(job string, source *maintenance.DarwinSource, guard func(func() error) error) (*cacheRecovery, error) {
-	body, err := scheduler.ReadPrivateStateFile(filepath.Join(b.scope.Root, "managed-state", "recovery.json"), productCacheLimit)
+	body, err := b.files.read(filepath.Join(b.scope.Root, "managed-state", "recovery.json"), productCacheLimit)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -138,7 +137,7 @@ func (b *productBinding) recoverPrepared(job string, source *maintenance.DarwinS
 	if closed {
 		return nil, nil
 	}
-	actual, err := scheduler.ReadPrivateStateFile(b.cachePath(), productCacheLimit)
+	actual, err := b.files.read(b.cachePath(), productCacheLimit)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
@@ -165,7 +164,7 @@ func (b *productBinding) closeRecovery(j cacheRecovery, e maintenance.DarwinEvid
 	if err != nil || active.ArtifactSHA256 != verified.ArtifactSHA256 {
 		return ErrProductRecovery
 	}
-	return scheduler.UpdatePrivateFileGuarded(filepath.Join(b.scope.Root, "managed-state", "recovery.json"), productCacheLimit, guard, func(body []byte) ([]byte, error) {
+	return b.files.update(filepath.Join(b.scope.Root, "managed-state", "recovery.json"), productCacheLimit, guard, func(body []byte) ([]byte, error) {
 		var old cacheRecovery
 		if productDecode(body, &old) != nil || old.transitionSHA256() != j.transitionSHA256() || old.CompletedOccurrenceDigest != "" && old.CompletedOccurrenceDigest != e.OccurrenceDigest {
 			return nil, ErrProductRecovery
@@ -180,12 +179,12 @@ func (b *productBinding) closeRecovery(j cacheRecovery, e maintenance.DarwinEvid
 // Assessment-only work retains its original occurrence in this same owner,
 // including when it changes no cache or the cache is absent.
 func (b *productBinding) prepareAssessment(command maintenance.Command, source maintenance.DarwinSource, guard func(func() error) error) error {
-	actual, err := scheduler.ReadPrivateStateFile(b.cachePath(), productCacheLimit)
+	actual, err := b.files.read(b.cachePath(), productCacheLimit)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	j := cacheRecovery{JobID: command.JobID, RequestedAt: command.RequestedAt, ScheduledFor: command.ScheduledFor.UTC(), SchemaVersion: 1, WorkspaceID: b.scope.WorkspaceID, ExternalSHA256: source.ExternalSHA256, OccurrenceDigest: command.OccurrenceDigest(), Before: actual, After: actual, Phase: "prepared", Kind: "assessment"}
-	return scheduler.UpdatePrivateFileGuarded(filepath.Join(b.scope.Root, "managed-state", "recovery.json"), productCacheLimit, guard, func(body []byte) ([]byte, error) {
+	return b.files.update(filepath.Join(b.scope.Root, "managed-state", "recovery.json"), productCacheLimit, guard, func(body []byte) ([]byte, error) {
 		if len(body) > 0 {
 			var previous cacheRecovery
 			if productDecode(body, &previous) != nil || !b.validRecovery(previous) {
@@ -212,17 +211,21 @@ func (b *productBinding) prepareAssessment(command maintenance.Command, source m
 // retained: this profile does not prove physical custody for replacement or
 // compensation against an uncooperative writer.
 func (invoker ManagedStateRepairInvoker) refreshProduct(previous, next []byte, guard func(func() error) error, validate func() error) error {
+	return refreshProduct(invoker.Root, nil, previous, next, guard, validate)
+}
+
+func refreshProduct(root string, files *productPrivateFiles, previous, next []byte, guard func(func() error) error, validate func() error) error {
 	if len(previous) != 0 {
 		return maintenance.ErrDarwinRepairUnavailable
 	}
 	if guard == nil {
 		return errors.New("Darwin publication guard required")
 	}
-	path := filepath.Join(invoker.Root, managedStateRelativePath)
-	if err := guard(func() error { return scheduler.PublishNewPrivateFile(path, next) }); err != nil {
+	path := filepath.Join(root, managedStateRelativePath)
+	if err := guard(func() error { return files.publish(path, next) }); err != nil {
 		return err
 	}
-	body, err := scheduler.ReadPrivateStateFile(path, productCacheLimit)
+	body, err := files.read(path, productCacheLimit)
 	if err == nil && !bytes.Equal(body, next) {
 		err = errors.New("Darwin cache readback mismatch")
 	}
@@ -254,7 +257,7 @@ func (b *productBinding) refresh(ctx context.Context, source *maintenance.Darwin
 	}
 	journal := cacheRecovery{Kind: "cache", JobID: command.JobID, RequestedAt: command.RequestedAt, ScheduledFor: command.ScheduledFor.UTC(), SchemaVersion: 1, WorkspaceID: b.scope.WorkspaceID, ExternalSHA256: source.ExternalSHA256, OccurrenceDigest: command.OccurrenceDigest(), Before: previous, After: desired, Phase: "prepared"}
 	journalPath := filepath.Join(b.scope.Root, "managed-state", "recovery.json")
-	if err = scheduler.UpdatePrivateFileGuarded(journalPath, productCacheLimit, guard, func(body []byte) ([]byte, error) {
+	if err = b.files.update(journalPath, productCacheLimit, guard, func(body []byte) ([]byte, error) {
 		if len(body) > 0 {
 			var old cacheRecovery
 			if productDecode(body, &old) != nil || old.SchemaVersion != 1 || old.WorkspaceID != b.scope.WorkspaceID {
@@ -278,7 +281,7 @@ func (b *productBinding) refresh(ctx context.Context, source *maintenance.Darwin
 			}
 			err := publish()
 			if err == nil {
-				actual, e := scheduler.ReadPrivateStateFile(b.cachePath(), productCacheLimit)
+				actual, e := b.files.read(b.cachePath(), productCacheLimit)
 				if errors.Is(e, os.ErrNotExist) && previous == nil {
 					*source = before
 				} else if e == nil && bytes.Equal(actual, previous) {
@@ -293,7 +296,7 @@ func (b *productBinding) refresh(ctx context.Context, source *maintenance.Darwin
 			return err
 		})
 	}
-	err = (ManagedStateRepairInvoker{Root: b.scope.Root}).refreshProduct(previous, desired, liveGuard, func() error {
+	err = refreshProduct(b.scope.Root, b.files, previous, desired, liveGuard, func() error {
 		current, e := b.health()
 		if e != nil {
 			return e
@@ -304,7 +307,7 @@ func (b *productBinding) refresh(ctx context.Context, source *maintenance.Darwin
 		return nil
 	})
 	if err != nil {
-		actual, e := scheduler.ReadPrivateStateFile(b.cachePath(), productCacheLimit)
+		actual, e := b.files.read(b.cachePath(), productCacheLimit)
 		if errors.Is(e, os.ErrNotExist) && previous == nil || e == nil && bytes.Equal(actual, previous) {
 			*source = before
 			journal.Phase = "compensated"
@@ -314,7 +317,7 @@ func (b *productBinding) refresh(ctx context.Context, source *maintenance.Darwin
 	} else {
 		journal.Phase = "committed"
 	}
-	if writeErr := scheduler.UpdatePrivateFileGuarded(journalPath, productCacheLimit, guard, func(body []byte) ([]byte, error) {
+	if writeErr := b.files.update(journalPath, productCacheLimit, guard, func(body []byte) ([]byte, error) {
 		var actual cacheRecovery
 		if productDecode(body, &actual) != nil || actual.OccurrenceDigest != journal.OccurrenceDigest {
 			return nil, ErrProductRecovery
@@ -331,7 +334,7 @@ func (b *productBinding) evidenceRoot(job string) string {
 }
 func (b *productBinding) publishEvidence(e maintenance.DarwinEvidence, guard func(func() error) error) error {
 	root := b.evidenceRoot(e.JobID)
-	if err := scheduler.EnsurePrivateDirectory(filepath.Join(root, "versions")); err != nil {
+	if err := b.files.ensureDirectory(filepath.Join(root, "versions")); err != nil {
 		return err
 	}
 	e.Artifact = "darwin/reports/" + e.JobID + "/versions/" + e.OccurrenceDigest + ".json"
@@ -343,8 +346,8 @@ func (b *productBinding) publishEvidence(e maintenance.DarwinEvidence, guard fun
 		return errors.New("Darwin evidence bound")
 	}
 	path := filepath.Join(root, "versions", e.OccurrenceDigest+".json")
-	if err = guard(func() error { return scheduler.PublishNewPrivateFile(path, body) }); err != nil {
-		existing, readErr := scheduler.ReadPrivateStateFile(path, productCacheLimit)
+	if err = guard(func() error { return b.files.publish(path, body) }); err != nil {
+		existing, readErr := b.files.read(path, productCacheLimit)
 		if !errors.Is(err, os.ErrExist) || readErr != nil || !bytes.Equal(body, existing) {
 			return err
 		}
@@ -352,7 +355,7 @@ func (b *productBinding) publishEvidence(e maintenance.DarwinEvidence, guard fun
 	pointer, _ := json.Marshal(struct {
 		Occurrence string `json:"occurrence"`
 	}{e.OccurrenceDigest})
-	return scheduler.UpdatePrivateFileGuarded(filepath.Join(root, "current.json"), 1024, guard, func([]byte) ([]byte, error) { return pointer, nil })
+	return b.files.update(filepath.Join(root, "current.json"), 1024, guard, func([]byte) ([]byte, error) { return pointer, nil })
 }
 func (b *productBinding) Evidence(job, occurrence string) (maintenance.DarwinEvidence, error) {
 	var e maintenance.DarwinEvidence
@@ -360,7 +363,7 @@ func (b *productBinding) Evidence(job, occurrence string) (maintenance.DarwinEvi
 		return e, errors.New("invalid Darwin evidence selector")
 	}
 	path := filepath.Join(b.evidenceRoot(job), "versions", occurrence+".json")
-	body, err := scheduler.ReadPrivateStateFile(path, productCacheLimit)
+	body, err := b.files.read(path, productCacheLimit)
 	if err != nil {
 		return e, err
 	}
@@ -383,7 +386,7 @@ func (b *productBinding) Evidence(job, occurrence string) (maintenance.DarwinEvi
 	}
 	if e.Outcome == maintenance.ReceiptProposalEmitted {
 		receipt := maintenance.Receipt{State: e.Outcome, JobID: job, OccurrenceDigest: occurrence, ProposalArtifactID: e.ProposalArtifactID, ProposalDigest: e.ProposalDigest, ProposalCount: e.ProposalCount}
-		if err = (ProposalStore{Root: b.scope.Root}).ValidateProductReceipt(receipt, e); err != nil {
+		if err = (ProposalStore{Root: b.scope.Root, files: b.files}).ValidateProductReceipt(receipt, e); err != nil {
 			return e, err
 		}
 	} else if e.ProposalCount != 0 || e.ProposalDigest != "" || e.ProposalArtifactID != "" {
@@ -405,7 +408,7 @@ func (b *productBinding) Report(job string) (maintenance.DarwinReport, error) {
 	} else if ok {
 		return report, nil
 	}
-	body, err := scheduler.ReadPrivateStateFile(filepath.Join(b.evidenceRoot(job), "current.json"), 1024)
+	body, err := b.files.read(filepath.Join(b.evidenceRoot(job), "current.json"), 1024)
 	if err != nil {
 		return out, err
 	}
@@ -428,7 +431,7 @@ func (b *productBinding) Report(job string) (maintenance.DarwinReport, error) {
 
 func (b *productBinding) pendingEffectReport(job string) (maintenance.DarwinReport, bool, error) {
 	var out maintenance.DarwinReport
-	body, err := scheduler.ReadPrivateStateFile(filepath.Join(b.scope.Root, "managed-state", "recovery.json"), productCacheLimit)
+	body, err := b.files.read(filepath.Join(b.scope.Root, "managed-state", "recovery.json"), productCacheLimit)
 	if errors.Is(err, os.ErrNotExist) {
 		return out, false, nil
 	}
@@ -449,7 +452,7 @@ func (b *productBinding) pendingEffectReport(job string) (maintenance.DarwinRepo
 	if closed {
 		return out, false, nil
 	}
-	actual, err := scheduler.ReadPrivateStateFile(b.cachePath(), productCacheLimit)
+	actual, err := b.files.read(b.cachePath(), productCacheLimit)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return out, false, err
 	}
@@ -458,7 +461,7 @@ func (b *productBinding) pendingEffectReport(job string) (maintenance.DarwinRepo
 	}
 	if j.Kind == "assessment" {
 		path := filepath.Join(b.scope.Root, "proposals", assessmentArtifactID(job, j.OccurrenceDigest)+".json")
-		if _, e := scheduler.ReadPrivateStateFile(path, productCacheLimit); errors.Is(e, os.ErrNotExist) {
+		if _, e := b.files.read(path, productCacheLimit); errors.Is(e, os.ErrNotExist) {
 			if _, e = b.Evidence(job, j.OccurrenceDigest); errors.Is(e, os.ErrNotExist) {
 				return out, false, nil
 			} else if e != nil {
@@ -486,7 +489,7 @@ func (store ProposalStore) AppendProduct(artifact AssessmentProposalArtifact) er
 		return err
 	}
 	root := filepath.Join(store.Root, "proposals")
-	if err := scheduler.EnsurePrivateDirectory(root); err != nil {
+	if err := store.files.ensureDirectory(root); err != nil {
 		return err
 	}
 	body, err := json.Marshal(artifact)
@@ -494,9 +497,9 @@ func (store ProposalStore) AppendProduct(artifact AssessmentProposalArtifact) er
 		return err
 	}
 	path := filepath.Join(root, artifact.ArtifactID+".json")
-	err = scheduler.PublishNewPrivateFile(path, body)
+	err = store.files.publish(path, body)
 	if errors.Is(err, os.ErrExist) {
-		actual, e := scheduler.ReadPrivateStateFile(path, productCacheLimit)
+		actual, e := store.files.read(path, productCacheLimit)
 		if e == nil && bytes.Equal(actual, body) {
 			return nil
 		}
@@ -508,7 +511,7 @@ func (store ProposalStore) ValidateProductReceipt(receipt maintenance.Receipt, e
 	if !validEvolutionSHA(receipt.ProposalArtifactID) {
 		return errors.New("invalid product proposal ID")
 	}
-	body, err := scheduler.ReadPrivateStateFile(filepath.Join(store.Root, "proposals", receipt.ProposalArtifactID+".json"), productCacheLimit)
+	body, err := store.files.read(filepath.Join(store.Root, "proposals", receipt.ProposalArtifactID+".json"), productCacheLimit)
 	if err != nil {
 		return err
 	}

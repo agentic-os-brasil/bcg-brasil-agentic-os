@@ -4,15 +4,20 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
@@ -82,6 +87,56 @@ func TestInstalledPilotPromptsSelectExactAdmittedStableConnector(t *testing.T) {
 		if _, err := installedDesktopExtensionName(bad); err == nil {
 			t.Fatal("unadmitted connector identity formatted")
 		}
+	}
+}
+
+func TestInstalledPilotDesktopOnlyReportStartsWithoutCode(t *testing.T) {
+	for _, documents := range []bool{false, true} {
+		t.Run(fmt.Sprint(documents), func(t *testing.T) {
+			var report installedPilotReport
+			body := fmt.Sprintf(`{"schema_version":2,"status":"partial","client_target":"desktop","workspace_id":%q,"desktop_extension":%q}`, strings.Repeat("e", 32), "maestro-connector-"+strings.Repeat("a", 32))
+			if err := json.Unmarshal([]byte(body), &report); err != nil {
+				t.Fatal(err)
+			}
+			if documents {
+				report.Runtime = &packaging.EngineeringRuntimeBinding{PackSHA256: strings.Repeat("b", 64)}
+			}
+			var output bytes.Buffer
+			if err := finishInstalledPilotReport(&report, &output); err != nil {
+				t.Fatal(err)
+			}
+			if report.CodePrompt != "" || report.CodeReadyPrompt != "" || report.CodeReadbackPrompt != "" {
+				t.Fatal("Desktop-only report still requires a Code journey")
+			}
+			var journey strings.Builder
+			for _, step := range report.DesktopSteps {
+				journey.WriteString(step.Prompt)
+			}
+			for _, required := range []string{report.WorkspaceID, report.DesktopExtension, "methods.plan", "brain.create", "memory.capture", "execution.create", "execution.pause"} {
+				if !strings.Contains(journey.String(), required) {
+					t.Fatalf("Desktop initial journey omitted %s", required)
+				}
+			}
+			for _, forbidden := range []string{"execution.resume", "peça o teste Code", "criado no Code", "Conferir conexão Code", "Ensaio completo no Code", "pacote Code"} {
+				if strings.Contains(report.DesktopPrompt, forbidden) || strings.Contains(report.Markdown, forbidden) {
+					t.Fatalf("Desktop-only report retained a Code prerequisite: %s", forbidden)
+				}
+			}
+			if !strings.Contains(report.DesktopReadyPrompt, report.DesktopExtension) || !strings.Contains(report.Markdown, "Desktop") {
+				t.Fatal("Desktop connector identity or guidance missing")
+			}
+			if documents && !strings.Contains(pilotStepPrompt(t, report.DesktopSteps, "conversion"), "content.convert") {
+				t.Fatal("Desktop target lost the existing document test")
+			}
+		})
+	}
+}
+
+func TestInstalledPilotUnknownClientTargetDoesNotGeneratePrompts(t *testing.T) {
+	report := installedPilotReport{pilotReport: pilotReport{SchemaVersion: 2, Status: "partial", WorkspaceID: strings.Repeat("e", 32), ClientTarget: "foreign"}}
+	var output bytes.Buffer
+	if err := finishInstalledPilotReport(&report, &output); err == nil || report.Status != "blocked" || report.CodePrompt != "" || report.DesktopPrompt != "" {
+		t.Fatal("unsupported client target generated an actionable journey")
 	}
 }
 
@@ -223,6 +278,13 @@ func TestInstalledPilotSDKReadsWithoutStartingMaintenanceOrWritingOwnerFiles(t *
 		return out
 	}
 	before := snapshot()
+	var lookups atomic.Int32
+	o.LookupEnv = func(key string) (string, bool) {
+		if key == "MAESTRO_HOME" {
+			lookups.Add(1)
+		}
+		return "", false
+	}
 	r := pilotReport{SchemaVersion: 2, Status: "partial", Checks: []pilotCheck{}}
 	if err := installedPilotSDK(context.Background(), o, space.WorkspaceID, strings.Repeat("b", 64), strings.Repeat("a", 64), &r); err != nil {
 		t.Fatal(err)
@@ -232,5 +294,144 @@ func TestInstalledPilotSDKReadsWithoutStartingMaintenanceOrWritingOwnerFiles(t *
 	}
 	if len(r.Checks) < 3 || r.Checks[0].Reason != "current_in_process_sdk_context_verified_not_host_loading" {
 		t.Fatalf("incorrect SDK evidence: %#v", r.Checks)
+	}
+	t.Run("healthy reads retain their own timeout", func(t *testing.T) {
+		// Installed admission revalidates large signed inventories on every read.
+		// Delay the existing admission seam, keeping each read below twenty seconds.
+		delay := 21 * time.Second / time.Duration(lookups.Load()-2)
+		lookups.Store(0)
+		o.LookupEnv = func(key string) (string, bool) {
+			if key == "MAESTRO_HOME" && lookups.Add(1) > 2 {
+				time.Sleep(delay)
+			}
+			return "", false
+		}
+		slow := pilotReport{SchemaVersion: 2, Status: "partial", Checks: []pilotCheck{}}
+		if err := installedPilotSDK(t.Context(), o, space.WorkspaceID, strings.Repeat("b", 64), strings.Repeat("a", 64), &slow); err != nil {
+			t.Fatalf("healthy cumulative readback failed: %v; checks=%+v; conversion=%+v", err, slow.Checks, slow.Conversion)
+		}
+		if slow.Conversion == nil || slow.Conversion.State != "pending_runtime" || !reflect.DeepEqual(r.Checks, slow.Checks) {
+			t.Fatalf("slow reads lost the canonical catalog or conversion observation: %+v", slow)
+		}
+		if !reflect.DeepEqual(before, snapshot()) {
+			t.Fatal("slow read-only SDK changed owner or workspace files")
+		}
+	})
+	for _, tc := range []struct {
+		name, reason string
+		cancel       bool
+	}{
+		{"caller cancellation", "current_in_process_sdk_context_cancelled", true},
+		{"one read exceeds its timeout", "current_in_process_sdk_context_deadline_exceeded", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			lookups.Store(0)
+			o.LookupEnv = func(key string) (string, bool) {
+				if key == "MAESTRO_HOME" && lookups.Add(1) == 3 {
+					if tc.cancel {
+						cancel()
+					} else {
+						time.Sleep(21 * time.Second)
+					}
+				}
+				return "", false
+			}
+			blocked := pilotReport{SchemaVersion: 2, Status: "partial", Checks: []pilotCheck{}}
+			err := installedPilotSDK(ctx, o, space.WorkspaceID, strings.Repeat("b", 64), strings.Repeat("a", 64), &blocked)
+			if err == nil || err.Error() != tc.reason || len(blocked.Checks) != 0 || blocked.Conversion != nil {
+				t.Fatalf("cancelled/expired read did not fail closed: error=%v; report=%+v", err, blocked)
+			}
+			if !reflect.DeepEqual(before, snapshot()) {
+				t.Fatal("failed read-only SDK changed owner or workspace files")
+			}
+		})
+	}
+}
+
+func TestInstalledPilotReadbackErrorOmitsPrivateCauses(t *testing.T) {
+	for _, tc := range []struct {
+		cause  error
+		reason string
+	}{
+		{errors.New("/private/DO_NOT_EXPORT_PARTICIPANT_SELECTION"), "failed"},
+		{fmt.Errorf("/private/DO_NOT_EXPORT: %w", context.DeadlineExceeded), "deadline_exceeded"},
+		{fmt.Errorf("/private/DO_NOT_EXPORT: %w", context.Canceled), "cancelled"},
+	} {
+		err := &installedPilotReadbackError{stage: "content_status", cause: tc.cause}
+		if err.Error() != "current_in_process_sdk_content_status_"+tc.reason || !errors.Is(err, tc.cause) {
+			t.Fatalf("unsafe or unclassifiable readback error: %v", err)
+		}
+	}
+}
+
+func TestInstalledPilotCodeExecutableUsesNativeHostContract(t *testing.T) {
+	root := t.TempDir()
+	// A bounded Mach-O executable header is sufficient for read-only identity;
+	// none of these synthetic files is ever executed.
+	header := make([]byte, 32)
+	for i, value := range []uint32{0xfeedfacf, 0x0100000c, 0, 2} {
+		binary.LittleEndian.PutUint32(header[i*4:], value)
+	}
+	write := func(name string, body []byte) string {
+		t.Helper()
+		path := filepath.Join(root, name)
+		if err := os.WriteFile(path, body, 0700); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	regular := write("native-regular", header)
+	native := write("native", header)
+	linked := filepath.Join(root, "native-hardlink")
+	if err := os.Link(native, linked); err != nil {
+		t.Fatal(err)
+	}
+	large := write("native-large", header)
+	if err := os.Truncate(large, (128<<20)+1); err != nil {
+		t.Fatal(err)
+	}
+	invalid := write("invalid", []byte("not an executable"))
+	for _, tc := range []struct {
+		name, path string
+		matches    bool
+	}{
+		{"regular host", regular, true},
+		{"hardlinked host", linked, true},
+		{"host above packet limit", large, true},
+		{"invalid native format", invalid, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			file, err := os.Open(tc.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hash := sha256.New()
+			_, copyErr := io.Copy(hash, file)
+			closeErr := file.Close()
+			if copyErr != nil || closeErr != nil {
+				t.Fatal(copyErr, closeErr)
+			}
+			code := installer.CodeObservation{Executable: tc.path, ExecutableSHA256: fmt.Sprintf("%x", hash.Sum(nil))}
+			if got := installedCodeExecutableMatches(code); got != tc.matches {
+				t.Fatalf("installed diagnostic identity match = %v, want %v", got, tc.matches)
+			}
+			changed, err := os.OpenFile(tc.path, os.O_WRONLY|os.O_APPEND, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, writeErr := changed.Write([]byte("changed"))
+			closeErr = changed.Close()
+			if writeErr != nil || closeErr != nil {
+				t.Fatal(writeErr, closeErr)
+			}
+			if installedCodeExecutableMatches(code) {
+				t.Fatal("changed executable bytes were admitted")
+			}
+		})
+	}
+	if installedCodeExecutableMatches(installer.CodeObservation{Executable: filepath.Join(root, "missing"), ExecutableSHA256: strings.Repeat("a", 64)}) {
+		t.Fatal("missing executable was admitted")
 	}
 }

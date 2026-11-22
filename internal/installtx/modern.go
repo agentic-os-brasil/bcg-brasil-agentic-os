@@ -2,6 +2,7 @@ package installtx
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"path/filepath"
@@ -231,28 +232,42 @@ func (v *ActivationReceipt) UnmarshalJSON(body []byte) error {
 }
 
 func checkModernServer(path, managedRoot string, server ExecutableIdentity) error {
-	identity, err := checkCandidateServer(path, server)
+	return checkModernServerContext(context.Background(), path, managedRoot, server)
+}
+
+func checkModernServerContext(ctx context.Context, path, managedRoot string, server ExecutableIdentity) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	identity, err := checkCandidateServerContext(ctx, path, server)
 	if err != nil {
 		return err
 	}
 	if _, err := releaseverify.LoadPinnedAuthorityRegistry(filepath.Join(managedRoot, "trust", "release-authority-registry.json"), identity.AuthorityRegistrySHA256, time.Now); err != nil {
 		return err
 	}
-	return verifyRegularFile(path, server.Size, server.SHA256)
+	return verifyRegularFileContext(ctx, path, server.Size, server.SHA256)
 }
 
 func checkCandidateServer(path string, server ExecutableIdentity) (releasecontract.ServerIdentity, error) {
-	if err := verifyRegularFile(path, server.Size, server.SHA256); err != nil {
+	return checkCandidateServerContext(context.Background(), path, server)
+}
+
+func checkCandidateServerContext(ctx context.Context, path string, server ExecutableIdentity) (releasecontract.ServerIdentity, error) {
+	if err := ctx.Err(); err != nil {
 		return releasecontract.ServerIdentity{}, err
 	}
-	identity, err := releasecontract.ReadServerIdentity(path)
+	if err := verifyRegularFileContext(ctx, path, server.Size, server.SHA256); err != nil {
+		return releasecontract.ServerIdentity{}, err
+	}
+	identity, err := releasecontract.ReadServerIdentityContext(ctx, path)
 	if err != nil {
 		return releasecontract.ServerIdentity{}, err
 	}
 	if identity.ExecutionContract != server.ExecutionContract || identity.Version != server.Version || identity.Protocol != server.Protocol || identity.CompatibleBundle != server.CompatibleBundle || identity.EmbeddedInputsSHA256 != server.EmbeddedInputsSHA256 {
 		return releasecontract.ServerIdentity{}, errors.New("actual server source-aware identity does not match authenticated release")
 	}
-	if err := verifyRegularFile(path, server.Size, server.SHA256); err != nil {
+	if err := verifyRegularFileContext(ctx, path, server.Size, server.SHA256); err != nil {
 		return releasecontract.ServerIdentity{}, err
 	}
 	return identity, nil
@@ -260,10 +275,17 @@ func checkCandidateServer(path string, server ExecutableIdentity) (releasecontra
 
 // CheckActivatedServer runs the same built-in protocol used by activation.
 func CheckActivatedServer(managedRoot string, state State) error {
+	return CheckActivatedServerContext(context.Background(), managedRoot, state)
+}
+
+func CheckActivatedServerContext(ctx context.Context, managedRoot string, state State) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if state.Profile != releasecontract.ModernProfile || !validModernIdentity(state.Profile, state.Server) {
 		return errors.New("modern installed state required")
 	}
-	return checkModernServer(filepath.Join(managedRoot, "bin", executableForProfile(state.TargetOS, state.Profile)), managedRoot, state.Server)
+	return checkModernServerContext(ctx, filepath.Join(managedRoot, "bin", executableForProfile(state.TargetOS, state.Profile)), managedRoot, state.Server)
 }
 
 func verifyModernPlan(plan ActivationPlan) error {

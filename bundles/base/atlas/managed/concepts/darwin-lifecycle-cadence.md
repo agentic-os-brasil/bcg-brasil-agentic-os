@@ -16,7 +16,7 @@ status: stable
 x-maestro-profile-version: "1"
 x-maestro-stable-id: managed/darwin-lifecycle-cadence
 x-maestro-scope: managed
-x-maestro-source-fingerprint: f413ccfbcde07f07c5e25e4ff6031ff7966f927f3962f559f5190d6e265c2bcf
+x-maestro-source-fingerprint: 4236015a694b0a4866d2dd3555a31991c9a9369abb69e134e7437e3ad901e599
 x-maestro-freshness: fresh
 x-maestro-status: active
 x-maestro-generator-version: maestro-managed-wiki/0.2
@@ -164,9 +164,13 @@ retains original occurrence and scheduled instant separately from request time;
 retry verifies/reuses the exact durable artifact rather than relabeling it.
 Semantic no-change cannot manufacture a qualification or proposal from time.
 
-The current Darwin constructor/publication remains unavailable on Windows.
-The existing native private kernel is preserved; source compilation is not
-native Darwin qualification. Focused owning and real SDK/rebuilt-stdio evidence,
-four exact-source reviews and affected hosted checks are separate gates.
-Automatic refresh/compensation acceptance, native Windows, real Code/Desktop
-loading, wake, production trust/distribution and colleague acceptance stay open.
+The Windows product constructor reuses the existing private kernel with
+operation-local retained namespace custody through the complete first-cache or
+proposal transaction, including its recovery journal, evidence and report pointer.
+Metadata replacement remains cooperative and inside the final live publication
+guard; this does not authorize stale-cache or authored-content replacement.
+Source construction and compilation do not establish native Darwin qualification.
+The original ordinary-account Windows owning and SDK/rebuilt-stdio journeys,
+four exact-source reviews and affected hosted checks remain separate gates.
+Automatic refresh/compensation acceptance, actual installed Code/Desktop loading,
+wake, production trust/distribution and colleague acceptance stay open.

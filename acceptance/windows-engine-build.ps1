@@ -71,6 +71,8 @@ $binaryRoot = Join-Path $publicRoot 'bin'
 New-Item -ItemType Directory -Path $sourceRoot, $binaryRoot | Out-Null
 $revision = (git rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $revision -cnotmatch '^[0-9a-f]{40}$') { throw 'Exact source revision is unavailable.' }
+$sourceTree = (git rev-parse 'HEAD^{tree}').Trim()
+if ($LASTEXITCODE -ne 0 -or $sourceTree -cnotmatch '^[0-9a-f]{40}$') { throw 'Exact source tree is unavailable.' }
 $archive = Join-Path $env:RUNNER_TEMP 'native-engine-source.tar'
 git archive --format=tar --output=$archive HEAD
 if ($LASTEXITCODE -ne 0) { throw 'Exact source archive failed.' }
@@ -123,7 +125,7 @@ print('verified_exact_public_runtime_inputs=57 bytes=132964926')
   })
   $records | Set-Content -LiteralPath $inventory -Encoding UTF8
   . (Join-Path $sourceRoot 'acceptance/windows-docling-profile.ps1')
-  $manifest=[ordered]@{schema_version=1;qualification_profile=$script:DoclingRuntimeQualificationProfile;runtime_profile='model-free-documents-v1';runtime_lock_sha256='38b1a0257c3feec8a5b4b97856e7f2096cdb72ed2bd1734d8e61567bf4757643';source_revision=$revision;public_root=$publicRoot;source_root=$sourceRoot;sdk_go=$sdkGo;module_cache=$env:GOMODCACHE;raw_inputs=$rawRoot;test_binary=$testBinary;inventory_sha256=(Get-FileHash -LiteralPath $inventory -Algorithm SHA256).Hash.ToLowerInvariant();required_tests=$script:DoclingRuntimeTests}
+  $manifest=[ordered]@{schema_version=1;qualification_profile=$script:DoclingRuntimeQualificationProfile;runtime_profile='model-free-documents-v1';runtime_lock_sha256='38b1a0257c3feec8a5b4b97856e7f2096cdb72ed2bd1734d8e61567bf4757643';source_revision=$revision;source_tree=$sourceTree;public_root=$publicRoot;source_root=$sourceRoot;sdk_go=$sdkGo;module_cache=$env:GOMODCACHE;raw_inputs=$rawRoot;test_binary=$testBinary;inventory_sha256=(Get-FileHash -LiteralPath $inventory -Algorithm SHA256).Hash.ToLowerInvariant();required_tests=$script:DoclingRuntimeTests}
   $manifestPath=Join-Path $publicRoot 'docling-runtime-manifest.json'
   $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
   Read-DoclingRuntimeManifest $manifestPath | Out-Null
@@ -133,7 +135,7 @@ print('verified_exact_public_runtime_inputs=57 bytes=132964926')
 $env:GOCACHE = Join-Path $env:RUNNER_TEMP 'native-engine-build-cache'
 $env:GOTOOLCHAIN = 'local'
 $env:GOFLAGS = '-buildvcs=false'
-$packages = @('execution', 'datahome', 'ownerctx', 'memory', 'scheduler', 'processidentity', 'winprivate', 'zipmigration')
+$packages = @('execution', 'datahome', 'ownerctx', 'memory', 'scheduler', 'processidentity', 'winprivate', 'zipmigration', 'darwin')
 $entries = @()
 $moduleInputs = @('go.mod', 'go.sum', 'adapters/mcp/go.mod', 'adapters/mcp/go.sum') | ForEach-Object {
   [ordered]@{path=$_; sha256=(Get-FileHash -LiteralPath (Join-Path $sourceRoot $_) -Algorithm SHA256).Hash}
@@ -208,12 +210,17 @@ try {
     'TestCompatibleDesktopCarrierReusesBytesWithoutChangingPriorSlot',
     'TestCurrentClientShippingNativeRefusal',
     'TestCurrentMaintenancePreservesQualifiedRoleAndReleaseArguments',
+    'TestDesktopOnlyInstalledClientLifecycle',
     'TestDirectInnerInstallRequiresProductionAuthority',
     'TestExplicitNativeRetryUsesFreshReviewedSlotsAndPreservesFailedCandidate',
     'TestForegroundProfilePreparationAndLoginRequireSeparateConfirmation',
     'TestFullNativeClientMaterializationHasNoResourceOnlyFallback',
     'TestInitialRuntimeOlderUnboundConsumerRemainsExplicitlyPending',
     'TestInterruptedVersionedDesktopReuseRequiresAuthenticatedPriorBinding',
+    'TestMaintenanceCommandOutputDrainsCopyAndSubprocess',
+    'TestMaintenanceCommandOutputHelper',
+    'TestMaintenanceOriginalChildInterruptionWinsOverOutputOverflow',
+    'TestMaintenanceOriginalChildOverflowWithoutInterruptionStaysRefused',
     'TestMaintenanceRefreshSelectsOnlyPreviouslyQualifiedStaleJobs',
     'TestModelProfilePreparationAndLoginRequireSeparateConfirmation',
     'TestModelRegistrationRefusesOwnerPolicyForWorkspaceBeforeSourceAccess',

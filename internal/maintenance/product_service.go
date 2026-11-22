@@ -26,6 +26,19 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
+type operationObserverKey struct{}
+
+// WithOperationObserver connects a native caller to a finite metadata-only
+// progress stream. It never changes review, admission, effects or qualification.
+func WithOperationObserver(ctx context.Context, observe func(string)) context.Context {
+	return context.WithValue(ctx, operationObserverKey{}, observe)
+}
+func observeOperation(ctx context.Context, phase string) {
+	if observe, ok := ctx.Value(operationObserverKey{}).(func(string)); ok && observe != nil {
+		observe(phase)
+	}
+}
+
 var ErrProductConflict = errors.New("maintenance review or revision changed")
 var ErrQualificationRequired = errors.New("current actual maintenance qualification required")
 
@@ -48,6 +61,8 @@ type ServiceOptions struct {
 	// InstalledGuard comes from the fixed product binding. It is not a grant
 	// or a model input and cannot replace the live job/control/lease checks.
 	InstalledGuard func(func() error) error `json:"-"`
+	// InstalledGuardContext preserves the same publication owner with the live operation budget.
+	InstalledGuardContext func(context.Context, func() error) error `json:"-"`
 	// EligibilityGuard is a trusted native veto; it cannot replace job authority.
 	EligibilityGuard func() error `json:"-"`
 }
@@ -373,11 +388,21 @@ func (s *Service) withControl(jobID string, fn func() error) error {
 }
 
 func (s *Service) Status() (ProductStatus, error) {
+	return s.StatusContext(context.Background())
+}
+
+func (s *Service) StatusContext(ctx context.Context) (ProductStatus, error) {
+	if err := ctx.Err(); err != nil {
+		return ProductStatus{}, err
+	}
 	if err := s.validate(); err != nil {
 		return ProductStatus{}, err
 	}
 	report := ProductStatus{WorkspaceID: s.workspaceID}
 	for _, job := range s.options.Catalog.Jobs {
+		if err := ctx.Err(); err != nil {
+			return report, err
+		}
 		if s.updateScoped && job.ID != UpdateAvailabilityJobID || s.weeklyScoped && job.ID != YodaSelfReviewWeeklyJobID || s.ownerScoped && job.ID != SelfObservationCaptureJobID {
 			continue
 		}
@@ -432,12 +457,19 @@ func (s *Service) Status() (ProductStatus, error) {
 		}
 		report.Jobs = append(report.Jobs, item)
 	}
-	return report, nil
+	return report, ctx.Err()
 }
 
 func (s *Service) Review(op Operation) (ProductReview, error) {
+	return s.ReviewContext(context.Background(), op)
+}
+
+func (s *Service) ReviewContext(ctx context.Context, op Operation) (ProductReview, error) {
+	if err := ctx.Err(); err != nil {
+		return ProductReview{}, err
+	}
 	if op.JobID == UpdateAvailabilityJobID && !s.updateScoped {
-		return s.updateAvailabilityService().Review(op)
+		return s.updateAvailabilityService().ReviewContext(ctx, op)
 	}
 	if modelJob(op.JobID) && op.Kind == "register" {
 		if op.JobID == YodaSelfReviewWeeklyJobID {
@@ -446,10 +478,10 @@ func (s *Service) Review(op Operation) (ProductReview, error) {
 		return s.reviewWeeklyRegistration(op)
 	}
 	if op.JobID == YodaSelfReviewWeeklyJobID && !s.weeklyScoped {
-		return s.weeklyModelService().Review(op)
+		return s.weeklyModelService().ReviewContext(ctx, op)
 	}
 	if op.JobID == SelfObservationCaptureJobID && !s.ownerScoped {
-		return s.selfObservationService().Review(op)
+		return s.selfObservationService().ReviewContext(ctx, op)
 	}
 	if err := s.validate(); err != nil {
 		return ProductReview{}, err
@@ -554,6 +586,9 @@ func (s *Service) Review(op Operation) (ProductReview, error) {
 		}
 		r.SourceReview = &review
 	}
+	if err := ctx.Err(); err != nil {
+		return ProductReview{}, err
+	}
 	r.seal = productDigest([]any{s.binding, r})
 	return r, nil
 }
@@ -561,6 +596,9 @@ func (s *Service) Review(op Operation) (ProductReview, error) {
 // Apply invokes the trusted host's exact review before any write, then repeats
 // read-only review and CAS. Returning an error from confirm leaves no state.
 func (s *Service) Apply(ctx context.Context, r ProductReview, confirm func(context.Context, ProductReview) error) (ProductJobStatus, error) {
+	if err := ctx.Err(); err != nil {
+		return ProductJobStatus{}, err
+	}
 	if r.Operation.JobID == UpdateAvailabilityJobID && !s.updateScoped {
 		return s.updateAvailabilityService().Apply(ctx, r, confirm)
 	}
@@ -579,22 +617,31 @@ func (s *Service) Apply(ctx context.Context, r ProductReview, confirm func(conte
 	if confirm == nil {
 		return ProductJobStatus{}, errors.New("trusted maintenance review required")
 	}
-	exact, err := s.Review(r.Operation)
+	observeOperation(ctx, "review")
+	exact, err := s.ReviewContext(ctx, r.Operation)
 	if err != nil {
 		return ProductJobStatus{}, err
 	}
 	if r.seal == "" || r.seal != exact.seal || productDigest(r) != productDigest(exact) {
 		return ProductJobStatus{}, ErrProductConflict
 	}
+	observeOperation(ctx, "confirmation")
 	if err := confirm(ctx, r); err != nil {
 		return ProductJobStatus{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return ProductJobStatus{}, err
 	}
-	exact, err = s.Review(r.Operation)
+	observeOperation(ctx, "review")
+	exact, err = s.ReviewContext(ctx, r.Operation)
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return ProductJobStatus{}, err
+	}
 	if err != nil || r.seal != exact.seal || productDigest(r) != productDigest(exact) {
 		return ProductJobStatus{}, ErrProductConflict
+	}
+	if err := ctx.Err(); err != nil {
+		return ProductJobStatus{}, err
 	}
 	if r.Operation.Kind == "qualify" {
 		if DarwinJob(r.Operation.JobID) {
@@ -603,6 +650,9 @@ func (s *Service) Apply(ctx context.Context, r ProductReview, confirm func(conte
 		return s.qualify(ctx, r)
 	}
 	err = s.withControl(r.Operation.JobID, func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		c, err := s.loadControl(r.Operation.JobID)
 		if err != nil {
 			return err
@@ -635,10 +685,13 @@ func (s *Service) Apply(ctx context.Context, r ProductReview, confirm func(conte
 	if err != nil {
 		return ProductJobStatus{}, err
 	}
-	return s.jobStatus(r.Operation.JobID)
+	return s.jobStatusContext(ctx, r.Operation.JobID)
 }
 func (s *Service) jobStatus(id string) (ProductJobStatus, error) {
-	status, err := s.Status()
+	return s.jobStatusContext(context.Background(), id)
+}
+func (s *Service) jobStatusContext(ctx context.Context, id string) (ProductJobStatus, error) {
+	status, err := s.StatusContext(ctx)
 	if err != nil {
 		return ProductJobStatus{}, err
 	}
@@ -694,8 +747,10 @@ func (p *productExecution) guard(publish func() error) error {
 	})
 }
 
-func (p *productExecution) guardWithin(ctx, acquisitionCtx context.Context, publish func() error) error {
+func (p *productExecution) guardWithin(ctx context.Context, publish func() error) error {
 	return p.guardWithControl(ctx, publish, func(action func() error) error {
+		acquisitionCtx, stopAcquisition := context.WithTimeout(ctx, leaseQuarantineGrace)
+		defer stopAcquisition()
 		return scheduler.WithPrivateLockContext(acquisitionCtx, filepath.Join(filepath.Dir(p.service.controlPath(p.jobID)), "control.guard"), action)
 	})
 }
@@ -790,6 +845,9 @@ func (p *productExecution) guardWithControl(ctx context.Context, publish func() 
 			}
 			return publish()
 		}
+		if p.jobID != UpdateCheckJobID && p.service.options.InstalledGuardContext != nil {
+			return p.service.options.InstalledGuardContext(ctx, guardedPublish)
+		}
 		if p.jobID != UpdateCheckJobID && p.service.options.InstalledGuard != nil {
 			return p.service.options.InstalledGuard(guardedPublish)
 		}
@@ -829,6 +887,9 @@ func (s *Service) worker(p *productExecution) Worker {
 }
 
 func (s *Service) execute(ctx context.Context, p *productExecution, occ scheduler.Occurrence, now time.Time) (Receipt, error) {
+	if err := ctx.Err(); err != nil {
+		return Receipt{}, err
+	}
 	p.ctx = ctx
 	if p.jobID == MemoryModelJobID {
 		if err := p.selectMemory(ctx, occ, now); err != nil {
@@ -891,6 +952,9 @@ func (s *Service) execute(ctx context.Context, p *productExecution, occ schedule
 }
 
 func (s *Service) RunDue(ctx context.Context) (WakeReport, error) {
+	if err := ctx.Err(); err != nil {
+		return WakeReport{}, err
+	}
 	if err := s.validate(); err != nil {
 		return WakeReport{}, err
 	}
@@ -1042,12 +1106,19 @@ func (s *Service) RunDue(ctx context.Context) (WakeReport, error) {
 }
 
 func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatus, error) {
+	if err := ctx.Err(); err != nil {
+		return ProductJobStatus{}, err
+	}
+	observeOperation(ctx, "reservation")
 	token, err := attemptID()
 	if err != nil {
 		return ProductJobStatus{}, err
 	}
 	var revision uint64
 	err = s.withControl(r.Operation.JobID, func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		c, err := s.loadControl(r.Operation.JobID)
 		if err != nil {
 			return err
@@ -1058,9 +1129,16 @@ func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatu
 		c.Revision++
 		c.OneShot = token
 		revision = c.Revision
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		return s.saveControl(c)
 	})
 	if err != nil {
+		return ProductJobStatus{}, err
+	}
+	observeOperation(ctx, "selection")
+	if err := ctx.Err(); err != nil {
 		return ProductJobStatus{}, err
 	}
 	p := &productExecution{service: s, jobID: r.Operation.JobID, revision: revision, oneShot: token, source: r.SourceState}
@@ -1080,8 +1158,13 @@ func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatu
 		}
 		occ.EventID, occ.ScheduledFor = snapshot.EventID, snapshot.EventAt
 	}
+	observeOperation(ctx, "execution")
 	receipt, err := s.execute(ctx, p, occ, now)
 	if err != nil {
+		return ProductJobStatus{}, err
+	}
+	observeOperation(ctx, "verification")
+	if err := ctx.Err(); err != nil {
 		return ProductJobStatus{}, err
 	}
 	if p.jobID == UpdateCheckJobID && receipt.State == ReceiptReviewedNoChange {
@@ -1099,7 +1182,7 @@ func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatu
 		if err != nil {
 			return ProductJobStatus{}, err
 		}
-		status, err := s.jobStatus(p.jobID)
+		status, err := s.jobStatusContext(ctx, p.jobID)
 		status.Reason = "reviewed_no_change"
 		return status, err
 	}
@@ -1136,6 +1219,10 @@ func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatu
 	if err := s.verifyQualification(&q); err != nil {
 		return ProductJobStatus{}, err
 	}
+	if err := ctx.Err(); err != nil {
+		return ProductJobStatus{}, err
+	}
+	observeOperation(ctx, "publication")
 	err = p.guard(func() error {
 		c, err := s.loadControl(p.jobID)
 		if err != nil {
@@ -1144,12 +1231,15 @@ func (s *Service) qualify(ctx context.Context, r ProductReview) (ProductJobStatu
 		c.Revision++
 		c.OneShot = ""
 		c.Qualification = &q
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		return s.saveControl(c)
 	})
 	if err != nil {
 		return ProductJobStatus{}, err
 	}
-	return s.jobStatus(p.jobID)
+	return s.jobStatusContext(ctx, p.jobID)
 }
 
 func (s *Service) domainEvidence(jobID string, at time.Time) (string, string, error) {

@@ -190,9 +190,10 @@ try{
   $script:Config|Add-Member -NotePropertyName client_parent -NotePropertyValue $clients
   $script:Config|Add-Member -NotePropertyName workspace -NotePropertyValue $Work
   $Common=@('--workspace',$Work)
-  $assignment=$ast.Find({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq '$Manage'},$true)
-  if($null -eq $assignment){throw 'Missing actual manager argument producer'}
-  Invoke-Expression $assignment.Extent.Text
+  $ClientTarget=''
+  $producer=$ast.Find({param($n) $n -is [Management.Automation.Language.IfStatementAst] -and $n.Extent.Text.Contains('$Manage = $Common')},$true)
+  if($null -eq $producer){throw 'Missing actual target-aware manager argument producer'}
+  Invoke-Expression $producer.Extent.Text
   if($Manage[$Manage.IndexOf('--client-code-root')+1] -cne (Join-Path $clients 'code') -or $Manage[$Manage.IndexOf('--client-desktop-path')+1] -cne (Join-Path $clients 'maestro-product.mcpb') -or $Manage[$Manage.IndexOf('--client-code-config')+1] -cne $profile){throw 'Original manager arguments lost exact client/profile selection'}
   function Verify-Installer([string]$Path){}
   function Ensure-CodeLogin{}
@@ -203,6 +204,18 @@ try{
   $Installer='Test-Installer';$env:CLAUDE_CONFIG_DIR='caller-profile'
   Invoke-Management -Extra @('--management-intent','update')
   if($script:ManagementExit -ne 9 -or $env:CLAUDE_CONFIG_DIR -cne 'caller-profile'){throw 'Manager exit or caller environment was lost'}
+  $legacyConfig=$script:Config
+  $script:Config=[PSCustomObject]@{client_target='desktop';client_parent=$clients;workspace=$Work}
+  $ClientTarget='desktop';Invoke-Expression $producer.Extent.Text
+  if($Manage -contains '--client-code-root' -or $Manage -contains '--client-code-config' -or $Manage -contains '--client-code-executable' -or $Manage -contains '--client-scope' -or $Manage[$Manage.IndexOf('--client-target')+1] -cne 'desktop'){throw 'Desktop manager fabricated Code selection'}
+  function Ensure-CodeLogin{throw 'Desktop manager attempted Code login'}
+  function Test-DesktopInstaller{
+    if($env:CLAUDE_CONFIG_DIR -cne 'caller-profile' -or $args[0] -cne 'manage' -or $args -contains '--client-code-root'){throw 'Desktop manager changed profile or selected Code'}
+    $global:LASTEXITCODE=7
+  }
+  $Installer='Test-DesktopInstaller';Invoke-Management -Extra @('--management-intent','update')
+  if($script:ManagementExit -ne 7 -or $env:CLAUDE_CONFIG_DIR -cne 'caller-profile'){throw 'Desktop manager lost original exit/environment'}
+  $script:Config=$legacyConfig;$ClientTarget=''
 }finally{if($had){$env:CLAUDE_CONFIG_DIR=$prior}else{Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue}}
 
 # Execute the original source-enrollment producer against a bounded synthetic owner.
@@ -301,4 +314,73 @@ foreach($scenario in @('local-test','decline','empty-choice','advanced-source','
   }
 }
 Write-Output 'PASS regular exe selection; exact owner clients; reserved-root and reparse preflight without child creation; explicit profile consent; existing settings preserved; selected child profile; forced official login recovery consent; original manager profile/path/update arguments; exit and caller environment restored'
+`
+
+// Execute the actual first-selection block under Windows path semantics, with
+// Code discovery/profile/login set to fail. This is not a native client test.
+func TestWindowsSelfServiceDesktopSelectionAvoidsCode(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows participant selection paths")
+	}
+	root := developerFixture(t)
+	powerShell, err := exec.LookPath("powershell.exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := filepath.Abs("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := filepath.Join(root, "desktop-target.ps1")
+	if err := os.WriteFile(script, []byte(windowsDesktopSelectionBehavior), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(powerShell, "-NoProfile", "-NonInteractive", "-File", script, "-Source", filepath.Join(repo, "dev/pilot/templates/installed-seed/Maestro.ps1"), "-Fixture", root)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("shipped Desktop selection invoked Code: %s %v", output, err)
+	}
+}
+
+const windowsDesktopSelectionBehavior = `param([string]$Source,[string]$Fixture)
+$ErrorActionPreference='Stop';Set-StrictMode -Version Latest
+$Utf8=New-Object System.Text.UTF8Encoding($false)
+$tokens=$null;$errors=$null;$ast=[Management.Automation.Language.Parser]::ParseFile($Source,[ref]$tokens,[ref]$errors)
+if($errors.Count -ne 0){throw 'Frontend does not parse'}
+$writer=$ast.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Write-Json'},$true)
+Invoke-Expression $writer.Extent.Text
+$selection=$ast.Find({param($n) $n -is [Management.Automation.Language.IfStatementAst] -and $n.Extent.Text.StartsWith('if (-not (Test-Path -LiteralPath $configPath))')},$true)
+if($null -eq $selection){throw 'Missing original first-selection block'}
+function Stop-Maestro([string]$Message){throw $Message}
+function Get-Command {throw 'CODE DISCOVERY MUST NOT RUN'}
+function Resolve-CodeExecutable {throw 'CODE EXECUTABLE MUST NOT RUN'}
+function Prepare-CodeConfiguration {throw 'CODE PROFILE MUST NOT RUN'}
+function Ensure-CodeLogin {throw 'CODE LOGIN MUST NOT RUN'}
+function Prepare-ClientParent {$p=Join-Path $Owner 'Maestro-Clients';[IO.Directory]::CreateDirectory($p)|Out-Null;return $p}
+function Read-Host([string]$Prompt){if($script:Answers.Count -eq 0){throw ('Unexpected prompt '+$Prompt)};$script:Answers.Dequeue()}
+$Dev=Join-Path $Fixture 'Developer';$Owner=Join-Path $Dev 'existing owner';$Base=Join-Path $Dev 'pilot';$Role='desktop-fixture';$CheckOnly=$false
+foreach($p in @($Dev,$Owner,$Base)){[IO.Directory]::CreateDirectory($p)|Out-Null}
+$configPath=Join-Path $Base 'participant.json';$env:MAESTRO_HOME=Join-Path $Owner 'brain'
+$script:Answers=New-Object 'Collections.Generic.Queue[string]'
+foreach($answer in @('desktop',$Owner,(Join-Path $Dev 'workspace'))){$script:Answers.Enqueue($answer)}
+Invoke-Expression $selection.Extent.Text
+$config=Get-Content -LiteralPath $configPath -Raw|ConvertFrom-Json
+if($config.client_target -cne 'desktop' -or $null -ne $config.PSObject.Properties['code_executable'] -or $null -ne $config.PSObject.Properties['code_configuration_directory']){throw 'Desktop selection fabricated Code state'}
+$before=[IO.File]::ReadAllText($configPath)
+Invoke-Expression $selection.Extent.Text
+if([IO.File]::ReadAllText($configPath) -cne $before -or $script:Answers.Count -ne 0){throw 'Resume changed selection or consumed more prompts'}
+$setup=$ast.Find({param($n) $n -is [Management.Automation.Language.IfStatementAst] -and $n.Extent.Text.StartsWith('if (-not (Test-Path -LiteralPath $installed))')},$true)
+if($null -eq $setup){throw 'Missing original bootstrap setup block'}
+$Product=Join-Path $Base 'product';$installed=Join-Path $Product 'maestro-install.exe';$Stage=Join-Path $Base 'stage';$Run=Join-Path $Base 'run'
+[IO.Directory]::CreateDirectory($Run)|Out-Null
+$script:BootstrapCommands=New-Object 'Collections.Generic.List[string]'
+function Confirm-Review($Review){}
+function Invoke-Installer([string]$Command,$Request,[string[]]$Extra=@()){
+  if($Request.target -cne 'desktop' -or $Request.ContainsKey('code_packet') -or $Request.ContainsKey('desktop_packet')){throw 'Desktop bootstrap created portable client placeholders'}
+  $script:BootstrapCommands.Add($Command)
+  if($Command -ceq 'review'){return [PSCustomObject]@{review_digest='reviewed-desktop'}}
+  if($Command -cne 'apply' -or ($Extra -join ',') -cne '--review-digest,reviewed-desktop,--confirm'){throw 'Original bootstrap review was not preserved'}
+  return [PSCustomObject]@{state='ready'}
+}
+Invoke-Expression $setup.Extent.Text
+if(($script:BootstrapCommands -join ',') -cne 'review,apply'){throw 'Original bootstrap route was not executed'}
 `

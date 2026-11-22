@@ -51,7 +51,17 @@ Select the local signed release directory, new managed installation directory,
 owner directory, workspace and two new packet destinations. Keep private home
 and installation custody outside the synced share and managed payload.
 
-The closed operator request has these six fields:
+The participant launcher now asks which client target to prepare. **Desktop only**
+uses the same signed activation, private owner/workspace and current-client manager;
+it never requires Code discovery, a Code profile or Code login. Its first setup
+request adds `"target": "desktop"` and omits both `code_packet` and
+`desktop_packet`. Activation does not advertise a portable initial connector: the
+installed manager subsequently publishes the admitted versioned Desktop MCPB,
+live-method archive and fixed management launchers. Their native installation and
+functional acceptance remain pending. See [the client guide](product-clients.md#select-desktop-without-code).
+This requires a newly accepted compatible kit; existing kits retain their contract.
+
+The legacy both-client operator request remains unchanged with these six fields:
 
 ```json
 {

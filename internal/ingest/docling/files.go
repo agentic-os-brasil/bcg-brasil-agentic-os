@@ -2,6 +2,7 @@ package docling
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -20,6 +21,35 @@ import (
 var errFileReadUnavailable = errors.New("file_read_unavailable")
 
 func digest(body []byte) string { s := sha256.Sum256(body); return hex.EncodeToString(s[:]) }
+
+type contextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r contextReader) Read(body []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	// Keep cancellation observable during large file and decompression reads.
+	if len(body) > 32<<10 {
+		body = body[:32<<10]
+	}
+	n, err := r.reader.Read(body)
+	if cancelled := r.ctx.Err(); cancelled != nil {
+		return n, cancelled
+	}
+	return n, err
+}
+
+func digestContext(ctx context.Context, body []byte) (string, error) {
+	hash := sha256.New()
+	if _, err := io.Copy(hash, contextReader{ctx, bytes.NewReader(body)}); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
 func relativeName(name string) bool {
 	if name == "" || name == "." || path.Clean(name) != name || strings.HasPrefix(name, "../") || strings.HasPrefix(name, "/") || strings.ContainsAny(name, "\\:\x00") || !utf8.ValidString(name) || !norm.NFC.IsNormalString(name) {
 		return false
@@ -38,15 +68,29 @@ func relativeName(name string) bool {
 }
 
 func readFile(name string, maximum int64) ([]byte, os.FileInfo, error) {
+	return readFileContext(context.Background(), name, maximum)
+}
+
+func readFileContext(ctx context.Context, name string, maximum int64) ([]byte, os.FileInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
 	f, err := scheduler.OpenRegularFile(name)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer f.Close()
-	return readOpenedFile(f, maximum)
+	return readOpenedFileContext(ctx, f, maximum)
 }
 
 func readOpenedFile(f *os.File, maximum int64) ([]byte, os.FileInfo, error) {
+	return readOpenedFileContext(context.Background(), f, maximum)
+}
+
+func readOpenedFileContext(ctx context.Context, f *os.File, maximum int64) ([]byte, os.FileInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
 	before, err := f.Stat()
 	if err != nil {
 		return nil, nil, err
@@ -62,7 +106,7 @@ func readOpenedFile(f *os.File, maximum int64) ([]byte, os.FileInfo, error) {
 	if !singleLink(f, before) {
 		return nil, nil, errors.New("file_not_bounded_single_link")
 	}
-	body, err := io.ReadAll(io.LimitReader(f, maximum+1))
+	body, err := io.ReadAll(io.LimitReader(contextReader{ctx, f}, maximum+1))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -72,6 +116,9 @@ func readOpenedFile(f *os.File, maximum int64) ([]byte, os.FileInfo, error) {
 	}
 	if !os.SameFile(before, after) || !after.Mode().IsRegular() || int64(len(body)) > maximum || before.Size() != int64(len(body)) || after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime()) || !singleLink(f, after) {
 		return nil, nil, errors.New("file_changed")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
 	}
 	return body, after, nil
 }
