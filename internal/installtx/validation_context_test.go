@@ -87,6 +87,12 @@ func init() {
 func qualifiedValidationIdentityFixture(t *testing.T) (string, string, State, string) {
 	t.Helper()
 	managed, data := t.TempDir(), t.TempDir()
+	fixtureTargetOS := runtime.GOOS
+	if fixtureTargetOS == "linux" {
+		// Only the synthetic release/state needs a supported product target.
+		// The identity child remains the actual host test binary, not a Darwin executable.
+		fixtureTargetOS = "darwin"
+	}
 	now := time.Now().UTC().Truncate(time.Second)
 	public, private, err := ed25519.GenerateKey(nil)
 	if err != nil {
@@ -124,7 +130,7 @@ func qualifiedValidationIdentityFixture(t *testing.T) (string, string, State, st
 	if err != nil {
 		t.Fatal(err)
 	}
-	serverPath := filepath.Join(managed, "bin", executableForProfile(runtime.GOOS, releasecontract.ModernProfile))
+	serverPath := filepath.Join(managed, "bin", executableForProfile(fixtureTargetOS, releasecontract.ModernProfile))
 	if err = os.MkdirAll(filepath.Dir(serverPath), 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +166,7 @@ func qualifiedValidationIdentityFixture(t *testing.T) (string, string, State, st
 	if err = os.WriteFile(filepath.Join(bundleRoot, "fixture.md"), []byte("x"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	manifest := releasecontract.Manifest{SchemaVersion: 2, Product: "maestro", Release: "0.2.0", Channel: "canary", Issuer: releasecontract.Issuer{ID: "engineering", KeyID: "fixture"}, Server: releasecontract.ServerComponent{Version: "0.2.0", Protocol: identity.Protocol, ExecutionContract: identity.ExecutionContract, CompatibleBundle: identity.CompatibleBundle, EmbeddedInputsSHA256: embedded}, Bundle: releasecontract.BundleComponent{Version: "0.2.0", CompatibleServer: ">=0.0.0 <1.0.0"}, Delivery: releasecontract.DeliveryComponent{Profile: releasecontract.ModernProfile, InstallerVersion: "0.2.0", InstallerProtocol: releasecontract.InstallerProtocol}, Artifacts: []releasecontract.Artifact{{Kind: "mcp_server", OS: runtime.GOOS, Arch: runtime.GOARCH, Name: "maestro-mcp_0.2.0_" + runtime.GOOS + "_" + runtime.GOARCH, Size: int64(len(executable)), SHA256: fmt.Sprintf("%x", sha256.Sum256(executable)), SignatureRef: "server_0.2.0.sig"}, {Kind: "bundle", OS: "any", Arch: "any", Name: "maestro-base_0.2.0.tar.gz", Size: int64(archive.Len()), SHA256: fmt.Sprintf("%x", sha256.Sum256(archive.Bytes())), SignatureRef: "bundle_0.2.0.sig"}}, Migrations: []releasecontract.Migration{}, ReleaseNotes: releasecontract.ReleaseNotes{Name: "notes_0.2.0.md", SHA256: strings.Repeat("c", 64)}}
+	manifest := releasecontract.Manifest{SchemaVersion: 2, Product: "maestro", Release: "0.2.0", Channel: "canary", Issuer: releasecontract.Issuer{ID: "engineering", KeyID: "fixture"}, Server: releasecontract.ServerComponent{Version: "0.2.0", Protocol: identity.Protocol, ExecutionContract: identity.ExecutionContract, CompatibleBundle: identity.CompatibleBundle, EmbeddedInputsSHA256: embedded}, Bundle: releasecontract.BundleComponent{Version: "0.2.0", CompatibleServer: ">=0.0.0 <1.0.0"}, Delivery: releasecontract.DeliveryComponent{Profile: releasecontract.ModernProfile, InstallerVersion: "0.2.0", InstallerProtocol: releasecontract.InstallerProtocol}, Artifacts: []releasecontract.Artifact{{Kind: "mcp_server", OS: fixtureTargetOS, Arch: runtime.GOARCH, Name: "maestro-mcp_0.2.0_" + fixtureTargetOS + "_" + runtime.GOARCH, Size: int64(len(executable)), SHA256: fmt.Sprintf("%x", sha256.Sum256(executable)), SignatureRef: "server_0.2.0.sig"}, {Kind: "bundle", OS: "any", Arch: "any", Name: "maestro-base_0.2.0.tar.gz", Size: int64(archive.Len()), SHA256: fmt.Sprintf("%x", sha256.Sum256(archive.Bytes())), SignatureRef: "bundle_0.2.0.sig"}}, Migrations: []releasecontract.Migration{}, ReleaseNotes: releasecontract.ReleaseNotes{Name: "notes_0.2.0.md", SHA256: strings.Repeat("c", 64)}}
 	manifest.Delivery.ClientInputsSHA256, err = manifest.ClientInputsDigest()
 	if err != nil {
 		t.Fatal(err)
@@ -170,14 +176,17 @@ func qualifiedValidationIdentityFixture(t *testing.T) (string, string, State, st
 		t.Fatal(err)
 	}
 	binding := ReleaseBinding{ManifestSHA256: fmt.Sprintf("%x", sha256.Sum256(manifestBody)), ClientInputsSHA256: manifest.Delivery.ClientInputsSHA256, ManifestJSON: string(manifestBody), ManifestSignature: base64.StdEncoding.EncodeToString(ed25519.Sign(private, manifestBody)), BundleSHA256: manifest.Artifacts[1].SHA256, BundleSize: int64(archive.Len()), BundleArchive: archivePath}
-	generation := releasecontract.Generation{SchemaVersion: 1, Product: "maestro", Protocol: releasecontract.GenerationProtocol, Issuer: manifest.Issuer, Source: releasecontract.SourceTuple{SourceID: "synthetic", Channel: "canary", OS: runtime.GOOS, Arch: runtime.GOARCH}, Sequence: 1, PublishedAt: now.Add(-time.Hour).Format(time.RFC3339), ExpiresAt: now.Add(time.Hour).Format(time.RFC3339), Release: manifest.Release, ManifestSHA256: binding.ManifestSHA256, ClientInputsSHA256: binding.ClientInputsSHA256, Recalls: []releasecontract.ReleaseRecall{}, MinimumReaderContract: releasecontract.SyncedSourceContract}
+	generation := releasecontract.Generation{SchemaVersion: 1, Product: "maestro", Protocol: releasecontract.GenerationProtocol, Issuer: manifest.Issuer, Source: releasecontract.SourceTuple{SourceID: "synthetic", Channel: "canary", OS: fixtureTargetOS, Arch: runtime.GOARCH}, Sequence: 1, PublishedAt: now.Add(-time.Hour).Format(time.RFC3339), ExpiresAt: now.Add(time.Hour).Format(time.RFC3339), Release: manifest.Release, ManifestSHA256: binding.ManifestSHA256, ClientInputsSHA256: binding.ClientInputsSHA256, Recalls: []releasecontract.ReleaseRecall{}, MinimumReaderContract: releasecontract.SyncedSourceContract}
 	body, err := json.Marshal(generation)
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := State{SchemaVersion: 4, Profile: releasecontract.ModernProfile, ManagedRoot: managed, Release: manifest.Release, Channel: manifest.Channel, CLIVersion: manifest.Release, BundleVersion: manifest.Bundle.Version, TargetOS: runtime.GOOS, TargetArch: runtime.GOARCH, ActivatedAt: now, Server: serverForManifest(manifest, manifest.Artifacts[0]), Binding: binding, Source: &SourceControl{Locator: filepath.Join(data, "source"), SourceBinding: SourceBinding{Tuple: generation.Source, Sequence: generation.Sequence, GenerationSHA256: fmt.Sprintf("%x", sha256.Sum256(body))}, Body: body, Signature: ed25519.Sign(private, body), Recalls: []releasecontract.ReleaseRecall{}, MinimumReaderContract: generation.MinimumReaderContract, ObservedAt: now}}
+	state := State{SchemaVersion: 4, Profile: releasecontract.ModernProfile, ManagedRoot: managed, Release: manifest.Release, Channel: manifest.Channel, CLIVersion: manifest.Release, BundleVersion: manifest.Bundle.Version, TargetOS: fixtureTargetOS, TargetArch: runtime.GOARCH, ActivatedAt: now, Server: serverForManifest(manifest, manifest.Artifacts[0]), Binding: binding, Source: &SourceControl{Locator: filepath.Join(data, "source"), SourceBinding: SourceBinding{Tuple: generation.Source, Sequence: generation.Sequence, GenerationSHA256: fmt.Sprintf("%x", sha256.Sum256(body))}, Body: body, Signature: ed25519.Sign(private, body), Recalls: []releasecontract.ReleaseRecall{}, MinimumReaderContract: generation.MinimumReaderContract, ObservedAt: now}}
 	if err = WriteState(data, state); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := ReadSourceState(data, managed); err != nil {
+		t.Fatalf("synthetic fixture state must be valid before validation: %v", err)
 	}
 	return managed, data, state, counter
 }
@@ -236,7 +245,7 @@ func TestQualifiedValidationRetainsIdentityAndArtifactRefusals(t *testing.T) {
 			case "registry-pin":
 				identity.AuthorityRegistrySHA256 = strings.Repeat("f", 64)
 			case "server-content":
-				flip(filepath.Join(managed, "bin", executableForProfile(runtime.GOOS, releasecontract.ModernProfile)))
+				flip(filepath.Join(managed, "bin", executableForProfile(state.TargetOS, releasecontract.ModernProfile)))
 			case "registry-content":
 				flip(filepath.Join(managed, "trust", "release-authority-registry.json"))
 			case "archive-content":
