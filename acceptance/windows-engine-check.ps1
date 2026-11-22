@@ -92,6 +92,7 @@ foreach ($entry in $report.adapter_packages) {
     $assertions = switch -CaseSensitive ($entry.name) { 'mcp' { $closed['$adapterAssertions'] }; 'mcp-command' { $parents }; 'setup' { $closed['$adapterSetupAssertions'] }; 'packaging' { $closed['$adapterPackagingAssertions'] } }
     if ($entry.qualified -ne $true -or $entry.copied_binary_custody -ne $true -or $entry.proof.qualified -ne $true -or
         @((Compare-Object ($parents | Sort-Object -CaseSensitive) (@($entry.proof.required_tests) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0 -or
+        @((Compare-Object ($assertions | Sort-Object -CaseSensitive) (@($entry.proof.required_assertions) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0 -or
         @((Compare-Object ($assertions | Sort-Object -CaseSensitive) (@($entry.proof.outcomes.test) | Sort-Object -CaseSensitive) -CaseSensitive)).Count -ne 0 -or
         @($entry.proof.outcomes.test | Sort-Object -CaseSensitive -Unique).Count -ne @($assertions).Count -or
         @($entry.proof.outcomes | Where-Object { $_.outcome -cne 'PASS' }).Count -ne 0) {
