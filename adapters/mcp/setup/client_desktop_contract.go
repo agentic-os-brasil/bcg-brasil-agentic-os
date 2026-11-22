@@ -16,7 +16,9 @@ func VerifyRecordedDesktopContract(path string, o installer.ClientOptions, targe
 	if err != nil {
 		return err
 	}
-	if status.State != "current_materialization" || status.Record == nil {
+	// Canonical partial preparation already contains the complete Desktop view;
+	// pending Code supplies no authority to skip the archive and binding checks.
+	if status.Record == nil || status.State != "current_materialization" && (status.State != installer.ClientPartialPreparation || !status.Record.CodePreparationPending()) {
 		return errors.New("current admitted client record required")
 	}
 	r := status.Record

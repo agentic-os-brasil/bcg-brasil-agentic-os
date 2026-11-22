@@ -32,8 +32,12 @@ func PrepareStableNativeHook(ctx context.Context, o ClientOptions, event, select
 		return QualifiedLaunch{}, err
 	}
 	var launch QualifiedLaunch
-	err := installtx.GuardQualifiedCurrent(o.ManagedRoot, o.DataRoot, installtx.ReleaseBinding{}, time.Now(), func() error {
-		status, err := ReadClientsSeeded(ctx, o)
+	err := installtx.GuardQualifiedCurrentStateContext(ctx, o.ManagedRoot, o.DataRoot, installtx.ReleaseBinding{}, time.Now(), func(state installtx.State, finalCheck func(installtx.ReleaseBinding, time.Time) error) error {
+		record, recordBody, err := readClientRecord(o.SeededOperationOptions, o.Request.CarrierID)
+		if err != nil {
+			return err
+		}
+		status, err := inspectClientRecordAtCurrent(ctx, o, record, state)
 		if err != nil {
 			return err
 		}
@@ -50,7 +54,20 @@ func PrepareStableNativeHook(ctx context.Context, o ClientOptions, event, select
 		if err != nil || fmt.Sprintf("%x", sha256.Sum256(body)) != selection {
 			return errors.New("native selected owner/workspace changed")
 		}
-		launch, err = PrepareQualifiedLaunch(ctx, QualifiedLaunchOptions{SeededOperationOptions: o.SeededOperationOptions, ExpectedBinding: installtx.ReleaseBinding{ManifestSHA256: r.Materialization.ManifestSHA256, ClientInputsSHA256: r.Materialization.ClientInputsSHA256}, Workspace: r.Binding.Workspace})
+		expected := installtx.ReleaseBinding{ManifestSHA256: r.Materialization.ManifestSHA256, ClientInputsSHA256: r.Materialization.ClientInputsSHA256}
+		// Packet hashing may cross source/authority expiry. Keep the late authenticated
+		// time/eligibility and exact-record fence inside this same installation guard.
+		_, currentRecordBody, err := readClientRecord(o.SeededOperationOptions, o.Request.CarrierID)
+		if err != nil || clientDigest(currentRecordBody) != clientDigest(recordBody) {
+			return errors.New("native client record changed during inspection")
+		}
+		if err := finalCheck(expected, time.Now()); err != nil {
+			return err
+		}
+		if err := recheckExperimentalOperationContext(ctx, o.SeededOperationOptions); err != nil {
+			return err
+		}
+		launch, err = qualifiedLaunchFromState(QualifiedLaunchOptions{SeededOperationOptions: o.SeededOperationOptions, ExpectedBinding: expected, Workspace: r.Binding.Workspace}, state)
 		if err != nil {
 			return err
 		}
@@ -58,7 +75,7 @@ func PrepareStableNativeHook(ctx context.Context, o ClientOptions, event, select
 		return err
 	})
 	if err == nil {
-		err = recheckExperimentalOperation(o.SeededOperationOptions)
+		err = recheckExperimentalOperationContext(ctx, o.SeededOperationOptions)
 	}
 	return launch, err
 }

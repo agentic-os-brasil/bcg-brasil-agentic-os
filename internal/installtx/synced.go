@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sync/atomic"
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
@@ -348,6 +349,18 @@ func verifyReleaseBindingContext(ctx context.Context, managedRoot, dataRoot stri
 	if err != nil {
 		return err
 	}
+	return verifyReleaseBindingWithRegistryContext(ctx, managedRoot, dataRoot, state, b, server, verifyBundle, r)
+}
+
+// Only callers that observed this actual server/registry in the same operation
+// may avoid another identity subprocess. No registry is retained across calls.
+func verifyReleaseBindingWithRegistryContext(ctx context.Context, managedRoot, dataRoot string, state State, b ReleaseBinding, server ExecutableIdentity, verifyBundle bool, r releaseverify.AuthorityRegistry) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !validReleaseBinding(b) || server.ExecutionContract != releasecontract.SyncedSourceContract {
+		return errors.New("authenticated source-aware release binding required")
+	}
 	if err := verifyReleaseWithRegistry(r, state, b, server); err != nil {
 		return err
 	}
@@ -499,52 +512,80 @@ func ValidateQualifiedLaunch(managedRoot, dataRoot string, expected ReleaseBindi
 }
 
 func ValidateQualifiedLaunchContext(ctx context.Context, managedRoot, dataRoot string, expected ReleaseBinding, now time.Time) (State, error) {
+	state, _, err := validateQualifiedLaunchContext(ctx, managedRoot, dataRoot, expected, now)
+	return state, err
+}
+
+func validateQualifiedLaunchContext(ctx context.Context, managedRoot, dataRoot string, expected ReleaseBinding, now time.Time) (State, releaseverify.AuthorityRegistry, error) {
+	started := time.Now()
 	if err := ctx.Err(); err != nil {
-		return State{}, err
+		return State{}, releaseverify.AuthorityRegistry{}, err
 	}
 	if (expected.ManifestSHA256 == "") != (expected.ClientInputsSHA256 == "") {
-		return State{}, errors.New("incomplete carrier release binding: manifest and client-input pins are required together")
+		return State{}, releaseverify.AuthorityRegistry{}, errors.New("incomplete carrier release binding: manifest and client-input pins are required together")
 	}
 	state, err := ReadSourceState(dataRoot, managedRoot)
 	if err != nil {
-		return State{}, err
+		return State{}, releaseverify.AuthorityRegistry{}, err
 	}
 	if state.SchemaVersion != 4 || state.Source == nil {
-		return State{}, errors.New("qualified source launch unavailable: use the independent installer source review/check")
+		return State{}, releaseverify.AuthorityRegistry{}, errors.New("qualified source launch unavailable: use the independent installer source review/check")
 	}
 	if state.Source.RecallCapacityExhausted {
-		return State{}, errors.New("source recall capacity exhausted; qualified launch unavailable")
+		return State{}, releaseverify.AuthorityRegistry{}, errors.New("source recall capacity exhausted; qualified launch unavailable")
 	}
 	if expected.ManifestSHA256 != "" && (state.Binding.ManifestSHA256 != expected.ManifestSHA256 || state.Binding.ClientInputsSHA256 != expected.ClientInputsSHA256) {
-		return State{}, errors.New("carrier release changed: regenerate the client packet")
+		return State{}, releaseverify.AuthorityRegistry{}, errors.New("carrier release changed: regenerate the client packet")
 	}
 	if err := validateSourceShape(state.Source); err != nil {
-		return State{}, err
+		return State{}, releaseverify.AuthorityRegistry{}, err
 	}
-	r, err := installedRegistryContext(ctx, managedRoot, state)
+	identity, r, err := observeActivatedServerContext(ctx, managedRoot, state)
 	if err != nil {
-		return State{}, err
+		return State{}, releaseverify.AuthorityRegistry{}, err
 	}
 	g, err := releaseverify.VerifyGeneration(state.Source.Body, state.Source.Signature, r)
 	if err != nil {
-		return State{}, err
+		return State{}, releaseverify.AuthorityRegistry{}, err
 	}
 	if g.SHA256 != state.Source.GenerationSHA256 {
-		return State{}, errors.New("cached source metadata differs from custody")
+		return State{}, releaseverify.AuthorityRegistry{}, errors.New("cached source metadata differs from custody")
 	}
 	if err := g.Generation.CheckTime(now, state.Source.ObservedAt); err != nil {
-		return State{}, err
+		return State{}, releaseverify.AuthorityRegistry{}, err
 	}
 	if err := releaseEligible(state.Source, state.Release, state.Binding); err != nil {
-		return State{}, err
+		return State{}, releaseverify.AuthorityRegistry{}, err
 	}
-	if err := CheckActivatedServerContext(ctx, managedRoot, state); err != nil {
-		return State{}, err
+	if err := verifyReleaseBindingWithRegistryContext(ctx, managedRoot, dataRoot, state, state.Binding, state.Server, true, r); err != nil {
+		return State{}, releaseverify.AuthorityRegistry{}, err
 	}
-	if err := verifyReleaseBindingContext(ctx, managedRoot, dataRoot, state, state.Binding, state.Server, true); err != nil {
-		return State{}, err
+	// Retain a final content fence, now after the expensive archive/tree walk.
+	// Metadata equality is not a replacement for the original SHA check.
+	path := filepath.Join(managedRoot, "bin", executableForProfile(state.TargetOS, state.Profile))
+	if err := verifyRegularFileContext(ctx, path, state.Server.Size, state.Server.SHA256); err != nil {
+		return State{}, releaseverify.AuthorityRegistry{}, err
 	}
-	return state, ctx.Err()
+	r, err = releaseverify.LoadPinnedAuthorityRegistry(filepath.Join(managedRoot, "trust", "release-authority-registry.json"), identity.AuthorityRegistrySHA256, time.Now)
+	if err != nil {
+		return State{}, releaseverify.AuthorityRegistry{}, err
+	}
+	g, err = releaseverify.VerifyGeneration(state.Source.Body, state.Source.Signature, r)
+	if err != nil || g.SHA256 != state.Source.GenerationSHA256 {
+		return State{}, releaseverify.AuthorityRegistry{}, errors.New("current source or authority changed during validation")
+	}
+	// Advance the supplied observation time by actual work, preserving the
+	// caller's clock anchor without freezing freshness during asset validation.
+	if err := g.Generation.CheckTime(now.Add(time.Since(started)), state.Source.ObservedAt); err != nil {
+		return State{}, releaseverify.AuthorityRegistry{}, err
+	}
+	if err := releaseEligible(state.Source, state.Release, state.Binding); err != nil {
+		return State{}, releaseverify.AuthorityRegistry{}, err
+	}
+	if err := recheckQualifiedCurrentState(dataRoot, managedRoot, StateDigest(state)); err != nil {
+		return State{}, releaseverify.AuthorityRegistry{}, err
+	}
+	return state, r, ctx.Err()
 }
 
 // GuardQualifiedCurrent couples a domain publication to the same serialization
@@ -575,6 +616,105 @@ func GuardQualifiedCurrentContext(ctx context.Context, managedRoot, dataRoot str
 		return err
 	}
 	return publish()
+}
+
+// GuardQualifiedCurrentStateContext keeps the same current-state admission and
+// installation lock while a synchronous owner inspects its record/files once.
+// The final check is only a narrowing fence, valid during this callback. Neither
+// the state nor the function is a reusable launch or publication authority.
+func GuardQualifiedCurrentStateContext(ctx context.Context, managedRoot, dataRoot string, expected ReleaseBinding, now time.Time, use func(State, func(ReleaseBinding, time.Time) error) error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if use == nil {
+		return errors.New("current-state callback required")
+	}
+	unlock, err := acquireLock(managedRoot)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	state, registry, err := validateQualifiedLaunchContext(ctx, managedRoot, dataRoot, expected, now)
+	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	var active atomic.Bool
+	active.Store(true)
+	defer active.Store(false)
+	check := qualifiedCurrentRecheck(ctx, state, registry, &active)
+	digest := StateDigest(state)
+	return use(state, func(expected ReleaseBinding, now time.Time) error {
+		if err := check(expected, now); err != nil {
+			return err
+		}
+		// This cheap metadata fence catches source/current replacement during
+		// packet inspection without rehashing the admitted executable/bundle.
+		if err := recheckQualifiedCurrentState(dataRoot, managedRoot, digest); err != nil {
+			return err
+		}
+		return ctx.Err()
+	})
+}
+
+func recheckQualifiedCurrentState(dataRoot, managedRoot, digest string) error {
+	current, err := ReadSourceState(dataRoot, managedRoot)
+	if err != nil || StateDigest(current) != digest {
+		return errors.New("qualified current state changed during inspection")
+	}
+	return nil
+}
+
+// All bytes and policy below were authenticated in the held installation guard.
+// Copy the small source closure so callback-owned values cannot mutate the late
+// check. Reverify the signature against the live registry clock and check time
+// again after packet hashing, without rereading executable or bundle assets.
+func qualifiedCurrentRecheck(ctx context.Context, state State, registry releaseverify.KeyRegistry, active *atomic.Bool) func(ReleaseBinding, time.Time) error {
+	var source *SourceControl
+	if state.Source != nil {
+		copy := *state.Source
+		copy.Body = append([]byte(nil), copy.Body...)
+		copy.Signature = append([]byte(nil), copy.Signature...)
+		copy.Recalls = append([]releasecontract.ReleaseRecall{}, copy.Recalls...)
+		source = &copy
+	}
+	binding, release := state.Binding, state.Release
+	return func(expected ReleaseBinding, now time.Time) error {
+		if active == nil || !active.Load() {
+			return errors.New("current-state check requires its active installation guard")
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if expected.ManifestSHA256 == "" || expected.ClientInputsSHA256 == "" {
+			return errors.New("qualified carrier requires exact immutable installed release binding")
+		}
+		if binding.ManifestSHA256 != expected.ManifestSHA256 || binding.ClientInputsSHA256 != expected.ClientInputsSHA256 {
+			return errors.New("carrier release changed: regenerate the client packet")
+		}
+		if source == nil {
+			return errors.New("qualified source launch unavailable")
+		}
+		if err := validateSourceShape(source); err != nil {
+			return err
+		}
+		generation, err := releaseverify.VerifyGeneration(source.Body, source.Signature, registry)
+		if err != nil {
+			return err
+		}
+		if generation.SHA256 != source.GenerationSHA256 {
+			return errors.New("cached source metadata differs from custody")
+		}
+		if err := generation.Generation.CheckTime(now, source.ObservedAt); err != nil {
+			return err
+		}
+		if err := releaseEligible(source, release, binding); err != nil {
+			return err
+		}
+		return ctx.Err()
+	}
 }
 
 // GuardQualifiedReconciliationCurrent is used by explicitly reviewed client

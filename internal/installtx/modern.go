@@ -288,6 +288,29 @@ func CheckActivatedServerContext(ctx context.Context, managedRoot string, state 
 	return checkModernServerContext(ctx, filepath.Join(managedRoot, "bin", executableForProfile(state.TargetOS, state.Profile)), managedRoot, state.Server)
 }
 
+// observeActivatedServerContext is confined to one qualified validation call.
+// It retains the original content checks before/after the actual identity
+// subprocess and every typed comparison. The caller must keep its final content
+// and registry fences after checking the signed manifest and complete bundle.
+func observeActivatedServerContext(ctx context.Context, managedRoot string, state State) (releasecontract.ServerIdentity, releaseverify.AuthorityRegistry, error) {
+	if err := ctx.Err(); err != nil {
+		return releasecontract.ServerIdentity{}, releaseverify.AuthorityRegistry{}, err
+	}
+	if state.Profile != releasecontract.ModernProfile || !validModernIdentity(state.Profile, state.Server) {
+		return releasecontract.ServerIdentity{}, releaseverify.AuthorityRegistry{}, errors.New("modern installed state required")
+	}
+	path := filepath.Join(managedRoot, "bin", executableForProfile(state.TargetOS, state.Profile))
+	identity, err := checkCandidateServerContext(ctx, path, state.Server)
+	if err != nil {
+		return identity, releaseverify.AuthorityRegistry{}, err
+	}
+	if identity.ExecutionContract != releasecontract.SyncedSourceContract {
+		return identity, releaseverify.AuthorityRegistry{}, errors.New("actual executable lacks admitted source execution contract")
+	}
+	registry, err := releaseverify.LoadPinnedAuthorityRegistry(filepath.Join(managedRoot, "trust", "release-authority-registry.json"), identity.AuthorityRegistrySHA256, time.Now)
+	return identity, registry, err
+}
+
 func verifyModernPlan(plan ActivationPlan) error {
 	if plan.Profile != "" {
 		if err := validateModernRoots(plan.ManagedRoot, plan.DataRoot, plan.UserHome); err != nil {

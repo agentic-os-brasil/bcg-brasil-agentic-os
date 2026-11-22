@@ -113,6 +113,174 @@ function Invoke-PilotSteps([string]$Client) {`+body+`Invoke-PilotSteps 'desktop'
 	}
 }
 
+// Keep the actual selector and Desktop helpers together under the launcher's
+// errexit policy. Only absolute GUI calls in this test copy use synthetic sinks.
+func TestParticipantMacDesktopOptionalGUIFailuresKeepCurrentStep(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Mac Bash/plutil contract; no client qualification")
+	}
+	source, err := os.ReadFile("../templates/installed-seed/Maestro.command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	extract := func(start, end string) string {
+		t.Helper()
+		_, body, ok := strings.Cut(string(source), start)
+		if !ok {
+			t.Fatalf("original helper missing: %s", start)
+		}
+		body, _, ok = strings.Cut(body, end)
+		if !ok {
+			t.Fatalf("original helper boundary missing: %s", end)
+		}
+		return start + body
+	}
+	helpers := extract("guard_test_prompt() {", "prepare_conversion_document() {") +
+		extract("desktop_clients_available() {", "current_clients=false") +
+		extract("desktop_install_is_current() {", "pilot_steps() {") +
+		extract("pilot_steps() {", "while [[ -t 0 ]]; do")
+	for _, command := range []string{"/usr/bin/pbcopy", "/usr/bin/open"} {
+		if strings.Count(helpers, command) != 1 {
+			t.Fatalf("expected one real GUI call to replace: %s", command)
+		}
+	}
+	helpers = strings.ReplaceAll(helpers, "/usr/bin/pbcopy", "test_clipboard")
+	helpers = strings.ReplaceAll(helpers, "/usr/bin/open", "test_open")
+	for _, test := range []struct {
+		name                     string
+		clipboardExit, openExit  int
+		confirmed, blocked       bool
+		clientRefused, noDesktop bool
+		emptyPrompt              bool
+	}{
+		{name: "clipboard_failure", clipboardExit: 1},
+		{name: "package_open_failure", openExit: 1},
+		{name: "both_fail", clipboardExit: 1, openExit: 1},
+		{name: "success"},
+		{name: "confirmed_clipboard_failure", clipboardExit: 1, confirmed: true},
+		{name: "diagnostic_blocked", blocked: true},
+		{name: "client_status_refused", clientRefused: true},
+		{name: "desktop_unavailable", noDesktop: true},
+		{name: "empty_prompt", emptyPrompt: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dir := developerFixture(t)
+			prompt := "Preferência fictícia: conferir a memória — uma etapa por vez.\nNão avançar automaticamente."
+			if test.emptyPrompt {
+				prompt = ""
+			}
+			status := "partial"
+			if test.blocked {
+				status = "blocked"
+			}
+			report, err := json.Marshal(map[string]any{"status": status, "desktop_steps": []map[string]string{
+				{"id": "memory-accept", "title": "Salvar e conferir a memória", "prompt": prompt},
+				{"id": "readback", "title": "PRÓXIMA-ETAPA-NÃO-SELECIONADA", "prompt": "DO-NOT-SEND"},
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			packageHash, contractHash := strings.Repeat("a", 64), strings.Repeat("b", 64)
+			desktop := map[string]any{"install_confirmation": "awaiting_user_install"}
+			if test.confirmed {
+				desktop = map[string]any{"install_confirmation": "user_confirmed_install", "evidence_class": "operator_attested", "package_sha256": packageHash, "native_contract_sha256": contractHash}
+			}
+			state := "current_materialization"
+			if test.noDesktop {
+				state = "unavailable"
+			}
+			packet, methods := filepath.Join(dir, "Pacote Desktop.mcpb"), filepath.Join(dir, "Métodos Desktop.zip")
+			clientStatus, err := json.Marshal(map[string]any{"state": state, "record": map[string]any{"desktop": desktop, "materialization": map[string]any{
+				"desktop_path": packet, "desktop_sha256": packageHash, "desktop_native_contract_sha256": contractHash,
+				"desktop_methods": map[string]any{"archive": methods, "version": "fixture-v1"},
+			}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			markdown := "# Relatório preservado\n\nDesktop: pending; client loading: not_observed.\n"
+			for file, body := range map[string][]byte{
+				"report.json": report, "RELATORIO.md": []byte(markdown), "status-fixture.json": clientStatus,
+				"installed-fixture": []byte("#!/bin/bash\n[[ \"$1\" == clients-status ]] || exit 99\n[[ \"$TEST_CLIENT_REFUSED\" == false ]] || exit 1\n/bin/cat \"$RUN/status-fixture.json\"\n"),
+			} {
+				if err := os.WriteFile(filepath.Join(dir, file), body, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "/bin/bash", "-c", `set -euo pipefail
+jget(){ /usr/bin/plutil -extract "$2" raw -o - "$1"; }
+fail(){ printf '%s\n' "$*" >&2; exit 1; }
+INSTALLED="$RUN/installed-fixture"
+CLIENT_STATUS=(--fixture)
+test_clipboard(){ /bin/cat > "$RUN/clipboard-attempt.txt"; printf 'clipboard\n' >> "$RUN/gui-calls.txt"; return "$TEST_CLIPBOARD_EXIT"; }
+test_open(){ printf '%s\n' "$1" > "$RUN/open-attempt.txt"; printf 'open\n' >> "$RUN/gui-calls.txt"; return "$TEST_OPEN_EXIT"; }
+`+helpers+`pilot_steps desktop
+printf 'menu-returned' > "$RUN/menu-returned.txt"`)
+			cmd.Env = append(os.Environ(), "RUN="+dir, fmt.Sprintf("TEST_CLIPBOARD_EXIT=%d", test.clipboardExit), fmt.Sprintf("TEST_OPEN_EXIT=%d", test.openExit), fmt.Sprintf("TEST_CLIENT_REFUSED=%t", test.clientRefused))
+			cmd.Stdin = strings.NewReader("1\n\n")
+			output, runErr := cmd.CombinedOutput()
+			refused := test.blocked || test.clientRefused || test.noDesktop || test.emptyPrompt
+			if refused {
+				if runErr == nil {
+					t.Fatalf("admission refusal became recoverable: %s", output)
+				}
+				if _, err := os.Stat(filepath.Join(dir, "gui-calls.txt")); !os.IsNotExist(err) {
+					t.Fatalf("refused step reached GUI commands: %v", err)
+				}
+			} else {
+				if runErr != nil {
+					t.Fatalf("optional GUI error killed current menu: %s %v", output, runErr)
+				}
+				assertFile := func(file, want string) {
+					t.Helper()
+					got, err := os.ReadFile(filepath.Join(dir, file))
+					if err != nil || string(got) != want {
+						t.Fatalf("%s changed: %q %v; want %q", file, got, err, want)
+					}
+				}
+				assertFile("menu-returned.txt", "menu-returned")
+				assertFile("clipboard-attempt.txt", prompt)
+				assertFile("clients-status.json", string(clientStatus))
+				calls := "clipboard\nopen\n"
+				if test.confirmed {
+					calls = "clipboard\n"
+					if _, err := os.Stat(filepath.Join(dir, "open-attempt.txt")); !os.IsNotExist(err) {
+						t.Fatalf("confirmed current package was reopened: %v", err)
+					}
+				} else {
+					assertFile("open-attempt.txt", packet+"\n")
+				}
+				assertFile("gui-calls.txt", calls)
+				text := string(output)
+				if strings.Count(text, "Etapa atual: Salvar e conferir a memória") != 2 || strings.Contains(text, "PRÓXIMA-ETAPA-NÃO-SELECIONADA") {
+					t.Fatalf("step advanced or retried automatically: %s", output)
+				}
+				for _, path := range []string{filepath.Join(dir, "DESKTOP-ETAPA.txt"), filepath.Join(dir, "RELATORIO.md"), packet, methods} {
+					if !strings.Contains(text, path) {
+						t.Errorf("manual recovery path missing: %s\n%s", path, output)
+					}
+				}
+				if strings.Contains(text, "Prompt copiado.") != (test.clipboardExit == 0) || strings.Contains(text, "Cópia do prompt pendente.") != (test.clipboardExit != 0) {
+					t.Errorf("clipboard outcome misreported: %s", output)
+				}
+				if strings.Contains(text, "Abertura do pacote pendente.") != (!test.confirmed && test.openExit != 0) {
+					t.Errorf("package opening outcome misreported: %s", output)
+				}
+				if !strings.Contains(text, "A importação no Desktop não foi observada") || !strings.Contains(text, "A conexão e o funcionamento continuam pendentes de teste") {
+					t.Errorf("host observations no longer pending: %s", output)
+				}
+			}
+			for file, want := range map[string]string{"report.json": string(report), "RELATORIO.md": markdown, "DESKTOP-ETAPA.txt": prompt} {
+				got, err := os.ReadFile(filepath.Join(dir, file))
+				if err != nil || string(got) != want {
+					t.Errorf("retained artifact %s changed: %q %v", file, got, err)
+				}
+			}
+		})
+	}
+}
+
 // Exercise the exact original prompt-consumer statements, not a copied decoder.
 // Windows requires Desktop 5.1; alternate defaults also expose the BOM-less
 // ANSI-reader failure on PowerShell 7. Synthetic sinks do not qualify clients.
