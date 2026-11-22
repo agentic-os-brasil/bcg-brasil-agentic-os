@@ -439,7 +439,7 @@ desktop_install_is_current() {
   [[ "$confirmation" == user_confirmed_install && "$evidence" == operator_attested && "$package" =~ ^[0-9a-f]{64}$ && "$contract" =~ ^[0-9a-f]{64}$ && "$observed_package" == "$package" && "$observed_contract" == "$contract" ]]
 }
 open_desktop() {
-  local packet methods method_version
+  local packet methods method_version copied=false
   guard_test_prompt "$1"
   "$INSTALLED" clients-status "${CLIENT_STATUS[@]}" > "$RUN/clients-status.json" || fail 'Registro atual indisponível.'
   desktop_clients_available "$RUN/clients-status.json" || fail 'Desktop ainda não está preparado; conclua pelo gerenciador.'
@@ -447,15 +447,26 @@ open_desktop() {
   methods="$(jget "$RUN/clients-status.json" record.materialization.desktop_methods.archive)"
   method_version="$(jget "$RUN/clients-status.json" record.materialization.desktop_methods.version)"
   if [[ "$1" == DESKTOP-CONVERSAO.txt ]]; then prepare_conversion_document "$RUN/clients-status.json" "$1"; fi
-  /usr/bin/pbcopy < "$RUN/$1"
+  if /usr/bin/pbcopy < "$RUN/$1" 2>/dev/null; then
+    copied=true
+  else
+    printf '\nCópia do prompt pendente. Abra o arquivo desta etapa indicado abaixo e copie o texto manualmente.\n'
+  fi
   if desktop_install_is_current "$RUN/clients-status.json"; then
     printf '\nA instalação deste pacote/contrato já foi confirmada por você. O instalador da extensão não será reaberto; conexão e funcionamento continuam pendentes de teste.\n'
   else
     printf '\nA instalação deste pacote/contrato ainda precisa de confirmação atual. Instale/ative somente esta extensão e confirme o pacote pelo gerenciador (opção 5).\n'
-    /usr/bin/open "$packet"
+    if ! /usr/bin/open "$packet" 2>/dev/null; then
+      printf 'Abertura do pacote pendente. Abra manualmente o pacote Desktop indicado abaixo pelo fluxo normal do cliente.\n'
+    fi
   fi
+  printf 'Pacote Desktop: %s\nPrompt desta etapa: %s\nRelatório preservado: %s/RELATORIO.md\nA conexão e o funcionamento continuam pendentes de teste.\n' "$packet" "$RUN/$1" "$RUN"
   printf 'Biblioteca de skills %s: %s\nA importação no Desktop não foi observada pelo menu. Se a biblioteca ainda não estiver disponível no cliente, importe esse arquivo pelo fluxo normal.\n' "$method_version" "$methods"
-  printf 'Prompt copiado. Abra sua conversa no Desktop, use somente o Maestro deste ensaio, cole uma vez e execute. Depois registre o resultado no menu 7.\n'
+  if [[ "$copied" == true ]]; then
+    printf 'Prompt copiado. Abra sua conversa no Desktop, use somente o Maestro deste ensaio, cole uma vez e execute. Depois registre o resultado no menu 7.\n'
+  else
+    printf 'Após copiar o texto manualmente, abra sua conversa no Desktop, use somente o Maestro deste ensaio, cole uma vez e execute. Depois registre o resultado no menu 7.\n'
+  fi
 }
 pilot_steps() {
   local client="$1" index=0 title key prompt_file action

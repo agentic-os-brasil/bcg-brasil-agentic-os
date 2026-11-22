@@ -4,9 +4,14 @@ package installer
 
 import (
 	"context"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 )
 
 func TestExperimentalNativeHookOwnerRequiresIndependentAdmission(t *testing.T) {
@@ -17,6 +22,26 @@ func TestExperimentalNativeHookOwnerRequiresIndependentAdmission(t *testing.T) {
 	}
 	if PassiveLifecycleEvent("PreToolUse") || PassiveLifecycleEvent("SubagentStart") {
 		t.Fatal("native owner widened passive lifecycle")
+	}
+}
+
+func TestQualifiedLaunchAssemblyRetainsExactPins(t *testing.T) {
+	// Pure assembly only. Synthetic state here grants no admission, native
+	// qualification or installed execution; both public owners retain those.
+	root := t.TempDir()
+	options := QualifiedLaunchOptions{SeededOperationOptions: SeededOperationOptions{ManagedRoot: root, UserHome: filepath.Join(root, "owner")}, ExpectedBinding: installtx.ReleaseBinding{ManifestSHA256: strings.Repeat("a", 64), ClientInputsSHA256: strings.Repeat("b", 64)}, Workspace: filepath.Join(root, "workspace")}
+	state := installtx.State{TargetOS: runtime.GOOS, Profile: releasecontract.ModernProfile, Binding: options.ExpectedBinding}
+	launch, err := qualifiedLaunchFromState(options, state)
+	want := []string{"serve", "--product-root", root, "--user-home", options.UserHome, "--installed-manifest", options.ExpectedBinding.ManifestSHA256, "--installed-client-inputs", options.ExpectedBinding.ClientInputsSHA256, "--workspace", options.Workspace}
+	if err != nil || !reflect.DeepEqual(launch.Args, want) {
+		t.Fatalf("qualified assembly changed: %+v %v", launch, err)
+	}
+	for _, pins := range []installtx.ReleaseBinding{{}, {ManifestSHA256: options.ExpectedBinding.ManifestSHA256}, {ClientInputsSHA256: options.ExpectedBinding.ClientInputsSHA256}, {ManifestSHA256: strings.Repeat("c", 64), ClientInputsSHA256: options.ExpectedBinding.ClientInputsSHA256}, {ManifestSHA256: options.ExpectedBinding.ManifestSHA256, ClientInputsSHA256: strings.Repeat("c", 64)}} {
+		changed := options
+		changed.ExpectedBinding = pins
+		if _, err := qualifiedLaunchFromState(changed, state); err == nil {
+			t.Fatal("pure assembly accepted incomplete or changed current-record pins")
+		}
 	}
 }
 

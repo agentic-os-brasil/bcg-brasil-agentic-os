@@ -601,6 +601,17 @@ func ReadClientsSeeded(ctx context.Context, o ClientOptions) (ClientStatus, erro
 		status.Reason = "source_or_current_unavailable"
 		return status, err
 	}
+	return inspectClientRecordAtCurrent(ctx, o, record, s)
+}
+
+// Called only after independent admission and current-source validation in the
+// same operation. Native delivery calls it while holding the installation guard;
+// public status retains its original admission/read/current ordering.
+func inspectClientRecordAtCurrent(ctx context.Context, o ClientOptions, record ClientRecord, s installtx.State) (ClientStatus, error) {
+	status := ClientStatus{State: "client-materialization-pending", CodeRegistration: "pending", SessionLoading: "pending", HostObservations: "historical_not_refreshed", Record: &record, Phases: ClientPhases(record)}
+	if err := ctx.Err(); err != nil {
+		return status, err
+	}
 	if !sameClientCurrent(record.Materialization, s) {
 		status.Reason = "current_release_changed"
 		if err := recheckExperimentalOperationContext(ctx, o.SeededOperationOptions); err != nil {

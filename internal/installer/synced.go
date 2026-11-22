@@ -90,8 +90,27 @@ func PrepareQualifiedLaunch(ctx context.Context, o QualifiedLaunchOptions) (Qual
 	if err != nil {
 		return QualifiedLaunch{}, err
 	}
+	launch, err := qualifiedLaunchFromState(o, state)
+	if err != nil {
+		return QualifiedLaunch{}, err
+	}
+	if err := recheckExperimentalOperationContext(ctx, o.SeededOperationOptions); err != nil {
+		return QualifiedLaunch{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return QualifiedLaunch{}, err
+	}
+	return launch, nil
+}
+
+// This pure assembly supplies no admission. Callers must hold a freshly
+// validated current state and retain their late source and role fences.
+func qualifiedLaunchFromState(o QualifiedLaunchOptions, state installtx.State) (QualifiedLaunch, error) {
 	if o.ExpectedBinding.ManifestSHA256 == "" || o.ExpectedBinding.ClientInputsSHA256 == "" {
 		return QualifiedLaunch{}, errors.New("qualified carrier requires exact immutable installed release binding")
+	}
+	if state.Binding.ManifestSHA256 != o.ExpectedBinding.ManifestSHA256 || state.Binding.ClientInputsSHA256 != o.ExpectedBinding.ClientInputsSHA256 {
+		return QualifiedLaunch{}, errors.New("qualified carrier release changed")
 	}
 	args := []string{"serve", "--product-root", o.ManagedRoot, "--user-home", o.UserHome, "--installed-manifest", state.Binding.ManifestSHA256, "--installed-client-inputs", state.Binding.ClientInputsSHA256}
 	if o.ExperimentalSeed != nil {
@@ -99,12 +118,6 @@ func PrepareQualifiedLaunch(ctx context.Context, o QualifiedLaunchOptions) (Qual
 	}
 	if o.Workspace != "" {
 		args = append(args, "--workspace", o.Workspace)
-	}
-	if err := recheckExperimentalOperationContext(ctx, o.SeededOperationOptions); err != nil {
-		return QualifiedLaunch{}, err
-	}
-	if err := ctx.Err(); err != nil {
-		return QualifiedLaunch{}, err
 	}
 	return QualifiedLaunch{Executable: installedExecutablePath(o.ManagedRoot, state.TargetOS, state.Profile), Args: args, State: state}, nil
 }
