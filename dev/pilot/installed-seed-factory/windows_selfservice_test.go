@@ -97,7 +97,7 @@ $Utf8=New-Object System.Text.UTF8Encoding($false)
 $tokens=$null; $errors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile($Source,[ref]$tokens,[ref]$errors)
 if($errors.Count -ne 0){throw 'Shipped PowerShell script does not parse'}
-foreach($name in @('Write-Json','Confirm-Review','Private-File','Resolve-CodeExecutable','Private-SelectionPath','Require-Disjoint','Prepare-ClientParent','Prepare-CodeConfiguration','Invoke-SelectedCode','Invoke-Management','Ensure-CodeLogin')){
+foreach($name in @('Write-Json','Confirm-Review','Private-File','Resolve-CodeExecutable','Private-SelectionPath','Require-Disjoint','Prepare-ClientParent','Prepare-CodeConfiguration','Invoke-SelectedCode','Invoke-Management','Ensure-CodeLogin','Test-DesktopPreparation')){
   $node=$ast.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq $name},$true)
   if($null -eq $node){throw "Missing shipped helper: $name"}
   Invoke-Expression $node.Extent.Text
@@ -183,8 +183,8 @@ try{
   Ensure-CodeLogin
   if($script:AuthCalls.Count -ne 1 -or $script:AuthCalls[0] -cne 'auth status'){throw 'Ordinary login status route changed'}
   $script:AuthCalls.Clear();$script:Answers.Enqueue('')
-  $declined=$false;try{Ensure-CodeLogin -Force}catch{$declined=$true}
-  if(-not $declined -or $script:AuthCalls.Count -ne 0){throw 'Forced official login ran without consent'}
+  $accepted=Ensure-CodeLogin -Force
+  if($accepted -ne $false -or $script:AuthCalls.Count -ne 0){throw 'Forced official login ran without consent'}
   $script:Answers.Enqueue('YES');Ensure-CodeLogin -Force
   if($script:AuthCalls.Count -ne 2 -or $script:AuthCalls[0] -cne 'auth login' -or $script:AuthCalls[1] -cne 'auth status'){throw 'Force login could not recover an expired session masked by loggedIn status'}
   $script:Config|Add-Member -NotePropertyName client_parent -NotePropertyValue $clients
@@ -196,14 +196,27 @@ try{
   Invoke-Expression $producer.Extent.Text
   if($Manage[$Manage.IndexOf('--client-code-root')+1] -cne (Join-Path $clients 'code') -or $Manage[$Manage.IndexOf('--client-desktop-path')+1] -cne (Join-Path $clients 'maestro-product.mcpb') -or $Manage[$Manage.IndexOf('--client-code-config')+1] -cne $profile){throw 'Original manager arguments lost exact client/profile selection'}
   function Verify-Installer([string]$Path){}
-  function Ensure-CodeLogin{}
+  function Ensure-CodeLogin{return $true}
   function Test-Installer {
     if($env:CLAUDE_CONFIG_DIR -cne $profile -or $args[0] -cne 'manage' -or $args[-2] -cne '--management-intent' -or $args[-1] -cne 'update'){throw 'Manager child lost reviewed profile or update arguments'}
     $global:LASTEXITCODE=9
   }
   $Installer='Test-Installer';$env:CLAUDE_CONFIG_DIR='caller-profile'
-  Invoke-Management -Extra @('--management-intent','update')
+  $script:Answers.Enqueue('YES');Invoke-Management -Extra @('--management-intent','update')
   if($script:ManagementExit -ne 9 -or $env:CLAUDE_CONFIG_DIR -cne 'caller-profile'){throw 'Manager exit or caller environment was lost'}
+  function Ensure-CodeLogin{throw 'Deferred Code/auth must not be invoked'}
+  foreach($intent in @('prepare-desktop','update-desktop')){
+    $script:ExpectedIntent=$intent
+    function Test-DeferredInstaller{
+      $values=@($args)
+      if($env:CLAUDE_CONFIG_DIR -cne 'caller-profile' -or $values[0] -cne 'manage' -or $values[-2] -cne '--management-intent' -or $values[-1] -cne $script:ExpectedIntent -or @($values|Where-Object{$_ -ceq '--management-intent'}).Count -ne 1){throw 'Deferred manager lost exact scope or intent'}
+      if($values -contains '--client-target' -or $values[$values.IndexOf('--client-code-config')+1] -cne $profile -or $values[$values.IndexOf('--client-desktop-path')+1] -cne (Join-Path $clients 'maestro-product.mcpb')){throw 'Deferral retargeted the saved both selection'}
+      $global:LASTEXITCODE=0
+    }
+    $Installer='Test-DeferredInstaller';$script:Answers.Enqueue('')
+    if($intent -ceq 'update-desktop'){Invoke-Management -Extra @('--management-intent','update')}else{Invoke-Management}
+    if($script:ManagementExit -ne 0 -or $env:CLAUDE_CONFIG_DIR -cne 'caller-profile' -or $script:ObservationClient -cne 'desktop'){throw 'Deferral did not return truthful Desktop observation scope'}
+  }
   $legacyConfig=$script:Config
   $script:Config=[PSCustomObject]@{client_target='desktop';client_parent=$clients;workspace=$Work}
   $ClientTarget='desktop';Invoke-Expression $producer.Extent.Text

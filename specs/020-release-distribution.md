@@ -1016,3 +1016,43 @@ Code OAuth; independent foreground agents retain their separately reviewed
 profile/runtime/login. Existing complete both-client records and JSON remain
 unchanged. A new compatible kit and actual host acceptance are required; initial
 portable packet import, source construction or copied files do not prove loading.
+
+### Desktop preparation while selected Code remains pending (CIPP)
+
+A reviewed both-client selection may enter one transitional schema3 phase,
+`desktop_prepared_code_pending`. Its immutable desired selection remains the full
+both-client request; the prepared materialization is the original complete
+Desktop connector and live-method frontend. Store the desired selection
+separately instead of changing the carrier target or claiming a qualified Code
+tree, provider, registration, specialist or hook. Code reports
+`pending_qualification`; Desktop installation, connection, loaded methods and
+functional acceptance remain separate observations.
+
+The actual installed bootstrapper and current backend must expose the separate
+bounded `maestro-client-preparation-v1` capability before this phase is reviewed.
+Legacy capability JSON and schema1/schema2 serialization remain unchanged; old
+readers refuse schema3. Source/current/owner/workspace, exact carrier and output
+selection, private-file, artifact inventory and native-contract guards remain
+mandatory. Generate and freshly inspect the complete Desktop view through the
+original trusted materializer. Write the canonical record last under the
+existing installation guard and previous-record digest. An interrupted file
+publication is recoverable only by re-entering that materializer and its current
+inspection, never by promoting discovered files or historical receipts.
+
+Code completion retains the original exact-host genuine producer and unchanged
+full native requirement. Only its same-call observed result may publish Code.
+Preserve compatible Desktop bytes, native contract, method library and matching
+observations while completing the original both-client record. A failed or
+canceled Code attempt leaves the valid Desktop phase intact. Current qualified
+both-client selections need no conversion or fresh model calls for a no-op
+Desktop update. Stale Code bytes remain retained and unavailable, never relabelled
+as current or resources-only.
+
+Both participant wrappers return a typed partial result on login deferral, reach
+normal diagnostics and permit the explicit Desktop preparation intent without
+invoking Code, a model, authentication or UI. Login deferral itself supplies no
+approval: the original exact-effect Desktop review still requires confirmation.
+Management launchers retain the desired both-client selection. This requires a
+new compatible kit; signed existing launchers and private profiles are unchanged.
+
+Refs: #638; CIPP.

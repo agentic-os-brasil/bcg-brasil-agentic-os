@@ -39,15 +39,15 @@ import (
 // finite release binding and current-consumer placement, NOT document conversion, Code or
 // Desktop qualification. Those require their genuine independent evidence.
 func TestExperimentalInstalledSeedFiniteSourceLifecycle(t *testing.T) {
-	experimentalInstalledSeedFiniteSourceLifecycle(t, false)
+	experimentalInstalledSeedFiniteSourceLifecycle(t, false, false)
 }
 
 // Reuse the exact finite fixture while avoiding unrelated runtime/update tails.
 func TestDesktopOnlyExperimentalCurrentConsumer(t *testing.T) {
-	experimentalInstalledSeedFiniteSourceLifecycle(t, true)
+	experimentalInstalledSeedFiniteSourceLifecycle(t, true, false)
 }
 
-func experimentalInstalledSeedFiniteSourceLifecycle(t *testing.T, desktopConsumerOnly bool) {
+func experimentalInstalledSeedFiniteSourceLifecycle(t *testing.T, desktopConsumerOnly, pendingCodeConsumerOnly bool) {
 	experimentalRuntimeFixtureHost(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
 	defer cancel()
@@ -175,6 +175,10 @@ func experimentalInstalledSeedFiniteSourceLifecycle(t *testing.T, desktopConsume
 		}
 	}
 	assertContext()
+	if pendingCodeConsumerOnly {
+		assertPendingCodeDesktopConsumer(t, ctx, seed, ws, home.Home, brainFile, initialized.WorkspaceID, root)
+		return
+	}
 	// Explicit resources-only fixture coverage is separate from full native
 	// enforcement. A full request without the genuine qualifier must fail.
 	codeHost, err := os.Executable()

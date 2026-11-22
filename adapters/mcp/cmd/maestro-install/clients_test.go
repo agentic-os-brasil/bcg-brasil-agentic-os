@@ -3,13 +3,124 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 )
+
+func TestPendingCodeAuthenticatedUpdateKeepsOriginalNativeOwner(t *testing.T) {
+	root := t.TempDir()
+	selection := installer.ClientRequest{VersionedSlots: true, NativeEnforcement: true, GenerationID: strings.Repeat("b", 32), CarrierID: strings.Repeat("c", 32), Workspace: filepath.Join(root, "workspace"), CodeRoot: filepath.Join(root, "code"), DesktopPath: filepath.Join(root, "desktop.mcpb"), CodeExecutable: filepath.Join(root, "selected-Code"), CodeScope: "user"}
+	projection, err := installer.DesktopPreparationOptions(installer.ClientOptions{Request: selection})
+	if err != nil {
+		t.Fatal(err)
+	}
+	material, err := installer.ClientGenerationPaths(projection.Request, strings.Repeat("d", 64))
+	if err != nil {
+		t.Fatal(err)
+	}
+	material.Release = "0.1.0"
+	material.ManifestSHA256 = strings.Repeat("d", 64)
+	material.ClientInputsSHA256 = strings.Repeat("e", 64)
+	material.ServerSHA256 = strings.Repeat("f", 64)
+	material.EmbeddedInputsSHA256 = strings.Repeat("1", 64)
+	material.BundleSHA256 = strings.Repeat("2", 64)
+	material.DesktopSHA256 = strings.Repeat("3", 64)
+	material.DesktopNativeContractSHA256 = strings.Repeat("4", 64)
+	material.BootstrapServerSHA256 = material.ServerSHA256
+	material.BootstrapEmbeddedInputsSHA256 = material.EmbeddedInputsSHA256
+	material.DesktopMethods = &installer.ClientMethodFrontend{BootstrapProtocol: "maestro-live-method-bootstrap-v1", Archive: filepath.Join(installer.ClientMethodsRoot(material), "maestro-desktop-methods-0.1.0.zip"), SHA256: strings.Repeat("5", 64), Version: material.Release, Files: 1}
+	r := installer.ClientRecord{SchemaVersion: 3, Profile: installer.StableClientProfile, Protocol: installer.StableClientProtocol, CarrierVersion: installer.StableCarrierVersion, CarrierID: selection.CarrierID, Binding: installer.ClientBinding{Workspace: selection.Workspace}, Materialization: material, Code: installer.CodeObservation{Executable: selection.CodeExecutable, Marketplace: "maestro-local-" + selection.CarrierID, PluginID: "maestro-product@maestro-local-" + selection.CarrierID, Scope: selection.CodeScope, State: installer.ClientCodeQualificationPending, EvidenceClass: "not_observed"}, Preparation: &installer.ClientPreparation{Phase: installer.ClientPreparationDesktopReady, Selection: selection}}
+	if _, err := installer.DesktopPreparationRecord(r); err != nil {
+		t.Fatal("invalid pending record shape", err)
+	}
+	for _, operation := range []string{"update", "resume-code"} {
+		t.Run(operation, func(t *testing.T) {
+			action, desktop, err := resolveClientManagementAction(r, operation)
+			if err != nil || action != operation || desktop {
+				t.Fatalf("authenticated request changed to deferral or refused: %s %t %v", action, desktop, err)
+			}
+			calls := 0
+			unavailable := errors.New("original native owner deliberately unavailable; no qualification receipt")
+			digest := strings.Repeat("6", 64)
+			o := installer.ClientOptions{Request: installer.ClientRequestFromRecord(r)}
+			result, err := applyManagedClients(context.Background(), o, digest, desktop, func(got installer.ClientOptions, gotDigest string) (installer.ClientRecord, error) {
+				calls++
+				if got.Request != selection || gotDigest != digest {
+					t.Fatal("native owner received changed selection or review")
+				}
+				return installer.ClientRecord{}, unavailable
+			})
+			if !errors.Is(err, unavailable) || calls != 1 || result.SchemaVersion != 0 || result.Preparation != nil {
+				t.Fatalf("native failure became Desktop fallback or success: %+v %v calls=%d", result, err, calls)
+			}
+		})
+	}
+	for _, change := range []string{"profile", "carrier", "workspace", "phase", "Code claim"} {
+		t.Run(change, func(t *testing.T) {
+			body, err := json.Marshal(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var bad installer.ClientRecord
+			if err := json.Unmarshal(body, &bad); err != nil {
+				t.Fatal(err)
+			}
+			switch change {
+			case "profile":
+				bad.Preparation.Selection.NativeEnforcement = false
+			case "carrier":
+				bad.Preparation.Selection.CarrierID = strings.Repeat("a", 32)
+			case "workspace":
+				bad.Preparation.Selection.Workspace = filepath.Join(root, "other-workspace")
+			case "phase":
+				bad.Preparation.Phase = "ready"
+			case "Code claim":
+				bad.Code.State = "registered"
+			}
+			for _, operation := range []string{"update", "resume-code"} {
+				if _, _, err := resolveClientManagementAction(bad, operation); err == nil {
+					t.Fatal("changed pending identity/profile entered publisher dispatch", operation)
+				}
+			}
+		})
+	}
+}
+
+func TestDesktopPreparationIntentRefusesLegacyWithoutCompleteMethods(t *testing.T) {
+	root := t.TempDir()
+	// A supported schema1 legacy carrier has neither versioned methods nor
+	// native qualification. Its old commands retain their existing behavior;
+	// it cannot supply this new full-method Desktop operation's success claim.
+	legacy := installer.ClientRecord{SchemaVersion: 1, Profile: installer.StableClientProfile, Protocol: installer.StableClientProtocol, CarrierVersion: installer.StableCarrierVersion, CarrierID: strings.Repeat("a", 32), Binding: installer.ClientBinding{Workspace: filepath.Join(root, "workspace")}, Materialization: installer.ClientMaterialization{CodeRoot: filepath.Join(root, "legacy-code"), DesktopPath: filepath.Join(root, "legacy.mcpb")}, Code: installer.CodeObservation{Scope: "user", State: "pending"}}
+	if legacy.Materialization.NativeEnforcement || legacy.Materialization.Selection != nil || legacy.Materialization.DesktopMethods != nil {
+		t.Fatal("legacy fixture manufactured current qualification or methods")
+	}
+	if err := requireDesktopPreparationRecord(legacy); err == nil {
+		t.Fatal("valid legacy carrier without complete methods accepted full Desktop scope")
+	}
+	for _, operation := range []string{"prepare-desktop", "update-desktop"} {
+		var output strings.Builder
+		if err := writeDesktopPreparationStatus(context.Background(), installer.ClientOptions{}, legacy, operation, &output); err == nil || !strings.Contains(err.Error(), "original full both-client profile") || output.Len() != 0 {
+			t.Fatalf("unsupported scope reached installation lookup or success output: %s %v", output.String(), err)
+		}
+	}
+	// A versioned resources-only carrier can have the complete Desktop archive
+	// while still lacking the selected full Code contract this intent preserves.
+	resources := legacy
+	resources.Materialization.Release = "0.1.0"
+	resources.Materialization.Selection = &installer.ClientPacketSelection{CodeRoot: legacy.Materialization.CodeRoot, DesktopPath: legacy.Materialization.DesktopPath}
+	resources.Materialization.DesktopMethods = &installer.ClientMethodFrontend{BootstrapProtocol: "maestro-live-method-bootstrap-v1", Archive: filepath.Join(installer.ClientMethodsRoot(resources.Materialization), "maestro-desktop-methods-0.1.0.zip"), SHA256: strings.Repeat("b", 64), Version: "0.1.0", Files: 1}
+	resources.Code.Executable = filepath.Join(root, "selected-Code")
+	if err := requireDesktopPreparationRecord(resources); err == nil {
+		t.Fatal("resources-only selection supplied the desired full profile")
+	}
+}
 
 func TestFirstClientOwnerReviewChannelIsAnExplicitCommonChoice(t *testing.T) {
 	for _, choice := range []string{"", "native-first", "local-browser", "model-approved"} {
@@ -130,5 +241,30 @@ func TestDesktopTargetCapabilityAndFrontendRefusals(t *testing.T) {
 	_, err = promptClientOwnerReviewChannel(func(prompt string) (string, error) { prompts = append(prompts, prompt); return "", nil }, true)
 	if err != nil || len(prompts) != 1 || strings.Contains(prompts[0], "BOTH Code") || !strings.Contains(prompts[0], "approves no write") {
 		t.Fatalf("Desktop review must describe its actual selected scope: %v %v", prompts, err)
+	}
+}
+
+func TestClientPreparationCapabilityWithoutInstallation(t *testing.T) {
+	oldArgs, oldVersion, oldPin, oldOutput := os.Args, Version, AuthorityRegistrySHA256, os.Stdout
+	defer func() { os.Args, Version, AuthorityRegistrySHA256, os.Stdout = oldArgs, oldVersion, oldPin, oldOutput }()
+	Version, AuthorityRegistrySHA256 = "0.3.7", strings.Repeat("b", 64)
+	os.Args = []string{"maestro-install", "client-preparation-capabilities"}
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	os.Stdout = w
+	err = run()
+	w.Close()
+	os.Stdout = oldOutput
+	body, readErr := io.ReadAll(r)
+	var got installer.ClientTargetCapability
+	if err != nil || readErr != nil || json.Unmarshal(body, &got) != nil || got != installer.ClientPreparationCapabilities("installer", Version, AuthorityRegistrySHA256) {
+		t.Fatalf("preparation reader must disclose its finite identity without an installation: %s %v %v", body, err, readErr)
+	}
+	os.Args = append(os.Args, "--unreviewed")
+	if err := run(); err == nil {
+		t.Fatal("preparation capability accepted extra arguments")
 	}
 }

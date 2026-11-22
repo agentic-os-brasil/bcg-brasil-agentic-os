@@ -68,8 +68,11 @@ type ClientOptions struct {
 	SeededOperationOptions
 	// Trusted materializer composition only; no request/tool field.
 	VersionedManagement bool `json:"-"`
-	Request             ClientRequest
-	LookupEnv           func(string) (string, bool)
+	// PreparationSelection is trusted composition for Desktop-first management
+	// launchers. It is never decoded from a request or a qualification result.
+	PreparationSelection *ClientRequest `json:"-"`
+	Request              ClientRequest
+	LookupEnv            func(string) (string, bool)
 }
 type ClientBinding struct {
 	ManagedRoot    string `json:"managed_root"`
@@ -176,6 +179,7 @@ type ClientRecord struct {
 	Materialization ClientMaterialization `json:"materialization"`
 	Code            CodeObservation       `json:"code"`
 	Desktop         DesktopObservation    `json:"desktop"`
+	Preparation     *ClientPreparation    `json:"preparation,omitempty"`
 }
 type ClientReview struct {
 	SchemaVersion        int                   `json:"schema_version"`
@@ -187,13 +191,14 @@ type ClientReview struct {
 	Digest               string                `json:"review_digest"`
 }
 type ClientStatus struct {
-	Phases           *ClientUpdatePhases `json:"phases,omitempty"`
-	State            string              `json:"state"`
-	Reason           string              `json:"reason,omitempty"`
-	Record           *ClientRecord       `json:"record,omitempty"`
-	CodeRegistration string              `json:"code_registration"`
-	SessionLoading   string              `json:"session_loading"`
-	HostObservations string              `json:"host_observations"`
+	Phases           *ClientUpdatePhases      `json:"phases,omitempty"`
+	Preparation      *ClientPreparationStatus `json:"preparation,omitempty"`
+	State            string                   `json:"state"`
+	Reason           string                   `json:"reason,omitempty"`
+	Record           *ClientRecord            `json:"record,omitempty"`
+	CodeRegistration string                   `json:"code_registration"`
+	SessionLoading   string                   `json:"session_loading"`
+	HostObservations string                   `json:"host_observations"`
 }
 type ClientMaterializer func(context.Context, installtx.State, ClientBinding, *ClientRecord) (ClientMaterialization, error)
 
@@ -222,11 +227,19 @@ func readClientRecord(o SeededOperationOptions, id string) (ClientRecord, []byte
 	if err = releasecontract.DecodeStrictJSON(body, &r); err != nil {
 		return r, nil, err
 	}
-	if r.SchemaVersion != clientRecordSchema(r.Materialization.Target) || validateClientTargetRecord(r) != nil || r.Profile != StableClientProfile || r.Protocol != StableClientProtocol || r.CarrierVersion != StableCarrierVersion || r.CarrierID != id || r.Binding.ManagedRoot != o.ManagedRoot || r.Binding.UserHome != o.UserHome || r.Binding.RegistrySHA256 != o.AuthorityRegistrySHA256 {
+	if r.SchemaVersion != 3 && r.SchemaVersion != clientRecordSchema(r.Materialization.Target) || validateClientTargetRecord(r) != nil || r.Profile != StableClientProfile || r.Protocol != StableClientProtocol || r.CarrierVersion != StableCarrierVersion || r.CarrierID != id || r.Binding.ManagedRoot != o.ManagedRoot || r.Binding.UserHome != o.UserHome || r.Binding.RegistrySHA256 != o.AuthorityRegistrySHA256 {
 		return r, nil, errors.New("client record binding/profile mismatch")
 	}
 	if r.Materialization.Selection != nil {
-		expected, err := ClientGenerationPaths(ClientRequestFromRecord(r), r.Materialization.ManifestSHA256)
+		request := ClientRequestFromRecord(r)
+		if r.CodePreparationPending() {
+			projected, projectionErr := DesktopPreparationOptions(ClientOptions{Request: request})
+			if projectionErr != nil {
+				return r, nil, projectionErr
+			}
+			request = projected.Request
+		}
+		expected, err := ClientGenerationPaths(request, r.Materialization.ManifestSHA256)
 		if err != nil || expected.CodeRoot != r.Materialization.CodeRoot || expected.DesktopPath != r.Materialization.DesktopPath {
 			return r, nil, errors.New("client record generation differs from reviewed selection")
 		}
@@ -458,18 +471,8 @@ func ReviewClientsSeeded(ctx context.Context, o ClientOptions) (ClientReview, er
 	}
 	old, body, err := readClientRecord(o.SeededOperationOptions, o.Request.CarrierID)
 	if err == nil {
-		selection := ClientRequestFromRecord(old)
-		if selection.Target != o.Request.Target {
-			return ClientReview{}, errors.New("existing carrier target differs; preserve it and review a separate carrier")
-		}
-		if selection.OwnerReviewChannel != o.Request.OwnerReviewChannel {
-			return ClientReview{}, errors.New("existing carrier owner review channel differs; preserved unchanged")
-		}
-		if old.Binding != binding || selection.CodeConfigurationDirectory != o.Request.CodeConfigurationDirectory || selection.CodeRoot != o.Request.CodeRoot || selection.DesktopPath != o.Request.DesktopPath || selection.VersionedSlots && !o.Request.VersionedSlots || old.Code.Scope != o.Request.CodeScope || old.Code.Executable != o.Request.CodeExecutable && !(old.Code.Executable == "" && old.Code.State == "registration_pending" && old.Code.EvidenceClass == "not_observed") {
-			return ClientReview{}, errors.New("existing client selection differs; preserved unchanged")
-		}
-		if old.Materialization.NativeEnforcement && !o.Request.NativeEnforcement {
-			return ClientReview{}, errors.New("native capability downgrade refused; retain previous packet and qualify the complete profile")
+		if err := validateClientSelectionContinuity(old, o.Request, binding); err != nil {
+			return ClientReview{}, err
 		}
 		if old.Code.Executable != o.Request.CodeExecutable {
 			if !filepath.IsAbs(o.Request.CodeExecutable) || filepath.Clean(o.Request.CodeExecutable) != o.Request.CodeExecutable || strings.ContainsAny(o.Request.CodeExecutable, "\x00\r\n") {
@@ -488,6 +491,24 @@ func ReviewClientsSeeded(ctx context.Context, o ClientOptions) (ClientReview, er
 	review.Digest = clientDigest(body)
 	return review, nil
 }
+
+func validateClientSelectionContinuity(old ClientRecord, request ClientRequest, binding ClientBinding) error {
+	selection := ClientRequestFromRecord(old)
+	if selection.Target != request.Target {
+		return errors.New("existing carrier target differs; preserve it and review a separate carrier")
+	}
+	if selection.OwnerReviewChannel != request.OwnerReviewChannel {
+		return errors.New("existing carrier owner review channel differs; preserved unchanged")
+	}
+	if old.Binding != binding || selection.CodeConfigurationDirectory != request.CodeConfigurationDirectory || selection.CodeRoot != request.CodeRoot || selection.DesktopPath != request.DesktopPath || selection.VersionedSlots && !request.VersionedSlots || old.Code.Scope != request.CodeScope || old.Code.Executable != request.CodeExecutable && !(old.Code.Executable == "" && old.Code.State == "registration_pending" && old.Code.EvidenceClass == "not_observed") {
+		return errors.New("existing client selection differs; preserved unchanged")
+	}
+	if selection.NativeEnforcement && !request.NativeEnforcement {
+		return errors.New("native capability downgrade refused; retain previous packet and qualify the complete profile")
+	}
+	return nil
+}
+
 func MaterializeClientsSeeded(ctx context.Context, o ClientOptions, digest string, confirmed bool, build ClientMaterializer) (ClientRecord, error) {
 	if !confirmed || !clientSHA.MatchString(digest) || build == nil {
 		return ClientRecord{}, errors.New("exact client review and explicit confirmation required")
@@ -542,21 +563,19 @@ func MaterializeClientsSeeded(ctx context.Context, o ClientOptions, digest strin
 		if _, e = installtx.ValidateQualifiedLaunch(o.ManagedRoot, o.DataRoot, s.Binding, time.Now()); e != nil {
 			return e
 		}
+		if previous != nil && previous.CodePreparationPending() {
+			if err := requirePreviousClientRecord(o, review.PreviousRecordSHA256); err != nil {
+				return err
+			}
+		}
 		result = ClientRecord{SchemaVersion: clientRecordSchema(o.Request.Target), Profile: StableClientProfile, Protocol: StableClientProtocol, CarrierVersion: StableCarrierVersion, CarrierID: o.Request.CarrierID, Binding: review.Binding, Materialization: material,
 			Code:    CodeObservation{Executable: o.Request.CodeExecutable, ConfigurationDirectory: o.Request.CodeConfigurationDirectory, Marketplace: "maestro-local-" + o.Request.CarrierID, PluginID: "maestro-product@maestro-local-" + o.Request.CarrierID, Scope: o.Request.CodeScope, State: "registration_pending", EvidenceClass: "not_observed"},
-			Desktop: DesktopObservation{Handoff: "bundle_ready", InstallConfirmation: "awaiting_user_install", Connection: "pending", FunctionalCheck: "pending", EvidenceClass: "not_observed"}}
+			Desktop: clientDesktopObservation(previous, material)}
 		if o.Request.DesktopOnly() {
 			result.Code = CodeObservation{State: "not_selected", EvidenceClass: "not_applicable"}
 		}
 		if previous != nil && previous.Materialization.CodeTreeSHA256 == material.CodeTreeSHA256 && previous.Code.Executable == o.Request.CodeExecutable {
 			result.Code = previous.Code
-		}
-		if previous != nil && previous.Materialization.DesktopSHA256 == material.DesktopSHA256 && previous.Materialization.DesktopNativeContractSHA256 == material.DesktopNativeContractSHA256 {
-			result.Desktop = previous.Desktop
-			if previous.Materialization.ManifestSHA256 != material.ManifestSHA256 {
-				result.Desktop.Connection = "restart_required"
-				result.Desktop.FunctionalCheck = "pending"
-			}
 		}
 		return writeClientRecord(o.SeededOperationOptions, result)
 	})
@@ -623,6 +642,11 @@ func ReadClientsSeeded(ctx context.Context, o ClientOptions) (ClientStatus, erro
 		return status, err
 	}
 	status.State = "current_materialization"
+	if record.CodePreparationPending() {
+		status.State = ClientPartialPreparation
+		status.Reason = "code_qualification_pending"
+		status.Preparation = &ClientPreparationStatus{Phase: ClientPreparationDesktopReady, SelectedTarget: "both", Desktop: "prepared", Code: ClientCodeQualificationPending}
+	}
 	if status.Phases != nil {
 		status.Phases.PacketInventory = "current_generation_files_verified"
 	}
@@ -665,7 +689,7 @@ func prepareStableLaunch(ctx context.Context, o ClientOptions, event string) (Qu
 		if e != nil {
 			return e
 		}
-		if status.State != "current_materialization" {
+		if status.State != "current_materialization" && !(event == "" && r.CodePreparationPending() && status.State == ClientPartialPreparation) {
 			return errors.New("stable binding stale; explicit client regeneration required")
 		}
 		launch, e = PrepareQualifiedLaunch(ctx, QualifiedLaunchOptions{SeededOperationOptions: o.SeededOperationOptions, ExpectedBinding: installtx.ReleaseBinding{ManifestSHA256: r.Materialization.ManifestSHA256, ClientInputsSHA256: r.Materialization.ClientInputsSHA256}, Workspace: r.Binding.Workspace})

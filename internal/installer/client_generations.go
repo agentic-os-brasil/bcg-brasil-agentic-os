@@ -46,6 +46,11 @@ func ClientPhases(r ClientRecord) *ClientUpdatePhases {
 		return nil
 	}
 	p := &ClientUpdatePhases{PacketInventory: "recorded_requires_current_validation", CodeRegistration: "pending", SessionLoading: "reload_reconnect_new_session_pending", NativeQualification: "unavailable_MCP_only_profile", DesktopConnector: r.Desktop.Connection, DesktopMethods: "live_canonical_methods_once_installed_bootstrap_unattested", MaintenanceQualification: "inspect_current_build_per_job_requalification_required", FunctionalAcceptance: "pending_actual_host_checks"}
+	if r.CodePreparationPending() {
+		p.CodeRegistration = ClientCodeQualificationPending
+		p.NativeQualification = "pending_genuine_Code_qualification"
+		return p
+	}
 	if r.Code.State == "registered" {
 		p.CodeRegistration = "historical_supported_CLI_readback"
 	}
@@ -122,6 +127,9 @@ func ClientGenerationPaths(r ClientRequest, manifest string) (ClientMaterializat
 }
 
 func ClientRequestFromRecord(r ClientRecord) ClientRequest {
+	if r.CodePreparationPending() {
+		return r.Preparation.Selection
+	}
 	request := ClientRequest{Target: r.Materialization.Target, CarrierID: r.CarrierID, Workspace: r.Binding.Workspace, CodeRoot: r.Materialization.CodeRoot, DesktopPath: r.Materialization.DesktopPath, CodeExecutable: r.Code.Executable, CodeConfigurationDirectory: r.Code.ConfigurationDirectory, CodeScope: r.Code.Scope, LifecycleContext: r.Materialization.LifecycleContext}
 	request.NativeEnforcement = r.Materialization.NativeEnforcement
 	request.OwnerReviewChannel = r.Materialization.OwnerReviewChannel
@@ -160,6 +168,9 @@ func CurrentClientPluginPath(ctx context.Context, o ClientOptions) (string, erro
 	r, before, err := readClientRecord(o.SeededOperationOptions, o.Request.CarrierID)
 	if err != nil {
 		return "", err
+	}
+	if r.CodePreparationPending() {
+		return "", errors.New("Code qualification remains pending; Desktop preparation grants no Code packet")
 	}
 	if r.Materialization.DesktopOnly() || r.Materialization.Selection == nil || r.Binding.Workspace != o.Request.Workspace {
 		return "", errors.New("current versioned client binding required")

@@ -27,6 +27,7 @@ import (
 type installedPilotSelection struct {
 	ProductRoot, UserHome, Workspace, CarrierID, InstallerVersion string
 	AdmissionSHA256, InstalledRoot                                string
+	ObservationClient                                             string
 }
 
 type installedPilotReport struct {
@@ -49,7 +50,7 @@ func parseInstalledPilotSelection(args []string) (installedPilotSelection, error
 	if len(args) > 32 {
 		return out, errors.New("installed_selection_invalid")
 	}
-	allowed := map[string]bool{"product-root": true, "user-home": true, "workspace": true, "carrier-id": true, "installer-version": true, "experimental-seed-sha256": true, "experimental-installed-root": true, "check-only": true}
+	allowed := map[string]bool{"product-root": true, "user-home": true, "workspace": true, "carrier-id": true, "installer-version": true, "experimental-seed-sha256": true, "experimental-installed-root": true, "check-only": true, "observation-client": true}
 	seen := map[string]bool{}
 	for _, arg := range args {
 		if len(arg) > 4096 || strings.ContainsAny(arg, "\x00\r\n") {
@@ -72,6 +73,7 @@ func parseInstalledPilotSelection(args []string) (installedPilotSelection, error
 	f.StringVar(&out.InstallerVersion, "installer-version", "", "fixed installer version")
 	f.StringVar(&out.AdmissionSHA256, "experimental-seed-sha256", "", "fixed admitted role")
 	f.StringVar(&out.InstalledRoot, "experimental-installed-root", "", "fixed installed root")
+	f.StringVar(&out.ObservationClient, "observation-client", "", "optional Desktop-only observation; does not change selected clients")
 	f.Bool("check-only", false, "read-only diagnostics without opening clients")
 	if err := f.Parse(args); err != nil || f.NArg() != 0 {
 		return out, errors.New("installed_selection_invalid")
@@ -82,6 +84,9 @@ func parseInstalledPilotSelection(args []string) (installedPilotSelection, error
 		}
 	}
 	if out.InstalledRoot != out.ProductRoot || !pilotWorkspaceID.MatchString(out.CarrierID) || !pilotKitID.MatchString(out.AdmissionSHA256) || !regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`).MatchString(out.InstallerVersion) {
+		return out, errors.New("installed_selection_invalid")
+	}
+	if out.ObservationClient != "" && out.ObservationClient != "desktop" {
 		return out, errors.New("installed_selection_invalid")
 	}
 	return out, nil
@@ -102,6 +107,7 @@ func runInstalledPilotCheck(ctx context.Context, args []string, output io.Writer
 	if ctx.Err() != nil {
 		return fail("installed_selection", "check_cancelled")
 	}
+	r.ObservationClient = selection.ObservationClient
 	r.add("installed_selection", "passed", "fixed_local_selection_received_not_authority", "")
 	role, err := installer.LoadExperimentalSeed(selection.ProductRoot, AuthorityRegistrySHA256, selection.InstallerVersion, time.Now)
 	if err != nil || role.Identity().AdmissionSHA256 != selection.AdmissionSHA256 {
@@ -137,7 +143,7 @@ func runInstalledPilotCheck(ctx context.Context, args []string, output io.Writer
 	r.add("current_backend", "passed", "executing_image_and_current_source_binding_verified", "")
 	options := installer.ClientOptions{SeededOperationOptions: operation, Request: installer.ClientRequest{CarrierID: selection.CarrierID, Workspace: selection.Workspace}}
 	status, err := installer.ReadClientsSeeded(ctx, options)
-	if err != nil || status.State != "current_materialization" || status.Record == nil {
+	if err != nil || status.Record == nil || status.State != "current_materialization" && (status.State != installer.ClientPartialPreparation || !status.Record.CodePreparationPending()) {
 		return fail("current_clients", "current_client_materialization_unavailable")
 	}
 	record := *status.Record
@@ -145,17 +151,27 @@ func runInstalledPilotCheck(ctx context.Context, args []string, output io.Writer
 		return fail("current_clients", "current_workspace_binding_mismatch")
 	}
 	r.WorkspaceID = record.Binding.WorkspaceID
-	r.ClientTarget = record.Materialization.Target
+	r.ClientTarget = installer.ClientSelectedTarget(record)
+	codePending := record.CodePreparationPending()
+	if codePending {
+		r.ClientPreparation = installer.ClientPreparationDesktopReady
+	}
 	r.CodeRegistration, r.SessionLoading = status.CodeRegistration, status.SessionLoading
 	if status.Phases != nil {
 		r.NativeQualification = status.Phases.NativeQualification
 	}
 	r.add("current_clients", "passed", "current_record_and_exact_selected_files_verified", "")
 	m := record.Materialization
-	if m.DesktopOnly() {
+	if codePending {
+		r.add("code_packet", "not_tested", "code_qualification_pending", "Retome explicitamente o Code pelo gerenciador; a preparação Desktop não o qualifica.")
+		r.add("code_profile", "not_tested", "code_qualification_pending", "")
+	} else if m.DesktopOnly() {
 		r.NativeQualification = "not_applicable"
 		r.add("code_packet", "not_applicable", "code_not_selected", "")
 		r.add("code_profile", "not_applicable", "code_not_selected", "")
+	} else if selection.ObservationClient == "desktop" {
+		r.add("code_packet", "not_tested", "outside_desktop_observation", "O registro anterior foi validado; o Code não foi observado nesta tentativa.")
+		r.add("code_profile", "not_tested", "outside_desktop_observation", "")
 	} else {
 		plugin := filepath.Join(m.CodeRoot, "plugins", "maestro-product")
 		packet, err := packaging.ValidatePacket(plugin)
@@ -194,8 +210,12 @@ func runInstalledPilotCheck(ctx context.Context, args []string, output io.Writer
 		return fail("desktop_methods", "current_method_bootstrap_changed")
 	}
 	r.add("desktop_methods", "passed", "current_bootstrap_archive_verified_host_installation_unobserved", "")
-	if m.DesktopOnly() {
+	if codePending {
+		r.add("code_cli", "not_tested", "code_qualification_pending", "Nenhuma conferência do executável ou login Code foi iniciada.")
+	} else if m.DesktopOnly() {
 		r.add("code_cli", "not_applicable", "code_not_selected", "")
+	} else if selection.ObservationClient == "desktop" {
+		r.add("code_cli", "not_tested", "outside_desktop_observation", "Nenhuma conferência do executável ou login Code foi iniciada.")
 	} else if record.Code.Executable == "" || !filepath.IsAbs(record.Code.Executable) {
 		r.add("code_cli", "not_tested", "no_absolute_executable_selected", "Selecione o Claude Code uma vez pelo gerenciador admitido.")
 	} else if record.Code.ExecutableSHA256 == "" {
@@ -220,6 +240,14 @@ func runInstalledPilotCheck(ctx context.Context, args []string, output io.Writer
 		return fail("mcp_readback", "current_in_process_sdk_readback_failed")
 	}
 	for _, name := range []string{"code_client", "desktop_client", "onboarding", "skills", "hooks", "authored_brain", "memory", "conversion"} {
+		if (codePending || selection.ObservationClient == "desktop") && (name == "code_client" || name == "hooks") {
+			reason := "outside_desktop_observation"
+			if codePending {
+				reason = "code_qualification_pending"
+			}
+			r.add(name, "not_tested", reason, "A seleção original foi preservada; este diagnóstico não testa nem qualifica o Code.")
+			continue
+		}
 		if m.DesktopOnly() && (name == "code_client" || name == "hooks") {
 			r.add(name, "not_applicable", "code_not_selected", "")
 			continue

@@ -4,6 +4,8 @@ Set-StrictMode -Version Latest
 $Utf8 = New-Object System.Text.UTF8Encoding($false)
 $OutputEncoding = $Utf8
 [Console]::OutputEncoding = $Utf8
+$script:ObservationClient = ''
+$script:CodePreparationPending = $false
 function Stop-Maestro([string]$Message) {
   $reportVariable = Get-Variable -Name Report -Scope Script -ErrorAction SilentlyContinue
   if ($null -ne $reportVariable -and (Test-Path -LiteralPath $reportVariable.Value -PathType Leaf)) { [IO.File]::AppendAllText($reportVariable.Value, "`nEtapa pendente: $Message`n", $Utf8) }
@@ -150,13 +152,14 @@ function Ensure-CodeLogin([switch]$Force) {
     [IO.File]::WriteAllText($statusPath,[string]::Join("`n",@($lines)),$Utf8)
     if ($script:CodeExit -eq 0) { $loggedIn = (Get-Content -LiteralPath $statusPath -Raw | ConvertFrom-Json).loggedIn -eq $true }
   } catch { $loggedIn = $false } }
-  if ($loggedIn) { return }
-  if ((Read-Host 'O perfil Code do piloto precisa de login oficial. Nenhuma credencial sera copiada. Digite YES para abrir o login; Enter deixa pendente') -cne 'YES') { Stop-Maestro 'Login do perfil de teste pendente. Reabra este programa quando quiser continuar.' }
+  if ($loggedIn) { return $true }
+  if ((Read-Host 'O perfil Code do piloto precisa de login oficial. Nenhuma credencial sera copiada. Digite YES para abrir o login; Enter deixa pendente') -cne 'YES') { Write-Host 'Code continua pendente; nenhuma chamada de login foi iniciada.'; return $false }
   Invoke-SelectedCode -Arguments @('auth','login') | Out-Host
   if ($script:CodeExit -ne 0) { Stop-Maestro 'Login nao concluido; use o fluxo oficial deste perfil e retome.' }
   $lines = Invoke-SelectedCode -Arguments @('auth','status') 2> $logPath
   [IO.File]::WriteAllText($statusPath,[string]::Join("`n",@($lines)),$Utf8)
   if ($script:CodeExit -ne 0 -or (Get-Content -LiteralPath $statusPath -Raw | ConvertFrom-Json).loggedIn -ne $true) { Stop-Maestro 'Login ainda pendente.' }
+  return $true
 }
 function Invoke-Management([string[]]$Extra = @()) {
   Verify-Installer $Installer
@@ -165,17 +168,44 @@ function Invoke-Management([string[]]$Extra = @()) {
     $script:ManagementExit = $LASTEXITCODE
     return
   }
-  Ensure-CodeLogin
+  $intent = ''; $pendingIntent = 'prepare-desktop'
+  if ($Extra.Count -gt 0) {
+    if ($Extra.Count -ne 2 -or $Extra[0] -cne '--management-intent' -or $Extra[1] -cne 'update') { Stop-Maestro 'Escolha de gerenciamento nao reconhecida; nenhuma preparacao foi iniciada.' }
+    $intent = 'update'; $pendingIntent = 'update-desktop'
+  }
+  $prepareCode = (Read-Host 'Preparar ou retomar o Code agora? Digite YES; Enter prepara o Desktop e mantem o Code pendente, sem consultar login nem executar o Code') -ceq 'YES'
+  if (-not $prepareCode -or -not (Ensure-CodeLogin)) {
+    $script:ObservationClient = 'desktop'
+    Write-Host 'Preparando somente a parte Desktop da selecao ambos. Code, hooks e qualificacao continuam pendentes.'
+    & $Installer manage @Manage --management-intent $pendingIntent
+    $script:ManagementExit = $LASTEXITCODE
+    return
+  }
+  $script:ObservationClient = ''
+  if ($intent -ceq '') {
+    $selection = Current-Clients
+    if ($selection.state -ceq 'partial_preparation' -and (Test-DesktopPreparation $selection)) { $intent = 'resume-code' }
+  }
+  $intentArguments = @()
+  if ($intent -cne '') { $intentArguments = @('--management-intent',$intent) }
   $hadProfile = Test-Path Env:CLAUDE_CONFIG_DIR
   $previousProfile = $env:CLAUDE_CONFIG_DIR
   try {
     $env:CLAUDE_CONFIG_DIR = $Config.code_configuration_directory
-    & $Installer manage @Manage @Extra
+    & $Installer manage @Manage @intentArguments
     $script:ManagementExit = $LASTEXITCODE
   } finally {
     if ($hadProfile) { $env:CLAUDE_CONFIG_DIR = $previousProfile }
     else { Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue }
   }
+}
+function Test-DesktopPreparation($ClientStatus) {
+  if ($ClientStatus.state -ceq 'current_materialization') { return $true }
+  $property = $ClientStatus.PSObject.Properties['preparation']
+  if ($ClientStatus.state -cne 'partial_preparation' -or $null -eq $property -or $null -eq $property.Value) { return $false }
+  $preparation = $property.Value
+  foreach ($name in @('phase','selected_target','desktop','code')) { if ($null -eq $preparation.PSObject.Properties[$name]) { return $false } }
+  return ($preparation.phase -ceq 'desktop_prepared_code_pending' -and $preparation.selected_target -ceq 'both' -and $preparation.desktop -ceq 'prepared' -and $preparation.code -ceq 'pending_qualification')
 }
 try {
   $Root = $PSScriptRoot
@@ -318,11 +348,15 @@ try {
     return ([string]::Join("`n", @($lines)) | ConvertFrom-Json)
   }
   $before = Current-Clients
-  if ($before.state -ceq 'current_materialization') {
-    $recordedTarget = ''; if ($null -ne $before.record.materialization.PSObject.Properties['target']) { $recordedTarget = $before.record.materialization.target }
-    if ($recordedTarget -cne $ClientTarget) { Stop-Maestro 'O alvo atual difere da selecao salva; preserve o carrier e revise pelo gerenciador.' }
+  if (Test-DesktopPreparation $before) {
+    if ($before.state -ceq 'partial_preparation') {
+      if ($ClientTarget -cne '') { Stop-Maestro 'A preparacao parcial difere da selecao salva; preserve o carrier.' }
+    } else {
+      $recordedTarget = ''; if ($null -ne $before.record.materialization.PSObject.Properties['target']) { $recordedTarget = $before.record.materialization.target }
+      if ($recordedTarget -cne $ClientTarget) { Stop-Maestro 'O alvo atual difere da selecao salva; preserve o carrier e revise pelo gerenciador.' }
+    }
   }
-  if (-not $CheckOnly -and $before.state -cne 'current_materialization') {
+  if (-not $CheckOnly -and -not (Test-DesktopPreparation $before)) {
     $request = @{managed_root=$Product;user_home=$Config.user_home}
     # This hint controls only first-choice UI; the installed owner validates state and binds the source.
     $firstSource = $false
@@ -361,13 +395,34 @@ try {
   $ClientStatus = Current-Clients
   $Server = Join-Path $Product 'bin\maestro-mcp.exe'; $null = Private-File $Server
   if ((Hash $Server) -cnotin $Meta.server_hashes) { Stop-Maestro 'Backend fora das duas versoes admitidas. Nada sera executado.' }
-  $result = & $Server installed-pilot-check @Common --installer-version $Meta.identity.installer_version --experimental-seed-sha256 $Role --experimental-installed-root $Product --check-only
-  $checkExit = $LASTEXITCODE
-  $Checked = ([string]::Join("`n", @($result)) | ConvertFrom-Json)
-  if ($Checked.schema_version -ne 2 -or $Checked.evidence_class -cne 'engineering_only') { Stop-Maestro 'Verificador nao produziu um relatorio reconhecido.' }
-  Write-Json (Join-Path $Run 'report-private.json') $Checked
-  $prompts = @{markdown='RELATORIO.md';code_prompt='CODE.txt';code_readback_prompt='CODE-RELEITURA.txt';desktop_prompt='DESKTOP.txt';code_ready_prompt='CODE-CONEXAO.txt';desktop_ready_prompt='DESKTOP-CONEXAO.txt'}
-  foreach ($name in $prompts.Keys) { [IO.File]::WriteAllText((Join-Path $Run $prompts[$name]), [string]$Checked.$name, $Utf8) }
+  $DiagnosticRoot = $Run
+  function Update-PilotReport {
+    Private-Directory $DiagnosticRoot
+    Private-Directory $Run
+    if (Test-Path -LiteralPath (Join-Path $Run 'report-private.json')) {
+      $script:Run = Join-Path $DiagnosticRoot ('recheck-' + [Guid]::NewGuid().ToString('N'))
+      Private-Directory $Run
+      $script:Report = Join-Path $Run 'RELATORIO.md'
+    }
+    Private-Directory $Run
+    Verify-Installer $Installer
+    $script:ClientStatus = Current-Clients
+    $null = Private-File $Server
+    if ((Hash $Server) -cnotin $Meta.server_hashes) { Stop-Maestro 'Backend fora das versoes admitidas. Nada sera executado.' }
+    $scopeArguments = @()
+    if ($script:ObservationClient -ceq 'desktop') { $scopeArguments = @('--observation-client','desktop') }
+    $result = & $Server installed-pilot-check @Common --installer-version $Meta.identity.installer_version --experimental-seed-sha256 $Role --experimental-installed-root $Product --check-only @scopeArguments
+    $script:CheckExit = $LASTEXITCODE
+    $script:Checked = ([string]::Join("`n", @($result)) | ConvertFrom-Json)
+    if ($Checked.schema_version -ne 2 -or $Checked.evidence_class -cne 'engineering_only') { Stop-Maestro 'Verificador nao produziu um relatorio reconhecido.' }
+    Write-Json (Join-Path $Run 'report-private.json') $Checked
+    $prompts = @{markdown='RELATORIO.md';code_prompt='CODE.txt';code_readback_prompt='CODE-RELEITURA.txt';desktop_prompt='DESKTOP.txt';code_ready_prompt='CODE-CONEXAO.txt';desktop_ready_prompt='DESKTOP-CONEXAO.txt'}
+    foreach ($name in $prompts.Keys) { [IO.File]::WriteAllText((Join-Path $Run $prompts[$name]), [string]$Checked.$name, $Utf8) }
+    $phase = $Checked.PSObject.Properties['client_preparation']
+    $script:CodePreparationPending = $null -ne $phase -and $phase.Value -ceq 'desktop_prepared_code_pending'
+    Write-Host "Relatorio atual: $Report`nOs relatorios anteriores foram preservados."
+  }
+  Update-PilotReport
   Write-Host "Relatorio para compartilhar: $Report`nJSONs e logs sao privados; nao envie a pasta inteira."
   if ($CheckOnly) { exit $checkExit }
   function Assert-TestPrompt([string]$PromptFile) {
@@ -380,7 +435,7 @@ try {
     $conversion = $Checked.conversion
     if ($conversion.state -ceq 'pending_runtime') { Write-Host 'Conversao pendente: o runtime atual nao esta pronto. O restante do ensaio pode continuar; nenhum documento sera criado.'; return }
     if ($conversion.state -cne 'ready_for_participant_test') { Stop-Maestro 'Identidade do conversor divergente ou indisponivel. Jornada interrompida.' }
-    if ($conversion.expected_manifest_sha256 -cnotmatch '^[0-9a-f]{64}$' -or $conversion.expected_pack_sha256 -cnotmatch '^[0-9a-f]{64}$' -or $ClientStatus.state -cne 'current_materialization' -or $ClientStatus.record.binding.workspace -cne $Config.workspace -or $ClientStatus.record.materialization.manifest_sha256 -cne $conversion.expected_manifest_sha256) { Stop-Maestro 'Workspace ou versao atual mudou desde o diagnostico. Reabra o teste.' }
+    if ($conversion.expected_manifest_sha256 -cnotmatch '^[0-9a-f]{64}$' -or $conversion.expected_pack_sha256 -cnotmatch '^[0-9a-f]{64}$' -or -not (Test-DesktopPreparation $ClientStatus) -or $ClientStatus.record.binding.workspace -cne $Config.workspace -or $ClientStatus.record.materialization.manifest_sha256 -cne $conversion.expected_manifest_sha256) { Stop-Maestro 'Workspace ou versao atual mudou desde o diagnostico. Reabra o teste.' }
     $publicSource = Join-Path $Stage 'test-documents\maestro-pilot.docx'
     $null = Private-File $publicSource
     if ($conversion.source -cne 'maestro-pilot.docx' -or $conversion.source_sha256 -cne '6bd282a12170035e8af5352f2de5a21f4fe4bc5c7919283482a26703c206bf81' -or (Hash $publicSource) -cne $conversion.source_sha256) { Stop-Maestro 'Documento sintetico divergente. Nenhum documento foi preparado.' }
@@ -421,7 +476,7 @@ try {
   function Open-Desktop([string]$PromptFile) {
     Assert-TestPrompt $PromptFile
     $ClientStatus = Current-Clients
-    if ($ClientStatus.state -cne 'current_materialization') { Stop-Maestro 'Pacotes ainda nao estao atuais.' }
+    if (-not (Test-DesktopPreparation $ClientStatus)) { Stop-Maestro 'Desktop ainda nao esta preparado; conclua pelo gerenciador.' }
     if ($PromptFile -ceq 'DESKTOP-CONVERSAO.txt') { Prepare-ConversionDocument $ClientStatus $PromptFile }
     Set-Clipboard -Value (Get-Content -LiteralPath (Join-Path $Run $PromptFile) -Raw -Encoding UTF8)
     if (Test-CurrentDesktopInstall $ClientStatus) {
@@ -460,8 +515,10 @@ try {
   do {
     if ($ClientTarget -ceq 'desktop') {
       Write-Host "`n2 - Testar ou continuar no Desktop`n4 - Conexao Desktop`n5 - Gerenciar Desktop e metodos`n7 - Resultados e relatorio`n8 - Atualizar da pasta compartilhada`nEnter - Sair"
+    } elseif ($script:ObservationClient -ceq 'desktop' -or $script:CodePreparationPending) {
+      Write-Host "`nEscopo atual: Desktop. Code e hooks nao foram observados nesta tentativa.`n2 - Testar ou continuar no Desktop`n4 - Conexao Desktop`n5 - Preparar ou retomar clientes`n7 - Resultados e relatorio`n8 - Atualizar da pasta compartilhada`n9 - Renovar login do perfil Code do piloto`nEnter - Sair"
     } else {
-    Write-Host "`n1 - Testar ou continuar no Code`n2 - Continuar no Desktop`n3 - Conexao Code`n4 - Conexao Desktop`n5 - Gerenciar/qualificar hooks e skills`n6 - Persistencia Code`n7 - Resultados e relatorio`n8 - Atualizar da pasta compartilhada`n9 - Renovar login do perfil Code do piloto`nEnter - Sair"
+      Write-Host "`n1 - Testar ou continuar no Code`n2 - Continuar no Desktop`n3 - Conexao Code`n4 - Conexao Desktop`n5 - Gerenciar/qualificar hooks e skills`n6 - Persistencia Code`n7 - Resultados e relatorio`n8 - Atualizar da pasta compartilhada`n9 - Renovar login do perfil Code do piloto`nEnter - Sair"
     }
     $choice = Read-Host 'Escolha'
     switch -CaseSensitive ($choice) {
@@ -469,7 +526,7 @@ try {
       '2' { Invoke-PilotSteps 'desktop' }
       '3' { Open-Code 'CODE-CONEXAO.txt' }
       '4' { Open-Desktop 'DESKTOP-CONEXAO.txt' }
-      '5' { Invoke-Management; if ($script:ManagementExit -ne 0) { Write-Host 'Gerenciamento pendente. Preserve o relatorio.' }; Write-Host 'Reabra Maestro.cmd para conferir a nova geracao.'; $choice = '' }
+      '5' { Invoke-Management; if ($script:ManagementExit -ne 0) { Write-Host 'Gerenciamento pendente. Preserve o relatorio.' }; Update-PilotReport }
       '6' { Open-Code 'CODE-RELEITURA.txt' }
       '7' {
         [IO.File]::AppendAllText($Report, "`n## Observacoes do participante`n`nAutodeclaracoes; nao substituem qualificacao nativa.`n", $Utf8)
@@ -478,14 +535,20 @@ try {
             [IO.File]::AppendAllText($Report, "`n- ${label}: not_applicable (alvo Desktop)`n", $Utf8)
             continue
           }
+          $scope = Get-Variable -Name ObservationClient -Scope Script -ErrorAction SilentlyContinue
+          $pending = Get-Variable -Name CodePreparationPending -Scope Script -ErrorAction SilentlyContinue
+          if ((($null -ne $scope -and $scope.Value -ceq 'desktop') -or ($null -ne $pending -and $pending.Value)) -and $label -cin @('Code: identidade/skills','Hooks e delegacao')) {
+            [IO.File]::AppendAllText($Report, "`n- ${label}: nao-testei (fora do escopo Desktop desta tentativa)`n", $Utf8)
+            continue
+          }
           $answer = Read-Host "$label (passou/falhou/nao-testei)"
           if ($answer -cnotin @('passou','falhou','nao-testei')) { $answer = 'nao-testei' }
           [IO.File]::AppendAllText($Report, "`n- ${label}: $answer (participante)`n", $Utf8)
         }
         Start-Process -FilePath notepad.exe -ArgumentList @('"' + $Report + '"')
       }
-      '8' { Invoke-Management -Extra @('--management-intent','update'); if ($script:ManagementExit -ne 0) { Write-Host 'Atualizacao pendente. Preserve o relatorio.' }; Write-Host 'Reabra Maestro.cmd para conferir a nova geracao.'; $choice = '' }
-      '9' { Ensure-CodeLogin -Force }
+      '8' { Invoke-Management -Extra @('--management-intent','update'); if ($script:ManagementExit -ne 0) { Write-Host 'Atualizacao pendente. Preserve o relatorio.' }; Update-PilotReport }
+      '9' { if (-not (Ensure-CodeLogin -Force)) { Write-Host 'Login Code permanece pendente. O Desktop preparado foi preservado.' } }
     }
   } while ($choice -ne '')
 } catch {

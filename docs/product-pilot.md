@@ -251,6 +251,34 @@ CLI; the cross-client checkpoint scenario requires the Code step first.
 client or report viewer; preparation uses that mode. Missing `claude` is reported
 without installing software or preventing the independent MCP/archive checks.
 
+The installed launcher also supports a Desktop-first phase without changing a
+saved **Code and Desktop** selection (issue #638). Before any Code login/status
+probe, the participant chooses whether to prepare/resume Code now. Enter keeps
+Code pending and asks the original manager to prepare the complete Desktop
+extension and live-method library. It does not publish a Code packet, register
+Code, invoke a model, or substitute a resources-only profile. The installed
+bootstrapper and backend must both support the preparation contract; older
+readers refuse the new phase before publication. Existing complete and explicit
+Desktop-only records retain their original semantics.
+
+An admitted partial record keeps aggregate preparation partial. Its Desktop
+journey begins with its own reconciliation and can create the synthetic work in
+Desktop; it does not resume a nonexistent Code checkpoint. Completing Code later
+uses the original same-call native qualification and preserves the prepared
+Desktop bytes and matching installation observations when unchanged. A failed or
+canceled Code attempt does not become Code readiness.
+
+For an exact-current complete record, explicitly choosing a Desktop-first update
+may be a no-op. The checker then uses the closed read-only
+`--observation-client desktop` scope: the selected clients and prior validated
+qualification remain unchanged, while Code prompts/probes and all-client-ready
+claims are omitted from this attempt. Unknown scopes refuse. This flag supplies
+no admission or native authority. Management refreshes the original checker into
+a fresh private diagnostic child, preserves earlier reports, and prints the
+latest Markdown path. Only the current valid client actions are offered. Actual
+Desktop installation, connection, loaded methods and functional behavior remain
+separate participant observations.
+
 The short participant instructions and actual-client flow live in
 [LEIA-ME.md](../dev/pilot/LEIA-ME.md) and [ROTEIRO.md](../dev/pilot/ROTEIRO.md).
 They keep packaging, import, connection, cross-client work and accepted effects

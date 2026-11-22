@@ -129,6 +129,12 @@ func run() (runErr error) {
 		}
 		return json.NewEncoder(os.Stdout).Encode(installer.DesktopClientCapabilities("server", Version, AuthorityRegistrySHA256))
 	}
+	if os.Args[1] == "client-preparation-capabilities" {
+		if len(os.Args) != 2 || Version == "" || AuthorityRegistrySHA256 == "" {
+			return errors.New("server preparation capabilities unavailable")
+		}
+		return json.NewEncoder(os.Stdout).Encode(installer.ClientPreparationCapabilities("server", Version, AuthorityRegistrySHA256))
+	}
 	if os.Args[1] == "client-capabilities" {
 		if len(os.Args) != 2 {
 			return errors.New("unexpected_arguments")

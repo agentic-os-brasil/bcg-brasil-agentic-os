@@ -49,6 +49,8 @@ type pilotReport struct {
 	ReferenceHost      packaging.Target                     `json:"reference_host"`
 	Target             packaging.Target                     `json:"target"`
 	ClientTarget       string                               `json:"client_target,omitempty"`
+	ObservationClient  string                               `json:"observation_client,omitempty"`
+	ClientPreparation  string                               `json:"client_preparation,omitempty"`
 	Markdown           string                               `json:"markdown"`
 	CodeSteps          []pilotStep                          `json:"code_steps,omitempty"`
 	DesktopSteps       []pilotStep                          `json:"desktop_steps,omitempty"`
@@ -455,6 +457,19 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 	if r.ClientTarget != "" && r.ClientTarget != "desktop" {
 		r.add("client_target", "failed", "client_target_invalid", "Preserve o diagnóstico e a seleção de clientes existente.")
 	}
+	if r.ObservationClient != "" && r.ObservationClient != "desktop" {
+		r.add("observation_client", "failed", "observation_client_invalid", "Preserve o diagnóstico; o escopo de observação não altera os clientes selecionados.")
+	}
+	if r.ClientPreparation != "" && (r.ClientPreparation != "desktop_prepared_code_pending" || r.ClientTarget != "") {
+		r.add("client_preparation", "failed", "client_preparation_invalid", "Preserve a preparação e confira o registro pelo gerenciador.")
+	}
+	codeAvailable := r.ClientTarget != "desktop" && r.ClientPreparation == "" && r.ObservationClient == ""
+	if !codeAvailable {
+		r.CodeSteps, r.CodePrompt, r.CodeReadbackPrompt, r.CodeReadyPrompt = nil, "", "", ""
+		if r.Status != "blocked" {
+			r.Status = "partial"
+		}
+	}
 	if r.Conversion != nil {
 		if r.Conversion.State == "blocked_identity_mismatch" {
 			r.Status = "blocked"
@@ -477,7 +492,7 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 			}
 			return result
 		}
-		if r.ClientTarget != "desktop" {
+		if codeAvailable {
 			codeSteps := make([]pilotStep, 0, len(steps))
 			for _, step := range steps {
 				if step.ID == "execution-resume" {
@@ -491,7 +506,7 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 			r.CodeSteps = bind(codeSteps, "Use somente o servidor MCP plugin:maestro-product:maestro deste ensaio. ")
 		}
 		desktopSteps := steps
-		if r.ClientTarget != "desktop" {
+		if codeAvailable {
 			desktopSteps = []pilotStep{steps[0], steps[len(steps)-2], steps[len(steps)-1]}
 		}
 		prefix := "Use somente o Maestro deste ensaio. "
@@ -500,7 +515,7 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 		}
 		r.DesktopSteps = bind(desktopSteps, prefix)
 
-		if r.ClientTarget != "desktop" {
+		if codeAvailable {
 			r.CodeReadyPrompt = fmt.Sprintf("Use somente o servidor MCP plugin:maestro-product:maestro, declarado pelo plugin Maestro deste ensaio. Chame maestro_context uma única vez, sem parâmetros. Confirme workspace_id exatamente %s e state ready. Mostre o workspace_id e o estado retornados e encerre após essa leitura. Se esse servidor estiver ausente, ambíguo ou recusado, se houver erro ou se os valores divergirem, pare e explique. Esta conferência autoriza somente essa leitura de contexto.", r.WorkspaceID)
 		}
 		if r.DesktopExtension != "" {
@@ -519,7 +534,7 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 		}
 		if conversion != "" {
 			step := pilotStep{ID: "conversion", Title: "Conferir um documento", Prompt: pilotStepScope(r.WorkspaceID) + conversion + " Encerre este turno após o resultado desta etapa."}
-			if r.ClientTarget != "desktop" {
+			if codeAvailable {
 				r.CodeSteps = append(r.CodeSteps, bind([]pilotStep{step}, "Use somente o servidor MCP plugin:maestro-product:maestro deste ensaio. ")[0])
 			}
 			r.DesktopSteps = append(r.DesktopSteps, bind([]pilotStep{step}, prefix)[0])
@@ -564,7 +579,13 @@ func finishPilotReport(r *pilotReport, output io.Writer) error {
 	for _, check := range r.Checks {
 		fmt.Fprintf(&md, "| %s | %s | %s | %s |\n", check.Name, check.Status, check.Reason, check.NextAction)
 	}
-	if r.ClientTarget == "desktop" {
+	if r.ClientPreparation == "desktop_prepared_code_pending" {
+		md.WriteString("\nClientes selecionados: **ambos**, sem alteração da seleção original. O pacote Desktop completo e sua biblioteca de métodos estão preparados; instalação, conexão e funcionamento no Desktop ainda não foram observados. O Code permanece pendente de login/qualificação genuína, sem pacote ou registro atual. Hooks e especialistas nativos do Code continuam pendentes. Este roteiro começa no Desktop e não exige trabalho anterior no Code.\n")
+		md.WriteString("\nUse 2 — Testar ou continuar no Desktop ou 4 — Conferir conexão Desktop. A opção 5 permite preparar ou retomar os clientes; só a escolha explícita do Code inicia seu fluxo normal de autenticação e qualificação. O relatório não publica o Code nem promove a preparação parcial.\n")
+	} else if r.ObservationClient == "desktop" && r.ClientTarget != "desktop" {
+		md.WriteString("\nClientes selecionados: **ambos**, sem alteração da seleção original. Escopo desta tentativa: **Desktop**. O registro completo existente foi preservado; sua qualificação anterior não comprova que o Code foi aberto, conectado ou testado nesta tentativa. Nenhum roteiro ou conferência do Code é oferecido neste escopo. Instalação, conexão e funcionamento do Desktop continuam sendo observações separadas.\n")
+		md.WriteString("\nUse 2 — Testar ou continuar no Desktop ou 4 — Conferir conexão Desktop. Este roteiro inicia o trabalho no Desktop sem exigir um checkpoint anterior no Code. Para testar o Code, retome explicitamente esse cliente pelo gerenciador e gere uma nova conferência.\n")
+	} else if r.ClientTarget == "desktop" {
 		md.WriteString("\nCliente selecionado: **Desktop**. Este diagnóstico faz apenas leituras locais; o conector e o catálogo verificados não comprovam carregamento no cliente. O prompt Desktop inicia o ensaio sintético sem exigir trabalho anterior em outro cliente. Hooks do Code e agentes com runtime independente exigem sua própria preparação e não foram qualificados por este diagnóstico.\n")
 		md.WriteString("\nUse a conferência de conexão Desktop para uma leitura do workspace e da saúde da conexão, ou o ensaio Desktop para testar métodos, página, memória e continuidade com confirmação normal do cliente. Para um reinício frio, feche somente a conexão Desktop deste ensaio pelo fluxo normal, preservando outros trabalhos. Conversa nova não comprova reinício do servidor; registre o reinício informado separadamente. Um diagnóstico bloqueado deve ser enviado ao time antes de abrir o cliente.\n")
 	} else {

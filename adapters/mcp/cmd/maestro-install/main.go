@@ -66,6 +66,12 @@ func run() error {
 		}
 		return json.NewEncoder(os.Stdout).Encode(installer.DesktopClientCapabilities("installer", Version, AuthorityRegistrySHA256))
 	}
+	if os.Args[1] == "client-preparation-capabilities" {
+		if len(os.Args) != 2 || Version == "" || AuthorityRegistrySHA256 == "" {
+			return errors.New("installer preparation capabilities unavailable")
+		}
+		return json.NewEncoder(os.Stdout).Encode(installer.ClientPreparationCapabilities("installer", Version, AuthorityRegistrySHA256))
+	}
 	if os.Args[1] == "client-capabilities" {
 		if len(os.Args) != 2 || Version == "" || AuthorityRegistrySHA256 == "" {
 			return errors.New("installer capabilities unavailable")
@@ -122,7 +128,7 @@ func run() error {
 		flags.StringVar(&launch.HookEvent, "event", "", "exact passive lifecycle event")
 	}
 	if os.Args[1] == "manage" {
-		flags.StringVar(&launch.ManagementIntent, "management-intent", "", "closed foreground participant intent: update")
+		flags.StringVar(&launch.ManagementIntent, "management-intent", "", "closed participant intent: update, prepare-desktop, update-desktop, or resume-code")
 		flags.BoolVar(&launch.LifecycleContext, "client-lifecycle-context", false, "explicit passive Code lifecycle selection")
 	}
 	if err = flags.Parse(os.Args[2:]); err != nil {

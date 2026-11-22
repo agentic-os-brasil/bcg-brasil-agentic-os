@@ -169,7 +169,7 @@ ensure_code_login() {
   if [[ "${1:-}" != force ]] && /usr/bin/env "CLAUDE_CONFIG_DIR=$CODE_CONFIG" "$CODE" auth status > "$RUN/code-auth-private.json" 2> "$RUN/code-auth-private.log" && [[ "$(jget "$RUN/code-auth-private.json" loggedIn 2>/dev/null || true)" == true ]]; then return; fi
   printf '\nO perfil Code do piloto precisa de login oficial. Nenhuma credencial será copiada. Abrir login agora? Digite YES; Enter deixa pendente: '
   read -r answer
-  [[ "$answer" == YES ]] || fail 'Login do perfil de teste pendente. Reabra este programa quando quiser continuar.'
+  if [[ "$answer" != YES ]]; then printf '\nCode continua pendente; nenhuma chamada de login foi iniciada.\n'; return 1; fi
   /usr/bin/env "CLAUDE_CONFIG_DIR=$CODE_CONFIG" "$CODE" auth login || fail 'Login não concluído; use o fluxo oficial deste perfil e retome.'
   /usr/bin/env "CLAUDE_CONFIG_DIR=$CODE_CONFIG" "$CODE" auth status > "$RUN/code-auth-private.json" 2> "$RUN/code-auth-private.log" || fail 'Login ainda pendente.'
   [[ "$(jget "$RUN/code-auth-private.json" loggedIn 2>/dev/null || true)" == true ]] || fail 'Login ainda pendente.'
@@ -263,16 +263,44 @@ manage() {
   if [[ "$TARGET" == desktop ]]; then
     "$INSTALLED" manage "${COMMON[@]}" --client-target desktop --client-desktop-path "$CLIENTS/maestro-product.mcpb" "$@"
   else
-  ensure_code_login
-  /usr/bin/env "CLAUDE_CONFIG_DIR=$CODE_CONFIG" "$INSTALLED" manage "${COMMON[@]}" --client-code-root "$CLIENTS/code" --client-desktop-path "$CLIENTS/maestro-product.mcpb" --client-code-executable "$CODE" --client-code-config "$CODE_CONFIG" --client-scope user "$@"
+    local intent="" pending_intent=prepare-desktop answer status_file intent_args=()
+    if [[ $# -gt 0 ]]; then
+      [[ $# -eq 2 && "$1" == --management-intent && "$2" == update ]] || fail 'Escolha de gerenciamento não reconhecida; nenhuma preparação foi iniciada.'
+      intent=update; pending_intent=update-desktop
+    fi
+    printf '\nPreparar ou retomar o Code agora? Digite YES; Enter prepara o Desktop e mantém o Code pendente, sem consultar login nem executar o Code: '
+    read -r answer || answer=""
+    if [[ "$answer" != YES ]] || ! ensure_code_login; then
+      PILOT_OBSERVATION_CLIENT=desktop
+      printf '\nPreparando somente a parte Desktop da seleção ambos. Code, hooks e qualificação continuam pendentes.\n'
+      "$INSTALLED" manage "${COMMON[@]}" --client-code-root "$CLIENTS/code" --client-desktop-path "$CLIENTS/maestro-product.mcpb" --client-code-executable "$CODE" --client-code-config "$CODE_CONFIG" --client-scope user --management-intent "$pending_intent"
+      return
+    fi
+    PILOT_OBSERVATION_CLIENT=""
+    if [[ -z "$intent" ]]; then
+      status_file="$(mktemp "$RUN/manage-clients-XXXXXXXX")"
+      if "$INSTALLED" clients-status "${COMMON[@]}" > "$status_file" 2> "$status_file.log" && [[ "$(jget "$status_file" state 2>/dev/null || true)" == partial_preparation ]] && desktop_clients_available "$status_file"; then intent=resume-code; fi
+    fi
+    if [[ -n "$intent" ]]; then intent_args=(--management-intent "$intent"); fi
+    /usr/bin/env "CLAUDE_CONFIG_DIR=$CODE_CONFIG" "$INSTALLED" manage "${COMMON[@]}" --client-code-root "$CLIENTS/code" --client-desktop-path "$CLIENTS/maestro-product.mcpb" --client-code-executable "$CODE" --client-code-config "$CODE_CONFIG" --client-scope user ${intent_args[@]+"${intent_args[@]}"}
   fi
 }
 CLIENT_STATUS=("${COMMON[@]}")
 if [[ "$TARGET" == desktop ]]; then CLIENT_STATUS+=(--client-target desktop); fi
+desktop_clients_available() {
+  local file="$1" state
+  state="$(jget "$file" state 2>/dev/null || true)"
+  [[ "$state" != current_materialization ]] || return 0
+  [[ "$state" == partial_preparation && "$(jget "$file" preparation.phase 2>/dev/null || true)" == desktop_prepared_code_pending && "$(jget "$file" preparation.selected_target 2>/dev/null || true)" == both && "$(jget "$file" preparation.desktop 2>/dev/null || true)" == prepared && "$(jget "$file" preparation.code 2>/dev/null || true)" == pending_qualification ]]
+}
 current_clients=false
 if "$INSTALLED" clients-status "${CLIENT_STATUS[@]}" > "$RUN/clients-before-private.json" 2> "$RUN/clients-before-private.log"; then
-  if [[ "$(jget "$RUN/clients-before-private.json" state)" == current_materialization ]]; then
-    [[ "$(jget "$RUN/clients-before-private.json" record.materialization.target 2>/dev/null || true)" == "$TARGET" ]] || fail 'O alvo atual difere da seleção salva; preserve o carrier e revise pelo gerenciador.'
+  if desktop_clients_available "$RUN/clients-before-private.json"; then
+    if [[ "$(jget "$RUN/clients-before-private.json" state)" == partial_preparation ]]; then
+      [[ -z "$TARGET" ]] || fail 'A preparação parcial difere da seleção salva; preserve o carrier.'
+    else
+      [[ "$(jget "$RUN/clients-before-private.json" record.materialization.target 2>/dev/null || true)" == "$TARGET" ]] || fail 'O alvo atual difere da seleção salva; preserve o carrier e revise pelo gerenciador.'
+    fi
     current_clients=true
   fi
 fi
@@ -317,12 +345,30 @@ SERVER="$PRODUCT/bin/maestro-mcp"
 [[ -f "$SERVER" && ! -L "$SERVER" && "$(stat -f '%l' "$SERVER")" == 1 ]] || fail 'Backend atual indisponível.'
 server_sha="$(sha "$SERVER")"
 [[ "$server_sha" == "$(jget "$META" server_hashes.0)" || "$server_sha" == "$(jget "$META" server_hashes.1)" ]] || fail 'Backend fora das duas versões admitidas. Nada será executado.'
-status=0
-"$SERVER" installed-pilot-check "${COMMON[@]}" --installer-version "$VERSION" --experimental-seed-sha256 "$ROLE" --experimental-installed-root "$PRODUCT" --check-only > "$RUN/report.json" 2> "$RUN/check-private.log" || status=$?
-[[ -f "$RUN/report.json" && "$(jget "$RUN/report.json" schema_version)" == 2 && "$(jget "$RUN/report.json" evidence_class)" == engineering_only ]] || fail 'Verificador não produziu um relatório reconhecido.'
-for pair in 'markdown|RELATORIO.md' 'code_prompt|CODE.txt' 'code_readback_prompt|CODE-RELEITURA.txt' 'desktop_prompt|DESKTOP.txt' 'code_ready_prompt|CODE-CONEXAO.txt' 'desktop_ready_prompt|DESKTOP-CONEXAO.txt'; do
-  /usr/bin/plutil -extract "${pair%%|*}" raw -o "$RUN/${pair#*|}" "$RUN/report.json" || fail 'Relatório incompleto.'
-done
+DIAGNOSTIC_ROOT="$RUN"
+refresh_report() {
+  local pair current_sha scope=()
+  private_dir "$DIAGNOSTIC_ROOT"
+  private_dir "$RUN"
+  if [[ -e "$RUN/report.json" || -L "$RUN/report.json" ]]; then RUN="$(mktemp -d "$DIAGNOSTIC_ROOT/recheck-XXXXXXXX")"; fi
+  private_dir "$RUN"
+  verify_installer "$INSTALLED"
+  "$INSTALLED" clients-status "${CLIENT_STATUS[@]}" > "$RUN/clients-status.json" || true
+  [[ -f "$SERVER" && ! -L "$SERVER" && "$(stat -f '%l' "$SERVER")" == 1 ]] || fail 'Backend atual indisponível.'
+  current_sha="$(sha "$SERVER")"
+  [[ "$current_sha" == "$(jget "$META" server_hashes.0)" || "$current_sha" == "$(jget "$META" server_hashes.1)" ]] || fail 'Backend fora das versões admitidas. Nada será executado.'
+  if [[ "${PILOT_OBSERVATION_CLIENT:-}" == desktop ]]; then scope=(--observation-client desktop); fi
+  status=0
+  "$SERVER" installed-pilot-check "${COMMON[@]}" --installer-version "$VERSION" --experimental-seed-sha256 "$ROLE" --experimental-installed-root "$PRODUCT" --check-only ${scope[@]+"${scope[@]}"} > "$RUN/report.json" 2> "$RUN/check-private.log" || status=$?
+  [[ -f "$RUN/report.json" && "$(jget "$RUN/report.json" schema_version)" == 2 && "$(jget "$RUN/report.json" evidence_class)" == engineering_only ]] || fail 'Verificador não produziu um relatório reconhecido.'
+  for pair in 'markdown|RELATORIO.md' 'code_prompt|CODE.txt' 'code_readback_prompt|CODE-RELEITURA.txt' 'desktop_prompt|DESKTOP.txt' 'code_ready_prompt|CODE-CONEXAO.txt' 'desktop_ready_prompt|DESKTOP-CONEXAO.txt'; do
+    /usr/bin/plutil -extract "${pair%%|*}" raw -o "$RUN/${pair#*|}" "$RUN/report.json" || fail 'Relatório incompleto.'
+  done
+  CODE_PREPARATION_PENDING=false
+  if [[ "$(jget "$RUN/report.json" client_preparation 2>/dev/null || true)" == desktop_prepared_code_pending ]]; then CODE_PREPARATION_PENDING=true; fi
+  printf '\nRelatório atual: %s/RELATORIO.md\nOs relatórios anteriores foram preservados.\n' "$RUN"
+}
+refresh_report
 printf '\nRelatório para compartilhar: %s/RELATORIO.md\nOs JSONs e logs são privados; não envie a pasta inteira.\n' "$RUN"
 [[ "${1:-}" != --check-only ]] || exit "$status"
 attest() {
@@ -332,6 +378,10 @@ attest() {
   for label in 'Code: identidade/skills' 'Desktop: conexão/skills' 'Onboarding e mesmo workspace' 'Memória: salvar e reler' 'Hooks e delegação' 'Conversão de documento'; do
     if [[ "${TARGET:-}" == desktop && ( "$label" == 'Code: identidade/skills' || "$label" == 'Hooks e delegação' ) ]]; then
       printf '\n- %s: not_applicable (alvo Desktop)\n' "$label" >> "$RUN/RELATORIO.md"
+      continue
+    fi
+    if [[ ( "${PILOT_OBSERVATION_CLIENT:-}" == desktop || "${CODE_PREPARATION_PENDING:-false}" == true ) && ( "$label" == 'Code: identidade/skills' || "$label" == 'Hooks e delegação' ) ]]; then
+      printf '\n- %s: nao-testei (fora do escopo Desktop desta tentativa)\n' "$label" >> "$RUN/RELATORIO.md"
       continue
     fi
     printf '%s: ' "$label"; read -r answer
@@ -352,7 +402,8 @@ prepare_conversion_document() {
   [[ "$state" == ready_for_participant_test ]] || fail 'Identidade do conversor divergente ou indisponível; a jornada foi interrompida.'
   expected_manifest="$(jget "$RUN/report.json" conversion.expected_manifest_sha256)"
   expected_pack="$(jget "$RUN/report.json" conversion.expected_pack_sha256)"
-  [[ "$expected_manifest" =~ ^[0-9a-f]{64}$ && "$expected_pack" =~ ^[0-9a-f]{64}$ && "$(jget "$current" state)" == current_materialization && "$(jget "$current" record.binding.workspace)" == "$WORK" && "$(jget "$current" record.materialization.manifest_sha256)" == "$expected_manifest" ]] || fail 'O workspace ou a versão atual mudou desde o diagnóstico. Reabra o teste.'
+  desktop_clients_available "$current" || fail 'Desktop ainda não está preparado; preserve o diagnóstico.'
+  [[ "$expected_manifest" =~ ^[0-9a-f]{64}$ && "$expected_pack" =~ ^[0-9a-f]{64}$ && "$(jget "$current" record.binding.workspace)" == "$WORK" && "$(jget "$current" record.materialization.manifest_sha256)" == "$expected_manifest" ]] || fail 'O workspace ou a versão atual mudou desde o diagnóstico. Reabra o teste.'
   [[ "$(jget "$RUN/report.json" conversion.source)" == maestro-pilot.docx && "$(jget "$RUN/report.json" conversion.source_sha256)" == 6bd282a12170035e8af5352f2de5a21f4fe4bc5c7919283482a26703c206bf81 && -f "$STAGE/test-documents/maestro-pilot.docx" && ! -L "$STAGE/test-documents/maestro-pilot.docx" && "$(sha "$STAGE/test-documents/maestro-pilot.docx")" == 6bd282a12170035e8af5352f2de5a21f4fe4bc5c7919283482a26703c206bf81 ]] || fail 'O documento sintético divergiu do ensaio. Nenhum documento foi preparado.'
   [[ -f "$SERVER" && ! -L "$SERVER" && "$(stat -f '%l' "$SERVER")" == 1 ]] || fail 'Backend atual indisponível.'
   server_sha="$(sha "$SERVER")"
@@ -391,7 +442,7 @@ open_desktop() {
   local packet methods method_version
   guard_test_prompt "$1"
   "$INSTALLED" clients-status "${CLIENT_STATUS[@]}" > "$RUN/clients-status.json" || fail 'Registro atual indisponível.'
-  [[ "$(jget "$RUN/clients-status.json" state)" == current_materialization ]] || fail 'Pacotes ainda não estão atuais.'
+  desktop_clients_available "$RUN/clients-status.json" || fail 'Desktop ainda não está preparado; conclua pelo gerenciador.'
   packet="$(jget "$RUN/clients-status.json" record.materialization.desktop_path)"
   methods="$(jget "$RUN/clients-status.json" record.materialization.desktop_methods.archive)"
   method_version="$(jget "$RUN/clients-status.json" record.materialization.desktop_methods.version)"
@@ -435,16 +486,18 @@ pilot_steps() {
 while [[ -t 0 ]]; do
   if [[ "$TARGET" == desktop ]]; then
     printf '\n2 — Testar ou continuar no Desktop\n4 — Conferir conexão Desktop\n5 — Gerenciar Desktop e métodos\n7 — Registrar resultados e abrir relatório\n8 — Atualizar da pasta compartilhada\nEnter — Sair\nEscolha: '
+  elif [[ "${PILOT_OBSERVATION_CLIENT:-}" == desktop || "${CODE_PREPARATION_PENDING:-false}" == true ]]; then
+    printf '\nEscopo atual: Desktop. Code e hooks não foram observados nesta tentativa.\n2 — Testar ou continuar no Desktop\n4 — Conferir conexão Desktop\n5 — Preparar ou retomar clientes\n7 — Registrar resultados e abrir relatório\n8 — Atualizar da pasta compartilhada\n9 — Renovar login do perfil Code do piloto\nEnter — Sair\nEscolha: '
   else
   printf '\n1 — Testar ou continuar no Code\n2 — Continuar no Desktop\n3 — Conferir conexão Code\n4 — Conferir conexão Desktop\n5 — Gerenciar/qualificar hooks e skills\n6 — Conferir persistência no Code\n7 — Registrar resultados e abrir relatório\n8 — Atualizar da pasta compartilhada\n9 — Renovar login do perfil Code do piloto\nEnter — Sair\nEscolha: '
   fi
   read -r choice
   case "$choice" in
     1) pilot_steps code;; 2) pilot_steps desktop;; 3) open_code CODE-CONEXAO.txt;; 4) open_desktop DESKTOP-CONEXAO.txt;;
-    5) manage; printf 'Após concluir, reabra Maestro.command para gerar um diagnóstico atual.\n'; break;;
+    5) manage || printf '\nGerenciamento pendente. Preserve o relatório.\n'; refresh_report;;
     6) open_code CODE-RELEITURA.txt;; 7) attest; /usr/bin/open -t "$RUN/RELATORIO.md";;
-    8) manage --management-intent update; printf 'Reabra Maestro.command para verificar a nova geração.\n'; break;;
-    9) ensure_code_login force;;
+    8) manage --management-intent update || printf '\nAtualização pendente. Preserve o relatório.\n'; refresh_report;;
+    9) if ! ensure_code_login force; then printf '\nLogin Code permanece pendente. O Desktop preparado foi preservado.\n'; fi;;
     '') break;; *) printf 'Escolha uma opção da lista.\n';;
   esac
 done

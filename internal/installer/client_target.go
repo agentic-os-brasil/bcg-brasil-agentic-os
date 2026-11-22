@@ -34,6 +34,12 @@ func clientRecordSchema(target string) int {
 	return 1
 }
 func validateClientTargetRecord(r ClientRecord) error {
+	if r.SchemaVersion == 3 {
+		return validateClientPreparationRecord(r)
+	}
+	if r.Preparation != nil {
+		return errors.New("legacy client record contains a preparation phase")
+	}
 	if r.Materialization.Target == "" {
 		if r.SchemaVersion != 1 || r.Materialization.Selection != nil && r.Materialization.Selection.Target != "" {
 			return errors.New("unsupported client record schema")

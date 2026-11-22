@@ -26,8 +26,20 @@ func versionedClientMaterializer(o installer.ClientOptions, nativeSHA string) in
 			return material, err
 		}
 		material.Selection = paths.Selection
-		if previous != nil && previous.Materialization.Selection != nil && *previous.Materialization.Selection != *paths.Selection {
-			return material, errors.New("versioned client selection changed")
+		if previous != nil && previous.Materialization.Selection != nil {
+			selection := previous.Materialization.Selection
+			if previous.CodePreparationPending() {
+				// The prepared Desktop role is not a retarget of the desired full
+				// selection. Reconstruct the latter through the canonical reader.
+				prior, err := installer.ClientGenerationPaths(installer.ClientRequestFromRecord(*previous), previous.Materialization.ManifestSHA256)
+				if err != nil {
+					return material, err
+				}
+				selection = prior.Selection
+			}
+			if *selection != *paths.Selection {
+				return material, errors.New("versioned client selection changed")
+			}
 		}
 		provider, err := ensureCommandMarketplace(o)
 		if err != nil {

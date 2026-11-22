@@ -627,6 +627,25 @@ before the producer runs. Current packet publication cannot reuse an imported
 native proof or silently fall back to the non-enforcing lifecycle/resources-only
 profiles. Existing native custody and qualification requirements remain effective.
 
+### Per-client preparation with pending full Code (CIPP)
+
+The complete MCPB/live-method surface may be prepared under an unchanged
+both-client selection while Code's genuine qualification remains pending. Reuse
+the existing Desktop adapter and authenticated current-source contract; this is
+not a resources-only selection and gives Desktop no native Code hook, specialist
+or foreground-runtime authority. Schema3 and the separate preparation capability
+in Spec020 record the prepared Desktop view and immutable desired selection.
+Pending Code cannot supply a current plugin, registration or native authority.
+
+The original exact-host producer remains mandatory before Code publication.
+Resuming it must preserve compatible Desktop bytes and existing bounded host
+observations. Preparation, native Code evidence, registration, loaded sessions,
+Desktop method installation and functional acceptance retain separate statuses.
+Earlier artifacts, a copied file, operator testimony or a successful opener
+cannot complete any missing phase.
+
+Refs: #638; CIPP.
+
 The experimental installed native hook uses a distinct closed
 `installed-native-hook` server command. The stable installer preserves the
 current installed executable and its original manifest, client-input and
