@@ -59,7 +59,9 @@ foreach($name in @('$env:TEMP','$env:TMP','$env:GOTMPDIR')) {
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_workflow_windows_blocks_parse(self):
-        for workflow_path in (".github/workflows/data-home-inspection.yml", ".github/workflows/windows-native-engine.yml"):
+        for workflow_path, expected_blocks in (
+                (".github/workflows/data-home-inspection.yml", 3),
+                (".github/workflows/windows-native-engine.yml", 4)):
             workflow = (ROOT / workflow_path).read_text(encoding="utf-8")
             current = []
             blocks = []
@@ -75,7 +77,7 @@ foreach($name in @('$env:TEMP','$env:TMP','$env:GOTMPDIR')) {
                             break
                         body.append(child)
                     blocks.append(textwrap.dedent("\n".join(body)))
-            self.assertEqual(len(blocks), 3)
+            self.assertEqual(len(blocks), expected_blocks, workflow_path)
             for index, body in enumerate(blocks):
                 script = self.root / f"workflow-{index}.ps1"
                 script.write_text(body, encoding="utf-8")
