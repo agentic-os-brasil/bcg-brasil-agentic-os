@@ -365,7 +365,7 @@ func TestWeeklyCLIDarwinActualZombieEPERMCleanup(t *testing.T) {
 			t.Fatal(err)
 		}
 		record, err = unix.SysctlKinfoProc("kern.proc.pid", cmd.Process.Pid)
-		if err == nil && record.Proc.P_stat == 5 {
+		if watch.exited && weeklyDarwinZombieRecordMatches(cmd.Process.Pid, record, err) {
 			break
 		}
 		time.Sleep(time.Millisecond)
