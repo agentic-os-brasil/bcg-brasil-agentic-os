@@ -75,7 +75,7 @@ func (e *MaintenanceCommandError) Error() string {
 	if !validMaintenanceDiagnostic(diagnostic) {
 		diagnostic = MaintenanceCommandDiagnostic{SchemaVersion: 1, Phase: "unknown", Code: "maintenance_rejected"}
 	}
-	return "maestro: maintenance " + diagnostic.Code + " during " + diagnostic.Phase + "; inspect maintenance-status before a fresh maintenance-review; existing state was retained"
+	return "maestro: maintenance " + diagnostic.Code + " during " + diagnostic.Phase + "; completion was not confirmed; inspect maintenance-status before a fresh maintenance-review"
 }
 func (e *MaintenanceCommandError) Unwrap() error { return e.cause }
 
@@ -167,7 +167,7 @@ func MaintenanceChildFailure(stderr []byte, cause error, interrupted bool) *Main
 	return &MaintenanceCommandError{Diagnostic: last, cause: cause}
 }
 
-// MaintenanceCommandTimeout is the original local manager's hard upper bound.
+// MaintenanceCommandTimeout retains the original ninety-second process supervision budget.
 const MaintenanceCommandTimeout = 90 * time.Second
 
 // MaintenanceCommandContext can only shorten the local operation's deadline.

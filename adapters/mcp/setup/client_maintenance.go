@@ -87,8 +87,10 @@ func currentMaintenanceCommand(ctx context.Context, o installer.ClientOptions, c
 	}
 	defer stopSupervision()
 	hardDeadline, _ := supervision.Deadline()
-	// Reserve return/cleanup time inside the original 90-second ceiling.
-	// Earlier caller cancellation still stops the supervised child immediately.
+	// The child operation ends two seconds before the original 90-second
+	// process supervision budget. WaitDelay and post-exit checks remain
+	// separate; this is not an absolute manager-return deadline.
+	// Earlier caller cancellation also cancels process supervision.
 	operation, stopOperation := context.WithDeadline(supervision, hardDeadline.Add(-2*time.Second))
 	defer stopOperation()
 	if err := operation.Err(); err != nil {
@@ -140,15 +142,9 @@ func currentMaintenanceCommand(ctx context.Context, o installer.ClientOptions, c
 		}
 		cmd.Stdin = bytes.NewReader(body)
 	}
-	output := maintenanceCommandOutput{limit: 1 << 20}
-	diagnostic := maintenanceCommandOutput{limit: 4096}
-	cmd.Stdout, cmd.Stderr = &output, &diagnostic
-	runErr := cmd.Run()
-	if output.truncated || diagnostic.truncated {
-		return nil, product.MaintenanceCommandFailure(product.ErrMaintenanceCommandOutputLimit, "output")
-	}
-	if runErr != nil {
-		return nil, product.MaintenanceChildFailure(diagnostic.Bytes(), runErr, supervision.Err() != nil)
+	output, err := runMaintenanceChild(supervision, cmd)
+	if err != nil {
+		return nil, err
 	}
 	phase = "verification"
 	if err := operation.Err(); err != nil {
@@ -167,7 +163,7 @@ func currentMaintenanceCommand(ctx context.Context, o installer.ClientOptions, c
 	if err := operation.Err(); err != nil {
 		return nil, err
 	}
-	return output.Bytes(), nil
+	return output, nil
 }
 
 // Keep the original qualified launch's complete release/experimental tail.
@@ -240,4 +236,22 @@ func ApplyClientMaintenance(ctx context.Context, o installer.ClientOptions, job 
 	var status ClientMaintenanceJob
 	err = releasecontract.DecodeStrictJSON(body, &status)
 	return status, err
+}
+
+// runMaintenanceChild owns the original bounded child stream and outcome handling.
+func runMaintenanceChild(supervision context.Context, cmd *exec.Cmd) ([]byte, error) {
+	output := maintenanceCommandOutput{limit: 1 << 20}
+	diagnostic := maintenanceCommandOutput{limit: 4096}
+	cmd.Stdout, cmd.Stderr = &output, &diagnostic
+	runErr := cmd.Run()
+	if supervision.Err() != nil {
+		return nil, product.MaintenanceChildFailure(diagnostic.Bytes(), runErr, true)
+	}
+	if output.truncated || diagnostic.truncated {
+		return nil, product.MaintenanceCommandFailure(product.ErrMaintenanceCommandOutputLimit, "output")
+	}
+	if runErr != nil {
+		return nil, product.MaintenanceChildFailure(diagnostic.Bytes(), runErr, false)
+	}
+	return output.Bytes(), nil
 }

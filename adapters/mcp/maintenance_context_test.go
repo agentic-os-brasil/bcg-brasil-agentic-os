@@ -89,3 +89,16 @@ func TestMaintenanceChildDiagnosticsStayClosed(t *testing.T) {
 		t.Fatal("unvalidated diagnostic was displayed")
 	}
 }
+
+func TestMaintenanceInterruptedMessageDoesNotClaimUnchangedState(t *testing.T) {
+	failure := product.MaintenanceChildFailure(
+		[]byte("{\"schema_version\":1,\"phase\":\"execution\",\"code\":\"in_progress\"}\n"),
+		context.Canceled, true,
+	)
+	message := failure.Error()
+	if !strings.Contains(message, "completion was not confirmed") ||
+		!strings.Contains(message, "inspect maintenance-status before a fresh maintenance-review") ||
+		strings.Contains(message, "state was retained") {
+		t.Fatalf("interruption message must preserve unknown completion: %s", message)
+	}
+}

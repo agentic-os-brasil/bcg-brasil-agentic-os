@@ -2,6 +2,12 @@ package setup
 
 import (
 	"bytes"
+	"context"
+	"errors"
+	"path/filepath"
+	"time"
+
+	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"io"
 	"os"
 	"os/exec"
@@ -35,14 +41,75 @@ func TestMaintenanceCommandOutputDrainsCopyAndSubprocess(t *testing.T) {
 }
 
 func TestMaintenanceCommandOutputHelper(t *testing.T) {
-	if os.Getenv("MAESTRO_TEST_MAINTENANCE_OUTPUT") != "1" {
+	mode := os.Getenv("MAESTRO_TEST_MAINTENANCE_OUTPUT")
+	if mode != "1" && mode != "interrupt_overflow" {
 		return
 	}
 	if _, err := os.Stdout.Write(bytes.Repeat([]byte("a"), (1<<20)+33)); err != nil {
 		os.Exit(2)
 	}
+	if mode == "interrupt_overflow" {
+		if _, err := os.Stderr.Write([]byte("{\"schema_version\":1,\"phase\":\"execution\",\"code\":\"in_progress\"}\n")); err != nil {
+			os.Exit(5)
+		}
+	}
 	if _, err := os.Stderr.Write(bytes.Repeat([]byte("b"), (1<<20)+33)); err != nil {
 		os.Exit(3)
 	}
+	if mode == "interrupt_overflow" {
+		if err := os.WriteFile(os.Getenv("MAESTRO_TEST_MAINTENANCE_INTERRUPT_READY"), []byte("ready"), 0600); err != nil {
+			os.Exit(6)
+		}
+		time.Sleep(time.Minute)
+		os.Exit(7)
+	}
 	os.Exit(0)
+}
+
+func TestMaintenanceOriginalChildInterruptionWinsOverOutputOverflow(t *testing.T) {
+	readyPath := filepath.Join(t.TempDir(), "overflow-drained")
+	supervision, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	child := exec.CommandContext(supervision, os.Args[0], "-test.run=^TestMaintenanceCommandOutputHelper$")
+	child.Env = append(os.Environ(), "MAESTRO_TEST_MAINTENANCE_OUTPUT=interrupt_overflow", "MAESTRO_TEST_MAINTENANCE_INTERRUPT_READY="+readyPath)
+	child.WaitDelay = 2 * time.Second
+	sawReady := make(chan bool, 1)
+	go func() {
+		ticker := time.NewTicker(2 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			if _, err := os.Stat(readyPath); err == nil {
+				sawReady <- true
+				cancel()
+				return
+			}
+			select {
+			case <-supervision.Done():
+				sawReady <- false
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	body, err := runMaintenanceChild(supervision, child)
+	if !<-sawReady {
+		t.Fatal("child did not finish overflowing both original bounded streams before interruption")
+	}
+	var failure *product.MaintenanceCommandError
+	if !errors.As(err, &failure) || failure.Diagnostic.Code != "interrupted" || failure.Diagnostic.Phase != "execution" {
+		t.Fatalf("original caller lost forced-interruption precedence: %v", err)
+	}
+	if len(body) != 0 {
+		t.Fatal("interrupted overflowing child returned successful output")
+	}
+}
+
+func TestMaintenanceOriginalChildOverflowWithoutInterruptionStaysRefused(t *testing.T) {
+	child := exec.Command(os.Args[0], "-test.run=^TestMaintenanceCommandOutputHelper$")
+	child.Env = append(os.Environ(), "MAESTRO_TEST_MAINTENANCE_OUTPUT=1")
+	body, err := runMaintenanceChild(context.Background(), child)
+	var failure *product.MaintenanceCommandError
+	if !errors.As(err, &failure) || failure.Diagnostic.Code != "output_limit" || failure.Diagnostic.Phase != "output" || len(body) != 0 {
+		t.Fatalf("ordinary overflowing child lost its refusal: %v", err)
+	}
 }
