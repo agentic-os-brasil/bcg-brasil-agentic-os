@@ -1139,7 +1139,8 @@ try {
             throw 'Docling credentialed bootstrap requires the admitted hosted system roots.'
         }
         $subjectHome = Join-Path $OutputRoot 'docling-user-home'
-        $subjectTemp = Join-Path $OutputRoot 'user-temp'
+        # Bootstrap uses the existing private root; the child creates its own fresh user-temp.
+        $subjectTemp = $OutputRoot
         # Resolve only already-admitted nonsecret bindings. Never copy the runner
         # environment or its profile into the new standard-account bootstrap.
         $doclingLaunchEnvironment = [ordered]@{
