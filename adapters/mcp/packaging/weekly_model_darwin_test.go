@@ -332,7 +332,6 @@ func TestWeeklyCLIDarwinActualZombieEPERMCleanup(t *testing.T) {
 	defer null.Close()
 	cmd := exec.Command(executable, "-test.run=^TestWeeklyCLIProcessHelper$")
 	cmd.Env = []string{"MAESTRO_WEEKLY_SYNTHETIC=echo"}
-	cmd.Stdin = null
 	cmd.Stdout = null
 	cmd.Stderr = null
 	configureNativeProcess(cmd)
@@ -343,11 +342,19 @@ func TestWeeklyCLIDarwinActualZombieEPERMCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer watch.close()
+	// Keep the echo helper blocked until NOTE_EXIT registration is complete;
+	// /dev/null would let it exit before the parent can register the watch.
+	input, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer input.Close()
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
 	attempted := false
 	defer func() {
+		_ = input.Close() // Release the fixture before cleanup and the sole Wait.
 		if !attempted {
 			_ = cancelGroup()
 		}
@@ -356,6 +363,9 @@ func TestWeeklyCLIDarwinActualZombieEPERMCleanup(t *testing.T) {
 		}
 	}()
 	if err := watch.register(cmd.Process.Pid); err != nil {
+		t.Fatal(err)
+	}
+	if err := input.Close(); err != nil {
 		t.Fatal(err)
 	}
 	until := time.Now().Add(time.Second)

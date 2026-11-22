@@ -149,3 +149,46 @@ func TestDesktopLiveBootstrapUsesCurrentCatalogAndCompleteMethodPages(t *testing
 		t.Fatal("live bootstrap was confused with older snapshot library")
 	}
 }
+
+func TestDesktopNamedBootstrapUsesExactPlanResources(t *testing.T) {
+	files, err := desktopLiveFrontendPayload("0.1.51")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, body := range files {
+		if !strings.HasPrefix(path, "skills/") || !strings.HasSuffix(path, "/SKILL.md") {
+			continue
+		}
+		id := strings.TrimSuffix(strings.TrimPrefix(path, "skills/"), "/SKILL.md")
+		if id == "operator" {
+			if !bytes.Contains(body, []byte("Discover the complete current catalog using methods.list")) || !bytes.Contains(body, []byte("following next_offset while has_more")) {
+				t.Fatal("open-ended operator discovery lost complete catalog pagination")
+			}
+			continue
+		}
+		if id == "resume" {
+			continue
+		}
+		if id == "review-explain-change" {
+			t.Logf("STATIC_NAMED_BOOTSTRAP method_id=%s wrapper_bytes=%d", id, len(body))
+		}
+		if !bytes.Contains(body, []byte("Call methods.plan with method_id `"+id+"`")) {
+			t.Fatalf("named wrapper must select its exact current plan without enumerating unrelated methods: %s", id)
+		}
+		for _, stale := range []string{"after it appears in the live catalog", "Discover the current catalog with methods.list, including every page"} {
+			if bytes.Contains(body, []byte(stale)) {
+				t.Fatalf("named wrapper still requires a full catalog scan: %s", id)
+			}
+		}
+		for _, required := range []string{"resources", "instruction_uri", "user_invoked_only", "plan's method_id differs, stop", "descriptors are absent", "Resolve referenced canonical methods with the same exact methods.plan lookup", "Match each page's resource_uri, sha256 and total_bytes against its plan descriptor", "next_offset", "has_more", "normal host review"} {
+			if !bytes.Contains(body, []byte(required)) {
+				t.Fatalf("named lookup omitted a current identity, dependency or compatibility requirement: %s: %s", id, required)
+			}
+		}
+	}
+	for _, required := range []string{"execution-continuity", "explicit resume request", "grants no resume authority"} {
+		if !bytes.Contains(files["skills/resume/SKILL.md"], []byte(required)) {
+			t.Fatal("resume alias lost explicit selection or its existing authority boundary", required)
+		}
+	}
+}
