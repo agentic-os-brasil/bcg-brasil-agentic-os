@@ -23,6 +23,16 @@ func HookExitCode(event string) int {
 	return 1
 }
 
+// HandleClaudeHook handles one invocation without retaining admission. The
+// handler's full entry validation also initializes the private binding/store.
+func HandleClaudeHook(o Options, event string, in io.Reader, out io.Writer) error {
+	b, err := newBound(o)
+	if err != nil {
+		return err
+	}
+	return b.HandleClaudeHook(event, in, out)
+}
+
 // HandleClaudeHook is the admitted native adapter, never a dispatcher to ZIP hooks.
 func (b *Bound) HandleClaudeHook(event string, in io.Reader, out io.Writer) error {
 	if err := b.validate(); err != nil {
