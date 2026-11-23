@@ -25,6 +25,22 @@ func experimentalNativeHookEvent(event string) bool {
 // A native record can be published only by the existing genuine qualifier.
 // Reading its bit here supplies no new publication or qualification path.
 func PrepareStableNativeHook(ctx context.Context, o ClientOptions, event, selection string) (QualifiedLaunch, error) {
+	return prepareStableNativeHook(ctx, o, event, selection, nil)
+}
+
+// InspectStableNativeHook adds one synchronous read-only binding inspection to
+// this invocation's full native/current admission. Exact-record, current/time
+// and role fences run after inspection, inside the existing installation guard.
+// The callback must not acquire domain locks or run a hook event. No snapshot or
+// callback result supplies reusable admission after this function returns.
+func InspectStableNativeHook(ctx context.Context, o ClientOptions, event, selection string, inspect func(QualifiedLaunch) error) (QualifiedLaunch, error) {
+	if inspect == nil {
+		return QualifiedLaunch{}, errors.New("native binding inspection required")
+	}
+	return prepareStableNativeHook(ctx, o, event, selection, inspect)
+}
+
+func prepareStableNativeHook(ctx context.Context, o ClientOptions, event, selection string, inspect func(QualifiedLaunch) error) (QualifiedLaunch, error) {
 	if o.ExperimentalSeed == nil || !experimentalNativeHookEvent(event) || !clientSHA.MatchString(selection) || !carrierIDPattern.MatchString(o.Request.CarrierID) || o.Request.Workspace == "" {
 		return QualifiedLaunch{}, errors.New("fixed experimental native hook selection required")
 	}
@@ -55,6 +71,19 @@ func PrepareStableNativeHook(ctx context.Context, o ClientOptions, event, select
 			return errors.New("native selected owner/workspace changed")
 		}
 		expected := installtx.ReleaseBinding{ManifestSHA256: r.Materialization.ManifestSHA256, ClientInputsSHA256: r.Materialization.ClientInputsSHA256}
+		launch, err = qualifiedLaunchFromState(QualifiedLaunchOptions{SeededOperationOptions: o.SeededOperationOptions, ExpectedBinding: expected, Workspace: r.Binding.Workspace}, state)
+		if err != nil {
+			return err
+		}
+		launch, err = nativeHookLaunch(launch, event, selection, o.Request.CarrierID)
+		if err != nil {
+			return err
+		}
+		if inspect != nil {
+			if err := inspect(launch); err != nil {
+				return err
+			}
+		}
 		// Packet hashing may cross source/authority expiry. Keep the late authenticated
 		// time/eligibility and exact-record fence inside this same installation guard.
 		_, currentRecordBody, err := readClientRecord(o.SeededOperationOptions, o.Request.CarrierID)
@@ -67,15 +96,13 @@ func PrepareStableNativeHook(ctx context.Context, o ClientOptions, event, select
 		if err := recheckExperimentalOperationContext(ctx, o.SeededOperationOptions); err != nil {
 			return err
 		}
-		launch, err = qualifiedLaunchFromState(QualifiedLaunchOptions{SeededOperationOptions: o.SeededOperationOptions, ExpectedBinding: expected, Workspace: r.Binding.Workspace}, state)
-		if err != nil {
-			return err
-		}
-		launch, err = nativeHookLaunch(launch, event, selection, o.Request.CarrierID)
-		return err
+		return ctx.Err()
 	})
 	if err == nil {
 		err = recheckExperimentalOperationContext(ctx, o.SeededOperationOptions)
+	}
+	if err != nil {
+		return QualifiedLaunch{}, err
 	}
 	return launch, err
 }

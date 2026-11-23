@@ -12,6 +12,7 @@ import (
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
 )
 
@@ -68,51 +69,65 @@ func runInstalledNativeHook(ctx context.Context, args []string, input io.Reader,
 // This private seam composes the real parser and handler. Shipping callers
 // always pass the immutable production admission function above; test-only
 // subprocesses can exercise protocol delivery without manufacturing host proof.
-func handleInstalledNativeHook(ctx context.Context, args []string, input io.Reader, output io.Writer, admit func(context.Context, installedNativeHookSelection, func(product.Options) error) error) error {
+func handleInstalledNativeHook(ctx context.Context, args []string, input io.Reader, output io.Writer, invoke func(context.Context, installedNativeHookSelection, io.Reader, io.Writer) error) error {
 	s, err := parseInstalledNativeHook(args)
 	if err != nil {
 		return err
 	}
-	return admit(ctx, s, func(o product.Options) error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		return product.HandleClaudeHook(o, s.Event, input, output)
-	})
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return invoke(ctx, s, input, output)
 }
 
-func withInstalledNativeHookAdmission(ctx context.Context, s installedNativeHookSelection, use func(product.Options) error) error {
+func withInstalledNativeHookAdmission(ctx context.Context, s installedNativeHookSelection, input io.Reader, output io.Writer) error {
+	finishBootstrap := installer.BeginNativeHookDiagnostic("child_bootstrap")
+	options, err := installedNativeHookOptions(ctx, s)
+	finishBootstrap(err)
+	if err != nil {
+		return err
+	}
+	return product.HandleInstalledClaudeHook(ctx, options, s.Event, s.BindingSHA256, s.CarrierID, input, output)
+}
+
+func installedNativeHookOptions(ctx context.Context, s installedNativeHookSelection) (product.Options, error) {
+	if err := ctx.Err(); err != nil {
+		return product.Options{}, err
+	}
 	fixed, err := installer.LoadExperimentalInstalledContext(s.ProductRoot, AuthorityRegistrySHA256, time.Now)
 	if err != nil {
-		return err
+		return product.Options{}, err
 	}
 	if fixed.ManagedRoot != s.ProductRoot || fixed.UserHome != s.UserHome || fixed.ExperimentalSeed.Identity().AdmissionSHA256 != s.AdmissionSHA256 {
-		return errors.New("installed native hook owner or admission differs")
+		return product.Options{}, errors.New("installed native hook owner or admission differs")
 	}
-	o := installer.ClientOptions{SeededOperationOptions: fixed, Request: installer.ClientRequest{CarrierID: s.CarrierID, Workspace: s.Workspace}}
-	// Reuse the original current-record native owner in this child, including
-	// its source guard and four-field selection check. Do not execute its argv.
-	// Release the installation lock before the handler acquires domain locks;
-	// product.HandleClaudeHook independently revalidates the installed source.
-	launch, err := installer.PrepareStableNativeHook(ctx, o, s.Event, s.BindingSHA256)
+	// This metadata/image precheck supplies no admission. The product-owned
+	// one-shot entry below freshly admits the complete native record/current
+	// source and repeats the actual-image check inside that guarded inspection.
+	state, err := installtx.ReadSourceState(fixed.DataRoot, fixed.ManagedRoot)
 	if err != nil {
-		return err
+		return product.Options{}, err
 	}
+	name := "maestro-mcp"
+	if state.TargetOS == "windows" {
+		name += ".exe"
+	}
+	launch := installer.QualifiedLaunch{Executable: filepath.Join(fixed.ManagedRoot, "bin", name), State: state}
 	actual, err := processidentity.Current()
 	if err != nil {
-		return errors.New("native hook must use the actual current installed server")
+		return product.Options{}, errors.New("native hook must use the actual current installed server")
 	}
 	if err := validateInstalledNativeHookCurrent(s, launch, actual, Version); err != nil {
-		return err
+		return product.Options{}, err
 	}
 	options := product.Options{
 		ExperimentalSeed: fixed.ExperimentalSeed, ExperimentalSeedRoot: fixed.ManagedRoot,
 		ProductRoot: fixed.ManagedRoot, UserHome: fixed.UserHome, WorkspacePath: s.Workspace,
-		InstalledManifestSHA256: launch.State.Binding.ManifestSHA256, InstalledClientInputsSHA256: launch.State.Binding.ClientInputsSHA256,
+		InstalledManifestSHA256: s.ManifestSHA256, InstalledClientInputsSHA256: s.ClientInputsSHA256,
 		GuardProcess: true,
 	}
 	seedDoclingAuthority(&options)
-	return use(options)
+	return options, ctx.Err()
 }
 
 func validateInstalledNativeHookCurrent(s installedNativeHookSelection, launch installer.QualifiedLaunch, actual processidentity.Identity, version string) error {

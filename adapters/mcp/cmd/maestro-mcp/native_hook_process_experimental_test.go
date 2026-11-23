@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
@@ -23,8 +24,8 @@ func init() {
 		err = run() // Preserve the actual generic packet-only command guard.
 	} else {
 		err = handleInstalledNativeHook(context.Background(), os.Args[2:], os.Stdin, os.Stdout,
-			func(_ context.Context, s installedNativeHookSelection, use func(product.Options) error) error {
-				return use(product.Options{ProductRoot: s.ProductRoot, UserHome: s.UserHome, WorkspacePath: s.Workspace})
+			func(_ context.Context, s installedNativeHookSelection, input io.Reader, output io.Writer) error {
+				return product.HandleClaudeHook(product.Options{ProductRoot: s.ProductRoot, UserHome: s.UserHome, WorkspacePath: s.Workspace}, s.Event, input, output)
 			})
 	}
 	if err != nil {
