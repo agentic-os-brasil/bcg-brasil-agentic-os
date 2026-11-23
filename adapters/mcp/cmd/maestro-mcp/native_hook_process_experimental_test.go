@@ -11,7 +11,7 @@ import (
 )
 
 // Present only in a go-test executable. This controlled delivery fixture uses
-// the actual closed parser, product.Open and HandleClaudeHook. It deliberately
+// the actual closed parser and product.HandleClaudeHook. It deliberately
 // does NOT admit an installation, publish NativeEnforcement or qualify a host.
 // No shipping flag, environment switch or mutable admission override exists.
 func init() {

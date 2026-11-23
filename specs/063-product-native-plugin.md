@@ -192,6 +192,16 @@ each invocation; cwd, ClientInfo and model flags are not binding authority.
 Reuse canonical claudeadapter, claudeagents, sessionhook, lifecycle and
 nativeagentflow rather than translating Claude through the ZIP Codex adapter.
 
+The product-owned `HandleClaudeHook(Options, ...)` entry handles one invocation:
+apply the same owner-review option checks as `Open`, construct the private binding
+and let the hook handler perform its full entry admission before reading input.
+Return no reusable binding or admission. Unknown review channels retain
+`owner_review_channel_unavailable`; binding failures use the handler's existing
+`hook_binding_unavailable` refusal without event output. `Open` and independently
+invoked `Bound.HandleClaudeHook` retain their own validation. The installed
+launcher's parent and child `PrepareStableNativeHook` admissions remain independent;
+this entry removes only the adjacent `Open`/handler duplicate in the child.
+
 SessionStart is wholly read-only and bounded; approved generated memory follows
 the PHLC projection above without acquiring instruction authority. UserPromptSubmit
 may update admitted flow metadata but never stores prompt/transcript text or
