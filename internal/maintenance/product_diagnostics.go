@@ -27,6 +27,7 @@ type SourceObservation struct {
 	SHA256 string `json:"sha256,omitempty"`
 }
 type RuntimeDiagnosis struct {
+	Installed            *InstalledConfiguration       `json:"installed,omitempty"`
 	Runtime              string                        `json:"runtime"`
 	NativeObservation    string                        `json:"native_observation"`
 	Observations         []SourceObservation           `json:"observations"`
@@ -84,6 +85,9 @@ func observeFile(root, relative, label string) (SourceObservation, []byte, error
 }
 func (s *Service) runtimeDiagnosis() (RuntimeDiagnosis, error) {
 	out := RuntimeDiagnosis{Runtime: "unknown", NativeObservation: "not_observed", InstallationCoverage: "unavailable"}
+	if s.options.Installed != (InstalledSelection{}) {
+		return s.installedRuntimeDiagnosis(out)
+	}
 	// These are real admitted workspace bytes. An absent native projection does
 	// not erase the observed identity and cannot become positive native evidence.
 	for _, file := range []struct{ root, relative, label string }{
@@ -134,6 +138,10 @@ func (s *Service) runtimeDiagnosis() (RuntimeDiagnosis, error) {
 			out.InstallationCoverage = "configured"
 		}
 	}
+	return s.withUnavailableCapabilities(out)
+}
+
+func (s *Service) withUnavailableCapabilities(out RuntimeDiagnosis) (RuntimeDiagnosis, error) {
 	manifest, err := baseruntime.Manifest()
 	if err != nil {
 		return out, err

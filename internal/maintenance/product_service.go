@@ -45,6 +45,12 @@ var ErrQualificationRequired = errors.New("current actual maintenance qualificat
 // ServiceOptions is a native constructor boundary, never a tool schema.
 // Catalog must come from bundles/base/runtime.Maintenance (which imports this package).
 type ServiceOptions struct {
+	// Installed is the fixed current release/carrier selected by the native
+	// launcher. It selects canonical readers, never paths or host authority.
+	Installed InstalledSelection `json:"-"`
+	// DiagnosticContext carries the constructing request's cancellation into
+	// installed read-only observations; it supplies no execution authority.
+	DiagnosticContext                              context.Context                          `json:"-"`
 	SourceAdmission                                updateservice.SyncedAdmission            `json:"-"`
 	WeeklyNativeExecutor                           WeeklyNativeExecutor                     `json:"-"`
 	MemoryNativeExecutor                           MemoryNativeExecutor                     `json:"-"`
