@@ -226,7 +226,8 @@ func (b *Bound) newMaintenanceService(ctx context.Context, eligibility func() er
 	// Foreground and serve-owned work share local authority. ClientInfo cannot
 	// qualify a native Code/Desktop adapter or an operating-system wake.
 	return maintenance.NewService(maintenance.ServiceOptions{
-		SourceAdmission:  b.experimentalSourceAdmission(),
+		Installed:       maintenance.InstalledSelection{ManifestSHA256: b.options.InstalledManifestSHA256, ClientInputsSHA256: b.options.InstalledClientInputsSHA256, CarrierID: b.options.ManagementCarrierID, InstallerVersion: b.options.ManagementInstallerVersion},
+		SourceAdmission: b.experimentalSourceAdmission(), DiagnosticContext: ctx,
 		EligibilityGuard: eligibility,
 		WeeklyCandidate:  b.options.WeeklyCandidate, WeeklyNativeExecutor: b.options.WeeklyNativeExecutor, MemoryNativeExecutor: b.options.MemoryNativeExecutor,
 		ProductRoot: b.options.ProductRoot, UserHome: b.options.UserHome,

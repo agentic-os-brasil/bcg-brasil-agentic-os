@@ -289,6 +289,29 @@ reports cannot qualify. This never promotes the reported runtime/capability to
 observed, healthy or native-qualified. Retention qualification similarly needs
 real capture/denial/commit observations and performs no deletion or repair.
 
+For the modern installed MCP profile, the trusted constructor carries the exact
+installed manifest/client-input pins and optional fixed management carrier and
+installer version. These selections are not observation authority. The closed
+collector reads the protected `UserHome/.maestro-install/config/install-state.json`
+and reuses the canonical current-source/activated-current and, when selected,
+current-client readers. It verifies the actual producer and exact home/workspace,
+registry and release bindings, retaining late custody/source checks. It emits
+only body-free configuration metadata and observation hashes. A missing selected
+carrier, changed packet, unsafe file or stale/mismatched source refuses. The
+read-only collector rejects legacy migration shapes before the canonical reader;
+it never migrates state or creates a legacy workspace projection. Request
+cancellation shortens the diagnostic's native reads.
+
+Modern installation/configuration observations are distinct from the legacy
+workspace projection/readiness model. An unselected client remains unattested.
+Native/session/host review/OS wake and unsupported state-document or modern
+readiness coverage remain unavailable/not observed until their owning evidence
+exists; thirteen unavailable capability declarations are not thirteen failed
+native probes. Fresh jobs remain inactive, unqualified and unscheduled. Static
+method-plan host dependencies remain unattested by selection; actual trusted
+review continues through the original request-owned confirmation or local
+operator review/apply, with no new approval authority.
+
 Deep-dream intent/enrollment is not lifetime-text approval. Reuse the existing
 exact per-candidate owner review; without that trusted review retain L2/L3 and
 report lifetime confirmation unavailable. The existing attended memory
