@@ -25,6 +25,20 @@ func TestExperimentalNativeHookOwnerRequiresIndependentAdmission(t *testing.T) {
 	}
 }
 
+func TestExperimentalNativeHookInspectionCannotSupplyMissingAdmission(t *testing.T) {
+	called := false
+	launch, err := InspectStableNativeHook(context.Background(), ClientOptions{}, "PreToolUse", strings.Repeat("a", 64), func(QualifiedLaunch) error {
+		called = true
+		return nil
+	})
+	if err == nil || called || launch.Executable != "" || len(launch.Args) != 0 {
+		t.Fatalf("inspection supplied missing native/current admission: called=%v launch=%+v err=%v", called, launch, err)
+	}
+	if _, err := InspectStableNativeHook(context.Background(), ClientOptions{}, "PreToolUse", strings.Repeat("a", 64), nil); err == nil {
+		t.Fatal("missing read-only inspection admitted")
+	}
+}
+
 func TestQualifiedLaunchAssemblyRetainsExactPins(t *testing.T) {
 	// Pure assembly only. Synthetic state here grants no admission, native
 	// qualification or installed execution; both public owners retain those.

@@ -98,6 +98,15 @@ func (b *Bound) validateContext(ctx context.Context) error {
 	if err := b.validateInstalledSourceAfterExperimentalCheckContext(ctx, installtx.ReadSourceState); err != nil {
 		return err
 	}
+	return b.validateBindingContext(ctx)
+}
+
+// validateBindingContext owns product-only home/workspace/review/store checks.
+// Its caller must establish this invocation's current source admission first.
+func (b *Bound) validateBindingContext(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	h, err := resolveBinding(b.options)
 	if err != nil || !h.Writable {
 		return errors.New("home_unavailable")

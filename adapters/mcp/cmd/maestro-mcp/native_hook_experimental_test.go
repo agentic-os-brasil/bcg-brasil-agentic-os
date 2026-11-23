@@ -5,7 +5,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -68,9 +70,9 @@ func TestInstalledNativeHookValidatesBindingOnce(t *testing.T) {
 	var output bytes.Buffer
 	input := fmt.Sprintf(`{"session_id":"one-shot","prompt_id":"turn-1","cwd":%q,"hook_event_name":"PreToolUse","tool_name":"Read","tool_use_id":"read-1","tool_input":{"file_path":%q}}`, s.Workspace, filepath.Join(s.Workspace, "synthetic.md"))
 	err = handleInstalledNativeHook(context.Background(), args, strings.NewReader(input), &output,
-		func(_ context.Context, _ installedNativeHookSelection, use func(product.Options) error) error {
+		func(_ context.Context, selected installedNativeHookSelection, input io.Reader, output io.Writer) error {
 			admissions++
-			return use(o)
+			return product.HandleClaudeHook(o, selected.Event, input, output)
 		})
 	if err != nil || strings.TrimSpace(output.String()) != "{}" || admissions != 1 {
 		t.Fatalf("real hook entry failed: err=%v output=%q admissions=%d", err, output.String(), admissions)
@@ -135,7 +137,7 @@ func TestInstalledNativeHookClosedSelection(t *testing.T) {
 			}
 			called := false
 			var output bytes.Buffer
-			err := handleInstalledNativeHook(context.Background(), args, strings.NewReader("PRIVATE_PAYLOAD"), &output, func(context.Context, installedNativeHookSelection, func(product.Options) error) error {
+			err := handleInstalledNativeHook(context.Background(), args, strings.NewReader("PRIVATE_PAYLOAD"), &output, func(context.Context, installedNativeHookSelection, io.Reader, io.Writer) error {
 				called = true
 				return nil
 			})
@@ -198,12 +200,39 @@ func TestInstalledNativeHookEntryIndependentlyRefusesAbsentAdmission(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
+	input := &nativeHookUnreadWitness{Reader: strings.NewReader(fmt.Sprintf(`{"session_id":"no-admission","prompt_id":"turn-1","cwd":%q,"hook_event_name":"UserPromptSubmit"}`, args[11]))}
 	var output bytes.Buffer
-	if err := runInstalledNativeHook(context.Background(), args, strings.NewReader("PRIVATE_PAYLOAD"), &output); err == nil || output.Len() != 0 {
-		t.Fatalf("missing signed custody admitted: %v %s", err, output.String())
+	if err := runInstalledNativeHook(context.Background(), args, input, &output); err == nil || input.reads != 0 || output.Len() != 0 {
+		t.Fatalf("missing signed custody reached event input: err=%v reads=%d output=%s", err, input.reads, output.String())
 	}
 	after, err := os.ReadDir(args[7])
 	if err != nil || len(before) != len(after) {
 		t.Fatal("refusal created private state")
+	}
+}
+
+type nativeHookUnreadWitness struct {
+	io.Reader
+	reads int
+}
+
+func (r *nativeHookUnreadWitness) Read(body []byte) (int, error) {
+	r.reads++
+	return r.Reader.Read(body)
+}
+
+func TestInstalledNativeHookCancellationBeforeAdmissionReadsNoEvent(t *testing.T) {
+	args := nativeHookSelectionArgs(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	called := false
+	input := &nativeHookUnreadWitness{Reader: strings.NewReader(fmt.Sprintf(`{"session_id":"cancelled","prompt_id":"turn-1","cwd":%q,"hook_event_name":"UserPromptSubmit"}`, args[11]))}
+	var output bytes.Buffer
+	err := handleInstalledNativeHook(ctx, args, input, &output, func(context.Context, installedNativeHookSelection, io.Reader, io.Writer) error {
+		called = true
+		return nil
+	})
+	if !errors.Is(err, context.Canceled) || called || input.reads != 0 || output.Len() != 0 {
+		t.Fatalf("cancelled entry reached admission/input: err=%v called=%v reads=%d output=%q", err, called, input.reads, output.String())
 	}
 }
