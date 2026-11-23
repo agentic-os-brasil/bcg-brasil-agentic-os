@@ -28,6 +28,12 @@ import (
 // Only the test executable implements this synthetic identity response. The
 // original qualified validator still executes and checks the real child image.
 func init() {
+	if len(os.Args) == 2 && os.Args[1] == "seed-status" {
+		if response := os.Getenv("MAESTRO_PRODUCT_TEST_SEED_STATUS"); response != "" {
+			fmt.Print(response)
+			os.Exit(0)
+		}
+	}
 	if len(os.Args) != 2 || os.Args[1] != "identity" {
 		return
 	}
@@ -62,6 +68,12 @@ func newProductSeedFixture(t *testing.T) *productSeedFixture {
 }
 
 func newProductSeedFixtureWithSource(t *testing.T, enrolled bool) *productSeedFixture {
+	return newProductSeedFixtureWithInstaller(t, enrolled, false)
+}
+
+// The optional installer is the real test executable's bounded seed-status
+// protocol fixture. It grants no installed client or native host qualification.
+func newProductSeedFixtureWithInstaller(t *testing.T, enrolled, executableInstaller bool) *productSeedFixture {
 	t.Helper()
 	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
 		t.Skip("the installed experimental role admits only Mac and Windows")
@@ -122,6 +134,9 @@ func newProductSeedFixtureWithSource(t *testing.T, enrolled bool) *productSeedFi
 	}
 	write(filepath.Join(managed, "bin", serverName), executable, 0700)
 	installerBody := []byte("synthetic installed installer bytes; never executed")
+	if executableInstaller {
+		installerBody = executable
+	}
 	write(filepath.Join(managed, installerName), installerBody, 0700)
 	var archive bytes.Buffer
 	gz := gzip.NewWriter(&archive)
@@ -181,6 +196,13 @@ func newProductSeedFixtureWithSource(t *testing.T, enrolled bool) *productSeedFi
 	verified, err := installer.VerifyExperimentalSeedAdmission(roleBody, signature, registry, role.RegistrySHA256, clock)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if executableInstaller {
+		status, err := installer.ExperimentalSeedStatus(verified)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("MAESTRO_PRODUCT_TEST_SEED_STATUS", string(encode(status)))
 	}
 	write(filepath.Join(managed, "trust", installer.ExperimentalSeedAdmissionName), roleBody, 0600)
 	write(filepath.Join(managed, "trust", installer.ExperimentalSeedAdmissionName+".sig"), signature, 0600)
