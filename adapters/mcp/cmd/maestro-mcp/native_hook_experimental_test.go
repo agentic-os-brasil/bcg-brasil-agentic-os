@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,10 +13,73 @@ import (
 	"testing"
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processidentity"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
+
+func TestInstalledNativeHookValidatesBindingOnce(t *testing.T) {
+	args := nativeHookSelectionArgs(t)
+	args[1] = "PreToolUse"
+	root, err := filepath.EvalSymlinks(args[7])
+	if err != nil {
+		t.Fatal(err)
+	}
+	args[7], args[9], args[11] = filepath.Join(root, "product"), filepath.Join(root, "owner"), filepath.Join(root, "workspace")
+	args[19] = args[7]
+	s, err := parseInstalledNativeHook(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{s.ProductRoot, s.UserHome} {
+		if err := os.Mkdir(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reads := 0
+	o := product.Options{ProductRoot: s.ProductRoot, UserHome: s.UserHome, WorkspacePath: s.Workspace,
+		LookupEnv: func(key string) (string, bool) {
+			if key == "MAESTRO_HOME" {
+				reads++
+			}
+			return "", false
+		}}
+	h, err := datahome.InitializeFresh(datahome.Options{ProductRoot: o.ProductRoot, UserHome: o.UserHome, LookupEnv: o.LookupEnv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: o.WorkspacePath, DataRoot: filepath.Join(h.Home, "state")}); err != nil {
+		t.Fatal(err)
+	}
+	reads = 0
+	if _, err := product.Open(o); err != nil {
+		t.Fatal(err)
+	}
+	oneValidationReads := reads
+	if oneValidationReads == 0 {
+		t.Fatal("binding observation was not exercised")
+	}
+	// The existing environment resolver observes this operation only; no
+	// replacement validator, persistent counter or shipping option is added.
+	reads = 0
+	admissions := 0
+	var output bytes.Buffer
+	input := fmt.Sprintf(`{"session_id":"one-shot","prompt_id":"turn-1","cwd":%q,"hook_event_name":"PreToolUse","tool_name":"Read","tool_use_id":"read-1","tool_input":{"file_path":%q}}`, s.Workspace, filepath.Join(s.Workspace, "synthetic.md"))
+	err = handleInstalledNativeHook(context.Background(), args, strings.NewReader(input), &output,
+		func(_ context.Context, _ installedNativeHookSelection, use func(product.Options) error) error {
+			admissions++
+			return use(o)
+		})
+	if err != nil || strings.TrimSpace(output.String()) != "{}" || admissions != 1 {
+		t.Fatalf("real hook entry failed: err=%v output=%q admissions=%d", err, output.String(), admissions)
+	}
+	if reads != oneValidationReads {
+		t.Fatalf("hook repeated full binding validation: resolver observations=%d; one full validation=%d", reads, oneValidationReads)
+	}
+	t.Logf("resolver observations=%d; one full validation=%d; admissions=%d", reads, oneValidationReads, admissions)
+}
 
 func nativeHookSelectionArgs(t *testing.T) []string {
 	t.Helper()

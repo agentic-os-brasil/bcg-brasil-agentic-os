@@ -77,11 +77,7 @@ func handleInstalledNativeHook(ctx context.Context, args []string, input io.Read
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		bound, err := product.Open(o)
-		if err != nil {
-			return err
-		}
-		return bound.HandleClaudeHook(s.Event, input, output)
+		return product.HandleClaudeHook(o, s.Event, input, output)
 	})
 }
 
@@ -97,7 +93,7 @@ func withInstalledNativeHookAdmission(ctx context.Context, s installedNativeHook
 	// Reuse the original current-record native owner in this child, including
 	// its source guard and four-field selection check. Do not execute its argv.
 	// Release the installation lock before the handler acquires domain locks;
-	// product.Open/HandleClaudeHook independently revalidate the installed source.
+	// product.HandleClaudeHook independently revalidates the installed source.
 	launch, err := installer.PrepareStableNativeHook(ctx, o, s.Event, s.BindingSHA256)
 	if err != nil {
 		return err

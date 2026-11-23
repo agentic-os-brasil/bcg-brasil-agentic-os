@@ -65,14 +65,21 @@ func Open(o Options) (*Bound, error) {
 
 // OpenContext retains admission while honoring the caller during expensive validation.
 func OpenContext(ctx context.Context, o Options) (*Bound, error) {
-	if o.OwnerReviewChannel != "" && o.OwnerReviewChannel != "local-browser" {
-		return nil, errors.New("owner_review_channel_unavailable")
+	b, err := newBound(o)
+	if err != nil {
+		return nil, err
 	}
-	b := &Bound{options: o}
 	if err := b.validateContext(ctx); err != nil {
 		return nil, err
 	}
 	return b, nil
+}
+
+func newBound(o Options) (*Bound, error) {
+	if o.OwnerReviewChannel != "" && o.OwnerReviewChannel != "local-browser" {
+		return nil, errors.New("owner_review_channel_unavailable")
+	}
+	return &Bound{options: o}, nil
 }
 func (b *Bound) validate() error {
 	return b.validateContext(context.Background())
