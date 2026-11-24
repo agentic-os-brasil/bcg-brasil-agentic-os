@@ -352,6 +352,238 @@ class WindowsDoclingRuntimeProfile(unittest.TestCase):
         self.assertNotIn("pull_request:", workflow)
         self.assertIn("./acceptance/windows-core-pilot.ps1 -DoclingManifest", workflow)
 
+    def test_docling_failure_stops_without_replaying_converter(self):
+        # Exercise the actual failure branch with an inert trace stub. No native
+        # proof, account, registry fixture, debugger or converter is invoked.
+        helper = ROOT / "acceptance/windows-docling-profile.ps1"
+        script = self.root / "placement-trace-condition.ps1"
+        script.write_text(r'''$ErrorActionPreference='Stop'
+$e=$null
+$tree=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$e)
+if($e.Count){throw 'Actual Docling helper must parse'}
+$dispatch=@($tree.FindAll({param($n)
+ $n -is [Management.Automation.Language.IfStatementAst] -and
+ $n.Clauses[0].Item1.Extent.Text.Contains('$exit -ne 0 -or $body -match')
+},$true))
+if($dispatch.Count -ne 1){throw 'Expected original native failure boundary'}
+function Invoke-DoclingFailureTrace { $script:replays++ }
+foreach($case in @(
+ @{exit=1;body='    native_windows_test.go:121: MAESTRO_NATIVE_RUNTIME_FAILURE operation=place stage=launch process_status=0xc0000022'},
+ @{exit=1;body='--- FAIL: synthetic'},
+ @{exit=0;body='--- SKIP: synthetic'}
+)) {
+ $exit=$case.exit;$body=$case.body;$script:replays=0;$failed=$false
+ try {Invoke-Expression $dispatch[0].Extent.Text} catch {$failed=$true}
+ if(-not $failed -or $script:replays -ne 0){throw 'Failed or skipped coverage must stop without a native replay'}
+}
+Write-Output 'failure_stops_without_replay=true'
+''', encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+                                 str(script), str(helper)],
+                                text=True, capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("failure_stops_without_replay=true", result.stdout)
+
+    def test_docling_bootstrap_environment_is_closed_before_creation_and_restored(self):
+        # Execute the real launch barrier around a harmless stub. A real .NET
+        # ProcessStartInfo observes its inherited environment. Materializing its
+        # advertised TEMP models overlap with the actual strict launcher init;
+        # it does not identify who created the directory in a native failure.
+        script = self.root / "docling-launch-environment.ps1"
+        script.write_text(r'''$ErrorActionPreference='Stop'
+$tokens=$null;$errors=$null
+$tree=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$tokens,[ref]$errors)
+if($errors.Count){throw 'Original driver must parse'}
+$calls=@($tree.FindAll({param($n) $n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -ceq 'Start-Process' -and $n.Extent.Text.Contains('-Credential $credential')},$true))
+if($calls.Count -ne 1){throw 'Expected the original credentialed launch'}
+$barrier=$calls[0].Parent
+while($barrier -and $barrier -isnot [Management.Automation.Language.TryStatementAst]){$barrier=$barrier.Parent}
+if(-not $barrier){throw 'Expected original launch restoration boundary'}
+$builder=@($tree.FindAll({param($n)
+ $n -is [Management.Automation.Language.IfStatementAst] -and $n.Clauses[0].Item1.Extent.Text -ceq '$withDocling' -and
+ @($n.Clauses[0].Item2.Statements | Where-Object {$_ -is [Management.Automation.Language.AssignmentStatementAst] -and $_.Left.Extent.Text -ceq '$doclingLaunchEnvironment'}).Count -eq 1
+},$true))
+$launcher=@($tokens | Where-Object {$_.Kind -eq 'HereStringLiteral'})
+if($launcher.Count -ne 1){throw 'Expected the single shared credentialed launcher'}
+$inner=[Management.Automation.Language.Parser]::ParseInput($launcher[0].Value,[ref]$null,[ref]$errors)
+if($errors.Count){throw 'Original launcher must parse'}
+$initializers=@($inner.FindAll({param($n)
+ $n -is [Management.Automation.Language.TryStatementAst] -and $n.Body.Statements.Count -ge 5 -and
+ $n.Body.Statements[0] -is [Management.Automation.Language.AssignmentStatementAst] -and
+ $n.Body.Statements[0].Left.Extent.Text -ceq '$temporary'
+},$true))
+if($initializers.Count -ne 1){throw 'Expected original child temporary-directory initializer'}
+$tempInit=@($initializers[0].Body.Statements | Select-Object -First 5)
+if($tempInit[-1] -isnot [Management.Automation.Language.AssignmentStatementAst] -or
+ $tempInit[-1].Left.Extent.Text -cne '$env:GOTMPDIR'){throw 'Expected complete original child temp initialization'}
+$withDocling=$true
+$doclingSystemRoot=Join-Path $PSScriptRoot 'windows';$doclingSystemDirectory=Join-Path $doclingSystemRoot 'System32'
+$doclingRuntime=@{sdk_go=(Join-Path $PSScriptRoot 'sdk/bin/go.exe');module_cache=(Join-Path $PSScriptRoot 'modules')}
+$powershell=$PSHOME+'/pwsh';$arguments=@('synthetic');$credential=$null;$stdout='unused';$stderr='unused'
+$env:GITHUB_ACTIONS='true';$env:RUNNER_ENVIRONMENT='github-hosted'
+$env:GH_TOKEN='synthetic-gh';$env:GITHUB_TOKEN='synthetic-github';$env:ACTIONS_RUNTIME_TOKEN='synthetic-actions'
+$env:UNRELATED_SYNTHETIC_SECRET='synthetic-unlisted';$env:USERPROFILE='synthetic-runner-home';$env:HOME='synthetic-runner-home'
+function Start-Process {
+ param($FilePath,$ArgumentList,$Credential,[switch]$LoadUserProfile,$WorkingDirectory,$RedirectStandardOutput,$RedirectStandardError,[switch]$Wait,[switch]$PassThru)
+ $script:launches++
+ $info=[Diagnostics.ProcessStartInfo]::new()
+ $visible=$info.Environment
+ foreach($key in @('GH_TOKEN','GITHUB_TOKEN','ACTIONS_RUNTIME_TOKEN','UNRELATED_SYNTHETIC_SECRET')) {
+  if($visible.ContainsKey($key)){throw 'Inherited credential canary reached process creation'}
+ }
+ $expected=@('SystemRoot','WINDIR','COMSPEC','PATHEXT','PATH','PSModulePath','TEMP','TMP','GOTMPDIR','USERPROFILE','HOME','APPDATA','LOCALAPPDATA','GOROOT','GOMODCACHE','GOCACHE','GOPATH','GOTOOLCHAIN','GOPROXY','GOSUMDB','GOFLAGS','CGO_ENABLED','GITHUB_ACTIONS','RUNNER_ENVIRONMENT')
+ if(@(Compare-Object ($expected|Sort-Object) (@($visible.Keys)|Sort-Object)).Count -ne 0){throw 'Bootstrap environment is not the closed key set'}
+ $subjectHome=Join-Path $OutputRoot 'docling-user-home'
+ if($visible['HOME'] -cne $subjectHome -or $visible['USERPROFILE'] -cne $subjectHome -or $visible['GOMODCACHE'] -cne $doclingRuntime.module_cache -or
+  $visible['GOCACHE'] -cne (Join-Path $OutputRoot 'go-cache') -or $visible['GOPATH'] -cne (Join-Path $OutputRoot 'go-path') -or
+  $visible['PATH'] -notlike ('*'+(Split-Path -Parent $doclingRuntime.sdk_go)+'*') -or $visible['PSModulePath'] -cne (Join-Path $PSHOME 'Modules') -or
+  $visible['GITHUB_ACTIONS'] -cne 'true' -or $visible['RUNNER_ENVIRONMENT'] -cne 'github-hosted') {throw 'Required resolved nonsecret bootstrap binding was lost'}
+ $childTemp=Join-Path $OutputRoot 'user-temp'
+ if($script:preexistingChildTemp){[IO.Directory]::CreateDirectory($childTemp) | Out-Null}
+ [IO.Directory]::CreateDirectory($visible['TEMP']) | Out-Null
+ $ProofRoot=$OutputRoot
+ try {Invoke-Expression ($tempInit.Extent.Text -join "`n")} catch {
+  $script:childTempRefused=$_.CategoryInfo.Category -eq [Management.Automation.ErrorCategory]::ResourceExists -and
+   (Test-Path -LiteralPath $childTemp -PathType Container)
+  throw
+ }
+ foreach($key in @('TEMP','TMP','GOTMPDIR')) {
+  if($visible[$key] -cne $OutputRoot){throw 'Bootstrap temporary directory differs from private output root'}
+  if([Environment]::GetEnvironmentVariable($key,'Process') -cne $childTemp){throw 'Child temporary directory was not rebound'}
+ }
+ if(-not (Test-Path -LiteralPath $childTemp -PathType Container)){throw 'Child temporary directory was not created'}
+ $script:childInitializations++
+ if($script:failLaunch){throw 'synthetic launch failed'}
+ return @{ExitCode=0}
+}
+foreach($case in @(
+ @{name='success';fail=$false;preexisting=$false},
+ @{name='throw';fail=$true;preexisting=$false},
+ @{name='preexisting';fail=$false;preexisting=$true}
+)) {
+ $OutputRoot=Join-Path $PSScriptRoot $case.name
+ New-Item -ItemType Directory -Path $OutputRoot | Out-Null
+ $script:failLaunch=$case.fail;$script:preexistingChildTemp=$case.preexisting
+ $script:launches=0;$script:childInitializations=0;$script:childTempRefused=$false;$doclingParentEnvironment=$null
+ $hadModulePath=Test-Path Env:PSModulePath;$priorModulePath=$env:PSModulePath
+ $before=[Environment]::GetEnvironmentVariables('Process')
+ if($builder.Count -eq 1){Invoke-Expression $builder[0].Extent.Text}
+ $caught=$null
+ try {Invoke-Expression $barrier.Extent.Text} catch {$caught=$_.Exception.Message}
+ $after=[Environment]::GetEnvironmentVariables('Process')
+ if($before.Count -ne $after.Count){throw 'Parent environment was not restored'}
+ foreach($key in $before.Keys){if(-not $after.Contains($key) -or $before[$key] -cne $after[$key]){throw 'Parent environment was not restored'}}
+ if($case.preexisting) {
+  if($script:launches -ne 1 -or -not $script:childTempRefused -or $script:childInitializations -ne 0 -or $null -eq $caught){
+   throw 'Preexisting child temp must refuse without adoption'
+  }
+  continue
+ }
+ if($script:launches -ne 1 -or $script:childInitializations -ne 1 -or
+  ($case.fail -and $caught -cne 'synthetic launch failed') -or (-not $case.fail -and $null -ne $caught)){
+  if($script:childTempRefused){throw 'Actual bootstrap environment contract failed: bootstrap_child_temp_overlap'}
+  $category=switch -Exact ($caught) {
+   'Inherited credential canary reached process creation' {'inherited_canary'}
+   'Bootstrap environment is not the closed key set' {'unexpected_keys'}
+   'Required resolved nonsecret bootstrap binding was lost' {'required_binding'}
+   'Docling bootstrap environment could not be closed.' {'barrier_keys'}
+   default {'unexpected_launch_error'}
+  }
+  throw ('Actual bootstrap environment contract failed: '+$category)
+ }
+}
+Write-Output 'closed_creation_and_parent_restore=true'
+Write-Output 'bootstrap_child_temp_separate_and_preexisting_refused=true'
+''', encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+                                 str(script), str(DRIVER)], text=True, capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("closed_creation_and_parent_restore=true", result.stdout)
+        self.assertIn("bootstrap_child_temp_separate_and_preexisting_refused=true", result.stdout)
+
+    def test_docling_account_removal_failure_is_fatal_and_clears_credentials(self):
+        # Run only the existing teardown block with a synthetic removal stub.
+        script = self.root / "docling-account-cleanup.ps1"
+        script.write_text(r'''$ErrorActionPreference='Stop'
+$errors=$null
+$tree=[Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$errors)
+if($errors.Count){throw 'Original driver must parse'}
+$cleanup=@($tree.FindAll({param($n)
+ $n -is [Management.Automation.Language.TryStatementAst] -and $n.Finally -and
+ @($n.Finally.FindAll({param($c) $c -is [Management.Automation.Language.CommandAst] -and $c.GetCommandName() -ceq 'Remove-LocalUser'},$true)).Count -gt 0
+},$true))
+if($cleanup.Count -ne 1){throw 'Expected original credential cleanup owner'}
+function Remove-LocalUser {
+ param($SID,$ErrorAction)
+ $script:removals++
+ if($ErrorAction -cne 'Stop'){throw 'Account removal must fail closed'}
+ if($script:failRemoval){throw 'synthetic removal failed'}
+}
+foreach($fail in @($false,$true)) {
+ $withDocling=$true;$account=@{SID='synthetic-account'};$script:removals=0;$script:failRemoval=$fail
+ $password='synthetic';$secure='synthetic';$credential='synthetic';$caught=$null
+ try {$output=@(Invoke-Expression ($cleanup[0].Finally.Statements.Extent.Text -join "`n"))} catch {$caught=$_.Exception.Message}
+ if($script:removals -ne 1 -or $null -ne $password -or $null -ne $secure -or $null -ne $credential){throw 'Account cleanup did not clear credential references'}
+ if($fail) {
+  if($caught -cne 'Docling disposable account removal failed; trial incomplete.'){throw 'Removal failure was not a finite fatal outcome'}
+ } elseif($null -ne $caught -or $output -cnotcontains 'docling_subject_cleanup account_removal_completed=true'){throw 'Successful account removal was not observed'}
+}
+Write-Output 'account_cleanup_fails_closed=true'
+''', encoding="utf-8")
+        result = subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+                                 str(script), str(DRIVER)], text=True, capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("account_cleanup_fails_closed=true", result.stdout)
+
+    def test_zero_capability_candidate_rejects_export_before_staging(self):
+        import textwrap
+        workflow = (ROOT / ".github/workflows/windows-docling-runtime.yml").read_text(encoding="utf-8")
+        step = workflow.split("      - name: Validate closed dispatch and create fresh Developer staging\n", 1)[1].split("      - name:", 1)[0]
+        script = self.root / "closed-dispatch.ps1"
+        script.write_text(textwrap.dedent(step.split("        run: |\n", 1)[1]), encoding="utf-8")
+        # An existing profile is legitimate; the workflow owns only its staging.
+        profile = self.root / "synthetic-host"
+        profile.mkdir()
+        developer = profile / "Developer"
+        staging = developer / "maestro-windows-kit-1729-1"
+        for mode in ("export", "assemble", "unknown"):
+            env = os.environ.copy()
+            for name in ("PILOT_REGISTRY", "PILOT_N", "PILOT_N1", "PILOT_INSTALLER", "PILOT_UNSIGNED_RUN", "PILOT_EXPORT_SHA", "PILOT_METADATA"):
+                env[name] = ""
+            env.update(PILOT_MODE=mode, USERPROFILE=str(profile), GITHUB_RUN_ID="1729", GITHUB_RUN_ATTEMPT="1")
+            result = subprocess.run([self.pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(script)], env=env, text=True, capture_output=True, timeout=30)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Zero-capability LPAC source candidate is proof-only", result.stdout + result.stderr)
+            self.assertFalse(developer.exists())
+            self.assertFalse(staging.exists())
+
+    def test_docling_source_keeps_zero_capabilities_and_pre_resume_lpac_attestation(self):
+        source = (ROOT / "internal/ingest/docling/confined_windows.go").read_text(encoding="utf-8")
+        self.assertIn("capabilities := securityCapabilities{SID: sid}", source)
+        self.assertNotIn("registryRead", source)
+        self.assertNotIn("DeriveCapabilitySidsFromName", source)
+        self.assertIn("windows.NewProcThreadAttributeList(4)", source)
+        self.assertIn("grantedAccess != 6", source)
+        self.assertIn("validateZeroCapabilities(capabilities, returned)", source)
+        self.assertIn("windows.CREATE_NO_WINDOW", source)
+        self.assertNotIn("windows.DETACHED_PROCESS", source)
+        controls = (ROOT / "internal/ingest/docling/confined_windows_test.go").read_text(encoding="utf-8")
+        self.assertIn("if !errors.Is(err, windows.WSAEACCES)", controls)
+        self.assertIn("networkDenied = false", controls)
+        self.assertIn("windows.WSAStartup(0x0202, &data)", controls)
+        self.assertIn("buffer bytes.Buffer", controls)
+        self.assertNotIn("r17ObserveChild", controls)
+
+        self.assertLess(source.index("windows.AssignProcessToJobObject"), source.index("validateConfinedToken(process.Process, sid)"))
+        self.assertLess(source.index("validateConfinedToken(process.Process, sid)"), source.index("windows.ResumeThread"))
+        self.assertLess(source.index('"Packages", strings.ToLower(monikerName), "AC", "Temp"'), source.index("holdExecutionTree(work)"))
+        qualification = (ROOT / "internal/ingest/docling/qualification_windows.go").read_text(encoding="utf-8")
+        self.assertIn("const nativeQualificationSchema = 3", qualification)
+        self.assertIn("Schema: nativeQualificationSchema", qualification)
+        self.assertIn("actual != expected", qualification)
+        for binding in ("Pack: pack.sha", "Manifest: pack.manifestSHA", "Implementation: implementation", "Host: hex.EncodeToString"):
+            self.assertIn(binding, qualification)
+
     def test_docling_public_acquisition_python_parses_without_execution(self):
         import ast
         source = (ROOT / "acceptance/windows-engine-build.ps1").read_text(encoding="utf-8")

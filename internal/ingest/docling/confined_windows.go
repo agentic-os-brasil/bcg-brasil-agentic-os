@@ -25,9 +25,15 @@ import (
 var userenv = windows.NewLazySystemDLL("userenv.dll")
 var createAppContainerProfile = userenv.NewProc("CreateAppContainerProfile")
 var deleteAppContainerProfile = userenv.NewProc("DeleteAppContainerProfile")
+var accessCheck = windows.NewLazySystemDLL("advapi32.dll").NewProc("AccessCheck")
 
 const securityCapabilitiesAttribute = 0x00020009
 const childProcessPolicyAttribute = 0x0002000e
+
+// Windows SDK WinBase.h definitions not exposed by x/sys v0.47.0.
+// ALL_APPLICATION_PACKAGES opt-out creates LPAC; access semantics attest it.
+const allApplicationPackagesPolicyAttribute = 0x0002000f
+const allApplicationPackagesOptOut uint32 = 0x01
 
 type securityCapabilities struct {
 	SID             *windows.SID
@@ -53,6 +59,11 @@ func runWindowsConfined(ctx context.Context, work, executable string, args []str
 		return err
 	}
 	defer custody.Close()
+	monikerName := "Maestro.Docling." + winprivate.Random()
+	// Windows redirects TEMP/TMP beneath the child's isolated LOCALAPPDATA.
+	if err := winprivate.MkdirAll(filepath.Join(work, "data", "Packages", strings.ToLower(monikerName), "AC", "Temp")); err != nil {
+		return err
+	}
 	// Admit the complete freshly-created staging tree before granting the child SID.
 	handles, paths, err := holdExecutionTree(work)
 	if err != nil {
@@ -63,7 +74,7 @@ func runWindowsConfined(ctx context.Context, work, executable string, args []str
 			windows.CloseHandle(h)
 		}
 	}()
-	moniker, err := windows.UTF16PtrFromString("Maestro.Docling." + winprivate.Random())
+	moniker, err := windows.UTF16PtrFromString(monikerName)
 	if err != nil {
 		return err
 	}
@@ -95,7 +106,7 @@ func runWindowsConfined(ctx context.Context, work, executable string, args []str
 	if _, err = windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation, uintptr(unsafe.Pointer(&limits)), uint32(unsafe.Sizeof(limits))); err != nil {
 		return err
 	}
-	attrs, err := windows.NewProcThreadAttributeList(3)
+	attrs, err := windows.NewProcThreadAttributeList(4)
 	if err != nil {
 		return err
 	}
@@ -103,6 +114,10 @@ func runWindowsConfined(ctx context.Context, work, executable string, args []str
 	capabilities := securityCapabilities{SID: sid}
 	if err = attrs.Update(securityCapabilitiesAttribute, unsafe.Pointer(&capabilities), unsafe.Sizeof(capabilities)); err != nil {
 		return err
+	}
+	applicationPackagesPolicy := allApplicationPackagesOptOut
+	if err = attrs.Update(allApplicationPackagesPolicyAttribute, unsafe.Pointer(&applicationPackagesPolicy), unsafe.Sizeof(applicationPackagesPolicy)); err != nil {
+		return fmt.Errorf("configure converter LPAC: %w", err)
 	}
 	childPolicy := uint32(1) // PROCESS_CREATION_CHILD_PROCESS_RESTRICTED.
 	if err = attrs.Update(childProcessPolicyAttribute, unsafe.Pointer(&childPolicy), unsafe.Sizeof(childPolicy)); err != nil {
@@ -182,6 +197,7 @@ func runWindowsConfined(ctx context.Context, work, executable string, args []str
 		return err
 	}
 	runtime.KeepAlive(capabilities)
+	runtime.KeepAlive(applicationPackagesPolicy)
 	runtime.KeepAlive(inherited)
 	runtime.KeepAlive(block)
 	defer windows.CloseHandle(process.Process)
@@ -388,7 +404,7 @@ func restoreExecutionTree(handles []windows.Handle) error {
 
 func validateConfinedToken(process windows.Handle, expected *windows.SID) error {
 	var token windows.Token
-	if err := windows.OpenProcessToken(process, windows.TOKEN_QUERY, &token); err != nil {
+	if err := windows.OpenProcessToken(process, windows.TOKEN_QUERY|windows.TOKEN_DUPLICATE, &token); err != nil {
 		return err
 	}
 	defer token.Close()
@@ -415,8 +431,51 @@ func validateConfinedToken(process windows.Handle, expected *windows.SID) error 
 	if err := windows.GetTokenInformation(token, 30, &capabilities[0], uint32(len(capabilities)), &returned); err != nil {
 		return err
 	}
-	if returned < 4 || *(*uint32)(unsafe.Pointer(&capabilities[0])) != 0 {
+	if err := validateZeroCapabilities(capabilities, returned); err != nil {
+		return err
+	}
+	return validateLessPrivilegedAppContainer(token, expected)
+}
+
+func validateZeroCapabilities(body []byte, returned uint32) error {
+	if returned < 4 || returned > uint32(len(body)) || *(*uint32)(unsafe.Pointer(&body[0])) != 0 {
 		return errors.New("converter_token_has_capabilities")
+	}
+	return nil
+}
+
+// Attest the actual suspended child's LPAC access semantics, without assigning
+// its token to a thread or changing any resource ACL. World permits all bits for
+// the user half; require the exact package and ARAP bits but exclude AAP access.
+func validateLessPrivilegedAppContainer(token windows.Token, expected *windows.SID) error {
+	var impersonation windows.Token
+	if err := windows.DuplicateTokenEx(token, windows.TOKEN_QUERY, nil, windows.SecurityIdentification, windows.TokenImpersonation, &impersonation); err != nil {
+		return fmt.Errorf("duplicate converter token for LPAC attestation: %w", err)
+	}
+	defer impersonation.Close()
+	descriptor, err := windows.SecurityDescriptorFromString("O:SYG:SYD:(A;;0x7;;;WD)(A;;0x1;;;AC)(A;;0x2;;;" + expected.String() + ")(A;;0x4;;;S-1-15-2-2)")
+	if err != nil {
+		return err
+	}
+	// GENERIC_MAPPING and PRIVILEGE_SET follow the documented Win32 layouts.
+	// DesiredAccess has no generic bits. Buffer insufficiency fails closed.
+	mapping := struct{ Read, Write, Execute, All uint32 }{1, 2, 4, 7}
+	privileges := struct {
+		Count, Control uint32
+		Privilege      [1]windows.LUIDAndAttributes
+	}{}
+	privilegeLength := uint32(unsafe.Sizeof(privileges))
+	var grantedAccess, accessStatus uint32
+	if err := accessCheck.Find(); err != nil {
+		return fmt.Errorf("load converter LPAC access check: %w", err)
+	}
+	ok, _, callErr := accessCheck.Call(uintptr(unsafe.Pointer(descriptor)), uintptr(impersonation), uintptr(windows.MAXIMUM_ALLOWED), uintptr(unsafe.Pointer(&mapping)), uintptr(unsafe.Pointer(&privileges)), uintptr(unsafe.Pointer(&privilegeLength)), uintptr(unsafe.Pointer(&grantedAccess)), uintptr(unsafe.Pointer(&accessStatus)))
+	runtime.KeepAlive(descriptor)
+	if ok == 0 {
+		return fmt.Errorf("check converter LPAC access: %w", callErr)
+	}
+	if privilegeLength > uint32(unsafe.Sizeof(privileges)) || accessStatus == 0 || grantedAccess != 6 {
+		return fmt.Errorf("converter_token_not_less_privileged_appcontainer: access_allowed=%t granted_mask=0x%x", accessStatus != 0, grantedAccess)
 	}
 	return nil
 }

@@ -197,6 +197,9 @@ func AssembleProfile(inputDirectory, destination, goos, goarch, profile string) 
 	if err := addNativeClosure(target, entries); err != nil {
 		return result, err
 	}
+	if err := addWindowsSettingsCompatibility(target, entries); err != nil {
+		return result, err
+	}
 	entries["bridge.py"] = entry{target.bridge, 0444}
 	entries["pylock.toml"] = entry{target.lock, 0444}
 	entries["inputs.json"] = entry{target.inputs, 0444}

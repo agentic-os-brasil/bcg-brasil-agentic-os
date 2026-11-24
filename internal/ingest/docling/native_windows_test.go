@@ -33,6 +33,7 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 	if windows.GetCurrentProcessToken().IsElevated() {
 		t.Fatal("native conversion qualification requires an ordinary non-elevated Windows user")
 	}
+	assertNativeMetadataFingerprint(t)
 	_, source, _, _ := goruntime.Caller(0)
 	sourceRoot := filepath.Clean(filepath.Join(filepath.Dir(source), "..", "..", ".."))
 	root := filepath.Join(t.TempDir(), "private")
@@ -98,8 +99,20 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("actual shared runtime %s failed: %v: %s", action, err, output)
 		}
-		if err = json.Unmarshal(output, out); err != nil {
-			t.Fatalf("actual runtime result: %v: %s", err, output)
+		if action == "convert" || action == "export_fixture" {
+			var wire struct {
+				Metadata docling.Conversion `json:"metadata"`
+				Markdown []byte             `json:"markdown"`
+				Document []byte             `json:"document"`
+			}
+			conversion, ok := out.(*docling.Conversion)
+			if !ok || json.Unmarshal(output, &wire) != nil {
+				t.Fatal("actual conversion fixture response invalid")
+			}
+			*conversion = wire.Metadata
+			conversion.Markdown, conversion.Document = wire.Markdown, json.RawMessage(wire.Document)
+		} else if json.Unmarshal(output, out) != nil {
+			t.Fatal("actual runtime metadata response invalid")
 		}
 	}
 	var availability docling.Availability
@@ -245,12 +258,61 @@ func nativeFixtureMetadata(t *testing.T, root string) string {
 		if err != nil {
 			return err
 		}
+		if info.IsDir() {
+			info = nativeHeldDirectoryInfo(t, name)
+		}
 		entries = append(entries, strings.Join([]string{name, info.ModTime().UTC().Format(time.RFC3339Nano), info.Mode().String()}, "|"))
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	return nativeMetadataFingerprint(entries)
+}
+
+// Directory listings can contain stale NTFS metadata. Query the held object
+// without omitting any directory, name, modification time or portable mode.
+func nativeHeldDirectoryInfo(t *testing.T, name string) os.FileInfo {
+	t.Helper()
+	directory, err := winprivate.Inspect(name)
+	if err != nil {
+		t.Fatal("held directory metadata open failed")
+	}
+	info, statErr := directory.File.Stat()
+	closeErr := directory.Close()
+	if statErr != nil || closeErr != nil {
+		t.Fatal("held directory metadata query or close failed")
+	}
+	if !info.IsDir() || info.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0 {
+		t.Fatal("held directory metadata type invalid")
+	}
+	return info
+}
+
+// Preserve every tracked name, modification time and portable mode.
+func nativeMetadataFingerprint(entries []string) string {
 	sort.Strings(entries)
 	return strings.Join(entries, "\n")
+}
+
+// Pure in-memory checks execute inside the existing original native parent.
+// Cross-compilation does not establish that these Windows-only checks ran.
+func assertNativeMetadataFingerprint(t *testing.T) {
+	t.Helper()
+	// Literal rows exercise the exact original full-name/time/mode sort/join.
+	rows := []string{"b|2026-11-20T00:00:00Z|-rw-------", "a|2026-11-20T00:00:00Z|drwx------"}
+	fingerprint := nativeMetadataFingerprint(append([]string{}, rows...))
+	if fingerprint != "a|2026-11-20T00:00:00Z|drwx------\nb|2026-11-20T00:00:00Z|-rw-------" {
+		t.Fatal("original sorted fingerprint changed")
+	}
+	for _, changed := range [][]string{
+		{rows[0]}, {rows[0], rows[1], "c|2026-11-20T00:00:00Z|-rw-------"},
+		{rows[0], "renamed|2026-11-20T00:00:00Z|drwx------"},
+		{rows[0], "a|2026-11-20T00:00:00.000000001Z|drwx------"},
+		{rows[0], "a|2026-11-20T00:00:00Z|dr-x------"},
+	} {
+		if nativeMetadataFingerprint(changed) == fingerprint {
+			t.Fatal("original fingerprint omitted a tracked entry or field")
+		}
+	}
 }
