@@ -50,7 +50,7 @@ func prepareStableNativeHook(ctx context.Context, o ClientOptions, event, select
 		return QualifiedLaunch{}, withNativeHookAdmissionCause("seed_admission", err)
 	}
 	var launch QualifiedLaunch
-	err := installtx.GuardQualifiedCurrentStateContext(ctx, o.ManagedRoot, o.DataRoot, installtx.ReleaseBinding{}, time.Now(), func(state installtx.State, finalCheck func(installtx.ReleaseBinding, time.Time) error) error {
+	err := installtx.GuardQualifiedNativeCurrentStateContext(ctx, o.ManagedRoot, o.DataRoot, installtx.ReleaseBinding{}, time.Now(), func(state installtx.State, finalCheck func(installtx.ReleaseBinding, time.Time) error) error {
 		record, recordBody, err := readClientRecord(o.SeededOperationOptions, o.Request.CarrierID)
 		if err != nil {
 			return withNativeHookAdmissionCause("client_binding", err)

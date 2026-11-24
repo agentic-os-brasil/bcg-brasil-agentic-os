@@ -741,6 +741,22 @@ without a cause, and disabled diagnostics preserve the original error identity.
 These extra labels do not diagnose historical failures that predate them;
 another final installed-client run is required to observe its own cause.
 
+Installed native parent and child admission may wait for the original exclusive
+activation lock before current validation begins. Each acquisition has one
+immediate attempt and a monotonic wait cap of one second, bounded further by
+earlier caller cancellation or deadline. Only the exact exclusive-open collision
+is retried. The wait never reads a PID, reclaims a lock or enters reconciliation;
+the existing 100 ms stale-owner recovery remains separate and unchanged. No
+validation or callback is retried, including one returning a file-exists error.
+After acquisition, cancellation releases the owned lock before validation or
+effects. The source-time anchor advances by actual monotonic acquisition work,
+and the original current/source, packet, record and late expiry/role fences run
+under the held guard. The acquisition cap does not become an operation timeout.
+The ordinary five-second host deadline stays unchanged; parent and child can
+each contend, so this is neither a fairness guarantee nor complete startup
+recovery qualification. Other publication and activation owners keep their
+single-attempt locking behavior.
+
 
 ## Experimental installed-carrier foreground review (ICRV)
 
