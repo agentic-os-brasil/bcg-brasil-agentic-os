@@ -358,7 +358,7 @@ func result(value any, err error) *mcp.CallToolResult {
 	if err != nil {
 		code := "execution_rejected"
 		switch {
-		case errors.Is(err, processidentity.ErrChanged):
+		case errors.Is(err, processidentity.ErrChanged), errors.Is(err, errOwnerReviewRecordChanged):
 			code = "restart_required"
 		case errors.Is(err, ErrSourceRecoveryRequired):
 			code = "source_recovery_required"
@@ -372,6 +372,9 @@ func result(value any, err error) *mcp.CallToolResult {
 			code = "item_busy"
 		}
 		metadata := map[string]string{"code": code}
+		if errors.Is(err, errOwnerReviewRecordChanged) {
+			metadata["next_action"] = ownerReviewReconnectAction
+		}
 		if code == "source_recovery_required" {
 			metadata["next_action"] = "Use the independently admitted local maestro-install source-review/source-check recovery route before restarting."
 		}

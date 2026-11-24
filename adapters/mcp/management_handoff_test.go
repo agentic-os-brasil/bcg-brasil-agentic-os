@@ -85,8 +85,17 @@ func TestInstalledOwnerReviewAcceptsCanonicalDesktopPreparationOnly(t *testing.T
 			case "channel":
 				bad.Materialization.OwnerReviewChannel = "other"
 			}
-			if err := check(bad); err == nil {
+			err = check(bad)
+			if err == nil {
 				t.Fatal("changed or fabricated client authority accepted")
+			}
+			if errors.Is(err, errOwnerReviewRecordChanged) {
+				t.Fatal("invalid authority was classified as a pinned-record restart")
+			}
+			out := result(nil, err)
+			text, ok := out.Content[0].(*mcp.TextContent)
+			if !out.IsError || !ok || text.Text != `{"code":"execution_rejected"}` {
+				t.Fatal("invalid authority acquired a recovery instruction")
 			}
 		})
 	}
@@ -95,9 +104,55 @@ func TestInstalledOwnerReviewAcceptsCanonicalDesktopPreparationOnly(t *testing.T
 	if err := b.validateInstalledOwnerReviewSnapshot(context.Background(), r.Binding.Home, r.Binding.WorkspaceID, status); err != nil {
 		t.Fatal(err)
 	}
-	r.Desktop.Handoff = "open_requested"
-	if err := b.validateInstalledOwnerReviewSnapshot(context.Background(), r.Binding.Home, r.Binding.WorkspaceID, status); err == nil {
-		t.Fatal("canonical snapshot changed after receiver pin")
+	pinned := b.ownerReviewClientSHA256
+	desktopSHA := r.Materialization.DesktopSHA256
+	// Simulate the canonical reader's completed Code preparation snapshot. The
+	// Desktop bytes remain identical while the whole record identity changes.
+	r.SchemaVersion, r.Preparation = 1, nil
+	r.Materialization.Target = ""
+	r.Materialization.Selection = &installer.ClientPacketSelection{CodeRoot: selection.CodeRoot, DesktopPath: selection.DesktopPath}
+	r.Materialization.CodeRoot = selection.CodeRoot
+	r.Materialization.NativeEnforcement = true
+	r.Code.State = "registered"
+	status.State = "current_materialization"
+	if _, err := installer.DesktopPreparationRecord(r); err != nil || r.Materialization.DesktopSHA256 != desktopSHA {
+		t.Fatal("promoted snapshot lost its unchanged Desktop view", err)
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		err := b.validateInstalledOwnerReviewSnapshot(context.Background(), r.Binding.Home, r.Binding.WorkspaceID, status)
+		if !errors.Is(err, errOwnerReviewRecordChanged) {
+			t.Fatal("canonical snapshot change lost its typed cause", err)
+		}
+		out := result(map[string]string{"private": "PRIVATE_RECONNECT_MARKER"}, fmt.Errorf("PRIVATE_RECONNECT_MARKER: %w", err))
+		if !out.IsError || len(out.Content) != 1 {
+			t.Fatal("stale receiver did not return one closed error")
+		}
+		text, ok := out.Content[0].(*mcp.TextContent)
+		if !ok {
+			t.Fatal("stale receiver did not return typed metadata")
+		}
+		var metadata map[string]string
+		if err := json.Unmarshal([]byte(text.Text), &metadata); err != nil {
+			t.Fatal(err)
+		}
+		if len(metadata) != 2 || metadata["code"] != "restart_required" || metadata["next_action"] != "Reconnect only the Maestro extension in Desktop, then retry the request." {
+			t.Fatalf("stale canonical record did not explain normal reconnection: %s", text.Text)
+		}
+		if strings.Contains(text.Text, "PRIVATE_RECONNECT_MARKER") || strings.Contains(text.Text, pinned) || strings.Contains(text.Text, r.Binding.Home) {
+			t.Fatal("private stale-receiver details escaped protocol metadata")
+		}
+		if b.ownerReviewClientSHA256 != pinned {
+			t.Fatal("stale receiver silently repinned the changed canonical record")
+		}
+	}
+	// A normal fresh receiver pins the newly admitted canonical record. No live
+	// receiver updates its pin or executes a protected request during recovery.
+	fresh := &Bound{options: b.options}
+	if err := fresh.validateInstalledOwnerReviewSnapshot(context.Background(), r.Binding.Home, r.Binding.WorkspaceID, status); err != nil {
+		t.Fatal("fresh receiver rejected the current canonical record", err)
+	}
+	if fresh.ownerReviewClientSHA256 != installer.ClientRecordDigest(r) || fresh.ownerReviewClientSHA256 == pinned {
+		t.Fatal("fresh receiver did not pin the exact current canonical record")
 	}
 }
 
@@ -202,5 +257,21 @@ func TestManagementOpenWitnessReportsOnlyRequestedHandoff(t *testing.T) {
 	prepared.State = "unqualified"
 	if _, err := requestManagementOpen(context.Background(), prepared, func(context.Context, string) error { t.Fatal("unqualified handoff opened"); return nil }); err == nil {
 		t.Fatal("unqualified handoff accepted")
+	}
+}
+
+// Matching error text alone grants no reconnection classification. These
+// unavailable, malformed and unrelated failures retain their closed protocol.
+func TestOwnerReviewReconnectDoesNotReclassifyOtherRefusals(t *testing.T) {
+	for _, err := range []error{
+		errors.New("owner_review_carrier_changed"),
+		errors.New("owner_review_carrier_unavailable"),
+		context.Canceled,
+	} {
+		out := result(nil, err)
+		text, ok := out.Content[0].(*mcp.TextContent)
+		if !out.IsError || !ok || text.Text != `{"code":"execution_rejected"}` {
+			t.Fatal("unrelated refusal acquired a recovery instruction")
+		}
 	}
 }
