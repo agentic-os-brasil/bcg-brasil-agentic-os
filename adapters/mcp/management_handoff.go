@@ -15,7 +15,7 @@ import (
 // connection must repeat the original admission before using its new identity.
 var errOwnerReviewRecordChanged = errors.New("owner_review_carrier_changed")
 
-const ownerReviewReconnectAction = "Reconnect only the Maestro extension in Desktop, then retry the request."
+const ownerReviewReconnectAction = "Reconnect only the Maestro connection in the client that made this request, then retry."
 
 // This is the receiving guard, not a mode supplied by a tool or a new source
 // admission. Original readers authenticate the current selected carrier on

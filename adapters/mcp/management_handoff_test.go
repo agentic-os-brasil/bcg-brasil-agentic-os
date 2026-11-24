@@ -135,7 +135,7 @@ func TestInstalledOwnerReviewAcceptsCanonicalDesktopPreparationOnly(t *testing.T
 		if err := json.Unmarshal([]byte(text.Text), &metadata); err != nil {
 			t.Fatal(err)
 		}
-		if len(metadata) != 2 || metadata["code"] != "restart_required" || metadata["next_action"] != "Reconnect only the Maestro extension in Desktop, then retry the request." {
+		if len(metadata) != 2 || metadata["code"] != "restart_required" || metadata["next_action"] != "Reconnect only the Maestro connection in the client that made this request, then retry." {
 			t.Fatalf("stale canonical record did not explain normal reconnection: %s", text.Text)
 		}
 		if strings.Contains(text.Text, "PRIVATE_RECONNECT_MARKER") || strings.Contains(text.Text, pinned) || strings.Contains(text.Text, r.Binding.Home) {

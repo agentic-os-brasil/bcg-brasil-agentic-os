@@ -68,17 +68,18 @@ review. No lock is held throughout the browser wait. Native-first diagnostic
 sessions without management carrier metadata preserve their existing behavior;
 a raw installed browser flag without an authenticated carrier is refused.
 
-A connected Desktop process that detects a changed canonical client-record pin
-returns `restart_required` with one normal reconnection instruction. The product,
-wiki and maintenance error projections preserve that same typed cause, including
-wrapped errors, while their retry policies remain unchanged. Completing
-Code preparation can change that record while the Desktop extension bytes stay
-identical. Reconnect only the Maestro extension in Desktop, then retry the
-request. The old process keeps its original pin and refuses repeated requests;
-a fresh connection repeats the existing source, carrier, owner and workspace
-admission before pinning the current record. Each protected request still needs
-its own review. Unavailable records and mismatched bindings keep their existing
-closed errors.
+A connected installed Maestro process that detects a changed canonical
+client-record pin returns `restart_required` with one normal reconnection
+instruction. Code and Desktop share this installed launcher and record pin.
+The product, wiki and maintenance error projections preserve that same typed
+cause, including wrapped errors, while their retry policies remain unchanged.
+Completing Code preparation can change that record while Desktop extension bytes
+stay identical. Reconnect only the Maestro connection in the client that made
+this request, then retry. The old process keeps its original pin and refuses
+repeated requests; a fresh connection repeats the existing source, carrier,
+owner and workspace admission before pinning the current record. Each protected
+request still needs its own review. Unavailable records and mismatched bindings
+keep their existing closed errors.
 
 This selection is restricted to explicitly reviewed experimental installed
 carriers. It changes neither production platform trust nor standalone pilot

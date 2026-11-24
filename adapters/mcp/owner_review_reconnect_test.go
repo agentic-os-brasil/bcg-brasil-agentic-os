@@ -15,7 +15,7 @@ import (
 // Exercise the existing error envelopes directly. No server, session, model,
 // installer, private profile or protected operation participates in this test.
 func TestOwnerReviewReconnectErrorMappings(t *testing.T) {
-	const action = "Reconnect only the Maestro extension in Desktop, then retry the request."
+	const action = "Reconnect only the Maestro connection in the client that made this request, then retry."
 	for _, test := range []struct {
 		name      string
 		err       error
