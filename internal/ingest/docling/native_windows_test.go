@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	goruntime "runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -33,6 +34,7 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 	if windows.GetCurrentProcessToken().IsElevated() {
 		t.Fatal("native conversion qualification requires an ordinary non-elevated Windows user")
 	}
+	assertNativeMetadataDiagnostic(t)
 	_, source, _, _ := goruntime.Caller(0)
 	sourceRoot := filepath.Clean(filepath.Join(filepath.Dir(source), "..", "..", ".."))
 	root := filepath.Join(t.TempDir(), "private")
@@ -98,8 +100,20 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("actual shared runtime %s failed: %v: %s", action, err, output)
 		}
-		if err = json.Unmarshal(output, out); err != nil {
-			t.Fatalf("actual runtime result: %v: %s", err, output)
+		if action == "convert" || action == "export_fixture" {
+			var wire struct {
+				Metadata docling.Conversion `json:"metadata"`
+				Markdown []byte             `json:"markdown"`
+				Document []byte             `json:"document"`
+			}
+			conversion, ok := out.(*docling.Conversion)
+			if !ok || json.Unmarshal(output, &wire) != nil {
+				t.Fatal("actual conversion fixture response invalid")
+			}
+			*conversion = wire.Metadata
+			conversion.Markdown, conversion.Document = wire.Markdown, json.RawMessage(wire.Document)
+		} else if json.Unmarshal(output, out) != nil {
+			t.Fatal("actual runtime metadata response invalid")
 		}
 	}
 	var availability docling.Availability
@@ -109,9 +123,9 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 	}
 	proofPath := filepath.Join(data, "ingestion", "docling", "windows-qualification.dpapi")
 	proof := read(t, proofPath)
-	before := nativeFixtureMetadata(t, data)
+	before := nativeFixtureMetadata(t, data, map[string]nativeMetadataEntry{})
 	invoke("status", ingest.Request{}, &availability)
-	if availability.State != "ready" || before != nativeFixtureMetadata(t, data) {
+	if availability.State != "ready" || before != nativeFixtureMetadata(t, data, map[string]nativeMetadataEntry{}) {
 		t.Fatalf("status failed proof validation or changed private state: %+v", availability)
 	}
 	for _, name := range []string{"sample.docx", "literal.txt", "structured.md", "quoted.csv", "generic.json", "generic.xml", "page.html", "page.htm", "spine.epub", "legacy.xls", "sheets.xlsx"} {
@@ -215,15 +229,15 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 	if err = os.Remove(proofPath); err != nil {
 		t.Fatal(err)
 	}
-	before = nativeFixtureMetadata(t, data)
+	before = nativeFixtureMetadata(t, data, map[string]nativeMetadataEntry{})
 	invoke("status", ingest.Request{}, &availability)
-	if availability.State == "ready" || availability.Reason != "requalification_required" || before != nativeFixtureMetadata(t, data) {
+	if availability.State == "ready" || availability.Reason != "requalification_required" || before != nativeFixtureMetadata(t, data, map[string]nativeMetadataEntry{}) {
 		t.Fatalf("missing proof self-repaired or became ready: %+v", availability)
 	}
 	put(t, proofPath, []byte("self-asserted ready"))
-	before = nativeFixtureMetadata(t, data)
+	before = nativeFixtureMetadata(t, data, map[string]nativeMetadataEntry{})
 	invoke("status", ingest.Request{}, &availability)
-	if availability.State == "ready" || before != nativeFixtureMetadata(t, data) {
+	if availability.State == "ready" || before != nativeFixtureMetadata(t, data, map[string]nativeMetadataEntry{}) {
 		t.Fatal("forged proof accepted or repaired")
 	}
 	put(t, proofPath, proof)
@@ -234,7 +248,7 @@ func TestWindowsRealAuthenticatedDocling(t *testing.T) {
 	t.Logf("engineering only: real native Windows converter + zero-capability kernel controls observed; pack_sha256=%s files=%d expanded=%d", assemble.ArchiveSHA256, assemble.Files, assemble.ExpandedBytes)
 }
 
-func nativeFixtureMetadata(t *testing.T, root string) string {
+func nativeFixtureMetadata(t *testing.T, root string, observed map[string]nativeMetadataEntry) string {
 	t.Helper()
 	var entries []string
 	err := filepath.WalkDir(root, func(name string, item os.DirEntry, err error) error {
@@ -245,12 +259,227 @@ func nativeFixtureMetadata(t *testing.T, root string) string {
 		if err != nil {
 			return err
 		}
+		if info.IsDir() {
+			info = nativeHeldDirectoryInfo(t, name)
+		}
 		entries = append(entries, strings.Join([]string{name, info.ModTime().UTC().Format(time.RFC3339Nano), info.Mode().String()}, "|"))
+		observed[name] = nativeMetadataEntry{info.ModTime().UTC().Format(time.RFC3339Nano), info.Mode().String(), info.IsDir()}
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	return nativeMetadataFingerprint(entries)
+}
+
+// Directory listings can contain stale NTFS metadata. Query the held object
+// without omitting any directory, name, modification time or portable mode.
+func nativeHeldDirectoryInfo(t *testing.T, name string) os.FileInfo {
+	t.Helper()
+	directory, err := winprivate.Inspect(name)
+	if err != nil {
+		t.Fatal("held directory metadata open failed")
+	}
+	info, statErr := directory.File.Stat()
+	closeErr := directory.Close()
+	if statErr != nil || closeErr != nil {
+		t.Fatal("held directory metadata query or close failed")
+	}
+	if !info.IsDir() || info.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0 {
+		t.Fatal("held directory metadata type invalid")
+	}
+	return info
+}
+
+// This is the original complete sorted fingerprint, not diagnostic equality.
+func nativeMetadataFingerprint(entries []string) string {
 	sort.Strings(entries)
 	return strings.Join(entries, "\n")
+}
+
+type nativeMetadataEntry struct {
+	modified, mode string
+	directory      bool
+}
+
+type nativeMetadataKnownPaths struct{ root, proof, pack string }
+
+type nativeMetadataFacts struct {
+	Added       int    `json:"added"`
+	Removed     int    `json:"removed"`
+	Files       int    `json:"files"`
+	Directories int    `json:"directories"`
+	MTime       int    `json:"mtime"`
+	Mode        int    `json:"mode"`
+	FirstRole   string `json:"first_role"`
+	FirstFields int    `json:"first_fields"`
+	Saturated   bool   `json:"saturated"`
+}
+
+func nativeMetadataRole(name string, known nativeMetadataKnownPaths) string {
+	if known.root == "" {
+		return "unknown"
+	}
+	base := filepath.Join(known.root, "ingestion", "docling")
+	switch name {
+	case known.root:
+		return "fixture_root"
+	case filepath.Join(known.root, "ingestion"):
+		return "ingestion_directory"
+	case base:
+		return "docling_directory"
+	case filepath.Join(base, "installed"):
+		return "installed_directory"
+	case filepath.Join(base, "executions"):
+		return "execution_directory"
+	case filepath.Join(base, "current.json"):
+		return "selection"
+	}
+	if known.proof != "" && name == known.proof {
+		return "qualification_proof"
+	}
+	if known.pack != "" && name == known.pack {
+		return "installed_pack_directory"
+	}
+	return "unknown"
+}
+
+func nativeMetadataDifference(before, after map[string]nativeMetadataEntry, known nativeMetadataKnownPaths) nativeMetadataFacts {
+	facts := nativeMetadataFacts{FirstRole: "unknown"}
+	increment := func(value *int) {
+		if *value < 1024 {
+			(*value)++
+		} else {
+			facts.Saturated = true
+		}
+	}
+	names := make([]string, 0, len(before)+len(after))
+	for name := range before {
+		names = append(names, name)
+	}
+	for name := range after {
+		if _, exists := before[name]; !exists {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		left, leftOK := before[name]
+		right, rightOK := after[name]
+		fields := 0
+		switch {
+		case !leftOK:
+			fields = 1
+			increment(&facts.Added)
+		case !rightOK:
+			fields = 2
+			increment(&facts.Removed)
+		default:
+			if left.modified != right.modified {
+				fields |= 4
+				increment(&facts.MTime)
+			}
+			if left.mode != right.mode {
+				fields |= 8
+				increment(&facts.Mode)
+			}
+			if left.directory != right.directory {
+				fields |= 16
+			}
+		}
+		if fields == 0 {
+			continue
+		}
+		if leftOK && !left.directory || rightOK && !right.directory {
+			increment(&facts.Files)
+		}
+		if leftOK && left.directory || rightOK && right.directory {
+			increment(&facts.Directories)
+		}
+		if facts.FirstFields == 0 {
+			facts.FirstRole, facts.FirstFields = nativeMetadataRole(name, known), fields
+		}
+	}
+	return facts
+}
+
+// Pure in-memory checks execute inside the existing original native parent.
+// The Mac preparation can compile these checks; it cannot claim they ran.
+func assertNativeMetadataDiagnostic(t *testing.T) {
+	t.Helper()
+	root := `C:\private\CLIENT_MARKER`
+	proof := filepath.Join(root, "ingestion", "docling", "windows-qualification.dpapi")
+	known := nativeMetadataKnownPaths{root: root, proof: proof, pack: filepath.Join(root, "ingestion", "docling", "installed", "pack")}
+	oldTime, newTime := "2026-11-20T00:00:00Z", "2026-11-20T00:00:00.000000001Z"
+	file := nativeMetadataEntry{oldTime, "-rw-------", false}
+	directory := nativeMetadataEntry{oldTime, "drwx------", true}
+	base := map[string]nativeMetadataEntry{root: directory, proof: file}
+	cases := []struct {
+		name   string
+		change func(map[string]nativeMetadataEntry)
+		want   nativeMetadataFacts
+	}{
+		{"unchanged", func(map[string]nativeMetadataEntry) {}, nativeMetadataFacts{FirstRole: "unknown"}},
+		{"added_foreign", func(m map[string]nativeMetadataEntry) { m[proof+".private"] = file }, nativeMetadataFacts{Added: 1, Files: 1, FirstRole: "unknown", FirstFields: 1}},
+		{"removed_proof", func(m map[string]nativeMetadataEntry) { delete(m, proof) }, nativeMetadataFacts{Removed: 1, Files: 1, FirstRole: "qualification_proof", FirstFields: 2}},
+		{"added_directory", func(m map[string]nativeMetadataEntry) { m[known.pack] = directory }, nativeMetadataFacts{Added: 1, Directories: 1, FirstRole: "installed_pack_directory", FirstFields: 1}},
+		{"removed_directory", func(m map[string]nativeMetadataEntry) { delete(m, root) }, nativeMetadataFacts{Removed: 1, Directories: 1, FirstRole: "fixture_root", FirstFields: 2}},
+		{"file_mtime", func(m map[string]nativeMetadataEntry) { m[proof] = nativeMetadataEntry{newTime, file.mode, false} }, nativeMetadataFacts{Files: 1, MTime: 1, FirstRole: "qualification_proof", FirstFields: 4}},
+		{"file_mode", func(m map[string]nativeMetadataEntry) { m[proof] = nativeMetadataEntry{oldTime, "-r--------", false} }, nativeMetadataFacts{Files: 1, Mode: 1, FirstRole: "qualification_proof", FirstFields: 8}},
+		{"directory_mtime", func(m map[string]nativeMetadataEntry) { m[root] = nativeMetadataEntry{newTime, directory.mode, true} }, nativeMetadataFacts{Directories: 1, MTime: 1, FirstRole: "fixture_root", FirstFields: 4}},
+		{"file_to_directory", func(m map[string]nativeMetadataEntry) { m[proof] = directory }, nativeMetadataFacts{Files: 1, Directories: 1, Mode: 1, FirstRole: "qualification_proof", FirstFields: 24}},
+		{"combined", func(m map[string]nativeMetadataEntry) { m[proof] = nativeMetadataEntry{newTime, "-r--------", false} }, nativeMetadataFacts{Files: 1, MTime: 1, Mode: 1, FirstRole: "qualification_proof", FirstFields: 12}},
+		{"renamed", func(m map[string]nativeMetadataEntry) { delete(m, proof); m[proof+".private"] = file }, nativeMetadataFacts{Added: 1, Removed: 1, Files: 2, FirstRole: "qualification_proof", FirstFields: 2}},
+	}
+	for _, test := range cases {
+		after := map[string]nativeMetadataEntry{}
+		for name, value := range base {
+			after[name] = value
+		}
+		test.change(after)
+		got := nativeMetadataDifference(base, after, known)
+		if got != test.want {
+			t.Fatalf("metadata diagnostic case %s differed", test.name)
+		}
+		body, err := json.Marshal(got)
+		if err != nil {
+			t.Fatal("metadata diagnostic projection unavailable")
+		}
+		for _, private := range []string{"CLIENT_MARKER", root, proof, oldTime, newTime, file.mode, directory.mode, ".private"} {
+			if bytes.Contains(body, []byte(private)) {
+				t.Fatal("private metadata escaped bounded diagnostic")
+			}
+		}
+	}
+	for _, name := range []string{proof + ".near", filepath.Join(root, "elsewhere", "windows-qualification.dpapi"), "windows-qualification.dpapi"} {
+		if nativeMetadataRole(name, known) != "unknown" {
+			t.Fatal("unmatched path acquired fixture role")
+		}
+	}
+	if nativeMetadataRole("", nativeMetadataKnownPaths{}) != "unknown" {
+		t.Fatal("missing role authority acquired meaning")
+	}
+	many := map[string]nativeMetadataEntry{}
+	for i := 0; i < 1025; i++ {
+		many["private-"+strconv.Itoa(i)] = file
+	}
+	if got := nativeMetadataDifference(nil, many, known); got.Added != 1024 || got.Files != 1024 || !got.Saturated || got.FirstRole != "unknown" || got.FirstFields != 1 {
+		t.Fatal("diagnostic count bound not enforced")
+	}
+	// Literal rows exercise the exact original full-name/time/mode sort/join.
+	rows := []string{"b|2026-11-20T00:00:00Z|-rw-------", "a|2026-11-20T00:00:00Z|drwx------"}
+	fingerprint := nativeMetadataFingerprint(append([]string{}, rows...))
+	if fingerprint != "a|2026-11-20T00:00:00Z|drwx------\nb|2026-11-20T00:00:00Z|-rw-------" {
+		t.Fatal("original sorted fingerprint changed")
+	}
+	for _, changed := range [][]string{
+		{rows[0]}, {rows[0], rows[1], "c|2026-11-20T00:00:00Z|-rw-------"},
+		{rows[0], "renamed|2026-11-20T00:00:00Z|drwx------"},
+		{rows[0], "a|2026-11-20T00:00:00.000000001Z|drwx------"},
+		{rows[0], "a|2026-11-20T00:00:00Z|dr-x------"},
+	} {
+		if nativeMetadataFingerprint(changed) == fingerprint {
+			t.Fatal("original fingerprint omitted a tracked entry or field")
+		}
+	}
 }

@@ -95,7 +95,11 @@ and capability reporting; Docling owns document conversion.
 The source supports target-specific construction for Darwin arm64 and Windows
 amd64. Darwin preserves its exact 51-wheel closure and bridge. Windows has a
 separate 52-wheel/CPython closure, held owner/DACL/no-reparse inventory verification
-and native ordinary-user zero-capability AppContainer execution. Child creation
+and native ordinary-user zero-capability LPAC execution. The launcher opts out
+of ALL_APPLICATION_PACKAGES and requires access mask 6 on the actual suspended
+child before resume. Its capability array stays empty and TokenCapabilities must
+report count zero. The redirected TEMP tree is created under execution-local
+LOCALAPPDATA before inventory custody and SID grants. Child creation
 is prohibited; a suspended child joins a timeout-controlled kill-on-close Job
 before execution. Only staged authenticated bytes and private scratch receive
 the per-conversion SID; original documents and installed-pack ACLs stay intact.
@@ -108,6 +112,19 @@ kernel/owner/install identity. Status only verifies that proof and current bytes
 missing/stale proof reports requalification_required without side effects.
 Profile create/remove and smoke execution belong only to explicit setup/apply or
 conversion, never queries. No admin/service/firewall/global ACL change is required.
+
+This source composition is unqualified. Schema 3 DPAPI qualification identity
+invalidates ordinary-AppContainer and historical registryRead trial receipts,
+while retaining exact pack, manifest, implementation, host and source bindings.
+The pinned Windows Documents installation defers pydantic-settings' genuine
+asyncio import to its existing coroutine CLI branch; the upstream wheel stays
+immutable and exact source/RECORD hashes plus installed provenance are required
+at pack admission. This change does not establish zero-capability compatibility.
+The independent Go child's eight network probes still require WSAEACCES; a
+WSAStartup 10107 observation is a failed candidate, never an accepted denial.
+The existing manual workflow is proof-only for this candidate. Export, assembly,
+signing and distribution remain unavailable pending separately authorized exact
+native proof and review. Historical R17 receipts cannot qualify it.
 
 Source tests, a cross-build or an assembled pack do not qualify native Windows.
 The closed ordinary-account driver and manual-only native workflow must actually

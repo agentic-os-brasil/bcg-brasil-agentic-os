@@ -207,3 +207,28 @@ refuses and requests a newly reviewed kit. No startup/query installs, renews,
 repairs or changes production enrollment. The initial bundled runtime targets
 Darwin ARM64; Windows redistribution/native gates and Intel runtime availability
 remain separate. See [the complete carrier flow](product-pilot.md#explicit-engineering-runtime-kit).
+
+
+### Unqualified Windows zero-capability LPAC source composition
+
+The November 24 source candidate keeps zero capabilities and requires the actual
+suspended token's LPAC access mask 6 before resume. It precreates the Windows
+redirected TEMP tree and defers only the authenticated Windows Documents
+pydantic-settings asynchronous CLI import. Its wheel is immutable; exact installed
+source/RECORD hashes and provenance are mandatory. Production conversion JSON
+still excludes document bodies; only the private synthetic test fixture transports
+their exact bytes. Directory metadata checks use held handles and retain the full
+sorted name/modification-time/mode fingerprint.
+
+This is source construction, not native qualification. Schema 3 invalidates prior
+ordinary-AppContainer and registryRead experiment DPAPI receipts while binding
+pack, manifest, implementation, source and host. The eight independent Go network
+probes, filesystem/snapshot and descendant denials, Job and deadlines remain
+required. WSAStartup 10107 is a failure. The existing manual workflow permits only
+proof; it cannot export or assemble this candidate. The bootstrap environment is
+closed before process creation, private bootstrap TEMP is separate from the fresh
+strict child TEMP, account cleanup failure is fatal, and native failure stops
+without replay. CREATE_NO_WINDOW is preserved: this candidate deliberately does
+not reproduce the historical experiment's DETACHED_PROCESS flags. No current
+source analysis establishes a complete zero-capability repair; future native
+execution needs separate authority.

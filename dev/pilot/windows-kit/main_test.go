@@ -114,17 +114,7 @@ func fixture(t *testing.T) (options, receipt, publicMetadata) {
 	gen := releasecontract.Generation{SchemaVersion: 1, Product: "maestro", Protocol: releasecontract.GenerationProtocol, Issuer: last.Issuer, Source: role.Source, Sequence: 1, PublishedAt: now.Format(time.RFC3339), ExpiresAt: role.ExpiresAt, Release: last.Release, ManifestSHA256: role.Releases[1].ManifestSHA256, ClientInputsSHA256: last.Delivery.ClientInputsSHA256, Recalls: []releasecontract.ReleaseRecall{}, MinimumReaderContract: releasecontract.SyncedSourceContract}
 	gb, _ := json.Marshal(gen)
 	p.Files = append(p.Files, publicFile{"current.json", gb}, publicFile{"current.json.sig", ed25519.Sign(key, gb)})
-	logText := "    native_windows_test.go:50: maestro_native_runtime_pack_sha256=" + r.RuntimeSHA256 + "\n"
-	logText += "    native_windows_test.go:51: maestro_native_runtime_profile=model-free-documents-v1 lock_sha256=38b1a0257c3feec8a5b4b97856e7f2096cdb72ed2bd1734d8e61567bf4757643\n"
-	for _, name := range []string{"TestWindowsNativeConfinement", "TestWindowsNativeConfinementDeadline", "TestWindowsSharedImplementationIdentityAcrossEntryModules", "TestWindowsRealAuthenticatedDocling"} {
-		logText += "--- PASS: " + name + " (0.01s)\n"
-	}
-	for _, name := range []string{"sample.docx", "literal.txt", "structured.md", "quoted.csv", "generic.json", "generic.xml", "page.html", "page.htm", "spine.epub", "legacy.xls", "sheets.xlsx", "native.pdf", "native.pptx", "interactive.pdf", "nontext.pdf", "scanned.pdf", "mixed-image.pdf", "mixed.pdf", "protected.pdf", "pptx_alternate_presentation", "pptx_duplicate_slide_selection", "pptx_external_relationship", "pptx_macro_presentation", "pptx_metafile", "pptx_macro_payload", "pptx_DTD", "pptx_slide_type_confusion", "pptx_root_decoy", "validated_export", "installed_tamper", "missing_native_runtime"} {
-		logText += "    --- PASS: TestWindowsRealAuthenticatedDocling/" + name + " (0.01s)\n"
-	}
-	log := []byte(logText) // Controlled proof-shaped text; no native execution is claimed.
-
-	proof, _ := json.Marshal(map[string]any{"schema_version": 1, "qualification_profile": "windows_docling_documents_v1", "source_revision": o.revision, "inventory_sha256": strings.Repeat("c", 64), "test_binary_sha256": strings.Repeat("d", 64), "effective_sid_sha256": strings.Repeat("e", 64), "actual_standard_user": true, "elevated": false, "admin_member": false, "passed_tests": []string{"TestWindowsNativeConfinement", "TestWindowsNativeConfinementDeadline", "TestWindowsSharedImplementationIdentityAcrossEntryModules", "TestWindowsRealAuthenticatedDocling"}, "real_formats": 13, "runtime_profile": "model-free-documents-v1", "runtime_lock_sha256": "38b1a0257c3feec8a5b4b97856e7f2096cdb72ed2bd1734d8e61567bf4757643", "pdf_refusals": 6, "pptx_refusals": 9, "runtime_pack_sha256": r.RuntimeSHA256, "log_sha256": digest(log), "shared_implementation_attested": true, "mcp_server_execution": "not_attested", "native_client": "not_run", "publisher_authority": "not_granted"})
+	proof, log := nativeProofFixture(o.revision, r.RuntimeSHA256)
 	mustWrite(filepath.Join(o.export, "proof.json"), proof)
 	mustWrite(filepath.Join(o.export, "proof.log"), log)
 	if e := filepath.WalkDir(o.export, func(p string, d os.DirEntry, e error) error {
@@ -257,16 +247,12 @@ func TestWindowsPublicBridgeCollectorEmitsOnlyBoundedPublicMetadata(t *testing.T
 	}
 }
 func TestWindowsNativeProofRequiresActualPackAndEveryFormat(t *testing.T) {
-	o, _, _ := fixture(t)
-	body, e := read(filepath.Join(o.export, "proof.json"), 64<<10)
-	if e != nil {
-		t.Fatal(e)
+	o := options{revision: strings.Repeat("a", 40)}
+	body, log := nativeProofFixture(o.revision, strings.Repeat("b", 64))
+	if _, err := verifyProof(body, log, o.revision); err != nil {
+		t.Fatalf("in-memory exact proof fixture refused: %v", err)
 	}
-	log, e := read(filepath.Join(o.export, "proof.log"), 4<<20)
-	if e != nil {
-		t.Fatal(e)
-	}
-	for _, mode := range []string{"missing-format", "skip", "wrong-pack", "no-standard-user", "legacy-profile", "legacy-lock", "old-format-count", "missing-pdf-positive", "missing-pptx-positive", "missing-pdf-refusal", "missing-pptx-refusal", "missing-profile-observation"} {
+	for _, mode := range []string{"missing-format", "skip", "wrong-pack", "no-standard-user", "legacy-profile", "legacy-lock", "old-format-count", "missing-pdf-positive", "missing-pptx-positive", "missing-pdf-refusal", "missing-pptx-refusal", "missing-profile-observation", "registry-read-experiment", "wrong-source"} {
 		t.Run(mode, func(t *testing.T) {
 			var p map[string]any
 			if e := json.Unmarshal(body, &p); e != nil {
@@ -296,6 +282,10 @@ func TestWindowsNativeProofRequiresActualPackAndEveryFormat(t *testing.T) {
 				l = bytes.ReplaceAll(l, []byte("TestWindowsRealAuthenticatedDocling/protected.pdf "), []byte("TestWindowsRealAuthenticatedDocling/no-refusal "))
 			case "missing-pptx-refusal":
 				l = bytes.ReplaceAll(l, []byte("TestWindowsRealAuthenticatedDocling/pptx_macro_payload "), []byte("TestWindowsRealAuthenticatedDocling/no-refusal "))
+			case "wrong-source":
+				p["source_revision"] = strings.Repeat("f", 40)
+			case "registry-read-experiment":
+				p["qualification_profile"] = "windows_docling_registry_read_r17"
 			case "missing-profile-observation":
 				l = bytes.ReplaceAll(l, []byte("maestro_native_runtime_profile="), []byte("not-a-profile-observation="))
 
@@ -357,4 +347,20 @@ func TestWindowsKitZipKeepsOnlyExpectedFactoryBytes(t *testing.T) {
 			}
 		})
 	}
+}
+
+// In-memory proof-shaped text only; no keys, signatures, exports or runtime.
+func nativeProofFixture(revision, pack string) ([]byte, []byte) {
+	logText := "    native_windows_test.go:50: maestro_native_runtime_pack_sha256=" + pack + "\n"
+	logText += "    native_windows_test.go:51: maestro_native_runtime_profile=model-free-documents-v1 lock_sha256=38b1a0257c3feec8a5b4b97856e7f2096cdb72ed2bd1734d8e61567bf4757643\n"
+	for _, name := range []string{"TestWindowsNativeConfinement", "TestWindowsNativeConfinementDeadline", "TestWindowsSharedImplementationIdentityAcrossEntryModules", "TestWindowsRealAuthenticatedDocling"} {
+		logText += "--- PASS: " + name + " (0.01s)\n"
+	}
+	for _, name := range []string{"sample.docx", "literal.txt", "structured.md", "quoted.csv", "generic.json", "generic.xml", "page.html", "page.htm", "spine.epub", "legacy.xls", "sheets.xlsx", "native.pdf", "native.pptx", "interactive.pdf", "nontext.pdf", "scanned.pdf", "mixed-image.pdf", "mixed.pdf", "protected.pdf", "pptx_alternate_presentation", "pptx_duplicate_slide_selection", "pptx_external_relationship", "pptx_macro_presentation", "pptx_metafile", "pptx_macro_payload", "pptx_DTD", "pptx_slide_type_confusion", "pptx_root_decoy", "validated_export", "installed_tamper", "missing_native_runtime"} {
+		logText += "    --- PASS: TestWindowsRealAuthenticatedDocling/" + name + " (0.01s)\n"
+	}
+	log := []byte(logText) // Controlled proof-shaped text; no native execution is claimed.
+
+	proof, _ := json.Marshal(map[string]any{"schema_version": 1, "qualification_profile": "windows_docling_documents_v1", "source_revision": revision, "inventory_sha256": strings.Repeat("c", 64), "test_binary_sha256": strings.Repeat("d", 64), "effective_sid_sha256": strings.Repeat("e", 64), "actual_standard_user": true, "elevated": false, "admin_member": false, "passed_tests": []string{"TestWindowsNativeConfinement", "TestWindowsNativeConfinementDeadline", "TestWindowsSharedImplementationIdentityAcrossEntryModules", "TestWindowsRealAuthenticatedDocling"}, "real_formats": 13, "runtime_profile": "model-free-documents-v1", "runtime_lock_sha256": "38b1a0257c3feec8a5b4b97856e7f2096cdb72ed2bd1734d8e61567bf4757643", "pdf_refusals": 6, "pptx_refusals": 9, "runtime_pack_sha256": pack, "log_sha256": digest(log), "shared_implementation_attested": true, "mcp_server_execution": "not_attested", "native_client": "not_run", "publisher_authority": "not_granted"})
+	return proof, log
 }
