@@ -728,6 +728,19 @@ absence or an unfinished phase is diagnostic scope, not proof of a specific
 internal cause. Stdout/event semantics, authority, qualification and ordinary
 five-second host deadlines stay unchanged.
 
+With that same explicit opt-in, an installed native admission failure may append
+one closed `cause`: `selection`, `seed_admission`, `activation_busy`,
+`current_source`, `client_binding`, `native_selection`, `launch_binding`,
+`binding_inspection`, `record_recheck`, `current_recheck` or `role_recheck`.
+These identify the earliest observed failing boundary, not its private error
+body or a repair authorization. `activation_busy` requires an actual exclusive
+open failure for the selected managed root's exact activation lock; another
+existing file or matching error text is insufficient. Wrapped cancellation and
+deadline outcomes remain distinct. Unclassified errors retain `unavailable`
+without a cause, and disabled diagnostics preserve the original error identity.
+These extra labels do not diagnose historical failures that predate them;
+another final installed-client run is required to observe its own cause.
+
 
 ## Experimental installed-carrier foreground review (ICRV)
 
