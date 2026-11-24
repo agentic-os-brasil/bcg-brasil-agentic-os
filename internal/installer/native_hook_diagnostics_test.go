@@ -79,3 +79,61 @@ func TestNativeHookDiagnosticsRequireExactOptInOnStderr(t *testing.T) {
 		})
 	}
 }
+
+func TestNativeHookAdmissionCausesStayClosedAndPreserveErrors(t *testing.T) {
+	t.Setenv("MAESTRO_HOOK_DIAGNOSTICS", "1")
+	private := errors.New("PRIVATE_PROMPT /private/config SECRET_VALUE")
+	for _, cause := range []string{"selection", "seed_admission", "activation_busy", "current_source", "client_binding", "native_selection", "launch_binding", "binding_inspection", "record_recheck", "current_recheck", "role_recheck"} {
+		t.Run(cause, func(t *testing.T) {
+			err := withNativeHookAdmissionCause(cause, private)
+			if !errors.Is(err, private) || err.Error() != private.Error() {
+				t.Fatal("diagnostic annotation changed the original error contract")
+			}
+			// A later guard cannot obscure an earlier, narrower failure boundary.
+			if withNativeHookAdmissionCause("current_source", err) != err {
+				t.Fatal("later diagnostic annotation replaced the original cause")
+			}
+			var output bytes.Buffer
+			finish := nativeHookDiagnostic("parent_admission", true, &output, func() time.Time { return time.Unix(0, 0) })
+			finish(fmt.Errorf("PRIVATE outer: %w", err))
+			want := "maestro-hook phase=parent_admission state=start\nmaestro-hook phase=parent_admission state=end elapsed_ms=0 outcome=unavailable cause=" + cause + "\n"
+			if output.String() != want {
+				t.Fatalf("closed cause leaked or disappeared: %q", output.String())
+			}
+		})
+	}
+	for _, err := range []error{private, &nativeHookAdmissionError{cause: "PRIVATE\n/private/config", err: private}} {
+		var output bytes.Buffer
+		finish := nativeHookDiagnostic("parent_admission", true, &output, func() time.Time { return time.Unix(0, 0) })
+		finish(err)
+		if strings.Contains(output.String(), "cause=") || strings.Contains(output.String(), "PRIVATE") {
+			t.Fatal("unclassified or open-ended cause escaped diagnostic metadata")
+		}
+	}
+	for _, test := range []struct {
+		err     error
+		outcome string
+	}{{context.Canceled, "cancelled"}, {context.DeadlineExceeded, "deadline"}} {
+		err := withNativeHookAdmissionCause("current_source", test.err)
+		var output bytes.Buffer
+		finish := nativeHookDiagnostic("parent_admission", true, &output, func() time.Time { return time.Unix(0, 0) })
+		finish(err)
+		if !errors.Is(err, test.err) || !strings.HasSuffix(output.String(), "outcome="+test.outcome+" cause=current_source\n") {
+			t.Fatal("diagnostic cause obscured cancellation or deadline")
+		}
+	}
+}
+
+func TestNativeHookAdmissionCauseAnnotationIsExactOptInOnly(t *testing.T) {
+	private := errors.New("PRIVATE_ERROR")
+	for _, value := range []string{"", "true", "01", "1\nPRIVATE"} {
+		t.Setenv("MAESTRO_HOOK_DIAGNOSTICS", value)
+		if withNativeHookAdmissionCause("client_binding", private) != private {
+			t.Fatal("disabled diagnostics changed error identity")
+		}
+	}
+	t.Setenv("MAESTRO_HOOK_DIAGNOSTICS", "1")
+	if withNativeHookAdmissionCause("PRIVATE\n/path", private) != private || withNativeHookAdmissionCause("seed_admission", nil) != nil {
+		t.Fatal("annotation accepted an open-ended cause or invented an error")
+	}
+}
