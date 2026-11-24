@@ -98,6 +98,15 @@ func (b *Bound) validateContext(ctx context.Context) error {
 	if err := b.validateInstalledSourceAfterExperimentalCheckContext(ctx, installtx.ReadSourceState); err != nil {
 		return err
 	}
+	return b.validateBindingContext(ctx)
+}
+
+// validateBindingContext owns product-only home/workspace/review/store checks.
+// Its caller must establish this invocation's current source admission first.
+func (b *Bound) validateBindingContext(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	h, err := resolveBinding(b.options)
 	if err != nil || !h.Writable {
 		return errors.New("home_unavailable")
@@ -349,7 +358,7 @@ func result(value any, err error) *mcp.CallToolResult {
 	if err != nil {
 		code := "execution_rejected"
 		switch {
-		case errors.Is(err, processidentity.ErrChanged):
+		case errors.Is(err, processidentity.ErrChanged), errors.Is(err, errOwnerReviewRecordChanged):
 			code = "restart_required"
 		case errors.Is(err, ErrSourceRecoveryRequired):
 			code = "source_recovery_required"
@@ -363,6 +372,9 @@ func result(value any, err error) *mcp.CallToolResult {
 			code = "item_busy"
 		}
 		metadata := map[string]string{"code": code}
+		if errors.Is(err, errOwnerReviewRecordChanged) {
+			metadata["next_action"] = ownerReviewReconnectAction
+		}
 		if code == "source_recovery_required" {
 			metadata["next_action"] = "Use the independently admitted local maestro-install source-review/source-check recovery route before restarting."
 		}

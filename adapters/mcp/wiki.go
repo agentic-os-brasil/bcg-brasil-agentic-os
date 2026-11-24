@@ -32,7 +32,7 @@ func wikiResult(value any, err error) *mcp.CallToolResult {
 	}
 	code := "wiki_unavailable"
 	switch {
-	case errors.Is(err, processidentity.ErrChanged):
+	case errors.Is(err, processidentity.ErrChanged), errors.Is(err, errOwnerReviewRecordChanged):
 		code = "restart_required"
 	case errors.Is(err, memory.ErrPrivateWikiStale):
 		code = "wiki_stale"
@@ -43,7 +43,11 @@ func wikiResult(value any, err error) *mcp.CallToolResult {
 	case errors.Is(err, memory.ErrPrivateWikiRetirement):
 		code = "wiki_retirement_incomplete"
 	}
-	out := result(map[string]any{"code": code, "retryable": false}, nil)
+	metadata := map[string]any{"code": code, "retryable": false}
+	if errors.Is(err, errOwnerReviewRecordChanged) {
+		metadata["next_action"] = ownerReviewReconnectAction
+	}
+	out := result(metadata, nil)
 	out.IsError = true
 	return out
 }

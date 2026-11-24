@@ -38,6 +38,12 @@ func (b *Bound) HandleClaudeHook(event string, in io.Reader, out io.Writer) erro
 	if err := b.validate(); err != nil {
 		return errors.New("hook_binding_unavailable")
 	}
+	return b.handleClaudeHook(event, in, out)
+}
+
+// handleClaudeHook follows this invocation's complete binding admission and
+// runs outside the installation guard before taking any event/domain locks.
+func (b *Bound) handleClaudeHook(event string, in io.Reader, out io.Writer) error {
 	input, err := claudeadapter.ParseReader(in)
 	if err != nil || claudeadapter.ValidateEvent(event, input) != nil {
 		return errors.New("hook_input_invalid")

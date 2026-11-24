@@ -105,7 +105,7 @@ func maintenanceErrorCode(err error) string {
 		return "weekly_registration_unavailable"
 	case errors.Is(err, ErrSourceRecoveryRequired):
 		return "source_recovery_required"
-	case errors.Is(err, processidentity.ErrChanged):
+	case errors.Is(err, processidentity.ErrChanged), errors.Is(err, errOwnerReviewRecordChanged):
 		return "restart_required"
 	case errors.Is(err, errConfirmationUnavailable):
 		return "confirmation_unavailable"
@@ -482,6 +482,9 @@ func maintenanceResult(value any, err error) *mcp.CallToolResult {
 	}
 	code := maintenanceErrorCode(err)
 	metadata := map[string]any{"code": code, "retryable": false}
+	if errors.Is(err, errOwnerReviewRecordChanged) {
+		metadata["next_action"] = ownerReviewReconnectAction
+	}
 	if value != nil {
 		metadata["result"] = value
 	}

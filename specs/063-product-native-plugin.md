@@ -199,8 +199,16 @@ Return no reusable binding or admission. Unknown review channels retain
 `owner_review_channel_unavailable`; binding failures use the handler's existing
 `hook_binding_unavailable` refusal without event output. `Open` and independently
 invoked `Bound.HandleClaudeHook` retain their own validation. The installed
-launcher's parent and child `PrepareStableNativeHook` admissions remain independent;
-this entry removes only the adjacent `Open`/handler duplicate in the child.
+launcher's parent and child admissions remain independent. The experimental
+product-owned `HandleInstalledClaudeHook` composes the child's complete native
+record/current admission with private product binding preparation through the
+canonical owner's synchronous `InspectStableNativeHook` callback. Keep the full
+native selection and product home/ready-workspace/reference/review/store/process
+predicates; exact-record, current/time and experimental-role fences run after
+that callback. Release the installation guard before event/domain locks. Return
+no binding, authorization token, state capability or callback; later invocations
+freshly admit their own current bytes. No serialized proof, validation flag or
+cross-call approval can enter this path.
 
 SessionStart is wholly read-only and bounded; approved generated memory follows
 the PHLC projection above without acquiring instruction authority. UserPromptSubmit
@@ -694,15 +702,60 @@ pins with that admitted result and requires the actual installed server path,
 image digest, target and current server version. The installed bootstrapper
 version still comes from the signed origin when the server updates independently.
 
-Complete current-record admission releases the installation lock before the
-existing product constructor and hook handler acquire their domain locks.
-Those original source and process checks remain active; this does not claim an
-atomic native event across an update. Generic `hook --binding-sha256` remains
+The child's product-owned one-shot entry performs read-only binding preparation
+inside that complete current-record guard. Its actual-image and original
+experimental/product binding checks remain mandatory, followed by the native
+owner's late exact-record/current/time/role fences. Only then release the
+installation lock and execute the unchanged event handler/domain operations.
+This removes the adjacent child duplicate of qualified-current work without
+reusing the parent's admission or claiming an atomic native event across an
+update. Generic `hook --binding-sha256` remains
 packet-only, and the default build exposes no installed native-hook admission.
 Controlled compiled protocol tests distinguish their test-only constructor from
 signed-source admission and genuine host qualification. Passing the original
 direct-packet qualifier alone does not prove delivery through the installed
 stable plugin; qualify that final ordinary client route separately.
+
+For an explicitly selected diagnosis only, `MAESTRO_HOOK_DIAGNOSTICS=1` emits
+closed `parent_admission`, `parent_child`, `child_bootstrap`, `child_admission`
+and `handler` start/end markers to the existing stderr channel. End markers
+carry elapsed milliseconds and only `ok`, `cancelled`, `deadline` or
+`unavailable`; never error strings, event input, prompts, paths, configuration,
+credentials or tool bodies. It is off by default, accepts no output path and
+writes no diagnostic file. The existing inherited child environment propagates
+this selection without adding an environment source or changing trust. Marker
+absence or an unfinished phase is diagnostic scope, not proof of a specific
+internal cause. Stdout/event semantics, authority, qualification and ordinary
+five-second host deadlines stay unchanged.
+
+With that same explicit opt-in, an installed native admission failure may append
+one closed `cause`: `selection`, `seed_admission`, `activation_busy`,
+`current_source`, `client_binding`, `native_selection`, `launch_binding`,
+`binding_inspection`, `record_recheck`, `current_recheck` or `role_recheck`.
+These identify the earliest observed failing boundary, not its private error
+body or a repair authorization. `activation_busy` requires an actual exclusive
+open failure for the selected managed root's exact activation lock; another
+existing file or matching error text is insufficient. Wrapped cancellation and
+deadline outcomes remain distinct. Unclassified errors retain `unavailable`
+without a cause, and disabled diagnostics preserve the original error identity.
+These extra labels do not diagnose historical failures that predate them;
+another final installed-client run is required to observe its own cause.
+
+Installed native parent and child admission may wait for the original exclusive
+activation lock before current validation begins. Each acquisition has one
+immediate attempt and a monotonic wait cap of one second, bounded further by
+earlier caller cancellation or deadline. Only the exact exclusive-open collision
+is retried. The wait never reads a PID, reclaims a lock or enters reconciliation;
+the existing 100 ms stale-owner recovery remains separate and unchanged. No
+validation or callback is retried, including one returning a file-exists error.
+After acquisition, cancellation releases the owned lock before validation or
+effects. The source-time anchor advances by actual monotonic acquisition work,
+and the original current/source, packet, record and late expiry/role fences run
+under the held guard. The acquisition cap does not become an operation timeout.
+The ordinary five-second host deadline stays unchanged; parent and child can
+each contend, so this is neither a fairness guarantee nor complete startup
+recovery qualification. Other publication and activation owners keep their
+single-attempt locking behavior.
 
 
 ## Experimental installed-carrier foreground review (ICRV)

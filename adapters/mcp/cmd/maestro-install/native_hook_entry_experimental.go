@@ -62,11 +62,18 @@ func experimentalNativeHookCommand(ctx context.Context, command, self string, ar
 		return true, errors.New("closed stable native hook selection required")
 	}
 	o := installer.ClientOptions{SeededOperationOptions: installer.SeededOperationOptions{ExperimentalSeed: role, Self: self, Version: Version, AuthorityRegistrySHA256: AuthorityRegistrySHA256, ManagedRoot: root, UserHome: user, DataRoot: filepath.Join(user, ".maestro-install")}, Request: installer.ClientRequest{CarrierID: carrier, Workspace: workspace}}
+	finishAdmission := installer.BeginNativeHookDiagnostic("parent_admission")
 	launch, err := installer.PrepareStableNativeHook(ctx, o, event, selection)
+	finishAdmission(err)
 	if err != nil {
 		return true, err
 	}
 	child := exec.CommandContext(ctx, launch.Executable, launch.Args...)
 	child.Stdin, child.Stdout, child.Stderr = os.Stdin, os.Stdout, os.Stderr
-	return true, child.Run()
+	// The existing inherited environment also carries diagnostic selection;
+	// no environment source or child command selection is added or broadened.
+	finishChild := installer.BeginNativeHookDiagnostic("parent_child")
+	err = child.Run()
+	finishChild(err)
+	return true, err
 }
