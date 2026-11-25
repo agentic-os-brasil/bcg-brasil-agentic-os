@@ -1946,3 +1946,14 @@ refuse without fallback. A new compatible bootstrap/backend is required; report
 checker-purpose SDK evidence separately from the normal native-client path.
 
 Refs: #655; original MPCK; specs/022-guided-pilot-release.md.
+
+## DCHK - Keep the authenticated checker receiver directly owned by the SDK
+
+- Date: 2026-11-25
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: An intermediate installer can be killed by SDK or outer-context cancellation before it forwards termination or waits on its separately created receiver. Process-only termination on Windows makes that custody gap concrete. Default signal termination of the outer checker also skips its final report and loses the known synthetic task identity from its output.
+- Decision: Refine MPCK transport composition without changing admission or effects. For every connection, obtain the executable and complete arguments from the canonical PrepareStableCheckLaunch owner and give that exact receiver directly to the SDK CommandTransport. Keep independent receiver image, argv, source and record validation and the opaque checker capability. Bind only the installed-pilot-check dispatcher to normal interrupt/termination cancellation, allowing owned-child cleanup and report finalization to run. Preserve the typed stable-check-launch CLI as a thin caller of the same canonical producer; it is not required as an intermediate process in the checker SDK path.
+- Consequences: SDK escalation and Wait operate on the same receiver; no new process manager, platform Job Object, environment selector or launch override is needed. Both read-only and explicit functional sessions retain their existing domain-effect boundaries. Focused tests must distinguish startup cancellation, connected cancellation and graceful-close escalation, and must not present caller-context cancellation alone as proof of the actual CLI signal boundary. Uncatchable forced termination remains outside the recoverable-report guarantee. Actual Windows and client qualification remain separate gates.
+- Refs: MPCK; #655; specs/022-guided-pilot-release.md; adapters/mcp/cmd/maestro-mcp/main.go; adapters/mcp/cmd/maestro-mcp/pilot_selftest.go
+- Supersedes: none

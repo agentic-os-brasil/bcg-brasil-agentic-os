@@ -308,6 +308,8 @@ fixture or unavailable runtime leaves the relevant stage incomplete. The action
 does not install or repair a converter or retry an ambiguous mutation.
 
 The action prints a fresh **RELATORIO.md** path and preserves previous reports.
+Complete resource verification and conversion can take several minutes; no
+additional participant action is required while the checker is running.
 Blocked, unavailable and failed checks return to the menu. Read the first pending
 stage and any retained item identity before another attempt; use option **5** for
 normal preparation or share only the reviewed Markdown with the team. JSONs,

@@ -109,6 +109,16 @@ environment switch selects the checker purpose. Unbound/unknown purposes and an
 older unsupported bootstrap refuse; there is no normal-launch fallback. Reports
 name the checker-purpose SDK scope, not byte-identical normal-client invocation.
 
+The SDK owns the receiver directly. Each connection obtains the executable and
+complete argument slice from `installer.PrepareStableCheckLaunch` and starts
+that exact `installed-check-serve` process, without an intermediate installer
+process or reconstructed arguments. The receiver repeats its normal independent
+admission. This preserves one process handle for cancellation, escalation and
+waiting on both platforms. The participant checker handles normal interrupt and
+termination signals through cancellation so cleanup and the incomplete report,
+including any known task identity, can finish. Forced process termination is
+not a recoverable signal contract.
+
 A separate explicit `--functional` invocation, selected by one action in both
 native menus, may perform a bounded synthetic functional check. It reuses the
 existing canonical DOCX fixture owner, preserving any conflicting or modified
@@ -135,4 +145,4 @@ qualification. Existing detailed client acceptance remains available and
 independent. A new compatible kit and actual installed acceptance are required
 before delivering this new behavior; older frozen packages retain their meaning.
 
-Refs: #655, #470, MPCK.
+Refs: #655, #470, MPCK, DCHK.
