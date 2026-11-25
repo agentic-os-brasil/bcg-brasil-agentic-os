@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/macosadapter"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/windowsadapter"
@@ -20,11 +21,42 @@ var errBackgroundUserActive = errors.New("native background user activity observ
 
 // Serve owns the worker lifetime; canonical job controls supply all authority.
 func (b *Bound) Serve(ctx context.Context, transport mcp.Transport) error {
+	return b.serveMCP(ctx, transport, ordinaryServe, b.maintain)
+}
+
+// ServeInstalledCheck retains ordinary explicit MCP operation guards while
+// omitting only the automatic worker for one authenticated installed child.
+func (b *Bound) ServeInstalledCheck(ctx context.Context, transport mcp.Transport, checker *installer.VerifiedStableCheck) error {
+	o := b.options
+	binding := installer.StableCheckBinding{ProductRoot: o.ProductRoot, UserHome: o.UserHome, Workspace: o.WorkspacePath, CarrierID: o.ManagementCarrierID, InstallerVersion: o.ManagementInstallerVersion, ManifestSHA256: o.InstalledManifestSHA256, ClientInputsSHA256: o.InstalledClientInputsSHA256}
+	if err := checker.ValidateContext(ctx, binding); err != nil {
+		return err
+	}
+	if err := b.validateContext(ctx); err != nil {
+		return err
+	}
+	return b.serveMCP(ctx, transport, installedCheckServe, b.maintain)
+}
+
+type servePurpose uint8
+
+const (
+	ordinaryServe servePurpose = iota
+	installedCheckServe
+)
+
+func (b *Bound) serveMCP(ctx context.Context, transport mcp.Transport, purpose servePurpose, worker func(context.Context)) error {
+	if purpose != ordinaryServe && purpose != installedCheckServe {
+		return errors.New("unsupported server purpose")
+	}
+	if purpose == installedCheckServe {
+		return b.Server().Run(ctx, transport)
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		b.maintain(ctx)
+		worker(ctx)
 	}()
 	defer func() {
 		cancel()

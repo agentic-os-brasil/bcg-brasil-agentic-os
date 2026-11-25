@@ -11,9 +11,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
+	"time"
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/setup"
@@ -36,9 +39,14 @@ func runClients(ctx context.Context, command, self string, f lifecycleFlags, dig
 // The trusted native-verifier seam is process composition, never a CLI field.
 func runClientsWithNativeVerifier(ctx context.Context, command, self string, f lifecycleFlags, digest string, confirmed bool, verifyNative func(context.Context, string) error) (bool, error) {
 	switch command {
-	case "clients-review", "clients-apply", "clients-reconcile", "clients-status", "code-review", "code-apply", "desktop-confirm", "stable-launch", "stable-hook", "client-plugin-path", "manage":
+	case "clients-review", "clients-apply", "clients-reconcile", "clients-status", "code-review", "code-apply", "desktop-confirm", "stable-launch", "stable-check-launch", "stable-hook", "client-plugin-path", "manage":
 	default:
 		return false, nil
+	}
+	if command == "stable-check-launch" {
+		var stop context.CancelFunc
+		ctx, stop = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+		defer stop()
 	}
 	o := installer.ClientOptions{SeededOperationOptions: installer.SeededOperationOptions{ExperimentalSeed: f.ExperimentalSeed, Self: self, Version: Version, AuthorityRegistrySHA256: AuthorityRegistrySHA256, ManagedRoot: f.ManagedRoot, UserHome: f.UserHome, DataRoot: filepath.Join(f.UserHome, ".maestro-install"), VerifyNative: verifyNative}, Request: installer.ClientRequest{CarrierID: f.CarrierID, Workspace: f.Workspace}}
 	if f.ClientTarget != "" && f.ClientTarget != "desktop" {
@@ -77,7 +85,7 @@ func runClientsWithNativeVerifier(ctx context.Context, command, self string, f l
 		_, err = fmt.Fprintln(os.Stdout, path)
 		return true, err
 	}
-	if command == "stable-launch" || command == "stable-hook" {
+	if command == "stable-launch" || command == "stable-check-launch" || command == "stable-hook" {
 		if f.ManifestSHA256 != "" || f.ClientInputsSHA256 != "" || f.PlanID != "" {
 			return true, errors.New("stable launch accepts only fixed roots/workspace/carrier ID")
 		}
@@ -85,6 +93,8 @@ func runClientsWithNativeVerifier(ctx context.Context, command, self string, f l
 		var err error
 		if command == "stable-hook" {
 			launch, err = installer.PrepareStableLifecycleHook(ctx, o, f.HookEvent)
+		} else if command == "stable-check-launch" {
+			launch, err = installer.PrepareStableCheckLaunch(ctx, o)
 		} else {
 			launch, err = installer.PrepareStableLaunch(ctx, o)
 		}
@@ -92,6 +102,9 @@ func runClientsWithNativeVerifier(ctx context.Context, command, self string, f l
 			return true, err
 		}
 		child := exec.CommandContext(ctx, launch.Executable, launch.Args...)
+		if command == "stable-check-launch" {
+			child.WaitDelay = 2 * time.Second
+		}
 		child.Stdin = os.Stdin
 		child.Stdout = os.Stdout
 		child.Stderr = os.Stderr
