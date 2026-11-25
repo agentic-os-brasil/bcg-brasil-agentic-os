@@ -347,7 +347,7 @@ server_sha="$(sha "$SERVER")"
 [[ "$server_sha" == "$(jget "$META" server_hashes.0)" || "$server_sha" == "$(jget "$META" server_hashes.1)" ]] || fail 'Backend fora das duas versões admitidas. Nada será executado.'
 DIAGNOSTIC_ROOT="$RUN"
 refresh_report() {
-  local pair current_sha scope=()
+  local pair current_sha mode="${1:---check-only}" scope=()
   private_dir "$DIAGNOSTIC_ROOT"
   private_dir "$RUN"
   if [[ -e "$RUN/report.json" || -L "$RUN/report.json" ]]; then RUN="$(mktemp -d "$DIAGNOSTIC_ROOT/recheck-XXXXXXXX")"; fi
@@ -359,7 +359,7 @@ refresh_report() {
   [[ "$current_sha" == "$(jget "$META" server_hashes.0)" || "$current_sha" == "$(jget "$META" server_hashes.1)" ]] || fail 'Backend fora das versões admitidas. Nada será executado.'
   if [[ "${PILOT_OBSERVATION_CLIENT:-}" == desktop ]]; then scope=(--observation-client desktop); fi
   status=0
-  "$SERVER" installed-pilot-check "${COMMON[@]}" --installer-version "$VERSION" --experimental-seed-sha256 "$ROLE" --experimental-installed-root "$PRODUCT" --check-only ${scope[@]+"${scope[@]}"} > "$RUN/report.json" 2> "$RUN/check-private.log" || status=$?
+  "$SERVER" installed-pilot-check "${COMMON[@]}" --installer-version "$VERSION" --experimental-seed-sha256 "$ROLE" --experimental-installed-root "$PRODUCT" "$mode" ${scope[@]+"${scope[@]}"} > "$RUN/report.json" 2> "$RUN/check-private.log" || status=$?
   [[ -f "$RUN/report.json" && "$(jget "$RUN/report.json" schema_version)" == 2 && "$(jget "$RUN/report.json" evidence_class)" == engineering_only ]] || fail 'Verificador não produziu um relatório reconhecido.'
   for pair in 'markdown|RELATORIO.md' 'code_prompt|CODE.txt' 'code_readback_prompt|CODE-RELEITURA.txt' 'desktop_prompt|DESKTOP.txt' 'code_ready_prompt|CODE-CONEXAO.txt' 'desktop_ready_prompt|DESKTOP-CONEXAO.txt'; do
     /usr/bin/plutil -extract "${pair%%|*}" raw -o "$RUN/${pair#*|}" "$RUN/report.json" || fail 'Relatório incompleto.'
@@ -367,10 +367,22 @@ refresh_report() {
   CODE_PREPARATION_PENDING=false
   if [[ "$(jget "$RUN/report.json" client_preparation 2>/dev/null || true)" == desktop_prepared_code_pending ]]; then CODE_PREPARATION_PENDING=true; fi
   printf '\nRelatório atual: %s/RELATORIO.md\nOs relatórios anteriores foram preservados.\n' "$RUN"
+  if [[ "$mode" == --functional ]]; then
+    [[ "$status" == 0 && "$(jget "$RUN/report.json" check_mode 2>/dev/null || true)" == functional && "$(jget "$RUN/report.json" functional_check 2>/dev/null || true)" == passed ]]
+    return $?
+  fi
 }
 refresh_report
 printf '\nRelatório para compartilhar: %s/RELATORIO.md\nOs JSONs e logs são privados; não envie a pasta inteira.\n' "$RUN"
 [[ "${1:-}" != --check-only ]] || exit "$status"
+functional_test() {
+  printf '\nEste teste MCP cria um documento sintético e registra um teste no histórico, concluído quando passa; clientes, hooks, memória e agendamento têm avaliações separadas.\n'
+  if ( refresh_report --functional ); then
+    printf 'Teste MCP encerrado. Confira as etapas no novo RELATORIO.md; o uso real no Code e no Desktop continua separado.\n'
+  else
+    printf '\nTeste MCP incompleto; os diagnósticos e relatórios anteriores estão preservados em %s. Confira a etapa pendente no relatório; use a opção 5 para revisar a preparação ou compartilhe RELATORIO.md com o time antes de tentar novamente.\n' "$DIAGNOSTIC_ROOT"
+  fi
+}
 attest() {
   local label answer
   printf '\nObservações suas (não são provas automáticas). Use passou, falhou ou nao-testei.\n'
@@ -496,12 +508,13 @@ pilot_steps() {
 }
 while [[ -t 0 ]]; do
   if [[ "$TARGET" == desktop ]]; then
-    printf '\n2 — Testar ou continuar no Desktop\n4 — Conferir conexão Desktop\n5 — Gerenciar Desktop e métodos\n7 — Registrar resultados e abrir relatório\n8 — Atualizar da pasta compartilhada\nEnter — Sair\nEscolha: '
+    printf '\n2 — Testar ou continuar no Desktop\n4 — Conferir conexão Desktop\n5 — Gerenciar Desktop e métodos\n7 — Registrar resultados e abrir relatório\n8 — Atualizar da pasta compartilhada\n'
   elif [[ "${PILOT_OBSERVATION_CLIENT:-}" == desktop || "${CODE_PREPARATION_PENDING:-false}" == true ]]; then
-    printf '\nEscopo atual: Desktop. Code e hooks não foram observados nesta tentativa.\n2 — Testar ou continuar no Desktop\n4 — Conferir conexão Desktop\n5 — Preparar ou retomar clientes\n7 — Registrar resultados e abrir relatório\n8 — Atualizar da pasta compartilhada\n9 — Renovar login do perfil Code do piloto\nEnter — Sair\nEscolha: '
+    printf '\nEscopo atual: Desktop. Code e hooks não foram observados nesta tentativa.\n2 — Testar ou continuar no Desktop\n4 — Conferir conexão Desktop\n5 — Preparar ou retomar clientes\n7 — Registrar resultados e abrir relatório\n8 — Atualizar da pasta compartilhada\n9 — Renovar login do perfil Code do piloto\n'
   else
-  printf '\n1 — Testar ou continuar no Code\n2 — Continuar no Desktop\n3 — Conferir conexão Code\n4 — Conferir conexão Desktop\n5 — Gerenciar/qualificar hooks e skills\n6 — Conferir persistência no Code\n7 — Registrar resultados e abrir relatório\n8 — Atualizar da pasta compartilhada\n9 — Renovar login do perfil Code do piloto\nEnter — Sair\nEscolha: '
+  printf '\n1 — Testar ou continuar no Code\n2 — Continuar no Desktop\n3 — Conferir conexão Code\n4 — Conferir conexão Desktop\n5 — Gerenciar/qualificar hooks e skills\n6 — Conferir persistência no Code\n7 — Registrar resultados e abrir relatório\n8 — Atualizar da pasta compartilhada\n9 — Renovar login do perfil Code do piloto\n'
   fi
+  printf '10 — Testar MCP automaticamente (documento sintético e histórico de teste)\nEnter — Sair\nEscolha: '
   read -r choice
   case "$choice" in
     1) pilot_steps code;; 2) pilot_steps desktop;; 3) open_code CODE-CONEXAO.txt;; 4) open_desktop DESKTOP-CONEXAO.txt;;
@@ -509,6 +522,7 @@ while [[ -t 0 ]]; do
     6) open_code CODE-RELEITURA.txt;; 7) attest; /usr/bin/open -t "$RUN/RELATORIO.md";;
     8) manage --management-intent update || printf '\nAtualização pendente. Preserve o relatório.\n'; refresh_report;;
     9) if ! ensure_code_login force; then printf '\nLogin Code permanece pendente. O Desktop preparado foi preservado.\n'; fi;;
+    10) functional_test;;
     '') break;; *) printf 'Escolha uma opção da lista.\n';;
   esac
 done

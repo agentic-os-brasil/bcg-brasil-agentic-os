@@ -287,6 +287,36 @@ hooks and confirmation as `not_tested`; participants record those observations
 after using the clients. Share only the reviewed Markdown report, not owner,
 workspace, client profiles or participant-local generated packets/prompts.
 
+## Automatic installed MCP functional check
+
+In the installed participant kit, open **Maestro.command** on Mac or
+**Maestro.cmd** on Windows and choose **10 — Testar MCP automaticamente**.
+Selecting the action explicitly permits one synthetic document and one test
+item in the work history, completed on success. It requires no development
+toolchain, protocol requests or copied prompts. Ordinary startup and check-only
+refreshes remain read-only.
+
+The existing installed checker connects through the admitted stable MCP carrier.
+It checks the workspace and canonical methods/resources, converts the canonical
+synthetic DOCX once, reads both derived outputs, and exercises a synthetic
+create/checkpoint/pause/reconnect/resume/evidence/complete journey. It also checks
+that a stale checkpoint is refused. Existing files are preserved; a conflicting
+fixture or unavailable runtime leaves the relevant stage incomplete. The action
+does not install or repair a converter or retry an ambiguous mutation.
+
+The action prints a fresh **RELATORIO.md** path and preserves previous reports.
+Blocked, unavailable and failed checks return to the menu. Read the first pending
+stage and any retained item identity before another attempt; use option **5** for
+normal preparation or share only the reviewed Markdown with the team. JSONs,
+raw checker output and logs remain private.
+
+A passing result proves the installed MCP/SDK journey only. Native Code/Desktop
+loading, normal login, Desktop extension and skill import, hook/agent execution,
+memory and scheduler qualification retain their separate status. Continue through
+the existing client options to test those experiences. This feature requires a
+new compatible kit and its own installed acceptance; it does not change earlier
+sealed packages or their evidence.
+
 ## Desktop owner review channel
 
 The explicit local preparation review discloses selection of `local-browser`
