@@ -105,7 +105,7 @@ func run() (runErr error) {
 	if len(os.Args) < 2 {
 		return errors.New("command_required")
 	}
-	if handled, err := experimentalEarlyCommand(context.Background(), os.Args[1], os.Args[2:], os.Stdout); handled {
+	if handled, err := dispatchEarlyCommand(os.Args[1], os.Args[2:], os.Stdout, experimentalEarlyCommand); handled {
 		return err
 	}
 	if os.Args[1] == "identity" {
@@ -645,4 +645,17 @@ func run() (runErr error) {
 	default:
 		return errors.New("unsupported_command")
 	}
+}
+
+// The installed checker owns final diagnostics and child cleanup even when the
+// terminal interrupts its early entry. Other early commands retain their
+// existing context and signal behavior.
+func dispatchEarlyCommand(command string, args []string, output io.Writer, invoke func(context.Context, string, []string, io.Writer) (bool, error)) (bool, error) {
+	ctx := context.Background()
+	if command == "installed-pilot-check" {
+		var stop context.CancelFunc
+		ctx, stop = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+		defer stop()
+	}
+	return invoke(ctx, command, args, output)
 }

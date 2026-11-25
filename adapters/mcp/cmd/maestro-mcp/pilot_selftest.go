@@ -18,6 +18,7 @@ import (
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	baseagents "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/agents"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/pilotdocument"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -33,12 +34,19 @@ func installedPilotTransport(ctx context.Context, o product.Options, id, manifes
 	if r.Target.OS == "windows" {
 		launcher += ".exe"
 	}
-	args := []string{"stable-check-launch", "--product-root", o.ProductRoot, "--user-home", o.UserHome, "--workspace", o.WorkspacePath, "--carrier-id", o.ManagementCarrierID}
+	selection := installer.ClientOptions{SeededOperationOptions: installer.SeededOperationOptions{ExperimentalSeed: o.ExperimentalSeed, Self: launcher, Version: o.ManagementInstallerVersion, AuthorityRegistrySHA256: o.AuthorityRegistrySHA256, ManagedRoot: o.ProductRoot, UserHome: o.UserHome, DataRoot: filepath.Join(o.UserHome, ".maestro-install")}, Request: installer.ClientRequest{CarrierID: o.ManagementCarrierID, Workspace: o.WorkspacePath}}
 	open := func(ctx context.Context) (*mcp.ClientSession, error) {
 		if err := o.ExperimentalSeed.Revalidate(); err != nil {
 			return nil, err
 		}
-		return installedPilotConnect(ctx, exec.CommandContext(ctx, launcher, args...))
+		// Keep the backend as the SDK's direct owned process. The original
+		// stable-launch owner still admits every connection. SDK cancellation
+		// targets that backend itself, including pre-stdio startup.
+		launch, err := installer.PrepareStableCheckLaunch(ctx, selection)
+		if err != nil {
+			return nil, err
+		}
+		return installedPilotConnect(ctx, exec.CommandContext(ctx, launch.Executable, launch.Args...))
 	}
 	prepare := func() error { return installedPilotPrepareFixture(ctx, o, id) }
 	return installedPilotExercise(ctx, open, prepare, id, manifest, pack, Version, r, functional)
