@@ -396,10 +396,10 @@ try {
   $Server = Join-Path $Product 'bin\maestro-mcp.exe'; $null = Private-File $Server
   if ((Hash $Server) -cnotin $Meta.server_hashes) { Stop-Maestro 'Backend fora das duas versoes admitidas. Nada sera executado.' }
   $DiagnosticRoot = $Run
-  function Update-PilotReport {
+  function Update-PilotReport([switch]$Functional) {
     Private-Directory $DiagnosticRoot
     Private-Directory $Run
-    if (Test-Path -LiteralPath (Join-Path $Run 'report-private.json')) {
+    if ((Test-Path -LiteralPath (Join-Path $Run 'report-private.json')) -or (Test-Path -LiteralPath (Join-Path $Run 'checker-stdout-private.log'))) {
       $script:Run = Join-Path $DiagnosticRoot ('recheck-' + [Guid]::NewGuid().ToString('N'))
       Private-Directory $Run
       $script:Report = Join-Path $Run 'RELATORIO.md'
@@ -411,8 +411,11 @@ try {
     if ((Hash $Server) -cnotin $Meta.server_hashes) { Stop-Maestro 'Backend fora das versoes admitidas. Nada sera executado.' }
     $scopeArguments = @()
     if ($script:ObservationClient -ceq 'desktop') { $scopeArguments = @('--observation-client','desktop') }
-    $result = & $Server installed-pilot-check @Common --installer-version $Meta.identity.installer_version --experimental-seed-sha256 $Role --experimental-installed-root $Product --check-only @scopeArguments
+    $mode = '--check-only'
+    if ($Functional) { $mode = '--functional' }
+    $result = & $Server installed-pilot-check @Common --installer-version $Meta.identity.installer_version --experimental-seed-sha256 $Role --experimental-installed-root $Product $mode @scopeArguments
     $script:CheckExit = $LASTEXITCODE
+    [IO.File]::WriteAllText((Join-Path $Run 'checker-stdout-private.log'), [string]::Join("`n", @($result)), $Utf8)
     $script:Checked = ([string]::Join("`n", @($result)) | ConvertFrom-Json)
     if ($Checked.schema_version -ne 2 -or $Checked.evidence_class -cne 'engineering_only') { Stop-Maestro 'Verificador nao produziu um relatorio reconhecido.' }
     Write-Json (Join-Path $Run 'report-private.json') $Checked
@@ -425,6 +428,19 @@ try {
   Update-PilotReport
   Write-Host "Relatorio para compartilhar: $Report`nJSONs e logs sao privados; nao envie a pasta inteira."
   if ($CheckOnly) { exit $checkExit }
+  function Invoke-FunctionalTest {
+    Write-Host "`nEste teste MCP cria um documento sintetico e registra um teste no historico, concluido quando passa; clientes, hooks, memoria e agendamento tem avaliacoes separadas."
+    $previousRun = $Run; $previousReport = $Report; $previousChecked = $Checked
+    try {
+      Update-PilotReport -Functional
+      if ($script:CheckExit -ne 0 -or $Checked.check_mode -cne 'functional' -or $Checked.functional_check -cne 'passed') { throw 'Etapa funcional incompleta.' }
+      Write-Host 'Teste MCP encerrado. Confira as etapas no novo RELATORIO.md; o uso real no Code e no Desktop continua separado.'
+    } catch {
+      Write-Host "Teste MCP incompleto; diagnosticos e relatorios anteriores estao preservados em $DiagnosticRoot. Confira a etapa pendente no relatorio; use a opcao 5 para revisar a preparacao ou compartilhe RELATORIO.md com o time antes de tentar novamente."
+    } finally {
+      $script:Run = $previousRun; $script:Report = $previousReport; $script:Checked = $previousChecked
+    }
+  }
   function Assert-TestPrompt([string]$PromptFile) {
     if ($Checked.status -ceq 'blocked') { Stop-Maestro 'O diagnostico bloqueou a jornada. Preserve o relatorio; nenhum cliente sera aberto.' }
     if (-not (Test-Path -LiteralPath (Join-Path $Run $PromptFile) -PathType Leaf) -or [string]::IsNullOrWhiteSpace((Get-Content -LiteralPath (Join-Path $Run $PromptFile) -Raw -Encoding UTF8))) { Stop-Maestro 'Prompt indisponivel. Reabra o diagnostico antes de continuar.' }
@@ -514,12 +530,13 @@ try {
   }
   do {
     if ($ClientTarget -ceq 'desktop') {
-      Write-Host "`n2 - Testar ou continuar no Desktop`n4 - Conexao Desktop`n5 - Gerenciar Desktop e metodos`n7 - Resultados e relatorio`n8 - Atualizar da pasta compartilhada`nEnter - Sair"
+      Write-Host "`n2 - Testar ou continuar no Desktop`n4 - Conexao Desktop`n5 - Gerenciar Desktop e metodos`n7 - Resultados e relatorio`n8 - Atualizar da pasta compartilhada"
     } elseif ($script:ObservationClient -ceq 'desktop' -or $script:CodePreparationPending) {
-      Write-Host "`nEscopo atual: Desktop. Code e hooks nao foram observados nesta tentativa.`n2 - Testar ou continuar no Desktop`n4 - Conexao Desktop`n5 - Preparar ou retomar clientes`n7 - Resultados e relatorio`n8 - Atualizar da pasta compartilhada`n9 - Renovar login do perfil Code do piloto`nEnter - Sair"
+      Write-Host "`nEscopo atual: Desktop. Code e hooks nao foram observados nesta tentativa.`n2 - Testar ou continuar no Desktop`n4 - Conexao Desktop`n5 - Preparar ou retomar clientes`n7 - Resultados e relatorio`n8 - Atualizar da pasta compartilhada`n9 - Renovar login do perfil Code do piloto"
     } else {
-      Write-Host "`n1 - Testar ou continuar no Code`n2 - Continuar no Desktop`n3 - Conexao Code`n4 - Conexao Desktop`n5 - Gerenciar/qualificar hooks e skills`n6 - Persistencia Code`n7 - Resultados e relatorio`n8 - Atualizar da pasta compartilhada`n9 - Renovar login do perfil Code do piloto`nEnter - Sair"
+      Write-Host "`n1 - Testar ou continuar no Code`n2 - Continuar no Desktop`n3 - Conexao Code`n4 - Conexao Desktop`n5 - Gerenciar/qualificar hooks e skills`n6 - Persistencia Code`n7 - Resultados e relatorio`n8 - Atualizar da pasta compartilhada`n9 - Renovar login do perfil Code do piloto"
     }
+    Write-Host "10 - Testar MCP automaticamente (documento sintetico e historico de teste)`nEnter - Sair"
     $choice = Read-Host 'Escolha'
     switch -CaseSensitive ($choice) {
       '1' { Invoke-PilotSteps 'code' }
@@ -549,6 +566,7 @@ try {
       }
       '8' { Invoke-Management -Extra @('--management-intent','update'); if ($script:ManagementExit -ne 0) { Write-Host 'Atualizacao pendente. Preserve o relatorio.' }; Update-PilotReport }
       '9' { if (-not (Ensure-CodeLogin -Force)) { Write-Host 'Login Code permanece pendente. O Desktop preparado foi preservado.' } }
+      '10' { Invoke-FunctionalTest }
     }
   } while ($choice -ne '')
 } catch {

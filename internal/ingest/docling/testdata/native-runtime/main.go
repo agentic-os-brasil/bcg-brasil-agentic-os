@@ -1,5 +1,3 @@
-//go:build windows
-
 // Synthetic native qualification harness. Never distributed or used as authority.
 package main
 
@@ -60,7 +58,20 @@ func main() {
 		fail(fmt.Errorf("unknown synthetic harness action"))
 	}
 }
+
+// Fixture-only transport. Production Conversion intentionally keeps bodies out
+// of JSON; both slices below preserve the exact synthetic bytes in this private
+// child-parent pipe, including original JSON whitespace and escaping.
+type conversionWire struct {
+	Metadata docling.Conversion `json:"metadata"`
+	Markdown []byte             `json:"markdown"`
+	Document []byte             `json:"document"`
+}
+
 func emit(value any) {
+	if conversion, ok := value.(docling.Conversion); ok {
+		value = conversionWire{conversion, conversion.Markdown, []byte(conversion.Document)}
+	}
 	if err := json.NewEncoder(os.Stdout).Encode(value); err != nil {
 		fail(err)
 	}

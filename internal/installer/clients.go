@@ -674,6 +674,22 @@ func inspectClientRecordAtCurrent(ctx context.Context, o ClientOptions, record C
 func PrepareStableLaunch(ctx context.Context, o ClientOptions) (QualifiedLaunch, error) {
 	return prepareStableLaunch(ctx, o, "")
 }
+
+// PrepareStableCheckLaunch changes only the purpose of an ordinarily admitted
+// current carrier. Admission, recovery, late record/source fences and argv
+// binding stay owned by the original stable launcher.
+func PrepareStableCheckLaunch(ctx context.Context, o ClientOptions) (QualifiedLaunch, error) {
+	launch, err := PrepareStableLaunch(ctx, o)
+	if err != nil {
+		return QualifiedLaunch{}, err
+	}
+	if len(launch.Args) == 0 || launch.Args[0] != "serve" {
+		return QualifiedLaunch{}, errors.New("canonical stable server unavailable")
+	}
+	launch.Args[0] = "installed-check-serve"
+	return launch, nil
+}
+
 func prepareStableLaunch(ctx context.Context, o ClientOptions, event string) (QualifiedLaunch, error) {
 	if _, err := admitOperationSeed(ctx, o.SeededOperationOptions); err != nil {
 		return QualifiedLaunch{}, err

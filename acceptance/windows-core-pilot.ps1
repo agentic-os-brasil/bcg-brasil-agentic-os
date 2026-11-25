@@ -490,6 +490,13 @@ try {
     $env:TMP = $temporary
     $env:GOTMPDIR = $temporary
     if ($DoclingManifest) {
+        $subjectHome = Join-Path $ProofRoot 'docling-user-home'
+        if ($env:USERPROFILE -cne $subjectHome -or $env:HOME -cne $subjectHome -or
+            $env:APPDATA -cne (Join-Path $subjectHome 'AppData/Roaming') -or
+            $env:LOCALAPPDATA -cne (Join-Path $subjectHome 'AppData/Local')) { throw 'Docling bootstrap private profile binding differs.' }
+        foreach ($directory in @($subjectHome, $env:APPDATA, $env:LOCALAPPDATA)) {
+            New-Item -ItemType Directory -Path $directory -Force | Out-Null
+        }
         if ((Get-FileHash -LiteralPath $DoclingProfile -Algorithm SHA256).Hash.ToLowerInvariant() -cne $DoclingProfileSHA256) { throw 'Docling typed profile changed before ordinary-account admission.' }
         . $DoclingProfile
         $manifest = Read-DoclingRuntimeManifest $DoclingManifest
@@ -1123,12 +1130,57 @@ try {
     }
     $hadModulePath = Test-Path Env:PSModulePath
     $priorModulePath = $env:PSModulePath
+    $doclingParentEnvironment = $null
+    $doclingSystemRoot = if ($withDocling) { [Environment]::GetFolderPath([Environment+SpecialFolder]::Windows) } else { $null }
+    $doclingSystemDirectory = if ($withDocling) { [Environment]::SystemDirectory } else { $null }
+    if ($withDocling) {
+        if ($env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or
+            -not [IO.Path]::IsPathFullyQualified($doclingSystemRoot) -or -not [IO.Path]::IsPathFullyQualified($doclingSystemDirectory)) {
+            throw 'Docling credentialed bootstrap requires the admitted hosted system roots.'
+        }
+        $subjectHome = Join-Path $OutputRoot 'docling-user-home'
+        # Bootstrap uses the existing private root; the child creates its own fresh user-temp.
+        $subjectTemp = $OutputRoot
+        # Resolve only already-admitted nonsecret bindings. Never copy the runner
+        # environment or its profile into the new standard-account bootstrap.
+        $doclingLaunchEnvironment = [ordered]@{
+            SystemRoot=$doclingSystemRoot; WINDIR=$doclingSystemRoot
+            COMSPEC=(Join-Path $doclingSystemDirectory 'cmd.exe'); PATHEXT='.COM;.EXE;.BAT;.CMD'
+            PATH=(@((Split-Path -Parent $doclingRuntime.sdk_go), $PSHOME, $doclingSystemDirectory) -join [IO.Path]::PathSeparator)
+            PSModulePath=(Join-Path $PSHOME 'Modules')
+            TEMP=$subjectTemp; TMP=$subjectTemp; GOTMPDIR=$subjectTemp
+            USERPROFILE=$subjectHome; HOME=$subjectHome
+            APPDATA=(Join-Path $subjectHome 'AppData/Roaming'); LOCALAPPDATA=(Join-Path $subjectHome 'AppData/Local')
+            GOROOT=(Split-Path -Parent (Split-Path -Parent $doclingRuntime.sdk_go)); GOMODCACHE=$doclingRuntime.module_cache
+            GOCACHE=(Join-Path $OutputRoot 'go-cache'); GOPATH=(Join-Path $OutputRoot 'go-path')
+            GOTOOLCHAIN='local'; GOPROXY='off'; GOSUMDB='off'; GOFLAGS='-mod=readonly -buildvcs=false'; CGO_ENABLED='0'
+            GITHUB_ACTIONS='true'; RUNNER_ENVIRONMENT='github-hosted'
+        }
+    }
     try {
-        # Stock Windows PowerShell must resolve its own modules, not inherited PowerShell7 modules.
-        Remove-Item Env:PSModulePath -ErrorAction SilentlyContinue
+        if ($withDocling) {
+            # Start-Process inherits the current process environment. Close it
+            # before creation, then restore the parent even if creation throws.
+            $doclingParentEnvironment = [Environment]::GetEnvironmentVariables('Process')
+            foreach ($key in $doclingParentEnvironment.Keys) { [Environment]::SetEnvironmentVariable($key, [NullString]::Value, 'Process') }
+            foreach ($entry in $doclingLaunchEnvironment.GetEnumerator()) { [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process') }
+        }
+        # Docling uses only its exact PowerShell modules. Other profiles keep
+        # the existing stock-Windows module resolution without inherited paths.
+        if (-not $withDocling) { Remove-Item Env:PSModulePath -ErrorAction SilentlyContinue }
+        if ($withDocling) {
+            if (@(Compare-Object @($doclingLaunchEnvironment.Keys) @([Environment]::GetEnvironmentVariables('Process').Keys)).Count -ne 0) {
+                throw 'Docling bootstrap environment could not be closed.'
+            }
+            Write-Output 'docling_subject_environment closed_before_create=true'
+        }
         $process = Start-Process -FilePath $powershell -ArgumentList $arguments -Credential $credential -LoadUserProfile -WorkingDirectory $OutputRoot -RedirectStandardOutput $stdout -RedirectStandardError $stderr -Wait -PassThru
     } finally {
-        if ($hadModulePath) { $env:PSModulePath = $priorModulePath }
+        if ($null -ne $doclingParentEnvironment) {
+            foreach ($key in @([Environment]::GetEnvironmentVariables('Process').Keys)) { [Environment]::SetEnvironmentVariable($key, [NullString]::Value, 'Process') }
+            foreach ($entry in $doclingParentEnvironment.GetEnumerator()) { [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process') }
+        }
+        elseif ($hadModulePath) { $env:PSModulePath = $priorModulePath }
         else { Remove-Item Env:PSModulePath -ErrorAction SilentlyContinue }
     }
     if ($withKit -or $AuthoredBrain -or $AtlasTestBinary -or $DoclingTestBinary -or $withInspection -or $withDocling) {
@@ -1208,8 +1260,17 @@ try {
     Remove-Item Env:MAESTRO_WINDOWS_CORE_SERVER -ErrorAction SilentlyContinue
     Remove-Item Env:MAESTRO_WINDOWS_CORE_PROOF_ROOT -ErrorAction SilentlyContinue
     foreach ($key in @('MAESTRO_WINDOWS_PILOT_KIT','MAESTRO_WINDOWS_PILOT_IDENTITY','MAESTRO_WINDOWS_PILOT_METHODS','MAESTRO_WINDOWS_PILOT_PROOF')) { Remove-Item ('Env:' + $key) -ErrorAction SilentlyContinue }
-    if ($account) { Remove-LocalUser -SID $account.SID -ErrorAction Continue }
-    $password = $null
-    $secure = $null
-    $credential = $null
+    try {
+        if ($account) {
+            if ($withDocling) {
+                try { Remove-LocalUser -SID $account.SID -ErrorAction Stop }
+                catch { throw 'Docling disposable account removal failed; trial incomplete.' }
+                Write-Output 'docling_subject_cleanup account_removal_completed=true'
+            } else { Remove-LocalUser -SID $account.SID -ErrorAction Continue }
+        }
+    } finally {
+        $password = $null
+        $secure = $null
+        $credential = $null
+    }
 }

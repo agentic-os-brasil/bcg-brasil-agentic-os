@@ -1918,3 +1918,42 @@ coverage, not proof of this complete-kit scope. Refs: #599; Spec061 NTXT.
 - Consequences: The existing v1 bootstrap family, endpoint inventory, binding admission, explicit-only restrictions, shared policies, complete active-branch reference reads, 4KB UTF-8 paging/hash/byte checks and original effect confirmation remain unchanged. This is intentional routing-contract evolution requiring a newly versioned library and normal host review/import with a descriptor-capable backend, not an ordinary live-content refresh. Existing imported libraries and their original evidence remain unchanged. No cache, engine, installer migration, permission or authority is added. Source and payload tests do not qualify a new native Desktop route or whole-product readiness; build and test a newly compatible kit separately.
 - Refs: SFRD; #644; specs/063-product-native-plugin.md; adapters/mcp/methods.go; adapters/mcp/methods_query.go; adapters/mcp/packaging/desktop_live_methods.go
 - Supersedes: none
+
+
+## MPCK - Test the installed MCP through its real carrier with explicit synthetic writes
+
+- Date: 2026-11-25
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The native participant entry prepares diagnostics but its installed SDK checks currently use an in-process server. Conversion and continuity require repeated client prompts. Private engineering callers have exercised the actual carrier, but they are not a native participant feature and cannot qualify a client host.
+- Decision: Reuse the existing installed-pilot-check owner and native menus. Read-only checks connect through the authenticated current stable carrier and verify binding plus canonical discovery/resource bytes; no in-process fallback may claim installed success. A distinct explicit functional action runs one bounded canonical synthetic DOCX conversion/readback and one completed execution-ledger continuity journey through ordinary MCP operations, reopening the same carrier and resuming once. Preserve existing effect/ownership guards, release constructor locks before child execution and revalidate current identity.
+- Consequences: Participants need no development toolchain or handwritten requests. Default refresh performs no domain mutations; normal admitted stable-start coordination remains governed by its existing owner. Functional checks preserve prior files, refuse conflicting fixtures and unavailable runtimes, retain failures and incomplete item identities, and never replay ambiguous mutations. SDK success does not qualify Code/Desktop, hooks, agents, memory, scheduling, publication or production. No review, enrollment, model, new pack, issuer or signing authority is introduced. New compatible artifacts and actual installed/client evidence remain separate gates.
+- Refs: #655; #470; specs/022-guided-pilot-release.md; adapters/mcp/cmd/maestro-mcp/pilot_installed.go; dev/pilot/templates/installed-seed
+- Supersedes: none
+
+### MPCK refinement — isolate automatic background work by authenticated launch purpose
+
+Ordinary serve starts its maintenance worker immediately. A diagnostic must not
+trigger already enrolled due jobs merely by opening an actual transport. Reuse
+the existing authenticated installed-role/current-record child handoff with one
+dedicated `stable-check-launch` -> `installed-check-serve` purpose. The receiver
+revalidates the canonical stable carrier and derives an opaque checker capability
+before serving explicit MCP operations without starting its automatic worker.
+This reduces that child's effects; it changes no grants, job state, ordinary
+serve or OS-wake behavior. No untrusted client metadata, environment or ordinary
+runtime suppression flag selects the purpose. Unsupported older bootstrappers
+refuse without fallback. A new compatible bootstrap/backend is required; report
+checker-purpose SDK evidence separately from the normal native-client path.
+
+Refs: #655; original MPCK; specs/022-guided-pilot-release.md.
+
+## DCHK - Keep the authenticated checker receiver directly owned by the SDK
+
+- Date: 2026-11-25
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: An intermediate installer can be killed by SDK or outer-context cancellation before it forwards termination or waits on its separately created receiver. Process-only termination on Windows makes that custody gap concrete. Default signal termination of the outer checker also skips its final report and loses the known synthetic task identity from its output.
+- Decision: Refine MPCK transport composition without changing admission or effects. For every connection, obtain the executable and complete arguments from the canonical PrepareStableCheckLaunch owner and give that exact receiver directly to the SDK CommandTransport. Keep independent receiver image, argv, source and record validation and the opaque checker capability. Bind only the installed-pilot-check dispatcher to normal interrupt/termination cancellation, allowing owned-child cleanup and report finalization to run. Preserve the typed stable-check-launch CLI as a thin caller of the same canonical producer; it is not required as an intermediate process in the checker SDK path. This refines MPCK's historical bootstrap compatibility wording: the installed bootstrap must retain its existing identity and custody admission, but lack of the new checker CLI verb alone is not a refusal condition for direct receiver composition. Unsupported checker admission or receiver implementations still refuse without a normal-serve fallback.
+- Consequences: SDK escalation and Wait operate on the same receiver; no new process manager, platform Job Object, environment selector or launch override is needed. Both read-only and explicit functional sessions retain their existing domain-effect boundaries. Focused tests must distinguish startup cancellation, connected cancellation and graceful-close escalation, and must not present caller-context cancellation alone as proof of the actual CLI signal boundary. Uncatchable forced termination remains outside the recoverable-report guarantee. Actual Windows and client qualification remain separate gates.
+- Refs: MPCK; #655; specs/022-guided-pilot-release.md; adapters/mcp/cmd/maestro-mcp/main.go; adapters/mcp/cmd/maestro-mcp/pilot_selftest.go
+- Supersedes: none
