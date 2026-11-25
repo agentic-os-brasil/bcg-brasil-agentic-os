@@ -68,7 +68,7 @@ func TestInstalledPilotStatusKeepsEarlierCallerDeadline(t *testing.T) {
 		Sentinel string `json:"sentinel"`
 	}
 	err := installedPilotCall(ctx, session, "content_status", "maestro_query", map[string]any{"operation": "content.status"}, &out)
-	if !errors.Is(err, context.DeadlineExceeded) || err.Error() != "current_in_process_sdk_content_status_deadline_exceeded" || out.Sentinel != "" {
+	if !errors.Is(err, context.DeadlineExceeded) || err.Error() != "current_installed_sdk_content_status_deadline_exceeded" || out.Sentinel != "" {
 		t.Fatalf("status overrode caller deadline or accepted late data: out=%+v err=%v", out, err)
 	}
 }
@@ -81,7 +81,7 @@ func TestInstalledPilotStatusDoesNotTurnRefusalIntoReadiness(t *testing.T) {
 		Sentinel string `json:"sentinel"`
 	}
 	err := installedPilotCall(t.Context(), session, "content_status", "maestro_query", map[string]any{"operation": "content.status"}, &out)
-	if err == nil || err.Error() != "current_in_process_sdk_content_status_failed" || out.Sentinel != "" {
+	if err == nil || err.Error() != "current_installed_sdk_content_status_failed" || out.Sentinel != "" {
 		t.Fatalf("refused read was admitted or exposed its cause: out=%+v err=%v", out, err)
 	}
 }

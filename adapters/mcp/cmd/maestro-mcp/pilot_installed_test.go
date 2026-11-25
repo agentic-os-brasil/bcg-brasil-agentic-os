@@ -9,22 +9,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"strings"
-	"sync/atomic"
 	"testing"
-	"time"
 
 	product "github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/adapters/mcp/packaging"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/datahome"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
 // This tests metadata comparison after the real archive verifier, never host
@@ -285,126 +279,13 @@ func TestInstalledPilotCheckerRejectsStaleOrForeignExecutingImage(t *testing.T) 
 	}
 }
 
-// This ordinary synthetic binding exercises only the shared read-only SDK helper,
-// not experimental seed admission, a native client or a qualified installation.
-func TestInstalledPilotSDKReadsWithoutStartingMaintenanceOrWritingOwnerFiles(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("ordinary-user Windows owner admission has its separate native qualification")
-	}
-	root, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	o := product.Options{ProductRoot: filepath.Join(root, "product"), UserHome: filepath.Join(root, "owner"), WorkspacePath: filepath.Join(root, "work"), CLIVersion: "0.1.51", LookupEnv: func(string) (string, bool) { return "", false }}
-	for _, path := range []string{o.ProductRoot, o.UserHome} {
-		if err := os.Mkdir(path, 0700); err != nil {
-			t.Fatal(err)
-		}
-	}
-	home, err := datahome.InitializeFresh(datahome.Options{ProductRoot: o.ProductRoot, UserHome: o.UserHome, LookupEnv: o.LookupEnv})
-	if err != nil {
-		t.Fatal(err)
-	}
-	space, err := workspace.Initialize(workspace.Options{WorkspacePath: o.WorkspacePath, DataRoot: filepath.Join(home.Home, "state")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	snapshot := func() map[string]string {
-		t.Helper()
-		out := map[string]string{}
-		if err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			info, err := d.Info()
-			if err != nil {
-				return err
-			}
-			if d.IsDir() {
-				out[path] = "directory:" + info.Mode().String()
-				return nil
-			}
-			b, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			out[path] = fmt.Sprintf("%s:%x", info.Mode(), sha256.Sum256(b))
-			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
-		return out
-	}
-	before := snapshot()
-	var lookups atomic.Int32
-	o.LookupEnv = func(key string) (string, bool) {
-		if key == "MAESTRO_HOME" {
-			lookups.Add(1)
-		}
-		return "", false
-	}
-	r := pilotReport{SchemaVersion: 2, Status: "partial", Checks: []pilotCheck{}}
-	if err := installedPilotSDK(context.Background(), o, space.WorkspaceID, strings.Repeat("b", 64), strings.Repeat("a", 64), &r); err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(before, snapshot()) {
-		t.Fatal("read-only SDK changed owner or workspace files")
-	}
-	if len(r.Checks) < 3 || r.Checks[0].Reason != "current_in_process_sdk_context_verified_not_host_loading" {
-		t.Fatalf("incorrect SDK evidence: %#v", r.Checks)
-	}
-	t.Run("healthy reads retain their own timeout", func(t *testing.T) {
-		// Installed admission revalidates large signed inventories on every read.
-		// Delay the existing admission seam, keeping each read below twenty seconds.
-		delay := 21 * time.Second / time.Duration(lookups.Load()-2)
-		lookups.Store(0)
-		o.LookupEnv = func(key string) (string, bool) {
-			if key == "MAESTRO_HOME" && lookups.Add(1) > 2 {
-				time.Sleep(delay)
-			}
-			return "", false
-		}
-		slow := pilotReport{SchemaVersion: 2, Status: "partial", Checks: []pilotCheck{}}
-		if err := installedPilotSDK(t.Context(), o, space.WorkspaceID, strings.Repeat("b", 64), strings.Repeat("a", 64), &slow); err != nil {
-			t.Fatalf("healthy cumulative readback failed: %v; checks=%+v; conversion=%+v", err, slow.Checks, slow.Conversion)
-		}
-		if slow.Conversion == nil || slow.Conversion.State != "pending_runtime" || !reflect.DeepEqual(r.Checks, slow.Checks) {
-			t.Fatalf("slow reads lost the canonical catalog or conversion observation: %+v", slow)
-		}
-		if !reflect.DeepEqual(before, snapshot()) {
-			t.Fatal("slow read-only SDK changed owner or workspace files")
-		}
-	})
-	for _, tc := range []struct {
-		name, reason string
-		cancel       bool
-	}{
-		{"caller cancellation", "current_in_process_sdk_context_cancelled", true},
-		{"one read exceeds its timeout", "current_in_process_sdk_context_deadline_exceeded", false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-			lookups.Store(0)
-			o.LookupEnv = func(key string) (string, bool) {
-				if key == "MAESTRO_HOME" && lookups.Add(1) == 3 {
-					if tc.cancel {
-						cancel()
-					} else {
-						time.Sleep(21 * time.Second)
-					}
-				}
-				return "", false
-			}
-			blocked := pilotReport{SchemaVersion: 2, Status: "partial", Checks: []pilotCheck{}}
-			err := installedPilotSDK(ctx, o, space.WorkspaceID, strings.Repeat("b", 64), strings.Repeat("a", 64), &blocked)
-			if err == nil || err.Error() != tc.reason || len(blocked.Checks) != 0 || blocked.Conversion != nil {
-				t.Fatalf("cancelled/expired read did not fail closed: error=%v; report=%+v", err, blocked)
-			}
-			if !reflect.DeepEqual(before, snapshot()) {
-				t.Fatal("failed read-only SDK changed owner or workspace files")
-			}
-		})
+// An ordinary local workspace is not an authenticated installed carrier. It
+// must never produce installed success by opening an in-process replacement.
+func TestInstalledPilotSDKRefusesInProcessFallback(t *testing.T) {
+	var r installedPilotReport
+	err := installedPilotTransport(t.Context(), product.Options{}, strings.Repeat("a", 32), strings.Repeat("b", 64), strings.Repeat("c", 64), &r, false)
+	if err == nil || len(r.Checks) != 0 {
+		t.Fatalf("unadmitted carrier acquired installed evidence: %v %+v", err, r)
 	}
 }
 
@@ -418,7 +299,7 @@ func TestInstalledPilotReadbackErrorOmitsPrivateCauses(t *testing.T) {
 		{fmt.Errorf("/private/DO_NOT_EXPORT: %w", context.Canceled), "cancelled"},
 	} {
 		err := &installedPilotReadbackError{stage: "content_status", cause: tc.cause}
-		if err.Error() != "current_in_process_sdk_content_status_"+tc.reason || !errors.Is(err, tc.cause) {
+		if err.Error() != "current_installed_sdk_content_status_"+tc.reason || !errors.Is(err, tc.cause) {
 			t.Fatalf("unsafe or unclassifiable readback error: %v", err)
 		}
 	}

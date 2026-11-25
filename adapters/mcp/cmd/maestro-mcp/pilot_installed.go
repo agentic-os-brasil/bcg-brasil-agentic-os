@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"runtime"
 	"strings"
@@ -27,6 +26,7 @@ import (
 type installedPilotSelection struct {
 	ProductRoot, UserHome, Workspace, CarrierID, InstallerVersion string
 	AdmissionSHA256, InstalledRoot                                string
+	Functional, CheckOnly                                         bool
 	ObservationClient                                             string
 }
 
@@ -43,6 +43,11 @@ type installedPilotReport struct {
 	SessionLoading      string `json:"session_loading"`
 	NativeQualification string `json:"native_qualification"`
 	FunctionalCheck     string `json:"functional_check"`
+	CheckMode           string `json:"check_mode"`
+	FunctionalItemID    string `json:"functional_item_id,omitempty"`
+	FunctionalStage     string `json:"functional_stage,omitempty"`
+	FunctionalReason    string `json:"functional_reason,omitempty"`
+	PrivateDiagnostic   string `json:"private_diagnostic,omitempty"`
 }
 
 func parseInstalledPilotSelection(args []string) (installedPilotSelection, error) {
@@ -50,7 +55,7 @@ func parseInstalledPilotSelection(args []string) (installedPilotSelection, error
 	if len(args) > 32 {
 		return out, errors.New("installed_selection_invalid")
 	}
-	allowed := map[string]bool{"product-root": true, "user-home": true, "workspace": true, "carrier-id": true, "installer-version": true, "experimental-seed-sha256": true, "experimental-installed-root": true, "check-only": true, "observation-client": true}
+	allowed := map[string]bool{"product-root": true, "user-home": true, "workspace": true, "carrier-id": true, "installer-version": true, "experimental-seed-sha256": true, "experimental-installed-root": true, "check-only": true, "functional": true, "observation-client": true}
 	seen := map[string]bool{}
 	for _, arg := range args {
 		if len(arg) > 4096 || strings.ContainsAny(arg, "\x00\r\n") {
@@ -74,7 +79,8 @@ func parseInstalledPilotSelection(args []string) (installedPilotSelection, error
 	f.StringVar(&out.AdmissionSHA256, "experimental-seed-sha256", "", "fixed admitted role")
 	f.StringVar(&out.InstalledRoot, "experimental-installed-root", "", "fixed installed root")
 	f.StringVar(&out.ObservationClient, "observation-client", "", "optional Desktop-only observation; does not change selected clients")
-	f.Bool("check-only", false, "read-only diagnostics without opening clients")
+	f.BoolVar(&out.CheckOnly, "check-only", false, "read-only diagnostics without opening clients")
+	f.BoolVar(&out.Functional, "functional", false, "explicit bounded synthetic conversion and execution check")
 	if err := f.Parse(args); err != nil || f.NArg() != 0 {
 		return out, errors.New("installed_selection_invalid")
 	}
@@ -86,6 +92,9 @@ func parseInstalledPilotSelection(args []string) (installedPilotSelection, error
 	if out.InstalledRoot != out.ProductRoot || !pilotWorkspaceID.MatchString(out.CarrierID) || !pilotKitID.MatchString(out.AdmissionSHA256) || !regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`).MatchString(out.InstallerVersion) {
 		return out, errors.New("installed_selection_invalid")
 	}
+	if seen["functional"] && !out.Functional || seen["check-only"] && !out.CheckOnly || out.Functional && out.CheckOnly {
+		return out, errors.New("installed_selection_invalid")
+	}
 	if out.ObservationClient != "" && out.ObservationClient != "desktop" {
 		return out, errors.New("installed_selection_invalid")
 	}
@@ -95,9 +104,17 @@ func parseInstalledPilotSelection(args []string) (installedPilotSelection, error
 // This is the installed variant of the existing read-only pilot report. Only
 // the separately compiled engineering dispatcher exposes this command.
 func runInstalledPilotCheck(ctx context.Context, args []string, output io.Writer) error {
-	r := installedPilotReport{pilotReport: pilotReport{SchemaVersion: 2, Status: "partial", Checks: []pilotCheck{}, ReferenceHost: packaging.Target{OS: runtime.GOOS, Arch: runtime.GOARCH}}, Profile: installer.ExperimentalSeedProfile, Evidence: "engineering_only", Protocol: "maestro-experimental-installed-pilot-check-v1", CodeRegistration: "unavailable", SessionLoading: "not_observed", NativeQualification: "not_observed", FunctionalCheck: "pending_actual_host_checks"}
+	r := installedPilotReport{pilotReport: pilotReport{SchemaVersion: 2, Status: "partial", Checks: []pilotCheck{}, ReferenceHost: packaging.Target{OS: runtime.GOOS, Arch: runtime.GOARCH}}, Profile: installer.ExperimentalSeedProfile, Evidence: "engineering_only", Protocol: "maestro-experimental-installed-pilot-check-v1", CodeRegistration: "unavailable", SessionLoading: "not_observed", NativeQualification: "not_observed", FunctionalCheck: "not_requested", CheckMode: "check_only"}
 	fail := func(name, reason string) error {
-		r.add(name, "failed", reason, "Preserve a instalação e compartilhe este diagnóstico; a verificação não inicializa, repara, atualiza nem abre clientes.")
+		next := "Preserve a instalação e compartilhe este diagnóstico; a verificação não inicializa, repara, atualiza nem abre clientes."
+		if r.CheckMode == "functional" {
+			r.FunctionalCheck = "incomplete"
+			if r.FunctionalStage == "" {
+				r.FunctionalStage, r.FunctionalReason = name, reason
+			}
+			next = "Preserve este relatório e o trabalho sintético informado; reconcilie a primeira falha antes de iniciar outro teste. Não há repetição automática nem reparo."
+		}
+		r.add(name, "failed", reason, next)
 		return finishInstalledPilotReport(&r, output)
 	}
 	selection, err := parseInstalledPilotSelection(args)
@@ -106,6 +123,9 @@ func runInstalledPilotCheck(ctx context.Context, args []string, output io.Writer
 	}
 	if ctx.Err() != nil {
 		return fail("installed_selection", "check_cancelled")
+	}
+	if selection.Functional {
+		r.CheckMode, r.FunctionalCheck = "functional", "incomplete"
 	}
 	r.ObservationClient = selection.ObservationClient
 	r.add("installed_selection", "passed", "fixed_local_selection_received_not_authority", "")
@@ -232,14 +252,19 @@ func runInstalledPilotCheck(ctx context.Context, args []string, output io.Writer
 	if err != nil {
 		return fail("document_runtime", "closed_current_runtime_identity_unavailable")
 	}
-	if err := installedPilotSDK(ctx, o, record.Binding.WorkspaceID, state.Binding.ManifestSHA256, expectedRuntime, &r.pilotReport); err != nil {
+	if err := installedPilotTransport(ctx, o, record.Binding.WorkspaceID, state.Binding.ManifestSHA256, expectedRuntime, &r, selection.Functional); err != nil {
+		r.PrivateDiagnostic = err.Error()
 		var readback *installedPilotReadbackError
 		if errors.As(err, &readback) {
+			r.PrivateDiagnostic = readback.cause.Error()
 			return fail("mcp_readback", readback.Error())
 		}
-		return fail("mcp_readback", "current_in_process_sdk_readback_failed")
+		return fail("mcp_readback", "current_installed_sdk_readback_failed")
 	}
 	for _, name := range []string{"code_client", "desktop_client", "onboarding", "skills", "hooks", "authored_brain", "memory", "conversion"} {
+		if selection.Functional && name == "conversion" {
+			continue
+		}
 		if (codePending || selection.ObservationClient == "desktop") && (name == "code_client" || name == "hooks") {
 			reason := "outside_desktop_observation"
 			if codePending {
@@ -282,90 +307,6 @@ func installedDesktopExtensionName(record installer.ClientRecord) (string, error
 	return "maestro-connector-" + record.CarrierID, nil
 }
 
-// Use the existing server/SDK without Serve's enrolled maintenance worker. This
-// verifies bounded read calls, not a native host, a new process or a reload.
-func installedPilotSDK(ctx context.Context, o product.Options, id, expectedManifest, expectedRuntime string, r *pilotReport) error {
-	if !pilotKitID.MatchString(expectedManifest) || !pilotKitID.MatchString(expectedRuntime) || o.InstalledManifestSHA256 != "" && o.InstalledManifestSHA256 != expectedManifest {
-		return errors.New("exact Current conversion expectations required")
-	}
-	bound, err := product.OpenContext(ctx, o)
-	if err != nil {
-		return err
-	}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	done := make(chan error, 1)
-	go func() { done <- bound.Server().Run(ctx, serverTransport) }()
-	client := mcp.NewClient(&mcp.Implementation{Name: "maestro-installed-pilot-check", Version: "1"}, nil)
-	connectCtx, connectCancel := context.WithTimeout(ctx, 20*time.Second)
-	session, err := client.Connect(connectCtx, clientTransport, nil)
-	connectCancel()
-	if err != nil {
-		cancel()
-		<-done
-		return &installedPilotReadbackError{stage: "connect", cause: err}
-	}
-	defer func() { cancel(); session.Close(); <-done }()
-	var metadata struct {
-		WorkspaceID string `json:"workspace_id"`
-		State       string `json:"state"`
-	}
-	if err := installedPilotCall(ctx, session, "context", "maestro_context", map[string]any{}, &metadata); err != nil {
-		return err
-	}
-	if metadata.WorkspaceID != id || metadata.State != "ready" {
-		return errors.New("installed_context_mismatch")
-	}
-	r.add("mcp_connection", "passed", "current_in_process_sdk_context_verified_not_host_loading", "")
-	methods, err := product.PackagedMethods()
-	if err != nil {
-		return err
-	}
-	var got []string
-	for offset := 0; ; {
-		if offset > 128 {
-			return errors.New("installed_method_bound")
-		}
-		var page struct {
-			Items []struct {
-				ID string `json:"id"`
-			} `json:"items"`
-			Next int  `json:"next_offset"`
-			More bool `json:"has_more"`
-		}
-		if err := installedPilotCall(ctx, session, "methods_list", "maestro_query", map[string]any{"operation": "methods.list", "offset": offset, "limit": 32}, &page); err != nil {
-			return err
-		}
-		if len(page.Items) > 32 || page.Next != offset+len(page.Items) || page.More && page.Next <= offset {
-			return errors.New("installed_method_page")
-		}
-		for _, method := range page.Items {
-			got = append(got, method.ID)
-		}
-		if !page.More {
-			break
-		}
-		offset = page.Next
-	}
-	want := make([]string, 0, len(methods.Methods))
-	for _, method := range methods.Methods {
-		want = append(want, method.ID)
-	}
-	if !reflect.DeepEqual(got, want) {
-		return errors.New("installed_method_catalog_mismatch")
-	}
-	r.add("method_catalog", "passed", "current_canonical_catalog_verified_not_native_skill_execution", "")
-	var availability struct {
-		State      string `json:"state"`
-		PackSHA256 string `json:"pack_sha256"`
-	}
-	if err := installedPilotCall(ctx, session, "content_status", "maestro_query", map[string]any{"operation": "content.status"}, &availability); err != nil {
-		return err
-	}
-	return installedConversionObservation(r, expectedManifest, expectedRuntime, availability.State, availability.PackSHA256)
-}
-
 type installedPilotReadbackError struct {
 	stage string
 	cause error
@@ -378,7 +319,10 @@ func (e *installedPilotReadbackError) Error() string {
 	} else if errors.Is(e.cause, context.Canceled) {
 		reason = "cancelled"
 	}
-	return "current_in_process_sdk_" + e.stage + "_" + reason
+	if e.stage == "checker_connect" && reason == "failed" {
+		return "current_installed_checker_transport_unavailable_or_unsupported"
+	}
+	return "current_installed_sdk_" + e.stage + "_" + reason
 }
 
 func (e *installedPilotReadbackError) Unwrap() error { return e.cause }
@@ -386,14 +330,34 @@ func (e *installedPilotReadbackError) Unwrap() error { return e.cause }
 func installedPilotCall(ctx context.Context, session *mcp.ClientSession, stage, name string, args map[string]any, out any) error {
 	// Each signed read keeps its finite bound without consuming the next read's budget.
 	budget := 20 * time.Second
-	if stage == "content_status" {
+	if stage == "content_status" || stage == "content_convert" {
 		// Several fifteen-second identity probes and authenticated inventories need
 		// a separate finite request policy; synchronous teardown remains separate.
 		budget = 3 * time.Minute
 	}
 	callCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
-	err := pilotCall(callCtx, session, name, args, out)
+	response, err := session.CallTool(callCtx, &mcp.CallToolParams{Name: name, Arguments: args})
+	if err == nil {
+		if response == nil || len(response.Content) != 1 {
+			err = errors.New("installed_tool_result_invalid")
+		} else if body, ok := response.Content[0].(*mcp.TextContent); !ok || len(body.Text) > 256<<10 {
+			err = errors.New("installed_tool_result_bound")
+		} else if response.IsError {
+			// Retain the closed refusal code, never a prompt, document or arbitrary
+			// provider error body, in the private first-stage diagnostic.
+			var refusal struct {
+				Code string `json:"code"`
+			}
+			if json.Unmarshal([]byte(body.Text), &refusal) == nil && regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`).MatchString(refusal.Code) {
+				err = fmt.Errorf("installed_tool_refused:%s", refusal.Code)
+			} else {
+				err = errors.New("installed_tool_refused")
+			}
+		} else {
+			err = json.Unmarshal([]byte(body.Text), out)
+		}
+	}
 	if callCtx.Err() != nil {
 		err = callCtx.Err()
 	}
@@ -423,7 +387,14 @@ func installedExpectedRuntime(role *installer.VerifiedExperimentalSeed, state in
 func finishInstalledPilotReport(r *installedPilotReport, output io.Writer) error {
 	var ignored bytes.Buffer
 	err := finishPilotReport(&r.pilotReport, &ignored)
-	prefix := fmt.Sprintf("Perfil: `%s`; evidência de distribuição: `%s`. Este diagnóstico verifica a instalação admitida e leituras SDK no próprio processo. Não abre clientes, executa manutenção agendada nem comprova carregamento, qualificação nativa ou atualização N→N+1.\n\n", r.Profile, r.Evidence)
+	prefix := fmt.Sprintf("Perfil: `%s`; evidência de distribuição: `%s`. Este diagnóstico verifica a instalação admitida e conexão SDK pelo processo autenticado do carrier de autoteste instalado. Não abre clientes, executa manutenção agendada nem comprova carregamento, qualificação nativa ou atualização N→N+1.\n\n", r.Profile, r.Evidence)
+	if r.CheckMode == "functional" {
+		prefix += fmt.Sprintf("Autoteste sintético MCP: **%s**. Etapa: `%s`; motivo: `%s`. Não comprova uma sessão nativa de cliente, hooks, agentes, memória ou agendamento.\n\n", r.FunctionalCheck, r.FunctionalStage, r.FunctionalReason)
+		if r.FunctionalItemID != "" {
+			prefix += fmt.Sprintf("Trabalho sintético deste teste: `%s`. Preserve esta identidade em caso de interrupção; nenhum outro trabalho foi retomado.\n\n", r.FunctionalItemID)
+		}
+		r.Markdown = strings.ReplaceAll(r.Markdown, "Este diagnóstico faz apenas leituras locais.", "Esta ação explícita testa conversão e continuidade com dados sintéticos pelo MCP instalado; preserve resultados incompletos.")
+	}
 	r.Markdown = prefix + strings.ReplaceAll(r.Markdown, "Identificador do kit: não verificado.", "Este é o perfil instalado; a identidade da admissão e da versão atual consta no diagnóstico estruturado.")
 	if encodeErr := json.NewEncoder(output).Encode(r); encodeErr != nil {
 		return encodeErr
