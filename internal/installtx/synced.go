@@ -618,6 +618,36 @@ func GuardQualifiedCurrentContext(ctx context.Context, managedRoot, dataRoot str
 	return publish()
 }
 
+// GuardQualifiedNativeCurrentStateContext permits a finite acquisition wait for
+// native parent/child readers only. The acquired guard, full validation and late
+// fences remain the original ones; neither validation nor callbacks are retried.
+func GuardQualifiedNativeCurrentStateContext(ctx context.Context, managedRoot, dataRoot string, expected ReleaseBinding, now time.Time, use func(State, func(ReleaseBinding, time.Time) error) error) error {
+	if use == nil {
+		return errors.New("current-state callback required")
+	}
+	return withNativeAdmissionLock(ctx, managedRoot, now, acquireNativeAdmissionLockContext, func(admittedAt time.Time) error {
+		return guardQualifiedCurrentStateHeldContext(ctx, managedRoot, dataRoot, expected, admittedAt, use)
+	})
+}
+
+// withNativeAdmissionLock advances the caller's time anchor by monotonic work.
+// The acquisition-only cap never becomes a deadline on the admitted operation.
+func withNativeAdmissionLock(ctx context.Context, managedRoot string, now time.Time, acquire func(context.Context, string) (func(), error), use func(time.Time) error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	started := time.Now()
+	unlock, err := acquire(ctx, managedRoot)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return use(now.Add(time.Since(started)))
+}
+
 // GuardQualifiedCurrentStateContext keeps the same current-state admission and
 // installation lock while a synchronous owner inspects its record/files once.
 // The final check is only a narrowing fence, valid during this callback. Neither
@@ -634,6 +664,14 @@ func GuardQualifiedCurrentStateContext(ctx context.Context, managedRoot, dataRoo
 		return err
 	}
 	defer unlock()
+	return guardQualifiedCurrentStateHeldContext(ctx, managedRoot, dataRoot, expected, now, use)
+}
+
+// Both public owners enter only while holding the same installation lock.
+func guardQualifiedCurrentStateHeldContext(ctx context.Context, managedRoot, dataRoot string, expected ReleaseBinding, now time.Time, use func(State, func(ReleaseBinding, time.Time) error) error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	state, registry, err := validateQualifiedLaunchContext(ctx, managedRoot, dataRoot, expected, now)
 	if err != nil {
 		return err

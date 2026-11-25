@@ -1898,6 +1898,54 @@ func acquireLock(managedRoot string) (func(), error) {
 	return func() { _ = os.Remove(path) }, nil
 }
 
+// Native readers wait only to acquire the original exclusive lock. This never
+// reads its PID, reclaims another owner's file or enters reconciliation.
+func acquireNativeAdmissionLockContext(ctx context.Context, managedRoot string) (func(), error) {
+	limit := time.Now().Add(time.Second)
+	timer := time.NewTimer(time.Second)
+	timer.Stop()
+	defer timer.Stop()
+	var last error
+	for {
+		if err := ctx.Err(); err != nil {
+			if last != nil {
+				return nil, errors.Join(err, last)
+			}
+			return nil, err
+		}
+		if last != nil && !time.Now().Before(limit) {
+			return nil, last
+		}
+		unlock, err := acquireLock(managedRoot)
+		if err == nil {
+			return unlock, nil
+		}
+		if !nativeAdmissionLockCollision(managedRoot, err) {
+			return nil, err
+		}
+		last = err
+		remaining := time.Until(limit)
+		if remaining <= 0 {
+			return nil, last
+		}
+		delay := 10 * time.Millisecond
+		if remaining < delay {
+			delay = remaining
+		}
+		timer.Reset(delay)
+		select {
+		case <-ctx.Done():
+			return nil, errors.Join(ctx.Err(), last)
+		case <-timer.C:
+		}
+	}
+}
+
+func nativeAdmissionLockCollision(managedRoot string, err error) bool {
+	var pathError *os.PathError
+	return errors.As(err, &pathError) && pathError.Op == "open" && pathError.Path == filepath.Join(managedRoot, ".activation.lock") && errors.Is(pathError.Err, os.ErrExist)
+}
+
 func acquireReconciliationLock(managedRoot string) (func(), error) {
 	return acquireReconciliationLockWith(managedRoot, processwait.UntilExit, os.Remove)
 }

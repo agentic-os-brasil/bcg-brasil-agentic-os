@@ -11,6 +11,12 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// An already-pinned receiver cannot adopt a changed canonical record. A fresh
+// connection must repeat the original admission before using its new identity.
+var errOwnerReviewRecordChanged = errors.New("owner_review_carrier_changed")
+
+const ownerReviewReconnectAction = "Reconnect only the Maestro connection in the client that made this request, then retry."
+
 // This is the receiving guard, not a mode supplied by a tool or a new source
 // admission. Original readers authenticate the current selected carrier on
 // every validation, including both sides of trusted foreground confirmation.
@@ -73,7 +79,7 @@ func (b *Bound) validateInstalledOwnerReviewSnapshot(ctx context.Context, home, 
 	}
 	pin := installer.ClientRecordDigest(r)
 	if b.ownerReviewClientSHA256 != "" && b.ownerReviewClientSHA256 != pin {
-		return errors.New("owner_review_carrier_changed")
+		return errOwnerReviewRecordChanged
 	}
 	if b.ownerReviewClientSHA256 == "" {
 		b.ownerReviewClientSHA256 = pin

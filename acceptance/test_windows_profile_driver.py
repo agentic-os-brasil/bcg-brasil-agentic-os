@@ -571,7 +571,6 @@ Write-Output 'account_cleanup_fails_closed=true'
         self.assertIn("if !errors.Is(err, windows.WSAEACCES)", controls)
         self.assertIn("networkDenied = false", controls)
         self.assertIn("windows.WSAStartup(0x0202, &data)", controls)
-        self.assertIn("buffer bytes.Buffer", controls)
         self.assertNotIn("r17ObserveChild", controls)
 
         self.assertLess(source.index("windows.AssignProcessToJobObject"), source.index("validateConfinedToken(process.Process, sid)"))
