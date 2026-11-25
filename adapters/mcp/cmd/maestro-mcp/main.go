@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 )
@@ -147,7 +148,7 @@ func run() (runErr error) {
 	}
 	var o product.Options
 	bindExperimental := experimentalCommandFlags(flags, &o)
-	if os.Args[1] == "serve" {
+	if os.Args[1] == "serve" || os.Args[1] == "installed-check-serve" {
 		flags.StringVar(&o.ManagementCarrierID, "management-carrier-id", "", "fixed independently admitted client carrier")
 		flags.StringVar(&o.ManagementInstallerVersion, "management-installer-version", "", "fixed validated installed manager version")
 	}
@@ -195,7 +196,7 @@ func run() (runErr error) {
 	if os.Args[1] == "plugin" || os.Args[1] == "native-review" || os.Args[1] == "native-qualify-and-build" {
 		flags.BoolVar(&codePilot, "code-pilot", false, "explicit participant-local experimental Code packet")
 	}
-	if os.Args[1] == "serve" || os.Args[1] == "mcpb" || os.Args[1] == "plugin" || os.Args[1] == "native-review" || os.Args[1] == "native-qualify-and-build" {
+	if os.Args[1] == "serve" || os.Args[1] == "installed-check-serve" || os.Args[1] == "mcpb" || os.Args[1] == "plugin" || os.Args[1] == "native-review" || os.Args[1] == "native-qualify-and-build" {
 		flags.StringVar(&o.OwnerReviewChannel, "owner-review-channel", "", "explicit local-browser selection for complete foreground owner review; empty keeps native-first")
 	}
 	flags.BoolVar(&packet, "packet", false, "validate the complete managed packet before runtime use")
@@ -617,14 +618,26 @@ func run() (runErr error) {
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
 		return encoder.Encode(value)
-	case "serve":
+	case "serve", "installed-check-serve":
 		bound, err := product.Open(o)
 		if err != nil {
 			return err
 		}
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		err = bound.Serve(ctx, &mcp.StdioTransport{})
+		if os.Args[1] == "installed-check-serve" {
+			name := "maestro-install"
+			if runtime.GOOS == "windows" {
+				name += ".exe"
+			}
+			checker, checkErr := installer.AdmitStableCheckServer(ctx, installer.ClientOptions{SeededOperationOptions: installer.SeededOperationOptions{ExperimentalSeed: o.ExperimentalSeed, Self: filepath.Join(o.ProductRoot, name), Version: o.ManagementInstallerVersion, AuthorityRegistrySHA256: o.AuthorityRegistrySHA256, ManagedRoot: o.ProductRoot, UserHome: o.UserHome, DataRoot: filepath.Join(o.UserHome, ".maestro-install")}, Request: installer.ClientRequest{CarrierID: o.ManagementCarrierID, Workspace: o.WorkspacePath}})
+			if checkErr != nil {
+				return checkErr
+			}
+			err = bound.ServeInstalledCheck(ctx, &mcp.StdioTransport{}, checker)
+		} else {
+			err = bound.Serve(ctx, &mcp.StdioTransport{})
+		}
 		if errors.Is(err, context.Canceled) && ctx.Err() != nil {
 			return nil
 		}
