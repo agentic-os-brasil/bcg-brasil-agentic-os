@@ -95,10 +95,15 @@ func assertPendingCodeDesktopConsumer(t *testing.T, ctx context.Context, seed in
 	// Exercise the participant's original diagnostic, including the nested
 	// recorded-contract inspector, against the actual partial producer above.
 	beforeDiagnostic := read(t, recordPath)
+	// The real compiled checker must keep domain state read-only. Installation
+	// coordination remains owned by its normal stable-start contract elsewhere.
+	brainBeforeDiagnostic, workspaceBeforeDiagnostic := snapshot(t, brain), snapshot(t, workspace)
 	checker := exec.CommandContext(ctx, filepath.Join(seed.ManagedRoot, "bin", "maestro-mcp"), "installed-pilot-check", "--product-root", seed.ManagedRoot, "--user-home", seed.UserHome, "--workspace", workspace, "--carrier-id", record.CarrierID, "--installer-version", seed.Version, "--experimental-seed-sha256", seed.ExperimentalSeed.Identity().AdmissionSHA256, "--experimental-installed-root", seed.ManagedRoot, "--observation-client", "desktop", "--check-only")
 	output, checkErr := checker.Output()
 	var diagnostic struct {
 		Status            string                        `json:"status"`
+		CheckMode         string                        `json:"check_mode"`
+		FunctionalCheck   string                        `json:"functional_check"`
 		WorkspaceID       string                        `json:"workspace_id"`
 		ClientTarget      string                        `json:"client_target"`
 		ClientPreparation string                        `json:"client_preparation"`
@@ -109,16 +114,19 @@ func assertPendingCodeDesktopConsumer(t *testing.T, ctx context.Context, seed in
 		Checks            []struct{ Name, Status, Reason string }
 	}
 	must(t, json.Unmarshal(output, &diagnostic))
-	if checkErr != nil || diagnostic.Status != "partial" || diagnostic.WorkspaceID != workspaceID || diagnostic.ClientTarget != "" || diagnostic.ClientPreparation != installer.ClientPreparationDesktopReady || diagnostic.CodeRegistration != installer.ClientCodeQualificationPending || len(diagnostic.DesktopSteps) == 0 || diagnostic.CodePrompt != "" || len(diagnostic.CodeSteps) != 0 {
+	if checkErr != nil || diagnostic.CheckMode != "check_only" || diagnostic.FunctionalCheck != "not_requested" || diagnostic.Status != "partial" || diagnostic.WorkspaceID != workspaceID || diagnostic.ClientTarget != "" || diagnostic.ClientPreparation != installer.ClientPreparationDesktopReady || diagnostic.CodeRegistration != installer.ClientCodeQualificationPending || len(diagnostic.DesktopSteps) == 0 || diagnostic.CodePrompt != "" || len(diagnostic.CodeSteps) != 0 {
 		t.Fatalf("actual partial Desktop diagnostic must retain its journey without qualifying Code: %s: %v", output, checkErr)
 	}
-	for _, name := range []string{"current_clients", "desktop_archive", "desktop_methods", "mcp_connection", "method_catalog"} {
+	for _, name := range []string{"current_clients", "desktop_archive", "desktop_methods", "mcp_connection", "method_catalog", "canonical_resources"} {
 		found := false
 		for _, check := range diagnostic.Checks {
 			if check.Status == "failed" {
 				t.Fatalf("actual partial Desktop diagnostic failed: %+v", check)
 			}
 			if check.Name == name && check.Status == "passed" {
+				if name == "mcp_connection" && check.Reason != "actual_authenticated_checker_carrier_sdk_context_verified_not_host_loading" {
+					t.Fatalf("compiled checker did not observe its authenticated diagnostic carrier: %+v", check)
+				}
 				found = true
 			}
 		}
@@ -134,6 +142,10 @@ func assertPendingCodeDesktopConsumer(t *testing.T, ctx context.Context, seed in
 	if !bytes.Equal(beforeDiagnostic, read(t, recordPath)) {
 		t.Fatal("read-only partial diagnostic changed the canonical record")
 	}
+	if !reflect.DeepEqual(brainBeforeDiagnostic, snapshot(t, brain)) || !reflect.DeepEqual(workspaceBeforeDiagnostic, snapshot(t, workspace)) {
+		t.Fatal("compiled check-only mutated existing brain or workspace domain state")
+	}
+
 	must(t, setup.VerifyRecordedDesktopContract(record.Materialization.DesktopPath, o, runtime.GOOS, record.Materialization.DesktopNativeContractSHA256))
 	for _, invalid := range []string{"path", "contract", "target", "workspace", "carrier", "source"} {
 		t.Run("partial Desktop contract refuses "+invalid, func(t *testing.T) {
