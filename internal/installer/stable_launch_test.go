@@ -32,3 +32,19 @@ func TestStableLaunchUnverifiedSelectionCannotRecoverLock(t *testing.T) {
 		t.Fatal("unverified startup created a recovery guard", err)
 	}
 }
+
+func TestStableCheckLaunchRetainsUnverifiedSelectionRefusal(t *testing.T) {
+	root := t.TempDir()
+	o := ClientOptions{SeededOperationOptions: SeededOperationOptions{ManagedRoot: root, UserHome: root, DataRoot: filepath.Join(root, ".maestro-install"), Self: filepath.Join(root, "maestro-install")}, Request: ClientRequest{CarrierID: "unverified", Workspace: filepath.Join(root, "work")}}
+	if _, err := PrepareStableCheckLaunch(context.Background(), o); err == nil {
+		t.Fatal("unverified checker selection launched")
+	}
+	if _, err := AdmitStableCheckServer(context.Background(), o); err == nil {
+		t.Fatal("options-only checker server admitted")
+	}
+	for _, capability := range []*VerifiedStableCheck{nil, {}} {
+		if err := capability.ValidateContext(context.Background(), StableCheckBinding{}); err == nil {
+			t.Fatal("unverified capability validated")
+		}
+	}
+}
