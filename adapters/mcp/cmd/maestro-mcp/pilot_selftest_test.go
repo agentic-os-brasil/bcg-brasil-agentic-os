@@ -47,7 +47,9 @@ func TestInstalledPilotFunctionalCLIReportsUnavailableWithoutPreparing(t *testin
 	}
 }
 
-type installedPilotChildConfig struct{ Product, Home, Workspace, Mutation string }
+type installedPilotChildConfig struct{ Product, Home, Workspace, Mutation, ReadyMarker string }
+
+const installedPilotChildReady = "installed-check-child-ready\n"
 
 // The isolated child uses the actual product resource/tool implementation over
 // stdio. It is a source transport fixture, not installed seed or client proof.
@@ -61,6 +63,17 @@ func TestInstalledPilotChildFixture(t *testing.T) {
 		panic(err)
 	}
 	if f.Mutation == "hang" {
+		if f.ReadyMarker != "" {
+			marker, err := os.OpenFile(f.ReadyMarker, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+			if err != nil {
+				panic(err)
+			}
+			_, writeErr := marker.WriteString(installedPilotChildReady)
+			closeErr := marker.Close()
+			if writeErr != nil || closeErr != nil {
+				panic(fmt.Errorf("fixture readiness: write=%v close=%v", writeErr, closeErr))
+			}
+		}
 		<-time.After(time.Minute)
 		os.Exit(0)
 	}
