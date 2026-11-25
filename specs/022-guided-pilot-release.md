@@ -80,3 +80,47 @@ A report is evidence, not automatic permission to publish or expand a pilot.
 
 The ten-person cohort balances Windows/macOS and classic/technical users.
 Expansion, redesign or stop is a human release decision.
+
+## Installed MCP participant self-check
+
+The original native participant entry has one automatic MCP check action. It
+uses only the shipped native programs and the existing authenticated
+installation/current-client/packet owners. It never asks participants to run a
+development harness, install a toolchain or assemble protocol requests.
+
+The existing `installed-pilot-check --check-only` path checks the actual
+admitted stable carrier through the public SDK/stdio transport. It verifies
+workspace identity, complete method discovery and complete canonical role/method
+resource identity. An in-process server is not a fallback for installed-transport
+success. Constructor guards must be released before starting the child; normal
+current-source/record and stable-start coordination rules remain in force.
+Read-only means no domain mutations or implicit preparation, repair, migration,
+qualification or grants; it does not assert absence of normal coordination locks.
+
+A separate explicit `--functional` invocation, selected by one action in both
+native menus, may perform a bounded synthetic functional check. It reuses the
+existing canonical DOCX fixture owner, preserving any conflicting or modified
+file. It uses only normal MCP conversion/readback and execution-ledger
+operations: verify the admitted runtime, convert once, reconstruct both outputs,
+verify content identity/hashes, create/checkpoint/pause one synthetic task, reopen
+the same stable carrier, resume once, verify artifact evidence and complete. A
+stale-attempt checkpoint must refuse without changing the current projection.
+There is no automatic replay of an ambiguous mutation. On failure, retain the
+first diagnostic and known item identity; never hide an unfinished task.
+
+The functional invocation installs no runtime and does not change format policy,
+source, roles, private signing material, provider settings or authority. An
+unavailable converter remains unavailable, with an incomplete result. It never
+substitutes memory capture, knowledge/brain authorship, owner review, maintenance
+qualification/enrollment or model execution. The default refresh remains
+read-only; synthetic writes require the explicit functional action.
+
+Private diagnostics and the existing shareable Markdown report expose distinct
+per-stage results. Shareable output contains no document bodies, prompts,
+credentials or private owner text. The observed scope is installed MCP/SDK, not
+a Code/Desktop native session, hook, agent, memory, scheduler, platform or rollout
+qualification. Existing detailed client acceptance remains available and
+independent. A new compatible kit and actual installed acceptance are required
+before delivering this new behavior; older frozen packages retain their meaning.
+
+Refs: #655, #470, MPCK.

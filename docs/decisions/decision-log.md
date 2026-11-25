@@ -1918,3 +1918,15 @@ coverage, not proof of this complete-kit scope. Refs: #599; Spec061 NTXT.
 - Consequences: The existing v1 bootstrap family, endpoint inventory, binding admission, explicit-only restrictions, shared policies, complete active-branch reference reads, 4KB UTF-8 paging/hash/byte checks and original effect confirmation remain unchanged. This is intentional routing-contract evolution requiring a newly versioned library and normal host review/import with a descriptor-capable backend, not an ordinary live-content refresh. Existing imported libraries and their original evidence remain unchanged. No cache, engine, installer migration, permission or authority is added. Source and payload tests do not qualify a new native Desktop route or whole-product readiness; build and test a newly compatible kit separately.
 - Refs: SFRD; #644; specs/063-product-native-plugin.md; adapters/mcp/methods.go; adapters/mcp/methods_query.go; adapters/mcp/packaging/desktop_live_methods.go
 - Supersedes: none
+
+
+## MPCK - Test the installed MCP through its real carrier with explicit synthetic writes
+
+- Date: 2026-11-25
+- Status: accepted
+- Owner: Maestro product maintainers
+- Context: The native participant entry prepares diagnostics but its installed SDK checks currently use an in-process server. Conversion and continuity require repeated client prompts. Private engineering callers have exercised the actual carrier, but they are not a native participant feature and cannot qualify a client host.
+- Decision: Reuse the existing installed-pilot-check owner and native menus. Read-only checks connect through the authenticated current stable carrier and verify binding plus canonical discovery/resource bytes; no in-process fallback may claim installed success. A distinct explicit functional action runs one bounded canonical synthetic DOCX conversion/readback and one completed execution-ledger continuity journey through ordinary MCP operations, reopening the same carrier and resuming once. Preserve existing effect/ownership guards, release constructor locks before child execution and revalidate current identity.
+- Consequences: Participants need no development toolchain or handwritten requests. Default refresh performs no domain mutations; normal admitted stable-start coordination remains governed by its existing owner. Functional checks preserve prior files, refuse conflicting fixtures and unavailable runtimes, retain failures and incomplete item identities, and never replay ambiguous mutations. SDK success does not qualify Code/Desktop, hooks, agents, memory, scheduling, publication or production. No review, enrollment, model, new pack, issuer or signing authority is introduced. New compatible artifacts and actual installed/client evidence remain separate gates.
+- Refs: #655; #470; specs/022-guided-pilot-release.md; adapters/mcp/cmd/maestro-mcp/pilot_installed.go; dev/pilot/templates/installed-seed
+- Supersedes: none
