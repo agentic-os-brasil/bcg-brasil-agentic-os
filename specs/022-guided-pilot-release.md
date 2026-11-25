@@ -105,9 +105,12 @@ operations but never starts the automatic maintenance worker; read-only and
 functional checks must not trigger already enrolled due jobs as a startup effect.
 Normal `stable-launch`, ordinary serve and other maintenance/wake processes keep
 their semantics and grants. No ordinary serve flag, MCP client metadata or
-environment switch selects the checker purpose. Unbound/unknown purposes and an
-older unsupported bootstrap refuse; there is no normal-launch fallback. Reports
-name the checker-purpose SDK scope, not byte-identical normal-client invocation.
+environment switch selects the checker purpose. Unbound/unknown checker purposes
+and unsupported checker admission or receiver implementations refuse without a
+normal-launch fallback. Existing installed-bootstrap identity and custody
+admission remain mandatory; this SDK path does not require that bootstrap's
+checker CLI verb. Reports name the checker-purpose SDK scope, not byte-identical
+normal-client invocation.
 
 The SDK owns the receiver directly. Each connection obtains the executable and
 complete argument slice from `installer.PrepareStableCheckLaunch` and starts
