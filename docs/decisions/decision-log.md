@@ -1930,3 +1930,19 @@ coverage, not proof of this complete-kit scope. Refs: #599; Spec061 NTXT.
 - Consequences: Participants need no development toolchain or handwritten requests. Default refresh performs no domain mutations; normal admitted stable-start coordination remains governed by its existing owner. Functional checks preserve prior files, refuse conflicting fixtures and unavailable runtimes, retain failures and incomplete item identities, and never replay ambiguous mutations. SDK success does not qualify Code/Desktop, hooks, agents, memory, scheduling, publication or production. No review, enrollment, model, new pack, issuer or signing authority is introduced. New compatible artifacts and actual installed/client evidence remain separate gates.
 - Refs: #655; #470; specs/022-guided-pilot-release.md; adapters/mcp/cmd/maestro-mcp/pilot_installed.go; dev/pilot/templates/installed-seed
 - Supersedes: none
+
+### MPCK refinement — isolate automatic background work by authenticated launch purpose
+
+Ordinary serve starts its maintenance worker immediately. A diagnostic must not
+trigger already enrolled due jobs merely by opening an actual transport. Reuse
+the existing authenticated installed-role/current-record child handoff with one
+dedicated `stable-check-launch` -> `installed-check-serve` purpose. The receiver
+revalidates the canonical stable carrier and derives an opaque checker capability
+before serving explicit MCP operations without starting its automatic worker.
+This reduces that child's effects; it changes no grants, job state, ordinary
+serve or OS-wake behavior. No untrusted client metadata, environment or ordinary
+runtime suppression flag selects the purpose. Unsupported older bootstrappers
+refuse without fallback. A new compatible bootstrap/backend is required; report
+checker-purpose SDK evidence separately from the normal native-client path.
+
+Refs: #655; original MPCK; specs/022-guided-pilot-release.md.

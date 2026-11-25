@@ -296,7 +296,10 @@ item in the work history, completed on success. It requires no development
 toolchain, protocol requests or copied prompts. Ordinary startup and check-only
 refreshes remain read-only.
 
-The existing installed checker connects through the admitted stable MCP carrier.
+The existing installed checker uses a dedicated authenticated diagnostic purpose
+through the same admitted stable carrier. Its child does not start automatic
+maintenance; ordinary client sessions and other scheduled/wake workers retain
+their existing behavior. The checker purpose is not a normal-client attestation.
 It checks the workspace and canonical methods/resources, converts the canonical
 synthetic DOCX once, reads both derived outputs, and exercises a synthetic
 create/checkpoint/pause/reconnect/resume/evidence/complete journey. It also checks

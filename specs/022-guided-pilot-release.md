@@ -97,6 +97,18 @@ current-source/record and stable-start coordination rules remain in force.
 Read-only means no domain mutations or implicit preparation, repair, migration,
 qualification or grants; it does not assert absence of normal coordination locks.
 
+The checker uses a dedicated authenticated `stable-check-launch` ->
+`installed-check-serve` purpose through the same canonical admission owner. The
+existing installed role/current-record handoff is revalidated before an opaque
+checker capability is derived. This child serves the ordinary explicit MCP
+operations but never starts the automatic maintenance worker; read-only and
+functional checks must not trigger already enrolled due jobs as a startup effect.
+Normal `stable-launch`, ordinary serve and other maintenance/wake processes keep
+their semantics and grants. No ordinary serve flag, MCP client metadata or
+environment switch selects the checker purpose. Unbound/unknown purposes and an
+older unsupported bootstrap refuse; there is no normal-launch fallback. Reports
+name the checker-purpose SDK scope, not byte-identical normal-client invocation.
+
 A separate explicit `--functional` invocation, selected by one action in both
 native menus, may perform a bounded synthetic functional check. It reuses the
 existing canonical DOCX fixture owner, preserving any conflicting or modified
